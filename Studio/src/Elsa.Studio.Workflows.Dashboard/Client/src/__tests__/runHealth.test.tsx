@@ -23,7 +23,7 @@ describe("Workflow Run Health widget", () => {
 
   it("accepts the exact Foundation wire bucket and renders DST-shaped labels, failed share, and top failures", () => {
     const snapshot: RunHealthSnapshot = { status: "ready", generatedAt: "", from: "2026-10-24T22:00:00Z", to: "2026-10-26T23:00:00Z", timeZone: "Europe/Amsterdam", bucket: "day", includeTestRuns: true, startedCount: 12, succeededCount: 8, failedCount: 2, cancelledCount: 1, incompleteCount: 1, incidentBearingRunCount: 3, incidentCount: 4, runningCount: 1, failurePercentage: 16.67, incidentBearingPercentage: 25, buckets: [{ from: "2026-10-25T22:00:00Z", to: "2026-10-26T23:00:00Z", startedCount: 12, failedCount: 3, incidentBearingRunCount: 4 }], highestFailureDefinitions: [{ definitionId: "orders", name: "Orders", failedCount: 2 }] };
-    const view = render(<WorkflowRunHealthWidget settings={{ range: "7d", includeTestRuns: true }} snapshot={snapshot} />);
+    const view = render(<WorkflowRunHealthWidget settings={{ range: "7d", includeTestRuns: true }} size="wide" snapshot={snapshot} />);
     expect(view.textContent).toContain("Includes transient test runs");
     expect(view.textContent).toContain("Orders");
     expect(view.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain("2026-10-25T22:00:00Z to 2026-10-26T23:00:00Z");
@@ -31,7 +31,7 @@ describe("Workflow Run Health widget", () => {
   });
 
   it("renders a safe unavailable state", () => {
-    const view = render(<WorkflowRunHealthWidget settings={{ range: "7d", includeTestRuns: false }} snapshot={{ status: "unavailable", generatedAt: "", errorCode: "PROVIDER_UNSUPPORTED" }} />);
+    const view = render(<WorkflowRunHealthWidget settings={{ range: "7d", includeTestRuns: false }} size="wide" snapshot={{ status: "unavailable", generatedAt: "", errorCode: "PROVIDER_UNSUPPORTED" }} />);
     expect(view.textContent).toBe("Run statistics are unavailable (PROVIDER_UNSUPPORTED).");
   });
 });

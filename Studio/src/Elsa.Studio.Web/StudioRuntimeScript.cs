@@ -26,6 +26,10 @@ internal static class StudioRuntimeScript
             // when Enabled is false the shell keeps booting anonymously.
             ["auth"] = BuildAuthRuntimeConfig(configuration),
             ["workflows"] = BuildWorkflowsRuntimeConfig(configuration),
+            ["attention"] = new Dictionary<string, object?>
+            {
+                ["hostApiEnabled"] = configuration.GetValue("Studio:Attention:HostApiEnabled", defaultValue: false)
+            },
             ["dashboard"] = BuildDashboardRuntimeConfig(configuration)
         };
 

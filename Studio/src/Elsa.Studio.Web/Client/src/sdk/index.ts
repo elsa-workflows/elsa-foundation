@@ -224,6 +224,7 @@ export interface StudioDashboardWidgetSettings<TSettings> {
 export interface StudioDashboardWidgetBodyProps<TSnapshot, TSettings> {
   snapshot: TSnapshot | undefined;
   settings: TSettings;
+  size: StudioDashboardWidgetSize;
 }
 
 export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> {
@@ -1069,6 +1070,9 @@ export interface StudioWorkflowRuntimeSettings {
 export interface StudioRuntimeSettings {
   hostId?: string;
   workflows?: StudioWorkflowRuntimeSettings;
+  attention?: {
+    hostApiEnabled?: boolean;
+  };
   dashboard?: {
     defaultRefreshIntervalMs?: number;
     widgetTimeoutMs?: number;

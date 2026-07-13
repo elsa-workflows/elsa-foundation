@@ -9,7 +9,7 @@ export interface AttentionSnapshot { generatedAt: string; items: AttentionItem[]
 export async function loadAttention(api: ElsaStudioModuleApi, signal: AbortSignal): Promise<AttentionSnapshot> {
   const sources = sameEndpoint(api.host.baseUrl, api.backend.baseUrl)
     ? [{ label: "Studio and backend", http: api.host.http, optional: false }]
-    : [{ label: "Studio", http: api.host.http, optional: true }, { label: "Backend", http: api.backend.http, optional: false }];
+    : [...(api.runtime.attention?.hostApiEnabled ? [{ label: "Studio", http: api.host.http, optional: true }] : []), { label: "Backend", http: api.backend.http, optional: false }];
   const calls = sources.map(source => read(source.http, signal));
   const settled = await Promise.allSettled(calls);
   const responses = settled.flatMap(result => result.status === "fulfilled" ? [result.value] : []);

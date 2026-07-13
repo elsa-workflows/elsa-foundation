@@ -8,6 +8,7 @@ export interface StudioRuntimeConfig {
   // carry a host management key, so there is no field for it here — new frontend code cannot depend on one.
   auth?: StudioAuthRuntimeConfig;
   workflows?: StudioWorkflowRuntimeSettings;
+  attention?: { hostApiEnabled?: boolean };
   dashboard?: StudioDashboardRuntimeSettings;
 }
 
@@ -56,6 +57,7 @@ export function getStudioRuntimeSettings(config: StudioRuntimeConfig): StudioRun
   return {
     hostId: config.hostId ?? "default",
     workflows: config.workflows,
+    attention: config.attention,
     dashboard: {
       defaultRefreshIntervalMs: config.dashboard?.defaultRefreshIntervalMs ?? 300_000,
       widgetTimeoutMs: config.dashboard?.widgetTimeoutMs ?? 10_000,

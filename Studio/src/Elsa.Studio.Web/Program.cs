@@ -104,6 +104,9 @@ app.MapConsoleStreamStudioIfEnabled(configuration, StudioBridgeAuth.PolicyName);
 app.MapShells();
 app.MapActiveShellStudioApi();
 app.MapNuplaneStaticWebAssets();
+// Unknown API routes must remain real 404 responses. Letting the SPA fallback answer them with index.html and 200
+// turns an optional API capability into a JSON parse failure and obscures ordinary endpoint mistakes in the browser.
+app.MapFallback("/_elsa/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("studio/index.html");
 
 app.Run();

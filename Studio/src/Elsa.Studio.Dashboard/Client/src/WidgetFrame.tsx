@@ -41,7 +41,7 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
     <div className="dashboard-widget-body">
       {runtime.state.status === "loading" ? <div role="status">Loading…</div> : null}
       {runtime.state.status === "error" || runtime.state.status === "timedOut" ? <div role="alert">{runtime.state.error} <button type="button" onClick={() => void runtime.refresh()}>Retry</button></div> : null}
-      {runtime.state.status === "idle" || runtime.state.status === "ready" || runtime.state.status === "refreshing" ? <Body snapshot={snapshot} settings={settings} /> : null}
+      {runtime.state.status === "idle" || runtime.state.status === "ready" || runtime.state.status === "refreshing" ? <Body snapshot={snapshot} settings={settings} size={size} /> : null}
     </div>
     {runtime.state.status === "ready" || runtime.state.status === "refreshing" ? <footer>
       Updated {formatTime(runtime.state.updatedAt)}

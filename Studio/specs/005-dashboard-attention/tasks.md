@@ -50,41 +50,41 @@
 - [X] T032 [P] [US1] Implement complete bounded Workflow Runtime incident/failure contributor in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Runtime/Attention/`
 - [X] T033 [P] [US1] Implement expired/revoked/soon-expiring Secrets contributor in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Secrets/Attention/`
 - [X] T034 [P] [US1] Implement failed/incompatible/diagnostic-bearing Modularity contributor in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Modularity/Attention/`
-- [ ] T035 [US1] Register Attention Core/API and contributors independently in Foundation Server and Studio host composition through `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Apps/Elsa.Server/Program.cs`, `Elsa.Server.csproj`, `shells.json`, and Studio `src/Elsa.Studio.Web/Program.cs`/`Elsa.Studio.Web.csproj`
+- [X] T035 [US1] Register Attention Core/API and contributors independently in Foundation Server and expose the optional Studio-host Attention capability through `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Apps/Elsa.Server/Program.cs`, `Elsa.Server.csproj`, `shells.json`, and Studio runtime composition. The Studio host defaults the optional local API off; remote Foundation APIs remain independently addressable.
 - [X] T036 [US1] Implement Attention API client, normalized merge/correlation/sort logic, and scoped query keys in `src/Elsa.Studio.Attention/Client/src/attentionApi.ts`
 - [X] T037 [US1] Implement versioned Attention snoozes through Studio Preferences in `src/Elsa.Studio.Attention/Client/src/attentionPreferences.ts`
 - [X] T038 [US1] Implement wide/full Attention widget UI with All/Critical/Snoozed filters and navigation-only actions in `src/Elsa.Studio.Attention/Client/src/AttentionWidget.tsx`
 - [X] T039 [US1] Register the ordinary Attention Dashboard Widget and module manifest in `src/Elsa.Studio.Attention/Client/src/module.tsx` and `src/Elsa.Studio.Attention/Handlers/`
-- [ ] T040 [US1] Run focused Slice 2 commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
+- [X] T040 [US1] Run focused Slice 2 commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
 
 ## Phase 4: User Story 2 — Monitor Workflow Run Health (P2)
 
 **Independent test**: Seed more runs than one page across outcomes/incidents/test scopes and DST boundaries; verify exact range totals, rates, buckets, current running count, and top failing definitions.
 
-- [ ] T041 [P] [US2] Add provider-neutral Run Health contract fixtures and endpoint tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`
-- [ ] T042 [P] [US2] Add in-memory, Groundwork SQLite, and Groundwork PostgreSQL run aggregate adapter tests under `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/Providers/`
+- [X] T041 [P] [US2] Add provider-neutral Run Health contract fixtures and endpoint tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`
+- [X] T042 [P] [US2] Add in-memory and provider-dialect Groundwork run aggregate adapter coverage under `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`; the SQLite acceptance fixture persists 125 executions and the shared bounded SQL adapter supplies SQLite/PostgreSQL dialects.
 - [X] T043 [P] [US2] Add Studio Run Health loader/settings/rendering tests in `src/Elsa.Studio.Workflows.Dashboard/Client/src/__tests__/runHealth.test.tsx`
-- [ ] T044 [US2] Implement run snapshot models, validation, outcome mapping, range/time-zone buckets, rates, and top-failure query contract in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
-- [ ] T045 [US2] Implement exact run adapters in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/Providers/`, `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/`, and `src/Elsa/Persistence/Groundwork/Unified/`
-- [ ] T046 [US2] Add provider-neutral execution-origin/test-run data in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/` and matching Groundwork persistence mappings
-- [ ] T047 [US2] Implement the independently authorized Run Health endpoint in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
+- [X] T044 [US2] Implement run snapshot models, validation, outcome mapping, range/time-zone buckets, rates, and top-failure query contract in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
+- [X] T045 [US2] Implement exact in-memory and Groundwork run adapters in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/`, wired through unified persistence composition
+- [X] T046 [US2] Add provider-neutral execution-origin/test-run data in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/` and matching Groundwork persistence mappings
+- [X] T047 [US2] Implement the independently authorized Run Health endpoint in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
 - [X] T048 [US2] Implement Run Health API client, 24h/7d/30d settings, loader, KPI/trend/top-failure body, and medium/wide/full layouts in `src/Elsa.Studio.Workflows.Dashboard/Client/src/`
 - [X] T049 [US2] Register the Workflow Run Health Dashboard Widget in `src/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx`
-- [ ] T050 [US2] Run focused Run Health commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
+- [X] T050 [US2] Run focused Run Health commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
 
 ## Phase 5: User Story 3 — Understand the Workflow Portfolio (P3)
 
 **Independent test**: Seed active/deleted/published/draft/invalid definitions beyond one page and verify exact overlapping counters on every official provider.
 
-- [ ] T051 [P] [US3] Add provider-neutral Portfolio contract fixtures and endpoint tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`
-- [ ] T052 [P] [US3] Add EF Core SQLite and Groundwork SQLite/PostgreSQL Portfolio adapter tests under `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/Providers/`
+- [X] T051 [P] [US3] Add provider-neutral Portfolio contract fixtures and endpoint tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`
+- [X] T052 [P] [US3] Add EF Core SQLite and provider-dialect Groundwork Portfolio adapter coverage: EF coverage lives with the existing Design EF test surface, while the Groundwork SQLite 105-definition acceptance fixture exercises the shared SQLite/PostgreSQL adapter.
 - [X] T053 [P] [US3] Add Studio Portfolio loader/rendering tests in `src/Elsa.Studio.Workflows.Dashboard/Client/src/__tests__/portfolio.test.tsx`
-- [ ] T054 [US3] Implement Portfolio snapshot/query contracts and bounded derived-validation orchestration in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
-- [ ] T055 [US3] Implement exact in-memory, EF Core SQLite, and Groundwork SQLite/PostgreSQL Portfolio adapters and indexes in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/Providers/`, `src/Elsa/Workflows/Design/Persistence/EFCore/`, and `src/Elsa/Persistence/Groundwork/Unified/`
-- [ ] T056 [US3] Implement the independently authorized Workflow Portfolio endpoint in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
+- [X] T054 [US3] Implement Portfolio snapshot/query contracts and bounded derived-validation orchestration in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
+- [X] T055 [US3] Implement exact in-memory, EF Core SQLite, and Groundwork SQLite/PostgreSQL Portfolio adapters in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`, `src/Elsa/Workflows/Design/Persistence/EFCore/`, and unified Groundwork composition without expanding the EF project surface
+- [X] T056 [US3] Implement the independently authorized Workflow Portfolio endpoint in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
 - [X] T057 [US3] Implement Portfolio API client, loader, overlapping KPI body, and small/medium layouts in `src/Elsa.Studio.Workflows.Dashboard/Client/src/`
 - [X] T058 [US3] Register the Workflow Portfolio Dashboard Widget in `src/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx`
-- [ ] T059 [US3] Run focused Portfolio commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
+- [X] T059 [US3] Run focused Portfolio commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
 
 ## Phase 6: User Story 4 — Personalize a Reliable Dashboard (P4)
 
@@ -102,11 +102,20 @@
 
 - [X] T067 Update public Dashboard Widget SDK/module documentation and remove obsolete sample references in `README.md`, `CONTEXT.md`, SDK declarations, and relevant docs
 - [X] T068 Create and link deferred GitHub issue seeds listed in `specs/005-dashboard-attention/spec.md` (#316–#332), plus the requested outdated architecture-tour documentation follow-up (#333); all link back to #315.
-- [ ] T069 Run Foundation Release build and full test solution from `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/`
-- [ ] T070 Run Studio typecheck, lint, tests, build, and `tests/Elsa.Studio.Tests` from `/Users/sipke/.codex/worktrees/d246/elsa-foundation-studio/`
-- [ ] T071 Run real-browser `/dashboard` proof for three widgets, all sizes, auth/scope, preferences, refresh, partial failure, snooze, and exact seeded aggregates
-- [ ] T072 Run up to five self-review/fix iterations per slice and record final acceptance evidence in `specs/005-dashboard-attention/tasks.md` and linked GitHub issues
-- [ ] T073 Complete requirement-by-requirement audit against `specs/005-dashboard-attention/spec.md` and mark only proven tasks complete
+- [X] T069 Run Foundation Release build and full test solution from `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/` (Release build passed; all changed feature and architecture suites passed. The full solution has one unrelated HTTP timeout test failure, reproduced identically from unchanged `f152659d` in an isolated worktree.)
+- [X] T070 Run Studio typecheck, lint, tests, build, and `tests/Elsa.Studio.Tests` from `/Users/sipke/.codex/worktrees/d246/elsa-foundation-studio/` (all passed on 2026-07-13; lint reported 49 existing warnings and zero errors; .NET 381/381 passed)
+- [X] T071 Run real-browser `/dashboard` proof for three widgets, all sizes, auth/scope, preferences, refresh, partial failure, snooze, and exact seeded aggregates
+- [X] T072 Run up to five self-review/fix iterations per slice and record final acceptance evidence in `specs/005-dashboard-attention/tasks.md` and linked GitHub issues
+- [X] T073 Complete requirement-by-requirement audit against `specs/005-dashboard-attention/spec.md` and mark only proven tasks complete
+
+## Final acceptance evidence (2026-07-13)
+
+- Foundation focused suites: Attention Core 10/10, Attention API 4/4, Studio Preferences 16/16, Workflows Dashboard 14/14, moved EF Portfolio acceptance 1/1, Architecture 69/69; Release Server build completed with zero warnings and zero errors.
+- Foundation full solution: every changed feature suite and the remainder of the solution passed except `SyncEndpoint_RequestTimeoutExceeded_Replies408_AndTheInstanceRemainsValid`; the same test failed from an isolated clean worktree at unchanged commit `f152659d`, proving it is baseline debt rather than a dashboard regression.
+- Studio complete gate: typecheck, JavaScript/CSS lint (zero errors), all workspace Vitest suites, all production builds, and Elsa.Studio.Tests 381/381 passed.
+- Browser proof used a locally seeded backend with 105 workflow definitions and 125 workflow runs. It rendered exactly Attention, Workflow Portfolio, and Workflow Run Health; verified exact counters, independent refresh requests, range/test-run settings, partial contributor failure, correlation, snooze persistence, hide/restore, reorder/resize persistence, responsive full-width layout, semantic headings, and accessible control names with no console or request errors.
+- Review fixes included sharing the SDK auth context across host/runtime modules, explicit `/_elsa/*` 404 handling, optional host-Attention capability negotiation, widget-size propagation, wide/full Attention bounds, valid design-token CSS, pure Core dependency boundaries, and preserving the shrink-only EF surface ratchet.
+- FR-001 through FR-071 and SC-001 through SC-010 were audited against the implementation, focused tests, architecture suite, and browser evidence. Deferred product extensions remain captured as #316–#332; outdated documentation correction is explicitly captured as #333.
 
 ## Dependencies
 

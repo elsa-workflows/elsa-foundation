@@ -3,14 +3,16 @@ import { useAuthSession, type ElsaStudioModuleApi, type StudioDashboardWidgetBod
 import { attentionScopeKey, groupAttentionItems, type AttentionSnapshot } from "./attentionApi";
 import { AttentionPreferenceStore, isSnoozed, snooze, type AttentionPreferences } from "./attentionPreferences";
 type Filter = "all" | "critical" | "snoozed";
-export function AttentionWidget({ api, snapshot }: { api: ElsaStudioModuleApi } & StudioDashboardWidgetBodyProps<AttentionSnapshot, unknown>) {
+export function AttentionWidget({ api, snapshot, size }: { api: ElsaStudioModuleApi } & StudioDashboardWidgetBodyProps<AttentionSnapshot, unknown>) {
   const [filter, setFilter] = useState<Filter>("all"); const [preferences, setPreferences] = useState<AttentionPreferences>({ snoozes: [] });
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
   const session = useAuthSession();
   const store = useMemo(() => new AttentionPreferenceStore(api, api.runtime.hostId ?? "default", attentionScopeKey(api, session.subject ?? "anonymous", session.tenantId ?? "default"), session.status !== "authenticated"), [api, session]);
   useEffect(() => { let current = true; setPreferenceError(null); void store.load().then(value => { if (current) setPreferences(value); }).catch(() => { if (current) setPreferenceError("Attention preferences are unavailable."); }); return () => { current = false; }; }, [store]);
   if (!snapshot) return <div role="status">Loading attention…</div>;
-  const visible = snapshot.items.filter(item => filter === "snoozed" ? isSnoozed(item, preferences.snoozes) : !isSnoozed(item, preferences.snoozes) && (filter !== "critical" || item.severity === "critical"));
+  const visible = snapshot.items
+    .filter(item => filter === "snoozed" ? isSnoozed(item, preferences.snoozes) : !isSnoozed(item, preferences.snoozes) && (filter !== "critical" || item.severity === "critical"))
+    .slice(0, size === "full" ? 20 : 5);
   const applySnooze = (items: typeof snapshot.items, duration: number) => { const keys = new Set(items.map(item => `${item.contributorId}:${item.id}`)); const next = { snoozes: [...preferences.snoozes.filter(value => !keys.has(`${value.contributorId}:${value.itemId}`)), ...items.map(item => snooze(item, duration))] }; setPreferences(next); setPreferenceError(null); void store.save(next).catch(() => setPreferenceError("Snooze could not be saved.")); };
   return <div className="attention-widget"><div role="group" aria-label="Attention filters">{(["all", "critical", "snoozed"] as Filter[]).map(value => <button type="button" aria-pressed={filter === value} key={value} onClick={() => setFilter(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div>
     {snapshot.failures.length ? <div role="alert">Dashboard data incomplete: {snapshot.failures.map(value => value.displayName).join(", ")}</div> : null}

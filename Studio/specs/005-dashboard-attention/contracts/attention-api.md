@@ -11,6 +11,11 @@ Repeated contributor IDs filter evaluation. An unfiltered request discovers and
 evaluates all authorized contributors. Studio and backend hosts may expose the
 same contract independently.
 
+Studio queries its own host endpoint only when browser runtime configuration
+sets `Studio:Attention:HostApiEnabled` to `true`; this prevents an unconfigured
+host capability from producing a noisy fallback request. The backend endpoint
+remains required. When both base URLs are the same, the client makes one request.
+
 ## Response
 
 ```json

@@ -21,6 +21,7 @@ interface StudioDashboardWidgetSettings<TSettings> {
 interface StudioDashboardWidgetBodyProps<TSnapshot, TSettings> {
   snapshot: TSnapshot | undefined;
   settings: TSettings;
+  size: StudioDashboardWidgetSize;
 }
 
 interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> {

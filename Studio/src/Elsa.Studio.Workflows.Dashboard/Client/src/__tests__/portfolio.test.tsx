@@ -14,13 +14,13 @@ describe("Workflow Portfolio widget", () => {
   });
 
   it("renders overlapping counters", () => {
-    const view = render(<WorkflowPortfolioWidget settings={undefined} snapshot={{ status: "ready", generatedAt: "", activeDefinitionCount: 10, publishedDefinitionCount: 8, unpublishedDraftCount: 4, invalidDraftCount: 2 }} />);
+    const view = render(<WorkflowPortfolioWidget settings={undefined} size="small" snapshot={{ status: "ready", generatedAt: "", activeDefinitionCount: 10, publishedDefinitionCount: 8, unpublishedDraftCount: 4, invalidDraftCount: 2 }} />);
     expect(view.textContent).toContain("counters overlap");
     expect(view.textContent).toContain("Invalid drafts");
   });
 
   it("renders a safe unavailable state", () => {
-    const view = render(<WorkflowPortfolioWidget settings={undefined} snapshot={{ status: "unavailable", generatedAt: "", errorCode: "PROVIDER_UNSUPPORTED" }} />);
+    const view = render(<WorkflowPortfolioWidget settings={undefined} size="small" snapshot={{ status: "unavailable", generatedAt: "", errorCode: "PROVIDER_UNSUPPORTED" }} />);
     expect(view.textContent).toBe("Portfolio statistics are unavailable (PROVIDER_UNSUPPORTED).");
   });
 });

@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { resolve } from "node:path";
 
 export default defineConfig({
   base: "/studio/",
@@ -20,6 +21,9 @@ export default defineConfig({
     }
   },
   test: {
+    alias: {
+      "@elsa-workflows/studio-sdk": resolve(__dirname, "src/sdk/index.ts")
+    },
     environment: "jsdom",
     setupFiles: ["./src/testSetup.ts"],
     // Full-page jsdom renders (extension builder, module management) normally finish in well

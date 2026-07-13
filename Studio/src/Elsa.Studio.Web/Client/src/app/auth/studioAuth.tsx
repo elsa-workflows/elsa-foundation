@@ -9,7 +9,7 @@ import {
   createSignalRAccessTokenFactory,
   type AuthProviderManager,
   type StudioEndpointContext
-} from "../../sdk";
+} from "@elsa-workflows/studio-sdk";
 import { isStudioAuthEnabled, type StudioRuntimeConfig } from "../runtime";
 import elsaLogo from "../../assets/images/icon.png";
 
