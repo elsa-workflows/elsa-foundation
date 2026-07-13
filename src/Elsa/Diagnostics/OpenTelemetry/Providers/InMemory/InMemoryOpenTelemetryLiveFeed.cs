@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 
-public class InMemoryOpenTelemetryLiveFeed(
+public sealed class InMemoryOpenTelemetryLiveFeed(
     IOptions<OpenTelemetryDiagnosticsOptions> options,
     IOpenTelemetrySourceRegistry sourceRegistry,
     DiagnosticsSubscriberDeliveryLossBridge? deliveryLossBridge = null) : IOpenTelemetryLiveFeed
@@ -138,8 +138,18 @@ public class InMemoryOpenTelemetryLiveFeed(
             if (signalType == null)
                 return;
 
+            var isReaggregatedSummary = item.DroppedItems is not null;
             _droppedSinceLastSummary.TryGetValue(signalType.Value, out var count);
             _droppedSinceLastSummary[signalType.Value] = count + (item.DroppedItems?.Count ?? 1);
+            // Raw items are accounted at their first loss. A summary may itself be evicted and requeued to
+            // preserve the in-band signal, but its underlying losses have already been observed.
+            if (!isReaggregatedSummary)
+            {
+                deliveryLossBridge?.RecordOpenTelemetry(new(
+                    signalType.Value,
+                    1,
+                    "SubscriberQueueFull"));
+            }
         }
 
         private void TryWriteDroppedSummary()
@@ -158,7 +168,6 @@ public class InMemoryOpenTelemetryLiveFeed(
                 // Clear the emitted signal as soon as it is queued so a write before the client reads the
                 // summary cannot enqueue the same drop count again (which would over-count drops).
                 _droppedSinceLastSummary.Remove(dropped.Key);
-                deliveryLossBridge?.RecordOpenTelemetry(summary);
             }
         }
 

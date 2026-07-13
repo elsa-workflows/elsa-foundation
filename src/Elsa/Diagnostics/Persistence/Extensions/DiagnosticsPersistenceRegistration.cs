@@ -76,9 +76,9 @@ public static class DiagnosticsPersistenceRegistration
     public static IServiceCollection AddDiagnosticsPersistenceObservability(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.TryAddSingleton<DiagnosticsPersistenceCounters>();
-        services.TryAddSingleton<IDiagnosticsPersistenceObserver>(provider =>
-            provider.GetRequiredService<DiagnosticsPersistenceCounters>());
+        RejectObserverConflicts(services);
+        services.AddDefaultDiagnosticsStore<IDiagnosticsPersistenceObserver, DiagnosticsPersistenceCounters>(
+            ServiceLifetime.Singleton);
         services.TryAddSingleton<DiagnosticsSubscriberDeliveryLossBridge>();
         return services;
     }
@@ -95,6 +95,25 @@ public static class DiagnosticsPersistenceRegistration
     {
         if (!Enum.IsDefined(lifetime))
             throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Unsupported diagnostics store lifetime.");
+    }
+
+    private static void RejectObserverConflicts(IServiceCollection services)
+    {
+        var observers = services
+            .Where(descriptor => descriptor.ServiceType == typeof(IDiagnosticsPersistenceObserver))
+            .ToArray();
+        if (observers.Length <= 1)
+            return;
+
+        var implementations = observers
+            .Select(descriptor => descriptor.ImplementationType?.FullName
+                ?? descriptor.ImplementationInstance?.GetType().FullName
+                ?? "factory registration")
+            .ToArray();
+        throw new InvalidOperationException(
+            $"Diagnostics replacement contract '{typeof(IDiagnosticsPersistenceObserver).FullName}' has conflicting " +
+            $"registrations: {string.Join(", ", implementations)}. Select one observer explicitly through " +
+            $"'{nameof(ReplaceDiagnosticsStore)}'.");
     }
 
     private sealed record DiagnosticsStoreSelection(
