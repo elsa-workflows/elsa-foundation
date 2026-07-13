@@ -233,7 +233,7 @@
 
 **Purpose**: Close documentation, generated-map, migration, security, performance, and release evidence across both repositories.
 
-- [ ] T102 [P] Refresh the narrowest affected domain, extension-point, architecture-reference, and feature-dependency maps using `tools/maps/generate-*.sh` and review `docs/maps/manifest.json`
+- [X] T102 [P] Refresh the narrowest affected domain, extension-point, architecture-reference, and feature-dependency maps using `tools/maps/generate-*.sh` and review `docs/maps/manifest.json`
 - [X] T103 [P] Update root/package documentation and the old ADR 0041 disposition in `README.md`, `docs/adr/0041-workflow-management-advertises-optional-authoring-capabilities.md`, and affected feature READMEs
 - [ ] T104 [P] Add definition-list bounded-query and capability-bootstrap request-count regression tests in `tests/Elsa/Workflows/Design/Api/Tests/` and Studio Workflows tests
 - [X] T105 [P] Complete endpoint authorization sweeps for every final domain slice (including Expressions and API Capabilities), assert the capability endpoint applies `PermissionNames.ApiCapabilitiesRead`, and add unauthenticated capability tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
