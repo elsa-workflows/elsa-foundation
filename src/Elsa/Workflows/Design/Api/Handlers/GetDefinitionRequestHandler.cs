@@ -15,9 +15,9 @@ public sealed class GetDefinitionRequestHandler(
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
     {
-        var definitionTask = definitionStore.GetAsync(request.Id, cancellationToken);
-        var versionsTask = versionStore.ListByDefinitionAsync(request.Id, cancellationToken);
-        var draftTask = draftStore.FindByWorkflowDefinitionIdAsync(request.Id, cancellationToken);
+        var definitionTask = definitionStore.GetAsync(request.DefinitionId, cancellationToken);
+        var versionsTask = versionStore.ListByDefinitionAsync(request.DefinitionId, cancellationToken);
+        var draftTask = draftStore.FindByWorkflowDefinitionIdAsync(request.DefinitionId, cancellationToken);
 
         var definition = await definitionTask;
         var versions = await versionsTask;

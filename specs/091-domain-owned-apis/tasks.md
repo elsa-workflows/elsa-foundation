@@ -128,10 +128,10 @@
 ### Implementation for User Story 4
 
 - [X] T053 [US4] Extend definition creation and list projections without concrete root kinds or N+1 reads in `src/Elsa/Workflows/Design/Api/`
-- [ ] T054 [US4] Separate metadata patching from first-class draft GET/PUT/promote/discard endpoints in `src/Elsa/Workflows/Design/Api/Endpoints/`
-- [ ] T055 [US4] Implement definition soft-delete/restore/permanent-delete and keep Publishing state untouched in `src/Elsa/Workflows/Design/Api/`
-- [ ] T056 [US4] Reject synthetic draft identifiers and isolate direct version ingestion behind explicit authorization in `src/Elsa/Workflows/Design/Api/Endpoints/Versions/`
-- [ ] T057 [US4] Move scoped-variable analysis and activity input-option resolution from the facade into `src/Elsa/Workflows/Design/Api/Endpoints/Authoring/`
+- [X] T054 [US4] Separate metadata patching from first-class draft GET/PUT/promote/discard endpoints in `src/Elsa/Workflows/Design/Api/Endpoints/`
+- [X] T055 [US4] Implement definition soft-delete/restore/permanent-delete and keep Publishing state untouched in `src/Elsa/Workflows/Design/Api/`
+- [X] T056 [US4] Reject synthetic draft identifiers and isolate direct version ingestion behind explicit authorization in `src/Elsa/Workflows/Design/Api/Endpoints/Versions/`
+- [X] T057 [US4] Move scoped-variable analysis and activity input-option resolution from the facade into `src/Elsa/Workflows/Design/Api/Endpoints/Authoring/`
 - [X] T058 [US4] Implement the unified normalized authoring catalog in `src/Elsa/Activities/Design/Api/Endpoints/Catalog/` and retain canonical availability endpoints
 - [X] T059 [US4] Implement `ExpressionsApiFeature`, descriptor endpoints, models, and route constants in `src/Elsa/Expressions/Api/`
 - [X] T060 [US4] Move `WorkflowExecutableInspector` and its views from Publishing into `src/Elsa/Workflows/Runtime/Api/` and add read-only provenance endpoints

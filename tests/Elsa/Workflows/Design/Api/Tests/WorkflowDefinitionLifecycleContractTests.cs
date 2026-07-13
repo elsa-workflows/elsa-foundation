@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -56,6 +57,25 @@ public sealed class WorkflowDefinitionLifecycleContractTests
         Assert.True(
             matches.Length == 1,
             $"Canonical operation '{endpointName}' requires exactly one {verb} {route} endpoint; found {matches.Length}.");
+        Assert.Contains(
+            verb == "GET" ? PermissionNames.WorkflowDesignRead : PermissionNames.WorkflowDesignManage,
+            matches[0].AllowedPermissions!);
+        Assert.Null(matches[0].AnonymousVerbs);
+    }
+
+    [Fact]
+    public void Direct_version_ingestion_is_isolated_behind_explicit_manage_authorization()
+    {
+        var definition = typeof(AddDefinition).Assembly.GetTypes()
+            .Where(type => type is { IsClass: true, IsAbstract: false }
+                           && type.Namespace == $"{Root}.Versions"
+                           && typeof(BaseEndpoint).IsAssignableFrom(type))
+            .Select(ConfiguredDefinition)
+            .Single(endpoint => endpoint.Verbs.Contains("POST", StringComparer.OrdinalIgnoreCase));
+
+        Assert.Contains("design/workflows/versions/ingest", definition.Routes);
+        Assert.Contains(PermissionNames.WorkflowDesignManage, definition.AllowedPermissions!);
+        Assert.Null(definition.AnonymousVerbs);
     }
 
     [Fact]

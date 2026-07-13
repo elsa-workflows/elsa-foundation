@@ -9,4 +9,8 @@ internal static class RouteConstants
     internal static string Definitions => GetRoute("definitions");
 
     internal static string Versions => GetRoute("versions");
+
+    internal static string ScopedVariableAnalysis => GetRoute("scoped-variables/analyze");
+
+    internal static string ActivityInputOptions => GetRoute("activities/{activityVersionId}/inputs/{inputName}/options");
 }

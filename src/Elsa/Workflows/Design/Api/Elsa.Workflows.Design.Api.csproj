@@ -11,6 +11,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
 		<ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
 		<ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
 		<ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />

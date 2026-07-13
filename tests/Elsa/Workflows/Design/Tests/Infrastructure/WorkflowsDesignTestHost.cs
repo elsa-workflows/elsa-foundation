@@ -161,6 +161,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         services
             .AddScoped<Persistence.Core.Contracts.IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
             .AddScoped<Persistence.Core.Contracts.ISaveWorkflowDefinitionCommand, SaveWorkflowDefinition>()
+            .AddScoped<Persistence.Core.Contracts.IDeleteWorkflowDefinitionPermanentlyCommand, DeleteWorkflowDefinitionPermanently>()
             .AddScoped<Persistence.Core.Contracts.ISubmitWorkflowDefinitionCommand, SubmitWorkflowDefinition>()
             // Lifecycle commands (NOT mutations — kept distinct, FR-003).
             .AddScoped<Persistence.Core.Contracts.ICreateDraftCommand, CreateDraft>()

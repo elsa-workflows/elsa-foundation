@@ -1,18 +1,18 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Constants;
-using Elsa.Workflows.Design.Api.Models;
 using Microsoft.Extensions.Logging;
-using Elsa.Api.FastEndpoints.Constants;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
-internal sealed class Add(ICommandSender commandSender, ILogger<Add> logger) : ElsaCommandHandlerEndpoint<AddDefinition, WorkflowDefinitionDetailsView>(commandSender, logger)
+internal sealed class Restore(ICommandSender commandSender, ILogger<Restore> logger)
+    : NoContentDesignCommandEndpoint<RestoreDefinition>(commandSender, logger)
 {
     public override void Configure()
     {
-        Post(RouteConstants.Definitions);
+        Post(RouteConstants.GetRoute("definitions/{definitionId}/restore"));
         ConfigurePermissions(PermissionNames.WorkflowDesignManage);
     }
 }

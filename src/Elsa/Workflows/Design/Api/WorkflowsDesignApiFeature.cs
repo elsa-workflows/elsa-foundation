@@ -34,6 +34,7 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         // These services back the authoring API and must not depend on the optional validation feature.
         services.AddScopedVariableAuthoring();
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
+        services.TryAddScoped<ActivityInputOptionsAuthoringService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
     }
 }
