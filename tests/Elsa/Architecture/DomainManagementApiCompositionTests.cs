@@ -159,7 +159,7 @@ public sealed class DomainManagementApiCompositionTests
                 var type when type == typeof(ExpressionDescriptorsResponse) => new ExpressionDescriptorsResponse([]),
                 var type when type == typeof(PublishedWorkflowView) => new PublishedWorkflowView(
                     "publication-1", "definition-1", "version-1", "version-1", "artifact-1", "default",
-                    PublicationStatus.Active, "reference-1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
+                    PublicationStatusView.Active, "reference-1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
                     null, "1.0.0", "hash-1", "root-1", 1, true),
                 var type when type == typeof(Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView) =>
                     new Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView([]),
