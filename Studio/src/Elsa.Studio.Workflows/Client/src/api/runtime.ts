@@ -116,22 +116,66 @@ export interface ListWorkflowInstancesRequest {
   runKind?: string;
   definitionId?: string;
   correlationId?: string;
+  workflowExecutionId?: string;
+  artifactId?: string;
+  from?: string;
+  to?: string;
   take?: number;
+  cursor?: string;
 }
 
-export async function listWorkflowInstances(context: StudioEndpointContext, request: ListWorkflowInstancesRequest = {}) {
-  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-instances");
+export interface WorkflowInstanceListPage {
+  items: WorkflowInstanceSummary[];
+  previousCursor: string | null;
+  nextCursor: string | null;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  count: number;
+  totalCount: number;
+}
+
+export function workflowInstanceListQuery(request: ListWorkflowInstancesRequest = {}) {
   const parameters = new URLSearchParams();
   if (request.status) parameters.set("status", request.status);
   if (request.runKind) parameters.set("runKind", request.runKind);
   if (request.definitionId) parameters.set("definitionId", request.definitionId);
   if (request.correlationId) parameters.set("correlationId", request.correlationId);
+  if (request.workflowExecutionId) parameters.set("workflowExecutionId", request.workflowExecutionId);
+  if (request.artifactId) parameters.set("artifactId", request.artifactId);
+  if (request.from) parameters.set("from", request.from);
+  if (request.to) parameters.set("to", request.to);
   if (request.take) parameters.set("take", String(request.take));
-  const query = parameters.toString();
+  if (request.cursor) parameters.set("cursor", request.cursor);
+  return parameters.toString();
+}
+
+export async function listWorkflowInstances(context: StudioEndpointContext, request: ListWorkflowInstancesRequest = {}) {
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-instances");
+  const query = workflowInstanceListQuery(request);
   const response = await context.http.getJson<
-    { items?: WorkflowInstanceSummary[] } | WorkflowInstanceSummary[]
+    Partial<WorkflowInstanceListPage> | WorkflowInstanceSummary[]
   >(`${path}${query ? `?${query}` : ""}`);
-  return Array.isArray(response) ? response : response.items ?? [];
+  if (Array.isArray(response)) {
+    return {
+      items: response,
+      previousCursor: null,
+      nextCursor: null,
+      hasPrevious: false,
+      hasNext: false,
+      count: response.length,
+      totalCount: response.length
+    } satisfies WorkflowInstanceListPage;
+  }
+  const items = response.items ?? [];
+  return {
+    items,
+    previousCursor: response.previousCursor ?? null,
+    nextCursor: response.nextCursor ?? null,
+    hasPrevious: response.hasPrevious ?? Boolean(response.previousCursor),
+    hasNext: response.hasNext ?? Boolean(response.nextCursor),
+    count: response.count ?? items.length,
+    totalCount: response.totalCount ?? items.length
+  } satisfies WorkflowInstanceListPage;
 }
 
 export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
