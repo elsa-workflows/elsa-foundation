@@ -591,12 +591,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/TestRun'
 
-  /publishing/workflows/drafts/{draftId}/test-runs:
-    parameters:
-      - $ref: '#/components/parameters/DraftId'
+  /publishing/workflows/drafts/test-runs:
     post:
       tags: [Publishing]
       operationId: startWorkflowDraftTestRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [definitionId, snapshotId, state]
+              properties:
+                definitionId: { type: string }
+                snapshotId: { type: string }
+                state:
+                  $ref: '#/components/schemas/WorkflowDefinitionState'
+                artifactVersion: { type: [string, 'null'] }
+                inputs:
+                  type: object
+                  additionalProperties: true
       responses:
         '201':
           description: Draft snapshot, test-run source reference, and execution created
