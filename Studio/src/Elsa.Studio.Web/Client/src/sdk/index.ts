@@ -1033,6 +1033,10 @@ export interface StudioContributionRegistry<T> {
   compose(options?: StudioContributionListOptions<T>): StudioContributionComposition<T>[];
 }
 
+export interface StudioDashboardWidgetRegistry extends Omit<StudioContributionRegistry<StudioDashboardWidgetContribution>, "add"> {
+  add<TSnapshot = unknown, TSettings = unknown>(contribution: StudioDashboardWidgetContribution<TSnapshot, TSettings>): void;
+}
+
 export interface StudioAiPromptDispatcher {
   dispatchPrompt(request: StudioAiPromptRequest): void;
   onPrompt(listener: (request: StudioAiPromptRequest) => void): () => void;
@@ -1079,7 +1083,7 @@ export interface ElsaStudioModuleApi {
   readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
-  readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution<any, any>>;
+  readonly dashboardWidgets: StudioDashboardWidgetRegistry;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
@@ -1135,6 +1139,12 @@ export function createContributionRegistry<T>(options: CreateStudioContributionR
       return composeContributions(contributions, slot, options, listOptions);
     }
   };
+}
+
+export function createDashboardWidgetRegistry(): StudioDashboardWidgetRegistry {
+  // Widget snapshot/settings types are contribution-local. The registry stores them opaquely and the
+  // Dashboard host invokes each contribution through its own paired loader/body contract.
+  return createContributionRegistry<StudioDashboardWidgetContribution>({ slot: studioSlots.dashboardWidgets }) as unknown as StudioDashboardWidgetRegistry;
 }
 
 export function createAiContributionApi(): StudioAiContributionApi {

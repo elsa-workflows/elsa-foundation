@@ -26,7 +26,7 @@ describe("extension builder page", () => {
         : {}
     }));
 
-    await flushPromises();
+    await waitForText(container, "You do not have Extension Builder capabilities");
 
     expect(container.textContent).toContain("You do not have Extension Builder capabilities");
     expect(container.textContent).toContain("GetCapabilities");

@@ -61,7 +61,7 @@ export function useDashboardWidget(
       const timedOut = abort.signal.aborted && abort.signal.reason === "timeout";
       setState({ status: timedOut ? "timedOut" : "error", error: timedOut ? "The widget timed out." : message(error) });
     } finally { window.clearTimeout(timeout); }
-  }, [active, cacheKey, defaultTimeoutMs, refreshIntervalMs, settings, widget]);
+  }, [active, cacheKey, cacheScopeKey, defaultTimeoutMs, refreshIntervalMs, settings, widget]);
 
   useEffect(() => {
     if (!widget.load || !active) { controller.current?.abort(); setState({ status: "idle" }); return; }

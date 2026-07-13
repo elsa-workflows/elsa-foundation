@@ -1,4 +1,3 @@
-import React from "react";
 import type { ElsaStudioModuleApi, StudioDashboardWidgetContribution, StudioSettingDescriptor } from "@elsa-workflows/studio-sdk";
 import { loadPortfolio, loadRunHealth, type RunHealthSettings, type WorkflowPortfolioSnapshot, type WorkflowRunHealthSnapshot } from "./workflowDashboardApi";
 import { WorkflowPortfolioWidget } from "./WorkflowPortfolioWidget";
