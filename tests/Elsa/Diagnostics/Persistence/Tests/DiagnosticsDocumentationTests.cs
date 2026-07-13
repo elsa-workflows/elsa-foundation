@@ -18,6 +18,12 @@ public sealed class DiagnosticsDocumentationTests
         Assert.Contains("Replacement", catalog, StringComparison.Ordinal);
         Assert.Contains("conflict", catalog, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("helper boundary", catalog, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("## Overridable contracts", catalog, StringComparison.Ordinal);
+        Assert.Contains("## Contributors", catalog, StringComparison.Ordinal);
+        Assert.Contains("## Events", catalog, StringComparison.Ordinal);
+        Assert.True(
+            catalog.Contains("*(Core —", StringComparison.Ordinal) ||
+            catalog.Contains("*(Feature-contract —", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -29,6 +35,18 @@ public sealed class DiagnosticsDocumentationTests
             "src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md",
             rootIndex,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Replacement_contract_kind_is_declared_on_the_contracts_themselves()
+    {
+        var drainTarget = File.ReadAllText(RepositoryPath(
+            "src/Elsa/Diagnostics/Persistence/Draining/DiagnosticsDrainContracts.cs"));
+        var observer = File.ReadAllText(RepositoryPath(
+            "src/Elsa/Diagnostics/Persistence/Observability/DiagnosticsPersistenceObservability.cs"));
+
+        Assert.Contains("Replacement contract", drainTarget, StringComparison.Ordinal);
+        Assert.Contains("Replacement contract", observer, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,7 +65,16 @@ public sealed class DiagnosticsDocumentationTests
             "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/EfCoreOpenTelemetryStoreTests.cs",
             "src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/EFCoreOpenTelemetryPersistenceFeatureBase.cs",
             "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/SqliteOpenTelemetryPersistenceFeatureTests.cs",
-            "src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Migrations/20260623005000_Initial.cs"
+            "src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Migrations/20260623005000_Initial.cs",
+            "src/Elsa/Persistence/EFCore/Storage/ChannelDrainingStoreBase.cs",
+            "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStoreResilienceTests.cs",
+            "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/EfCoreOpenTelemetryStoreResilienceTests.cs",
+            "src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Tasks/StartStructuredLogDrainingStartupTask.cs",
+            "src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Tasks/StopStructuredLogDrainingShellTerminator.cs",
+            "src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Tasks/StartOpenTelemetryDrainingStartupTask.cs",
+            "src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Tasks/StopOpenTelemetryDrainingShellTerminator.cs",
+            "src/Elsa/Diagnostics/StructuredLogs/Live/InMemoryStructuredLogLiveFeed.cs",
+            "src/Elsa/Diagnostics/OpenTelemetry/Providers/InMemory/InMemoryOpenTelemetryLiveFeed.cs"
         };
 
         Assert.All(requiredEvidence, path => Assert.Contains($"`{path}`", inventory, StringComparison.Ordinal));

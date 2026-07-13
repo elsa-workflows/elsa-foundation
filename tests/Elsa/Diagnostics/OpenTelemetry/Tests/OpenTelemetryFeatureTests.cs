@@ -1,6 +1,8 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Endpoints;
+using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -8,6 +10,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 
 public sealed class OpenTelemetryFeatureTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 7, 13, 10, 0, 0, TimeSpan.Zero);
     [Fact]
     public void RegistersResolvableDiagnosticsServices()
     {
@@ -49,5 +52,31 @@ public sealed class OpenTelemetryFeatureTests
         Assert.Equal(123, options.TraceCapacity);
         Assert.Equal("secret", options.ApiKey);
         Assert.False(options.AllowUnauthenticatedLoopback);
+    }
+
+    [Fact]
+    public async Task Production_composition_counts_each_subscriber_drop_summary_once()
+    {
+        var services = new ServiceCollection();
+        new OpenTelemetryFeature { SubscriberChannelCapacity = 1 }.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        var feed = provider.GetRequiredService<IOpenTelemetryLiveFeed>();
+        var counters = provider.GetRequiredService<DiagnosticsPersistenceCounters>();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await using var subscriber = feed.SubscribeAsync(new OpenTelemetryTraceFilter(), cancellation.Token)
+            .GetAsyncEnumerator(cancellation.Token);
+        var traces = Enumerable.Range(1, 3)
+            .Select(index => new TelemetryTrace(
+                $"trace-{index}", "root", "name", Now, Now.AddMilliseconds(5),
+                TimeSpan.FromMilliseconds(5), SpanStatus.Ok, ["resource-1"], [], 1))
+            .ToArray();
+
+        await feed.PublishAsync(new OpenTelemetryBatch([], traces, [], [], [], []), cancellation.Token);
+        Assert.True(await subscriber.MoveNextAsync());
+        Assert.True(await subscriber.MoveNextAsync());
+
+        var signal = Assert.IsType<OpenTelemetryDroppedItemSummary>(subscriber.Current.DroppedItems);
+        Assert.Equal(signal.Count,
+            counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
     }
 }

@@ -88,6 +88,40 @@ public sealed class DiagnosticsPersistenceArchitectureTests
         Assert.Single(preexisting, descriptor => descriptor.ServiceType == typeof(ITestStore));
     }
 
+    [Fact]
+    public void Diagnostics_stores_default_to_scoped_and_share_one_instance_within_each_scope()
+    {
+        var services = new ServiceCollection();
+        services.AddDefaultDiagnosticsStore<ITestStore, FirstStore>();
+
+        Assert.Equal(ServiceLifetime.Scoped,
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ITestStore)).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped,
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(FirstStore)).Lifetime);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var firstScope = provider.CreateScope();
+        using var secondScope = provider.CreateScope();
+        Assert.Same(
+            firstScope.ServiceProvider.GetRequiredService<ITestStore>(),
+            firstScope.ServiceProvider.GetRequiredService<FirstStore>());
+        Assert.NotSame(
+            firstScope.ServiceProvider.GetRequiredService<ITestStore>(),
+            secondScope.ServiceProvider.GetRequiredService<ITestStore>());
+    }
+
+    [Theory]
+    [InlineData(nameof(DiagnosticsPersistenceRegistration.AddDefaultDiagnosticsStore))]
+    [InlineData(nameof(DiagnosticsPersistenceRegistration.ReplaceDiagnosticsStore))]
+    public void Store_registration_allows_an_explicit_documented_lifetime(string methodName)
+    {
+        var method = typeof(DiagnosticsPersistenceRegistration)
+            .GetMethods()
+            .Single(candidate => candidate.Name == methodName);
+
+        Assert.Contains(method.GetParameters(), parameter => parameter.ParameterType == typeof(ServiceLifetime));
+    }
+
     private interface ITestStore;
     private sealed class FirstStore : ITestStore;
     private sealed class SecondStore : ITestStore;

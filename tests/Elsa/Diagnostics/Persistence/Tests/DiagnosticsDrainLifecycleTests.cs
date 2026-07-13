@@ -40,6 +40,30 @@ public sealed class DiagnosticsDrainLifecycleTests : DiagnosticsDrainTestBase
     }
 
     [Fact]
+    public async Task Retry_delay_is_capped_while_the_same_batch_continues_to_retry()
+    {
+        var target = new DiagnosticsFailureTarget
+        {
+            Failure = (_, attempt) => attempt < 3
+                ? new DiagnosticsOperationalException("provider unavailable")
+                : null
+        };
+        var drain = Fixture.Create(
+            target,
+            maxAttempts: 3,
+            baseRetryDelay: TimeSpan.FromMilliseconds(1),
+            maxRetryDelay: TimeSpan.FromMilliseconds(1));
+        var acknowledgement = drain.EnqueueAsync(8).AsTask();
+
+        var result = await drain.StopAsync();
+
+        Assert.True(result.Drained);
+        Assert.Equal(8, await acknowledgement);
+        Assert.Equal(3, target.Attempts);
+        Assert.Single(target.AttemptedBatchIds.Distinct());
+    }
+
+    [Fact]
     public async Task Caller_cancellation_does_not_abandon_an_accepted_acknowledgement()
     {
         var target = new DiagnosticsFailureTarget { CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };

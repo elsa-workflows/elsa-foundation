@@ -29,6 +29,7 @@ public sealed class DiagnosticsFailureTarget : IDiagnosticsDrainTarget<int, int>
     public Func<int, Exception?>? RetentionFailure { get; set; }
     public TaskCompletionSource CommitEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource? CommitRelease { get; set; }
+    public Action? CancellationCallback { get; set; }
     public int Attempts => Volatile.Read(ref _attempts);
     public int RetentionCalls => Volatile.Read(ref _retentionCalls);
     public ConcurrentQueue<DiagnosticsDrainBatchId> AttemptedBatchIds { get; } = new();
@@ -37,6 +38,7 @@ public sealed class DiagnosticsFailureTarget : IDiagnosticsDrainTarget<int, int>
         DiagnosticsDrainBatch<int> batch,
         CancellationToken cancellationToken = default)
     {
+        using var cancellationRegistration = cancellationToken.Register(() => CancellationCallback?.Invoke());
         var attempt = Interlocked.Increment(ref _attempts);
         AttemptedBatchIds.Enqueue(batch.Id);
         CommitEntered.TrySetResult();

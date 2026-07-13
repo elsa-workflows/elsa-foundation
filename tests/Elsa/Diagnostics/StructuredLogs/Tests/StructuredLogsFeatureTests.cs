@@ -1,6 +1,7 @@
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Endpoints;
+using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -53,5 +54,30 @@ public sealed class StructuredLogsFeatureTests
 
         Assert.Equal(LogLevel.Warning, options.MinimumLevel);
         Assert.Equal(123, options.BufferCapacity);
+    }
+
+    [Fact]
+    public async Task Production_composition_counts_each_subscriber_drop_once()
+    {
+        var services = new ServiceCollection();
+        new StructuredLogsFeature().ConfigureServices(services);
+        services.Configure<StructuredLogsOptions>(options => options.SubscriberQueueCapacity = 1);
+        using var provider = services.BuildServiceProvider();
+        var feed = provider.GetRequiredService<IStructuredLogLiveFeed>();
+        var publisher = provider.GetRequiredService<IStructuredLogLivePublisher>();
+        var counters = provider.GetRequiredService<DiagnosticsPersistenceCounters>();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await using var subscriber = feed.Subscribe(StructuredLogFilter.None, cancellation.Token)
+            .GetAsyncEnumerator(cancellation.Token);
+
+        publisher.Publish(TestEntries.Create(sequence: 1));
+        publisher.Publish(TestEntries.Create(sequence: 2));
+        publisher.Publish(TestEntries.Create(sequence: 3));
+        Assert.True(await subscriber.MoveNextAsync());
+        Assert.True(await subscriber.MoveNextAsync());
+
+        var signal = Assert.IsType<Core.Models.DroppedEntriesSignal>(subscriber.Current.Dropped);
+        Assert.Equal(signal.DroppedCount,
+            counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
     }
 }

@@ -53,6 +53,67 @@ public sealed class DiagnosticsDrainShutdownTests : DiagnosticsDrainTestBase
     }
 
     [Fact]
+    public async Task Shutdown_timeout_is_not_extended_by_a_blocking_cancellation_callback()
+    {
+        using var callbackEntered = new ManualResetEventSlim();
+        using var callbackRelease = new ManualResetEventSlim();
+        var target = new DiagnosticsFailureTarget
+        {
+            CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously),
+            IgnoreCancellation = true,
+            CancellationCallback = () =>
+            {
+                callbackEntered.Set();
+                callbackRelease.Wait();
+            }
+        };
+        var drain = Fixture.Create(target, shutdownTimeout: TimeSpan.FromMilliseconds(50));
+        drain.Start();
+        Assert.True(drain.TryEnqueue(1, out var acknowledgement));
+        await target.CommitEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var stop = drain.StopAsync();
+
+        try
+        {
+            Assert.True(callbackEntered.Wait(TimeSpan.FromSeconds(2)));
+            Assert.Same(stop, await Task.WhenAny(stop, Task.Delay(TimeSpan.FromMilliseconds(500))));
+            var result = await stop;
+
+            Assert.Equal(DiagnosticsDrainState.TimedOut, result.State);
+            Assert.Equal(DiagnosticsPersistenceLossReason.ShutdownTimeout,
+                (await Assert.ThrowsAsync<DiagnosticsDrainException>(() => acknowledgement)).Reason);
+        }
+        finally
+        {
+            callbackRelease.Set();
+            target.CommitRelease.TrySetResult();
+            await stop.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    [Fact]
+    public async Task Unexpected_drain_loop_fault_uses_the_same_terminal_fallback_and_settles_acks()
+    {
+        var target = new DiagnosticsFailureTarget
+        {
+            Failure = (_, _) => new DiagnosticsOperationalException("provider unavailable")
+        };
+        var drain = Fixture.Create(
+            target,
+            maxAttempts: 2,
+            baseRetryDelay: TimeSpan.MaxValue,
+            maxRetryDelay: TimeSpan.MaxValue);
+        Assert.True(drain.TryEnqueue(1, out var acknowledgement));
+
+        var result = await drain.StopAsync();
+
+        Assert.False(result.Drained);
+        Assert.Equal(DiagnosticsDrainState.TimedOut, result.State);
+        Assert.Equal(DiagnosticsPersistenceLossReason.ShutdownTimeout,
+            (await Assert.ThrowsAsync<DiagnosticsDrainException>(() => acknowledgement)).Reason);
+    }
+
+    [Fact]
     public async Task Timeout_and_overflow_leave_no_accepted_acknowledgement_incomplete()
     {
         var target = new DiagnosticsFailureTarget

@@ -72,6 +72,31 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     }
 
     [Fact]
+    public void Cumulative_structured_log_signals_record_only_deltas_even_when_repeated_or_concurrent()
+    {
+        var counters = new DiagnosticsPersistenceCounters();
+        var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
+        var since = DateTimeOffset.UnixEpoch;
+
+        Parallel.For(1, 101, count => bridge.Record(new DroppedEntriesSignal(count, since)));
+        bridge.Record(new DroppedEntriesSignal(100, since));
+
+        Assert.Equal(100, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
+    }
+
+    [Fact]
+    public void A_new_structured_log_subscription_starts_a_new_cumulative_epoch()
+    {
+        var counters = new DiagnosticsPersistenceCounters();
+        var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
+
+        bridge.Record(new DroppedEntriesSignal(4, DateTimeOffset.UnixEpoch));
+        bridge.Record(new DroppedEntriesSignal(2, DateTimeOffset.UnixEpoch.AddSeconds(1)));
+
+        Assert.Equal(6, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
+    }
+
+    [Fact]
     public void Subscriber_delivery_bridge_validates_dependencies_signals_and_counts_without_truncation()
     {
         Assert.Throws<ArgumentNullException>(() => new DiagnosticsSubscriberDeliveryLossBridge(null!));

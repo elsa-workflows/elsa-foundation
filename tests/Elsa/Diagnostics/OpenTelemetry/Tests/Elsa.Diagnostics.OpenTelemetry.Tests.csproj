@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Elsa.Diagnostics.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

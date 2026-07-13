@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Elsa.Diagnostics.Persistence.csproj" />
   </ItemGroup>
 
 </Project>
