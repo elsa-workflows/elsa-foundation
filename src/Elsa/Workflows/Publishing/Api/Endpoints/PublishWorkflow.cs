@@ -5,6 +5,7 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Microsoft.Extensions.Logging;
 using PublishWorkflowCommand = Elsa.Workflows.Publishing.Api.Requests.PublishWorkflow;
@@ -30,7 +31,8 @@ internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILog
                     request.VersionId,
                     request.Action is { } action ? PublicationIntentContract.ToModel(action) : null,
                     request.SlotName,
-                    request.ExpectedPublicationId),
+                    request.ExpectedPublicationId,
+                    request.PreflightToken),
                 cancellationToken);
             await Send.ResponseAsync(response, response.WasCreated ? 201 : 200, cancellationToken);
         }
@@ -39,6 +41,10 @@ internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILog
             ThrowError(exception.Message, 404);
         }
         catch (PublicationPreflightConflictException exception)
+        {
+            ThrowError(exception.Message, 409);
+        }
+        catch (PublicationSnapshotReviewException exception)
         {
             ThrowError(exception.Message, 409);
         }

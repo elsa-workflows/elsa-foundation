@@ -221,3 +221,23 @@ public sealed record PublicationPreflightView(
     bool CanActivate,
     IReadOnlyCollection<PublicationTriggerChangeView> Triggers,
     IReadOnlyCollection<PublicationTriggerConflictView> Conflicts);
+
+public sealed record PublicationTriggerClaimView(string Key, PublicationTriggerCardinalityView Cardinality)
+{
+    public static PublicationTriggerClaimView From(PublicationTriggerClaim claim) =>
+        new(PublicationContract.TriggerKey(claim.StimulusType, claim.StimulusHash), PublicationContract.ToView(claim.Cardinality));
+}
+
+public sealed record PublicationSnapshotPreflightView(
+    string PreflightToken,
+    string CandidateHash,
+    string DefinitionId,
+    string? VersionId,
+    string SlotName,
+    PublicationActionView ResolvedAction,
+    PublicationPolicySourceView PolicySource,
+    long? PolicyRevision,
+    bool CanActivate,
+    IReadOnlyCollection<PublicationTriggerClaimView> Claims,
+    IReadOnlyCollection<PublicationTriggerChangeView> Triggers,
+    IReadOnlyCollection<PublicationTriggerConflictView> Conflicts);

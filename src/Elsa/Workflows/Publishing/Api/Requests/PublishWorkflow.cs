@@ -8,4 +8,5 @@ public sealed record PublishWorkflow(
     string VersionId,
     PublicationAction? Action = null,
     string? SlotName = null,
-    string? ExpectedPublicationId = null) : IRequest<PublishedWorkflowView>;
+    string? ExpectedPublicationId = null,
+    string? PreflightToken = null) : IRequest<PublishedWorkflowView>;

@@ -27,7 +27,9 @@ public sealed class PublishWorkflowRequestHandler(
     IPublicationPreflightService preflightService,
     IPublicationActivator activator,
     TimeProvider timeProvider,
-    WorkflowPublicationPreflightReader? publicationPreflightReader = null)
+    WorkflowPublicationPreflightReader? publicationPreflightReader = null,
+    IWorkflowDefinitionVersionStore? workflowVersionStore = null,
+    PublicationSnapshotReviewService? snapshotReviews = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -46,23 +48,38 @@ public sealed class PublishWorkflowRequestHandler(
         ArgumentNullException.ThrowIfNull(request);
         var now = timeProvider.GetUtcNow();
         var executable = await CompileAsync(request.VersionId, now, cancellationToken);
-        await executableStore.SaveAsync(executable, cancellationToken);
-
         var identity = executable.Identity;
-        var requestIntent = request.Action is { } action
-            ? new PublicationRequestIntent(action, request.SlotName)
-            : request.SlotName is not null
-                ? new PublicationRequestIntent(PublicationAction.Replace, request.SlotName)
-                : null;
+        var review = request.PreflightToken is { } preflightToken
+            ? (snapshotReviews ?? throw new InvalidOperationException("Publication snapshot review services are not configured."))
+                .Get(preflightToken)
+            : null;
+        if (review is not null)
+            snapshotReviews!.ValidateRequestedIntent(review, request.Action, request.SlotName, request.ExpectedPublicationId);
+        var requestIntent = review is not null
+            ? RequestIntent(review.RequestedAction, review.RequestedSlotName)
+            : RequestIntent(request.Action, request.SlotName);
         var publicationId = $"publication-{ShortIdentityGenerator.Generate(now)}";
         var plan = await _publicationPreflightReader.EvaluateAsync(
             executable,
             requestIntent,
-            request.ExpectedPublicationId,
+            review?.ActivePublicationId ?? request.ExpectedPublicationId,
             publicationId,
             cancellationToken);
+        if (review is not null)
+        {
+            var version = await (workflowVersionStore
+                ?? throw new InvalidOperationException("Workflow definition version services are not configured."))
+                .GetWithDefinitionAsync(request.VersionId, cancellationToken);
+            var layout = await layoutStore.FindByVersionIdAsync(request.VersionId, cancellationToken);
+            var candidateHash = snapshotReviews!.ComputeCandidateHash(version.State, layout?.Records ?? []);
+            snapshotReviews.ValidateAndConsume(request.PreflightToken!, candidateHash, plan);
+        }
         if (!plan.Result.CanActivate)
             throw new PublicationPreflightConflictException(plan.Result.Conflicts);
+
+        // A supplied snapshot token is fully revalidated and consumed before this first write. Stale candidates,
+        // intents, policies, and slot authorities therefore fail without persisting an executable or publication.
+        await executableStore.SaveAsync(executable, cancellationToken);
 
         var resolved = plan.ResolvedAction;
         var slot = plan.Slot;
@@ -140,6 +157,13 @@ public sealed class PublishWorkflowRequestHandler(
                 PublishedArtifactPrefix,
                 new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" }),
             cancellationToken);
+
+    private static PublicationRequestIntent? RequestIntent(PublicationAction? action, string? slotName) =>
+        action is { } requestedAction
+            ? new PublicationRequestIntent(requestedAction, slotName)
+            : slotName is not null
+                ? new PublicationRequestIntent(PublicationAction.Replace, slotName)
+                : null;
 
     private async ValueTask<WorkflowExecutableSourceReference> BuildSourceReferenceAsync(
         WorkflowExecutable executable,

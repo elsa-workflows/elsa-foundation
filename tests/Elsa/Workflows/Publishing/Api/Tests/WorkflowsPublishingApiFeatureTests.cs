@@ -1,5 +1,6 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -29,7 +30,19 @@ public sealed class WorkflowsPublishingApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationSlotStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationPolicyStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowPublicationPreflightReader));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(PublicationSnapshotReviewService));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(TimeProvider));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
+    }
+
+    [Fact]
+    public void Advertises_mutation_free_snapshot_preflight()
+    {
+        var link = Assert.Single(
+            PublishingApiCapabilities.StaticDeclaration.Links,
+            candidate => candidate.Rel == "publication-snapshot-preflight");
+
+        Assert.Equal("publishing/workflows/preflight", link.Href);
+        Assert.False(link.Templated);
     }
 }
