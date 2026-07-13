@@ -26,8 +26,8 @@ public sealed class WorkflowDefinitionProjectionTests
         var handler = fixture.CreateHandler();
 
         var result = (await handler.Handle(
-            new ListDefinitions(null, null, null, null, null),
-            CancellationToken.None)).ToArray();
+            new ListDefinitions(null, null, null, null, null, "all"),
+            CancellationToken.None)).Items.ToArray();
 
         Assert.Equal(definitionCount, result.Length);
         Assert.InRange(fixture.TotalReadCount, 1, 3);
@@ -40,6 +40,22 @@ public sealed class WorkflowDefinitionProjectionTests
             Assert.Equal(2, RequiredProperty<int>(view, "VersionCount"));
             Assert.Equal(ordinal % 2 == 0, Property(view, "DeletedAt") is not null);
         }
+    }
+
+    [Theory]
+    [InlineData(null, 13)]
+    [InlineData("active", 13)]
+    [InlineData("deleted", 12)]
+    [InlineData("all", 25)]
+    public async Task Definition_list_honors_active_deleted_and_all_scopes(string? state, int expectedCount)
+    {
+        var fixture = new ProjectionFixture(25);
+        var result = await fixture.CreateHandler().Handle(
+            new ListDefinitions(null, null, null, null, null, state),
+            CancellationToken.None);
+
+        Assert.Equal(expectedCount, result.Items.Count);
+        Assert.InRange(fixture.TotalReadCount, 1, 3);
     }
 
     private static T RequiredProperty<T>(WorkflowDefinitionView view, string name) =>

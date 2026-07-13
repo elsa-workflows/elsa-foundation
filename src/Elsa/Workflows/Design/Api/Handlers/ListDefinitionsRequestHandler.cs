@@ -10,9 +10,9 @@ public sealed class ListDefinitionsRequestHandler(
     IWorkflowDefinitionStore store,
     IWorkflowDefinitionListProjectionStore projectionStore)
 
-    : IRequestHandler<ListDefinitions, IEnumerable<WorkflowDefinitionView>>
+    : IRequestHandler<ListDefinitions, WorkflowDefinitionListView>
 {
-    public async Task<IEnumerable<WorkflowDefinitionView>> Handle(ListDefinitions request, CancellationToken cancellationToken)
+    public async Task<WorkflowDefinitionListView> Handle(ListDefinitions request, CancellationToken cancellationToken)
     {
         var filter = new WorkflowDefinitionFilter
         {
@@ -23,7 +23,14 @@ public sealed class ListDefinitionsRequestHandler(
             TenantAgnostic = request.TenantAgnostic
         };
 
-        var definitions = await store.ListAsync(filter, cancellationToken);
+        var definitions = (await store.ListAsync(filter, cancellationToken))
+            .Where(definition => request.State?.ToLowerInvariant() switch
+            {
+                "deleted" => definition.DeletedAt is not null,
+                "all" => true,
+                _ => definition.DeletedAt is null
+            })
+            .ToArray();
         var projections = await projectionStore.ListByDefinitionIdsAsync(
             definitions.Select(definition => definition.Id).ToArray(),
             cancellationToken);
@@ -31,7 +38,7 @@ public sealed class ListDefinitionsRequestHandler(
             projection => projection.WorkflowDefinitionId,
             StringComparer.Ordinal);
 
-        return definitions.Select(definition =>
+        var items = definitions.Select(definition =>
         {
             projectionsByDefinitionId.TryGetValue(definition.Id, out var projection);
             return new WorkflowDefinitionView(
@@ -45,6 +52,7 @@ public sealed class ListDefinitionsRequestHandler(
                 projection?.LatestVersionId,
                 projection?.LatestVersion,
                 projection?.VersionCount ?? 0);
-        });
+        }).ToArray();
+        return new WorkflowDefinitionListView(items);
     }
 }

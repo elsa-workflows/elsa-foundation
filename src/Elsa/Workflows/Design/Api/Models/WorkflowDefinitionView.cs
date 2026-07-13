@@ -12,3 +12,5 @@ public sealed record WorkflowDefinitionView(
     string? LatestVersion = null,
     int VersionCount = 0
 );
+
+public sealed record WorkflowDefinitionListView(IReadOnlyCollection<WorkflowDefinitionView> Items);

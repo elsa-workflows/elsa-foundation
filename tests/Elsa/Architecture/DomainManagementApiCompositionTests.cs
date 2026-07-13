@@ -154,7 +154,7 @@ public sealed class DomainManagementApiCompositionTests
         {
             object response = typeof(T) switch
             {
-                var type when type == typeof(IEnumerable<WorkflowDefinitionView>) => Array.Empty<WorkflowDefinitionView>(),
+                var type when type == typeof(WorkflowDefinitionListView) => new WorkflowDefinitionListView([]),
                 var type when type == typeof(ActivityAuthoringCatalogView) => new ActivityAuthoringCatalogView([]),
                 var type when type == typeof(ExpressionDescriptorsResponse) => new ExpressionDescriptorsResponse([]),
                 var type when type == typeof(PublishedWorkflowView) => new PublishedWorkflowView(

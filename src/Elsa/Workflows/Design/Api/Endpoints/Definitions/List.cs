@@ -8,7 +8,7 @@ using Elsa.Api.FastEndpoints.Constants;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
-internal sealed class List(IRequestSender requestSender, ILogger<List> logger) : ElsaRequestHandlerEndpoint<ListDefinitions, IEnumerable<WorkflowDefinitionView>>(requestSender, logger)
+internal sealed class List(IRequestSender requestSender, ILogger<List> logger) : ElsaRequestHandlerEndpoint<ListDefinitions, WorkflowDefinitionListView>(requestSender, logger)
 {
     public override void Configure()
     {
