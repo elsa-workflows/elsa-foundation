@@ -123,6 +123,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionStore>();
         services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionVersionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionVersionStore>();
         services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionDraftStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionDraftStore>();
+        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionListProjectionStore>();
         services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionVersionLayoutStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionVersionLayoutStore>();
 
         // All command implementations.

@@ -127,7 +127,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T053 [US4] Extend definition creation and list projections without concrete root kinds or N+1 reads in `src/Elsa/Workflows/Design/Api/`
+- [X] T053 [US4] Extend definition creation and list projections without concrete root kinds or N+1 reads in `src/Elsa/Workflows/Design/Api/`
 - [ ] T054 [US4] Separate metadata patching from first-class draft GET/PUT/promote/discard endpoints in `src/Elsa/Workflows/Design/Api/Endpoints/`
 - [ ] T055 [US4] Implement definition soft-delete/restore/permanent-delete and keep Publishing state untouched in `src/Elsa/Workflows/Design/Api/`
 - [ ] T056 [US4] Reject synthetic draft identifiers and isolate direct version ingestion behind explicit authorization in `src/Elsa/Workflows/Design/Api/Endpoints/Versions/`

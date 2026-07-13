@@ -6,7 +6,9 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
-public sealed class ListDefinitionsRequestHandler(IWorkflowDefinitionStore store)
+public sealed class ListDefinitionsRequestHandler(
+    IWorkflowDefinitionStore store,
+    IWorkflowDefinitionListProjectionStore projectionStore)
 
     : IRequestHandler<ListDefinitions, IEnumerable<WorkflowDefinitionView>>
 {
@@ -22,6 +24,27 @@ public sealed class ListDefinitionsRequestHandler(IWorkflowDefinitionStore store
         };
 
         var definitions = await store.ListAsync(filter, cancellationToken);
-        return definitions.Select(e => new WorkflowDefinitionView(e.Id, e.Name, e.Description, e.CreatedAt, e.LastModifiedAt));
+        var projections = await projectionStore.ListByDefinitionIdsAsync(
+            definitions.Select(definition => definition.Id).ToArray(),
+            cancellationToken);
+        var projectionsByDefinitionId = projections.ToDictionary(
+            projection => projection.WorkflowDefinitionId,
+            StringComparer.Ordinal);
+
+        return definitions.Select(definition =>
+        {
+            projectionsByDefinitionId.TryGetValue(definition.Id, out var projection);
+            return new WorkflowDefinitionView(
+                definition.Id,
+                definition.Name,
+                definition.Description,
+                definition.CreatedAt,
+                definition.LastModifiedAt,
+                definition.DeletedAt,
+                projection?.DraftId,
+                projection?.LatestVersionId,
+                projection?.LatestVersion,
+                projection?.VersionCount ?? 0);
+        });
     }
 }

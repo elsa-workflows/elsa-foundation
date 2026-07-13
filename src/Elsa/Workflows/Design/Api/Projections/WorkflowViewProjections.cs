@@ -11,7 +11,13 @@ namespace Elsa.Workflows.Design.Api.Projections;
 public static class WorkflowViewProjections
 {
     public static WorkflowDefinitionView ToView(this IWorkflowDefinition definition) =>
-        new(definition.Id, definition.Name, definition.Description, definition.CreatedAt, definition.LastModifiedAt);
+        new(
+            definition.Id,
+            definition.Name,
+            definition.Description,
+            definition.CreatedAt,
+            definition.LastModifiedAt,
+            definition.DeletedAt);
 
     public static WorkflowDefinitionStateView ToStateView(this WorkflowDefinitionState state) =>
         new(

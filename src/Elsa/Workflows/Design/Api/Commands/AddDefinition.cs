@@ -5,7 +5,8 @@ namespace Elsa.Workflows.Design.Api.Commands;
 
 public sealed record AddDefinition(
     string Name,
-    string Description
-)
+    string? Description,
+    WorkflowDefinitionStateView? InitialState = null,
+    IReadOnlyCollection<WorkflowDefinitionLayoutRecordView>? Layout = null)
 
 : ICommand<WorkflowDefinitionDetailsView>;

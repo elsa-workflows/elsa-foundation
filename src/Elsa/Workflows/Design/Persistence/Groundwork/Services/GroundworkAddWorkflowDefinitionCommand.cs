@@ -17,7 +17,14 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkAddWorkflowDefinitionCommand(IDocumentStore store, IPayloadSerializer payloadSerializer, ISystemClock clock)
     : IAddWorkflowDefinitionCommand
 {
-    public async Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation)
+    public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation) =>
+        Execute(workflowDefinition, draft, [], cancellation);
+
+    public async Task Execute(
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        CancellationToken cancellation)
     {
         var now = clock.UtcNow;
         GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
@@ -33,7 +40,7 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(IDocumentStore store,
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer));
-        var draftSave = draftDocuments.ToSaveRequest(draft, []);
+        var draftSave = draftDocuments.ToSaveRequest(draft, layout.ToArray());
 
         await store.SaveAllAsync(
             DocumentCommitScope.Of(

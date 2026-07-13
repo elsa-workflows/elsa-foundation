@@ -53,8 +53,7 @@ public sealed class WorkflowDefinitionProjectionTests
     private sealed class ProjectionFixture
     {
         private readonly CountingDefinitionStore _definitions;
-        private readonly CountingDraftStore _drafts;
-        private readonly CountingVersionStore _versions;
+        private readonly CountingProjectionStore _projections;
 
         public ProjectionFixture(int count)
         {
@@ -67,18 +66,16 @@ public sealed class WorkflowDefinitionProjectionTests
                 })
                 .ToArray();
             _definitions = new CountingDefinitionStore(definitions);
-            _drafts = new CountingDraftStore();
-            _versions = new CountingVersionStore();
+            _projections = new CountingProjectionStore();
         }
 
-        public int TotalReadCount => _definitions.ReadCount + _drafts.ReadCount + _versions.ReadCount;
+        public int TotalReadCount => _definitions.ReadCount + _projections.ReadCount;
 
         public ListDefinitionsRequestHandler CreateHandler()
         {
             var services = new ServiceCollection()
                 .AddSingleton<IWorkflowDefinitionStore>(_definitions)
-                .AddSingleton<IWorkflowDefinitionDraftStore>(_drafts)
-                .AddSingleton<IWorkflowDefinitionVersionStore>(_versions)
+                .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
                 .BuildServiceProvider();
             return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
         }
@@ -97,50 +94,28 @@ public sealed class WorkflowDefinitionProjectionTests
         }
     }
 
-    private sealed class CountingDraftStore : IWorkflowDefinitionDraftStore
+    private sealed class CountingProjectionStore : IWorkflowDefinitionListProjectionStore
     {
         public int ReadCount { get; private set; }
-        public Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<WorkflowDefinitionListProjection>> ListByDefinitionIdsAsync(
+            IReadOnlyCollection<string> workflowDefinitionIds,
+            CancellationToken cancellationToken = default)
         {
             ReadCount++;
-            var ordinal = workflowDefinitionId["definition-".Length..];
-            return Task.FromResult<WorkflowDefinitionDraft?>(new WorkflowDefinitionDraft
-            {
-                Id = $"draft-{ordinal}",
-                WorkflowDefinitionId = workflowDefinitionId,
-                State = EmptyState()
-            });
+            IReadOnlyList<WorkflowDefinitionListProjection> projections = workflowDefinitionIds
+                .Select(workflowDefinitionId =>
+                {
+                    var ordinal = workflowDefinitionId["definition-".Length..];
+                    return new WorkflowDefinitionListProjection(
+                        workflowDefinitionId,
+                        $"draft-{ordinal}",
+                        $"version-{ordinal}-2",
+                        "2.0.0",
+                        2);
+                })
+                .ToArray();
+            return Task.FromResult(projections);
         }
-
-        public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
-
-    private sealed class CountingVersionStore : IWorkflowDefinitionVersionStore
-    {
-        public int ReadCount { get; private set; }
-        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default)
-        {
-            ReadCount++;
-            var ordinal = definitionId["definition-".Length..];
-            IReadOnlyList<WorkflowDefinitionVersion> versions =
-            [
-                new(definitionId, "1.0.0") { Id = $"version-{ordinal}-1", State = EmptyState() },
-                new(definitionId, "2.0.0") { Id = $"version-{ordinal}-2", State = EmptyState() }
-            ];
-            return Task.FromResult(versions);
-        }
-
-        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
-    private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null, null);
 }

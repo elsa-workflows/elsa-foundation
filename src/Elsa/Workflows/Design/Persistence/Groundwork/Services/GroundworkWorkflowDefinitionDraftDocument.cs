@@ -28,7 +28,13 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         => CurrentDraft(await ListByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken));
 
     public async Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
+        => await ListByWorkflowDefinitionIdsAsync([workflowDefinitionId], cancellationToken);
+
+    public async Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
     {
+        var definitionIds = workflowDefinitionIds.ToHashSet(StringComparer.Ordinal);
         var envelopes = await store.QueryAsync(
             new DocumentStoreQuery(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
@@ -38,7 +44,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
 
         return envelopes
             .Select(Deserialize)
-            .Where(document => document.Entity.WorkflowDefinitionId == workflowDefinitionId)
+            .Where(document => definitionIds.Contains(document.Entity.WorkflowDefinitionId))
             .ToList();
     }
 
