@@ -15,7 +15,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         IReadOnlyDictionary<string, object?>? inputs = null,
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
-        WorkflowRunKind runKind = WorkflowRunKind.Unknown)
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown,
+        WorkflowExecutableSourceSelection? sourceSelection = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -39,6 +40,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         StimulusInput = stimulusInput?.Clone();
         TriggerNodeId = triggerNodeId;
         RunKind = runKind;
+        SourceSelection = sourceSelection;
     }
 
     public string ArtifactId { get; }
@@ -83,8 +85,48 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// </summary>
     public WorkflowRunKind RunKind { get; }
 
+    /// <summary>
+    /// Server-validated selector for the authoritative live source reference. The selector only disambiguates
+    /// references; none of its values are copied into execution provenance until the dispatcher has matched them
+    /// against the requested artifact, required scope and current liveness.
+    /// </summary>
+    public WorkflowExecutableSourceSelection? SourceSelection { get; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+}
+
+/// <summary>
+/// Selects an authoritative source reference without allowing callers to assert definition or version facts.
+/// Direct execution uses <see cref="SourceReferenceId"/>; stimulus routing uses the publication/slot identity
+/// already stamped on the server-owned trigger binding.
+/// </summary>
+public sealed record WorkflowExecutableSourceSelection
+{
+    public WorkflowExecutableSourceSelection(
+        string? sourceReferenceId = null,
+        string? publicationId = null,
+        string? slotId = null)
+    {
+        if (sourceReferenceId is not null && string.IsNullOrWhiteSpace(sourceReferenceId))
+            throw new ArgumentException("Source reference ID cannot be blank when provided.", nameof(sourceReferenceId));
+        if (publicationId is not null && string.IsNullOrWhiteSpace(publicationId))
+            throw new ArgumentException("Publication ID cannot be blank when provided.", nameof(publicationId));
+        if (slotId is not null && string.IsNullOrWhiteSpace(slotId))
+            throw new ArgumentException("Slot ID cannot be blank when provided.", nameof(slotId));
+        if (sourceReferenceId is null && publicationId is null && slotId is null)
+            throw new ArgumentException("A source reference, publication or slot ID is required.");
+        if (sourceReferenceId is not null && (publicationId is not null || slotId is not null))
+            throw new ArgumentException("Select by source reference ID or publication identity, not both.");
+
+        SourceReferenceId = sourceReferenceId;
+        PublicationId = publicationId;
+        SlotId = slotId;
+    }
+
+    public string? SourceReferenceId { get; }
+    public string? PublicationId { get; }
+    public string? SlotId { get; }
 }
 
 public sealed class WorkflowExecutionStartCommandPayload
@@ -97,7 +139,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
-        WorkflowRunKind runKind = WorkflowRunKind.Unknown)
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown,
+        WorkflowExecutableSourceProvenance? pinnedSource = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
@@ -109,6 +152,7 @@ public sealed class WorkflowExecutionStartCommandPayload
         StimulusInput = stimulusInput?.Clone();
         TriggerNodeId = triggerNodeId;
         RunKind = runKind;
+        PinnedSource = pinnedSource;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -145,6 +189,11 @@ public sealed class WorkflowExecutionStartCommandPayload
     /// </summary>
     public WorkflowRunKind RunKind { get; }
 
+    /// <summary>
+    /// Server-validated source attribution selected at dispatch. Null only for legacy commands.
+    /// </summary>
+    public WorkflowExecutableSourceProvenance? PinnedSource { get; }
+
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(
             item => item.Key,
@@ -161,7 +210,8 @@ public sealed class WorkflowExecutionStartDispatchResult
         string workflowExecutionId,
         WorkflowExecutableIdentity pinnedExecutable,
         WorkflowExecutionCommandDispatchResult commandDispatch,
-        WorkflowExecutionActorDescriptor agent)
+        WorkflowExecutionActorDescriptor agent,
+        WorkflowExecutableSourceProvenance? pinnedSource = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
@@ -178,10 +228,12 @@ public sealed class WorkflowExecutionStartDispatchResult
         PinnedExecutable = pinnedExecutable;
         CommandDispatch = commandDispatch;
         Agent = agent;
+        PinnedSource = pinnedSource;
     }
 
     public string WorkflowExecutionId { get; }
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public WorkflowExecutionCommandDispatchResult CommandDispatch { get; }
     public WorkflowExecutionActorDescriptor Agent { get; }
+    public WorkflowExecutableSourceProvenance? PinnedSource { get; }
 }

@@ -30,7 +30,13 @@ public sealed record WorkflowInstanceSummaryView(
     string? ParentWorkflowExecutionId,
     string? TenantId,
     int ActivityCount,
-    int IncidentCount)
+    int IncidentCount,
+    string? SourceReferenceId = null,
+    string? PublicationId = null,
+    string? SlotId = null,
+    string? SourceKind = null,
+    string? SourceId = null,
+    string? SourceVersion = null)
 {
     public static WorkflowInstanceSummaryView From(
         WorkflowExecutionState state,
@@ -39,9 +45,9 @@ public sealed record WorkflowInstanceSummaryView(
         new(
             state.WorkflowExecutionId,
             state.PinnedExecutable.ArtifactId,
-            state.PinnedExecutable.DefinitionId,
-            state.PinnedExecutable.DefinitionVersionId,
-            state.PinnedExecutable.ArtifactVersion,
+            state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId,
+            state.PinnedSource?.DefinitionVersionId ?? state.PinnedExecutable.DefinitionVersionId,
+            state.PinnedSource?.ArtifactVersion ?? state.PinnedExecutable.ArtifactVersion,
             state.PinnedExecutable.ArtifactHash,
             state.Status.ToString(),
             state.RunKind.ToString(),
@@ -54,7 +60,13 @@ public sealed record WorkflowInstanceSummaryView(
             state.ParentWorkflowExecutionId,
             state.TenantId,
             activityCount,
-            incidentCount);
+            incidentCount,
+            state.PinnedSource?.SourceReferenceId,
+            state.PinnedSource?.PublicationId,
+            state.PinnedSource?.SlotId,
+            state.PinnedSource?.SourceKind,
+            state.PinnedSource?.SourceId,
+            state.PinnedSource?.SourceVersion);
 }
 
 public sealed record WorkflowInstanceDetailsView(
@@ -375,17 +387,23 @@ public sealed record WorkflowExecutionStartDispatchView(
     string EnvelopeId,
     string AgentId,
     string AgentProviderName,
-    string? Reason)
+    string? Reason,
+    string? SourceReferenceId = null,
+    string? PublicationId = null,
+    string? SlotId = null)
 {
     public static WorkflowExecutionStartDispatchView From(WorkflowExecutionStartDispatchResult result) =>
         new(
             result.WorkflowExecutionId,
             result.PinnedExecutable.ArtifactId,
-            result.PinnedExecutable.ArtifactVersion,
+            result.PinnedSource?.ArtifactVersion ?? result.PinnedExecutable.ArtifactVersion,
             result.PinnedExecutable.ArtifactHash,
             result.CommandDispatch.Status.ToString(),
             result.CommandDispatch.EnvelopeId,
             result.Agent.AgentId,
             result.Agent.ProviderName,
-            result.CommandDispatch.Reason);
+            result.CommandDispatch.Reason,
+            result.PinnedSource?.SourceReferenceId,
+            result.PinnedSource?.PublicationId,
+            result.PinnedSource?.SlotId);
 }

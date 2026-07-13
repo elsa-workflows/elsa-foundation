@@ -229,7 +229,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
             }, priorWorkflowState)))
         {
-            RunKind = priorWorkflowState?.RunKind ?? payload.RunKind
+            RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -272,7 +273,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
             }, priorWorkflowState)))
         {
-            RunKind = priorWorkflowState?.RunKind ?? payload.RunKind
+            RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);

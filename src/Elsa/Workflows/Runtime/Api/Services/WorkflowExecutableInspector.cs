@@ -21,16 +21,28 @@ public sealed class WorkflowExecutableInspector(
     {
         var now = _timeProvider.GetUtcNow();
         var retainedCounts = await RetainedCountsAsync(cancellationToken);
+        var referencesByArtifact = (await referenceStore.ListAsync(cancellationToken: cancellationToken))
+            .GroupBy(reference => reference.ArtifactId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var items = new List<WorkflowExecutableSummaryView>();
         foreach (var executable in await executableStore.ListAsync(cancellationToken))
         {
-            var references = await referenceStore.ListByArtifactAsync(executable.Identity.ArtifactId, cancellationToken);
+            var references = referencesByArtifact.GetValueOrDefault(executable.Identity.ArtifactId) ?? [];
             var matching = references.Where(reference => MatchesScope(reference, scope)).ToArray();
             if (!includeRetired && matching.All(reference => !reference.IsLive(now)))
                 continue;
             if (matching.Length == 0 && !retainedCounts.ContainsKey(executable.Identity.ArtifactId))
                 continue;
-            items.Add(Summary(executable, references.Count(reference => reference.IsLive(now)), retainedCounts.GetValueOrDefault(executable.Identity.ArtifactId)));
+            var ordered = OrderReferences(references).ToArray();
+            var chosen = ordered.FirstOrDefault(reference => MatchesScope(reference, scope) && reference.IsLive(now))
+                ?? ordered.FirstOrDefault(reference => MatchesScope(reference, scope));
+            items.Add(Summary(
+                executable,
+                chosen,
+                ordered,
+                now,
+                references.Count(reference => reference.IsLive(now)),
+                retainedCounts.GetValueOrDefault(executable.Identity.ArtifactId)));
         }
 
         return new WorkflowExecutablesListView(items
@@ -39,7 +51,10 @@ public sealed class WorkflowExecutableInspector(
             .ToArray());
     }
 
-    public async ValueTask<WorkflowExecutableDetailsView?> GetAsync(string artifactId, CancellationToken cancellationToken = default)
+    public async ValueTask<WorkflowExecutableDetailsView?> GetAsync(
+        string artifactId,
+        string? sourceReferenceId = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         var executable = await executableStore.FindAsync(artifactId, cancellationToken);
@@ -47,15 +62,34 @@ public sealed class WorkflowExecutableInspector(
             return null;
         var now = _timeProvider.GetUtcNow();
         var references = await referenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+        var ordered = OrderReferences(references).ToArray();
+        var requested = sourceReferenceId is null
+            ? null
+            : ordered.FirstOrDefault(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId));
+        var chosen = requested
+            ?? ordered.FirstOrDefault(reference => reference.Scope == WorkflowExecutableReferenceScope.Published && reference.IsLive(now))
+            ?? ordered.FirstOrDefault(reference => reference.IsLive(now))
+            ?? ordered.FirstOrDefault();
         var retained = (await RetainedCountsAsync(cancellationToken)).GetValueOrDefault(artifactId);
         return new WorkflowExecutableDetailsView(
             artifactId,
             executable.Identity.ArtifactHash,
             executable.CreatedAt,
+            executable.RootActivity.ActivityType,
+            executable.RootActivity.ActivityTypeVersion,
+            executable.Nodes.Count,
+            executable.ResumeTargets.Count,
             references.Count(reference => reference.IsLive(now)),
             retained,
             Node(executable.RootActivity),
-            executable.CompatibilityMetadata);
+            executable.CompatibilityMetadata,
+            chosen is null
+                ? null
+                : new WorkflowExecutableChosenReferenceView(
+                    chosen.SourceReferenceId,
+                    requested is null ? chosen.IsLive(now) ? "newest-live" : "newest" : "requested",
+                    chosen.Layout),
+            ordered.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray());
     }
 
     public async ValueTask<ExecutableProvenanceView?> GetProvenanceAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -88,15 +122,38 @@ public sealed class WorkflowExecutableInspector(
         _ => true
     };
 
-    private static WorkflowExecutableSummaryView Summary(WorkflowExecutable executable, int liveReferences, int retainedExecutions) =>
+    private static WorkflowExecutableSummaryView Summary(
+        WorkflowExecutable executable,
+        WorkflowExecutableSourceReference? chosen,
+        IReadOnlyCollection<WorkflowExecutableSourceReference> references,
+        DateTimeOffset now,
+        int liveReferences,
+        int retainedExecutions) =>
         new(
             executable.Identity.ArtifactId,
+            chosen?.ArtifactVersion ?? executable.Identity.ArtifactVersion,
             executable.Identity.ArtifactHash,
+            chosen?.DefinitionId ?? executable.Identity.DefinitionId,
+            chosen?.DefinitionVersionId ?? executable.Identity.DefinitionVersionId,
             executable.CreatedAt,
+            chosen?.PublishedAt,
+            chosen?.DeletedAt,
+            chosen?.SourceKind,
+            chosen?.SourceId,
+            chosen?.SourceVersion,
             executable.RootActivity.ActivityType,
+            executable.RootActivity.ActivityTypeVersion,
             executable.Nodes.Count,
+            executable.ResumeTargets.Count,
             liveReferences,
-            retainedExecutions);
+            retainedExecutions,
+            references.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray());
+
+    private static IOrderedEnumerable<WorkflowExecutableSourceReference> OrderReferences(
+        IEnumerable<WorkflowExecutableSourceReference> references) =>
+        references
+            .OrderByDescending(reference => reference.PublishedAt ?? reference.CreatedAt)
+            .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal);
 
     private static WorkflowExecutableNodeView Node(ExecutableNode node) =>
         new(

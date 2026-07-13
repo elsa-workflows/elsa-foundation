@@ -19,5 +19,9 @@ public sealed class RuntimeExecutionEndpointTests
         Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
         Assert.Null(typeof(ExecuteWorkflow).GetProperty("RunKind", BindingFlags.Public | BindingFlags.Instance));
+        Assert.NotNull(typeof(ExecuteWorkflow).GetProperty("SourceReferenceId", BindingFlags.Public | BindingFlags.Instance));
+        Assert.Null(typeof(ExecuteWorkflow).GetProperty("DefinitionId", BindingFlags.Public | BindingFlags.Instance));
+        Assert.Null(typeof(ExecuteWorkflow).GetProperty("DefinitionVersionId", BindingFlags.Public | BindingFlags.Instance));
+        Assert.Null(typeof(ExecuteWorkflow).GetProperty("ArtifactVersion", BindingFlags.Public | BindingFlags.Instance));
     }
 }

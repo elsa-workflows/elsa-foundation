@@ -129,6 +129,23 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_FiltersByPinnedSourceDefinitionWhenContentWasDeduplicated()
+    {
+        await _workflowStore.SaveAsync(Workflow(
+            "published-source",
+            WorkflowExecutionStatus.Running,
+            "content-origin-definition",
+            sourceDefinitionId: "published-definition"));
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var result = await handler.Handle(
+            new ListWorkflowInstances(null, "published-definition", null, 10),
+            CancellationToken.None);
+
+        Assert.Equal("published-source", Assert.Single(result.Items).WorkflowExecutionId);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_RejectsMalformedCursor()
     {
         var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
@@ -236,7 +253,8 @@ public sealed class WorkflowInstancesRequestHandlerTests
         string definitionId,
         string? correlationId = null,
         DateTimeOffset? updatedAt = null,
-        WorkflowRunKind runKind = WorkflowRunKind.Unknown) =>
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown,
+        string? sourceDefinitionId = null) =>
         new(
             WorkflowExecutionId: id,
             PinnedExecutable: new WorkflowExecutableIdentity(
@@ -256,7 +274,19 @@ public sealed class WorkflowInstancesRequestHandlerTests
             TenantId: null,
             SystemMetadata: new Dictionary<string, string>())
         {
-            RunKind = runKind
+            RunKind = runKind,
+            PinnedSource = sourceDefinitionId is null
+                ? null
+                : new WorkflowExecutableSourceProvenance(
+                    "reference-1",
+                    "WorkflowDefinitionVersion",
+                    "published-version",
+                    "2.0.0",
+                    sourceDefinitionId,
+                    "published-version",
+                    "2.0.0",
+                    "publication-1",
+                    "slot-default")
         };
 
     private static ActivityExecutionState Activity(

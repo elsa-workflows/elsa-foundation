@@ -153,7 +153,10 @@ public sealed class StimulusRouter : IStimulusRouter
                 metadata: dispatchMetadata,
                 stimulusInput: request.Input,
                 triggerNodeId: binding.ExecutableNodeId,
-                runKind: WorkflowRunKind.PublishedRun);
+                runKind: WorkflowRunKind.PublishedRun,
+                sourceSelection: binding.PublicationId is null && binding.SlotId is null
+                    ? null
+                    : new WorkflowExecutableSourceSelection(publicationId: binding.PublicationId, slotId: binding.SlotId));
 
             // Forward the request-affine dispatch options (spec 089 FR-019) so an in-process inline drain of this
             // start can build activity execution contexts from the caller's ambient scope. Live reference only —

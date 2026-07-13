@@ -12,6 +12,21 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 /// <summary>RED ownership and HTTP contract for moving executable inspection out of Publishing.</summary>
 public sealed class WorkflowExecutableInspectorTests
 {
+    private readonly DateTimeOffset _now = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+    private readonly InMemoryWorkflowExecutableStore _executableStore = new();
+    private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
+    private readonly InMemoryWorkflowExecutionStateStore _executionStore = new();
+    private readonly WorkflowExecutableInspector _inspector;
+
+    public WorkflowExecutableInspectorTests()
+    {
+        _inspector = new WorkflowExecutableInspector(
+            _executableStore,
+            _referenceStore,
+            _executionStore,
+            new FixedTimeProvider(_now));
+    }
+
     [Fact]
     public void Runtime_owns_the_self_contained_executable_inspector()
     {
@@ -47,7 +62,10 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.NotNull(items);
         var row = ElementType(items!.PropertyType);
 
-        AssertProperties(row, "ArtifactId", "CreatedAt", "LiveSourceReferenceCount", "RetainedExecutionCount");
+        AssertProperties(
+            row,
+            "ArtifactId", "ArtifactVersion", "DefinitionId", "DefinitionVersionId", "RootActivityVersion",
+            "ResumeTargetCount", "References", "LiveSourceReferenceCount", "RetainedExecutionCount");
     }
 
     [Fact]
@@ -57,52 +75,115 @@ public sealed class WorkflowExecutableInspectorTests
             RuntimeApiEndpointTestFactory.FindByRoute("runtime/workflows/executables/{artifactId}/provenance")).Response;
 
         AssertProperties(response, "ArtifactId", "SourceReferences", "RetainedExecutionCount", "ProtectedFromCollection");
+        var references = response.GetProperty("SourceReferences", BindingFlags.Public | BindingFlags.Instance);
+        AssertProperties(ElementType(references!.PropertyType), "DefinitionId", "DefinitionVersionId", "ArtifactVersion");
     }
 
     [Fact]
     public async Task Inspector_reports_live_source_and_retained_execution_roots()
     {
-        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
-        var executableStore = new InMemoryWorkflowExecutableStore();
-        var referenceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
-        var executionStore = new InMemoryWorkflowExecutionStateStore();
-        var executable = Executable(now);
-        await executableStore.SaveAsync(executable);
-        await referenceStore.SaveAsync(new WorkflowExecutableSourceReference(
+        var executable = await ActivateAsync(new WorkflowExecutableSourceReference(
             "reference-1", "artifact-1", "WorkflowDefinitionVersion", "version-1", "1.0.0",
-            "definition-1", "version-1", "1.0.0", now, now,
+            "definition-1", "version-1", "1.0.0", _now, _now,
             WorkflowExecutableReferenceScope.Published));
-        await executionStore.SaveAsync(new WorkflowExecutionState(
-            "execution-1", executable.Identity, WorkflowExecutionStatus.Completed, null, now, now, now, now,
+        await _executionStore.SaveAsync(new WorkflowExecutionState(
+            "execution-1", executable.Identity, WorkflowExecutionStatus.Completed, null, _now, _now, _now, _now,
             null, null, null, new Dictionary<string, string>()));
-        var inspector = new WorkflowExecutableInspector(executableStore, referenceStore, executionStore, new FixedTimeProvider(now));
 
-        var summary = Assert.Single((await inspector.ListAsync()).Items);
-        var provenance = await inspector.GetProvenanceAsync("artifact-1");
+        var summary = Assert.Single((await _inspector.ListAsync()).Items);
+        var provenance = await _inspector.GetProvenanceAsync("artifact-1");
 
         Assert.Equal(1, summary.LiveSourceReferenceCount);
         Assert.Equal(1, summary.RetainedExecutionCount);
         Assert.True(provenance!.ProtectedFromCollection);
         Assert.Equal(1, provenance.RetainedExecutionCount);
         Assert.True(Assert.Single(provenance.SourceReferences).Live);
+        var source = Assert.Single(provenance.SourceReferences);
+        Assert.Equal("definition-1", source.DefinitionId);
+        Assert.Equal("version-1", source.DefinitionVersionId);
+        Assert.Equal("1.0.0", source.ArtifactVersion);
+        Assert.Equal("WorkflowDefinitionVersion", source.SourceKind);
+        Assert.Equal("reference-1", Assert.Single(summary.References).SourceReferenceId);
+    }
+
+    [Fact]
+    public async Task Detail_honors_requested_reference_and_defaults_to_live_published_reference()
+    {
+        await ActivateAsync(
+            Reference("published-old", WorkflowExecutableReferenceScope.Published, _now.AddMinutes(-20), "1.0.0"),
+            Reference("published-new", WorkflowExecutableReferenceScope.Published, _now.AddMinutes(-10), "2.0.0"),
+            Reference("test-newest", WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1), "draft", _now.AddHours(1)));
+
+        var defaultDetail = await _inspector.GetAsync("artifact-1");
+        var requestedDetail = await _inspector.GetAsync("artifact-1", "published-old");
+
+        Assert.Equal("published-new", defaultDetail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("newest-live", defaultDetail.ChosenReference.Selection);
+        Assert.Equal("published-old", requestedDetail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("requested", requestedDetail.ChosenReference.Selection);
+        Assert.Equal(
+            ["test-newest", "published-new", "published-old"],
+            defaultDetail.References.Select(reference => reference.SourceReferenceId));
+
+        var unknownRequestedDetail = await _inspector.GetAsync("artifact-1", "missing-reference");
+        Assert.Equal("published-new", unknownRequestedDetail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("newest-live", unknownRequestedDetail.ChosenReference.Selection);
+    }
+
+    [Fact]
+    public async Task List_includes_reference_less_artifact_only_when_retained_history_is_requested()
+    {
+        var executable = await ActivateAsync();
+
+        Assert.Empty((await _inspector.ListAsync(includeRetired: true)).Items);
+        await _executionStore.SaveAsync(new WorkflowExecutionState(
+            "execution-1", executable.Identity, WorkflowExecutionStatus.Completed, null, _now, _now, _now, _now,
+            null, null, null, new Dictionary<string, string>()));
+
+        Assert.Empty((await _inspector.ListAsync()).Items);
+        var retained = Assert.Single((await _inspector.ListAsync(includeRetired: true)).Items);
+        Assert.Equal(1, retained.RetainedExecutionCount);
+        Assert.Empty(retained.References);
+    }
+
+    [Fact]
+    public async Task List_and_detail_fall_back_to_newest_retired_reference_when_retired_history_is_requested()
+    {
+        await ActivateAsync(Reference(
+            "retired-reference", WorkflowExecutableReferenceScope.Published, _now.AddMinutes(-1), "2.0.0")
+            .Retire(_now, "superseded"));
+
+        var summary = Assert.Single((await _inspector.ListAsync(includeRetired: true)).Items);
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Equal("2.0.0", summary.ArtifactVersion);
+        Assert.Equal("retired-reference", Assert.Single(summary.References).SourceReferenceId);
+        Assert.Equal("retired-reference", detail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("newest", detail.ChosenReference.Selection);
+    }
+
+    [Fact]
+    public async Task Detail_uses_live_test_run_when_no_live_published_reference_exists()
+    {
+        await ActivateAsync(Reference(
+            "test-reference", WorkflowExecutableReferenceScope.TestRun, _now, "draft", _now.AddHours(1)));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Equal("test-reference", detail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("newest-live", detail.ChosenReference.Selection);
     }
 
     [Fact]
     public async Task Detail_projects_nodes_without_descriptor_payloads()
     {
-        var now = DateTimeOffset.UnixEpoch;
-        var executableStore = new InMemoryWorkflowExecutableStore();
-        var executable = Executable(now, JsonSerializer.SerializeToElement(new { secret = "must-not-leak" }));
-        await executableStore.SaveAsync(executable);
-        var inspector = new WorkflowExecutableInspector(
-            executableStore,
-            new InMemoryWorkflowExecutableSourceReferenceStore(),
-            new InMemoryWorkflowExecutionStateStore(),
-            new FixedTimeProvider(now));
+        await ActivateAsync(descriptor: JsonSerializer.SerializeToElement(new { secret = "must-not-leak" }));
 
-        var detail = await inspector.GetAsync("artifact-1");
+        var detail = await _inspector.GetAsync("artifact-1");
         var json = JsonSerializer.Serialize(detail, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
+        Assert.Null(detail!.ChosenReference);
+        Assert.Empty(detail.References);
         Assert.DoesNotContain("descriptorPayload", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("must-not-leak", json, StringComparison.Ordinal);
     }
@@ -128,6 +209,40 @@ public sealed class WorkflowExecutableInspectorTests
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,
             new Dictionary<string, string>());
+
+    private Task<WorkflowExecutable> ActivateAsync(params WorkflowExecutableSourceReference[] references) =>
+        ActivateAsync(null, references);
+
+    private async Task<WorkflowExecutable> ActivateAsync(
+        JsonElement? descriptor,
+        params WorkflowExecutableSourceReference[] references)
+    {
+        var executable = Executable(_now, descriptor);
+        await _executableStore.SaveAsync(executable);
+        foreach (var reference in references)
+            await _referenceStore.SaveAsync(reference);
+        return executable;
+    }
+
+    private static WorkflowExecutableSourceReference Reference(
+        string sourceReferenceId,
+        WorkflowExecutableReferenceScope scope,
+        DateTimeOffset createdAt,
+        string artifactVersion,
+        DateTimeOffset? expiresAt = null) =>
+        new(
+            sourceReferenceId,
+            "artifact-1",
+            "WorkflowDefinitionVersion",
+            $"version-{artifactVersion}",
+            artifactVersion,
+            "definition-1",
+            $"version-{artifactVersion}",
+            artifactVersion,
+            createdAt,
+            scope == WorkflowExecutableReferenceScope.Published ? createdAt : null,
+            scope,
+            expiresAt);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

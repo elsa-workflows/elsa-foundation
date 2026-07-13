@@ -22,6 +22,11 @@ public sealed record WorkflowExecutionState(
     /// deserialize to <see cref="WorkflowRunKind.Unknown"/> and remain distinguishable as legacy history.
     /// </summary>
     public WorkflowRunKind RunKind { get; init; } = WorkflowRunKind.Unknown;
+
+    /// <summary>
+    /// Immutable source attribution selected when this execution started. Null only for legacy state.
+    /// </summary>
+    public WorkflowExecutableSourceProvenance? PinnedSource { get; init; }
 }
 
 public enum WorkflowRunKind

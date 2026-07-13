@@ -188,7 +188,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 },
                 variables: variables,
                 inputs: inputs,
-                runKind: WorkflowRunKind.TestRun),
+                runKind: WorkflowRunKind.TestRun,
+                sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: reference.SourceReferenceId)),
             WorkflowExecutableReferenceScope.TestRun,
             cancellationToken: cancellationToken);
 
