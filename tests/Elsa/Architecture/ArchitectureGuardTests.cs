@@ -180,6 +180,19 @@ public sealed class ArchitectureGuardTests
         Assert.Equal(50, settings["MaxSegmentCheckpoints"]?.GetValue<int>());
     }
 
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_uses_unified_groundwork_persistence_for_publication_authority(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+
+        Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
+            $"{fileName} must persist runtime, design, and publishing authority through the unified Groundwork store.");
+        Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
+            $"{fileName} must not select the runtime-only store because it omits publishing authority.");
+    }
+
     [Fact]
     public void Server_catalogs_http_endpoint_feature_and_its_runtime_dependency()
     {

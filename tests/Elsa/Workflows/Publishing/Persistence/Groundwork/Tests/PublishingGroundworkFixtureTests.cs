@@ -39,7 +39,8 @@ public sealed class PublishingGroundworkFixtureTests
             PublishingGroundworkStorageManifest.PublicationSlotDocumentKind,
             PublishingGroundworkStorageManifest.PublicationRecordDocumentKind,
             PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind,
-            PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind
+            PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind,
+            PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind
         };
         Assert.All(kinds, kind => Assert.Equal(1, PublishingGroundworkDocumentSerializer.CurrentFor(kind)));
         Assert.Throws<ArgumentException>(() => PublishingGroundworkDocumentSerializer.CurrentFor("unknown"));

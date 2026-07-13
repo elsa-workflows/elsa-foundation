@@ -18,6 +18,8 @@ public static class GroundworkPublishingStoreRegistration
         services.AddSingleton<IPublicationPolicyStore, GroundworkPublicationPolicyStore>();
         services.RemoveAll<IPublicationProjectionIntentStore>();
         services.AddSingleton<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>();
+        services.RemoveAll<IPublicationSnapshotReviewStore>();
+        services.AddSingleton<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>();
         return services;
     }
 }

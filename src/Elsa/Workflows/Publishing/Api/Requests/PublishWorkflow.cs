@@ -9,4 +9,5 @@ public sealed record PublishWorkflow(
     PublicationAction? Action = null,
     string? SlotName = null,
     string? ExpectedPublicationId = null,
-    string? PreflightToken = null) : IRequest<PublishedWorkflowView>;
+    string? PreflightToken = null,
+    string? TenantId = null) : IRequest<PublishedWorkflowView>;

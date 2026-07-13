@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +32,7 @@ public static class GroundworkSqliteUnifiedRegistration
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
+        services.AddGroundworkPublishingStores();
 
         return services;
     }

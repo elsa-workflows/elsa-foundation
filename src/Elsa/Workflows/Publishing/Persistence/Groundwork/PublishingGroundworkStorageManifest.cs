@@ -12,6 +12,7 @@ public static class PublishingGroundworkStorageManifest
     public const string PublicationRecordDocumentKind = "publishingPublicationRecord";
     public const string PublicationPolicyDocumentKind = "publishingPublicationPolicy";
     public const string ProjectionIntentDocumentKind = "publishingProjectionIntent";
+    public const string SnapshotReviewDocumentKind = "publishingSnapshotReview";
     public const string ByDefinitionIndex = "by-definition";
     public const string BySlotIndex = "by-slot";
     public const string ByPublicationIndex = "by-publication";
@@ -31,7 +32,8 @@ public static class PublishingGroundworkStorageManifest
                 [Query("list-by-definition", ByDefinitionIndex), Query("find-by-active-publication", ByActivePublicationIndex)]),
             Unit(PublicationRecordDocumentKind, "Publication record", [Keyword(BySlotIndex, SlotIdField)], [Query("list-by-slot", BySlotIndex)]),
             Unit(PublicationPolicyDocumentKind, "Publication policy", [], []),
-            Unit(ProjectionIntentDocumentKind, "Publication projection intent", [Keyword(ByPublicationIndex, PublicationIdField)], [Query("list-by-publication", ByPublicationIndex)])
+            Unit(ProjectionIntentDocumentKind, "Publication projection intent", [Keyword(ByPublicationIndex, PublicationIdField)], [Query("list-by-publication", ByPublicationIndex)]),
+            Unit(SnapshotReviewDocumentKind, "Publication snapshot review", [], [])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);

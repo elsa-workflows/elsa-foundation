@@ -17,9 +17,7 @@
           "ApiCapabilities": {},
           "Secrets": {},
           "SecretsApi": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignApi": {},
           "ActivitiesRuntime": {},
           "ActivitiesControlFlow": {},
@@ -42,7 +40,7 @@
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},
-          "GroundworkRuntimePersistenceSqlite": {},
+          "GroundworkUnifiedPersistenceSqlite": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},

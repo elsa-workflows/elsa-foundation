@@ -49,30 +49,31 @@ public sealed class PublishWorkflowRequestHandler(
         var now = timeProvider.GetUtcNow();
         var executable = await CompileAsync(request.VersionId, now, cancellationToken);
         var identity = executable.Identity;
-        var review = request.PreflightToken is { } preflightToken
-            ? (snapshotReviews ?? throw new InvalidOperationException("Publication snapshot review services are not configured."))
-                .Get(preflightToken)
+        var resolvedReview = request.PreflightToken is { } preflightToken
+            ? await (snapshotReviews ?? throw new InvalidOperationException("Publication snapshot review services are not configured."))
+                .GetAsync(preflightToken, request.TenantId, cancellationToken)
             : null;
-        if (review is not null)
-            snapshotReviews!.ValidateRequestedIntent(review, request.Action, request.SlotName, request.ExpectedPublicationId);
-        var requestIntent = review is not null
-            ? RequestIntent(review.RequestedAction, review.RequestedSlotName)
+        if (resolvedReview is not null)
+            snapshotReviews!.ValidateRequestedIntent(resolvedReview, request.Action, request.SlotName, request.ExpectedPublicationId);
+        var requestIntent = resolvedReview is not null
+            ? RequestIntent(resolvedReview.RequestedAction, resolvedReview.RequestedSlotName)
             : RequestIntent(request.Action, request.SlotName);
         var publicationId = $"publication-{ShortIdentityGenerator.Generate(now)}";
         var plan = await _publicationPreflightReader.EvaluateAsync(
             executable,
             requestIntent,
-            review?.ActivePublicationId ?? request.ExpectedPublicationId,
+            resolvedReview?.ActivePublicationId ?? request.ExpectedPublicationId,
             publicationId,
             cancellationToken);
-        if (review is not null)
+        if (resolvedReview is not null)
         {
             var version = await (workflowVersionStore
                 ?? throw new InvalidOperationException("Workflow definition version services are not configured."))
                 .GetWithDefinitionAsync(request.VersionId, cancellationToken);
             var layout = await layoutStore.FindByVersionIdAsync(request.VersionId, cancellationToken);
             var candidateHash = snapshotReviews!.ComputeCandidateHash(version.State, layout?.Records ?? []);
-            snapshotReviews.ValidateAndConsume(request.PreflightToken!, candidateHash, plan);
+            await snapshotReviews.ValidateAndConsumeAsync(
+                request.PreflightToken!, candidateHash, plan, request.TenantId, cancellationToken);
         }
         if (!plan.Result.CanActivate)
             throw new PublicationPreflightConflictException(plan.Result.Conflicts);

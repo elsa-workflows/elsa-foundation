@@ -1,9 +1,9 @@
 using System.Buffers;
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
@@ -12,11 +12,11 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// Creates short-lived, single-use review tokens that bind an authored candidate snapshot to the policy and slot
 /// authority observed by publication preflight. The token itself is opaque; no authored content is exposed in it.
 /// </summary>
-public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider)
+public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, IPublicationSnapshotReviewStore store)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
-    private readonly ConcurrentDictionary<string, PublicationSnapshotReview> _reviews = new(StringComparer.Ordinal);
+    private const int CleanupBatchSize = 128;
 
     public string ComputeCandidateHash(
         WorkflowDefinitionState state,
@@ -35,45 +35,59 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider)
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(buffer.WrittenSpan))}";
     }
 
-    public PublicationSnapshotReviewIssued Issue(
+    public async ValueTask<PublicationSnapshotReviewIssued> IssueAsync(
         string candidateHash,
         WorkflowPublicationPreflightPlan plan,
         PublicationAction? requestedAction = null,
         string? requestedSlotName = null,
-        string? requestedExpectedPublicationId = null)
+        string? requestedExpectedPublicationId = null,
+        string? tenantId = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateHash);
         ArgumentNullException.ThrowIfNull(plan);
-        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
         var resolved = plan.ResolvedAction;
-        var review = new PublicationSnapshotReview(
-            token,
-            candidateHash,
-            resolved.WorkflowDefinitionId,
-            resolved.Action,
-            resolved.SlotName,
-            resolved.PolicySource,
-            resolved.PolicyRevision,
-            requestedAction,
-            requestedSlotName,
-            requestedExpectedPublicationId,
-            plan.Slot?.Revision ?? 0,
-            plan.Slot?.ActivePublicationId,
-            timeProvider.GetUtcNow().Add(Lifetime));
-        if (!_reviews.TryAdd(token, review))
-            throw new InvalidOperationException("Unable to create a unique publication snapshot review token.");
-        return new(token, candidateHash);
+        var now = timeProvider.GetUtcNow();
+        await store.DeleteExpiredAsync(now, CleanupBatchSize, cancellationToken);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+            var review = new PublicationSnapshotReview(
+                token,
+                candidateHash,
+                resolved.WorkflowDefinitionId,
+                resolved.Action,
+                resolved.SlotName,
+                resolved.PolicySource,
+                resolved.PolicyRevision,
+                requestedAction,
+                requestedSlotName,
+                requestedExpectedPublicationId,
+                plan.Slot?.Revision ?? 0,
+                plan.Slot?.ActivePublicationId,
+                tenantId,
+                now.Add(Lifetime));
+            if (await store.TryAddAsync(review, cancellationToken))
+                return new(token, candidateHash);
+        }
+        throw new InvalidOperationException("Unable to create a unique publication snapshot review token.");
     }
 
-    public PublicationSnapshotReview Get(string preflightToken)
+    public async ValueTask<PublicationSnapshotReview> GetAsync(
+        string preflightToken,
+        string? tenantId = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(preflightToken);
-        if (!_reviews.TryGetValue(preflightToken, out var review) || review.ExpiresAt <= timeProvider.GetUtcNow())
+        var review = await store.FindAsync(preflightToken, cancellationToken);
+        if (review is null || review.ExpiresAt <= timeProvider.GetUtcNow() ||
+            !StringComparer.Ordinal.Equals(review.TenantId, tenantId))
         {
-            _reviews.TryRemove(preflightToken, out _);
+            if (review?.ExpiresAt <= timeProvider.GetUtcNow())
+                await store.TryConsumeAsync(preflightToken, cancellationToken);
             throw PublicationSnapshotReviewException.Stale();
         }
 
@@ -93,12 +107,14 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider)
             throw PublicationSnapshotReviewException.Stale();
     }
 
-    public void ValidateAndConsume(
+    public async ValueTask ValidateAndConsumeAsync(
         string preflightToken,
         string candidateHash,
-        WorkflowPublicationPreflightPlan currentPlan)
+        WorkflowPublicationPreflightPlan currentPlan,
+        string? tenantId = null,
+        CancellationToken cancellationToken = default)
     {
-        var review = Get(preflightToken);
+        var review = await GetAsync(preflightToken, tenantId, cancellationToken);
         var resolved = currentPlan.ResolvedAction;
         var isCurrent = StringComparer.Ordinal.Equals(review.CandidateHash, candidateHash) &&
                         StringComparer.Ordinal.Equals(review.DefinitionId, resolved.WorkflowDefinitionId) &&
@@ -108,7 +124,7 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider)
                         review.PolicyRevision == resolved.PolicyRevision &&
                         review.SlotRevision == (currentPlan.Slot?.Revision ?? 0) &&
                         StringComparer.Ordinal.Equals(review.ActivePublicationId, currentPlan.Slot?.ActivePublicationId);
-        if (!isCurrent || !_reviews.TryRemove(preflightToken, out _))
+        if (!isCurrent || !await store.TryConsumeAsync(preflightToken, cancellationToken))
             throw PublicationSnapshotReviewException.Stale();
     }
 
@@ -158,21 +174,6 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider)
 }
 
 public sealed record PublicationSnapshotReviewIssued(string PreflightToken, string CandidateHash);
-
-public sealed record PublicationSnapshotReview(
-    string PreflightToken,
-    string CandidateHash,
-    string DefinitionId,
-    PublicationAction Action,
-    string SlotName,
-    PublicationPolicySource PolicySource,
-    long? PolicyRevision,
-    PublicationAction? RequestedAction,
-    string? RequestedSlotName,
-    string? RequestedExpectedPublicationId,
-    long SlotRevision,
-    string? ActivePublicationId,
-    DateTimeOffset ExpiresAt);
 
 public sealed class PublicationSnapshotReviewException(string code, string message) : InvalidOperationException(message)
 {

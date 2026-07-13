@@ -7,6 +7,7 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +54,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IPublicationActivator, PublicationActivator>();
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
         services.TryAddSingleton<PublicationSnapshotReviewService>();
+        services.TryAddSingleton<IPublicationSnapshotReviewStore, InMemoryPublicationSnapshotReviewStore>();
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
         // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
         services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();

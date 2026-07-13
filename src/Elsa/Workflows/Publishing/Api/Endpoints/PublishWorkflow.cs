@@ -32,7 +32,8 @@ internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILog
                     request.Action is { } action ? PublicationIntentContract.ToModel(action) : null,
                     request.SlotName,
                     request.ExpectedPublicationId,
-                    request.PreflightToken),
+                    request.PreflightToken,
+                    PublicationRequestTenant.Resolve(User)),
                 cancellationToken);
             await Send.ResponseAsync(response, response.WasCreated ? 201 : 200, cancellationToken);
         }

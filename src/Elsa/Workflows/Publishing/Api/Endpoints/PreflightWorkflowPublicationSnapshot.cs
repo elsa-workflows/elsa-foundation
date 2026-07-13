@@ -63,12 +63,14 @@ internal sealed class PreflightWorkflowPublicationSnapshotEndpoint(
                 request.ExpectedPublicationId,
                 $"preflight:{candidateHash}",
                 cancellationToken);
-            var issued = snapshotReviews.Issue(
+            var issued = await snapshotReviews.IssueAsync(
                 candidateHash,
                 plan,
                 request.Action is { } action ? PublicationIntentContract.ToModel(action) : null,
                 request.SlotName,
-                request.ExpectedPublicationId);
+                request.ExpectedPublicationId,
+                PublicationRequestTenant.Resolve(User),
+                cancellationToken);
             var resolved = plan.ResolvedAction;
             await Send.OkAsync(
                 new PublicationSnapshotPreflightView(

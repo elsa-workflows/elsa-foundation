@@ -22,6 +22,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -50,7 +51,9 @@ public sealed class PublishWorkflowRequestHandlerTests
     private readonly InMemoryPublicationRecordStore _publicationStore = new();
     private readonly InMemoryPublicationPolicyStore _policyStore = new();
     private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
-    private readonly PublicationSnapshotReviewService _snapshotReviews = new(TimeProvider.System);
+    private readonly PublicationSnapshotReviewService _snapshotReviews = new(
+        TimeProvider.System,
+        new InMemoryPublicationSnapshotReviewStore());
 
     [Fact]
     public async Task Publishes_reviewed_snapshot_when_candidate_and_authority_are_unchanged()
@@ -61,7 +64,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             WorkflowDefinitionVersionId = workflowVersion.Id,
             Records = [new DesignMetadataRecord("write-one", 10, 20)]
         };
-        var issued = _snapshotReviews.Issue(
+        var issued = await _snapshotReviews.IssueAsync(
             _snapshotReviews.ComputeCandidateHash(workflowVersion.State, layout.Records),
             SnapshotPlan());
 
@@ -76,7 +79,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     public async Task Stale_snapshot_token_fails_before_persisting_the_compiled_artifact()
     {
         var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
-        var issued = _snapshotReviews.Issue(
+        var issued = await _snapshotReviews.IssueAsync(
             _snapshotReviews.ComputeCandidateHash(WorkflowDefinitionState.Empty, []),
             SnapshotPlan());
 
