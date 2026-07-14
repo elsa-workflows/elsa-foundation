@@ -1,4 +1,5 @@
-context_file: AGENTS.md
+# Keep repository-wide instructions feature-neutral; the agent-context extension is disabled.
+context_file:
 context_markers:
   start: <!-- SPECKIT START -->
   end: <!-- SPECKIT END -->
