@@ -161,5 +161,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/093-groundwork-design-persistence/plan.md`.
+`specs/094-harden-groundwork-stores/plan.md`.
 <!-- SPECKIT END -->

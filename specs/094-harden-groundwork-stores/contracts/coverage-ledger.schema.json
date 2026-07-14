@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://elsa-workflows.dev/schemas/groundwork-persistence-coverage-ledger-v1.json",
+  "title": "Groundwork persistence coverage ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "feature",
+    "baselineRef",
+    "mandatoryProviders",
+    "entries"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "./contracts/coverage-ledger.schema.json"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "feature": {
+      "type": "string",
+      "const": "094-harden-groundwork-stores"
+    },
+    "baselineRef": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "mandatoryProviders": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "prefixItems": [
+        { "type": "string", "const": "sqlite" },
+        { "type": "string", "const": "sqlserver" },
+        { "type": "string", "const": "postgresql" },
+        { "type": "string", "const": "mongodb" }
+      ],
+      "items": false
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "evidenceLinks": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "providerEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "properties": {
+        "sqlite": { "$ref": "#/$defs/evidenceLinks" },
+        "sqlserver": { "$ref": "#/$defs/evidenceLinks" },
+        "postgresql": { "$ref": "#/$defs/evidenceLinks" },
+        "mongodb": { "$ref": "#/$defs/evidenceLinks" }
+      }
+    },
+    "performanceVerdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "acceptedShape", "evidence"],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["pass", "redesign", "blocked", "not-hot-path"]
+        },
+        "acceptedShape": {
+          "type": "string",
+          "enum": [
+            "shared-linked",
+            "dedicated-document",
+            "physical-entity",
+            "specialized-path",
+            "not-applicable"
+          ]
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "family",
+        "contract",
+        "outcome",
+        "scope",
+        "accessPolicy",
+        "authority",
+        "status",
+        "initialGap",
+        "queryShapes",
+        "concurrencySemantics",
+        "atomicBoundary",
+        "failureWindows",
+        "restartScenarios",
+        "providerEvidence",
+        "requiredPerformanceVerdict",
+        "performanceWorkload",
+        "dependency",
+        "deliveryOwner",
+        "behavioralBaseline"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "family": {
+          "type": "string",
+          "enum": ["runtime", "iam", "secrets", "distributed-runtime"]
+        },
+        "contract": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ordinary-document",
+            "operational-store",
+            "specialized-primitive",
+            "external-authority-adapter",
+            "explicit-exclusion"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "tenant-scoped",
+            "explicit-global",
+            "external-owner-classification"
+          ]
+        },
+        "scopeReason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accessPolicy": {
+          "type": "string",
+          "enum": [
+            "ordinary",
+            "privileged",
+            "ordinary-read-privileged-write",
+            "external-owner-classification"
+          ]
+        },
+        "accessReason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority": {
+          "type": "string",
+          "pattern": "^#[0-9]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "missing",
+            "planned",
+            "implemented",
+            "evidence-complete",
+            "performance-complete",
+            "ready",
+            "externally-blocked",
+            "excluded"
+          ]
+        },
+        "initialGap": {
+          "type": "string",
+          "minLength": 1
+        },
+        "queryShapes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "concurrencySemantics": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "atomicBoundary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failureWindows": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "restartScenarios": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "providerEvidence": {
+          "$ref": "#/$defs/providerEvidence"
+        },
+        "requiredPerformanceVerdict": {
+          "type": "string",
+          "enum": ["pass", "pass-or-reviewed-not-hot-path", "external-owner-verdict"]
+        },
+        "performanceWorkload": {
+          "type": "string",
+          "minLength": 1
+        },
+        "performanceVerdict": {
+          "$ref": "#/$defs/performanceVerdict"
+        },
+        "dependency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deliveryOwner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "behavioralBaseline": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "scope": { "type": "string", "const": "explicit-global" }
+            },
+            "required": ["scope"]
+          },
+          "then": {
+            "type": "object",
+            "required": ["scopeReason"],
+            "properties": {
+              "scopeReason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "accessPolicy": {
+                "type": "string",
+                "enum": ["privileged", "ordinary-read-privileged-write"]
+              }
+            },
+            "required": ["accessPolicy"]
+          },
+          "then": {
+            "type": "object",
+            "required": ["accessReason"],
+            "properties": {
+              "accessReason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": { "type": "string", "const": "external-authority-adapter" }
+            },
+            "required": ["outcome"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "authority": {
+                "type": "string",
+                "enum": ["#644", "#660"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": { "type": "string", "const": "ready" }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "type": "object",
+            "required": ["performanceVerdict"],
+            "properties": {
+              "providerEvidence": {
+                "type": "object",
+                "properties": {
+                  "sqlite": { "type": "array", "minItems": 1 },
+                  "sqlserver": { "type": "array", "minItems": 1 },
+                  "postgresql": { "type": "array", "minItems": 1 },
+                  "mongodb": { "type": "array", "minItems": 1 }
+                }
+              },
+              "performanceVerdict": {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["pass", "not-hot-path"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

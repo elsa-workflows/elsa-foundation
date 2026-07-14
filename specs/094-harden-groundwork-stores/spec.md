@@ -1,6 +1,6 @@
 # Feature Specification: Harden Groundwork Store Families
 
-**Feature Branch**: `598-harden-groundwork-stores`
+**Feature Branch**: `codex/645-groundwork-store-hardening`
 
 **Created**: 2026-07-14
 
@@ -66,13 +66,13 @@ A tenant administrator can rely on the persistence boundary to prevent one tenan
 
 **Why this priority**: Caller-side key conventions are not a sufficient isolation boundary for durable multi-tenant state.
 
-**Independent Test**: Store equivalent identifiers in distinct tenant scopes, attempt all supported operations through the wrong scope, and verify isolation; separately exercise explicitly privileged operations and verify they are both restricted and observable.
+**Independent Test**: Store equivalent identifiers in distinct tenant scopes, attempt all supported operations through the wrong scope, and verify isolation; separately exercise explicitly global storage and privileged operation access, and verify that each is independently classified, restricted, and observable.
 
 **Acceptance Scenarios**:
 
 1. **Given** equal identifiers in two tenant scopes, **When** either tenant reads, queries, updates, or deletes its data, **Then** only that tenant's data is affected.
 2. **Given** an ordinary session, **When** it attempts global or another-tenant access, **Then** access is denied before data is returned or changed.
-3. **Given** an operation that legitimately requires global access, **When** it is executed, **Then** it uses an explicit privileged path and records the access scope, named purpose, and outcome.
+3. **Given** an operation over an explicitly global storage unit, **When** it is executed, **Then** global scope is selected for the recorded storage reason, and any operation that also requires elevated authority uses its separately declared privileged access policy and records the named purpose and outcome.
 4. **Given** cancellation, disposal, or failure inside a scoped unit of work, **When** another request reuses provider resources, **Then** tenant scope and transaction state do not leak across requests.
 5. **Given** a tenant-scoped or privileged operation that emits operational telemetry, **When** metrics are recorded, **Then** tenant identifiers are not used as metric labels and the privileged access remains diagnosable through bounded operational records.
 
@@ -189,7 +189,7 @@ An Elsa performance owner receives representative #645 workloads with verified o
 - **FR-006**: Every selected in-scope feature family MUST contribute its durable requirements to one host-selected storage composition before the host serves work.
 - **FR-007**: Composition validation MUST reject missing, duplicate, incompatible, or unsupported durable requirements with a diagnostic that identifies the owning features.
 - **FR-008**: A production-shaped host MUST prove that runtime, in-scope IAM, secrets, and distributed stores can be enabled together, used through their public contracts, disposed, and reopened over the same durable database.
-- **FR-009**: Every in-scope storage unit MUST be classified as tenant-scoped, explicitly global, or privileged, and each global or privileged classification MUST name the operational reason for it.
+- **FR-009**: Every in-scope storage unit MUST be classified as tenant-scoped, explicitly global, or externally owner-classified, with a storage reason for every explicitly global unit; operation access MUST be classified separately as ordinary, privileged, ordinary-read/privileged-write, or externally owner-classified, with an authorization reason for every policy containing privileged access.
 - **FR-010**: Tenant scope MUST be enforced for direct loads, writes, deletes, queries, mutations, recovery, and units of work at the persistence boundary; wrong-scope operations MUST NOT disclose whether another tenant's record exists.
 - **FR-011**: Privileged access MUST reject ordinary callers and record the access scope, named purpose, and outcome without exposing tenant identifiers as unbounded telemetry labels.
 - **FR-012**: Execution ownership MUST issue unique, strictly increasing fencing tokens across independent processes, release, failure, and restart.
@@ -215,6 +215,7 @@ An Elsa performance owner receives representative #645 workloads with verified o
 - **FR-032**: Core modules and their persistence contracts MUST remain free of Groundwork dependencies and provider-specific behavior.
 - **FR-033**: This feature MUST NOT add new EF migrations or expand the EF persistence surface; while EF remains a temporary oracle, the same observable contract scenarios MUST run against EF and Groundwork where an EF implementation exists.
 - **FR-034**: Existing behavioral tests for refactored stores MUST remain present and passing; removing a test requires the repository's recorded-approval process.
+- **FR-035**: Logic-bearing store adapters, aggregators, handlers, access-context selectors, and unit-of-work/session consumers MUST be scoped unless a narrower constitution-compliant lifetime is required; every non-scoped exception MUST be documented and covered by registration/lifetime tests that prove request scope and mutable operation state cannot leak.
 
 ### Requirement Traceability
 
@@ -232,13 +233,15 @@ An Elsa performance owner receives representative #645 workloads with verified o
 | FR-032 | User Story 1 | SC-011 |
 | FR-033 | User Stories 1, 8, and 9 | SC-012, SC-013 |
 | FR-034 | User Story 1 | SC-010 |
+| FR-035 | User Stories 2 and 4 | SC-002, SC-004, SC-014 |
 
 ### Key Entities
 
 - **Persistence Coverage Entry**: The authoritative status of one durable contract, including owner, scope, behavior, query, provider, recovery, and performance obligations.
 - **Durable Outcome**: The one accountable persistence path assigned to a coverage entry: ordinary document storage, operational storage, a specialized primitive or query path, adaptation to externally owned authority, or linked exclusion.
 - **Storage Composition**: The complete set of storage declarations selected by one application host and validated as a coherent whole.
-- **Storage Scope**: The tenant, explicitly global, or privileged boundary within which an operation is authorized.
+- **Storage Scope**: The tenant-scoped, explicitly global, or externally owner-classified partition in which data is stored and accessed. Privilege is a separate operation access policy, not a storage scope.
+- **Operation Access Policy**: The ordinary or privileged authorization required for an operation independently of the storage unit's scope.
 - **Fencing Token**: A strictly increasing ownership number included in a commit decision so an earlier owner cannot write after a successor takes over.
 - **Scale-Bearing Query**: A collection query whose possible dataset size is not capped by a documented business invariant and therefore requires a finite result bound and storage-boundary execution.
 - **Operational Transition**: A durable ownership, checkpoint, claim, acknowledgement, retry, completion, or schedule change whose atomicity and concurrency outcome are part of the public contract.
@@ -266,6 +269,7 @@ An Elsa performance owner receives representative #645 workloads with verified o
 - **SC-011**: The complete dependency audit reports zero violations of the ratified provider-neutral core boundary.
 - **SC-012**: The retiring persistence-surface ratchet reports zero additions relative to the feature baseline.
 - **SC-013**: 100% of shared observable contract scenarios execute against both the temporary oracle and the replacement wherever both implementations exist.
+- **SC-014**: Registration/lifetime tests report zero logic-bearing persistence services with an undocumented non-scoped lifetime and zero scope or mutable-operation-state leakage across independently created request scopes.
 
 ## Assumptions
 
