@@ -250,10 +250,28 @@ public sealed class DiagnosticsPersistenceArchitectureTests
         services.AddDiagnosticsPersistenceObservability();
 
         Assert.Single(services, descriptor =>
-            descriptor.ImplementationType?.Name == "DiagnosticsPersistenceObserverRegistrationValidator");
+            descriptor.ServiceType == typeof(DiagnosticsPersistenceObserverRegistrationValidator));
+        Assert.Single(services, descriptor =>
+            descriptor.ImplementationType?.Name == "DiagnosticsPersistenceObserverRegistrationOptionsAdapter");
         using var provider = services.BuildServiceProvider();
         provider.GetRequiredService<IStartupValidator>().Validate();
         Assert.Same(observer, provider.GetRequiredService<IDiagnosticsPersistenceObserver>());
+    }
+
+    [Fact]
+    public void Observer_registration_validation_exports_only_the_constitution_mandated_implementation()
+    {
+        var assembly = typeof(DiagnosticsPersistenceObserverRegistrationValidator).Assembly;
+        var exportedRegistrationTypes = assembly.ExportedTypes
+            .Where(type => type.Name.StartsWith("DiagnosticsPersistenceObserverRegistration", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal([typeof(DiagnosticsPersistenceObserverRegistrationValidator)], exportedRegistrationTypes);
+        Assert.True(typeof(DiagnosticsPersistenceObserverRegistrationValidator).IsSealed);
+        var constructor = Assert.Single(typeof(DiagnosticsPersistenceObserverRegistrationValidator).GetConstructors());
+        Assert.Equal([typeof(IServiceCollection)], constructor.GetParameters().Select(parameter => parameter.ParameterType));
+        Assert.Contains(assembly.GetTypes(), type =>
+            type.Name == "DiagnosticsPersistenceObserverRegistrationOptionsAdapter" && !type.IsPublic);
     }
 
     [Fact]

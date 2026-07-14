@@ -1,7 +1,6 @@
 using Elsa.Diagnostics.Persistence.Extensions;
 using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
@@ -13,12 +12,9 @@ public sealed class DiagnosticsPersistenceObserverRegistrationValidatorTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
-        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(
-            new DiagnosticsPersistenceObserverRegistrationState(services));
+        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(services);
 
-        var result = validator.Validate(
-            Options.DefaultName,
-            new DiagnosticsPersistenceObserverRegistrationOptions());
+        var result = validator.Validate();
 
         Assert.True(result.Succeeded);
     }
@@ -29,12 +25,9 @@ public sealed class DiagnosticsPersistenceObserverRegistrationValidatorTests
         var services = new ServiceCollection();
         services.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
         services.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
-        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(
-            new DiagnosticsPersistenceObserverRegistrationState(services));
+        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(services);
 
-        var result = validator.Validate(
-            Options.DefaultName,
-            new DiagnosticsPersistenceObserverRegistrationOptions());
+        var result = validator.Validate();
 
         Assert.True(result.Failed);
         var message = Assert.Single(result.Failures);

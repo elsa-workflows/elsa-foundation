@@ -18,6 +18,10 @@ public sealed class DiagnosticsDocumentationTests
         Assert.Contains("Replacement", catalog, StringComparison.Ordinal);
         Assert.Contains("conflict", catalog, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("helper boundary", catalog, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DiagnosticsPersistenceObserverRegistrationValidator", catalog, StringComparison.Ordinal);
+        Assert.Contains("constitution-mandated first-party implementation", catalog, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("internal Options adapter", catalog, StringComparison.Ordinal);
+        Assert.Contains("not an adapter extension contract", catalog, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("## Overridable contracts", catalog, StringComparison.Ordinal);
         Assert.Contains("## Implementable contributor interfaces", catalog, StringComparison.Ordinal);
         Assert.Contains("## Events", catalog, StringComparison.Ordinal);
