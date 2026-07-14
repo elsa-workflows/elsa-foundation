@@ -60,8 +60,8 @@
 
 - [X] T016 [US1] Harden durable append, stable commit ordering, cursor advancement, and exact cursor-failure translation in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs`
 - [X] T017 [US1] Bind replay cursors to version, storage scope, source, stream, provider position, and record anchor in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkReplayCursorCodec.cs`
-- [ ] T018 [P] [US1] Define OpenTelemetry record-stream mappings and canonical serializers in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/`
-- [ ] T019 [P] [US1] Define resource and instrument catalog document mappings in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/`
+- [X] T018 [P] [US1] Define OpenTelemetry record-stream mappings and canonical serializers in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/`
+- [X] T019 [P] [US1] Define resource and instrument catalog document mappings in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/`
 - [ ] T020 [US1] Implement idempotent normalized batch writes and durable restart reads in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
 - [ ] T021 [US1] Declare Structured Logs streams/indexes/ledger requirements in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs` and OpenTelemetry streams/catalogs/indexes/ledger requirements in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs`
 - [ ] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/091-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
