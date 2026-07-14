@@ -85,6 +85,21 @@ If implementation inventory finds another public design persistence contract, it
 
 All physical plans inject scope and document-kind discrimination. Provider plan evidence must identify the intended table/index and must not show a full shared collection scan for a selective query.
 
+## Benchmark Acceptance Catalog
+
+"Gated ordinary-store operation" means each row below; no aggregate score may substitute for a failing row. Reads use a 100K mixed catalog with 10% of records in the active scope, page size 50, a selective predicate returning 1–2%, and fixed hit/miss ratios of 90/10 for identity operations. Writes use pre-seeded related state and concurrency 1 and 16. The 1M run repeats every scale-bearing read and every physical-form comparison.
+
+| Workload | Fixed operation |
+|---|---|
+| Workflow identity | Get a definition by scoped identity; get an exact version; resolve latest version |
+| Workflow catalog | Filter name/description, order by stable identity, return page 10 of 50; count the identical predicate |
+| Workflow lifecycle | Create definition plus draft; replace draft state plus layout; promote draft to immutable version; submit definition; permanently delete the complete aggregate |
+| Activity identity | Get an activity definition by scoped identity/type key; get an exact version; resolve the applicable latest version |
+| Activity catalog | Filter type/category/display fields, order by stable identity, return page 10 of 50; load versions for a fixed definition set |
+| Activity lifecycle | Create activity definition plus initial version; add a version; update availability settings |
+
+The seeded value distribution, payload bytes, requested identities, predicate values, and expected result hashes are identical across adapters and forms. Each row records latency, throughput, allocation, provider work/round trips, storage, write amplification, and plan selection; lifecycle rows also record rollback/retry cost.
+
 ## Provider Contract
 
 Each provider fixture must prove:
@@ -110,8 +125,8 @@ EF remains a temporary oracle only until all of the following are attached to th
 2. all four provider conformance suites green;
 3. provider-native plans accepted for every scale-bearing query;
 4. atomicity, retry, scope, restart, and schema-evolution tests green;
-5. Groundwork ordinary-store p95 `<= 1.25x` EF, throughput `>= 80%` EF, and p99 `<= 2x` EF;
-6. every selected physical-entity type demonstrates repeatable benefit over shared and dedicated-document forms;
+5. for every row in the Benchmark Acceptance Catalog at 100K, the median of three independent measured processes (one untimed warm-up, at least 100 operations and 30 seconds steady state each) has Groundwork p95 `<= 1.25x` same-provider EF, throughput `>= 80%` EF, and p99 `<= 2x` EF;
+6. at 100K and 1M, every selected physical-entity type improves median p95 or throughput by at least 10% over both shared/linked and dedicated-document forms, in the same direction in all three runs, with a 95% bootstrap confidence interval excluding zero;
 7. reference design composition uses Groundwork;
 8. design source/project/package/test dependency audit reports zero EF;
 9. architecture guard rejects a deliberate direct and transitive reintroduction.

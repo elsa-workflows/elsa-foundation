@@ -21,7 +21,7 @@ As a workflow author, I can create, find, revise, validate, promote, submit, and
 **Acceptance Scenarios**:
 
 1. **Given** no definition with a requested identity exists, **when** an author creates a workflow or activity definition, **then** the definition and its initial related state become visible together or neither becomes visible.
-2. **Given** a workflow draft with authored state, layout, and validation results, **when** the author updates, promotes, submits, discards, or permanently deletes it, **then** the same domain rules, ordering, atomicity, and published outcomes apply as before the migration.
+2. **Given** a workflow draft with authored state and layout, **when** the author updates, promotes, submits, discards, or permanently deletes it, **then** validation is derived through the established domain gate and the same domain rules, ordering, atomicity, and published outcomes apply as before the migration.
 3. **Given** committed design data, **when** the application and storage connection are restarted, **then** all public read ports reconstruct the same logical design objects without provider artifacts leaking into the domain model.
 
 ---
@@ -98,7 +98,7 @@ As an Elsa maintainer, I can evolve design persistence contracts once without ma
 - **FR-007**: Every supported list, filter, membership, substring, exact-version, latest-version, ordering, paging, and count request MUST preserve the existing public contract's null, missing-value, comparison, semantic-version, and ordering behavior.
 - **FR-008**: Every scale-bearing predicate, ordering, page, count, and relationship lookup MUST execute through a bounded server-side storage route; unbounded client evaluation and load-all fallback are forbidden in production composition.
 - **FR-009**: Related aggregate reads MUST remain explicit and bounded and MUST NOT require provider-specific navigation behavior in core contracts.
-- **FR-010**: Persisted workflow state, activity descriptors, input/output definitions, design facets, layouts, and validation results MUST round-trip as logical domain content; provider-only storage representations MUST NOT become part of the domain contract.
+- **FR-010**: Persisted workflow state, activity descriptors, input/output definitions, design facets, and layouts MUST round-trip as logical domain content; provider-only storage representations MUST NOT become part of the domain contract. Validation outcomes MUST be derived from the authoritative authored state through the established domain validation gate and MUST NOT be recreated as a persistence table or treated as authoritative stored state.
 - **FR-011**: The chosen physical form and declared searchable fields for each design document kind MUST be justified by its stable query and write workload, while canonical serialized content remains authoritative.
 - **FR-012**: Storage scope and tenant ownership MUST be enforced on every save, load, update, delete, query, count, and multi-aggregate operation, including direct identity lookups.
 - **FR-013**: SQLite, SQL Server, PostgreSQL, and MongoDB MUST pass the same black-box design persistence conformance suite for every capability the product advertises.
@@ -115,7 +115,7 @@ As an Elsa maintainer, I can evolve design persistence contracts once without ma
 ### Key Entities
 
 - **Workflow Definition**: The stable identity and descriptive metadata of an authored workflow.
-- **Workflow Definition Draft**: Mutable authored workflow state plus its associated layout and validation outcome before promotion.
+- **Workflow Definition Draft**: Mutable authored workflow state plus its associated layout before promotion; its validation outcome is derived and is not authoritative persisted state.
 - **Workflow Definition Version**: An immutable, semantically versioned authored snapshot with exact and latest-version lookup behavior.
 - **Workflow Definition Version Layout**: The designer-only visual layout associated with an immutable workflow version.
 - **Activity Definition**: The catalog identity and provenance for one activity kind.
@@ -130,9 +130,9 @@ As an Elsa maintainer, I can evolve design persistence contracts once without ma
 - **SC-001**: One shared behavioral suite passes 100% of workflow- and activity-design contract scenarios on SQLite, SQL Server, PostgreSQL, and MongoDB, including restart, concurrency, isolation, and failure-recovery scenarios.
 - **SC-002**: Execution evidence for 100% of scale-bearing design query shapes shows bounded storage-side filtering, ordering, paging, and counting with no full-catalog application-memory fallback.
 - **SC-003**: All injected partial-failure and lost-acknowledgement scenarios leave either the complete intended aggregate transition or no transition, with zero duplicates and zero orphaned related records.
-- **SC-004**: At representative catalog scale, ordinary design-store operations have p95 latency no worse than 1.25 times the accepted oracle, throughput of at least 80% of the oracle, and p99 latency no worse than 2 times the oracle.
-- **SC-005**: Any design document kind selecting an entity-style physical form demonstrates a repeatable improvement over both shared and dedicated-document forms on its representative workload.
-- **SC-006**: The reference host completes schema readiness checks and representative design create/read/update/delete/version flows with each mandatory provider using one host-level provider choice.
+- **SC-004**: For every operation in the contract's Benchmark Acceptance Catalog at the required 100K catalog scale, the median of three independent measured process runs has p95 latency no worse than 1.25 times the same-provider EF oracle, throughput of at least 80% of that oracle, and p99 latency no worse than 2 times that oracle; each run follows one untimed warm-up and contains at least 100 completed operations and 30 seconds of steady-state measurement.
+- **SC-005**: Any design document kind selecting an entity-style physical form improves median p95 latency or median throughput by at least 10% over both shared/linked and dedicated-document forms at the 100K and 1M scale-bearing workloads, the improvement direction holds in all three independent runs, and the 95% bootstrap confidence interval for the relative improvement excludes zero.
+- **SC-006**: The actual `Elsa.Server` reference host completes schema readiness checks and representative design create/read/update/delete/version flows with each mandatory provider using one host-level provider choice, and its design-only, runtime-only, and combined deployment shapes all compose with the intended feature boundaries.
 - **SC-007**: After final cleanup, the design persistence source, project, package, registration, test, and resolved dependency graphs contain zero EF Core implementation artifacts, while all design core projects contain zero concrete-provider dependencies.
 - **SC-008**: A deliberate reintroduction of a direct or transitive EF dependency is rejected automatically and reports the full violating dependency path.
 

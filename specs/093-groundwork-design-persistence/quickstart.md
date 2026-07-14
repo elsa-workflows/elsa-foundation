@@ -49,6 +49,16 @@ Required fixtures:
 
 Expected: identical result hashes and domain outcomes for all public design stores/commands; isolation, OCC, atomic rollback, ambiguous acknowledgement, cancellation, restart, and schema drift scenarios pass.
 
+The same test project must boot the actual `src/Apps/Elsa.Server/` reference host for this composition matrix, rather than proving only isolated fixtures:
+
+| Shape | SQLite | SQL Server | PostgreSQL | MongoDB |
+|---|---:|---:|---:|---:|
+| Design-only | required | required | required | required |
+| Runtime-only | required | required | required | required |
+| Combined design + runtime | required | required | required | required |
+
+Design-only and combined execute representative design create/read/update/delete/version flows plus readiness before traffic. Runtime-only proves design features are absent while runtime persistence remains operational. Each cell restarts the host and retains one host-level provider selection.
+
 ## 4. Prove bounded execution
 
 Run the scale dataset/query suite with plan capture enabled. Evidence must cover every row in [the bounded query catalog](contracts/design-persistence-contract.md#bounded-query-catalog).
@@ -100,7 +110,9 @@ Using the fixed workload from issue #646, run identical seeds, payloads, query s
 3. Groundwork dedicated document tables;
 4. Groundwork physical entity tables.
 
-Datasets include the agreed 1K/100K/1M scale points where the runner and provider capacity permit. Record p50/p95/p99, throughput, allocation, round trips/database work, storage, write amplification, migration/backfill cost, and native plan selection.
+The 1K dataset is the required correctness/smoke scale, 100K is the required acceptance scale for every workload and mandatory provider, and 1M is required for every scale-bearing query/form comparison on every mandatory provider. An architect-approved workload exclusion must be recorded before timing; machine capacity does not silently waive a scale.
+
+Run every row in the [Benchmark Acceptance Catalog](contracts/design-persistence-contract.md#benchmark-acceptance-catalog). For each measured case, run three independent processes after one untimed warm-up per process. Each measured process must complete at least 100 operations and 30 seconds of steady-state work. Retain raw per-operation samples, fixed seed, payload hash, result hash, provider/server settings, machine metadata, allocation, round trips/database work, storage, write amplification, migration/backfill cost, and native plans. Compute per-run p50/p95/p99 and throughput, use the median of the three runs for the EF ratio gates, and report 95% bootstrap confidence intervals for form comparisons. Apply gates per catalog row; do not use a workload aggregate to hide a failing operation.
 
 Exit gate:
 
@@ -108,7 +120,8 @@ Exit gate:
 - p95 `<= 1.25x` EF;
 - throughput `>= 80%` EF;
 - p99 `<= 2x` EF;
-- selected entity forms beat both other Groundwork forms repeatably.
+- selected entity forms improve median p95 or median throughput by at least 10% over each other Groundwork form at both 100K and 1M, with the improvement direction present in all three runs and the 95% bootstrap confidence interval excluding zero;
+- same-provider EF ratios are required wherever an EF oracle exists; MongoDB records its absolute baseline and must pass correctness, bounded-plan, and form-selection gates without a fabricated EF comparison.
 
 ## 7. Run design behavior and architecture suites
 

@@ -24,11 +24,11 @@ The implementation is an in-place productionization of existing adapters, manife
 
 **Project Type**: Modular .NET libraries, provider-specific host adapters, reference server, test suites, and deployment-schema manifest source
 
-**Performance Goals**: Ordinary design-store p95 no worse than 1.25x the EF oracle; throughput at least 80% of the oracle; p99 no worse than 2x; every selected physical-entity form must show a repeatable benefit over shared and dedicated-document forms
+**Performance Goals**: At the required 100K acceptance scale, each operation in the contract's Benchmark Acceptance Catalog uses the median of three independent measured processes (one untimed warm-up, at least 100 operations and 30 seconds steady state per process) and must achieve p95 no worse than 1.25x the same-provider EF oracle, throughput at least 80% of the oracle, and p99 no worse than 2x. Every selected physical-entity form must improve median p95 or throughput by at least 10% over shared/linked and dedicated-document forms at both 100K and 1M, in the same direction in all three runs, with a 95% bootstrap confidence interval excluding zero.
 
 **Constraints**: No Groundwork dependency in design core modules; no unbounded client evaluation; exact scope isolation; atomic multi-aggregate writes; canonical JSON retained; no production EF-data migration; one host provider choice; provider capabilities and MongoDB topology requirements must be truthful; no direct or transitive design EF dependency after exit
 
-**Scale/Scope**: Six primary design aggregate/document types plus activity availability settings; all public design read/write contracts; fixed 1K/100K/1M benchmark datasets where practical; four providers; design-only, runtime-only, and combined host shapes
+**Scale/Scope**: Six primary design aggregate/document types plus activity availability settings; all public design read/write contracts; required fixed 1K correctness, 100K acceptance, and 1M scale-bearing benchmark datasets (unless an explicit architect-approved workload exclusion is recorded before timing); four providers; the actual `Elsa.Server` in design-only, runtime-only, and combined host shapes
 
 ## Constitution Check
 

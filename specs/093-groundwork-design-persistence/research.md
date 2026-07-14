@@ -72,7 +72,7 @@
 
 ## Decision 7: Migrate test objectives before deleting EF tests
 
-**Decision**: Extract black-box behavior fixtures from existing EF-centric tests, run them against the temporary EF oracle and every Groundwork provider, then remove only the EF setup/mechanism assertions after parity and performance evidence is recorded. Preserve domain-objective tests such as immutability, event sequencing, SemVer resolution, layout behavior, and failure recovery.
+**Decision**: Extract black-box behavior fixtures from existing EF-centric tests, run them against the temporary EF oracle and every Groundwork provider, then remove only the EF setup/mechanism assertions after parity and performance evidence is recorded. Preserve domain-objective tests such as immutability, event sequencing, SemVer resolution, layout behavior, and failure recovery. Before deleting any existing test, record the exact test, its classified objective, its replacement evidence or reason the objective is invalid, and explicit architect approval in the test-removal ledger in this document; general approval of the migration is not approval to delete an individual test.
 
 **Rationale**: Framework §2.21.1 requires test objective continuity. Several current tests assert EF metadata as a proxy for domain immutability; those objectives must become provider-neutral observable stale-write/conflict tests before their EF mechanics disappear.
 
@@ -83,7 +83,9 @@
 
 ## Decision 8: Gate physical-form selection with reproducible evidence
 
-**Decision**: Use identical fixed datasets, payloads, query shapes, concurrency, and result hashes to compare EF normalized tables with Groundwork shared/linked, dedicated-document, and physical-entity forms. Record raw artifacts and provider-native plans. Keep the selected physical-entity form only when it passes correctness and shows repeatable benefit while meeting the accepted latency/throughput gates.
+**Decision**: Use identical fixed datasets, payloads, query shapes, concurrency, and result hashes to compare EF normalized tables with Groundwork shared/linked, dedicated-document, and physical-entity forms. The required scales are 1K for correctness/smoke, 100K for every acceptance workload on every mandatory provider, and 1M for every scale-bearing query/form comparison on every mandatory provider. A scale may be omitted only by an explicit architect-approved workload exclusion recorded before timing; machine capacity alone is not an implicit waiver.
+
+Each measured case runs as three independent processes after one untimed warm-up per process, with at least 100 completed operations and 30 seconds of steady-state measurement per run. Acceptance uses the median of the three per-run p95, p99, and throughput results and applies the EF ratio gates to each gated operation rather than hiding a regression in an aggregate. Raw per-operation samples, fixed seed, payload hash, provider/server configuration, machine metadata, native plan, round trips/database work, allocation, and result hash are retained. A physical-entity form earns selection only when it improves median p95 or median throughput by at least 10% over both other Groundwork forms at 100K and 1M, the direction holds in all three runs, and a 95% bootstrap confidence interval for relative improvement excludes zero. The same-provider EF ratio is required wherever an EF oracle exists; MongoDB records the absolute baseline and must still pass form-selection, bounded-plan, and correctness gates without inventing an EF comparison.
 
 **Rationale**: Physical entity tables add schema and backfill complexity and must earn it. The parent PRDs already ratified thresholds and representative 1K/100K/1M scale points.
 
@@ -91,6 +93,22 @@
 
 - Choose entity tables solely by architectural preference: rejected because the explicit performance policy requires measured justification.
 - Benchmark only SQLite: rejected because provider-neutral correctness and plan shape can diverge even when SQLite is fast.
+
+## Test-removal approval ledger
+
+This ledger is populated by T003. No entry is approved by default. T072 and T073 may delete an existing test only when its exact test identity appears here with its objective classification, replacement evidence or invalid-objective rationale, architect, decision, and decision date.
+
+| Existing test | Objective classification | Replacement evidence / rationale | Architect | Decision | Date |
+|---|---|---|---|---|---|
+| _Populate during T003_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ |
+
+## Framework §2.23 coverage ledger
+
+T020 creates and maintains this ledger at class granularity. Every feature class receives a direct registration/composition test under §2.23.1; every logic-bearing implementation receives its own stubbed-dependency public-surface branch suite under §2.23.2. T035, T048, T061, and T062 must add and close rows introduced by their implementation phases before those checkpoints can pass.
+
+| Class | Kind | Owning implementation task | Registration test | Direct branch test | Status |
+|---|---|---|---|---|---|
+| _Populate during T020 and later implementation tasks_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ |
 
 ## Resolved Dependencies
 

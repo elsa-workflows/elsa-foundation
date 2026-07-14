@@ -25,7 +25,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 - [ ] T001 Record branch base, Groundwork package/tool version, provider images, and current focused/full test counts in `specs/093-groundwork-design-persistence/quickstart.md`
 - [ ] T002 Reconcile every current workflow/activity design store and command with the coverage list in `specs/093-groundwork-design-persistence/contracts/design-persistence-contract.md`
-- [ ] T003 Classify every EF-referencing design test by preserved domain objective versus removable EF mechanism in `specs/093-groundwork-design-persistence/research.md`
+- [ ] T003 Classify every EF-referencing design test by preserved domain objective versus removable EF mechanism and populate the exact per-test architect approval ledger in `specs/093-groundwork-design-persistence/research.md`; T072/T073 may not delete a test without its approved ledger row
 - [ ] T004 Capture the temporary EF SQLite oracle result hashes and behavior baseline in `specs/093-groundwork-design-persistence/quickstart.md`
 - [ ] T005 Create `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj` and add it to `Elsa.Server.slnx`
 - [ ] T006 [P] Add the released `Groundwork.SqlServer`, `Groundwork.MongoDb`, and matching provider test/tool package versions to `Directory.Packages.props`
@@ -53,7 +53,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 - [ ] T017 Add explicit privileged-session acquisition for tenant-agnostic design operations in `src/Elsa/Persistence/Groundwork/Querying/GroundworkDesignStoreSessionFactory.cs`
 - [ ] T018 Add domain-scoped translation, readiness, corrupt-payload, and provider-failure exceptions in `src/Elsa/Persistence/Groundwork/Querying/Exceptions/`
 - [ ] T019 Update the in-memory Groundwork test substrate to execute declared bounded queries truthfully or reject them before I/O in `tests/Elsa/Persistence/Groundwork/Testing/InMemoryDocumentStore.cs`
-- [ ] T020 Add manifest/route compilation, naming collision, scope injection, algorithm-version fingerprint, and missing-handler tests in `tests/Elsa/Persistence/Groundwork/Querying/Tests/GroundworkDesignPhysicalRouteTests.cs`
+- [ ] T020 Create the live §2.23 coverage ledger in `specs/093-groundwork-design-persistence/research.md`, inventory every existing and Phase-2 feature/logic-bearing implementation, and add §2.23.1 registration plus direct §2.23.2 branch coverage for manifests/translators, session and factory classes under `tests/Elsa/Persistence/Groundwork/Querying/Tests/`; include route compilation, naming collision, scope injection, algorithm-version fingerprint, and missing-handler paths, and assign every later command/UoW, readiness, schema-source, provider registration, and provider materialization row to T035, T048, T061, or T062 before its implementation task closes
 
 **Checkpoint**: Physical definitions compile, every declared query binds to one certified handler, core projects remain Groundwork-free, and unsupported shapes fail before provider work.
 
@@ -84,7 +84,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 - [ ] T032 [US1] Apply the hardened atomic write path to activity definition/version commands in `src/Elsa/Activities/Design/Persistence/Groundwork/Services/`
 - [ ] T033 [US1] Map provider write/read/serialization failures to domain-scoped exceptions without swallowing cancellation in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/` and `src/Elsa/Activities/Design/Persistence/Groundwork/Services/`
 - [ ] T034 [US1] Register scoped store sessions, translators, commands, and stores exactly once in `src/Elsa/Workflows/Design/Persistence/Groundwork/DependencyInjection/GroundworkWorkflowsDesignStoreRegistration.cs` and `src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs`
-- [ ] T035 [US1] Pass all focused workflow/activity Groundwork suites and the SQLite T021–T024 conformance fixture; record exact counts in `specs/093-groundwork-design-persistence/quickstart.md`
+- [ ] T035 [US1] Complete every T020 coverage-ledger row introduced by T026–T034 with per-feature registration and per-implementation direct branch tests (including atomic command/UoW, failure, retry, cancellation, and default paths) in the owning workflow/activity/Groundwork test directories; pass all focused suites plus SQLite T021–T024 and record exact counts in `specs/093-groundwork-design-persistence/quickstart.md`
 - [ ] T036 [US1] Commit and independently review the US1 exact HEAD for lifecycle, atomicity, scope, retry, and test-objective preservation; record the commit/review in `specs/093-groundwork-design-persistence/quickstart.md`
 
 **Checkpoint**: User Story 1 is durable and independently demonstrable on SQLite with no partial aggregate visibility or scope leak.
@@ -113,7 +113,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 - [ ] T045 [P] [US2] Declare native activity definition search/equality/membership fields and version compound routes in `src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignStorageManifest.cs`
 - [ ] T046 [US2] Enforce declared maximum `IN` cardinality and deterministic bounded batches in `src/Elsa/Persistence/Groundwork/Querying/GroundworkQueryTranslator.cs` and `GroundworkWorkflowDefinitionListProjectionStore.cs`
 - [ ] T047 [US2] Remove every design by-collection/list-all fallback and obsolete fallback documentation in `src/Elsa/Persistence/Groundwork/Querying/`, `src/Elsa/Workflows/Design/Persistence/Groundwork/`, and `src/Elsa/Activities/Design/Persistence/Groundwork/`
-- [ ] T048 [US2] Run T037–T040 at representative SQLite scale with allocation/command counters and attach result hashes plus plan index in `specs/093-groundwork-design-persistence/quickstart.md`
+- [ ] T048 [US2] Complete every T020 coverage-ledger row introduced by T041–T047 with direct translator/read-store/manifest branch tests in the owning Groundwork test directories, then run T037–T040 at representative SQLite scale with allocation/command counters and attach result hashes plus plan index in `specs/093-groundwork-design-persistence/quickstart.md`
 - [ ] T049 [US2] Add a negative architecture test that fails on `InMemoryQueryEvaluator`, `DocumentStoreQuery` list-all, or uncertified scale-bearing design paths in `tests/Elsa/Architecture/DesignPersistenceBoundedQueryTests.cs`
 - [ ] T050 [US2] Commit and independently review the US2 exact HEAD for query semantic parity and bounded execution; record the commit/review in `specs/093-groundwork-design-persistence/quickstart.md`
 
@@ -142,9 +142,9 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 - [ ] T058 [P] [US3] Add MongoDB runtime/unified provider projects, registration, initializer, topology validation, and shell feature in `src/Elsa/Persistence/Groundwork/MongoDb/` and `src/Elsa/Persistence/Groundwork/MongoDb/Unified/`
 - [ ] T059 [US3] Bind all four provider compositions to `GroundworkUnifiedManifest` plus `ElsaGroundworkSchema` with one naming-policy/override pipeline in `src/Elsa/Persistence/Groundwork/Unified/`
 - [ ] T060 [US3] Add startup readiness validation that never auto-applies or falls back in `src/Elsa/Persistence/Groundwork/Unified/GroundworkSchemaReadinessTask.cs`
-- [ ] T061 [P] [US3] Add offline/live plan/validate/status/apply CLI contract tests for the unified manifest in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/UnifiedSchemaToolContractTests.cs`
-- [ ] T062 [P] [US3] Add provider feature registration and one-provider-per-host conflict tests in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/UnifiedDesignProviderRegistrationTests.cs`
-- [ ] T063 [US3] Run the complete T021–T040 suite on all four real providers and remediate every provider-specific semantic or plan difference in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/`
+- [ ] T061 [P] [US3] Add offline/live plan/validate/status/apply CLI contract tests plus direct schema-source/readiness branch tests required by the T020 coverage ledger in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/UnifiedSchemaToolContractTests.cs` and `UnifiedSchemaReadinessTests.cs`
+- [ ] T062 [P] [US3] Complete every provider feature/registration/materialization row in the T020 coverage ledger with direct branch tests, then add one-provider-per-host conflict tests that compose the actual `src/Apps/Elsa.Server/` reference host in design-only, runtime-only, and combined deployment shapes for each provider in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/UnifiedDesignProviderRegistrationTests.cs` and the owning provider test directories
+- [ ] T063 [US3] Run the complete T021–T040 suite through the actual `Elsa.Server` reference host on all four real providers in design-only and combined shapes, prove runtime-only excludes design while retaining runtime composition, and remediate every provider-specific semantic, plan, or composition difference under `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/`
 - [ ] T064 [US3] Prove additive schema/backfill restart, naming collision, drift, cancellation, and safe-apply recovery across all providers in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/UnifiedSchemaEvolutionContractTests.cs`
 - [ ] T065 [US3] Document provider selection, connection-secret inputs, MongoDB topology, and CI/CD CLI commands in `src/Elsa/Persistence/Groundwork/Unified/README.md`
 - [ ] T066 [US3] Commit and independently review the US3 exact HEAD for four-provider parity, topology truthfulness, schema operations, and coherent host composition; record the commit/review in `specs/093-groundwork-design-persistence/quickstart.md`
@@ -161,16 +161,16 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 ### Tests and evidence for User Story 4
 
-- [ ] T067 [P] [US4] Add fixed design workload datasets, result hashing, and EF/Groundwork adapter targets to the temporary benchmark harness under `benchmarks/Elsa.DesignPersistence.Benchmarks/`
+- [ ] T067 [P] [US4] Add fixed 1K correctness, 100K acceptance, and 1M scale-bearing design workload datasets; deterministic seeds/payload and result hashes; same-provider EF/Groundwork adapter targets; one untimed warm-up plus three independent process runs of at least 100 operations and 30 seconds steady state; raw-sample capture and 95% bootstrap comparison to the temporary harness under `benchmarks/Elsa.DesignPersistence.Benchmarks/`
 - [ ] T068 [P] [US4] Add shared/dedicated/entity physical-form selection and provider-plan capture to `benchmarks/Elsa.DesignPersistence.Benchmarks/`
-- [ ] T069 [US4] Run correctness-first 1K/100K/1M evidence where practical, record raw summaries, environment, statistics, and threshold decisions in `docs/reports/groundwork-design-persistence-performance.md`
+- [ ] T069 [US4] Run the required correctness-first 1K/100K/1M matrix, record any architect-approved pre-timing workload exclusion, raw samples, environment, fixed inputs, per-operation medians/confidence intervals, native plans, and threshold decisions in `docs/reports/groundwork-design-persistence-performance.md`
 - [ ] T070 [US4] Convert every still-valid EF-specific workflow/activity test objective identified in T003 into Groundwork/shared contract tests under `tests/Elsa/Workflows/Design/`, `tests/Elsa/Activities/Design/`, or `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/`
 
 ### Implementation for User Story 4
 
 - [ ] T071 [US4] Switch `src/Apps/Elsa.Server/Elsa.Server.csproj`, `shells.json`, reset paths, and design feature composition to Groundwork-only design persistence
-- [ ] T072 [P] [US4] Remove workflow design EF source, migrations, project references, and EF-only setup from `src/Elsa/Workflows/Design/Persistence/EFCore/` and affected workflow tests
-- [ ] T073 [P] [US4] Remove activity design EF source, migrations, project references, and EF-only setup from `src/Elsa/Activities/Design/Persistence/EFCore/` and affected activity tests
+- [ ] T072 [P] [US4] Remove workflow design EF source, migrations, project references, and EF-only setup from `src/Elsa/Workflows/Design/Persistence/EFCore/`; delete an affected workflow test only when T003 records its exact architect-approved ledger row and replacement evidence
+- [ ] T073 [P] [US4] Remove activity design EF source, migrations, project references, and EF-only setup from `src/Elsa/Activities/Design/Persistence/EFCore/`; delete an affected activity test only when T003 records its exact architect-approved ledger row and replacement evidence
 - [ ] T074 [US4] Remove only now-unused design EF package/project entries from `Directory.Packages.props` and `Elsa.Server.slnx` while preserving EF dependencies still owned by unfinished zero-EF lanes
 - [ ] T075 [US4] Tighten the EF surface ratchet to absolute zero for workflow/activity design source and dependency graphs in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs` and `EfCoreSurfaceScanner.cs`
 - [ ] T076 [US4] Add core-to-Groundwork negative dependency and complete provider-registration architecture tests in `tests/Elsa/Architecture/DesignPersistenceBoundaryTests.cs`
@@ -193,8 +193,8 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 - [ ] T084 Run an independent requirement-by-requirement audit of FR-001–FR-022 and SC-001–SC-008 against exact branch HEAD and record findings in `specs/093-groundwork-design-persistence/quickstart.md`
 - [ ] T085 Remediate every blocking independent-review, CI, provider, schema, architecture, or performance finding in the owning source/test files and repeat T083–T084
 - [ ] T086 Push `093-groundwork-design-persistence`, open a reviewed PR linked to #641, and obtain all required checks with evidence in the PR body
-- [ ] T087 Merge the approved PR using Model B, verify remote `main` contains the exact reviewed result, and confirm issue #641 plus parent #629 state is accurate
-- [ ] T088 Record the merge commit, PR/check/provider/schema/benchmark links, and remaining zero-EF dependencies in `specs/093-groundwork-design-persistence/quickstart.md`
+- [ ] T087 Finalize `specs/093-groundwork-design-persistence/quickstart.md` before merge with the exact reviewed candidate HEAD, PR/check/provider/schema/benchmark links, and remaining zero-EF dependencies
+- [ ] T088 Merge the approved PR using Model B, verify remote `main` contains the exact reviewed result, and record the merge commit plus final issue #641/parent #629 state in the PR or issue timeline as the post-merge durable record
 
 ---
 
@@ -219,7 +219,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 ### Critical Path
 
-`T001–T009 -> T010–T020 -> (T021–T035 || T037–T049) -> T051–T064 -> T067–T078 -> T083–T087`
+`T001–T009 -> T010–T020 -> ((T021–T035 -> T036) || (T037–T049 -> T050)) -> T051–T065 -> T066 -> T067–T078 -> T079 -> T080–T082 -> T083–T088`
 
 ## Parallel Opportunities
 
