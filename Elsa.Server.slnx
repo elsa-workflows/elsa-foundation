@@ -74,8 +74,7 @@
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/" />
-  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/">
+  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/">
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/">
