@@ -103,6 +103,10 @@ textured, layered surface recipes on top of the flat `--studio-*` layer. They ar
 A module opts into the material look by consuming these tokens **inside a
 `[data-theme-material]` guard**; without the guard the module stays flat.
 
+The built-in `material-design` theme is intentionally not part of this family: it implements
+Google's flat Material Design language and the Elsa Studio 3 palette through the ordinary
+semantic tokens. It does not set `data-theme-material` and must not inherit physical textures.
+
 Each material theme defines the full set below per theme+mode block. If you add a new
 `--studio-material-*` token you MUST define it in **every** material theme block, not as one
 hardcoded value.

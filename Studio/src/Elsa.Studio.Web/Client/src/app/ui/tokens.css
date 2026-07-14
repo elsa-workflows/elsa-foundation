@@ -82,6 +82,50 @@ html[data-theme-mode="dark"] {
   --studio-danger-fg: oklch(0.78 0.15 27);
 }
 
+/*
+ * Google Material Design treatment for the Elsa 3-compatible palette. This is deliberately
+ * separate from `data-theme-material`, which denotes Studio's textured physical materials.
+ */
+html[data-theme="material-design"] {
+  --font-sans: "Roboto", "Segoe UI", Arial, sans-serif;
+  --radius-sm: 2px;
+  --radius: 4px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --shadow-sm:
+    0 1px 2px rgb(15 23 42 / 0.16),
+    0 1px 3px rgb(15 23 42 / 0.12);
+  --shadow-md:
+    0 2px 4px -1px rgb(15 23 42 / 0.18),
+    0 4px 8px rgb(15 23 42 / 0.12);
+  --shadow-lg:
+    0 6px 10px -2px rgb(15 23 42 / 0.18),
+    0 4px 14px rgb(15 23 42 / 0.12);
+  --shadow-xl:
+    0 12px 18px -4px rgb(15 23 42 / 0.2),
+    0 8px 28px rgb(15 23 42 / 0.14);
+  --studio-surface-raised: #ffffff;
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --studio-focus: var(--ring);
+}
+
+html[data-theme="material-design"][data-theme-mode="dark"] {
+  --shadow-sm:
+    0 1px 2px rgb(0 0 0 / 0.36),
+    0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-md:
+    0 2px 4px -1px rgb(0 0 0 / 0.42),
+    0 4px 8px rgb(0 0 0 / 0.32);
+  --shadow-lg:
+    0 6px 10px -2px rgb(0 0 0 / 0.46),
+    0 4px 14px rgb(0 0 0 / 0.36);
+  --shadow-xl:
+    0 12px 18px -4px rgb(0 0 0 / 0.5),
+    0 8px 28px rgb(0 0 0 / 0.4);
+  --studio-surface-raised: #1e293b;
+}
+
 html[data-theme="black-glass"] {
   --studio-bg: #04070f;
   --studio-surface: color-mix(in srgb, #0e1826 76%, transparent);

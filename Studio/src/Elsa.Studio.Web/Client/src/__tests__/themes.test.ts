@@ -11,6 +11,38 @@ describe("theme presets", () => {
     expect(getThemeNames()).toContainEqual({ id: "hot-pink", name: "Hot Pink" });
   });
 
+  it("includes the selectable flat Material Design theme with the Elsa 3 palette", () => {
+    const theme = getTheme("material-design");
+
+    expect(theme).toBeDefined();
+    expect(theme).toMatchObject({
+      id: "material-design",
+      name: "Material Design",
+      source: "built-in",
+      enabled: true,
+      published: true
+    });
+    expect(getThemeNames()).toContainEqual({ id: "material-design", name: "Material Design" });
+    expect(findSelectableTheme(normalizeThemeStore(), "material-design").id).toBe("material-design");
+    expect(getSupportedThemeModes(theme!)).toEqual(["light", "dark"]);
+    expect(supportsThemeMode(theme!, "light")).toBe(true);
+    expect(supportsThemeMode(theme!, "dark")).toBe(true);
+    expect(theme?.light).toMatchObject({
+      primary: "#0ea5e9",
+      background: "#ffffff",
+      card: "#f8fafc",
+      sidebar: "#f8fafc",
+      foreground: "#0f172a"
+    });
+    expect(theme?.dark).toMatchObject({
+      primary: "#0ea5e9",
+      background: "#0f172a",
+      card: "#182234",
+      sidebar: "#0f172a"
+    });
+    expect(isMaterialTheme("material-design")).toBe(false);
+  });
+
   it("represents material themes as read-only built-in definitions", () => {
     expect(getThemeNames()).toEqual(expect.arrayContaining([
       { id: "black-glass", name: "Black Glass" },

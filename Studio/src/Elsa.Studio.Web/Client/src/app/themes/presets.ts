@@ -305,8 +305,11 @@ type MaterialThemeColorConfig = {
   accent: string;
   accentForeground?: string;
   success?: string;
+  successForeground?: string;
   warning?: string;
+  warningForeground?: string;
   danger?: string;
+  dangerForeground?: string;
   background: string;
   foreground: string;
   card: string;
@@ -332,11 +335,11 @@ const createMaterialThemeColors = (config: MaterialThemeColorConfig): ThemeColor
   accentForeground: config.accentForeground ?? config.foreground,
 
   success: config.success ?? oklchToVar(0.68, 0.14, 150),
-  successForeground: oklchToVar(0.98, 0, 0),
+  successForeground: config.successForeground ?? oklchToVar(0.98, 0, 0),
   warning: config.warning ?? oklchToVar(0.72, 0.16, 70),
-  warningForeground: oklchToVar(0.14, 0.01, 70),
+  warningForeground: config.warningForeground ?? oklchToVar(0.14, 0.01, 70),
   danger: config.danger ?? oklchToVar(0.62, 0.2, 26),
-  dangerForeground: oklchToVar(0.98, 0, 0),
+  dangerForeground: config.dangerForeground ?? oklchToVar(0.98, 0, 0),
 
   background: config.background,
   foreground: config.foreground,
@@ -360,6 +363,64 @@ const createMaterialThemeColors = (config: MaterialThemeColorConfig): ThemeColor
     config.warning ?? oklchToVar(0.72, 0.16, 70),
     config.danger ?? oklchToVar(0.62, 0.2, 26),
   ],
+});
+
+// Material Design — carries forward the recognisable Elsa Studio 3 / MudBlazor palette
+// while supplying explicit accessible foreground pairs for Studio 4 controls.
+const materialDesignLightTheme = createMaterialThemeColors({
+  primary: "#0ea5e9",
+  primaryForeground: "#082f49",
+  secondary: "#e2e8f0",
+  secondaryForeground: "#0f172a",
+  accent: "#0369a1",
+  accentForeground: "#ffffff",
+  success: "#2e7d32",
+  successForeground: "#ffffff",
+  warning: "#ed6c02",
+  warningForeground: "#311b00",
+  danger: "#d32f2f",
+  dangerForeground: "#ffffff",
+  background: "#ffffff",
+  foreground: "#0f172a",
+  card: "#f8fafc",
+  muted: "#f1f5f9",
+  mutedForeground: "#475569",
+  border: "#cbd5e1",
+  input: "#ffffff",
+  sidebar: "#f8fafc",
+  sidebarForeground: "#0f172a",
+  sidebarActive: "#e0f2fe",
+  sidebarActiveForeground: "#0c4a6e",
+  ring: "#0284c7",
+  chartColors: ["#0ea5e9", "#6366f1", "#2e7d32", "#ed6c02", "#d32f2f"],
+});
+
+const materialDesignDarkTheme = createMaterialThemeColors({
+  primary: "#0ea5e9",
+  primaryForeground: "#082f49",
+  secondary: "#334155",
+  secondaryForeground: "#f8fafc",
+  accent: "#38bdf8",
+  accentForeground: "#082f49",
+  success: "#22c55e",
+  successForeground: "#052e16",
+  warning: "#f59e0b",
+  warningForeground: "#451a03",
+  danger: "#f87171",
+  dangerForeground: "#450a0a",
+  background: "#0f172a",
+  foreground: "#f8fafc",
+  card: "#182234",
+  muted: "#1e293b",
+  mutedForeground: "#cbd5e1",
+  border: "#475569",
+  input: "#1e293b",
+  sidebar: "#0f172a",
+  sidebarForeground: "#f8fafc",
+  sidebarActive: "#1e3a5f",
+  sidebarActiveForeground: "#e0f2fe",
+  ring: "#38bdf8",
+  chartColors: ["#38bdf8", "#818cf8", "#22c55e", "#f59e0b", "#f87171"],
 });
 
 const stoneTheme = createMaterialThemeColors({
@@ -715,6 +776,13 @@ export const builtInThemeDefinitions: Theme[] = [
     "Smoked-glass Studio surfaces with cyan blueprint glow.",
     { ...blackGlassLight, material: materialMode("frosted", "/studio/assets/frosted-glass-tile.png", 0.36, 420) },
     { ...blackGlassDark, material: materialMode("glass", "/studio/assets/black-glass-tile.png", 0.72, 420) }
+  ),
+  createThemeDefinition(
+    "material-design",
+    "Material Design",
+    "Familiar Elsa Studio 3 surfaces, sky-blue accents, compact geometry, and Material elevation.",
+    materialDesignLightTheme,
+    materialDesignDarkTheme
   ),
   createThemeDefinition(
     "stone",
