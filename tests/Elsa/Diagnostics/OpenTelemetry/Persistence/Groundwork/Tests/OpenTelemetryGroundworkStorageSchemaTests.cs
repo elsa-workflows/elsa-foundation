@@ -35,12 +35,40 @@ public sealed class OpenTelemetryGroundworkStorageSchemaTests
 
         var resources = manifest.StorageUnits.Single(x => x.Identity.Value == CatalogDocuments.ResourceKind);
         Assert.Contains(resources.PhysicalStorage!.LogicalIndexes,
-            x => x.Identity == OpenTelemetryGroundworkStorageSchema.ByServiceNameIndex);
+            x => x.Identity == OpenTelemetryGroundworkStorageSchema.ByResourceStatusIndex);
         Assert.Contains(resources.PhysicalStorage.BoundedQueries,
             x => x.Identity == "resources-by-last-seen" && x.ExecutionClass == BoundedQueryExecutionClass.ScaleBearing);
         var resourcePolicy = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(resources.PhysicalStorage.Policy);
         Assert.Contains(resourcePolicy.Definition.Indexes,
             x => x.LogicalName == OpenTelemetryGroundworkStorageSchema.ByRetentionIndex && x.Columns.Count == 3);
         Assert.Contains("open-telemetry-capture-operation", OpenTelemetryGroundworkStorageSchema.RequiredOperationLedgers);
+    }
+
+    [Fact]
+    public void Every_declared_physical_index_is_within_sql_server_key_width_limits()
+    {
+        var manifest = OpenTelemetryGroundworkStorageSchema.CreateDocumentManifest();
+
+        foreach (var unit in manifest.StorageUnits)
+        {
+            var policy = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy);
+            var columns = policy.Definition.ProjectedColumns.ToDictionary(x => x.LogicalName, StringComparer.Ordinal);
+            foreach (var index in policy.Definition.Indexes)
+            {
+                var keyBytes = index.Columns.Sum(column => column.ColumnLogicalName switch
+                {
+                    "storage_scope" => 128 * 2,
+                    _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.String =>
+                        columns[column.ColumnLogicalName].Length!.Value * 2,
+                    _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.Int32 => 4,
+                    _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.Int64 => 8,
+                    _ => throw new Xunit.Sdk.XunitException(
+                        $"SQL Server validator does not recognize index column '{column.ColumnLogicalName}'.")
+                });
+
+                Assert.True(keyBytes <= 1_700,
+                    $"SQL Server physical index '{index.LogicalName}' requires {keyBytes} key bytes; the provider maximum is 1700.");
+            }
+        }
     }
 }

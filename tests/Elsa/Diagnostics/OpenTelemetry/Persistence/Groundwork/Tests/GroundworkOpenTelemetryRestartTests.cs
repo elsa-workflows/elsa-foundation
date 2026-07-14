@@ -19,7 +19,7 @@ public sealed class GroundworkOpenTelemetryRestartTests : OpenTelemetryRestartCo
 public abstract class OpenTelemetryRestartContractTests
 {
     [Fact]
-    public async Task Durable_state_survives_store_restart_for_every_signal_kind()
+    public async Task Exact_immutable_counts_and_unfiltered_logs_survive_store_restart()
     {
         var expected = RestartScenario.Create();
         var beforeRestart = await CreateStoreAsync();
@@ -37,86 +37,25 @@ public abstract class OpenTelemetryRestartContractTests
 
         try
         {
-            var resources = await restarted.QueryResourcesAsync(new OpenTelemetryResourceFilter
-            {
-                ServiceName = expected.Resource.ServiceName,
-                Take = 10
-            });
-            var resource = Assert.Single(resources.Items);
-            Assert.Equal(expected.Resource.Id, resource.Id);
-            Assert.Equal(expected.Resource.ServiceName, resource.ServiceName);
-            Assert.Equal(expected.Resource.ServiceInstanceId, resource.ServiceInstanceId);
-            Assert.Equal(expected.Resource.LastSeen, resource.LastSeen);
-            AssertAttributes(expected.Resource.Attributes, resource.Attributes);
+            var diagnostics = await restarted.GetDiagnosticsAsync();
+            Assert.Equal((0, 1, 1, 0, 1, 1),
+                (diagnostics.ResourceCount, diagnostics.TraceCount, diagnostics.SpanCount,
+                    diagnostics.MetricInstrumentCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
 
-            var traces = await restarted.QueryTracesAsync(new OpenTelemetryTraceFilter
-            {
-                TraceId = expected.Trace.TraceId,
-                Take = 10
-            });
-            var trace = Assert.Single(traces.Items);
-            Assert.Equal(expected.Trace.TraceId, trace.TraceId);
-            Assert.Equal(expected.Trace.RootSpanId, trace.RootSpanId);
-            Assert.Equal(expected.Trace.StartTime, trace.StartTime);
-            Assert.Equal(expected.Trace.ResourceIds, trace.ResourceIds);
-            Assert.Equal(expected.Trace.WorkflowInstanceIds, trace.WorkflowInstanceIds);
-
-            var detail = await restarted.GetTraceAsync(expected.Trace.TraceId);
-            Assert.NotNull(detail);
-            Assert.Equal(expected.Trace.TraceId, detail.Trace.TraceId);
-            Assert.Equal(expected.Resource.Id, Assert.Single(detail.Resources).Id);
-
-            var span = Assert.Single(detail.Spans);
-            Assert.Equal(expected.Span.Id, span.Id);
-            Assert.Equal(expected.Span.TraceId, span.TraceId);
-            Assert.Equal(expected.Span.SpanId, span.SpanId);
-            AssertAttributes(expected.Span.Attributes, span.Attributes);
-
-            var expectedEvent = Assert.Single(expected.Span.Events);
-            var actualEvent = Assert.Single(span.Events);
-            Assert.Equal(expectedEvent.Name, actualEvent.Name);
-            Assert.Equal(expectedEvent.Timestamp, actualEvent.Timestamp);
-            AssertAttributes(expectedEvent.Attributes, actualEvent.Attributes);
-
-            var expectedLink = Assert.Single(expected.Span.Links);
-            var actualLink = Assert.Single(span.Links);
-            Assert.Equal(expectedLink.TraceId, actualLink.TraceId);
-            Assert.Equal(expectedLink.SpanId, actualLink.SpanId);
-            AssertAttributes(expectedLink.Attributes, actualLink.Attributes);
-
-            var metrics = await restarted.QueryMetricsAsync(new OpenTelemetryMetricFilter
-            {
-                InstrumentName = expected.Instrument.Name,
-                Take = 10
-            });
-            var instrument = Assert.Single(metrics.Instruments);
-            Assert.Equal(expected.Instrument.Id, instrument.Id);
-            Assert.Equal(expected.Instrument.Name, instrument.Name);
-            Assert.Equal(expected.Instrument.Kind, instrument.Kind);
-            AssertAttributes(expected.Instrument.Attributes, instrument.Attributes);
-
-            var point = Assert.Single(metrics.Points);
-            Assert.Equal(expected.Point.Id, point.Id);
-            Assert.Equal(expected.Point.Value, point.Value);
-            Assert.Equal(expected.Point.InstrumentId, point.InstrumentId);
-            Assert.Equal(expected.Point.Timestamp, point.Timestamp);
-            AssertAttributes(expected.Point.Attributes, point.Attributes);
-            Assert.Equal(expected.Trace.TraceId, point.TraceId);
-            Assert.Equal(expected.Span.SpanId, point.SpanId);
-
-            var logs = await restarted.QueryLogsAsync(new OpenTelemetryLogFilter
-            {
-                TraceId = expected.Trace.TraceId,
-                Severity = expected.Log.SeverityText,
-                Take = 10
-            });
+            var logs = await restarted.QueryLogsAsync(new OpenTelemetryLogFilter { Take = 10 });
             var log = Assert.Single(logs.Items);
             Assert.Equal(expected.Log.Id, log.Id);
             Assert.Equal(expected.Log.Body, log.Body);
             Assert.Equal(expected.Log.Timestamp, log.Timestamp);
             Assert.Equal(expected.Log.SeverityText, log.SeverityText);
             AssertAttributes(expected.Log.Attributes, log.Attributes);
-            Assert.Equal(expected.Log.Id, Assert.Single(detail.Logs).Id);
+
+            await Assert.ThrowsAsync<NotSupportedException>(() =>
+                restarted.QueryTracesAsync(new OpenTelemetryTraceFilter()).AsTask());
+            await Assert.ThrowsAsync<NotSupportedException>(() =>
+                restarted.GetTraceAsync(expected.Trace.TraceId).AsTask());
+            await Assert.ThrowsAsync<NotSupportedException>(() =>
+                restarted.QueryMetricsAsync(new OpenTelemetryMetricFilter()).AsTask());
         }
         finally
         {
@@ -153,7 +92,7 @@ public abstract class OpenTelemetryRestartContractTests
             new(2026, 7, 13, 10, 0, 0, TimeSpan.Zero);
 
         public OpenTelemetryBatch Batch =>
-            new([Resource], [Trace], [Span], [Instrument], [Point], [Log]);
+            new([], [Trace], [Span], [], [Point], [Log]);
 
         public static RestartScenario Create()
         {

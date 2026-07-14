@@ -15,10 +15,8 @@ public static class OpenTelemetryGroundworkStorageSchema
     public const string SchemaVersion = "1.0.0";
     public const string OperationLedgerKind = "openTelemetryCaptureOperation";
 
-    public const string ByServiceNameIndex = "by-service-name";
     public const string ByResourceStatusIndex = "by-resource-status";
     public const string ByInstrumentResourceIndex = "by-resource";
-    public const string ByInstrumentNameIndex = "by-name";
     public const string ByInstrumentKindIndex = "by-kind";
     public const string ByLastSeenIndex = "by-last-seen";
     public const string ByRetentionTieBreakerIndex = "by-retention-tie-breaker";
@@ -62,19 +60,16 @@ public static class OpenTelemetryGroundworkStorageSchema
                 "elsa_open_telemetry_resources",
                 "elsa_open_telemetry_resource_indexes",
                 [
-                    Column(CatalogDocuments.ServiceNamePath, PortablePhysicalType.String, length: 4_096),
                     Column(CatalogDocuments.ResourceStatusPath, PortablePhysicalType.Int32),
                     Column(CatalogDocuments.LastSeenPath, PortablePhysicalType.Int64),
                     Column(CatalogDocuments.RetentionTieBreakerPath, PortablePhysicalType.String, length: 512)
                 ],
                 [
-                    Logical(ByServiceNameIndex, CatalogDocuments.ServiceNamePath, IndexValueKind.Keyword),
                     Logical(ByResourceStatusIndex, CatalogDocuments.ResourceStatusPath, IndexValueKind.Number),
                     Logical(ByLastSeenIndex, CatalogDocuments.LastSeenPath, IndexValueKind.Number),
                     Logical(ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, IndexValueKind.Keyword)
                 ],
                 [
-                    Query("resources-by-service-name", ByServiceNameIndex),
                     Query("resources-by-status", ByResourceStatusIndex),
                     Query("resources-by-last-seen", ByLastSeenIndex, sortable: true),
                     Query("resources-by-retention-tie-breaker", ByRetentionTieBreakerIndex, sortable: true)
@@ -86,21 +81,18 @@ public static class OpenTelemetryGroundworkStorageSchema
                 "elsa_open_telemetry_instrument_indexes",
                 [
                     Column(CatalogDocuments.InstrumentResourceIdPath, PortablePhysicalType.String, length: 512),
-                    Column(CatalogDocuments.InstrumentNamePath, PortablePhysicalType.String, length: 4_096),
                     Column(CatalogDocuments.InstrumentKindPath, PortablePhysicalType.Int32),
                     Column(CatalogDocuments.LastSeenPath, PortablePhysicalType.Int64),
                     Column(CatalogDocuments.RetentionTieBreakerPath, PortablePhysicalType.String, length: 512)
                 ],
                 [
                     Logical(ByInstrumentResourceIndex, CatalogDocuments.InstrumentResourceIdPath, IndexValueKind.Keyword),
-                    Logical(ByInstrumentNameIndex, CatalogDocuments.InstrumentNamePath, IndexValueKind.Keyword),
                     Logical(ByInstrumentKindIndex, CatalogDocuments.InstrumentKindPath, IndexValueKind.Number),
                     Logical(ByLastSeenIndex, CatalogDocuments.LastSeenPath, IndexValueKind.Number),
                     Logical(ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, IndexValueKind.Keyword)
                 ],
                 [
                     Query("instruments-by-resource", ByInstrumentResourceIndex),
-                    Query("instruments-by-name", ByInstrumentNameIndex),
                     Query("instruments-by-kind", ByInstrumentKindIndex),
                     Query("instruments-by-last-seen", ByLastSeenIndex, sortable: true),
                     Query("instruments-by-retention-tie-breaker", ByRetentionTieBreakerIndex, sortable: true)
@@ -109,8 +101,8 @@ public static class OpenTelemetryGroundworkStorageSchema
         ],
         RequiredCapabilities,
         [
-            "Catalog identities and comparisons remain ordinal until Groundwork exposes the required portable comparison-key policy.",
-            "The capture-operation document fixes the issued-at value reused by every per-stream append retry."
+            "Catalog identity writes and case-equivalence-dependent reads remain unavailable until Groundwork exposes the required portable comparison-key policy.",
+            "The capture-operation document binds a drain batch identity and tracks a bounded attempt for every non-empty record stream."
         ]);
 
     private static StorageUnit CatalogUnit(

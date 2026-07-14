@@ -38,10 +38,13 @@ internal sealed class OpenTelemetryGroundworkSqliteFixture : IAsyncDisposable
         return CreateStore(providers);
     }
 
-    public GroundworkOpenTelemetryStore CreateStore(GroundworkOpenTelemetryStores providers) => new(
+    public GroundworkOpenTelemetryStore CreateStore(
+        GroundworkOpenTelemetryStores providers,
+        TimeProvider? timeProvider = null) => new(
         providers,
         Options.Create(new OpenTelemetryDiagnosticsOptions()),
-        Binding);
+        Binding,
+        timeProvider);
 
     public ValueTask DisposeAsync()
     {

@@ -9,23 +9,34 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 /// Explicit persistence routing for one OpenTelemetry source. Core contracts remain provider-neutral; this
 /// Groundwork leaf owns the translation to diagnostic scopes, streams, and a scoped document partition.
 /// </summary>
-public sealed record GroundworkOpenTelemetryBinding(
-    string TenantId,
-    string ScopeId,
-    string SourceId,
-    string TraceStreamId,
-    string SpanStreamId,
-    string MetricPointStreamId,
-    string LogStreamId)
+public sealed class GroundworkOpenTelemetryBinding
 {
+    private GroundworkOpenTelemetryBinding(string tenantId, string scopeId, string sourceId, string routeIdentity)
+    {
+        TenantId = tenantId;
+        ScopeId = scopeId;
+        SourceId = sourceId;
+        TraceStreamId = $"open-telemetry:{routeIdentity}:traces";
+        SpanStreamId = $"open-telemetry:{routeIdentity}:spans";
+        MetricPointStreamId = $"open-telemetry:{routeIdentity}:metric-points";
+        LogStreamId = $"open-telemetry:{routeIdentity}:logs";
+    }
+
+    public string TenantId { get; }
+    public string ScopeId { get; }
+    public string SourceId { get; }
+    public string TraceStreamId { get; }
+    public string SpanStreamId { get; }
+    public string MetricPointStreamId { get; }
+    public string LogStreamId { get; }
+
     /// <summary>Creates a binding whose stream names are deterministically derived from the source identity.</summary>
     public static GroundworkOpenTelemetryBinding Create(string tenantId, string scopeId, string sourceId)
     {
         Validate(tenantId, nameof(tenantId));
         Validate(scopeId, nameof(scopeId));
         Validate(sourceId, nameof(sourceId));
-        var prefix = $"open-telemetry:{sourceId}";
-        return new(tenantId, scopeId, sourceId, $"{prefix}:traces", $"{prefix}:spans", $"{prefix}:metric-points", $"{prefix}:logs");
+        return new(tenantId, scopeId, sourceId, HashBinding(tenantId, scopeId, sourceId));
     }
 
     internal DiagnosticStorageScope DiagnosticScope
@@ -43,8 +54,7 @@ public sealed record GroundworkOpenTelemetryBinding(
         get
         {
             ValidateAll();
-            var input = Encoding.UTF8.GetBytes($"{TenantId.Length}:{TenantId}{ScopeId.Length}:{ScopeId}{SourceId.Length}:{SourceId}");
-            return new($"otel-{Convert.ToHexStringLower(SHA256.HashData(input))}");
+            return new($"otel-{HashBinding(TenantId, ScopeId, SourceId)}");
         }
     }
 
@@ -65,4 +75,10 @@ public sealed record GroundworkOpenTelemetryBinding(
 
     private static void Validate(string value, string parameterName) =>
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+
+    private static string HashBinding(string tenantId, string scopeId, string sourceId)
+    {
+        var input = Encoding.UTF8.GetBytes($"{tenantId.Length}:{tenantId}{scopeId.Length}:{scopeId}{sourceId.Length}:{sourceId}");
+        return Convert.ToHexStringLower(SHA256.HashData(input));
+    }
 }

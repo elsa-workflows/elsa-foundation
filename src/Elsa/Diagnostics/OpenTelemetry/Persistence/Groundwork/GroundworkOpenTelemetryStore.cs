@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +8,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Catalogs;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
+using Elsa.Diagnostics.Persistence.Draining;
 using Groundwork.DiagnosticRecords;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -18,20 +18,26 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 
 /// <summary>
 /// Durable Groundwork implementation of the provider-neutral OpenTelemetry store contract. Immutable signals use
-/// four append streams; current resources and instruments use scoped keyed documents. A durable capture ledger fixes
-/// the operation issue time before the first append so retries after a partial multi-stream commit replay exactly.
+/// four append streams. The adapter rejects catalog identity writes and case-equivalence-dependent reads until
+/// Groundwork supplies the portable comparison-key route tracked by issues #70 and #71. A durable capture ledger binds
+/// a caller-owned drain batch identity to canonical input and tracks a bounded attempt for each stream independently.
 /// </summary>
+/// <remarks>
+/// The interim exact read surface is storage diagnostics plus unfiltered telemetry-log restart reads (with either no
+/// time range or a closed inclusive range). Resource results, trace results/detail, metric results, catalog writes, and
+/// every string-filtered log query fail before provider I/O. Those paths must not be enabled until #70/#71 are consumed.
+/// </remarks>
 public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
 {
-    private const int MaxCatalogWriteAttempts = 8;
-    private const int LedgerSchemaVersion = 1;
-    private static readonly DateTimeOffset FingerprintObservationTime = DateTimeOffset.UnixEpoch;
+    private const int MaxLedgerWriteAttempts = 8;
+    private const int LedgerSchemaVersion = 2;
     private static readonly JsonSerializerOptions LedgerJsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = false,
         RespectRequiredConstructorParameters = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
     };
+    private static readonly string[] StreamKinds = ["traces", "spans", "metric-points", "logs"];
 
     private readonly GroundworkOpenTelemetryStores _stores;
     private readonly GroundworkOpenTelemetryBinding _binding;
@@ -40,8 +46,11 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
     private readonly DiagnosticStreamId _spanStream;
     private readonly DiagnosticStreamId _metricPointStream;
     private readonly DiagnosticStreamId _logStream;
+    private readonly DiagnosticRecordStreamDefinition _traceDefinition;
+    private readonly DiagnosticRecordStreamDefinition _spanDefinition;
+    private readonly DiagnosticRecordStreamDefinition _metricPointDefinition;
+    private readonly DiagnosticRecordStreamDefinition _logDefinition;
     private readonly CanonicalRecordSerializer _recordSerializer = new();
-    private readonly CatalogDocumentSerializer _catalogSerializer = new();
     private readonly TimeProvider _timeProvider;
     private readonly int _traceCapacity;
     private readonly int _spanCapacity;
@@ -80,6 +89,10 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         _spanStream = new(binding.SpanStreamId);
         _metricPointStream = new(binding.MetricPointStreamId);
         _logStream = new(binding.LogStreamId);
+        _traceDefinition = OpenTelemetryRecordStreamDefinitions.CreateTraces(binding.TraceStreamId);
+        _spanDefinition = OpenTelemetryRecordStreamDefinitions.CreateSpans(binding.SpanStreamId);
+        _metricPointDefinition = OpenTelemetryRecordStreamDefinitions.CreateMetricPoints(binding.MetricPointStreamId);
+        _logDefinition = OpenTelemetryRecordStreamDefinitions.CreateLogs(binding.LogStreamId);
         _timeProvider = timeProvider ?? TimeProvider.System;
         var value = options.Value;
         _traceCapacity = ClampCapacity(value.TraceCapacity);
@@ -89,188 +102,73 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         _maxQuerySize = ClampCapacity(value.MaxQuerySize);
     }
 
-    public async ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
+    public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default) =>
+        WriteAsync(DiagnosticsDrainBatchId.New(), batch, cancellationToken);
+
+    /// <summary>
+    /// Commits one drain batch. The same identity may be retried with the same canonical input; a different identity
+    /// always represents an independent capture, even when its content is byte-for-byte identical.
+    /// </summary>
+    public async ValueTask WriteAsync(
+        DiagnosticsDrainBatchId batchId,
+        OpenTelemetryBatch batch,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(batch);
+        if (batchId.Value == Guid.Empty)
+            throw new ArgumentException("The diagnostics drain batch identity cannot be empty.", nameof(batchId));
         cancellationToken.ThrowIfCancellationRequested();
+        RejectCatalogIdentityWrites(batch);
 
         var traces = NormalizeTraces(batch.Traces);
         var spans = NormalizeRecords(batch.Spans, span => _recordSerializer.ToRecord(span.Id, span));
         var points = NormalizeRecords(batch.MetricPoints, point => _recordSerializer.ToRecord(point.Id, point));
         var logs = NormalizeRecords(batch.Logs, log => _recordSerializer.ToRecord(log.Id, log));
-        var resources = NormalizeResources(batch.Resources);
-        var instruments = NormalizeInstruments(batch.Instruments);
-        var fingerprint = CaptureFingerprint(traces, spans, points, logs, resources, instruments);
-        var operation = await GetOrCreateCaptureOperationAsync(fingerprint, cancellationToken);
-
-        foreach (var resource in resources)
-            await UpsertResourceAsync(resource, cancellationToken);
-
-        var pointTimes = batch.MetricPoints
-            .GroupBy(x => x.InstrumentId, StringComparer.Ordinal)
-            .ToDictionary(x => x.Key, x => x.Max(point => point.Timestamp), StringComparer.Ordinal);
-        foreach (var instrument in instruments)
+        var fingerprint = CaptureFingerprint(traces, spans, points, logs);
+        var targets = new[]
         {
-            var lastSeen = pointTimes.GetValueOrDefault(instrument.Id, operation.IssuedAt);
-            await UpsertInstrumentAsync(instrument, lastSeen, cancellationToken);
-        }
+            new StreamTarget("traces", _stores.Traces, _traceStream, _traceDefinition, PhysicalizeRecordIds(batchId, "traces", traces)),
+            new StreamTarget("spans", _stores.Spans, _spanStream, _spanDefinition, PhysicalizeRecordIds(batchId, "spans", spans)),
+            new StreamTarget("metric-points", _stores.MetricPoints, _metricPointStream, _metricPointDefinition, PhysicalizeRecordIds(batchId, "metric-points", points)),
+            new StreamTarget("logs", _stores.Logs, _logStream, _logDefinition, PhysicalizeRecordIds(batchId, "logs", logs))
+        };
+        Preflight(batchId, targets);
+        await GetOrCreateCaptureOperationAsync(batchId, fingerprint, cancellationToken);
 
-        await AppendAsync(_stores.Traces, _traceStream, "traces", traces, operation, cancellationToken);
-        await AppendAsync(_stores.Spans, _spanStream, "spans", spans, operation, cancellationToken);
-        await AppendAsync(_stores.MetricPoints, _metricPointStream, "metric-points", points, operation, cancellationToken);
-        await AppendAsync(_stores.Logs, _logStream, "logs", logs, operation, cancellationToken);
+        foreach (var target in targets)
+            await AppendAsync(batchId, fingerprint, target, cancellationToken);
     }
 
-    public async ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(
+    public ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(
         OpenTelemetryResourceFilter filter,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        RejectUnsupportedTextFilter(filter.Search, nameof(filter.Search));
-        var take = ClampTake(filter.Take);
-        if (take == 0)
-            return new([], 0);
-
-        IReadOnlyList<DocumentEnvelope> documents;
-        if (!string.IsNullOrWhiteSpace(filter.ServiceName))
-        {
-            documents = await QueryCatalogByIndexAsync(
-                CatalogDocuments.ResourceKind,
-                OpenTelemetryGroundworkStorageSchema.ByServiceNameIndex,
-                filter.ServiceName,
-                cancellationToken);
-        }
-        else if (filter.Status is { } status)
-        {
-            documents = await QueryCatalogByIndexAsync(
-                CatalogDocuments.ResourceKind,
-                OpenTelemetryGroundworkStorageSchema.ByResourceStatusIndex,
-                ((int)status).ToString(CultureInfo.InvariantCulture),
-                cancellationToken);
-        }
-        else
-        {
-            documents = (await QueryDocumentsAsync(CatalogDocuments.ResourceKind, _maxQuerySize, cancellationToken)).Documents;
-        }
-
-        var resources = documents
-            .Select(_catalogSerializer.ToResource)
-            .Select(x => x.Resource)
-            .Where(x => filter.Status is null || x.Status == filter.Status)
-            .OrderByDescending(x => x.LastSeen)
-            .ThenBy(x => x.ServiceName, StringComparer.Ordinal)
-            .ThenBy(x => x.Id, StringComparer.Ordinal)
-            .Take(take)
-            .ToArray();
-        return new(resources, 0);
+        throw UnsupportedCaseIdentity("Resource catalog results require case-insensitive resource identity.");
     }
 
-    public async ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(
+    public ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(
         OpenTelemetryTraceFilter filter,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        RejectUnsupportedTextFilter(filter.ServiceName, nameof(filter.ServiceName));
-        RejectUnsupportedTextFilter(filter.Search, nameof(filter.Search));
-        RejectOneSidedRange(filter.From, filter.To);
-        var take = ClampTake(filter.Take);
-        if (take == 0)
-            return new([], 0);
-
-        var predicates = new List<DiagnosticRecordPredicate>();
-        AddContains(predicates, RecordFields.TraceId, filter.TraceId);
-        AddEqual(predicates, RecordFields.ResourceId, filter.ResourceId);
-        AddContains(predicates, RecordFields.WorkflowInstanceId, filter.WorkflowInstanceId);
-        if (filter.Status is { } status)
-            predicates.Add(DiagnosticRecordPredicate.Equal(RecordFields.Status, DiagnosticFieldValue.Int64((long)status)));
-        AddRange(predicates, RecordFields.StartTime, filter.From, filter.To);
-
-        var page = await _stores.Traces.QueryAsync(new(
-            _scope,
-            _traceStream,
-            take,
-            new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
-            Predicate: All(predicates),
-            LatestPerKeyField: RecordFields.TraceId), cancellationToken);
-        var traces = page.Records.Select(_recordSerializer.ToTrace).Reverse().ToArray();
-        return new(traces, 0);
+        throw UnsupportedCaseIdentity("Trace results require case-insensitive latest-per-trace identity.");
     }
 
-    public async ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(
+    public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(
         string traceId,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
-        var tracePage = await _stores.Traces.QueryAsync(new(
-            _scope,
-            _traceStream,
-            1,
-            new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
-            Predicate: DiagnosticRecordPredicate.Equal(RecordFields.TraceId, DiagnosticFieldValue.String(traceId)),
-            LatestPerKeyField: RecordFields.TraceId), cancellationToken);
-        if (tracePage.Records.Count == 0)
-            return null;
-
-        var trace = _recordSerializer.ToTrace(tracePage.Records[0]);
-        var spansPage = await _stores.Spans.QueryAsync(new(
-            _scope,
-            _spanStream,
-            _maxQuerySize,
-            new(RecordFields.StartTime),
-            Predicate: DiagnosticRecordPredicate.Equal(RecordFields.TraceId, DiagnosticFieldValue.String(traceId))), cancellationToken);
-        var logsPage = await _stores.Logs.QueryAsync(new(
-            _scope,
-            _logStream,
-            _maxQuerySize,
-            new(RecordFields.Timestamp),
-            Predicate: DiagnosticRecordPredicate.Equal(RecordFields.TraceId, DiagnosticFieldValue.String(traceId))), cancellationToken);
-
-        var resources = new List<TelemetryResource>();
-        foreach (var resourceId in trace.ResourceIds.Order(StringComparer.Ordinal))
-        {
-            var document = await _stores.Documents.LoadAsync(CatalogDocuments.ResourceKind, resourceId, cancellationToken);
-            if (document is not null)
-                resources.Add(_catalogSerializer.ToResource(document).Resource);
-        }
-
-        return new(
-            trace,
-            spansPage.Records.Select(_recordSerializer.ToSpan).ToArray(),
-            resources,
-            logsPage.Records.Select(_recordSerializer.ToLog).ToArray());
+        throw UnsupportedCaseIdentity("Trace detail lookup requires case-insensitive trace identity and catalog joins.");
     }
 
-    public async ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(
+    public ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(
         OpenTelemetryMetricFilter filter,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        RejectUnsupportedTextFilter(filter.ServiceName, nameof(filter.ServiceName));
-        RejectOneSidedRange(filter.From, filter.To);
-        var take = ClampTake(filter.Take);
-        if (take == 0)
-            return new([], [], 0);
-
-        var predicates = new List<DiagnosticRecordPredicate>();
-        AddEqual(predicates, RecordFields.ResourceId, filter.ResourceId);
-        AddContains(predicates, RecordFields.InstrumentName, filter.InstrumentName);
-        AddRange(predicates, RecordFields.Timestamp, filter.From, filter.To);
-        var page = await _stores.MetricPoints.QueryAsync(new(
-            _scope,
-            _metricPointStream,
-            take,
-            new(RecordFields.Timestamp, DiagnosticSortDirection.Descending),
-            Predicate: All(predicates)), cancellationToken);
-        var points = page.Records.Select(_recordSerializer.ToMetricPoint).Reverse().ToArray();
-
-        var instruments = new List<MetricInstrument>();
-        foreach (var instrumentId in points.Select(x => x.InstrumentId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
-        {
-            var document = await _stores.Documents.LoadAsync(CatalogDocuments.InstrumentKind, instrumentId, cancellationToken);
-            if (document is not null)
-                instruments.Add(_catalogSerializer.ToInstrument(document).Instrument);
-        }
-        return new(instruments, points, 0);
+        throw UnsupportedCaseIdentity("Metric results require case-insensitive instrument identity and catalog joins.");
     }
 
     public async ValueTask<OpenTelemetryLogResult> QueryLogsAsync(
@@ -280,16 +178,16 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         ArgumentNullException.ThrowIfNull(filter);
         RejectUnsupportedTextFilter(filter.ServiceName, nameof(filter.ServiceName));
         RejectUnsupportedTextFilter(filter.Search, nameof(filter.Search));
+        RejectUnsupportedTextFilter(filter.ResourceId, nameof(filter.ResourceId));
+        RejectUnsupportedTextFilter(filter.TraceId, nameof(filter.TraceId));
+        RejectUnsupportedTextFilter(filter.SpanId, nameof(filter.SpanId));
+        RejectUnsupportedTextFilter(filter.Severity, nameof(filter.Severity));
         RejectOneSidedRange(filter.From, filter.To);
         var take = ClampTake(filter.Take);
         if (take == 0)
             return new([], 0);
 
         var predicates = new List<DiagnosticRecordPredicate>();
-        AddEqual(predicates, RecordFields.ResourceId, filter.ResourceId);
-        AddContains(predicates, RecordFields.TraceId, filter.TraceId);
-        AddContains(predicates, RecordFields.SpanId, filter.SpanId);
-        AddContains(predicates, RecordFields.SeverityText, filter.Severity);
         AddRange(predicates, RecordFields.Timestamp, filter.From, filter.To);
         var page = await _stores.Logs.QueryAsync(new(
             _scope,
@@ -326,62 +224,161 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
     }
 
     private async Task AppendAsync(
-        IDiagnosticRecordStore store,
-        DiagnosticStreamId stream,
-        string streamKind,
-        IReadOnlyList<DiagnosticRecordInput> records,
-        CaptureOperation operation,
+        DiagnosticsDrainBatchId batchId,
+        string fingerprint,
+        StreamTarget target,
         CancellationToken cancellationToken)
     {
-        if (records.Count == 0)
+        if (target.Records.Count == 0)
             return;
 
-        var operationId = new DiagnosticOperationId(operation.IssuedAt, $"otel-v1:{operation.Fingerprint}:{streamKind}");
-        await store.AppendAsync(DiagnosticRecordBatch.Create(_scope, stream, operationId, records), cancellationToken);
+        var attempt = await GetOrCreateStreamAttemptAsync(
+            batchId,
+            fingerprint,
+            target,
+            cancellationToken);
+        if (attempt.Committed)
+            return;
+
+        var operationId = OperationId(batchId, target.Kind, attempt.IssuedAt);
+        var request = DiagnosticRecordBatch.Create(_scope, target.Stream, operationId, target.Records);
+        await target.Store.AppendAsync(request, cancellationToken);
+        await MarkStreamCommittedAsync(batchId, fingerprint, target.Kind, CancellationToken.None);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private async Task<CaptureOperation> GetOrCreateCaptureOperationAsync(
+    private async Task GetOrCreateCaptureOperationAsync(
+        DiagnosticsDrainBatchId batchId,
         string fingerprint,
         CancellationToken cancellationToken)
     {
-        var existing = await _stores.Documents.LoadAsync(
-            OpenTelemetryGroundworkStorageSchema.OperationLedgerKind,
-            fingerprint,
-            cancellationToken);
-        if (existing is not null)
-            return ReadOperation(existing, fingerprint);
-
-        var candidate = new CaptureOperation(
-            LedgerSchemaVersion,
-            fingerprint,
-            _timeProvider.GetUtcNow(),
-            _binding.TenantId,
-            _binding.ScopeId,
-            _binding.SourceId);
-        var content = JsonSerializer.Serialize(candidate, LedgerJsonOptions);
-        for (var attempt = 0; attempt < MaxCatalogWriteAttempts; attempt++)
+        var documentId = batchId.ToString();
+        for (var attempt = 0; attempt < MaxLedgerWriteAttempts; attempt++)
         {
-            var result = await _stores.Documents.SaveAsync(new(
-                OpenTelemetryGroundworkStorageSchema.OperationLedgerKind,
-                fingerprint,
-                OpenTelemetryGroundworkStorageSchema.SchemaVersion,
-                content,
-                ExpectedVersion: 0), cancellationToken);
-            if (result.Status == DocumentStoreWriteStatus.Saved)
-                return candidate;
-
-            existing = await _stores.Documents.LoadAsync(
-                OpenTelemetryGroundworkStorageSchema.OperationLedgerKind,
-                fingerprint,
-                cancellationToken);
+            var existing = await LoadOperationAsync(documentId, cancellationToken);
             if (existing is not null)
-                return ReadOperation(existing, fingerprint);
+            {
+                ValidateFingerprint(existing.Operation, batchId, fingerprint);
+                return;
+            }
+
+            var candidate = new CaptureOperation(
+                LedgerSchemaVersion,
+                documentId,
+                fingerprint,
+                _timeProvider.GetUtcNow(),
+                _binding.TenantId,
+                _binding.ScopeId,
+                _binding.SourceId,
+                new Dictionary<string, CaptureStreamAttempt>(StringComparer.Ordinal));
+            var result = await SaveOperationAsync(candidate, 0, cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.Saved)
+                return;
         }
 
         throw new InvalidOperationException("The OpenTelemetry capture operation could not be claimed after concurrent retries.");
     }
 
-    private CaptureOperation ReadOperation(DocumentEnvelope envelope, string fingerprint)
+    private async Task<CaptureStreamAttempt> GetOrCreateStreamAttemptAsync(
+        DiagnosticsDrainBatchId batchId,
+        string fingerprint,
+        StreamTarget target,
+        CancellationToken cancellationToken)
+    {
+        var documentId = batchId.ToString();
+        for (var retry = 0; retry < MaxLedgerWriteAttempts; retry++)
+        {
+            var snapshot = await LoadRequiredOperationAsync(documentId, cancellationToken);
+            ValidateFingerprint(snapshot.Operation, batchId, fingerprint);
+            if (snapshot.Operation.Streams.TryGetValue(target.Kind, out var existing))
+            {
+                if (!existing.Committed && _timeProvider.GetUtcNow() > existing.RetryUntil)
+                    throw new DiagnosticOperationExpiredException(
+                        DiagnosticOperationKind.Append,
+                        OperationId(batchId, target.Kind, existing.IssuedAt));
+                return existing;
+            }
+
+            var issuedAt = _timeProvider.GetUtcNow();
+            var candidate = new CaptureStreamAttempt(
+                issuedAt,
+                issuedAt + target.Definition.AppendIdempotencyWindow + target.Definition.MaxOperationClockSkew,
+                Committed: false);
+            var streams = new Dictionary<string, CaptureStreamAttempt>(snapshot.Operation.Streams, StringComparer.Ordinal)
+            {
+                [target.Kind] = candidate
+            };
+            var result = await SaveOperationAsync(
+                snapshot.Operation with { Streams = streams },
+                snapshot.Version,
+                cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.Saved)
+                return candidate;
+        }
+
+        throw new InvalidOperationException($"OpenTelemetry stream attempt '{target.Kind}' could not be claimed after concurrent retries.");
+    }
+
+    private async Task MarkStreamCommittedAsync(
+        DiagnosticsDrainBatchId batchId,
+        string fingerprint,
+        string streamKind,
+        CancellationToken cancellationToken)
+    {
+        var documentId = batchId.ToString();
+        for (var retry = 0; retry < MaxLedgerWriteAttempts; retry++)
+        {
+            var snapshot = await LoadRequiredOperationAsync(documentId, cancellationToken);
+            ValidateFingerprint(snapshot.Operation, batchId, fingerprint);
+            if (!snapshot.Operation.Streams.TryGetValue(streamKind, out var attempt))
+                throw new InvalidOperationException($"OpenTelemetry stream attempt '{streamKind}' is missing from the capture ledger.");
+            if (attempt.Committed)
+                return;
+
+            var streams = new Dictionary<string, CaptureStreamAttempt>(snapshot.Operation.Streams, StringComparer.Ordinal)
+            {
+                [streamKind] = attempt with { Committed = true }
+            };
+            var result = await SaveOperationAsync(
+                snapshot.Operation with { Streams = streams },
+                snapshot.Version,
+                cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.Saved)
+                return;
+        }
+
+        throw new InvalidOperationException($"OpenTelemetry stream attempt '{streamKind}' could not be completed after concurrent retries.");
+    }
+
+    private async Task<CaptureOperationSnapshot?> LoadOperationAsync(
+        string documentId,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await _stores.Documents.LoadAsync(
+            OpenTelemetryGroundworkStorageSchema.OperationLedgerKind,
+            documentId,
+            cancellationToken);
+        return envelope is null ? null : ReadOperation(envelope);
+    }
+
+    private async Task<CaptureOperationSnapshot> LoadRequiredOperationAsync(
+        string documentId,
+        CancellationToken cancellationToken) =>
+        await LoadOperationAsync(documentId, cancellationToken)
+        ?? throw new InvalidOperationException("The OpenTelemetry capture operation disappeared during an active write.");
+
+    private Task<DocumentStoreWriteResult> SaveOperationAsync(
+        CaptureOperation operation,
+        long expectedVersion,
+        CancellationToken cancellationToken) =>
+        _stores.Documents.SaveAsync(new(
+            OpenTelemetryGroundworkStorageSchema.OperationLedgerKind,
+            operation.BatchId,
+            OpenTelemetryGroundworkStorageSchema.SchemaVersion,
+            JsonSerializer.Serialize(operation, LedgerJsonOptions),
+            expectedVersion), cancellationToken);
+
+    private CaptureOperationSnapshot ReadOperation(DocumentEnvelope envelope)
     {
         try
         {
@@ -392,15 +389,17 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
             var operation = JsonSerializer.Deserialize<CaptureOperation>(envelope.ContentJson, LedgerJsonOptions)
                             ?? throw new InvalidOperationException("The OpenTelemetry capture operation is empty.");
             if (operation.LedgerSchemaVersion != LedgerSchemaVersion ||
-                !StringComparer.Ordinal.Equals(operation.Fingerprint, fingerprint) ||
-                !StringComparer.Ordinal.Equals(envelope.Id, fingerprint) ||
+                !StringComparer.Ordinal.Equals(operation.BatchId, envelope.Id) ||
                 !StringComparer.Ordinal.Equals(operation.TenantId, _binding.TenantId) ||
                 !StringComparer.Ordinal.Equals(operation.ScopeId, _binding.ScopeId) ||
-                !StringComparer.Ordinal.Equals(operation.SourceId, _binding.SourceId))
+                !StringComparer.Ordinal.Equals(operation.SourceId, _binding.SourceId) ||
+                operation.Streams is null ||
+                operation.Streams.Keys.Except(StreamKinds, StringComparer.Ordinal).Any() ||
+                operation.Streams.Values.Any(x => x.RetryUntil < x.IssuedAt))
             {
                 throw new InvalidOperationException("The OpenTelemetry capture operation does not match this storage binding.");
             }
-            return operation;
+            return new(operation, envelope.Version);
         }
         catch (JsonException exception)
         {
@@ -408,70 +407,55 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         }
     }
 
-    private async Task UpsertResourceAsync(TelemetryResource incoming, CancellationToken cancellationToken)
+    private static void ValidateFingerprint(
+        CaptureOperation operation,
+        DiagnosticsDrainBatchId batchId,
+        string fingerprint)
     {
-        for (var attempt = 0; attempt < MaxCatalogWriteAttempts; attempt++)
-        {
-            var existing = await _stores.Documents.LoadAsync(CatalogDocuments.ResourceKind, incoming.Id, cancellationToken);
-            var target = incoming;
-            long expectedVersion = 0;
-            if (existing is not null)
-            {
-                var entry = _catalogSerializer.ToResource(existing);
-                expectedVersion = entry.Revision;
-                if (entry.Resource.LastSeen > incoming.LastSeen)
-                    return;
-                if (entry.Resource.LastSeen == incoming.LastSeen)
-                {
-                    var incomingContent = _catalogSerializer.ToSaveRequest(incoming).ContentJson;
-                    var existingContent = _catalogSerializer.ToSaveRequest(entry.Resource).ContentJson;
-                    if (StringComparer.Ordinal.Compare(existingContent, incomingContent) <= 0)
-                        return;
-                }
-                target = incoming with { LastSeen = Max(incoming.LastSeen, entry.Resource.LastSeen) };
-            }
-
-            var request = _catalogSerializer.ToSaveRequest(target, expectedVersion);
-            var result = await _stores.Documents.SaveAsync(request, cancellationToken);
-            if (result.Status == DocumentStoreWriteStatus.Saved)
-                return;
-        }
-        throw new InvalidOperationException($"OpenTelemetry resource '{incoming.Id}' could not be updated after concurrent retries.");
+        if (StringComparer.Ordinal.Equals(operation.Fingerprint, fingerprint))
+            return;
+        throw new DiagnosticOperationConflictException(
+            DiagnosticOperationKind.Append,
+            new(operation.CreatedAt, batchId.ToString()));
     }
 
-    private async Task UpsertInstrumentAsync(
-        MetricInstrument incoming,
-        DateTimeOffset observedAt,
-        CancellationToken cancellationToken)
+    private void Preflight(DiagnosticsDrainBatchId batchId, IReadOnlyList<StreamTarget> targets)
     {
-        for (var attempt = 0; attempt < MaxCatalogWriteAttempts; attempt++)
+        var issuedAt = _timeProvider.GetUtcNow();
+        foreach (var target in targets.Where(x => x.Records.Count > 0))
         {
-            var existing = await _stores.Documents.LoadAsync(CatalogDocuments.InstrumentKind, incoming.Id, cancellationToken);
-            var targetObservedAt = observedAt;
-            long expectedVersion = 0;
-            if (existing is not null)
-            {
-                var entry = _catalogSerializer.ToInstrument(existing);
-                expectedVersion = entry.Revision;
-                if (entry.LastSeen > observedAt)
-                    return;
-                if (entry.LastSeen == observedAt)
-                {
-                    var incomingContent = _catalogSerializer.ToSaveRequest(incoming, observedAt).ContentJson;
-                    var existingContent = _catalogSerializer.ToSaveRequest(entry.Instrument, entry.LastSeen).ContentJson;
-                    if (StringComparer.Ordinal.Compare(existingContent, incomingContent) <= 0)
-                        return;
-                }
-                targetObservedAt = Max(observedAt, entry.LastSeen);
-            }
-
-            var request = _catalogSerializer.ToSaveRequest(incoming, targetObservedAt, expectedVersion);
-            var result = await _stores.Documents.SaveAsync(request, cancellationToken);
-            if (result.Status == DocumentStoreWriteStatus.Saved)
-                return;
+            var request = DiagnosticRecordBatch.Create(
+                _scope,
+                target.Stream,
+                OperationId(batchId, target.Kind, issuedAt),
+                target.Records);
+            DiagnosticRecordRequestValidator.Validate(request, target.Definition);
         }
-        throw new InvalidOperationException($"OpenTelemetry metric instrument '{incoming.Id}' could not be updated after concurrent retries.");
     }
+
+    private static void RejectCatalogIdentityWrites(OpenTelemetryBatch batch)
+    {
+        if (batch.Resources.Count > 0 || batch.Instruments.Count > 0)
+        {
+            throw UnsupportedCaseIdentity(
+                "Resource and instrument catalog writes require provider-neutral case-insensitive document identity.");
+        }
+    }
+
+    private static DiagnosticOperationId OperationId(
+        DiagnosticsDrainBatchId batchId,
+        string streamKind,
+        DateTimeOffset issuedAt) =>
+        new(issuedAt, $"otel-v2:{batchId}:{streamKind}");
+
+    private static DiagnosticRecordInput[] PhysicalizeRecordIds(
+        DiagnosticsDrainBatchId batchId,
+        string streamKind,
+        IReadOnlyList<DiagnosticRecordInput> records) =>
+        records.Select(record => record with
+        {
+            RecordId = $"otel-{Hash($"{batchId}:{streamKind}:{record.RecordId}")}"
+        }).ToArray();
 
     private DiagnosticRecordInput[] NormalizeTraces(IReadOnlyCollection<TelemetryTrace> values) =>
         NormalizeRecords(values, trace =>
@@ -500,41 +484,14 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         return result.Values.OrderBy(x => x.RecordId, StringComparer.Ordinal).ToArray();
     }
 
-    private TelemetryResource[] NormalizeResources(IReadOnlyCollection<TelemetryResource> values)
-    {
-        ArgumentNullException.ThrowIfNull(values);
-        return values
-            .Select(value => (Value: value, Content: _catalogSerializer.ToSaveRequest(value).ContentJson))
-            .GroupBy(x => x.Value.Id, StringComparer.Ordinal)
-            .Select(group => group
-                .OrderByDescending(x => x.Value.LastSeen)
-                .ThenBy(x => x.Content, StringComparer.Ordinal)
-                .First().Value)
-            .OrderBy(x => x.Id, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private MetricInstrument[] NormalizeInstruments(IReadOnlyCollection<MetricInstrument> values)
-    {
-        ArgumentNullException.ThrowIfNull(values);
-        return values
-            .Select(value => (Value: value, Content: _catalogSerializer.ToSaveRequest(value, FingerprintObservationTime).ContentJson))
-            .GroupBy(x => x.Value.Id, StringComparer.Ordinal)
-            .Select(group => group.OrderBy(x => x.Content, StringComparer.Ordinal).First().Value)
-            .OrderBy(x => x.Id, StringComparer.Ordinal)
-            .ToArray();
-    }
-
     private string CaptureFingerprint(
         IReadOnlyList<DiagnosticRecordInput> traces,
         IReadOnlyList<DiagnosticRecordInput> spans,
         IReadOnlyList<DiagnosticRecordInput> points,
-        IReadOnlyList<DiagnosticRecordInput> logs,
-        IReadOnlyList<TelemetryResource> resources,
-        IReadOnlyList<MetricInstrument> instruments)
+        IReadOnlyList<DiagnosticRecordInput> logs)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "elsa-open-telemetry-capture-v1");
+        Append(hash, "elsa-open-telemetry-capture-v2");
         Append(hash, _binding.TenantId);
         Append(hash, _binding.ScopeId);
         Append(hash, _binding.SourceId);
@@ -542,46 +499,13 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         Append(hash, DiagnosticRequestFingerprint.ForAppend(_scope, _spanStream, spans).Value);
         Append(hash, DiagnosticRequestFingerprint.ForAppend(_scope, _metricPointStream, points).Value);
         Append(hash, DiagnosticRequestFingerprint.ForAppend(_scope, _logStream, logs).Value);
-        Append(hash, resources.Count);
-        foreach (var request in resources.Select(x => _catalogSerializer.ToSaveRequest(x)))
-        {
-            Append(hash, request.DocumentKind);
-            Append(hash, request.Id);
-            Append(hash, request.ContentJson);
-        }
-        Append(hash, instruments.Count);
-        foreach (var request in instruments.Select(x => _catalogSerializer.ToSaveRequest(x, FingerprintObservationTime)))
-        {
-            Append(hash, request.DocumentKind);
-            Append(hash, request.Id);
-            Append(hash, request.ContentJson);
-        }
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
 #pragma warning disable GW0004
-    private Task<IReadOnlyList<DocumentEnvelope>> QueryCatalogByIndexAsync(
-        string kind,
-        string index,
-        string value,
-        CancellationToken cancellationToken) =>
-        _stores.Documents.QueryAsync(new DocumentStoreQuery(kind, index, value, take: _maxQuerySize), cancellationToken);
-
     private Task<DocumentQueryResult> QueryDocumentsAsync(string kind, int take, CancellationToken cancellationToken) =>
         _stores.Documents.QueryAsync(new PortableDocumentQuery(kind, take: take), cancellationToken);
 #pragma warning restore GW0004
-
-    private static void AddEqual(List<DiagnosticRecordPredicate> predicates, string field, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-            predicates.Add(DiagnosticRecordPredicate.Equal(field, DiagnosticFieldValue.String(value)));
-    }
-
-    private static void AddContains(List<DiagnosticRecordPredicate> predicates, string field, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-            predicates.Add(DiagnosticRecordPredicate.Contains(field, value));
-    }
 
     private static void AddRange(
         List<DiagnosticRecordPredicate> predicates,
@@ -611,6 +535,9 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
                 $"Filter '{parameterName}' requires the portable comparison-key or long-text query work tracked separately from restart persistence.");
     }
 
+    private static NotSupportedException UnsupportedCaseIdentity(string operation) =>
+        new($"{operation} This operation is unavailable until Groundwork issues #70 and #71 provide the portable case-equivalence route.");
+
     private static void RejectOneSidedRange(DateTimeOffset? from, DateTimeOffset? to)
     {
         if ((from is null) != (to is null))
@@ -623,8 +550,6 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
 
     private static int ToCount(long value) => value >= int.MaxValue ? int.MaxValue : (int)Math.Max(0, value);
 
-    private static DateTimeOffset Max(DateTimeOffset first, DateTimeOffset second) => first >= second ? first : second;
-
     private static string Hash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
@@ -634,13 +559,6 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         Span<byte> length = stackalloc byte[sizeof(int)];
         BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
         hash.AppendData(length);
-        hash.AppendData(bytes);
-    }
-
-    private static void Append(IncrementalHash hash, int value)
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(int)];
-        BinaryPrimitives.WriteInt32BigEndian(bytes, value);
         hash.AppendData(bytes);
     }
 
@@ -656,9 +574,25 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
 
     private sealed record CaptureOperation(
         int LedgerSchemaVersion,
+        string BatchId,
         string Fingerprint,
-        DateTimeOffset IssuedAt,
+        DateTimeOffset CreatedAt,
         string TenantId,
         string ScopeId,
-        string SourceId);
+        string SourceId,
+        Dictionary<string, CaptureStreamAttempt> Streams);
+
+    private sealed record CaptureStreamAttempt(
+        DateTimeOffset IssuedAt,
+        DateTimeOffset RetryUntil,
+        bool Committed);
+
+    private sealed record CaptureOperationSnapshot(CaptureOperation Operation, long Version);
+
+    private sealed record StreamTarget(
+        string Kind,
+        IDiagnosticRecordStore Store,
+        DiagnosticStreamId Stream,
+        DiagnosticRecordStreamDefinition Definition,
+        IReadOnlyList<DiagnosticRecordInput> Records);
 }
