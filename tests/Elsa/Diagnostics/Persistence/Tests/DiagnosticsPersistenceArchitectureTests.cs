@@ -256,6 +256,23 @@ public sealed class DiagnosticsPersistenceArchitectureTests
         Assert.Same(observer, provider.GetRequiredService<IDiagnosticsPersistenceObserver>());
     }
 
+    [Fact]
+    public void Startup_validation_describes_instance_and_type_observer_conflicts()
+    {
+        var observer = new FirstObserver();
+        var services = new ServiceCollection();
+        services.AddSingleton<IDiagnosticsPersistenceObserver>(observer);
+        services.AddDiagnosticsPersistenceObservability();
+        services.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+
+        Assert.Contains(observer.GetType().FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(SecondObserver).FullName!, exception.Message, StringComparison.Ordinal);
+    }
+
     private interface ITestStore;
     private sealed class FirstStore : ITestStore;
     private sealed class SecondStore : ITestStore;

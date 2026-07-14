@@ -1,6 +1,7 @@
 using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.Persistence.Extensions;
 
@@ -24,11 +25,16 @@ public static class DiagnosticsPersistenceRegistration
             return services;
 
         services.TryAdd(ServiceDescriptor.Describe(typeof(TImplementation), typeof(TImplementation), lifetime));
-        services.TryAdd(ServiceDescriptor.Describe(
+        var contractDescriptor = ServiceDescriptor.Describe(
             typeof(TContract),
             provider => provider.GetRequiredService<TImplementation>(),
-            lifetime));
-        services.AddSingleton(new DiagnosticsStoreSelection(typeof(TContract), typeof(TImplementation), IsExplicit: false));
+            lifetime);
+        services.TryAdd(contractDescriptor);
+        services.AddSingleton(new DiagnosticsStoreSelection(
+            typeof(TContract),
+            typeof(TImplementation),
+            contractDescriptor,
+            IsExplicit: false));
         return services;
     }
 
@@ -61,11 +67,16 @@ public static class DiagnosticsPersistenceRegistration
         }
         services.RemoveAll<TImplementation>();
         services.Add(ServiceDescriptor.Describe(typeof(TImplementation), typeof(TImplementation), lifetime));
-        services.Add(ServiceDescriptor.Describe(
+        var contractDescriptor = ServiceDescriptor.Describe(
             typeof(TContract),
             provider => provider.GetRequiredService<TImplementation>(),
-            lifetime));
-        services.AddSingleton(new DiagnosticsStoreSelection(typeof(TContract), typeof(TImplementation), IsExplicit: true));
+            lifetime);
+        services.Add(contractDescriptor);
+        services.AddSingleton(new DiagnosticsStoreSelection(
+            typeof(TContract),
+            typeof(TImplementation),
+            contractDescriptor,
+            IsExplicit: true));
         return services;
     }
 
@@ -80,6 +91,7 @@ public static class DiagnosticsPersistenceRegistration
         services.AddDefaultDiagnosticsStore<IDiagnosticsPersistenceObserver, DiagnosticsPersistenceCounters>(
             ServiceLifetime.Singleton);
         services.TryAddSingleton<DiagnosticsSubscriberDeliveryLossBridge>();
+        AddObserverRegistrationValidation(services);
         return services;
     }
 
@@ -99,26 +111,62 @@ public static class DiagnosticsPersistenceRegistration
 
     private static void RejectObserverConflicts(IServiceCollection services)
     {
+        var message = GetObserverConflictMessage(services);
+        if (message is not null)
+            throw new InvalidOperationException(message);
+    }
+
+    internal static string? GetObserverConflictMessage(IServiceCollection services)
+    {
         var observers = services
             .Where(descriptor => descriptor.ServiceType == typeof(IDiagnosticsPersistenceObserver))
             .ToArray();
         if (observers.Length <= 1)
-            return;
+            return null;
 
+        var selection = FindSelection<IDiagnosticsPersistenceObserver>(services);
         var implementations = observers
-            .Select(descriptor => descriptor.ImplementationType?.FullName
-                ?? descriptor.ImplementationInstance?.GetType().FullName
-                ?? "factory registration")
+            .Select(descriptor => DescribeObserverDescriptor(descriptor, selection))
             .ToArray();
-        throw new InvalidOperationException(
+        return
             $"Diagnostics replacement contract '{typeof(IDiagnosticsPersistenceObserver).FullName}' has conflicting " +
             $"registrations: {string.Join(", ", implementations)}. Select one observer explicitly through " +
-            $"'{nameof(ReplaceDiagnosticsStore)}'.");
+            $"'{nameof(ReplaceDiagnosticsStore)}'.";
+    }
+
+    private static string DescribeObserverDescriptor(
+        ServiceDescriptor descriptor,
+        DiagnosticsStoreSelection? selection)
+    {
+        if (selection is not null && ReferenceEquals(descriptor, selection.ContractDescriptor))
+            return selection.ImplementationType.ToString();
+
+        if (descriptor.ImplementationType is { } implementationType)
+            return implementationType.ToString();
+
+        if (descriptor.ImplementationInstance is { } implementationInstance)
+            return implementationInstance.GetType().ToString();
+
+        return $"factory registration for '{typeof(IDiagnosticsPersistenceObserver).FullName}'";
+    }
+
+    private static void AddObserverRegistrationValidation(IServiceCollection services)
+    {
+        if (services.Any(descriptor =>
+                descriptor.ServiceType == typeof(DiagnosticsPersistenceObserverRegistrationState)))
+            return;
+
+        services.AddSingleton(new DiagnosticsPersistenceObserverRegistrationState(services));
+        services.AddSingleton<
+            IValidateOptions<DiagnosticsPersistenceObserverRegistrationOptions>,
+            DiagnosticsPersistenceObserverRegistrationValidator>();
+        services.AddOptions<DiagnosticsPersistenceObserverRegistrationOptions>().ValidateOnStart();
     }
 
     private sealed record DiagnosticsStoreSelection(
         Type ContractType,
         Type ImplementationType,
+        ServiceDescriptor ContractDescriptor,
         bool IsExplicit)
     {
         public ServiceDescriptor Descriptor { get; init; } = null!;
