@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.SqlServer" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Persistence.Groundwork.SqlServer.csproj" />
+    <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+  </ItemGroup>
+
+</Project>

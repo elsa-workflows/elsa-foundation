@@ -51,8 +51,7 @@ jobs:
         # Run the fast unit tests only. Any test project that references
         # Testcontainers spins up Docker containers, so exclude those by reference --
         # this is self-maintaining (new Testcontainers projects are auto-excluded) and
-        # provably starts no containers. Today that excludes exactly the two Groundwork
-        # PostgreSql projects; every other test project is kept.
+        # provably starts no containers. Every other test project is kept.
         run: |
           keep=()
           while IFS= read -r p; do
@@ -72,3 +71,18 @@ jobs:
 
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
+
+  # Feature 094 activation shell. Keep this fail-closed until T018 wires the
+  # coverage-ledger, behavioral-baseline, dependency, EF-surface, and lifetime
+  # ratchets into one explicit container-free command set.
+  groundwork-fast:
+    name: Groundwork fast gates (scaffold)
+    if: ${{ false }}
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Activation sentinel
+        run: |
+          echo "::error::Groundwork fast gates are scaffolding only; replace this sentinel when T018 activates the lane."
+          exit 1
