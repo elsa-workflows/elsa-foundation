@@ -4076,6 +4076,13 @@ html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > bu
   color: var(--accent-foreground);
 }
 
+html[data-theme="material-design"][data-theme-mode="light"] .console-stream-panel,
+html[data-theme="material-design"][data-theme-mode="light"] .console-stream-page {
+  --cs-accent: var(--accent);
+  --cs-accent-text: var(--accent-foreground);
+  --cs-accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
 html[data-theme="material-design"] .host-health-strip,
 html[data-theme="material-design"] .admin-card,
 html[data-theme="material-design"] .studio-card,
