@@ -36,6 +36,39 @@ public sealed class DiagnosticsPersistenceObserverRegistrationValidatorTests
         Assert.Contains(nameof(DiagnosticsPersistenceRegistration.ReplaceDiagnosticsStore), message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Validate_WhenTrackedDefaultConflictsWithDirectObserver_DescribesSelectedImplementation()
+    {
+        var services = new ServiceCollection();
+        services.AddDiagnosticsPersistenceObservability();
+        services.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
+        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(services);
+
+        var result = validator.Validate();
+
+        Assert.True(result.Failed);
+        var message = Assert.Single(result.Failures);
+        Assert.Contains(typeof(DiagnosticsPersistenceCounters).FullName!, message, StringComparison.Ordinal);
+        Assert.Contains(typeof(SecondObserver).FullName!, message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validate_WhenInstanceAndFactoryObserversConflict_DescribesBothRegistrationForms()
+    {
+        var observer = new FirstObserver();
+        var services = new ServiceCollection();
+        services.AddSingleton<IDiagnosticsPersistenceObserver>(observer);
+        services.AddSingleton<IDiagnosticsPersistenceObserver>(_ => new SecondObserver());
+        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(services);
+
+        var result = validator.Validate();
+
+        Assert.True(result.Failed);
+        var message = Assert.Single(result.Failures);
+        Assert.Contains(observer.GetType().FullName!, message, StringComparison.Ordinal);
+        Assert.Contains("factory registration", message, StringComparison.Ordinal);
+    }
+
     private sealed class FirstObserver : TestObserver;
     private sealed class SecondObserver : TestObserver;
 

@@ -103,6 +103,15 @@ public static class DiagnosticsPersistenceRegistration
             .Select(item => item.Selection! with { Descriptor = item.Descriptor })
             .SingleOrDefault();
 
+    internal static (ServiceDescriptor ContractDescriptor, Type ImplementationType)? FindObserverSelection(
+        IServiceCollection services)
+    {
+        var selection = FindSelection<IDiagnosticsPersistenceObserver>(services);
+        return selection is null
+            ? null
+            : (selection.ContractDescriptor, selection.ImplementationType);
+    }
+
     private static void ValidateLifetime(ServiceLifetime lifetime)
     {
         if (!Enum.IsDefined(lifetime))
@@ -111,55 +120,21 @@ public static class DiagnosticsPersistenceRegistration
 
     private static void RejectObserverConflicts(IServiceCollection services)
     {
-        var message = GetObserverConflictMessage(services);
-        if (message is not null)
-            throw new InvalidOperationException(message);
-    }
-
-    internal static string? GetObserverConflictMessage(IServiceCollection services)
-    {
-        var observers = services
-            .Where(descriptor => descriptor.ServiceType == typeof(IDiagnosticsPersistenceObserver))
-            .ToArray();
-        if (observers.Length <= 1)
-            return null;
-
-        var selection = FindSelection<IDiagnosticsPersistenceObserver>(services);
-        var implementations = observers
-            .Select(descriptor => DescribeObserverDescriptor(descriptor, selection))
-            .ToArray();
-        return
-            $"Diagnostics replacement contract '{typeof(IDiagnosticsPersistenceObserver).FullName}' has conflicting " +
-            $"registrations: {string.Join(", ", implementations)}. Select one observer explicitly through " +
-            $"'{nameof(ReplaceDiagnosticsStore)}'.";
-    }
-
-    private static string DescribeObserverDescriptor(
-        ServiceDescriptor descriptor,
-        DiagnosticsStoreSelection? selection)
-    {
-        if (selection is not null && ReferenceEquals(descriptor, selection.ContractDescriptor))
-            return selection.ImplementationType.ToString();
-
-        if (descriptor.ImplementationType is { } implementationType)
-            return implementationType.ToString();
-
-        if (descriptor.ImplementationInstance is { } implementationInstance)
-            return implementationInstance.GetType().ToString();
-
-        return $"factory registration for '{typeof(IDiagnosticsPersistenceObserver).FullName}'";
+        var result = new DiagnosticsPersistenceObserverRegistrationValidator(services).Validate();
+        if (result.Failed)
+            throw new InvalidOperationException(result.Failures.Single());
     }
 
     private static void AddObserverRegistrationValidation(IServiceCollection services)
     {
         if (services.Any(descriptor =>
-                descriptor.ServiceType == typeof(DiagnosticsPersistenceObserverRegistrationState)))
+                descriptor.ServiceType == typeof(DiagnosticsPersistenceObserverRegistrationValidator)))
             return;
 
-        services.AddSingleton(new DiagnosticsPersistenceObserverRegistrationState(services));
+        services.AddSingleton(new DiagnosticsPersistenceObserverRegistrationValidator(services));
         services.AddSingleton<
             IValidateOptions<DiagnosticsPersistenceObserverRegistrationOptions>,
-            DiagnosticsPersistenceObserverRegistrationValidator>();
+            DiagnosticsPersistenceObserverRegistrationOptionsAdapter>();
         services.AddOptions<DiagnosticsPersistenceObserverRegistrationOptions>().ValidateOnStart();
     }
 

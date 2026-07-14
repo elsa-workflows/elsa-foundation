@@ -37,10 +37,18 @@ that needs fan-out must place it behind one implementation instead of resolving 
   aggregate bridge; contribution-style `IEnumerable<T>` resolution is not supported.
 - **Data rule:** the contract accepts no diagnostic payload, identifier, tenant, or free-form label.
 
-The public surface is intentionally limited to the contracts and models required for concrete
-adapter assemblies to compose the shared drain. Provider packages stay in the concrete adapter
-projects. A separate `.Core` project would add another public package and dependency layer without
-creating an independent domain contract, so this narrow helper-boundary exception is deliberate.
+The adapter extension surface is intentionally limited to the contracts and models required for
+concrete adapter assemblies to compose the shared drain. Provider packages stay in the concrete
+adapter projects. A separate `.Core` project would add another public package and dependency layer
+without creating an independent domain contract, so this narrow helper-boundary exception is
+deliberate.
+
+`DiagnosticsPersistenceObserverRegistrationValidator` is the constitution-mandated
+first-party implementation required by §2.23.3; it is not an adapter extension contract. Its public
+constructor accepts only `IServiceCollection`, and its public validation method owns observer
+conflict detection and the actionable result. An internal Options adapter delegates .NET
+`ValidateOnStart` into that implementation without creating another public implementation or
+extension seam.
 
 ## Implementable contributor interfaces
 
