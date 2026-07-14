@@ -8,13 +8,15 @@ Core modules and their persistence contracts do not reference this contract or G
 
 ## Contribution topology
 
-The provider-specific composition feature owns:
+The acyclic `Elsa.Persistence.Groundwork.Composition` implementation project owns only the shared source/event/context/snapshot contract. Domain Groundwork projects reference it but never `Unified`. The provider-specific `Unified` composition feature owns:
 
 - a feature contract representing one manifest source and its stable feature identity;
 - a named startup event carrying the mutable composition context;
 - exactly one aggregating event handler that resolves all selected manifest sources;
 - an immutable registry/snapshot populated before synchronous provider materialization;
 - one `IPhysicalSchemaManifestSource` exposed to both runtime initialization and `Groundwork.Tool`.
+
+`Unified` references Composition and removes hard-coded references to Runtime, Workflows Design, Activities Design, and Publishing. Runtime, Workflows Design, Activities Design, Publishing, IAM, Secrets, and Distributed Runtime each register their own source when selected. Diagnostics remains a linked #660 source/evidence dependency. This dependency shape is acyclic and keeps domain behavior out of the composition contract.
 
 Feature-specific Groundwork modules register a source; they do not materialize providers and do not each register an event handler for the fan-in. The app host selects a source by selecting that Groundwork feature. No selected source means no durable claim for that feature.
 

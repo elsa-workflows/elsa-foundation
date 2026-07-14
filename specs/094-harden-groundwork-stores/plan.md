@@ -80,6 +80,7 @@ specs/094-harden-groundwork-stores/
 src/Elsa/
 ├── Persistence/Core/                         # Provider-neutral persistence scope/access contract
 ├── Persistence/Groundwork/
+│   ├── Composition/                  # Acyclic implementation-level manifest contribution contracts
 │   ├── Stores/                       # Runtime adapters and operational transitions
 │   ├── Querying/                     # Closed Elsa query -> bound Groundwork route translation
 │   ├── Scoping/                      # Elsa scope/access -> Groundwork session mapping
@@ -97,6 +98,7 @@ src/Elsa/
 
 tests/Elsa/
 ├── Persistence/Groundwork/
+│   ├── Composition/Tests/            # Direct contribution/context/validator/facade coverage
 │   ├── Testing/                      # Shared provider driver and black-box scenario fixtures
 │   ├── Conformance/Tests/            # Provider-independent public-contract matrix
 │   ├── UnifiedHost/Tests/
@@ -110,7 +112,7 @@ tests/Elsa/
 └── Architecture/                     # Core/provider, capability, EF-surface, and ledger ratchets
 ```
 
-**Structure Decision**: Keep each domain's Groundwork adapter in its existing provider-suffixed implementation project. Add SQL Server and MongoDB only as provider materialization/composition leaves and centralize reusable test mechanics in `Elsa.Persistence.Groundwork.Testing`; do not centralize domain behavior or create a provider-neutral persistence umbrella. The reference host explicitly selects the desired family manifests and one provider.
+**Structure Decision**: Keep each domain's Groundwork adapter in its existing provider-suffixed implementation project. Add one small `Elsa.Persistence.Groundwork.Composition` project for the acyclic, implementation-level manifest-source/event/snapshot contract shared by those projects; it contains no domain store behavior and no core module references it. `Unified` owns aggregation/materialization and depends on Composition, while domain implementation projects depend only on Composition, preventing a Unified↔domain project cycle. Add SQL Server and MongoDB only as provider materialization/composition leaves and centralize reusable test mechanics in `Elsa.Persistence.Groundwork.Testing`; do not centralize domain behavior or create a provider-neutral persistence umbrella. The reference host explicitly selects the desired family manifests and one provider.
 
 ## Delivery Sequencing
 
