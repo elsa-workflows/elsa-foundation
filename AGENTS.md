@@ -157,9 +157,3 @@ New work should move toward this rule:
 - Skills: executable workflows.
 - Maps/catalogs: navigation and generated facts.
 - Reports: current findings and unfinished work.
-
-<!-- SPECKIT START -->
-For additional context about technologies, project structure, shell commands, contracts, and
-validation scenarios for the active work unit, read
-`specs/094-harden-groundwork-stores/plan.md`.
-<!-- SPECKIT END -->
