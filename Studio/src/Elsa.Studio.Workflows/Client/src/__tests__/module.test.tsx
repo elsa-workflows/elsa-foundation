@@ -1944,6 +1944,48 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("sanitizes activity availability load errors and offers a retry", async () => {
+    const rawServerError = [
+      "System.InvalidOperationException: Failed to bind the request.",
+      "Authorization: Bearer secret-token",
+      "Cookie: antiforgery=secret-cookie",
+      "at Contoso.ActivityAvailabilityEndpoint.Invoke(HttpContext context)"
+    ].join("\n");
+    let diagnosticsAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities/availability/settings")) {
+        return response({ scope: "host-default", mode: "AllExcept", rules: { activityTypes: [], sets: [] } });
+      }
+      if (url.includes("/activities/availability/diagnostics")) {
+        diagnosticsAttempts += 1;
+        return diagnosticsAttempts === 1
+          ? response(rawServerError, 500)
+          : response({ items: [], sets: [] });
+      }
+      if (url.includes("/design/activities/catalog")) return response({ activities: [] });
+      return response(null, 404);
+    }));
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+
+    await waitForText(container, "Activity availability could not be loaded.");
+    const alert = container.querySelector("[role='alert']");
+    expect(alert?.textContent).toContain("Check the server logs for technical details.");
+    expect(alert?.textContent).not.toContain("InvalidOperationException");
+    expect(alert?.textContent).not.toContain("Authorization");
+    expect(alert?.textContent).not.toContain("secret-token");
+    expect(alert?.textContent).not.toContain("Cookie");
+    expect(alert?.textContent?.length).toBeLessThan(160);
+
+    await click(buttonByText(container, "Retry"));
+    await waitForText(container, "No availability diagnostics reported.");
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(diagnosticsAttempts).toBe(2);
+
+    await unmount();
+  });
+
   it("saves mode-aware availability toggles and inspects activity metadata in the details panel", async () => {
     let savedBody: { mode: number; rules: { activityTypes: string[]; sets: string[] } } | null = null;
     stubActivityAvailabilityFetch({

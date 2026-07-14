@@ -596,13 +596,13 @@ const brassTheme = createMaterialThemeColors({
   warning: oklchToVar(0.8, 0.14, 78),
   danger: oklchToVar(0.68, 0.16, 28),
   background: oklchToVar(0.15, 0.014, 82),
-  foreground: oklchToVar(0.86, 0.04, 82),
+  foreground: oklchToVar(0.9, 0.04, 82),
   card: oklchToVar(0.19, 0.018, 82),
   muted: oklchToVar(0.27, 0.022, 82),
-  mutedForeground: oklchToVar(0.7, 0.04, 82),
-  border: oklchToVar(0.48, 0.075, 78),
+  mutedForeground: oklchToVar(0.78, 0.04, 82),
+  border: oklchToVar(0.58, 0.075, 78),
   sidebar: oklchToVar(0.13, 0.014, 82),
-  sidebarForeground: oklchToVar(0.82, 0.04, 82),
+  sidebarForeground: oklchToVar(0.88, 0.04, 82),
   sidebarActive: oklchToVar(0.26, 0.045, 78),
 });
 

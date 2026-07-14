@@ -4669,6 +4669,20 @@ html[data-theme="brass-instrument"] .bottom-panel-tab-list button.active {
   text-transform: uppercase;
 }
 
+html[data-theme="brass-instrument"] .brand small,
+html[data-theme="brass-instrument"] .nav-heading,
+html[data-theme="brass-instrument"] .breadcrumb {
+  opacity: 0.88;
+}
+
+html[data-theme="brass-instrument"] :is(button, input, select, textarea):disabled {
+  border-color: var(--studio-border);
+  background: var(--studio-surface-muted);
+  box-shadow: none;
+  color: var(--studio-text-muted);
+  opacity: 1;
+}
+
 html[data-theme="brass-instrument"] .sidebar,
 html[data-theme="brass-instrument"] .topbar,
 html[data-theme="brass-instrument"] .bottom-panel,

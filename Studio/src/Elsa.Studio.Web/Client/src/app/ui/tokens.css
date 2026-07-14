@@ -217,33 +217,30 @@ html[data-theme="stone"] {
     linear-gradient(0deg, color-mix(in srgb, black 24%, transparent), transparent 46%),
     linear-gradient(color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
     linear-gradient(160deg, #1b2429, #0c1113 72%);
   --studio-material-panel-bg-strong:
     linear-gradient(180deg, color-mix(in srgb, white 20%, transparent), transparent 32%),
     linear-gradient(0deg, color-mix(in srgb, black 28%, transparent), transparent 48%),
     linear-gradient(color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
     linear-gradient(160deg, #263137, #0e1315 70%);
   --studio-material-panel-bg-soft:
     linear-gradient(180deg, color-mix(in srgb, white 15%, transparent), transparent 34%),
     linear-gradient(0deg, color-mix(in srgb, black 18%, transparent), transparent 48%),
-    var(--studio-material-texture),
+    linear-gradient(color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #8bdfff 2%, transparent) 1px, transparent 1px),
     linear-gradient(160deg, #242e34, #12191c 70%);
-  --studio-material-panel-bg-size: auto, auto, 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
-  /* Flat dense-row fill: grain grid + texture + slate base, bevel + shadow dropped. */
+  --studio-material-panel-bg-size: auto, auto, 36px 36px, 36px 36px, auto;
+  /* Content slabs stay matte so grain does not compete with dense text. */
   --studio-material-row-bg:
     linear-gradient(color-mix(in srgb, white 4%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, white 3%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
     linear-gradient(160deg, #1c242a, #141b1f 72%);
-  --studio-material-row-bg-size: 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  --studio-material-row-bg-size: 36px 36px, 36px 36px, auto;
   /* Recessed well: darker sunken slate for search/filter inputs. */
   --studio-material-well-bg:
-    var(--studio-material-texture),
     linear-gradient(160deg, #0e1316, #0a0e10 72%);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg-size: auto;
   --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 46%, transparent),
     inset 0 0 0 1px color-mix(in srgb, black 26%, transparent);
   --studio-material-body-bg:
@@ -256,15 +253,13 @@ html[data-theme="stone"] {
     radial-gradient(circle at 28% 22%, color-mix(in srgb, white 6%, transparent), transparent 18rem),
     linear-gradient(color-mix(in srgb, #8bdfff 5%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
     linear-gradient(160deg, #10161a, #050708 70%);
-  --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
+  --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, auto;
   --studio-material-canvas-bg:
     linear-gradient(color-mix(in srgb, white 6%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
     linear-gradient(160deg, #12191d, #050809 72%);
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
+  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, auto;
   --studio-material-node-bg:
     linear-gradient(180deg, color-mix(in srgb, white 18%, transparent), transparent 36%),
     linear-gradient(0deg, color-mix(in srgb, black 22%, transparent), transparent 50%),
@@ -619,30 +614,27 @@ html[data-theme="brass-instrument"] {
   --studio-surface-muted: #232217;
   --studio-surface-raised: #28271b;
   --studio-text: #f1d992;
-  --studio-text-muted: #b49f6c;
-  --studio-border: #7a5a25;
+  --studio-text-muted: #d0bd84;
+  --studio-border: #98763a;
   --studio-accent: #d1a041;
   --studio-accent-text: #17120a;
   --studio-success-fg: #b7ee83;
   --studio-warning-fg: #ffd36a;
   --studio-danger-fg: #ff9b79;
-  --studio-material-edge: color-mix(in srgb, #d1a041 52%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #f1d992 78%, transparent);
+  --studio-material-edge: var(--studio-border);
+  --studio-material-edge-strong: color-mix(in srgb, var(--studio-accent) 84%, var(--studio-border));
   --studio-material-texture: url("../../assets/materials/brass-enamel-tile.png");
   --studio-material-texture-size: 380px 380px;
   --studio-material-panel-bg:
     linear-gradient(180deg, color-mix(in srgb, #f1d992 8%, transparent), transparent 42%),
-    var(--studio-material-texture),
     linear-gradient(180deg, #1c1d17, #0f100d);
   --studio-material-panel-bg-strong:
     linear-gradient(180deg, color-mix(in srgb, #f1d992 12%, transparent), transparent 42%),
-    var(--studio-material-texture),
     linear-gradient(180deg, #242117, #10100d);
   --studio-material-panel-bg-soft:
     linear-gradient(180deg, color-mix(in srgb, #f1d992 7%, transparent), transparent 42%),
-    var(--studio-material-texture),
     linear-gradient(180deg, #272417, #15130e);
-  --studio-material-panel-bg-size: auto, var(--studio-material-texture-size), auto;
+  --studio-material-panel-bg-size: auto, auto;
   --studio-material-body-bg:
     radial-gradient(circle at 76% 14%, color-mix(in srgb, #d1a041 15%, transparent), transparent 28rem),
     var(--studio-material-texture),
@@ -651,14 +643,12 @@ html[data-theme="brass-instrument"] {
   --studio-material-content-bg:
     linear-gradient(color-mix(in srgb, #d1a041 8%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #d1a041 7%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
     linear-gradient(180deg, #171813, #0c0d0a);
-  --studio-material-content-bg-size: 18px 18px, 18px 18px, var(--studio-material-texture-size), auto;
+  --studio-material-content-bg-size: 18px 18px, 18px 18px, auto;
   --studio-material-canvas-bg:
     radial-gradient(color-mix(in srgb, #d1a041 12%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
     linear-gradient(180deg, #171813, #0d0e0b);
-  --studio-material-canvas-bg-size: 18px 18px, var(--studio-material-texture-size), auto;
+  --studio-material-canvas-bg-size: 18px 18px, auto;
   --studio-material-grid-size: 18px 18px;
   --studio-material-node-bg:
     linear-gradient(180deg, color-mix(in srgb, #f1d992 10%, transparent), transparent 46%),
@@ -673,15 +663,13 @@ html[data-theme="brass-instrument"] {
     inset 0 1px 0 color-mix(in srgb, #f1d992 15%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #f0c46a, #b77f22);
   --studio-material-send-text: #17120a;
-  /* Flat dense-row fill: enamel grain over base, bevel + shadow dropped. */
+  /* Flat dense-row fill: matte enamel keeps small metadata legible. */
   --studio-material-row-bg:
-    var(--studio-material-texture),
     linear-gradient(180deg, #201f17, #131310);
-  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-row-bg-size: auto;
   --studio-material-well-bg:
-    var(--studio-material-texture),
     linear-gradient(180deg, #0d0d0a, #171611);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg-size: auto;
   --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 50%, transparent),
     inset 0 0 0 1px color-mix(in srgb, #f1d992 10%, transparent);
 }

@@ -135,8 +135,19 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
   const hiddenCount = activityEntries.filter(entry => getAvailabilityStateName(entry.state) === "HiddenByManagementSettings").length;
   const dirty = useMemo(() => isAvailabilityDraftDirty(draft, settings), [draft, settings]);
 
-  const error = saveMutation.error ?? settingsQuery.error ?? diagnosticsQuery.error;
-  const errorMessage = error instanceof Error ? error.message : error ? "Activity availability could not be loaded." : null;
+  const loadError = settingsQuery.error ?? diagnosticsQuery.error;
+  const saveError = saveMutation.error;
+  const errorMessage = saveError
+    ? "Activity availability could not be saved. Your changes are still here; try saving again."
+    : loadError
+      ? "Activity availability could not be loaded."
+      : null;
+  const retryingLoad = settingsQuery.isFetching || diagnosticsQuery.isFetching;
+
+  const retryLoad = () => {
+    void settingsQuery.refetch();
+    void diagnosticsQuery.refetch();
+  };
 
   const editDraft = (edit: (current: AvailabilityDraft) => AvailabilityDraft) => {
     setStatus(null);
@@ -180,7 +191,20 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
       </div>
 
       <div className="availability-body">
-        {errorMessage && <div className="availability-banner availability-banner-error">{errorMessage}</div>}
+        {errorMessage && (
+          <div className="availability-banner availability-banner-error" role="alert">
+            <AlertTriangle size={16} aria-hidden="true" />
+            <span className="availability-banner-message">
+              <strong>{errorMessage}</strong>
+              <span>Check the server logs for technical details.</span>
+            </span>
+            {loadError && (
+              <button type="button" className="availability-banner-action" onClick={retryLoad} disabled={retryingLoad}>
+                {retryingLoad ? "Retrying…" : "Retry"}
+              </button>
+            )}
+          </div>
+        )}
         {status && !errorMessage && <div className="availability-banner availability-banner-success">{status}</div>}
 
         <div className="availability-mode" role="group" aria-label="Activity availability mode">
