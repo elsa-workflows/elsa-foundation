@@ -469,7 +469,7 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
                 !StringComparer.Ordinal.Equals(operation.SourceId, _binding.SourceId) ||
                 operation.Streams is null ||
                 operation.Streams.Keys.Except(StreamKinds, StringComparer.Ordinal).Any() ||
-                operation.Streams.Values.Any(x => x.RetryUntil < x.IssuedAt))
+                operation.Streams.Values.Any(x => x is null || x.RetryUntil < x.IssuedAt))
             {
                 throw CorruptOperation(envelope.Id, "The OpenTelemetry capture operation does not match this storage binding.");
             }

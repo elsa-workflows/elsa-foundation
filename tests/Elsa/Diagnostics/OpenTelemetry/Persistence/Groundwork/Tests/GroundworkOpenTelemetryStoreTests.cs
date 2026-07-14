@@ -330,6 +330,38 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Null_capture_stream_attempt_is_reported_as_provider_neutral_corrupt_data()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = _fixture.CreateStore(providers);
+        var batchId = DiagnosticsDrainBatchId.New();
+        var content = JsonSerializer.Serialize(new
+        {
+            ledgerSchemaVersion = 2,
+            batchId = batchId.ToString(),
+            fingerprint = "persisted-fingerprint",
+            createdAt = DateTimeOffset.UtcNow,
+            tenantId = _fixture.Binding.TenantId,
+            scopeId = _fixture.Binding.ScopeId,
+            sourceId = _fixture.Binding.SourceId,
+            streams = new Dictionary<string, object?> { ["traces"] = null }
+        });
+        var result = await providers.Documents.SaveAsync(new(
+            OpenTelemetryGroundworkStorageSchema.OperationLedgerKind,
+            batchId.ToString(),
+            OpenTelemetryGroundworkStorageSchema.SchemaVersion,
+            content,
+            0));
+        Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
+
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(() =>
+            store.WriteAsync(batchId, CreateBatch(includeCatalogs: false)).AsTask());
+
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
+        Assert.Equal(batchId.ToString(), failure.Context["batchId"]);
+    }
+
+    [Fact]
     public async Task Query_and_diagnostics_provider_failures_are_translated_at_the_public_boundary()
     {
         var providers = await _fixture.CreateProvidersAsync();
