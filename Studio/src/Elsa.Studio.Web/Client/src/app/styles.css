@@ -4050,30 +4050,30 @@ html[data-theme="material-design"] .topbar {
 }
 
 html[data-theme="material-design"][data-theme-mode="light"] .topbar {
-  background: var(--primary);
+  background: var(--accent);
 }
 
 html[data-theme="material-design"][data-theme-mode="light"] .topbar h1,
 html[data-theme="material-design"][data-theme-mode="light"] .topbar .breadcrumb {
-  color: var(--primary-foreground);
+  color: var(--accent-foreground);
 }
 
 html[data-theme="material-design"][data-theme-mode="light"] .topbar .breadcrumb {
-  opacity: 0.78;
+  opacity: 0.84;
 }
 
 html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > a,
 html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > button {
-  border-color: color-mix(in srgb, var(--primary-foreground) 22%, transparent);
-  background: color-mix(in srgb, var(--primary-foreground) 8%, transparent);
-  color: var(--primary-foreground);
+  border-color: color-mix(in srgb, var(--accent-foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--accent-foreground) 8%, transparent);
+  color: var(--accent-foreground);
 }
 
 html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > a:hover,
 html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > button:hover {
-  border-color: color-mix(in srgb, var(--primary-foreground) 32%, transparent);
-  background: color-mix(in srgb, var(--primary-foreground) 16%, transparent);
-  color: var(--primary-foreground);
+  border-color: color-mix(in srgb, var(--accent-foreground) 32%, transparent);
+  background: color-mix(in srgb, var(--accent-foreground) 12%, transparent);
+  color: var(--accent-foreground);
 }
 
 html[data-theme="material-design"] .host-health-strip,
