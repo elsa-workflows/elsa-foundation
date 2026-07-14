@@ -184,6 +184,8 @@ _TeamCity*
 coverage*.json
 coverage*.xml
 coverage*.info
+!specs/**/coverage-ledger.json
+!specs/**/contracts/coverage-ledger.schema.json
 
 # Visual Studio code coverage results
 *.coverage

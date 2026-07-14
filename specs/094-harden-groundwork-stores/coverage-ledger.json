@@ -1,0 +1,1434 @@
+{
+  "$schema": "./contracts/coverage-ledger.schema.json",
+  "schemaVersion": 1,
+  "feature": "094-harden-groundwork-stores",
+  "baselineRef": "c9aa5fd8f7cfa6c86b2f37885a2446f3f4b82103",
+  "mandatoryProviders": [
+    "sqlite",
+    "sqlserver",
+    "postgresql",
+    "mongodb"
+  ],
+  "entries": [
+    {
+      "id": "runtime-activity-execution-inspection",
+      "family": "runtime",
+      "contract": "IActivityExecutionInspectionStore; IActivityExecutionInspectionWriter",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
+      "performanceWorkload": "not-hot-path",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-activity",
+        "list-summaries-by-workflow-bounded"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One inspection document for direct save; inspection changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass-or-reviewed-not-hot-path",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkActivityExecutionInspectionStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-activity-execution-state",
+      "family": "runtime",
+      "contract": "IActivityExecutionStateStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
+      "performanceWorkload": "checkpoint-commit",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-activity",
+        "list-by-workflow-bounded",
+        "list-by-parent-bounded"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One activity state document for direct save; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-bookmark-state",
+      "family": "runtime",
+      "contract": "IBookmarkStateStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Scale-bearing lookup still relies on incomplete bounded-route evidence.",
+      "performanceWorkload": "bookmark-lookup",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-bookmark",
+        "list-by-workflow-bounded"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "expected-version-delete",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One bookmark document for direct mutation; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkBookmarkStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-durable-timer",
+      "family": "runtime",
+      "contract": "IDurableTimerStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Due selection and advancement lack provider-atomic four-provider evidence.",
+      "performanceWorkload": "due-timer-selection",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-timer",
+        "list-due-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-existing-wins",
+        "expected-version-delete",
+        "conditional-due-claim"
+      ],
+      "atomicBoundary": "One timer transition per identity; a claimed occurrence is decided by one expected-version mutation.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableTimerStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-durable-value-state",
+      "family": "runtime",
+      "contract": "IDurableValueStateStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
+      "performanceWorkload": "checkpoint-commit",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-value",
+        "list-by-workflow-bounded"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "expected-version-delete",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One durable-value document for direct mutation; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-execution-liveness",
+      "family": "runtime",
+      "contract": "IExecutionLivenessStateStore; IRuntimeExecutionOwnershipService; IRuntimeRecoveryScanner",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Ownership transitions and recovery scans are not one bounded provider-atomic path.",
+      "performanceWorkload": "recovery-scan",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-state",
+        "list-by-workflow-bounded",
+        "list-recovery-candidates-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-ownership-acquire",
+        "conditional-heartbeat",
+        "conditional-release",
+        "strictly-increasing-fence"
+      ],
+      "atomicBoundary": "The ownership record CAS and fence allocation form one provider-atomic transition.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeExecutionOwnershipTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeRecoveryScannerTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-incident-state",
+      "family": "runtime",
+      "contract": "IIncidentStateStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Create-once and revision behavior lacks race/restart evidence.",
+      "performanceWorkload": "recovery-scan",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-incident",
+        "list-by-workflow-bounded",
+        "list-blocking-by-workflow-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-try-add",
+        "expected-version-save"
+      ],
+      "atomicBoundary": "One incident document; create-only admission selects the winner.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-recurring-trigger-schedule",
+      "family": "runtime",
+      "contract": "IRecurringTriggerScheduleStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Due and publication queries filter client-side and schedule transitions race.",
+      "performanceWorkload": "recurring-schedule-selection",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-schedule",
+        "list-by-publication-bounded",
+        "list-due-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-save",
+        "compare-and-swap-advance",
+        "conditional-publication-activation"
+      ],
+      "atomicBoundary": "Prepared schedules and publication projection state change in one Groundwork unit of work; occurrence advance is one CAS.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-checkpoint-commit",
+      "family": "runtime",
+      "contract": "IRuntimeCheckpointCommitStore",
+      "outcome": "specialized-primitive",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Fence validation has a TOCTOU window and correctness relies on process-local locks.",
+      "performanceWorkload": "checkpoint-commit",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "idempotency-marker-by-commit-key"
+      ],
+      "concurrencySemantics": [
+        "strictly-increasing-fence",
+        "atomic-stale-fence-rejection",
+        "create-only-idempotency-marker",
+        "expected-version-state-changes"
+      ],
+      "atomicBoundary": "Ownership fence validation/touch, checkpoint state, outbox state, and commit marker are one provider unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointRootWriteLeaseTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/RuntimeCheckpointCommitStorePostCommitContract.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkCoalescingCrashConvergenceTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeCheckpointCommitTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-diagnostics-settings",
+      "family": "runtime",
+      "contract": "IRuntimeDiagnosticsSettingsStore",
+      "outcome": "external-authority-adapter",
+      "scope": "external-owner-classification",
+      "authority": "#660",
+      "status": "externally-blocked",
+      "initialGap": "The diagnostics Groundwork pull request is not yet landed on main.",
+      "performanceWorkload": "diagnostic-settings-owned-by-660-and-646",
+      "dependency": "#660",
+      "accessPolicy": "external-owner-classification",
+      "queryShapes": [
+        "external-owner-defined"
+      ],
+      "concurrencySemantics": [
+        "external-owner-defined"
+      ],
+      "atomicBoundary": "Owned and proved by #660; #645 consumes its public-contract and provider evidence.",
+      "failureWindows": [
+        "consume-external-owner-failure-window-evidence"
+      ],
+      "restartScenarios": [
+        "consume-external-owner-dispose-reopen-and-process-restart-evidence"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "external-owner-verdict",
+      "deliveryOwner": "#660",
+      "behavioralBaseline": [
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticsSettingsApiTests.cs",
+        "tests/Elsa/Architecture/DomainApiCapabilityRegistrationTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-post-commit-outbox",
+      "family": "runtime",
+      "contract": "IRuntimePostCommitOutboxStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Deliverable reads do not claim atomically and completion has no stale-ack token.",
+      "performanceWorkload": "outbox-drain",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "claim-deliverable-bounded-by-due-order",
+        "find-by-outbox-id"
+      ],
+      "concurrencySemantics": [
+        "create-only-intent",
+        "expected-version-claim",
+        "claim-token-completion",
+        "stale-acknowledgement-rejection",
+        "conditional-retry"
+      ],
+      "atomicBoundary": "Each claim/completion/retry is one expected-version transition; pending items join checkpoint commit atomically.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxContinuityTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-scheduler-state",
+      "family": "runtime",
+      "contract": "ISchedulerStateStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Conditional transition and restart evidence is incomplete.",
+      "performanceWorkload": "recovery-scan",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow",
+        "list-bounded"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One scheduler state document for direct save; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-executable-source-reference",
+      "family": "runtime",
+      "contract": "IWorkflowExecutableSourceReferenceStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Source-reference query shapes lack complete bounded-route/provider evidence.",
+      "performanceWorkload": "trigger-binding-stimulus-lookup",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-reference",
+        "list-by-artifact-bounded",
+        "list-live-by-scope-bounded",
+        "delete-expired-or-retired-bounded",
+        "list-unreferenced-artifacts-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-save",
+        "conditional-retire",
+        "bounded-conditional-delete"
+      ],
+      "atomicBoundary": "One reference mutation per identity; bounded GC mutations commit their selected batch atomically.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-7-bounded-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutableStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionRetentionTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-workflow-executable",
+      "family": "runtime",
+      "contract": "IWorkflowExecutableStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
+      "performanceWorkload": "checkpoint-commit",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-artifact",
+        "list-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-artifact",
+        "expected-version-root-lease",
+        "expected-version-deletion-guard",
+        "guarded-delete"
+      ],
+      "atomicBoundary": "Artifact creation is create-only; each lease/guard transition is one CAS; guarded delete checks current guard and leases atomically.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutableStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointRootWriteLeaseTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-workflow-execution-state",
+      "family": "runtime",
+      "contract": "IWorkflowExecutionStateStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Paging has partial relational-only execution and incomplete four-provider parity.",
+      "performanceWorkload": "recovery-scan",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-execution",
+        "query-page-bounded",
+        "list-pinned-artifact-ids-bounded",
+        "list-all-replaced-by-bounded-page"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "expected-version-delete",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One execution state document for direct mutation; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionStatePagingTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionRetentionTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/WorkflowExecutionHistoryProviderConformance.cs"
+      ]
+    },
+    {
+      "id": "runtime-workflow-hold-state",
+      "family": "runtime",
+      "contract": "IWorkflowHoldStateStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Conditional hold transition and recovery evidence is incomplete.",
+      "performanceWorkload": "recovery-scan",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-control-state",
+        "list-by-workflow-bounded",
+        "list-all-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-save",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One hold-state transition per identity; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-scheduler-poison",
+      "family": "runtime",
+      "contract": "IWorkflowSchedulerPoisonStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "missing",
+      "initialGap": "No Groundwork implementation exists; the current durable outcome is memory-only.",
+      "performanceWorkload": "queue-drain",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-work-item",
+        "list-by-workflow-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-record",
+        "conditional-redrive-link"
+      ],
+      "atomicBoundary": "One poison record and its failed-work identity/retry relationship are committed together.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-scheduler-work-queue",
+      "family": "runtime",
+      "contract": "IWorkflowSchedulerWorkQueue",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Claim/acknowledgement races and client-side query work remain.",
+      "performanceWorkload": "queue-drain",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "list-by-workflow-bounded",
+        "claim-next-by-workflow",
+        "list-pending-workflow-ids-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-enqueue",
+        "expected-version-claim",
+        "claim-token-acknowledgement",
+        "stale-acknowledgement-rejection"
+      ],
+      "atomicBoundary": "Enqueue is create-only; each claim/acknowledgement is one expected-version transition.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerWorkQueueTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-trigger-binding",
+      "family": "runtime",
+      "contract": "IWorkflowTriggerBindingStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Some publication/stimulus query and activation behavior is client-side or race-prone.",
+      "performanceWorkload": "trigger-binding-stimulus-lookup",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "list-by-publication-bounded",
+        "list-by-stimulus-bounded",
+        "list-by-artifact-bounded",
+        "list-by-stimulus-type-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-save",
+        "conditional-publication-activation",
+        "bounded-delete-by-artifact"
+      ],
+      "atomicBoundary": "Prepared bindings and publication projection state change in one Groundwork unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-7-bounded-queries-and-boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTriggerBindingStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkAddedIndexBackfillRegressionTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-publication-projection-state",
+      "family": "runtime",
+      "contract": "Trigger and recurring publication projection internal state",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "The shared internal projection authority and conditional activation behavior need explicit evidence.",
+      "performanceWorkload": "recurring-schedule-selection",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-projection-kind-and-publication"
+      ],
+      "concurrencySemantics": [
+        "create-only-prepare-marker",
+        "expected-version-activation",
+        "conditional-replaced-publication-deactivation"
+      ],
+      "atomicBoundary": "Projection state and the affected trigger/schedule documents change in one Groundwork unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTriggerBindingStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
+      ]
+    },
+    {
+      "id": "iam-user",
+      "family": "iam",
+      "contract": "IUserStore",
+      "outcome": "external-authority-adapter",
+      "scope": "tenant-scoped",
+      "authority": "#644",
+      "status": "externally-blocked",
+      "initialGap": "The current Groundwork IAM document would duplicate #644's authoritative user.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "dependency": "#644",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-tenant-and-id",
+        "find-by-tenant-and-normalized-email",
+        "find-by-tenant-and-normalized-name"
+      ],
+      "concurrencySemantics": [
+        "authoritative-644-expected-version",
+        "tenant-local-create-only-uniqueness"
+      ],
+      "atomicBoundary": "The #645 adapter and #644 framework store mutate one authoritative user aggregate.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
+      ]
+    },
+    {
+      "id": "iam-role",
+      "family": "iam",
+      "contract": "IRoleStore",
+      "outcome": "external-authority-adapter",
+      "scope": "tenant-scoped",
+      "authority": "#644",
+      "status": "externally-blocked",
+      "initialGap": "The current Groundwork IAM document would duplicate #644's authoritative role.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "dependency": "#644",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-tenant-and-id",
+        "list-by-tenant-bounded",
+        "find-by-tenant-and-normalized-name"
+      ],
+      "concurrencySemantics": [
+        "authoritative-644-expected-version",
+        "tenant-local-create-only-uniqueness"
+      ],
+      "atomicBoundary": "The #645 adapter and #644 framework store mutate one authoritative role aggregate.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
+      ]
+    },
+    {
+      "id": "iam-application",
+      "family": "iam",
+      "contract": "IApplicationStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "missing",
+      "initialGap": "No Groundwork implementation exists.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-tenant-and-id",
+        "find-by-tenant-and-client-id"
+      ],
+      "concurrencySemantics": [
+        "tenant-local-create-only-uniqueness",
+        "expected-version-save"
+      ],
+      "atomicBoundary": "One application document per identity; tenant/client uniqueness admission is create-only.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-6-iam-secrets",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
+      ]
+    },
+    {
+      "id": "iam-credential",
+      "family": "iam",
+      "contract": "ICredentialStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "missing",
+      "initialGap": "No Groundwork implementation exists.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-tenant-and-id"
+      ],
+      "concurrencySemantics": [
+        "create-only-credential",
+        "expected-version-rotate",
+        "expected-version-revoke"
+      ],
+      "atomicBoundary": "One credential revision transition per identity.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-6-iam-secrets",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
+      ]
+    },
+    {
+      "id": "iam-external-identity",
+      "family": "iam",
+      "contract": "IExternalIdentityStore",
+      "outcome": "external-authority-adapter",
+      "scope": "tenant-scoped",
+      "authority": "#644",
+      "status": "externally-blocked",
+      "initialGap": "The current Groundwork IAM document would duplicate #644's authoritative external login.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "dependency": "#644",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-tenant-provider-subject",
+        "list-by-tenant-and-user-bounded"
+      ],
+      "concurrencySemantics": [
+        "authoritative-644-create-only-link",
+        "authoritative-644-expected-version"
+      ],
+      "atomicBoundary": "The #645 adapter and #644 framework store mutate one authoritative external-login relationship.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
+      ]
+    },
+    {
+      "id": "iam-claim-mapping",
+      "family": "iam",
+      "contract": "IClaimMappingStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "missing",
+      "initialGap": "No Groundwork implementation exists.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "list-by-tenant-and-provider-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-rule-identity",
+        "expected-version-save"
+      ],
+      "atomicBoundary": "One claim-mapping rule transition per identity.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-6-iam-secrets",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
+      ]
+    },
+    {
+      "id": "iam-provider-configuration-tenant",
+      "family": "iam",
+      "contract": "IProviderConfigurationStore tenant path",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "missing",
+      "initialGap": "No Groundwork implementation exists.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-tenant-and-provider",
+        "find-effective-tenant-first"
+      ],
+      "concurrencySemantics": [
+        "tenant-local-create-only-uniqueness",
+        "expected-version-save"
+      ],
+      "atomicBoundary": "One tenant provider-configuration transition per provider identity.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-6-iam-secrets",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs"
+      ]
+    },
+    {
+      "id": "iam-provider-configuration-global",
+      "family": "iam",
+      "contract": "IProviderConfigurationStore global path",
+      "outcome": "ordinary-document",
+      "scope": "explicit-global",
+      "scopeReason": "Host-wide authentication provider fallback is intentionally shared across tenant scopes.",
+      "authority": "#645",
+      "status": "missing",
+      "initialGap": "No Groundwork implementation exists and the privileged global path is not yet explicit.",
+      "performanceWorkload": "not-hot-path",
+      "accessPolicy": "ordinary-read-privileged-write",
+      "accessReason": "Reads may participate in explicit global fallback; writes require named privileged administration.",
+      "queryShapes": [
+        "find-global-by-provider",
+        "find-effective-global-fallback"
+      ],
+      "concurrencySemantics": [
+        "global-create-only-uniqueness",
+        "privileged-expected-version-save"
+      ],
+      "atomicBoundary": "One explicitly global provider-configuration transition per provider identity; writes require privileged access.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass-or-reviewed-not-hot-path",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-6-iam-secrets",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs"
+      ]
+    },
+    {
+      "id": "iam-tenant-membership",
+      "family": "iam",
+      "contract": "ITenantMembershipStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Writes are last-write-wins and four-provider concurrency evidence is absent.",
+      "performanceWorkload": "iam-normalized-lookup-update",
+      "dependency": "#644",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-tenant-and-user"
+      ],
+      "concurrencySemantics": [
+        "tenant-local-create-only-uniqueness",
+        "expected-version-save"
+      ],
+      "atomicBoundary": "One tenant-membership revision per tenant/user identity; coupled #644 changes share its unit of work where required.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
+      "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
+        "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
+      ]
+    },
+    {
+      "id": "secrets-repository",
+      "family": "secrets",
+      "contract": "ISecretRepository",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "TryAdd is read-then-save, List is unbounded, and updates carry no expected revision.",
+      "performanceWorkload": "secret-create-read-list",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-scope-and-normalized-name",
+        "list-by-scope-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-try-add",
+        "expected-version-save",
+        "expected-version-delete-if-added"
+      ],
+      "atomicBoundary": "One secret aggregate, including its versions, changes under one expected revision.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-6-iam-secrets",
+      "behavioralBaseline": [
+        "tests/Elsa/Secrets/Tests/GroundworkSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Tests/SecretRepositoryContractTests.cs",
+        "tests/Elsa/Secrets/Tests/SecretsGroundworkDocumentFixtureTests.cs"
+      ]
+    },
+    {
+      "id": "distributed-execution-placement",
+      "family": "distributed-runtime",
+      "contract": "IExecutionPlacementStore",
+      "outcome": "specialized-primitive",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "List is unbounded and LeaseFencing is advertised before checkpoint integration proves it.",
+      "performanceWorkload": "placement-takeover",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-scope-and-execution",
+        "list-owned-or-current-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-claim",
+        "conditional-renew",
+        "conditional-takeover",
+        "stale-release-rejection",
+        "monotonic-placement-token"
+      ],
+      "atomicBoundary": "Each claim/renew/takeover/release is one provider-atomic placement CAS.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-9-distributed",
+      "behavioralBaseline": [
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionPlacementStoreContractTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedCasTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Tests/GroundworkTwoNodeAcceptanceTests.cs"
+      ]
+    },
+    {
+      "id": "distributed-command-transport",
+      "family": "distributed-runtime",
+      "contract": "IExecutionCommandTransport",
+      "outcome": "specialized-primitive",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "planned",
+      "initialGap": "Sequence allocation scans maxima and claim/acknowledgement behavior lacks full provider evidence.",
+      "performanceWorkload": "command-send-lease-ack",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "lease-visible-by-execution-bounded",
+        "list-pending-execution-ids-bounded",
+        "count-pending-by-execution"
+      ],
+      "concurrencySemantics": [
+        "create-only-command-identity",
+        "expected-version-stream-head-sequence",
+        "expected-version-visibility-lease",
+        "claim-token-acknowledgement",
+        "stale-acknowledgement-rejection"
+      ],
+      "atomicBoundary": "Command create plus stream-head sequence allocation is one unit of work; each lease/acknowledgement is one CAS.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-9-distributed",
+      "behavioralBaseline": [
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionCommandTransportContractTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedCasTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Tests/GroundworkTwoNodeAcceptanceTests.cs"
+      ]
+    }
+  ]
+}
