@@ -51,10 +51,10 @@
 
 ### Tests for User Story 1 — write and observe failures first
 
-- [ ] T012 [P] [US1] Expand Structured Logs conformance tests for tied ordering, filtered cursor advancement, restart, invalid binding, trimmed anchors, and operational failure visibility in `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogReplayTests.cs`
-- [ ] T013 [P] [US1] Add OpenTelemetry restart tests for resources, trace summaries, spans, instruments, metric points, and log records in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryRestartTests.cs`
-- [ ] T014 [P] [US1] Add append idempotency, operation-identity conflict, acknowledgement-loss, cancellation-boundary, concurrent-writer, malformed-payload, and oversized-batch rejection-without-mutation tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDurableOperationConformanceTests.cs`
-- [ ] T015 [US1] Run T012-T014 against the current adapters and record the expected failing assertions in `specs/091-groundwork-diagnostics-persistence/evidence/red-test-baseline.md` before implementation
+- [X] T012 [P] [US1] Expand Structured Logs conformance tests for tied ordering, filtered cursor advancement, restart, invalid binding, trimmed anchors, and operational failure visibility in `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogReplayTests.cs`
+- [X] T013 [P] [US1] Add OpenTelemetry restart tests for resources, trace summaries, spans, instruments, metric points, and log records in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryRestartTests.cs`
+- [X] T014 [P] [US1] Add append idempotency, operation-identity conflict, acknowledgement-loss, cancellation-boundary, concurrent-writer, malformed-payload, and oversized-batch rejection-without-mutation tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDurableOperationConformanceTests.cs`
+- [X] T015 [US1] Run T012-T014 against the current adapters and record the expected failing assertions in `specs/091-groundwork-diagnostics-persistence/evidence/red-test-baseline.md` before implementation
 
 ### Implementation for User Story 1
 
