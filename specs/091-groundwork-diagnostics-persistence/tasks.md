@@ -58,8 +58,8 @@
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Harden durable append, stable commit ordering, cursor advancement, and exact cursor-failure translation in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs`
-- [ ] T017 [US1] Bind replay cursors to version, storage scope, source, stream, provider position, and record anchor in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkReplayCursorCodec.cs`
+- [X] T016 [US1] Harden durable append, stable commit ordering, cursor advancement, and exact cursor-failure translation in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs`
+- [X] T017 [US1] Bind replay cursors to version, storage scope, source, stream, provider position, and record anchor in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkReplayCursorCodec.cs`
 - [ ] T018 [P] [US1] Define OpenTelemetry record-stream mappings and canonical serializers in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/`
 - [ ] T019 [P] [US1] Define resource and instrument catalog document mappings in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/`
 - [ ] T020 [US1] Implement idempotent normalized batch writes and durable restart reads in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`

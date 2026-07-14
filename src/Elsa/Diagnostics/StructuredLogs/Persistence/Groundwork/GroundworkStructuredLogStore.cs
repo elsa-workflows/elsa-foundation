@@ -173,49 +173,34 @@ public sealed class GroundworkStructuredLogStore : IStructuredLogStore, IAsyncDi
         ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
         var limit = Math.Min(maxCount, _maxRecentQuerySize);
 
-        try
-        {
-            DiagnosticRecord? anchor = null;
-            if (afterCursor is { } cursor)
-                anchor = await ValidateAnchorAsync(cursor, cancellationToken);
+        DiagnosticRecord? anchor = null;
+        if (afterCursor is { } cursor)
+            anchor = await ValidateAnchorAsync(cursor, cancellationToken);
 
-            var query = new DiagnosticRecordQuery(
-                _scope,
-                _stream,
-                limit,
-                DiagnosticRecordOrder.CursorAscending);
-            if (anchor is not null)
+        var query = new DiagnosticRecordQuery(
+            _scope,
+            _stream,
+            limit,
+            DiagnosticRecordOrder.CursorAscending);
+        if (anchor is not null)
+        {
+            var statistics = await _store.InspectAsync(new(_scope, _stream), cancellationToken);
+            if (statistics.LifetimeCommittedCursorHighWater is not { } snapshotHighWater)
+                throw new StructuredLogReplayCursorUnavailableException();
+            query = query with
             {
-                var statistics = await _store.InspectAsync(new(_scope, _stream), cancellationToken);
-                if (statistics.LifetimeCommittedCursorHighWater is not { } snapshotHighWater)
-                    throw new StructuredLogReplayCursorUnavailableException();
-                query = query with
-                {
-                    Continuation = new(
-                        snapshotHighWater,
-                        anchor.Cursor,
-                        DiagnosticRequestFingerprint.ForQuery(query, _definition))
-                };
-            }
+                Continuation = new(
+                    snapshotHighWater,
+                    anchor.Cursor,
+                    DiagnosticRequestFingerprint.ForQuery(query, _definition))
+            };
+        }
 
-            var page = await _store.QueryAsync(query, cancellationToken);
-            var scanned = page.Records;
-            var entries = scanned.Select(ToEntry).Where(filter.Matches).ToArray();
-            var next = scanned.Count == 0 ? afterCursor : ToEntry(scanned[^1]).ReplayCursor;
-            return new(entries, next, page.Continuation is not null);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (StructuredLogReplayCursorUnavailableException)
-        {
-            throw;
-        }
-        catch
-        {
-            throw new StructuredLogReplayCursorUnavailableException();
-        }
+        var page = await _store.QueryAsync(query, cancellationToken);
+        var scanned = page.Records;
+        var entries = scanned.Select(ToEntry).Where(filter.Matches).ToArray();
+        var next = scanned.Count == 0 ? afterCursor : ToEntry(scanned[^1]).ReplayCursor;
+        return new(entries, next, page.Continuation is not null);
     }
 
     public async Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default)
