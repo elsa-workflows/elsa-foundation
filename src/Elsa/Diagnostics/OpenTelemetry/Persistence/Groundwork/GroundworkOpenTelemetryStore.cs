@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Catalogs;
@@ -120,23 +121,55 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         cancellationToken.ThrowIfCancellationRequested();
         RejectCatalogIdentityWrites(batch);
 
-        var traces = NormalizeTraces(batch.Traces);
-        var spans = NormalizeRecords(batch.Spans, span => _recordSerializer.ToRecord(span.Id, span));
-        var points = NormalizeRecords(batch.MetricPoints, point => _recordSerializer.ToRecord(point.Id, point));
-        var logs = NormalizeRecords(batch.Logs, log => _recordSerializer.ToRecord(log.Id, log));
-        var fingerprint = CaptureFingerprint(traces, spans, points, logs);
-        var targets = new[]
+        var context = Context(("batchId", batchId.ToString()));
+        DiagnosticRecordInput[] traces;
+        DiagnosticRecordInput[] spans;
+        DiagnosticRecordInput[] points;
+        DiagnosticRecordInput[] logs;
+        try
         {
-            new StreamTarget("traces", _stores.Traces, _traceStream, _traceDefinition, PhysicalizeRecordIds(batchId, "traces", traces)),
-            new StreamTarget("spans", _stores.Spans, _spanStream, _spanDefinition, PhysicalizeRecordIds(batchId, "spans", spans)),
-            new StreamTarget("metric-points", _stores.MetricPoints, _metricPointStream, _metricPointDefinition, PhysicalizeRecordIds(batchId, "metric-points", points)),
-            new StreamTarget("logs", _stores.Logs, _logStream, _logDefinition, PhysicalizeRecordIds(batchId, "logs", logs))
-        };
-        Preflight(batchId, targets);
-        await GetOrCreateCaptureOperationAsync(batchId, fingerprint, cancellationToken);
+            traces = NormalizeTraces(batch.Traces);
+            spans = NormalizeRecords(batch.Spans, span => _recordSerializer.ToRecord(span.Id, span));
+            points = NormalizeRecords(batch.MetricPoints, point => _recordSerializer.ToRecord(point.Id, point));
+            logs = NormalizeRecords(batch.Logs, log => _recordSerializer.ToRecord(log.Id, log));
+        }
+        catch (RecordPayloadException exception)
+        {
+            throw new OpenTelemetryPersistenceValidationException(
+                "write",
+                "The OpenTelemetry persistence operation contains a record that cannot be represented canonically.",
+                context,
+                exception);
+        }
 
-        foreach (var target in targets)
-            await AppendAsync(batchId, fingerprint, target, cancellationToken);
+        try
+        {
+            var fingerprint = CaptureFingerprint(traces, spans, points, logs);
+            var targets = new[]
+            {
+                new StreamTarget("traces", _stores.Traces, _traceStream, _traceDefinition, PhysicalizeRecordIds(batchId, "traces", traces)),
+                new StreamTarget("spans", _stores.Spans, _spanStream, _spanDefinition, PhysicalizeRecordIds(batchId, "spans", spans)),
+                new StreamTarget("metric-points", _stores.MetricPoints, _metricPointStream, _metricPointDefinition, PhysicalizeRecordIds(batchId, "metric-points", points)),
+                new StreamTarget("logs", _stores.Logs, _logStream, _logDefinition, PhysicalizeRecordIds(batchId, "logs", logs))
+            };
+            Preflight(batchId, targets);
+            await GetOrCreateCaptureOperationAsync(batchId, fingerprint, cancellationToken);
+
+            foreach (var target in targets)
+                await AppendAsync(batchId, fingerprint, target, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (OpenTelemetryPersistenceException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw TranslateFailure("write", context, exception);
+        }
     }
 
     public ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(
@@ -144,7 +177,9 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        throw UnsupportedCaseIdentity("Resource catalog results require case-insensitive resource identity.");
+        throw UnsupportedCaseIdentity(
+            "query-resources",
+            "Resource catalog results require case-insensitive resource identity.");
     }
 
     public ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(
@@ -152,7 +187,9 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        throw UnsupportedCaseIdentity("Trace results require case-insensitive latest-per-trace identity.");
+        throw UnsupportedCaseIdentity(
+            "query-traces",
+            "Trace results require case-insensitive latest-per-trace identity.");
     }
 
     public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(
@@ -160,7 +197,9 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
-        throw UnsupportedCaseIdentity("Trace detail lookup requires case-insensitive trace identity and catalog joins.");
+        throw UnsupportedCaseIdentity(
+            "get-trace",
+            "Trace detail lookup requires case-insensitive trace identity and catalog joins.");
     }
 
     public ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(
@@ -168,7 +207,9 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        throw UnsupportedCaseIdentity("Metric results require case-insensitive instrument identity and catalog joins.");
+        throw UnsupportedCaseIdentity(
+            "query-metrics",
+            "Metric results require case-insensitive instrument identity and catalog joins.");
     }
 
     public async ValueTask<OpenTelemetryLogResult> QueryLogsAsync(
@@ -187,40 +228,70 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         if (take == 0)
             return new([], 0);
 
-        var predicates = new List<DiagnosticRecordPredicate>();
-        AddRange(predicates, RecordFields.Timestamp, filter.From, filter.To);
-        var page = await _stores.Logs.QueryAsync(new(
-            _scope,
-            _logStream,
-            take,
-            new(RecordFields.Timestamp, DiagnosticSortDirection.Descending),
-            Predicate: All(predicates)), cancellationToken);
-        return new(page.Records.Select(_recordSerializer.ToLog).Reverse().ToArray(), 0);
+        try
+        {
+            var predicates = new List<DiagnosticRecordPredicate>();
+            AddRange(predicates, RecordFields.Timestamp, filter.From, filter.To);
+            var page = await _stores.Logs.QueryAsync(new(
+                _scope,
+                _logStream,
+                take,
+                new(RecordFields.Timestamp, DiagnosticSortDirection.Descending),
+                Predicate: All(predicates)), cancellationToken);
+            return new(page.Records.Select(_recordSerializer.ToLog).Reverse().ToArray(), 0);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (OpenTelemetryPersistenceException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw TranslateFailure("query-logs", Context(), exception);
+        }
     }
 
     public async ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
     {
-        var traces = await _stores.Traces.InspectAsync(new(_scope, _traceStream), cancellationToken);
-        var spans = await _stores.Spans.InspectAsync(new(_scope, _spanStream), cancellationToken);
-        var points = await _stores.MetricPoints.InspectAsync(new(_scope, _metricPointStream), cancellationToken);
-        var logs = await _stores.Logs.InspectAsync(new(_scope, _logStream), cancellationToken);
-        var resources = await QueryDocumentsAsync(CatalogDocuments.ResourceKind, 0, cancellationToken);
-        var instruments = await QueryDocumentsAsync(CatalogDocuments.InstrumentKind, 0, cancellationToken);
-        return new(
-            _traceCapacity,
-            _spanCapacity,
-            _metricPointCapacity,
-            _logRecordCapacity,
-            ToCount(resources.TotalCount),
-            ToCount(traces.RetainedCount.Value),
-            ToCount(spans.RetainedCount.Value),
-            ToCount(instruments.TotalCount),
-            ToCount(points.RetainedCount.Value),
-            ToCount(logs.RetainedCount.Value),
-            0,
-            0,
-            0,
-            0);
+        try
+        {
+            var traces = await _stores.Traces.InspectAsync(new(_scope, _traceStream), cancellationToken);
+            var spans = await _stores.Spans.InspectAsync(new(_scope, _spanStream), cancellationToken);
+            var points = await _stores.MetricPoints.InspectAsync(new(_scope, _metricPointStream), cancellationToken);
+            var logs = await _stores.Logs.InspectAsync(new(_scope, _logStream), cancellationToken);
+            var resources = await QueryDocumentsAsync(CatalogDocuments.ResourceKind, 0, cancellationToken);
+            var instruments = await QueryDocumentsAsync(CatalogDocuments.InstrumentKind, 0, cancellationToken);
+            return new(
+                _traceCapacity,
+                _spanCapacity,
+                _metricPointCapacity,
+                _logRecordCapacity,
+                ToCount(resources.TotalCount),
+                ToCount(traces.RetainedCount.Value),
+                ToCount(spans.RetainedCount.Value),
+                ToCount(instruments.TotalCount),
+                ToCount(points.RetainedCount.Value),
+                ToCount(logs.RetainedCount.Value),
+                0,
+                0,
+                0,
+                0);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (OpenTelemetryPersistenceException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw TranslateFailure("get-diagnostics", Context(), exception);
+        }
     }
 
     private async Task AppendAsync(
@@ -365,7 +436,10 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         string documentId,
         CancellationToken cancellationToken) =>
         await LoadOperationAsync(documentId, cancellationToken)
-        ?? throw new InvalidOperationException("The OpenTelemetry capture operation disappeared during an active write.");
+        ?? throw new OpenTelemetryPersistenceDataException(
+            "write",
+            "The OpenTelemetry capture operation disappeared during an active write.",
+            Context(("batchId", documentId)));
 
     private Task<DocumentStoreWriteResult> SaveOperationAsync(
         CaptureOperation operation,
@@ -383,11 +457,11 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         try
         {
             if (!StringComparer.Ordinal.Equals(envelope.SchemaVersion, OpenTelemetryGroundworkStorageSchema.SchemaVersion))
-                throw new InvalidOperationException("The OpenTelemetry capture operation schema is unsupported.");
+                throw CorruptOperation(envelope.Id, "The OpenTelemetry capture operation schema is unsupported.");
             if (!StringComparer.Ordinal.Equals(envelope.DocumentKind, OpenTelemetryGroundworkStorageSchema.OperationLedgerKind))
-                throw new InvalidOperationException("The OpenTelemetry capture operation kind is invalid.");
+                throw CorruptOperation(envelope.Id, "The OpenTelemetry capture operation kind is invalid.");
             var operation = JsonSerializer.Deserialize<CaptureOperation>(envelope.ContentJson, LedgerJsonOptions)
-                            ?? throw new InvalidOperationException("The OpenTelemetry capture operation is empty.");
+                            ?? throw CorruptOperation(envelope.Id, "The OpenTelemetry capture operation is empty.");
             if (operation.LedgerSchemaVersion != LedgerSchemaVersion ||
                 !StringComparer.Ordinal.Equals(operation.BatchId, envelope.Id) ||
                 !StringComparer.Ordinal.Equals(operation.TenantId, _binding.TenantId) ||
@@ -397,13 +471,17 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
                 operation.Streams.Keys.Except(StreamKinds, StringComparer.Ordinal).Any() ||
                 operation.Streams.Values.Any(x => x.RetryUntil < x.IssuedAt))
             {
-                throw new InvalidOperationException("The OpenTelemetry capture operation does not match this storage binding.");
+                throw CorruptOperation(envelope.Id, "The OpenTelemetry capture operation does not match this storage binding.");
             }
             return new(operation, envelope.Version);
         }
-        catch (JsonException exception)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new InvalidOperationException("The OpenTelemetry capture operation is malformed.", exception);
+            throw new OpenTelemetryPersistenceDataException(
+                "write",
+                "The OpenTelemetry capture operation is malformed.",
+                Context(("batchId", envelope.Id)),
+                exception);
         }
     }
 
@@ -438,6 +516,7 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
         if (batch.Resources.Count > 0 || batch.Instruments.Count > 0)
         {
             throw UnsupportedCaseIdentity(
+                "write",
                 "Resource and instrument catalog writes require provider-neutral case-insensitive document identity.");
         }
     }
@@ -476,7 +555,9 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
             if (result.TryGetValue(record.RecordId, out var existing))
             {
                 if (!RecordEquals(existing, record))
-                    throw new InvalidOperationException($"OpenTelemetry record id '{record.RecordId}' identifies conflicting payloads in one batch.");
+                    throw new ArgumentException(
+                        $"OpenTelemetry record id '{record.RecordId}' identifies conflicting payloads in one batch.",
+                        nameof(values));
                 continue;
             }
             result.Add(record.RecordId, record);
@@ -531,18 +612,78 @@ public sealed class GroundworkOpenTelemetryStore : IOpenTelemetryStore
     private static void RejectUnsupportedTextFilter(string? value, string parameterName)
     {
         if (!string.IsNullOrWhiteSpace(value))
-            throw new NotSupportedException(
-                $"Filter '{parameterName}' requires the portable comparison-key or long-text query work tracked separately from restart persistence.");
+            throw new OpenTelemetryPersistenceCapabilityException(
+                "query-logs",
+                "portable-text-filter",
+                $"Filter '{parameterName}' requires the portable comparison-key or long-text query work tracked separately from restart persistence.",
+                Context(("filter", parameterName)));
     }
 
-    private static NotSupportedException UnsupportedCaseIdentity(string operation) =>
-        new($"{operation} This operation is unavailable until Groundwork issues #70 and #71 provide the portable case-equivalence route.");
+    private static OpenTelemetryPersistenceCapabilityException UnsupportedCaseIdentity(
+        string operation,
+        string detail) =>
+        new(
+            operation,
+            "portable-case-equivalence",
+            $"{detail} This operation is unavailable until the portable case-equivalence route is available.");
 
     private static void RejectOneSidedRange(DateTimeOffset? from, DateTimeOffset? to)
     {
         if ((from is null) != (to is null))
-            throw new NotSupportedException("One-sided OpenTelemetry ranges require the provider query-at-scale work tracked separately.");
+            throw new OpenTelemetryPersistenceCapabilityException(
+                "query-logs",
+                "one-sided-time-range",
+                "One-sided OpenTelemetry ranges require the portable query-at-scale capability.");
     }
+
+    private static OpenTelemetryPersistenceDataException CorruptOperation(string batchId, string message) =>
+        new("write", message, Context(("batchId", batchId)));
+
+    private static OpenTelemetryPersistenceException TranslateFailure(
+        string operation,
+        IReadOnlyDictionary<string, string> context,
+        Exception exception) => exception switch
+        {
+            DiagnosticOperationConflictException => new OpenTelemetryPersistenceConflictException(
+                operation,
+                "The OpenTelemetry persistence operation conflicts with an existing request.",
+                context,
+                exception),
+            DiagnosticOperationExpiredException => new OpenTelemetryPersistenceExpiredException(
+                operation,
+                "The OpenTelemetry persistence operation can no longer be retried safely.",
+                context,
+                exception),
+            DiagnosticRecordValidationException => new OpenTelemetryPersistenceValidationException(
+                operation,
+                "The OpenTelemetry persistence operation contains an invalid record.",
+                context,
+                exception),
+            RecordPayloadException when operation == "write" => new OpenTelemetryPersistenceValidationException(
+                operation,
+                "The OpenTelemetry persistence operation contains a record that cannot be represented canonically.",
+                context,
+                exception),
+            RecordPayloadException => new OpenTelemetryPersistenceDataException(
+                operation,
+                "The OpenTelemetry persistence operation encountered a malformed durable record.",
+                context,
+                exception),
+            JsonException => new OpenTelemetryPersistenceDataException(
+                operation,
+                "The OpenTelemetry persistence operation encountered malformed durable data.",
+                context,
+                exception),
+            _ => new OpenTelemetryPersistenceUnavailableException(
+                operation,
+                "The OpenTelemetry persistence operation could not be completed.",
+                context,
+                exception)
+        };
+
+    private static IReadOnlyDictionary<string, string> Context(
+        params (string Key, string Value)[] values) =>
+        values.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
 
     private int ClampTake(int? requested) => Math.Clamp(requested ?? _maxQuerySize, 0, _maxQuerySize);
 

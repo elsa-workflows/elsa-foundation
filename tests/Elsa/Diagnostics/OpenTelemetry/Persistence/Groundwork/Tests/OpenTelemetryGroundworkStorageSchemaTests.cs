@@ -2,6 +2,9 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Catalogs;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
+using Groundwork.Documents.Scoping;
+using Groundwork.SqlServer;
+using Groundwork.SqlServer.Documents;
 using Xunit;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests;
@@ -42,6 +45,29 @@ public sealed class OpenTelemetryGroundworkStorageSchemaTests
         Assert.Contains(resourcePolicy.Definition.Indexes,
             x => x.LogicalName == OpenTelemetryGroundworkStorageSchema.ByRetentionIndex && x.Columns.Count == 3);
         Assert.Contains("open-telemetry-capture-operation", OpenTelemetryGroundworkStorageSchema.RequiredOperationLedgers);
+    }
+
+    [Fact]
+    public void Schema_resolves_compiles_and_passes_the_sql_server_physical_store_validator_without_io()
+    {
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant", "scope", "source");
+        var manifest = OpenTelemetryGroundworkStorageSchema.CreateDocumentManifest();
+        var resolution = PhysicalStorageResolver.Resolve(
+            manifest,
+            PhysicalNamePolicy.Identity,
+            SqlServerGroundworkCapabilities.PhysicalNames);
+
+        Assert.True(resolution.IsValid, string.Join("; ", resolution.Diagnostics.Select(x => x.Message)));
+        var compilation = ExecutableStorageRouteCompiler.Compile(resolution.Definitions);
+        Assert.True(compilation.IsValid, string.Join("; ", compilation.Diagnostics.Select(x => x.Message)));
+
+        var store = new SqlServerPhysicalDocumentStore(
+            "Server=localhost;Database=groundwork;User ID=sa;Password=not-used;Encrypt=False",
+            manifest,
+            compilation.Routes,
+            DocumentStoreAccess.Scoped(binding.DocumentStorageScope));
+
+        Assert.Equal(binding.DocumentStorageScope, store.Access.Scope);
     }
 
     [Fact]

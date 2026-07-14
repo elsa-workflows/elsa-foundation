@@ -1,6 +1,9 @@
+using System.Text.Json;
+using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Catalogs;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
 using Elsa.Diagnostics.Persistence.Draining;
 using Groundwork.DiagnosticRecords;
 using Groundwork.Documents.Store;
@@ -56,7 +59,12 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
         var batchId = DiagnosticsDrainBatchId.New();
         var batch = CreateBatch(includeCatalogs: false);
 
-        await Assert.ThrowsAsync<IOException>(() => store.WriteAsync(batchId, batch).AsTask());
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceUnavailableException>(() =>
+            store.WriteAsync(batchId, batch).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.ProviderFailure, failure.Reason);
+        Assert.Equal("write", failure.Operation);
+        Assert.Equal(batchId.ToString(), failure.Context["batchId"]);
+        Assert.IsType<IOException>(failure.InnerException);
         var partial = await store.GetDiagnosticsAsync();
         Assert.Equal(1, partial.TraceCount);
         Assert.Equal(1, partial.SpanCount);
@@ -117,8 +125,11 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
             Logs = first.Logs.Select(x => x with { Body = $"{x.Body}-changed" }).ToArray()
         };
 
-        await Assert.ThrowsAsync<DiagnosticOperationConflictException>(() =>
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceConflictException>(() =>
             store.WriteAsync(batchId, changed).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.ConflictingOperation, failure.Reason);
+        Assert.Equal(batchId.ToString(), failure.Context["batchId"]);
+        Assert.IsType<DiagnosticOperationConflictException>(failure.InnerException);
 
         var diagnostics = await store.GetDiagnosticsAsync();
         Assert.Equal((1, 1, 1, 1),
@@ -136,13 +147,18 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
         }, clock);
         var batchId = DiagnosticsDrainBatchId.New();
         var batch = CreateBatch(includeCatalogs: false);
-        await Assert.ThrowsAsync<IOException>(() => store.WriteAsync(batchId, batch).AsTask());
+        var appendFailure = await Assert.ThrowsAsync<OpenTelemetryPersistenceUnavailableException>(() =>
+            store.WriteAsync(batchId, batch).AsTask());
+        Assert.IsType<IOException>(appendFailure.InnerException);
         clock.Advance(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(5) + TimeSpan.FromTicks(1));
 
         var restartedProviders = await _fixture.CreateProvidersAsync();
         var restarted = _fixture.CreateStore(restartedProviders, clock);
-        await Assert.ThrowsAsync<DiagnosticOperationExpiredException>(() =>
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceExpiredException>(() =>
             restarted.WriteAsync(batchId, batch).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.ExpiredOperation, failure.Reason);
+        Assert.Equal(batchId.ToString(), failure.Context["batchId"]);
+        Assert.IsType<DiagnosticOperationExpiredException>(failure.InnerException);
 
         var diagnostics = await restarted.GetDiagnosticsAsync();
         Assert.Equal((1, 1, 0, 0),
@@ -155,7 +171,10 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
         var providers = await _fixture.CreateProvidersAsync();
         var store = _fixture.CreateStore(providers);
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.WriteAsync(CreateBatch()).AsTask());
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
+            store.WriteAsync(CreateBatch()).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CapabilityUnavailable, failure.Reason);
+        Assert.Equal("portable-case-equivalence", failure.Context["capability"]);
 
         await AssertNoMutationAsync(store, providers.Documents);
     }
@@ -167,15 +186,15 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.QueryResourcesAsync(
+        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() => store.QueryResourcesAsync(
             new() { ServiceName = "API" }, cancellation.Token).AsTask());
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.QueryTracesAsync(
+        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() => store.QueryTracesAsync(
             new(), cancellation.Token).AsTask());
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.GetTraceAsync(
+        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() => store.GetTraceAsync(
             "TRACE-1", cancellation.Token).AsTask());
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.QueryMetricsAsync(
+        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() => store.QueryMetricsAsync(
             new(), cancellation.Token).AsTask());
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.QueryLogsAsync(
+        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() => store.QueryLogsAsync(
             new() { TraceId = "TRACE-1" }, cancellation.Token).AsTask());
     }
 
@@ -196,7 +215,10 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
                 .ToArray()
         };
 
-        await Assert.ThrowsAsync<DiagnosticRecordValidationException>(() => store.WriteAsync(batch).AsTask());
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceValidationException>(() =>
+            store.WriteAsync(batch).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.InvalidRecord, failure.Reason);
+        Assert.IsType<DiagnosticRecordValidationException>(failure.InnerException);
 
         await AssertNoMutationAsync(store, providers.Documents);
     }
@@ -215,7 +237,35 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
             Logs = batch.Logs.Select(x => x with { SeverityText = new string('s', 4_097) }).ToArray()
         };
 
-        await Assert.ThrowsAsync<DiagnosticRecordValidationException>(() => store.WriteAsync(batch).AsTask());
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceValidationException>(() =>
+            store.WriteAsync(batch).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.InvalidRecord, failure.Reason);
+        Assert.IsType<DiagnosticRecordValidationException>(failure.InnerException);
+
+        await AssertNoMutationAsync(store, providers.Documents);
+    }
+
+    [Fact]
+    public async Task Canonical_payload_failures_are_translated_but_caller_argument_failures_remain_argument_exceptions()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = _fixture.CreateStore(providers);
+        var batch = CreateBatch(includeCatalogs: false);
+        var log = Assert.Single(batch.Logs);
+        var invalidPayload = batch with
+        {
+            Logs = [log with { Attributes = null! }]
+        };
+
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceValidationException>(() =>
+            store.WriteAsync(invalidPayload).AsTask());
+        Assert.IsType<RecordPayloadException>(failure.InnerException);
+
+        var conflictingInput = batch with
+        {
+            Logs = [log, log with { Body = "different" }]
+        };
+        await Assert.ThrowsAsync<ArgumentException>(() => store.WriteAsync(conflictingInput).AsTask());
 
         await AssertNoMutationAsync(store, providers.Documents);
     }
@@ -255,6 +305,51 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
         var diagnostics = await restarted.GetDiagnosticsAsync();
         Assert.Equal((1, 1, 1, 1),
             (diagnostics.TraceCount, diagnostics.SpanCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
+    }
+
+    [Fact]
+    public async Task Malformed_capture_ledger_is_reported_as_provider_neutral_corrupt_data()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = _fixture.CreateStore(providers);
+        var batchId = DiagnosticsDrainBatchId.New();
+        var result = await providers.Documents.SaveAsync(new(
+            OpenTelemetryGroundworkStorageSchema.OperationLedgerKind,
+            batchId.ToString(),
+            OpenTelemetryGroundworkStorageSchema.SchemaVersion,
+            "[]",
+            0));
+        Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
+
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(() =>
+            store.WriteAsync(batchId, CreateBatch(includeCatalogs: false)).AsTask());
+
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
+        Assert.Equal(batchId.ToString(), failure.Context["batchId"]);
+        Assert.IsType<JsonException>(failure.InnerException);
+    }
+
+    [Fact]
+    public async Task Query_and_diagnostics_provider_failures_are_translated_at_the_public_boundary()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var queryFailure = new IOException("Injected query failure.");
+        var inspectFailure = new IOException("Injected inspect failure.");
+        var store = _fixture.CreateStore(providers with
+        {
+            Logs = new ObservingRecordStore(providers.Logs, queryFailure: queryFailure),
+            Traces = new ObservingRecordStore(providers.Traces, inspectFailure: inspectFailure)
+        });
+
+        var queryError = await Assert.ThrowsAsync<OpenTelemetryPersistenceUnavailableException>(() =>
+            store.QueryLogsAsync(new()).AsTask());
+        Assert.Equal("query-logs", queryError.Operation);
+        Assert.Same(queryFailure, queryError.InnerException);
+
+        var diagnosticsError = await Assert.ThrowsAsync<OpenTelemetryPersistenceUnavailableException>(() =>
+            store.GetDiagnosticsAsync().AsTask());
+        Assert.Equal("get-diagnostics", diagnosticsError.Operation);
+        Assert.Same(inspectFailure, diagnosticsError.InnerException);
     }
 
 #pragma warning disable GW0004
@@ -312,7 +407,9 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
     private sealed class ObservingRecordStore(
         IDiagnosticRecordStore inner,
         bool failFirstAppend = false,
-        Action? afterSuccessfulAppend = null) : IDiagnosticRecordStore
+        Action? afterSuccessfulAppend = null,
+        Exception? queryFailure = null,
+        Exception? inspectFailure = null) : IDiagnosticRecordStore
     {
         private int _failNext = failFirstAppend ? 1 : 0;
 
@@ -333,6 +430,20 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
             afterSuccessfulAppend?.Invoke();
             return result;
         }
+
+        public ValueTask<DiagnosticRecordPage> QueryAsync(
+            DiagnosticRecordQuery query,
+            CancellationToken cancellationToken = default) =>
+            queryFailure is null
+                ? inner.QueryAsync(query, cancellationToken)
+                : ValueTask.FromException<DiagnosticRecordPage>(queryFailure);
+
+        public ValueTask<DiagnosticStreamStatistics> InspectAsync(
+            DiagnosticStreamInspectionRequest request,
+            CancellationToken cancellationToken = default) =>
+            inspectFailure is null
+                ? inner.InspectAsync(request, cancellationToken)
+                : ValueTask.FromException<DiagnosticStreamStatistics>(inspectFailure);
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider

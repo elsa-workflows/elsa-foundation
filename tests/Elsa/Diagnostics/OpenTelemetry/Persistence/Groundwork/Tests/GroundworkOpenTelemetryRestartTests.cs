@@ -1,4 +1,5 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Xunit;
 
@@ -50,11 +51,11 @@ public abstract class OpenTelemetryRestartContractTests
             Assert.Equal(expected.Log.SeverityText, log.SeverityText);
             AssertAttributes(expected.Log.Attributes, log.Attributes);
 
-            await Assert.ThrowsAsync<NotSupportedException>(() =>
+            await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
                 restarted.QueryTracesAsync(new OpenTelemetryTraceFilter()).AsTask());
-            await Assert.ThrowsAsync<NotSupportedException>(() =>
+            await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
                 restarted.GetTraceAsync(expected.Trace.TraceId).AsTask());
-            await Assert.ThrowsAsync<NotSupportedException>(() =>
+            await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
                 restarted.QueryMetricsAsync(new OpenTelemetryMetricFilter()).AsTask());
         }
         finally
