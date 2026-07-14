@@ -1,18 +1,8 @@
-# Global Codex Instructions
+# Elsa Foundation Studio agent instructions
 
-## Code style
+## Project conventions
 
-- **DRY by default.** After implementing something, proactively check for repetition and extract helpers, shared setup, or abstractions without waiting to be asked.
-- **Clean tests.** Prefer instance fields and constructor setup over repeating arrange blocks. Extract `ActivateAsync()`-style helpers. Use `IAsyncDisposable` for test class teardown where appropriate.
-- **No unnecessary boilerplate.** Inline trivially small helpers rather than wrapping them in extra methods.
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/005-dictionary-editor/plan.md
-<!-- SPECKIT END -->
-
-## Agent skills
+For Spec Kit feature work, read the plan in the feature directory identified by the request, ticket, or branch. Do not assume one feature plan applies repository-wide.
 
 ### Issue tracker
 
@@ -20,11 +10,11 @@ Issues are tracked in GitHub Issues for `elsa-workflows/elsa-foundation-studio`;
 
 ### Triage labels
 
-Use the default triage label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+Use only labels that currently exist in the repository. See `docs/agents/triage-labels.md` for the workflow-specific labels and verification command.
 
 ### Domain docs
 
-Use a single-context domain documentation layout. See `docs/agents/domain.md`.
+Before domain-sensitive exploration, follow `docs/agents/domain.md`: read the root `CONTEXT.md`, or the relevant contexts from `CONTEXT-MAP.md` when present, plus applicable ADRs.
 
 ### Design tokens
 
