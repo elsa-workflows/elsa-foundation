@@ -13,7 +13,8 @@ public sealed class DiagnosticsPersistenceObserverRegistrationValidatorTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
-        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(services);
+        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(
+            new DiagnosticsPersistenceObserverRegistrationState(services));
 
         var result = validator.Validate(
             Options.DefaultName,
@@ -28,7 +29,8 @@ public sealed class DiagnosticsPersistenceObserverRegistrationValidatorTests
         var services = new ServiceCollection();
         services.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
         services.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
-        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(services);
+        var validator = new DiagnosticsPersistenceObserverRegistrationValidator(
+            new DiagnosticsPersistenceObserverRegistrationState(services));
 
         var result = validator.Validate(
             Options.DefaultName,

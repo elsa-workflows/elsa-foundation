@@ -3,11 +3,11 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.Persistence.Extensions;
 
-internal sealed class DiagnosticsPersistenceObserverRegistrationOptions;
+public sealed class DiagnosticsPersistenceObserverRegistrationOptions;
 
-internal sealed record DiagnosticsPersistenceObserverRegistrationState(IServiceCollection Services);
+public sealed record DiagnosticsPersistenceObserverRegistrationState(IServiceCollection Services);
 
-internal sealed class DiagnosticsPersistenceObserverRegistrationValidator(
+public sealed class DiagnosticsPersistenceObserverRegistrationValidator(
     DiagnosticsPersistenceObserverRegistrationState state)
     : IValidateOptions<DiagnosticsPersistenceObserverRegistrationOptions>
 {
