@@ -1,15 +1,19 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Xunit;
-using Xunit.Sdk;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests;
 
-public sealed class GroundworkOpenTelemetryRestartTests : OpenTelemetryRestartContractTests
+public sealed class GroundworkOpenTelemetryRestartTests : OpenTelemetryRestartContractTests, IAsyncLifetime
 {
-    protected override ValueTask<IOpenTelemetryStore> CreateStoreAsync() =>
-        ValueTask.FromException<IOpenTelemetryStore>(new XunitException(
-            "Expected T013 red: T020 has not implemented or wired GroundworkOpenTelemetryStore."));
+    private readonly OpenTelemetryGroundworkSqliteFixture _fixture = new();
+
+    protected override async ValueTask<IOpenTelemetryStore> CreateStoreAsync() =>
+        await _fixture.CreateStoreAsync();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await _fixture.DisposeAsync();
 }
 
 public abstract class OpenTelemetryRestartContractTests
