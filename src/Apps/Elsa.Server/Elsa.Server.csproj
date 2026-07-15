@@ -40,6 +40,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\Elsa\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
@@ -122,6 +123,7 @@
 			artifacts. Scheduling is host policy — the runtime resolves the GC service regardless.
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
