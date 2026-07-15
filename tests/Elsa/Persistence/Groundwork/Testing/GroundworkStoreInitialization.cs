@@ -1,5 +1,8 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Groundwork.Core.Capabilities;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.PostgreSql;
@@ -20,6 +23,36 @@ namespace Elsa.Persistence.Groundwork.Testing;
 /// </summary>
 public static class GroundworkStoreInitialization
 {
+    /// <summary>Compiles the exact runtime physical target used by production provider admission.</summary>
+    public static async ValueTask<GroundworkPhysicalSchemaManifestSource> CreateRuntimePhysicalSchemaSourceAsync(
+        ProviderCapabilityReport capabilityReport,
+        GroundworkProviderTopologySnapshot topology,
+        IProviderPhysicalNameNormalizer providerNameNormalizer,
+        IGroundworkPhysicalSchemaTargetCompiler? targetCompiler = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(capabilityReport);
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(providerNameNormalizer);
+
+        var services = new ServiceCollection();
+        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkStorageComposition();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        return await scope.ServiceProvider
+            .GetRequiredService<GroundworkStorageCompositionFactory>()
+            .CreateSourceAsync(
+                GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
+                    capabilityReport,
+                    topology,
+                    RuntimeGroundworkStorageManifestSource.FeatureName,
+                    [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
+                providerNameNormalizer,
+                cancellationToken,
+                targetCompiler);
+    }
+
     /// <summary>Explicitly applies the selected SQLite target before exercising runtime admission.</summary>
     public static async Task ApplySqliteGroundworkSchemaAsync(
         this IServiceProvider provider,
@@ -79,13 +112,17 @@ public static class GroundworkStoreInitialization
         return await scope.ServiceProvider
             .GetRequiredService<GroundworkStorageCompositionFactory>()
             .CreateSourceAsync(
-                new GroundworkProviderCapabilitySnapshot(
+                GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
                     capabilityReport,
                     new GroundworkProviderTopologySnapshot(
                         capabilityReport.Provider.Name,
                         topologyIdentity,
-                        new HashSet<string>(StringComparer.Ordinal)),
-                    []),
+                        new HashSet<string>(StringComparer.Ordinal)
+                        {
+                            RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                        }),
+                    RuntimeGroundworkStorageManifestSource.FeatureName,
+                    [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
                 providerNameNormalizer,
                 cancellationToken);
     }

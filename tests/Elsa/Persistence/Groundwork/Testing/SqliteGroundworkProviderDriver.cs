@@ -1,9 +1,13 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Sqlite;
 using Groundwork.Sqlite.Documents;
+using Groundwork.Sqlite.PhysicalStorage;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,12 +41,14 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     private readonly GroundworkProcessProbeRunner _processProbeRunner = new();
     private GroundworkProcessLaunchDescriptor? _processLaunchDescriptor;
     private string? _connectionString;
+    private GroundworkPhysicalSchemaManifestSource? _physicalSource;
 
     public override GroundworkProviderDescriptor Descriptor => ProviderDescriptor;
 
     public override GroundworkTopologyCapabilities RequiredTopology =>
         GroundworkTopologyCapabilities.PersistentStorage |
         GroundworkTopologyCapabilities.IndependentClients |
+        GroundworkTopologyCapabilities.MultiDocumentTransactions |
         GroundworkTopologyCapabilities.ExternalProcessRestart;
 
     public override GroundworkCompositionFingerprint CompositionFingerprint => FixtureComposition;
@@ -71,11 +77,46 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     protected override async ValueTask ResetCoreAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var databasePath = RequireConnectionString().DataSource;
-        foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
-            File.Delete(path);
+        DeleteDatabaseFiles();
+        _physicalSource = null;
 
         _ = await CreateStoreAsync(cancellationToken);
+    }
+
+    protected override async ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        DeleteDatabaseFiles();
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            SqliteGroundworkCapabilities.Runtime(),
+            new GroundworkProviderTopologySnapshot(
+                SqliteGroundworkCapabilities.Provider.Name,
+                "sqlite-file",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            SqliteGroundworkCapabilities.PhysicalNames,
+            cancellationToken: cancellationToken);
+        await using (var connection = new SqliteConnection(RequireConnectionString().ConnectionString))
+        {
+            var applied = await PhysicalSchemaApplication.ApplyAsync(
+                source.PhysicalTarget,
+                new SqlitePhysicalSchemaExecutor(connection),
+                cancellationToken: cancellationToken);
+            EnsureSchemaApplied(applied);
+        }
+
+        await using (var inspectionConnection = new SqliteConnection(RequireConnectionString().ConnectionString))
+        {
+            var admission = await source.InspectRuntimeAdmissionAsync(
+                new SqlitePhysicalSchemaExecutor(inspectionConnection),
+                cancellationToken);
+            if (!admission.IsReady)
+                throw new InvalidOperationException("SQLite physical provider driver did not admit its applied runtime target.");
+        }
+
+        _physicalSource = source;
     }
 
     protected override ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
@@ -102,6 +143,27 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
             services,
             services.GetRequiredService<IDocumentStore>(),
             services.DisposeAsync);
+    }
+
+    protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var source = _physicalSource ?? throw new InvalidOperationException("The SQLite physical target has not been applied.");
+        var store = new SqlitePhysicalDocumentStore(
+            RequireConnectionString().ConnectionString,
+            source.CreateManifest(),
+            source.PhysicalTarget.Routes,
+            GroundworkTestAccess.DefaultScoped);
+        var services = new ServiceCollection()
+            .AddSingleton<IDocumentStore>(store)
+            .BuildServiceProvider();
+        return ValueTask.FromResult(new GroundworkProviderClient(
+            clientId,
+            services,
+            store,
+            services.DisposeAsync));
     }
 
     protected override ValueTask<GroundworkProcessProbeResult> RunInNewProcessCoreAsync(
@@ -181,6 +243,19 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
             Directory.Delete(_directory, recursive: true);
         _connectionString = null;
         return ValueTask.CompletedTask;
+    }
+
+    private void DeleteDatabaseFiles()
+    {
+        var databasePath = RequireConnectionString().DataSource;
+        foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
+            File.Delete(path);
+    }
+
+    private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
+    {
+        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
+            throw new InvalidOperationException($"SQLite physical schema application was not accepted: {result.Outcome}.");
     }
 
     private Task<SqliteDocumentStore> CreateStoreAsync(CancellationToken cancellationToken) =>

@@ -125,10 +125,17 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var compositionFactory = scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>();
         var provider = SqlServerGroundworkCapabilities.Runtime();
-        var capabilities = new GroundworkProviderCapabilitySnapshot(
+        var capabilities = GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
             provider,
-            new GroundworkProviderTopologySnapshot(provider.Provider.Name, "sqlserver", new HashSet<string>()),
-            []);
+            new GroundworkProviderTopologySnapshot(
+                provider.Provider.Name,
+                "sqlserver",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            RuntimeGroundworkStorageManifestSource.FeatureName,
+            [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]);
         return await compositionFactory.CreateSourceAsync(
             capabilities,
             SqlServerGroundworkCapabilities.PhysicalNames,

@@ -31,19 +31,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var factory = scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>();
-        var source = await factory.CreateSourceAsync(
-            new GroundworkProviderCapabilitySnapshot(
-                new ProviderCapabilityReport(
-                    providerIdentity,
-                    new HashSet<CapabilityId>(),
-                    new HashSet<CapabilityId>(),
-                    IndexCapabilities.All,
-                    Enum.GetValues<PortableQueryOperation>().ToHashSet(),
-                    Enum.GetValues<ConcurrencyKind>().ToHashSet(),
-                    []),
-                new GroundworkProviderTopologySnapshot(providerIdentity.Name, "sqlite-file", new HashSet<string>()),
-                []),
-            ProviderPhysicalNameNormalizer.Identity);
+        var source = await factory.CreateSourceAsync(ProviderCapabilities(), ProviderPhysicalNameNormalizer.Identity);
 
         Assert.Equal("elsa-documents", source.PhysicalTarget.ManifestIdentity.Value);
         Assert.Equal(providerIdentity, source.PhysicalTarget.Provider);
@@ -161,16 +149,23 @@ public sealed class GroundworkStorageCompositionFactoryTests
     private static GroundworkProviderCapabilitySnapshot ProviderCapabilities()
     {
         var provider = new ProviderIdentity("groundwork-sqlite", "1.0.0");
-        return new GroundworkProviderCapabilitySnapshot(
+        return GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
             new ProviderCapabilityReport(
                 provider,
-                new HashSet<CapabilityId>(),
-                new HashSet<CapabilityId>(),
+                new HashSet<CapabilityId> { WellKnownCapabilities.AtomicCommit },
+                new HashSet<CapabilityId> { WellKnownCapabilities.AtomicCommit },
                 IndexCapabilities.All,
                 Enum.GetValues<PortableQueryOperation>().ToHashSet(),
                 Enum.GetValues<ConcurrencyKind>().ToHashSet(),
                 []),
-            new GroundworkProviderTopologySnapshot(provider.Name, "sqlite-file", new HashSet<string>()),
-            []);
+            new GroundworkProviderTopologySnapshot(
+                provider.Name,
+                "sqlite-file",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            RuntimeGroundworkStorageManifestSource.FeatureName,
+            [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]);
     }
 }

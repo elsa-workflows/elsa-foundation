@@ -60,6 +60,20 @@ public sealed class GroundworkProviderCapabilitySnapshot
             .ToFrozenSet();
     }
 
+    public static GroundworkProviderCapabilitySnapshot ForFeatureRoutes(
+        ProviderCapabilityReport capabilityReport,
+        GroundworkProviderTopologySnapshot topology,
+        string featureIdentity,
+        IReadOnlyCollection<GroundworkStorageRouteRequirement> routes) =>
+        new(
+            capabilityReport,
+            topology,
+            routes.Select(route => new GroundworkActiveStoragePath(
+                featureIdentity,
+                route.StorageUnit,
+                route.RouteIdentity,
+                route.RequiredCapabilities)).ToArray());
+
     public ProviderCapabilityReport CapabilityReport { get; }
 
     public ProviderIdentity Provider => CapabilityReport.Provider;

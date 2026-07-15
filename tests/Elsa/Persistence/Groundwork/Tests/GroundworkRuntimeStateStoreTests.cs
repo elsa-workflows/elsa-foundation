@@ -202,6 +202,38 @@ public sealed class GroundworkRuntimeStateStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task OperationalState_ConditionalWrites_PreserveWinnerAndRevision(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IExecutionLivenessStateStore store = new GroundworkExecutionLivenessStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer);
+        var first = OperationalWithValue("wf-1", "ownership:wf-1", "first");
+        var second = OperationalWithValue("wf-1", "ownership:wf-1", "second");
+
+        var created = await store.TrySaveAsync(first, expectedRevision: 0);
+        var duplicate = await store.TrySaveAsync(second, expectedRevision: 0);
+        var loaded = await store.FindVersionedAsync("wf-1", "ownership:wf-1");
+        var updated = await store.TrySaveAsync(second, expectedRevision: loaded!.Revision);
+        var stale = await store.TrySaveAsync(first, expectedRevision: loaded.Revision);
+        var missing = await store.TrySaveAsync(
+            OperationalWithValue("wf-1", "missing", "missing"),
+            expectedRevision: 1);
+
+        Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, created.Status);
+        Assert.Equal(1, created.Revision);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, duplicate.Status);
+        Assert.Equal("first", loaded.State.Metadata["value"]);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, updated.Status);
+        Assert.Equal(2, updated.Revision);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, stale.Status);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.NotFound, missing.Status);
+        Assert.Equal("second", (await store.FindAsync("wf-1", "ownership:wf-1"))!.Metadata["value"]);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task ControlPlaneState_RoundTrips_Scoped_And_Global(string provider)
     {
         await using var fixture = CreateStore(provider);
@@ -406,6 +438,19 @@ public sealed class GroundworkRuntimeStateStoreTests
         heartbeat: null,
         drain: null,
         interruptedExecution: null);
+
+    private static ExecutionLivenessState OperationalWithValue(
+        string workflowExecutionId,
+        string operationalStateId,
+        string value) =>
+        new(
+            operationalStateId,
+            workflowExecutionId,
+            executionLease: null,
+            heartbeat: null,
+            drain: null,
+            interruptedExecution: null,
+            metadata: new Dictionary<string, string> { ["value"] = value });
 
     private static IncidentState Incident(string workflowExecutionId, string incidentId, IncidentStatus status) => new(
         incidentId,

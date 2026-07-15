@@ -415,6 +415,33 @@ public class GroundworkStorageCompositionTests
             declaration.RequiredStoreContracts.OrderBy(x => x.FullName, StringComparer.Ordinal));
         Assert.All(declaration.Manifest.StorageUnits, unit =>
             Assert.Contains(unit.Identity, declaration.ScopeClassifications.Keys));
+
+        if (family == "runtime")
+        {
+            var route = Assert.Single(declaration.RequiredRoutes);
+            Assert.Equal(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, route.StorageUnit.Value);
+            Assert.Equal(RuntimeGroundworkStorageManifestSource.CheckpointCommitRouteIdentity, route.RouteIdentity);
+            Assert.Equal([WellKnownCapabilities.AtomicCommit], route.RequiredCapabilities);
+            Assert.Equal(
+                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity,
+                Assert.Single(declaration.TopologyRequirements).Identity);
+        }
+    }
+
+    [Fact]
+    public async Task Legacy_physicalization_bounds_projected_string_index_keys()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource()
+            .CreateDeclarationAsync(CancellationToken.None);
+        var projectedStrings = declaration.Manifest.StorageUnits
+            .Select(unit => Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition)
+            .SelectMany(definition => definition.ProjectedColumns)
+            .Where(column => column.Type == PortablePhysicalType.String)
+            .ToArray();
+
+        Assert.NotEmpty(projectedStrings);
+        Assert.All(projectedStrings, column =>
+            Assert.Equal(LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength, column.Length));
     }
 
     [Fact]

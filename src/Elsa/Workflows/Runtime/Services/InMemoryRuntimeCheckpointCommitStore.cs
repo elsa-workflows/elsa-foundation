@@ -1,6 +1,8 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -25,6 +27,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IExecutionLivenessStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Creates the in-memory commit store. RT-8: the seven telescoping constructors collapsed into this single primary
@@ -42,7 +45,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ISchedulerStateStore? schedulerStateStore = null,
         IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
         IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
-        InMemoryRuntimeCheckpointStoreState? state = null)
+        InMemoryRuntimeCheckpointStoreState? state = null,
+        TimeProvider? timeProvider = null)
     {
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
         _workflowExecutionStateStore = workflowExecutionStateStore;
@@ -54,6 +58,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _operationalStateStore = operationalStateStore;
         _schedulerStateStore = schedulerStateStore;
         _rootWriteLeaseManager = rootWriteLeaseManager;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -65,59 +70,139 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await _state.WriteGate.WaitAsync(cancellationToken);
         try
         {
+            var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
             lock (_state.SyncRoot)
             {
                 if (_state.Commits.TryGetValue(commit.CommitId, out var existing))
+                {
+                    if (!StringComparer.Ordinal.Equals(
+                            RuntimeCheckpointCommitFingerprint.Compute(existing.Commit),
+                            fingerprint))
+                    {
+                        throw new RuntimeCheckpointReplayConflictException(commit.CommitId);
+                    }
                     return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds);
+                }
             }
 
-            var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
-            ValidatePendingOutboxItems(pendingOutboxItems);
-            ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
-            ValidateSchedulerStateChange(commit);
-            ValidateActivityExecutionStateChanges(commit);
-            ValidateActivityExecutionInspectionChanges(commit);
-            ValidateBookmarkStateChanges(commit);
-            ValidateDurableValueStateChanges(commit);
-            ValidateIncidentStateChanges(commit);
-            ValidateOperationalStateChanges(commit);
-            await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
+            if (commit.ExpectedFence is null)
+                return await CommitNewAsync(commit, decision, cancellationToken);
+
+            if (_operationalStateStore is not InMemoryExecutionLivenessStateStore inMemoryOperationalStateStore)
             {
-                await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
-                await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
-                await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
-                await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
-                await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
-                await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
-                await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
-                await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+                throw new InvalidOperationException(
+                    "A fenced in-memory checkpoint requires the in-memory execution liveness-state store so ownership validation and checkpoint writes share one atomic boundary.");
+            }
 
-                try
-                {
-                    // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
-                    // are serialized by the write gate), so an exception here is a genuine partial-persistence
-                    // risk — the projections above have been applied but the commit record/outbox may not be
-                    // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
-                    lock (_state.SyncRoot)
-                    {
-                        foreach (var item in pendingOutboxItems)
-                            SavePendingOutboxItem(item);
-
-                        _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
-                    }
-                }
-                catch (Exception exception)
-                {
-                    throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
-                }
-            }, cancellationToken);
-
-            return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray());
+            return await inMemoryOperationalStateStore.ExecuteOwnershipAtomicAsync(
+                ct => CommitNewAsync(commit, decision, ct),
+                cancellationToken);
         }
         finally
         {
             _state.WriteGate.Release();
         }
+    }
+
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken)
+    {
+        await EnsureExpectedFenceAsync(commit, cancellationToken);
+
+        var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
+        ValidatePendingOutboxItems(pendingOutboxItems);
+        ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+        ValidateSchedulerStateChange(commit);
+        ValidateActivityExecutionStateChanges(commit);
+        ValidateActivityExecutionInspectionChanges(commit);
+        ValidateBookmarkStateChanges(commit);
+        ValidateDurableValueStateChanges(commit);
+        ValidateIncidentStateChanges(commit);
+        ValidateOperationalStateChanges(commit);
+        await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
+        {
+            await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
+            await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
+            await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
+            await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
+            await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
+            await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
+            await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
+            await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+
+            try
+            {
+                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
+                // are serialized by the write gate), so an exception here is a genuine partial-persistence
+                // risk — the projections above have been applied but the commit record/outbox may not be
+                // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
+                lock (_state.SyncRoot)
+                {
+                    foreach (var item in pendingOutboxItems)
+                        SavePendingOutboxItem(item);
+
+                    _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
+                }
+            }
+            catch (Exception exception)
+            {
+                throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
+            }
+        }, cancellationToken);
+
+        return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray());
+    }
+
+    private async ValueTask EnsureExpectedFenceAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.ExpectedFence is not { } expectedFence)
+            return;
+        if (_operationalStateStore is null)
+        {
+            throw new InvalidOperationException(
+                "A checkpoint carrying an execution fence requires an execution liveness-state store.");
+        }
+
+        var state = await _operationalStateStore.FindAsync(
+            commit.WorkflowExecutionId,
+            InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId),
+            cancellationToken);
+        var currentToken = ReadHighestIssuedToken(state);
+        var current = state?.ExecutionLease;
+        var reason = current is null
+            ? RuntimeFencingRejectionReason.NoActiveLease
+            : current.IsExpired(_timeProvider.GetUtcNow())
+                ? RuntimeFencingRejectionReason.ExpiredLease
+                : RuntimeFencingRejectionReason.StaleToken;
+        if (current is null ||
+            current.IsExpired(_timeProvider.GetUtcNow()) ||
+            !StringComparer.Ordinal.Equals(current.LeaseId, expectedFence.LeaseId) ||
+            !StringComparer.Ordinal.Equals(current.OwnerId, expectedFence.OwnerId) ||
+            current.FencingToken != expectedFence.FencingToken)
+        {
+            throw new RuntimeStaleFencingTokenException(
+                commit.WorkflowExecutionId,
+                expectedFence.FencingToken,
+                currentToken,
+                reason);
+        }
+    }
+
+    private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
+    {
+        if (state is null)
+            return 0;
+        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
+            long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token))
+        {
+            return token;
+        }
+
+        return state.ExecutionLease?.FencingToken ?? 0;
     }
 
     private async ValueTask ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
@@ -560,6 +645,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Operational state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            if (StringComparer.Ordinal.Equals(
+                    stateChange.State.OperationalStateId,
+                    InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId)))
+            {
+                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
+            }
         }
     }
 

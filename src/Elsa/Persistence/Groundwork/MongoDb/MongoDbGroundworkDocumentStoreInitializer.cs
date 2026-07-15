@@ -79,10 +79,11 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
                 _connectionString,
                 _databaseName,
                 cancellationToken);
-            var providerCapabilities = new GroundworkProviderCapabilitySnapshot(
-                MongoDbGroundworkCapabilities.Runtime(),
+            var providerCapabilities = GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
+                MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
                 topology,
-                []);
+                RuntimeGroundworkStorageManifestSource.FeatureName,
+                [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]);
 
             await using var scope = _scopeFactory.CreateAsyncScope();
             var source = await scope.ServiceProvider

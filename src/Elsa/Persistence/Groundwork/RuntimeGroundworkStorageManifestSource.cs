@@ -1,12 +1,18 @@
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Groundwork.Core.Capabilities;
+using Groundwork.Core.Manifests;
 
 namespace Elsa.Persistence.Groundwork;
 
 /// <summary>Contributes the runtime family's durable Groundwork declaration.</summary>
 public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageManifestSource
 {
-    public string FeatureIdentity => "elsa-workflows-runtime";
+    public const string FeatureName = "elsa-workflows-runtime";
+    public const string CheckpointCommitRouteIdentity = "runtime-checkpoint-commit";
+    public const string MultiDocumentTransactionsTopologyIdentity = "multi-document-transactions";
+
+    public string FeatureIdentity => FeatureName;
 
     public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
         CancellationToken cancellationToken = default)
@@ -37,8 +43,10 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IWorkflowTriggerBindingStore),
                 typeof(IRecurringTriggerScheduleStore)
             ],
-            [],
-            [],
+            [
+                CreateCheckpointCommitRouteRequirement()
+            ],
+            [new GroundworkStorageTopologyRequirement(MultiDocumentTransactionsTopologyIdentity)],
             [
                 "runtime-activity-execution-inspection",
                 "runtime-activity-execution-state",
@@ -62,4 +70,10 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 "runtime-publication-projection-state"
             ]));
     }
+
+    public static GroundworkStorageRouteRequirement CreateCheckpointCommitRouteRequirement() =>
+        new(
+            new StorageUnitIdentity(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind),
+            CheckpointCommitRouteIdentity,
+            new HashSet<CapabilityId> { WellKnownCapabilities.AtomicCommit });
 }

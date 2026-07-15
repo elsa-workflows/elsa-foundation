@@ -75,13 +75,17 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         var runtimeSource = await scope.ServiceProvider
             .GetRequiredService<GroundworkStorageCompositionFactory>()
             .CreateSourceAsync(
-                new GroundworkProviderCapabilitySnapshot(
+                GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
                     SqliteGroundworkCapabilities.Runtime(),
                     new GroundworkProviderTopologySnapshot(
                         SqliteGroundworkCapabilities.Provider.Name,
                         "sqlite-file",
-                        new HashSet<string>(StringComparer.Ordinal)),
-                    []),
+                        new HashSet<string>(StringComparer.Ordinal)
+                        {
+                            RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                        }),
+                    RuntimeGroundworkStorageManifestSource.FeatureName,
+                    [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
                 SqliteGroundworkCapabilities.PhysicalNames,
                 CancellationToken.None);
         var deploymentSource = serviceProvider.GetRequiredService<IPhysicalSchemaManifestSource>();

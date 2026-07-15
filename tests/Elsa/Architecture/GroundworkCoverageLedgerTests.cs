@@ -73,7 +73,7 @@ public sealed class GroundworkCoverageLedgerTests
 
         Assert.Equal(1, ledger.SchemaVersion);
         Assert.Equal("094-harden-groundwork-stores", ledger.Feature);
-        Assert.Equal("0.0.1-preview.53", ledger.GroundworkVersion);
+        Assert.Equal("0.0.1-preview.55", ledger.GroundworkVersion);
         Assert.Equal(ExpectedEntryIds, ledger.Entries.Select(entry => entry.Id));
         Assert.Equal(["sqlite", "sqlserver", "postgresql", "mongodb"], ledger.MandatoryProviders);
         Assert.Equal("host-selection-all32", ledger.CompositionEvidence.EvidenceId);
@@ -491,7 +491,7 @@ public sealed class GroundworkCoverageLedgerTests
             $"{EntryId}: sqlserver evidence record '{scenarioId}' requires provider identity 'groundwork-sqlserver'; found 'groundwork-sqlite'.",
             findings);
         Assert.Contains(
-            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '0.0.1-preview.53'.",
+            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '0.0.1-preview.55'.",
             findings);
         Assert.Contains(
             $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its catalog-bound provider-driver execution path.",
@@ -711,7 +711,7 @@ public sealed class GroundworkCoverageLedgerTests
             ["coverageEntryId"] = entryId,
             ["provider"] = provider,
             ["providerIdentity"] = $"groundwork-{provider}",
-            ["providerVersion"] = "0.0.1-preview.53",
+            ["providerVersion"] = "0.0.1-preview.55",
             ["topology"] = provider switch
             {
                 "sqlite" => "file-backed-distinct-connections",

@@ -42,6 +42,15 @@ it must drive it explicitly before the first provider operation. `IDocumentStore
 `GroundworkScopedDocumentStore`; its first operation throws a descriptive `InvalidOperationException` until the
 session source is admitted. Resolution itself never blocks or performs provider I/O.
 
+**Atomic runtime admission.** The runtime manifest declares the logical `runtime-checkpoint-commit` path on
+the `checkpointCommit` storage unit as requiring `AtomicCommit` plus observed
+`multi-document-transactions` topology. The unit is the stable admission anchor; the capability covers the
+cross-unit checkpoint transaction that fence-touches ownership and commits checkpoint state, outbox state, and
+the idempotency marker together. Every provider initializer must activate that exact feature/unit/path tuple.
+SQLite, PostgreSQL, and SQL Server report transactional storage as a provider invariant. MongoDB reports atomic
+commit evidence only after the initializer has observed a matching writable replica set and completed a real
+transaction round trip; configured intent alone is never admission evidence.
+
 MongoDB keeps one validate-only admitted handle for the provider lifetime and derives access-bound stores from
 that immutable runtime. It does not create a client, probe topology, or repeat schema admission for each scoped
 operation. Disposing the session source drains an in-flight store binding before it releases the provider handle.

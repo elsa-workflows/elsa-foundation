@@ -44,13 +44,17 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(
-                    new GroundworkProviderCapabilitySnapshot(
+                    GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
                         PostgreSqlGroundworkCapabilities.Runtime(),
                         new GroundworkProviderTopologySnapshot(
                             PostgreSqlGroundworkCapabilities.Provider.Name,
                             "postgresql-server",
-                            new HashSet<string>(StringComparer.Ordinal)),
-                        []),
+                            new HashSet<string>(StringComparer.Ordinal)
+                            {
+                                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                            }),
+                        RuntimeGroundworkStorageManifestSource.FeatureName,
+                        [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
                     PostgreSqlGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 

@@ -128,6 +128,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
                 admission.Accesses);
             Assert.Equal(MongoDbGroundworkCapabilities.Provider, admission.Source!.PhysicalTarget.Provider);
             Assert.Equal(["elsa-workflows-runtime"], admission.Source.Snapshot.SelectedFeatures);
+            Assert.Contains(WellKnownCapabilities.AtomicCommit, admission.Source.Snapshot.RequiredCapabilities);
             AssertExactMongoTarget(admission.Source);
 
             await initializer.StartAsync(CancellationToken.None);
