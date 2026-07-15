@@ -119,7 +119,7 @@ Heading convention per research item R4: `### <EventClassName>`.
 - Exactly one `IEventHandler<OnEntitySaving>`: `ApplyEntitySavingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable` (dedupes by implementation type even with several EF Core persistence features enabled).
 
 **Contributing handlers (`IEntitySavingHandler<,>` impls).**
-- `ActivityDefinitionVersionSavingHandler` (`Elsa.Activities.Design.Persistence.EFCore`) — serialises `Inputs`/`Outputs`/`DesignFacets` and the opaque descriptor payload into `DescriptorPayloadSource`; `DescriptorType` is set by the producer, not derived.
+- `ActivityDefinitionVersionSavingHandler` (`Elsa.Activities.Design.Persistence.EFCore`) — serialises `Inputs`/`Outputs`/`DesignFacets` and the opaque descriptor payload into `DescriptorPayloadSource`; stable provider/consumer identity is producer-owned. The legacy `DescriptorType` column is an obsolete EF-only compatibility mapping, not runtime dispatch identity.
 - `WorkflowDefinitionVersionSavingHandler` / `WorkflowDefinitionDraftSavingHandler` (`Elsa.Workflows.Design.Persistence.EFCore`) — serialise the workflow `State` / version payloads into their `*Source` columns.
 
 **Ordering guarantees.**

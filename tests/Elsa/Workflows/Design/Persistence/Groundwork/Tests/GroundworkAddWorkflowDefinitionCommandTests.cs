@@ -26,7 +26,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         {
             Id = "draft-1",
             WorkflowDefinitionId = "def-1",
-            State = new WorkflowDefinitionState([], null, [], [], null, null),
+            State = new WorkflowDefinitionState([], null, [], [], null),
         };
 
         await command.Execute(definition, draft, CancellationToken.None);

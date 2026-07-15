@@ -13,8 +13,18 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Api.Contracts;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
+
+internal sealed class TestActivityPublishingAuthorizationContext(string? tenantId = null)
+    : IActivityPublishingAuthorizationContext
+{
+    public string? TenantId { get; } = tenantId;
+
+    public bool CanAccessTenant(string? candidateTenantId) =>
+        candidateTenantId is null || StringComparer.Ordinal.Equals(candidateTenantId, TenantId);
+}
 
 /// <summary>Builds an <see cref="IWellKnownTypeRegistry"/> seeded with the primitives these tests rely on.</summary>
 internal static class TestWellKnownTypeRegistry

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -11,29 +12,32 @@ public sealed class ActivityFaultIncidentRecorder
     private readonly TimeProvider _timeProvider;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
+    private readonly ActivityActivationFailureHandler _activationFailures;
 
     public ActivityFaultIncidentRecorder(TimeProvider timeProvider)
-        : this(timeProvider, null, DefaultRuntimeFaultCapturePolicy.CreateDefault())
+        : this(timeProvider, null, DefaultRuntimeFaultCapturePolicy.CreateDefault(), new ActivityActivationFailureHandler())
     {
     }
 
     public ActivityFaultIncidentRecorder(
         TimeProvider timeProvider,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator)
-        : this(timeProvider, inspectionAccumulator, DefaultRuntimeFaultCapturePolicy.CreateDefault())
+        : this(timeProvider, inspectionAccumulator, DefaultRuntimeFaultCapturePolicy.CreateDefault(), new ActivityActivationFailureHandler())
     {
     }
 
     public ActivityFaultIncidentRecorder(
         TimeProvider timeProvider,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        IRuntimeFaultCapturePolicy faultCapturePolicy)
+        IRuntimeFaultCapturePolicy faultCapturePolicy,
+        ActivityActivationFailureHandler? activationFailures = null)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(faultCapturePolicy);
         _timeProvider = timeProvider;
         _inspectionAccumulator = inspectionAccumulator;
         _faultCapturePolicy = faultCapturePolicy;
+        _activationFailures = activationFailures ?? new ActivityActivationFailureHandler();
     }
 
     public async ValueTask CommitAsync(ActivityFaultIncidentRecordRequest request, CancellationToken cancellationToken = default)
@@ -42,11 +46,15 @@ public sealed class ActivityFaultIncidentRecorder
         cancellationToken.ThrowIfCancellationRequested();
 
         var occurredAt = _timeProvider.GetUtcNow();
+        var activationFailure = _activationFailures.Classify(
+            request.Exception,
+            ArtifactId(request.WorkItem.CommandMetadata),
+            request.ExecutableNodeId);
         var incidentId = NewIncidentId(request);
         var faultInfo = _faultCapturePolicy.Capture(request.Exception);
-        var metadata = NewCommitMetadata(request, incidentId);
-        var faultedState = NewFaultedActivityState(request, incidentId, occurredAt, faultInfo);
-        var incident = NewIncident(request, incidentId, occurredAt, faultInfo);
+        var metadata = NewCommitMetadata(request, incidentId, activationFailure);
+        var faultedState = NewActivityState(request, incidentId, occurredAt, faultInfo, activationFailure);
+        var incident = NewIncident(request, incidentId, occurredAt, faultInfo, activationFailure);
         var checkpointId = $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}";
         var inspection = _inspectionAccumulator is null
             ? null
@@ -99,7 +107,7 @@ public sealed class ActivityFaultIncidentRecorder
                             State: inspection,
                             Metadata: metadata)
                     ]),
-            PostCommitIntents: NewPostCommitIntents(request, occurredAt),
+            PostCommitIntents: activationFailure is null ? NewPostCommitIntents(request, occurredAt) : [],
             Metadata: metadata);
 
         await request.CheckpointCommitter.CommitAsync(commit, cancellationToken);
@@ -132,7 +140,10 @@ public sealed class ActivityFaultIncidentRecorder
                 metadata: request.WorkItem.CommandMetadata))
             .ToArray();
 
-    private static Dictionary<string, string> NewCommitMetadata(ActivityFaultIncidentRecordRequest request, string incidentId)
+    private static Dictionary<string, string> NewCommitMetadata(
+        ActivityFaultIncidentRecordRequest request,
+        string incidentId,
+        ActivityActivationFailure? activationFailure)
     {
         var metadata = request.IncidentMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         foreach (var item in NewBaseMetadata(request))
@@ -141,6 +152,7 @@ public sealed class ActivityFaultIncidentRecorder
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
         AddCausationMetadata(metadata, request.Exception);
+        AddActivationMetadata(metadata, activationFailure);
 
         return metadata;
     }
@@ -155,11 +167,12 @@ public sealed class ActivityFaultIncidentRecorder
             [RuntimeMetadataKeys.FaultSubStatus] = request.SubStatus
         };
 
-    private static ActivityExecutionState NewFaultedActivityState(
+    private static ActivityExecutionState NewActivityState(
         ActivityFaultIncidentRecordRequest request,
         string incidentId,
         DateTimeOffset completedAt,
-        RuntimeFaultInfo faultInfo)
+        RuntimeFaultInfo faultInfo,
+        ActivityActivationFailure? activationFailure)
     {
         var metadata = request.State.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         foreach (var item in request.ActivityMetadata)
@@ -168,15 +181,16 @@ public sealed class ActivityFaultIncidentRecorder
         AddExceptionMetadata(metadata, faultInfo, request.Exception);
         AddCausationMetadata(metadata, request.Exception);
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
+        AddActivationMetadata(metadata, activationFailure);
 
         return request.State with
         {
-            Status = ActivityExecutionStatus.Faulted,
-            SubStatus = request.SubStatus,
-            CompletedAt = completedAt,
+            Status = activationFailure is null ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Waiting,
+            SubStatus = activationFailure is null ? request.SubStatus : ActivityActivationFailureHandler.IncidentFailureType,
+            CompletedAt = activationFailure is null ? completedAt : null,
             IncidentIds = request.State.IncidentIds.Append(incidentId).Distinct(StringComparer.Ordinal).ToArray(),
-            FaultCount = request.State.FaultCount + 1,
-            AggregateFaultCount = request.State.AggregateFaultCount + 1,
+            FaultCount = request.State.FaultCount + (activationFailure is null ? 1 : 0),
+            AggregateFaultCount = request.State.AggregateFaultCount + (activationFailure is null ? 1 : 0),
             Metadata = metadata
         };
     }
@@ -185,13 +199,15 @@ public sealed class ActivityFaultIncidentRecorder
         ActivityFaultIncidentRecordRequest request,
         string incidentId,
         DateTimeOffset occurredAt,
-        RuntimeFaultInfo faultInfo)
+        RuntimeFaultInfo faultInfo,
+        ActivityActivationFailure? activationFailure)
     {
         var metadata = request.IncidentMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         foreach (var item in NewBaseMetadata(request))
             metadata[item.Key] = item.Value;
         AddExceptionMetadata(metadata, faultInfo, request.Exception);
         AddCausationMetadata(metadata, request.Exception);
+        AddActivationMetadata(metadata, activationFailure);
 
         return new IncidentState(
             incidentId: incidentId,
@@ -201,12 +217,28 @@ public sealed class ActivityFaultIncidentRecorder
             severity: IncidentSeverity.Error,
             status: IncidentStatus.Blocking,
             resolutionAction: IncidentResolutionAction.WaitForIntervention,
-            failureType: request.SubStatus,
+            failureType: activationFailure is null ? request.SubStatus : ActivityActivationFailureHandler.IncidentFailureType,
             message: faultInfo.Message,
             createdAt: occurredAt,
             resolvedAt: null,
             metadata: metadata);
     }
+
+    private static void AddActivationMetadata(
+        IDictionary<string, string> metadata,
+        ActivityActivationFailure? activationFailure)
+    {
+        if (activationFailure is null)
+            return;
+        foreach (var item in activationFailure.Metadata)
+            metadata[item.Key] = item.Value;
+        if (!string.IsNullOrWhiteSpace(activationFailure.ArtifactId))
+            metadata[RuntimeMetadataKeys.ExecutableArtifactId] = activationFailure.ArtifactId;
+    }
+
+    private static string? ArtifactId(IReadOnlyDictionary<string, string> metadata) =>
+        metadata.GetValueOrDefault(RuntimeMetadataKeys.PinnedArtifactId) ??
+        metadata.GetValueOrDefault(RuntimeMetadataKeys.ExecutableArtifactId);
 
     private static void AddExceptionMetadata(IDictionary<string, string> metadata, RuntimeFaultInfo faultInfo, Exception exception)
     {

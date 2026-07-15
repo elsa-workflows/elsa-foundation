@@ -216,14 +216,13 @@ public class GroundworkWorkflowDefinitionCommandTests
         AssertStamped(layout!);
     }
 
-    private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null, null);
+    private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null);
 
     private static WorkflowDefinitionState MinimalState() => new(
         [],
         new ActivityNode("root", "activity-version-1", [], []),
         [],
         [],
-        null,
         null);
 
     private static void AssertStamped(Elsa.Primitives.Entities.Entity entity)

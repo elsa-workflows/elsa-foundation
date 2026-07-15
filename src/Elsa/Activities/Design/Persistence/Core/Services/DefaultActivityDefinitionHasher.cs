@@ -63,7 +63,10 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
     // Version is deliberately excluded here: it identifies the version row, not its projected content.
     private static object ProjectVersion(IActivityDefinitionVersion v) => new
     {
-        v.DescriptorType,
+        v.ProviderKey,
+        v.ProviderSchemaVersion,
+        v.ConsumerKey,
+        v.ConsumerSchemaVersion,
         v.DescriptorPayload,
         v.ExecutionType,
         v.Inputs,

@@ -235,7 +235,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
         try
         {
-            var resumeMethod = ResolveResumeMethod(activity.GetType(), resumePayload.ResumeTargetId);
+            var target = executable.ResumeTargets[resumePayload.ResumeTargetId];
+            var resumeMethod = ResolveResumeMethod(activity.GetType(), target.LocalResumeTargetId ?? resumePayload.ResumeTargetId);
             await InvokeResumeMethodAsync(resumeMethod, activity, context, resumePayload.Input, cancellationToken);
 
             // Write back the resume callback's variable mutations, mirroring the invoke path's post-execution

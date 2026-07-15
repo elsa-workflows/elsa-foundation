@@ -20,8 +20,6 @@ public sealed class ActivityDraftDiffCandidateCompiler(
         var baseline = request.BaseVersionId is null
             ? null
             : await publications.FindAsync(request.BaseVersionId, cancellationToken);
-        var fingerprint = baseline?.ProviderFingerprint
-                          ?? $"provider:{request.State.Provider.ProviderKey}:{request.State.Provider.SchemaVersion}";
         var candidateVersionId = $"preview:{request.DraftId}:{request.Revision}";
         var draft = new ActivityDefinitionDraft
         {
@@ -37,8 +35,6 @@ public sealed class ActivityDraftDiffCandidateCompiler(
             draft,
             candidateVersionId,
             baseline?.Version ?? "0.0.0-preview",
-            fingerprint,
-            [],
             layoutBytes), cancellationToken);
 
         var owner = new ActivityDefinitionReference(
@@ -70,7 +66,7 @@ public sealed class ActivityDraftDiffCandidateCompiler(
 
         return new(
             result.Template?.TemplateHash,
-            result.Template?.ProviderFingerprint ?? fingerprint,
+            result.Template?.ProviderFingerprint ?? baseline?.ProviderFingerprint ?? string.Empty,
             result.Template is null ? null : result.Measurements.ClosedNodeCount,
             result.Template?.ResumeTargets.Count,
             result.Template?.RuntimeRequirements

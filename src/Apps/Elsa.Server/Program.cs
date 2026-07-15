@@ -6,8 +6,6 @@ using CShells.DependencyInjection;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
 using Elsa.Server;
-using Elsa.Activities.Composition.Design;
-using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
@@ -50,6 +48,7 @@ using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
@@ -177,8 +176,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
-            // Construction seam (Runtime side): the dispatch factory + registry, the CLR kind, and the
-            // Workflow kind. These populate the constructor registry the bridge dispatches through.
+            // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.
             typeof(ActivitiesRuntimeFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
@@ -190,17 +188,14 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // absent from a clean host deployment discoverable.
             typeof(ActivitiesHttpFeature).Assembly,
             typeof(WorkflowsRuntimeHttpFeature).Assembly,
-            typeof(ActivitiesCompositionRuntimeFeature).Assembly,
-
             // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which
-            // populate the catalog with WriteLine + WorkflowDefinitionActivity as CLR rows at startup.
+            // publish source-owned CLR activity definitions through the stable provider/runtime seam.
             typeof(ActivitiesDesignReconciliationFeature).Assembly,
             typeof(ClrActivityReconciliationFeature).Assembly,
-            // Workflow kind (Design side): catalogs usable-as-activity workflow versions as WorkflowIdentity rows.
-            typeof(ActivitiesCompositionDesignFeature).Assembly,
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,
+            typeof(PublishingGroundworkFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,

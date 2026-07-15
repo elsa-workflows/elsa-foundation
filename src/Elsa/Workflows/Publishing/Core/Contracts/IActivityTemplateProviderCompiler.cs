@@ -6,6 +6,11 @@ namespace Elsa.Workflows.Publishing.Core.Contracts;
 public interface IActivityTemplateProviderCompiler
 {
     string ProviderKey { get; }
+    /// <summary>
+    /// Stable identity of the compiler implementation whose behavior contributes to the executable
+    /// template. Publishing, rather than an API caller, supplies this authoritative value to compilation.
+    /// </summary>
+    string CompilerFingerprint { get; }
     IReadOnlySet<string> SupportedManifestSchemas { get; }
 
     ValueTask<ActivityTemplateCompilation> CompileAsync(

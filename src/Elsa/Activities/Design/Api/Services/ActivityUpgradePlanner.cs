@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Contracts;
 
@@ -68,7 +69,7 @@ public sealed class ActivityUpgradePlanner(
                 owner.Owner.Revision,
                 owner.DefinitionHeadVersionId,
                 resultingDiff,
-                stepDiagnostics));
+                ActivityDiagnosticOrderer.Order(stepDiagnostics)));
         }
 
         diagnostics.AddRange(steps.SelectMany(x => x.Diagnostics));
@@ -80,7 +81,7 @@ public sealed class ActivityUpgradePlanner(
             .ThenBy(x => x.Id, StringComparer.Ordinal)
             .ToArray();
         var now = clock.UtcNow;
-        var orderedDiagnostics = OrderDiagnostics(diagnostics);
+        var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
         var plan = new ActivityUpgradePlan(
             $"upgrade-plan-{identityGenerator.Generate()}",
             now,
@@ -151,13 +152,6 @@ public sealed class ActivityUpgradePlanner(
         "The exact post-rewrite activity candidate could not be compiled for compatibility analysis.",
         new ActivityDiagnosticSubject(owner.Owner.Kind, owner.Owner.DraftId ?? owner.Owner.VersionId ?? owner.Owner.DefinitionId, owner.Owner.DefinitionId, owner.Owner.VersionId, owner.Owner.Revision),
         Remediation: "Resolve provider rewrite or compilation diagnostics before applying the upgrade.");
-
-    private static IReadOnlyList<ActivityDiagnostic> OrderDiagnostics(IEnumerable<ActivityDiagnostic> diagnostics) => diagnostics
-        .OrderByDescending(x => x.Severity)
-        .ThenBy(x => x.Code, StringComparer.Ordinal)
-        .ThenBy(x => x.Subject.Kind, StringComparer.Ordinal)
-        .ThenBy(x => x.Subject.Id, StringComparer.Ordinal)
-        .ToArray();
 
     private static int KindOrder(string kind) => kind switch
     {

@@ -6,11 +6,15 @@ public interface IExecutableActivityTemplateReader
 {
     ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default);
     ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyCollection<ExecutableActivityTemplate>> ListAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<ExecutableActivityTemplate>>([]);
 }
 
 public interface IExecutableActivityTemplateWriter
 {
     ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default);
+    ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(false);
 }
 
 public interface IExecutableActivityTemplateStore : IExecutableActivityTemplateReader, IExecutableActivityTemplateWriter;
@@ -54,5 +58,7 @@ public interface IWorkflowExecutableSourceReferenceWriter
 {
     ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default);
     ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default);
+    ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(false);
     ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default);
 }

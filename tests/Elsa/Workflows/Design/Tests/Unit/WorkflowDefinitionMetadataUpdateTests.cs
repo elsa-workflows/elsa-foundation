@@ -121,7 +121,6 @@ public sealed class WorkflowDefinitionMetadataUpdateTests
             RootActivity: new ActivityNode("root", "activity-version-1", [], []),
             Inputs: [],
             Outputs: [],
-            WorkflowActivityOptions: null,
             StrategyOptions: null));
 
         return submitted.DefinitionId;

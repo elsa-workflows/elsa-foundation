@@ -209,3 +209,10 @@ dotnet build Elsa.Server.slnx -c Release
 ```
 
 Expected after implementation: all suites pass; the architecture suite reports zero new Runtime -> Activity Design, Workflow Design, or Publishing implementation references and no reintroduction of the removed workflow-as-activity surface.
+
+## Recorded implementation evidence (2026-07-16)
+
+- Mandatory SQLite gate: `ActivityDraftTestRunTests.Groundwork_sqlite_graph_run_suspends_restarts_in_runtime_only_host_resumes_inspects_and_propagates_output_once` passed in Release. Generation 1 used a combined host to publish and suspend a real `GraphActivity`; all host/store state was disposed. Generation 2 used Runtime, Activities Runtime, Graph Runtime, and Groundwork SQLite only, resumed the same bookmark/workflow, preserved execution ids/sequences, captured the boundary input once, propagated the required output once, and read the executed Source Reference layout/hierarchy.
+- Focused Release suites: Activity Design 348, Design Groundwork 33, Graph 35, Activities Runtime 186, Publishing 152, Workflows Runtime 833, Groundwork 208, Elsa3 Mapping 19, Architecture 78 — 1,892 passing tests total.
+- `dotnet build Elsa.Server.slnx -c Release`: passed with 0 errors (one retained obsolete legacy-EF-column warning).
+- `git diff --check`, clean-break searches, Runtime-boundary searches, and migration search passed. Legacy `UsableAsActivity` remains only in Elsa 3 import models/analyzers and guard fixtures; explicit `ExecuteWorkflow` remains available for separate-workflow execution.

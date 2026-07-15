@@ -23,24 +23,24 @@ public sealed class GetActivityExecutionEndpoint(IRequestSender requestSender, I
             var result = await requestSender.Send(req, ct);
             if (result.ActivityExecution is null)
             {
-                await Send.NotFoundAsync(ct);
+                await ActivityExecutionProblemDetails.NotFoundAsync(HttpContext, ct);
                 return;
             }
 
             await Send.OkAsync(result.ActivityExecution, ct);
         }
-        catch (ArgumentException e)
+        catch (ArgumentException exception)
         {
-            ThrowError(e, 400);
+            await ActivityExecutionProblemDetails.InvalidRequestAsync(HttpContext, exception.Message, ct);
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            logger.LogError(e, "Unexpected error occurred when handling request '{type}'", typeof(GetActivityExecution));
-            ThrowError("Unexpected error occurred", 500);
+            logger.LogError(exception, "Unexpected error occurred when handling request '{type}'", typeof(GetActivityExecution));
+            await ActivityExecutionProblemDetails.UnexpectedAsync(HttpContext, ct);
         }
     }
 }

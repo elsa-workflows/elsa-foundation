@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -58,6 +59,7 @@ public sealed class WorkflowExecutableCompiler(
             var placedActivities = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
             var placedResumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
             var placedNodeIds = new HashSet<string>(StringComparer.Ordinal);
+            var placedStorageDriverRequirements = new HashSet<RuntimeStorageDriverRequirement>();
             var placedLayoutSegments = new List<ExecutableLayoutBoundarySegment>();
             foreach (var activity in projection.Nodes)
             {
@@ -75,6 +77,7 @@ public sealed class WorkflowExecutableCompiler(
 
                 var template = await activityTemplates.FindAsync(publication.TemplateId, cancellationToken)
                                ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no executable template '{publication.TemplateId}'.");
+                placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
                 var bindings = CompileBoundaryInputs(activity, publication.Contract, inputBindingCompiler);
@@ -118,6 +121,21 @@ public sealed class WorkflowExecutableCompiler(
                 if (!resumeTargets.TryAdd(target.Key, target.Value))
                     throw new ArgumentException($"Resume target '{target.Key}' collides with an ordinary workflow activity resume target.");
 
+            var executableNodes = Flatten(compiledRoot).ToArray();
+            var runtimeRequirements = executableNodes
+                .Select(x => new RuntimeRequirement(x.Descriptor.ConsumerKey, x.Descriptor.SchemaVersion))
+                .Distinct()
+                .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
+                .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal)
+                .ToArray();
+            var storageDriverRequirements = executableNodes
+                .SelectMany(x => x.OutputCaptures.Values)
+                .Select(x => new RuntimeStorageDriverRequirement(x.StorageDriverKey))
+                .Concat(placedStorageDriverRequirements)
+                .Distinct()
+                .OrderBy(x => x.DriverKey, StringComparer.Ordinal)
+                .ToArray();
+
             var executable = new WorkflowExecutable(
                 identity: new WorkflowExecutableIdentity(
                     ArtifactId: artifactId,
@@ -128,7 +146,9 @@ public sealed class WorkflowExecutableCompiler(
                 rootActivity: compiledRoot,
                 resumeTargets: resumeTargets,
                 createdAt: request.CreatedAt,
-                compatibilityMetadata: metadata);
+                compatibilityMetadata: metadata,
+                runtimeRequirements: runtimeRequirements,
+                storageDriverRequirements: storageDriverRequirements);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
             return executable;
         }

@@ -238,7 +238,11 @@ public sealed record ActivityDiagnostic(
     ActivityDiagnosticSubject Subject,
     ActivityDiagnosticLocation? Location = null,
     string? Remediation = null,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null)
+{
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } =
+        Metadata ?? new Dictionary<string, string>();
+}
 
 public sealed record ActivityDraftValidation(
     string DraftId,

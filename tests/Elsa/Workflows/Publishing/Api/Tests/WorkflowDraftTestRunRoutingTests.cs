@@ -17,6 +17,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// over the parameterized <c>workflows/{versionId}/test-runs</c> route. Both endpoints are hosted
 /// through FastEndpoints (exactly as in production) so the test exercises the real route matcher.
 /// </summary>
+[Collection(nameof(WorkflowDraftTestRunRoutingTests))]
 public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
 {
     private const string DraftPath = "/publishing/workflows/drafts/test-runs";
@@ -31,6 +32,10 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton<IRequestSender>(_sender);
+        // FastEndpoints discovers all endpoints in referenced assemblies in this self-hosted fixture.
+        // Runtime diagnostics commands are out of scope for route selection, but their constructors still
+        // need a command sender while the endpoint graph is activated.
+        builder.Services.AddSingleton<ICommandSender, UnusedCommandSender>();
         builder.Services.AddFastEndpoints(o => o.Assemblies = [typeof(StartWorkflowTestRun).Assembly]);
 
         _app = builder.Build();
@@ -132,4 +137,16 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
             return Task.FromResult((T)(object)view);
         }
     }
+
+    private sealed class UnusedCommandSender : ICommandSender
+    {
+        public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull =>
+            throw new InvalidOperationException("The routing fixture does not execute commands.");
+
+        public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The routing fixture does not execute commands.");
+    }
 }
+
+[CollectionDefinition(nameof(WorkflowDraftTestRunRoutingTests), DisableParallelization = true)]
+public sealed class WorkflowDraftTestRunRoutingTestCollection;

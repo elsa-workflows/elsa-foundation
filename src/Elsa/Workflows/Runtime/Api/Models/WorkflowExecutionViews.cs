@@ -91,9 +91,14 @@ public sealed record ActivityExecutionInspectionView(
     IReadOnlyCollection<ActivityExecutionBookmarkSummaryView> Bookmarks,
     IReadOnlyCollection<ActivityExecutionIncidentSummaryView> Incidents,
     IReadOnlyCollection<ActivityExecutionInspectionValueSnapshotView> ValueSnapshots,
+    ActivityExecutionAttemptView? Attempt,
+    ActivityExecutionBoundaryView? Boundary,
     IReadOnlyDictionary<string, string> Metadata)
 {
-    public static ActivityExecutionInspectionView From(ActivityExecutionInspectionProjection projection) =>
+    public static ActivityExecutionInspectionView From(
+        ActivityExecutionInspectionProjection projection,
+        ActivityExecutionBoundary? boundary = null,
+        bool canInspectSensitiveValues = true) =>
         new(
             projection.ActivityExecutionId,
             projection.WorkflowExecutionId,
@@ -112,10 +117,74 @@ public sealed record ActivityExecutionInspectionView(
             projection.LastCommittedAt,
             ActivitySchedulingProvenanceView.From(projection.Provenance),
             projection.OutcomeNames,
-            projection.Bookmarks.Select(ActivityExecutionBookmarkSummaryView.From).ToArray(),
+            projection.Bookmarks.Select(x => ActivityExecutionBookmarkSummaryView.From(x, canInspectSensitiveValues)).ToArray(),
             projection.Incidents.Select(ActivityExecutionIncidentSummaryView.From).ToArray(),
-            projection.ValueSnapshots.Select(ActivityExecutionInspectionValueSnapshotView.From).ToArray(),
+            projection.ValueSnapshots.Select(x => ActivityExecutionInspectionValueSnapshotView.From(x, canInspectSensitiveValues)).ToArray(),
+            ActivityExecutionAttemptView.From(projection.Attempt ?? projection.Provenance.Attempt),
+            ActivityExecutionBoundaryView.From(boundary),
             projection.Metadata);
+}
+
+public sealed record ActivityExecutionAttemptView(
+    int AttemptNumber,
+    string FirstAttemptActivityExecutionId,
+    string? PreviousAttemptActivityExecutionId)
+{
+    public static ActivityExecutionAttemptView? From(ActivityExecutionAttemptLineage? attempt) =>
+        attempt is null ? null : new(attempt.AttemptNumber, attempt.FirstAttemptActivityExecutionId, attempt.PreviousAttemptActivityExecutionId);
+}
+
+public sealed record ActivityExecutionBoundaryView(
+    string Kind,
+    string DefinitionId,
+    string DefinitionVersionId,
+    string Version,
+    string TemplateHash,
+    IReadOnlyList<ActivityInvocationOriginSegmentView> InvocationOrigin,
+    string ExecutionScopeId,
+    bool HasChildren,
+    int DirectChildCount,
+    long CommittedDescendantCount,
+    ActivityExecutionHierarchyAggregateView Aggregate,
+    bool LayoutAvailable)
+{
+    public static ActivityExecutionBoundaryView? From(ActivityExecutionBoundary? boundary) => boundary is null ? null : new(
+        boundary.Kind,
+        boundary.DefinitionId,
+        boundary.DefinitionVersionId,
+        boundary.Version,
+        boundary.TemplateHash,
+        boundary.InvocationOrigin.Segments.Select(ActivityInvocationOriginSegmentView.From).ToArray(),
+        boundary.ExecutionScopeId,
+        boundary.HasChildren,
+        boundary.DirectChildCount,
+        boundary.CommittedDescendantCount,
+        ActivityExecutionHierarchyAggregateView.From(boundary.Aggregate),
+        boundary.LayoutAvailable);
+}
+
+public sealed record ActivityInvocationOriginSegmentView(string Kind, string Id)
+{
+    public static ActivityInvocationOriginSegmentView From(ActivityInvocationOriginSegment segment) =>
+        new(segment.Kind.ToString(), segment.Id);
+}
+
+public sealed record ActivityExecutionHierarchyAggregateView(
+    string Status,
+    long Total,
+    long Scheduled,
+    long Running,
+    long Suspended,
+    long Completed,
+    long Faulted,
+    long Cancelled,
+    long BlockingIncidentCount,
+    long RetryCount,
+    long LastExecutionSequence)
+{
+    public static ActivityExecutionHierarchyAggregateView From(ActivityExecutionHierarchyAggregate value) => new(
+        value.Status.ToString(), value.Total, value.Scheduled, value.Running, value.Suspended, value.Completed,
+        value.Faulted, value.Cancelled, value.BlockingIncidentCount, value.RetryCount, value.LastExecutionSequence);
 }
 
 public sealed record ActivitySchedulingProvenanceView(
@@ -152,7 +221,7 @@ public sealed record ActivityExecutionBookmarkSummaryView(
     IReadOnlyDictionary<string, string> Metadata,
     object? Payload)
 {
-    public static ActivityExecutionBookmarkSummaryView From(ActivityExecutionBookmarkSummary summary) =>
+    public static ActivityExecutionBookmarkSummaryView From(ActivityExecutionBookmarkSummary summary, bool canInspectSensitiveValues = true) =>
         new(
             summary.BookmarkId,
             summary.ResumeTargetId,
@@ -161,7 +230,7 @@ public sealed record ActivityExecutionBookmarkSummaryView(
             summary.CreatedAt,
             summary.ExpiresAt,
             summary.Metadata,
-            summary.Payload);
+            canInspectSensitiveValues ? summary.Payload : null);
 }
 
 public sealed record ActivityExecutionIncidentSummaryView(
@@ -203,16 +272,16 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     bool IsSensitive,
     IReadOnlyDictionary<string, string> Metadata)
 {
-    public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot) =>
+    public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot, bool canInspectSensitiveValues = true) =>
         new(
             snapshot.Name,
             snapshot.Subject.ToString(),
             snapshot.CaptureMode.ToString(),
-            SnapshotState(snapshot),
+            canInspectSensitiveValues ? SnapshotState(snapshot) : "redacted",
             snapshot.Type,
             snapshot.CapturedAt,
-            snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload ? snapshot.Payload : null,
-            snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
+            canInspectSensitiveValues && snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload ? snapshot.Payload : null,
+            canInspectSensitiveValues && snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
             snapshot.CaptureReason,
             snapshot.IsSensitive,
             snapshot.Metadata);

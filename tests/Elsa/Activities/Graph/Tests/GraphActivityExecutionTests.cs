@@ -8,6 +8,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -134,7 +135,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var scope = Scope();
         var evaluations = 0;
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => scope.CaptureInputsAsync(
+        var exception = await Assert.ThrowsAsync<RuntimeDurableValueStorageDriverNotFoundException>(() => scope.CaptureInputsAsync(
             [Input("value", Default("fallback"), "unknown.driver")],
             new Dictionary<string, object?>(),
             new HashSet<string>(),

@@ -12,30 +12,41 @@ public sealed class ActivityTemplateProviderCompilerRegistry : IActivityTemplate
 
     public ActivityTemplateProviderCompilerRegistry(IEnumerable<IActivityTemplateProviderCompiler>? compilers = null)
     {
-        foreach (var compiler in compilers ?? [])
-            Add(compiler);
+        AddAll(compilers ?? []);
     }
 
-    public void Add(IActivityTemplateProviderCompiler compiler)
+    public void Add(IActivityTemplateProviderCompiler compiler) => AddAll([compiler]);
+
+    private void AddAll(IEnumerable<IActivityTemplateProviderCompiler> compilers)
     {
-        ArgumentNullException.ThrowIfNull(compiler);
-        lock (_lock)
+        ArgumentNullException.ThrowIfNull(compilers);
+        var additions = compilers.Select(compiler =>
         {
+            ArgumentNullException.ThrowIfNull(compiler);
             var claims = compiler.SupportedManifestSchemas
                 .Select(schema => (compiler.ProviderKey, Schema: schema))
                 .ToArray();
-            if (claims.Length == 0 || claims.Any(x => string.IsNullOrWhiteSpace(x.ProviderKey) || string.IsNullOrWhiteSpace(x.Schema)))
-                throw new InvalidOperationException("An activity template compiler must claim a non-empty provider key and at least one non-empty schema.");
+            if (claims.Length == 0 || claims.Any(x => string.IsNullOrWhiteSpace(x.ProviderKey) || string.IsNullOrWhiteSpace(x.Schema)) ||
+                string.IsNullOrWhiteSpace(compiler.CompilerFingerprint))
+                throw new InvalidOperationException("An activity template compiler must claim a non-empty provider key, compiler fingerprint, and at least one non-empty schema.");
             if (claims.Distinct().Count() != claims.Length)
                 throw new InvalidOperationException($"Activity template compiler '{compiler.ProviderKey}' contains duplicate schema claims.");
-            var conflict = claims.FirstOrDefault(_compilers.ContainsKey);
-            if (conflict != default)
-                throw new InvalidOperationException($"An activity template compiler already owns provider '{conflict.ProviderKey}' schema '{conflict.Schema}'.");
+            return (Compiler: compiler, Claims: claims);
+        }).ToArray();
 
-            var guarded = new GuardedCompiler(compiler);
-            foreach (var key in claims)
+        lock (_lock)
+        {
+            var claimed = _compilers.Keys.ToHashSet();
+            foreach (var addition in additions)
+                foreach (var claim in addition.Claims)
+                    if (!claimed.Add(claim))
+                        throw new InvalidOperationException($"An activity template compiler already owns provider '{claim.ProviderKey}' schema '{claim.Schema}'.");
+
+            foreach (var addition in additions)
             {
-                _compilers.Add(key, guarded);
+                var guarded = new GuardedCompiler(addition.Compiler);
+                foreach (var key in addition.Claims)
+                    _compilers.Add(key, guarded);
             }
         }
     }
@@ -54,6 +65,7 @@ public sealed class ActivityTemplateProviderCompilerRegistry : IActivityTemplate
     private sealed class GuardedCompiler(IActivityTemplateProviderCompiler inner) : IActivityTemplateProviderCompiler
     {
         public string ProviderKey => inner.ProviderKey;
+        public string CompilerFingerprint => inner.CompilerFingerprint;
         public IReadOnlySet<string> SupportedManifestSchemas => inner.SupportedManifestSchemas;
 
         public async ValueTask<ActivityTemplateCompilation> CompileAsync(
@@ -63,13 +75,14 @@ public sealed class ActivityTemplateProviderCompilerRegistry : IActivityTemplate
             try
             {
                 var result = await inner.CompileAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityDiagnosticOrderer.Order(result.Diagnostics) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 return new(
                     null,
                     new Dictionary<string, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableResumeTarget>(StringComparer.Ordinal),
+                    [],
                     [],
                     [],
                     new(0, 0, 0, 0, 0, 0, 0),

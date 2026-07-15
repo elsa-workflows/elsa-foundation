@@ -22,7 +22,6 @@ public sealed class GroundworkCloneDraftFromVersionCommand(
             RootActivity: sourceState.RootActivity,
             Inputs: [.. sourceState.Inputs],
             Outputs: [.. sourceState.Outputs],
-            WorkflowActivityOptions: sourceState.WorkflowActivityOptions,
             StrategyOptions: sourceState.StrategyOptions);
 
         return await createDraftCommand.Execute(

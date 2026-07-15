@@ -30,6 +30,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IActivityDependencyProjectionStore,
     IActivityUpgradePlanStore,
     ICreateActivityDefinitionCommand,
+    IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
     IReplaceActivityDraftCommand,
     IDiscardActivityDraftCommand,
@@ -323,6 +324,33 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             _sequence++;
         }
         return Task.CompletedTask;
+    }
+
+    public Task<ActivityDefinition> ExecuteAsync(
+        UpdateActivityDefinitionPresentationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var current = _definitions.GetValueOrDefault(request.DefinitionId)
+                ?? throw Missing($"Activity definition '{request.DefinitionId}' was not found.");
+            var authoring = Authoring(request.DefinitionId);
+            EnsureDesignAuthority(authoring);
+            if (!StringComparer.Ordinal.Equals(current.TenantId, authoring.TenantId))
+                throw Conflict($"Activity definition '{request.DefinitionId}' tenant does not match its authoring state.");
+            if (!IsVisible(current.TenantId, request.TenantId) || !IsVisible(authoring.TenantId, request.TenantId))
+                throw Conflict($"Activity definition '{request.DefinitionId}' is outside the caller tenant scope.");
+
+            var updated = Clone(current);
+            updated.Category = request.Category;
+            updated.DisplayName = request.DisplayName;
+            updated.Description = request.Description;
+            updated.LastModifiedAt = request.LastModifiedAt;
+            _definitions[request.DefinitionId] = updated;
+            _sequence++;
+            return Task.FromResult(Clone(updated));
+        }
     }
 
     public Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default)
@@ -736,6 +764,10 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     {
         Id = source.Id,
         TenantId = source.TenantId,
+        ProviderKey = source.ProviderKey,
+        ProviderSchemaVersion = source.ProviderSchemaVersion,
+        ConsumerKey = source.ConsumerKey,
+        ConsumerSchemaVersion = source.ConsumerSchemaVersion,
         DescriptorType = source.DescriptorType,
         DescriptorPayload = source.DescriptorPayload.Clone(),
         Inputs = source.Inputs.ToArray(),

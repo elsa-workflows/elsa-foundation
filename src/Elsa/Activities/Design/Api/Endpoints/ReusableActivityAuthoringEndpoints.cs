@@ -30,6 +30,8 @@ namespace Elsa.Activities.Design.Api.Endpoints
             }
             catch (ActivityAuthoringException exception)
             {
+                if (exception.StatusCode >= StatusCodes.Status500InternalServerError)
+                    logger.LogError(exception, "Internal activity authoring command failure for {CommandType}", typeof(TCommand));
                 await SendProblemAsync(exception, cancellationToken);
             }
             catch (OperationCanceledException)
@@ -39,28 +41,22 @@ namespace Elsa.Activities.Design.Api.Endpoints
             catch (Exception exception)
             {
                 logger.LogError(exception, "Unexpected activity authoring command failure for {CommandType}", typeof(TCommand));
-                await SendProblemAsync(
-                    new(500, "activity.operation.failed", "Activity authoring operation failed", "The activity authoring operation failed."),
-                    cancellationToken);
+                await WriteProblemAsync(ActivityProblemDetails.Unexpected(HttpContext), 500, cancellationToken);
             }
         }
 
         private async Task SendProblemAsync(ActivityAuthoringException exception, CancellationToken cancellationToken)
         {
-            HttpContext.Response.StatusCode = exception.StatusCode;
-            HttpContext.Response.ContentType = "application/problem+json";
-            await HttpContext.Response.WriteAsJsonAsync(ToProblem(exception), cancellationToken);
+            var problem = ActivityProblemDetails.From(exception, HttpContext);
+            await WriteProblemAsync(problem, problem.Status, cancellationToken);
         }
 
-        private ActivityProblemDetailsView ToProblem(ActivityAuthoringException exception) => new(
-            $"https://elsa.dev/problems/{exception.ErrorCode.Replace('.', '-')}",
-            exception.Title,
-            exception.StatusCode,
-            exception.Message,
-            HttpContext.Request.Path,
-            exception.ErrorCode,
-            HttpContext.TraceIdentifier,
-            exception.Diagnostics);
+        private async Task WriteProblemAsync(ActivityProblemDetailsView problem, int statusCode, CancellationToken cancellationToken)
+        {
+            HttpContext.Response.StatusCode = statusCode;
+            HttpContext.Response.ContentType = "application/problem+json";
+            await HttpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+        }
     }
 
     internal abstract class ActivityAuthoringRequestEndpoint<TRequest, TResponse>(
@@ -77,15 +73,10 @@ namespace Elsa.Activities.Design.Api.Endpoints
             }
             catch (ActivityAuthoringException exception)
             {
-                await WriteProblemAsync(new ActivityProblemDetailsView(
-                    $"https://elsa.dev/problems/{exception.ErrorCode.Replace('.', '-')}",
-                    exception.Title,
-                    exception.StatusCode,
-                    exception.Message,
-                    HttpContext.Request.Path,
-                    exception.ErrorCode,
-                    HttpContext.TraceIdentifier,
-                    exception.Diagnostics), exception.StatusCode, cancellationToken);
+                if (exception.StatusCode >= StatusCodes.Status500InternalServerError)
+                    logger.LogError(exception, "Internal activity authoring request failure for {RequestType}", typeof(TRequest));
+                var problem = ActivityProblemDetails.From(exception, HttpContext);
+                await WriteProblemAsync(problem, problem.Status, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -94,15 +85,7 @@ namespace Elsa.Activities.Design.Api.Endpoints
             catch (Exception exception)
             {
                 logger.LogError(exception, "Unexpected activity authoring request failure for {RequestType}", typeof(TRequest));
-                await WriteProblemAsync(new ActivityProblemDetailsView(
-                    "https://elsa.dev/problems/activity-operation-failed",
-                    "Activity authoring operation failed",
-                    500,
-                    "The activity authoring operation failed.",
-                    HttpContext.Request.Path,
-                    "activity.operation.failed",
-                    HttpContext.TraceIdentifier,
-                    []), 500, cancellationToken);
+                await WriteProblemAsync(ActivityProblemDetails.Unexpected(HttpContext), 500, cancellationToken);
             }
         }
 
@@ -161,6 +144,16 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("definitions/{definitionId}"));
+            ConfigurePermissions();
+        }
+    }
+
+    internal sealed class Update(ICommandSender sender, ILogger<Update> logger)
+        : ActivityAuthoringCommandEndpoint<UpdateReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Patch(RouteConstants.GetRoute("definitions/{definitionId}"));
             ConfigurePermissions();
         }
     }
@@ -232,6 +225,20 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         }
     }
 
+    internal sealed class MigrateProvider(ICommandSender sender, ILogger<MigrateProvider> logger)
+        : ActivityAuthoringCommandEndpoint<MigrateReusableActivityDraft, ReusableActivityDraftView>(sender, logger)
+    {
+        protected override int SuccessStatusCode => 201;
+        protected override string GetLocation(ReusableActivityDraftView response) =>
+            $"/{RouteConstants.GetRoute($"drafts/{response.DraftId}")}";
+
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("drafts/{draftId}/migrate-provider"));
+            ConfigurePermissions();
+        }
+    }
+
     internal sealed class Discard(ICommandSender sender, ILogger<Discard> logger) : ElsaEndpoint<DiscardReusableActivityDraft>
     {
         public override void Configure()
@@ -249,15 +256,10 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
             }
             catch (ActivityAuthoringException exception)
             {
-                await WriteProblemAsync(new ActivityProblemDetailsView(
-                    $"https://elsa.dev/problems/{exception.ErrorCode.Replace('.', '-')}",
-                    exception.Title,
-                    exception.StatusCode,
-                    exception.Message,
-                    HttpContext.Request.Path,
-                    exception.ErrorCode,
-                    HttpContext.TraceIdentifier,
-                    exception.Diagnostics), exception.StatusCode, cancellationToken);
+                if (exception.StatusCode >= StatusCodes.Status500InternalServerError)
+                    logger.LogError(exception, "Internal activity draft discard failure");
+                var problem = ActivityProblemDetails.From(exception, HttpContext);
+                await WriteProblemAsync(problem, problem.Status, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -266,15 +268,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
             catch (Exception exception)
             {
                 logger.LogError(exception, "Unexpected activity draft discard failure");
-                await WriteProblemAsync(new ActivityProblemDetailsView(
-                    "https://elsa.dev/problems/activity-operation-failed",
-                    "Activity authoring operation failed",
-                    500,
-                    "The activity authoring operation failed.",
-                    HttpContext.Request.Path,
-                    "activity.operation.failed",
-                    HttpContext.TraceIdentifier,
-                    []), 500, cancellationToken);
+                await WriteProblemAsync(ActivityProblemDetails.Unexpected(HttpContext), 500, cancellationToken);
             }
         }
 

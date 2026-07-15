@@ -22,5 +22,9 @@ public interface IActivityConstructorRegistry
 
     IActivityConstructor Resolve(string consumerKey, string schemaVersion);
 
+    bool TryResolve(string consumerKey, string schemaVersion, out IActivityConstructor? constructor);
+
+    IReadOnlyCollection<string> GetSupportedSchemaVersions(string consumerKey);
+
     IActivityConstructor Resolve(RuntimeActivityDescriptor descriptor) => Resolve(descriptor.ConsumerKey, descriptor.SchemaVersion);
 }

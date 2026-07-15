@@ -17,7 +17,6 @@
           "SecretsApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
@@ -26,15 +25,14 @@
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
-          "ActivitiesCompositionRuntime": {},
           "ActivitiesDesignReconciliation": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
             }
           },
-          "ActivitiesCompositionDesign": {},
           "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",

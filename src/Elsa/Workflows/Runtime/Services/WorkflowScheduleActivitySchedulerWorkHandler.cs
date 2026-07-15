@@ -143,6 +143,18 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             ActivityType: executableNode.ActivityType,
             ActivityTypeVersion: executableNode.ActivityTypeVersion);
 
+        var metadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.ScheduleReason] = schedulePayload.Reason,
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.PinnedArtifactVersion] = schedulePayload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.PinnedArtifactHash] = schedulePayload.PinnedExecutable.ArtifactHash
+        };
+        foreach (var key in BoundaryInspectionMetadataKeys)
+            if (executableNode.Metadata.TryGetValue(key, out var value))
+                metadata[key] = value;
+
         return new ActivityExecutionState(
             Execution: execution,
             Status: ActivityExecutionStatus.Scheduled,
@@ -161,17 +173,22 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             IncidentIds: [],
             FaultCount: 0,
             AggregateFaultCount: 0,
-            Metadata: new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.ScheduleReason] = schedulePayload.Reason,
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
-                [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId,
-                [RuntimeMetadataKeys.PinnedArtifactVersion] = schedulePayload.PinnedExecutable.ArtifactVersion,
-                [RuntimeMetadataKeys.PinnedArtifactHash] = schedulePayload.PinnedExecutable.ArtifactHash
-            },
+            Metadata: metadata,
             ExecutionScopeId: provenance.ExecutionScopeId,
             Attempt: provenance.Attempt);
     }
+
+    private static readonly string[] BoundaryInspectionMetadataKeys =
+    [
+        "activity.definitionId",
+        "activity.definitionVersionId",
+        "activity.version",
+        "activity.templateHash",
+        "activity.sourceReferenceId",
+        "activity.invocationOrigin",
+        "activity.placementNamespace",
+        "graph.templateHash"
+    ];
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
         RuntimeSchedulerWorkItem workItem,

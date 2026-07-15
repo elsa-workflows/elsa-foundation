@@ -12,6 +12,8 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Workflows.Publishing.Api.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -42,8 +44,14 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
+        services.AddHttpContextAccessor();
+        services.TryAddScoped<IActivityPublishingAuthorizationContext, HttpContextActivityPublishingAuthorizationContext>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        services.TryAddScoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
+        services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
+            serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
         // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
         services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();
@@ -62,10 +70,13 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<ActivityTemplatePlacer>();
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddScoped<IActivityDefinitionPublisher, ActivityDefinitionPublisher>();
+        services.TryAddScoped<IActivitySourceVersionPublisher, SourceOwnedActivityVersionPublisher>();
+        services.TryAddScoped<IActivityDraftTestRunPublisher, ActivityDraftTestRunPublisher>();
         services.TryAddScoped<IActivityDraftDiffCandidateCompiler, ActivityDraftDiffCandidateCompiler>();
         services.TryAddScoped<IActivityUpgradePlanApplier, ApplyActivityUpgradePlanCommand>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
+        services.TryAddScoped<RuntimeRequirementPreflight>();
         // Read-only projection of the artifact + reference stores into the executables list/detail views the
         // Studio Executable Inspector consumes (#598 P1). Self-contained: depends only on the two runtime stores.
         services.TryAddScoped<WorkflowExecutableInspector>();

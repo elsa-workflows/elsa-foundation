@@ -21,7 +21,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 This feature ships two `IEntitySavingHandler` + `IEntityLoadingHandler` implementations for the activity catalog entities. These contributor interfaces are defined in `Elsa.Persistence.EFCore` — see [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md) for the interface contracts and aggregating handlers.
 
-- **`ActivityDefinitionVersionSavingHandler`** — serialises `Inputs`/`Outputs`/`DesignFacets` and writes the opaque descriptor payload from the `DescriptorPayload` `JsonElement` into `DescriptorPayloadSource`; `DescriptorType` is set by the producer, never derived. Registered via `AddEntitySavingHandlersFrom(assembly)` in `EFCoreActivitiesPersistenceFeatureBase`.
+- **`ActivityDefinitionVersionSavingHandler`** — serialises `Inputs`/`Outputs`/`DesignFacets` and writes the opaque descriptor payload from the `DescriptorPayload` `JsonElement` into `DescriptorPayloadSource`. Stable provider/consumer key/schema identity is producer-owned. The obsolete EF-only `DescriptorType` column is a compile-time compatibility mapping, not a current extension or dispatch seam. Registered via `AddEntitySavingHandlersFrom(assembly)` in `EFCoreActivitiesPersistenceFeatureBase`.
 - **`ActivityDefinitionVersionLoadingHandler`** — deserialises `*Source` columns and parses `DescriptorPayloadSource` into a `JsonElement` (`DescriptorPayload`). It resolves no descriptor CLR type (no kind→type registry).
 
 ---

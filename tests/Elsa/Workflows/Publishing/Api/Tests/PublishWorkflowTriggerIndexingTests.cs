@@ -5,6 +5,7 @@ using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -328,7 +329,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
         };
 
     private static ActivityNode TriggerNode(string nodeId) =>
@@ -352,7 +353,10 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 ActivityTypeKey = activityType,
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(
                 new ClrActivityDescriptor(clrType is null ? "Object" : TypeAliasConvention.CanonicalAlias(clrType)),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web)),

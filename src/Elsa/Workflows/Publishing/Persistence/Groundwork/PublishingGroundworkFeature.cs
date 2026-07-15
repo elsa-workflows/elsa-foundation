@@ -22,6 +22,7 @@ public sealed class PublishingGroundworkFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, GroundworkActivityPublicationCommand>();
+        services.AddScoped<ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, GroundworkSourceActivityPublicationCommand>();
         services.AddScoped<GroundworkActivityUpgradePlanStore>();
         services.AddScoped<IActivityUpgradeDiscoverySource>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
         services.AddScoped<IActivityUpgradePlanMutationStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());

@@ -223,11 +223,11 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }, priorWorkflowState)));
+            }, priorWorkflowState, workItem)));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
     }
@@ -236,10 +236,17 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     // builders rebuild SystemMetadata from scratch, so without this a SetName assignment folded into an
     // activity-completed checkpoint would be wiped by the subsequent workflow-completed checkpoint — mirroring
     // how the dedicated CorrelationId field is carried forward via priorWorkflowState.
-    private static Dictionary<string, string> PreserveInstanceName(Dictionary<string, string> metadata, WorkflowExecutionState? priorWorkflowState)
+    private static Dictionary<string, string> PreserveSystemMetadata(
+        Dictionary<string, string> metadata,
+        WorkflowExecutionState? priorWorkflowState,
+        RuntimeSchedulerWorkItem? workItem = null)
     {
         if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var instanceName) == true)
             metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var existingReferenceId) == true)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = existingReferenceId;
+        else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
 
         return metadata;
     }
@@ -263,7 +270,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId

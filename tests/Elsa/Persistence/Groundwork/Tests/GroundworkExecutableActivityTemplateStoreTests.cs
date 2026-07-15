@@ -26,6 +26,8 @@ public sealed class GroundworkExecutableActivityTemplateStoreTests
         Assert.Equal("template-1", byId!.TemplateId);
         Assert.Equal("node-1", byId.Root.ExecutableNodeId);
         Assert.True(byId.NodesById.ContainsKey("node-1"));
+        Assert.Equal(new RuntimeRequirement("test.consumer", "1"), Assert.Single(byId.RuntimeRequirements));
+        Assert.Equal("sample.external", Assert.Single(byId.StorageDriverRequirements).DriverKey);
         Assert.Equal("template-1", byHash!.TemplateId);
 
         var envelope = Assert.Single(documents.Snapshot(ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind));
@@ -95,7 +97,8 @@ public sealed class GroundworkExecutableActivityTemplateStoreTests
         [new RuntimeRequirement("test.consumer", "1")],
         "provider/1",
         new Dictionary<string, string> { ["wire"] = "stable-descriptor" },
-        createdAt ?? DateTimeOffset.UnixEpoch);
+        createdAt ?? DateTimeOffset.UnixEpoch,
+        [new RuntimeStorageDriverRequirement("sample.external")]);
 
     private static ExecutableNode Node(string id) => new(
         id,

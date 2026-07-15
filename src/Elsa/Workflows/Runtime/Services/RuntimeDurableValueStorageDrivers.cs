@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -29,8 +30,16 @@ public sealed class RuntimeDurableValueStorageDriverRegistry : IRuntimeDurableVa
         ArgumentException.ThrowIfNullOrWhiteSpace(driverKey);
         return _drivers.TryGetValue(driverKey, out var driver)
             ? driver
-            : throw new InvalidOperationException($"No durable-value storage driver is registered for key '{driverKey}'.");
+            : throw new RuntimeDurableValueStorageDriverNotFoundException(driverKey);
     }
+
+    public bool Contains(string driverKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverKey);
+        return _drivers.ContainsKey(driverKey);
+    }
+
+    public IReadOnlyCollection<string> DriverKeys => _drivers.Keys.Order(StringComparer.Ordinal).ToArray();
 }
 
 /// <summary>Built-in JSON codec that stores the encoded value inline.</summary>

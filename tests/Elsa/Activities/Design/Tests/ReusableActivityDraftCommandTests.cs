@@ -32,6 +32,78 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Update_definition_replaces_only_presentation_metadata()
+    {
+        var harness = new Harness();
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var before = Assert.Single(harness.Stores.Definitions);
+
+        var result = await harness.Service.UpdateDefinitionAsync(new(
+            created.Definition.DefinitionId,
+            "Finance",
+            "Calculate invoice total",
+            "Updated description"), default);
+
+        var persisted = Assert.Single(harness.Stores.Definitions);
+        Assert.Equal("Finance", result.Definition.Category);
+        Assert.Equal("Calculate invoice total", result.Definition.DisplayName);
+        Assert.Equal("Updated description", result.Definition.Description);
+        Assert.Equal(before.ActivityTypeKey, persisted.ActivityTypeKey);
+        Assert.Equal(before.TenantId, persisted.TenantId);
+        Assert.Equal(created.Definition.ContentAuthority, result.Definition.ContentAuthority);
+        Assert.Equal(created.Definition.HeadVersionId, result.Definition.HeadVersionId);
+        Assert.Equal(created.Drafts, result.Drafts);
+    }
+
+    [Theory]
+    [InlineData("", "Display")]
+    [InlineData("   ", "Display")]
+    [InlineData("Category", "")]
+    [InlineData("Category", "   ")]
+    public async Task Update_definition_rejects_blank_required_presentation_metadata(string category, string displayName)
+    {
+        var harness = new Harness();
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            harness.Service.UpdateDefinitionAsync(new(created.Definition.DefinitionId, category, displayName, null), default));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+        Assert.Equal("Orders", Assert.Single(harness.Stores.Definitions).Category);
+    }
+
+    [Fact]
+    public async Task Update_definition_requires_design_authority()
+    {
+        var harness = new Harness();
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            harness.Service.UpdateDefinitionAsync(new(source.DefinitionId, "Updated", "Updated", null), default));
+
+        Assert.Equal(409, exception.StatusCode);
+        Assert.Equal("activity.definition.content-authority", exception.ErrorCode);
+        Assert.Equal("Seed", harness.Stores.Definitions.Single(x => x.Id == source.DefinitionId).Category);
+    }
+
+    [Fact]
+    public async Task Update_definition_requires_tenant_visibility()
+    {
+        var stores = new InMemoryReusableActivityStores();
+        var owner = new Harness(tenantId: "tenant-owner", stores: stores);
+        var caller = new Harness(tenantId: "tenant-caller", stores: stores);
+        var source = await owner.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            caller.Service.UpdateDefinitionAsync(new(source.DefinitionId, "Updated", "Updated", null), default));
+
+        Assert.Equal(403, exception.StatusCode);
+        Assert.Equal("activity.tenant.reference-denied", exception.ErrorCode);
+        Assert.Equal("Seed", stores.Definitions.Single(x => x.Id == source.DefinitionId).Category);
+    }
+
+    [Fact]
     public async Task Definition_key_uniqueness_is_tenant_scoped_and_global_authoring_is_explicit()
     {
         var stores = new InMemoryReusableActivityStores();
@@ -162,6 +234,29 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Provider_migration_creates_a_new_draft_and_preserves_source_revision_and_original()
+    {
+        var harness = new Harness();
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
+        harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
+        var clone = await harness.Service.CreateDraftAsync(new(source.DefinitionId, "source-version"), default);
+
+        var migrated = await harness.Service.MigrateDraftAsync(new(
+            clone.DraftId,
+            clone.Revision,
+            "target.provider",
+            "1"), default);
+
+        Assert.NotEqual(clone.DraftId, migrated.DraftId);
+        Assert.Equal("source-version", migrated.SourceVersionId);
+        Assert.Equal("target.provider", migrated.Provider.ProviderKey);
+        Assert.Equal(clone.Contract.ContractSchemaVersion, migrated.Contract.ContractSchemaVersion);
+        Assert.Equal(clone.Contract.Outcomes.Select(x => x.ReferenceKey), migrated.Contract.Outcomes.Select(x => x.ReferenceKey));
+        Assert.Equal(ActivityDefinitionDraftStatus.Active, (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(clone.DraftId))!.Status);
+        Assert.Equal("elsa.activity-graph", (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(clone.DraftId))!.State.Provider.ProviderKey);
+    }
+
+    [Fact]
     public async Task Validation_findings_are_the_result_and_are_stored_for_the_exact_revision()
     {
         var harness = new Harness(invalidValidation: true);
@@ -222,6 +317,7 @@ public sealed class ReusableActivityDraftCommandTests
             Stores = stores ?? new();
             var registry = new ActivityProviderRegistry([new MigratingProvider("elsa.activity-graph"), new MigratingProvider("target.provider")]);
             Service = new(
+                Stores,
                 Stores,
                 Stores,
                 Stores,

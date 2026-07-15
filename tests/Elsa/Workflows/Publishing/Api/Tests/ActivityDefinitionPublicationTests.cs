@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -45,6 +46,38 @@ public sealed class ActivityDefinitionPublicationTests
             Request("1.0.0+build.2")));
 
         Assert.Equal("activity.version.conflict", exception.ErrorCode);
+        Assert.Equal(0, harness.Compiler.CallCount);
+        Assert.Equal(0, harness.Commit.CallCount);
+    }
+
+    [Fact]
+    public async Task Publisher_denies_a_foreign_exact_draft_before_content_use_without_disclosing_target_facts()
+    {
+        var harness = PublisherHarness.Create(resourceTenantId: "tenant-b", authorizationTenantId: "tenant-a");
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishAsync(Request("1.0.0")));
+
+        Assert.Equal("activity.tenant.reference-denied", exception.ErrorCode);
+        Assert.Empty(exception.Diagnostics);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, harness.Compiler.CallCount);
+        Assert.Equal(0, harness.Commit.CallCount);
+    }
+
+    [Fact]
+    public async Task Publisher_rechecks_tenant_authorization_after_the_publish_lock_and_draft_reread()
+    {
+        var harness = PublisherHarness.Create(
+            resourceTenantId: "tenant-a",
+            authorizationTenantId: "tenant-a",
+            rereadTenantId: "tenant-b");
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishAsync(Request("1.0.0")));
+
+        Assert.Equal("activity.tenant.reference-denied", exception.ErrorCode);
+        Assert.Empty(exception.Diagnostics);
         Assert.Equal(0, harness.Compiler.CallCount);
         Assert.Equal(0, harness.Commit.CallCount);
     }
@@ -133,6 +166,59 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task First_publication_returns_a_diff_against_the_explicit_definition_baseline()
+    {
+        var harness = PublisherHarness.Create(differ: new ActivityVersionDiffer());
+
+        var result = await harness.Publisher.PublishAsync(Request("1.0.0"));
+
+        Assert.NotNull(result.Diff);
+        Assert.Equal("ActivityDefinitionBaseline", result.Diff!.From.Kind);
+        Assert.Equal("definition-1", result.Diff.From.DefinitionId);
+        Assert.Equal(result.Template.TemplateHash, result.Diff.To.TemplateHash);
+    }
+
+    [Fact]
+    public async Task Implementation_only_change_requires_minor_and_diff_receives_provider_runtime_and_layout_facts()
+    {
+        var oldTemplate = Template();
+        var head = CopyPublication(
+            Publication("definition-1", "version-head", "test.activity", oldTemplate),
+            "1.0.0",
+            templateHash: "sha256:old-implementation");
+        var providerChange = new ActivityVersionChange(
+            "test.provider:implementation-plan-changed",
+            ActivityVersionChangeArea.Implementation,
+            "ImplementationPlanChanged",
+            new(),
+            null,
+            null,
+            ActivityVersionChangeImpact.Additive,
+            ActivityVersionBump.Minor,
+            "The provider implementation plan changed.");
+        var compilation = SuccessfulCompilation() with { ProviderCompatibilityChanges = [providerChange] };
+        var capturingDiffer = new CapturingDiffer(new ActivityVersionDiffer());
+        var harness = PublisherHarness.Create(
+            headVersionId: head.DefinitionVersionId,
+            existingPublications: [head],
+            compileResult: compilation,
+            differ: capturingDiffer);
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishAsync(Request("1.0.1", head.DefinitionVersionId)));
+
+        Assert.Equal("activity.publication.invalid", exception.ErrorCode);
+        Assert.Contains(exception.Diagnostics, x => x.Code == "activity.version.bump-insufficient");
+        var request = Assert.IsType<ActivityVersionDiffRequest>(capturingDiffer.Request);
+        Assert.Equal(compilation.Template!.ProviderFingerprint, request.ToImplementation!.ProviderFingerprint);
+        Assert.Equal(compilation.Template.RuntimeRequirements.Count, request.ToImplementation.RuntimeRequirements!.Count);
+        Assert.NotNull(request.ToImplementation.LayoutHash);
+        Assert.Equal(compilation.ProviderCompatibilityChanges, request.ProviderCompatibilityChanges);
+        Assert.Contains(providerChange.ChangeId, (await capturingDiffer.Result!).Changes.Select(x => x.ChangeId));
+        Assert.Equal(ActivityVersionBump.Minor, (await capturingDiffer.Result!).RequiredBump);
+    }
+
+    [Fact]
     public async Task Behavior_hash_deduplicates_across_version_identity_and_root_excludes_publication_identity()
     {
         var provider = new PureBehaviorCompiler();
@@ -150,6 +236,7 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.True(second.IsSuccessful);
         Assert.Equal(first.Template!.TemplateHash, second.Template!.TemplateHash);
         Assert.Equal(first.Template.TemplateId, second.Template.TemplateId);
+        Assert.Equal(provider.CompilerFingerprint, first.Template.ProviderFingerprint);
         Assert.Equal(64, first.Template.TemplateId["activity-template-".Length..].Length);
         var payload = first.Template.Root.Descriptor.Payload;
         Assert.False(payload.TryGetProperty("definitionId", out _));
@@ -254,8 +341,6 @@ public sealed class ActivityDefinitionPublicationTests
             new ActivityDefinitionDraft { Id = draftId, DefinitionId = definitionId, Revision = 3, State = state },
             versionId,
             version,
-            "provider-fingerprint",
-            [],
             0);
     }
 
@@ -268,7 +353,7 @@ public sealed class ActivityDefinitionPublicationTests
         new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
 
     private static PublishActivityDefinitionRequest Request(string version, string? expectedHead = null) =>
-        new("draft-1", 4, expectedHead, version, "provider-fingerprint", []);
+        new("draft-1", 4, expectedHead, version);
 
     private static ActivityResourceMeasurements Measurements() => new(1, 1, 0, 1, 10, 20, 0);
 
@@ -289,7 +374,8 @@ public sealed class ActivityDefinitionPublicationTests
 
     private static ActivityDefinitionVersionPublication CopyPublication(
         ActivityDefinitionVersionPublication source,
-        string version) => new()
+        string version,
+        string? templateHash = null) => new()
     {
         Id = source.Id,
         DefinitionId = source.DefinitionId,
@@ -299,7 +385,7 @@ public sealed class ActivityDefinitionPublicationTests
         Contract = source.Contract,
         Provider = source.Provider,
         TemplateId = source.TemplateId,
-        TemplateHash = source.TemplateHash,
+        TemplateHash = templateHash ?? source.TemplateHash,
         SourceReferenceId = source.SourceReferenceId,
         ProviderFingerprint = source.ProviderFingerprint,
         DirectDependencyCount = source.DirectDependencyCount,
@@ -337,6 +423,7 @@ public sealed class ActivityDefinitionPublicationTests
     private sealed class PureBehaviorCompiler : IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
     {
         public string ProviderKey => "test.provider";
+        public string CompilerFingerprint => "test.provider/compiler/1";
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
 
         public ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default)
@@ -355,6 +442,7 @@ public sealed class ActivityDefinitionPublicationTests
                 new Dictionary<string, WorkflowExecutableResumeTarget>(),
                 [],
                 [new RuntimeRequirement("test.consumer", "1")],
+                [],
                 new(1, 1, 0, 1, 10, 0, 0),
                 request.ProviderFingerprint,
                 [],
@@ -370,6 +458,7 @@ public sealed class ActivityDefinitionPublicationTests
     private sealed class CycleCompiler : IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
     {
         public string ProviderKey => "test.provider";
+        public string CompilerFingerprint => "test.provider/compiler/1";
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
         public ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default) => throw new Xunit.Sdk.XunitException("Cycle detection must precede provider compilation.");
         public ValueTask<ActivityTemplateDependencyDiscovery> DiscoverDependenciesAsync(ActivityTemplateDependencyDiscoveryRequest request, CancellationToken cancellationToken = default) =>
@@ -435,14 +524,19 @@ public sealed class ActivityDefinitionPublicationTests
             string? headVersionId = null,
             IReadOnlyList<ActivityDefinitionVersionPublication>? existingPublications = null,
             ActivityVersionBump requiredBump = ActivityVersionBump.None,
-            ActivityTemplateCompilerResult? compileResult = null)
+            ActivityTemplateCompilerResult? compileResult = null,
+            IActivityVersionDiffer? differ = null,
+            string? resourceTenantId = null,
+            string? authorizationTenantId = null,
+            string? rereadTenantId = null)
         {
             var definition = new ActivityDefinition
             {
                 Id = "definition-1",
                 ActivityTypeKey = "test.activity",
                 Category = "Test",
-                DisplayName = "Test Activity"
+                DisplayName = "Test Activity",
+                TenantId = resourceTenantId
             };
             var draft = new ActivityDefinitionDraft
             {
@@ -450,6 +544,7 @@ public sealed class ActivityDefinitionPublicationTests
                 DefinitionId = definition.Id,
                 Revision = 4,
                 Status = ActivityDefinitionDraftStatus.Active,
+                TenantId = resourceTenantId,
                 State = new(Contract(), Provider(), new Dictionary<string, string>())
             };
             var authoring = new ActivityDefinitionAuthoringState
@@ -457,7 +552,17 @@ public sealed class ActivityDefinitionPublicationTests
                 Id = definition.Id,
                 DefinitionId = definition.Id,
                 ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
-                HeadVersionId = headVersionId
+                HeadVersionId = headVersionId,
+                TenantId = resourceTenantId
+            };
+            var rereadDraft = rereadTenantId is null ? draft : new ActivityDefinitionDraft
+            {
+                Id = draft.Id,
+                DefinitionId = draft.DefinitionId,
+                Revision = draft.Revision,
+                Status = draft.Status,
+                State = draft.State,
+                TenantId = rereadTenantId
             };
             var publications = new PublisherPublicationStore(existingPublications ?? []);
             var compiler = new SpyTemplateCompiler(compileResult ?? SuccessfulCompilation());
@@ -465,13 +570,14 @@ public sealed class ActivityDefinitionPublicationTests
             var publisher = new ActivityDefinitionPublisher(
                 new PublisherDefinitionStore(definition),
                 new PublisherAuthoringStore(authoring),
-                new PublisherDraftStore(draft),
+                new PublisherDraftStore(draft, rereadDraft),
                 publications,
-                new PublisherLayoutStore(omitLayout ? null : layout ?? Layout(draft.Revision)),
+                new PublisherLayoutStore(omitLayout ? null : layout ?? Layout(draft.Revision, resourceTenantId)),
                 new EmptyDependencyStore(),
                 new ValidDraftValidator(),
-                new RequiredBumpDiffer(requiredBump),
+                differ ?? new RequiredBumpDiffer(requiredBump),
                 compiler,
+                new TestActivityPublishingAuthorizationContext(authorizationTenantId),
                 commit,
                 new ImmediateLockProvider(),
                 new SequentialIdentityGenerator(),
@@ -479,11 +585,12 @@ public sealed class ActivityDefinitionPublicationTests
             return new(publisher, compiler, commit);
         }
 
-        public static ActivityDefinitionDraftLayout Layout(long revision) => new()
+        public static ActivityDefinitionDraftLayout Layout(long revision, string? tenantId = null) => new()
         {
             Id = "layout-draft-1",
             DraftId = "draft-1",
             Revision = revision,
+            TenantId = tenantId,
             Records = [new("boundary", Json("{\"x\":10,\"y\":20}"))]
         };
     }
@@ -505,10 +612,14 @@ public sealed class ActivityDefinitionPublicationTests
         public Task<IReadOnlyList<ActivityDefinitionAuthoringState>> ListAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
-    private sealed class PublisherDraftStore(ActivityDefinitionDraft draft) : IActivityDefinitionDraftStore
+    private sealed class PublisherDraftStore(ActivityDefinitionDraft draft, ActivityDefinitionDraft? rereadDraft = null) : IActivityDefinitionDraftStore
     {
+        private int _findCount;
+
         public Task<ActivityDefinitionDraft?> FindAsync(string draftId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<ActivityDefinitionDraft?>(draftId == draft.Id ? draft : null);
+            Task.FromResult<ActivityDefinitionDraft?>(draftId == draft.Id
+                ? Interlocked.Increment(ref _findCount) == 1 ? draft : rereadDraft ?? draft
+                : null);
         public Task<IReadOnlyList<ActivityDefinitionDraft>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
@@ -524,7 +635,13 @@ public sealed class ActivityDefinitionPublicationTests
     {
         public Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(string draftId, CancellationToken cancellationToken = default) =>
             Task.FromResult(layout?.DraftId == draftId ? layout : null);
-        public Task<ActivityDefinitionVersionLayout?> FindVersionLayoutAsync(string definitionVersionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ActivityDefinitionVersionLayout?> FindVersionLayoutAsync(string definitionVersionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ActivityDefinitionVersionLayout?>(layout is null ? null : new()
+            {
+                Id = definitionVersionId,
+                DefinitionVersionId = definitionVersionId,
+                Records = layout.Records.ToArray()
+            });
     }
 
     private sealed class EmptyDependencyStore : IActivityDirectDependencyStore
@@ -552,6 +669,21 @@ public sealed class ActivityDefinitionPublicationTests
                 new(requiredBump == ActivityVersionBump.Major ? 1 : 0, 0, 0, 0),
                 [],
                 []));
+    }
+
+    private sealed class CapturingDiffer(IActivityVersionDiffer inner) : IActivityVersionDiffer
+    {
+        public ActivityVersionDiffRequest? Request { get; private set; }
+        public Task<ActivityVersionDiff>? Result { get; private set; }
+
+        public ValueTask<ActivityVersionDiff> DiffAsync(
+            ActivityVersionDiffRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Request = request;
+            Result = inner.DiffAsync(request, cancellationToken).AsTask();
+            return new(Result);
+        }
     }
 
     private sealed class SpyTemplateCompiler(ActivityTemplateCompilerResult result) : IActivityTemplateCompiler
@@ -717,7 +849,10 @@ public sealed class ActivityDefinitionPublicationTests
             var catalog = new ActivityDefinitionVersion("1.0.0", "definition-1")
             {
                 Id = "version-1",
-                DescriptorType = "test.consumer",
+                ProviderKey = "test.provider",
+                ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+                ConsumerKey = "test.consumer",
+                ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
                 DescriptorPayload = root.Descriptor.Payload,
                 SourceKind = "ActivityDefinitionDraft",
                 SourceId = "draft-1",

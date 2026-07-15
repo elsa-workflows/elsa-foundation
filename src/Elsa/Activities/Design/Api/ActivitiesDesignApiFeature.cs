@@ -4,8 +4,11 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Api.Services;
+using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Stores;
+using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
@@ -26,6 +29,8 @@ namespace Elsa.Activities.Design.Api;
 )]
 public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 {
+    private static readonly string ProcessDependencyCursorSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
     public ActivityAvailabilityOptions ActivityAvailability { get; set; } = new();
     public string? DependencyCursorSigningKey { get; set; }
     public int DependencyDefaultPageSize { get; set; } = 100;
@@ -37,6 +42,10 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
+        services.AddHttpContextAccessor();
+        services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
+        services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        services.TryAddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         services.AddOptions<ActivityAvailabilityOptions>()
             .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>
@@ -50,7 +59,9 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<ActivityDependencyCursorOptions>().Configure(options =>
-            options.SigningKey = DependencyCursorSigningKey ?? string.Empty);
+            options.SigningKey = string.IsNullOrWhiteSpace(DependencyCursorSigningKey)
+                ? ProcessDependencyCursorSigningKey
+                : DependencyCursorSigningKey);
         services.AddOptions<ActivityDependencyReaderOptions>().Configure(options =>
         {
             options.DefaultPageSize = DependencyDefaultPageSize;
@@ -58,6 +69,9 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         });
         services.TryAddSingleton<IActivityDependencyCursorCodec, HmacActivityDependencyCursorCodec>();
         services.TryAddScoped<ActivityDependencyReader>();
+        services.TryAddScoped<ReusableActivityAuthoringService>();
+        services.TryAddScoped<ActivityVersionLifecycleService>();
+        services.TryAddSingleton<IActivityVersionSelectionPolicy, DefaultActivityVersionSelectionPolicy>();
 
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);

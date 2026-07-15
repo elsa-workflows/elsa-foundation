@@ -145,6 +145,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
             await ApplyActivityExecutionInspectionChangesAsync(stores.ActivityExecutionInspectionWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+            await ApplyActivityExecutionHierarchyChangesAsync(stores.ActivityExecutionHierarchyWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
             await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
             await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
             await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
@@ -166,6 +167,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
             ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
+            ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind,
             ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
             ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
             ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
@@ -242,6 +244,19 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     {
         foreach (var stateChange in stateChanges)
             await writer.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private static async ValueTask ApplyActivityExecutionHierarchyChangesAsync(
+        IActivityExecutionHierarchyWriter writer,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        foreach (var stateChange in stateChanges)
+        {
+            var projection = stateChange.State;
+            if (!string.IsNullOrWhiteSpace(projection.ExecutionScopeId ?? projection.Provenance.ExecutionScopeId))
+                await writer.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection), cancellationToken);
+        }
     }
 
     private static async ValueTask ApplyBookmarkStateChangesAsync(
@@ -458,6 +473,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ISchedulerStateStore SchedulerStateStore,
         IActivityExecutionStateStore ActivityExecutionStateStore,
         IActivityExecutionInspectionWriter ActivityExecutionInspectionWriter,
+        IActivityExecutionHierarchyWriter ActivityExecutionHierarchyWriter,
         IBookmarkStateStore BookmarkStateStore,
         IDurableValueStateStore DurableValueStateStore,
         IIncidentStateStore IncidentStateStore,
@@ -472,6 +488,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 new GroundworkSchedulerStateStore(store, serializer),
                 new GroundworkActivityExecutionStateStore(store, serializer),
                 new GroundworkActivityExecutionInspectionStore(store, serializer),
+                new GroundworkActivityExecutionHierarchyStore(store, serializer),
                 new GroundworkBookmarkStateStore(store, serializer),
                 new GroundworkDurableValueStateStore(store, serializer),
                 new GroundworkIncidentStateStore(store, serializer),

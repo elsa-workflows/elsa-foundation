@@ -42,11 +42,26 @@ public sealed record RuntimeRequirement
     public string SchemaVersion { get; }
 }
 
+/// <summary>
+/// An exact stable durable-value storage-driver capability required by retained executable material.
+/// This is deliberately separate from <see cref="RuntimeRequirement"/>: storage drivers encode values,
+/// while activity consumers construct executable nodes, and the two registries have different contracts.
+/// </summary>
+public sealed record RuntimeStorageDriverRequirement
+{
+    public RuntimeStorageDriverRequirement(string driverKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverKey);
+        DriverKey = driverKey;
+    }
+
+    public string DriverKey { get; }
+}
+
 /// <summary>Stable first-party Runtime consumer keys. These values are independent of CLR names.</summary>
 public static class WellKnownRuntimeActivityConsumers
 {
     public const string ClrActivity = "elsa.clr-activity";
-    public const string WorkflowDefinitionActivity = "elsa.workflow-definition-activity";
     public const string GraphActivity = "elsa.graph-activity";
 }
 
@@ -55,20 +70,71 @@ public enum ActivityActivationFailureKind
 {
     MissingConsumer,
     UnsupportedSchema,
-    InvalidDescriptor
+    InvalidDescriptor,
+    MissingStorageDriver
+}
+
+public enum RuntimeActivationCapabilityKind
+{
+    ActivityConsumer,
+    DurableValueStorageDriver
 }
 
 /// <summary>Safe Runtime evidence describing why one executable node could not be activated.</summary>
-public sealed record ActivityActivationFailure(
-    ActivityActivationFailureKind Kind,
-    string ConsumerKey,
-    string SchemaVersion,
-    string? ArtifactId = null,
-    string? ExecutableNodeId = null,
-    IReadOnlyDictionary<string, string>? Metadata = null)
+public sealed record ActivityActivationFailure
 {
-    public IReadOnlyDictionary<string, string> Metadata { get; init; } =
-        Metadata is null
+    public ActivityActivationFailure(
+        ActivityActivationFailureKind kind,
+        string consumerKey,
+        string schemaVersion,
+        string? artifactId = null,
+        string? executableNodeId = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
+        : this(
+            kind,
+            RuntimeActivationCapabilityKind.ActivityConsumer,
+            consumerKey,
+            schemaVersion,
+            artifactId,
+            executableNodeId,
+            metadata)
+    {
+    }
+
+    public ActivityActivationFailure(
+        ActivityActivationFailureKind kind,
+        RuntimeActivationCapabilityKind capabilityKind,
+        string capabilityKey,
+        string? schemaVersion,
+        string? artifactId = null,
+        string? executableNodeId = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(capabilityKey);
+        if (capabilityKind == RuntimeActivationCapabilityKind.ActivityConsumer)
+            ArgumentException.ThrowIfNullOrWhiteSpace(schemaVersion);
+        if (capabilityKind == RuntimeActivationCapabilityKind.DurableValueStorageDriver && schemaVersion is not null)
+            throw new ArgumentException("Durable-value storage-driver capabilities do not use activity descriptor schemas.", nameof(schemaVersion));
+
+        Kind = kind;
+        CapabilityKind = capabilityKind;
+        CapabilityKey = capabilityKey;
+        SchemaVersion = schemaVersion;
+        ArtifactId = artifactId;
+        ExecutableNodeId = executableNodeId;
+        Metadata = metadata is null
             ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : new Dictionary<string, string>(Metadata, StringComparer.Ordinal);
+            : new Dictionary<string, string>(metadata, StringComparer.Ordinal);
+    }
+
+    public ActivityActivationFailureKind Kind { get; }
+    public RuntimeActivationCapabilityKind CapabilityKind { get; }
+    public string CapabilityKey { get; }
+    public string? ConsumerKey => CapabilityKind == RuntimeActivationCapabilityKind.ActivityConsumer ? CapabilityKey : null;
+    public string? StorageDriverKey => CapabilityKind == RuntimeActivationCapabilityKind.DurableValueStorageDriver ? CapabilityKey : null;
+    public string? SchemaVersion { get; }
+    public string? ArtifactId { get; }
+    public string? ExecutableNodeId { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 }

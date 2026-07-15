@@ -6,6 +6,16 @@ namespace Elsa.Architecture.Tests;
 public sealed class ReusableActivityArchitectureTests
 {
     [Fact]
+    public void Elsa4_legacy_workflow_as_activity_projects_and_model_are_absent()
+    {
+        Assert.False(File.Exists(FullPath("src/Elsa/Activities/Composition/Design/Elsa.Activities.Composition.Design.csproj")));
+        Assert.False(File.Exists(FullPath("src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj")));
+        Assert.False(File.Exists(FullPath("src/Elsa/Workflows/Design/Core/Models/WorkflowActivityOptions.cs")));
+        Assert.False(File.Exists(FullPath("src/Elsa/Workflows/Primitives/Models/WorkflowIdentity.cs")));
+        Assert.False(File.Exists(FullPath("tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj")));
+    }
+
+    [Fact]
     public void Graph_runtime_references_only_runtime_core_contracts() =>
         AssertProjectReferences(
             "src/Elsa/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
@@ -73,6 +83,7 @@ public sealed class ReusableActivityArchitectureTests
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
                            !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Concat(Directory.EnumerateFiles(FullPath("src"), "ReusableActivity*.cs", SearchOption.AllDirectories))
+            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}Elsa3{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var violations = reusableFiles
@@ -85,6 +96,23 @@ public sealed class ReusableActivityArchitectureTests
             violations.Length == 0,
             "New reusable-activity code must not depend on the legacy workflow-as-activity surface:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Elsa3_reusable_marker_detection_is_confined_to_the_one_way_import_boundary()
+    {
+        var hits = Directory.EnumerateFiles(FullPath("src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+                           !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(file => File.ReadAllText(file).Contains("UsableAsActivity", StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(hits);
+        Assert.All(hits, file => Assert.StartsWith("src/Elsa3/", file, StringComparison.Ordinal));
+        Assert.Contains(hits, file => file.EndsWith("Models/Elsa3WorkflowDefinition.cs", StringComparison.Ordinal));
+        Assert.Contains(hits, file => file.EndsWith("Services/ReusableActivityCollectionAnalyzer.cs", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -102,6 +130,28 @@ public sealed class ReusableActivityArchitectureTests
         Assert.DoesNotContain("DescriptorType", constructor, StringComparison.Ordinal);
         Assert.DoesNotContain("DescriptorType", executableNode, StringComparison.Ordinal);
         Assert.DoesNotContain("DescriptorPayload", executableNode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Universal_activity_version_contracts_do_not_expose_clr_descriptor_type_identity()
+    {
+        string[] relativePaths =
+        [
+            "src/Elsa/Activities/Design/Core/Contracts/IActivityDefinitionVersion.cs",
+            "src/Elsa/Activities/Design/Core/Models/ActivityDefinitionVersionModel.cs",
+            "src/Elsa/Activities/Design/Reconciliation/Core/Models/ActivityVersionReconciliationModel.cs",
+            "src/Elsa/Activities/Design/Api/Commands/AddDefinition.cs",
+            "src/Elsa/Activities/Design/Api/Commands/AddVersion.cs",
+            "src/Elsa/Activities/Design/Api/Models/ActivityDefinitionVersionDetailsView.cs"
+        ];
+
+        foreach (var relativePath in relativePaths)
+        {
+            var text = File.ReadAllText(FullPath(relativePath));
+            Assert.Contains("ProviderKey", text, StringComparison.Ordinal);
+            Assert.Contains("ConsumerKey", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("DescriptorType", text, StringComparison.Ordinal);
+        }
     }
 
     private static void AssertProjectReferences(string relativeProjectPath, params string[] expectedReferences)

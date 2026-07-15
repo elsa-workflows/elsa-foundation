@@ -55,7 +55,7 @@ public sealed class ActivityTemplateDependencyDiscovererRegistry : IActivityTemp
             try
             {
                 var result = await inner.DiscoverDependenciesAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityDiagnosticOrderer.Order(result.Diagnostics) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {

@@ -16,6 +16,25 @@ public interface ICreateActivityDefinitionCommand
         CancellationToken cancellationToken = default);
 }
 
+public sealed record UpdateActivityDefinitionPresentationRequest(
+    string DefinitionId,
+    string? TenantId,
+    string Category,
+    string DisplayName,
+    string? Description,
+    DateTimeOffset LastModifiedAt);
+
+/// <summary>
+/// Updates only mutable catalog presentation metadata. Implementations must preserve the activity
+/// type key, tenant, content authority, fork provenance, and head identity.
+/// </summary>
+public interface IUpdateActivityDefinitionPresentationCommand
+{
+    Task<ActivityDefinition> ExecuteAsync(
+        UpdateActivityDefinitionPresentationRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record CreateActivityDraftRequest(
     ActivityDefinitionDraft Draft,
     ActivityDefinitionDraftLayout Layout,
@@ -106,5 +125,29 @@ public interface ICommitActivityPublicationCommand<TExecutableTemplate, TSourceR
 {
     Task<ActivityPublicationResult> ExecuteAsync(
         ActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record SourceActivityPublicationCommit<TExecutableTemplate, TSourceReference>(
+    ActivityDefinition Definition,
+    ActivityDefinitionAuthoringState AuthoringState,
+    ActivityDefinitionVersion CatalogVersion,
+    ActivityDefinitionVersionPublication Publication,
+    ActivityDefinitionVersionLayout Layout,
+    TExecutableTemplate ExecutableTemplate,
+    TSourceReference SourceReference)
+    where TExecutableTemplate : class
+    where TSourceReference : class;
+
+/// <summary>
+/// Atomic source-authority counterpart of draft publication. There is no mutable draft or head CAS:
+/// the source owns content and reconciliation supplies deterministic definition/version identities.
+/// </summary>
+public interface ICommitSourceActivityPublicationCommand<TExecutableTemplate, TSourceReference>
+    where TExecutableTemplate : class
+    where TSourceReference : class
+{
+    Task ExecuteAsync(
+        SourceActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
         CancellationToken cancellationToken = default);
 }

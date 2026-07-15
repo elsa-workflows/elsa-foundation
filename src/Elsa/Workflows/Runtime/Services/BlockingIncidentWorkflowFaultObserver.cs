@@ -55,7 +55,11 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
             return;
 
         var blockingIncidents = await _incidentStateStore.ListBlockingAsync(workflowExecutionId, cancellationToken);
-        if (blockingIncidents.Count == 0)
+        // A missing stable consumer/schema is a deployment compatibility incident. Keep the run recoverable
+        // while it waits for deployment correction; ordinary activity faults still terminalize the workflow.
+        if (blockingIncidents.All(x => StringComparer.Ordinal.Equals(
+                x.FailureType,
+                ActivityActivationFailureHandler.IncidentFailureType)))
             return;
 
         var occurredAt = _timeProvider.GetUtcNow();

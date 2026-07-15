@@ -29,6 +29,30 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 
 Version diff, dependency, upgrade, and runtime inspection routes are defined in their focused contracts.
 
+### Update definition presentation metadata
+
+```http
+PATCH /design/activities/definitions/{definitionId}
+Content-Type: application/json
+
+{
+  "category": "Finance",
+  "displayName": "Calculate invoice total",
+  "description": "Calculates an invoice total and discount."
+}
+```
+
+This is a full replacement of the three presentation fields. `category` and `displayName` are
+required non-blank strings; `description` may be a string or `null`. No other body properties are
+part of this request contract. `activityTypeKey`, tenant identity, content authority, fork
+provenance, and head identity are immutable through this route.
+
+Only a tenant-visible, Design-owned definition can be updated. A blank required field returns
+`400 activity.request.invalid`; a source-owned definition returns
+`409 activity.definition.content-authority`; an out-of-scope definition returns
+`403 activity.tenant.reference-denied`. Success returns `200 OK` with the complete
+`ReusableActivityDefinitionDetailsView`.
+
 ## 2. Shared views
 
 ### `ActivityDefinitionIdentityView`

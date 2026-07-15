@@ -33,6 +33,79 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
+    public async Task UpdateDefinitionPresentation_Uses_Document_Cas_And_Preserves_Immutable_Identity_State()
+    {
+        var harness = Harness.Create();
+        var create = CreateRequest();
+        await harness.Stores.ExecuteAsync(create);
+
+        var updated = await harness.Stores.ExecuteAsync(new UpdateActivityDefinitionPresentationRequest(
+            "definition-1",
+            null,
+            "Finance",
+            "Calculate invoice total",
+            "Updated description",
+            new DateTimeOffset(2026, 1, 1, 2, 0, 0, TimeSpan.Zero)));
+
+        var persisted = await new GroundworkActivityDefinitionStore(harness.Documents).GetAsync("definition-1");
+        var authoring = await harness.Stores.FindAsync("definition-1");
+        Assert.Equal("Finance", persisted.Category);
+        Assert.Equal("Calculate invoice total", persisted.DisplayName);
+        Assert.Equal("Updated description", persisted.Description);
+        Assert.Equal(create.Definition.ActivityTypeKey, persisted.ActivityTypeKey);
+        Assert.Equal(create.Definition.TenantId, persisted.TenantId);
+        Assert.Equal(create.AuthoringState.ContentAuthority, authoring!.ContentAuthority);
+        Assert.Equal(create.AuthoringState.HeadVersionId, authoring.HeadVersionId);
+        Assert.Equal(persisted.Category, updated.Category);
+    }
+
+    [Fact]
+    public async Task UpdateDefinitionPresentation_Rejects_Source_Authority_Without_Writes()
+    {
+        var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest(ActivityContentAuthorityKind.ProviderSource));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(new UpdateActivityDefinitionPresentationRequest(
+            "definition-1", null, "Finance", "Updated", null, DateTimeOffset.UtcNow)));
+
+        Assert.Equal("Samples", (await new GroundworkActivityDefinitionStore(harness.Documents).GetAsync("definition-1")).Category);
+    }
+
+    [Fact]
+    public async Task UpdateDefinitionPresentation_Rejects_A_Concurrent_Document_Write_By_Cas()
+    {
+        var harness = Harness.Create();
+        var create = CreateRequest();
+        await harness.Stores.ExecuteAsync(create);
+        var envelope = await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            create.Definition.Id);
+        var concurrent = create.Definition;
+        concurrent.Category = "Concurrent update";
+        var candidate = GroundworkDocumentWriter.ToSaveRequest(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            concurrent,
+            GroundworkActivitiesDesignJson.Options);
+        var concurrentWrite = new SaveDocumentRequest(
+            candidate.DocumentKind,
+            candidate.Id,
+            candidate.SchemaVersion,
+            candidate.ContentJson,
+            envelope!.Version);
+        var stores = new GroundworkReusableActivityStores(
+            new RaceInjectingDocumentStore(harness.Documents, concurrentWrite),
+            new FakeClock(),
+            new ImmediateDistributedLockProvider());
+
+        await Assert.ThrowsAsync<DocumentAtomicWriteException>(() => stores.ExecuteAsync(new UpdateActivityDefinitionPresentationRequest(
+            "definition-1", null, "Losing update", "Losing update", null, DateTimeOffset.UtcNow)));
+
+        Assert.Equal("Concurrent update", (await new GroundworkActivityDefinitionStore(harness.Documents).GetAsync("definition-1")).Category);
+    }
+
+    [Fact]
     public async Task Replace_Uses_Revision_Cas_And_Updates_Draft_And_Layout_Together()
     {
         var harness = Harness.Create();

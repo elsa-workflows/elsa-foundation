@@ -6,7 +6,6 @@
         "Features": {
           "ActivitiesControlFlow": {},
           "ActivitiesDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
@@ -146,6 +145,7 @@
           "WorkflowsDesignApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {

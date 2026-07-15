@@ -13,6 +13,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IActivityExecutionInspectionWriter? _activityExecutionInspectionWriter;
+    private readonly IActivityExecutionHierarchyWriter? _activityExecutionHierarchyWriter;
     private readonly IBookmarkStateStore? _bookmarkStateStore;
     private readonly IDurableValueStateStore? _durableValueStateStore;
     private readonly IIncidentStateStore? _incidentStateStore;
@@ -35,7 +36,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IExecutionLivenessStateStore? operationalStateStore = null,
         ISchedulerStateStore? schedulerStateStore = null,
         IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
-        IActivityScopeCleanupStore? activityScopeCleanupStore = null)
+        IActivityScopeCleanupStore? activityScopeCleanupStore = null,
+        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter = null)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
@@ -46,6 +48,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _operationalStateStore = operationalStateStore;
         _schedulerStateStore = schedulerStateStore;
         _activityScopeCleanupStore = activityScopeCleanupStore;
+        _activityExecutionHierarchyWriter = activityExecutionHierarchyWriter;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -77,6 +80,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
             await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+            await ApplyActivityExecutionHierarchyChangesAsync(commit.StateChanges.ActivityExecutionInspections, cancellationToken);
             await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
             await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
             await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, cancellationToken);
@@ -285,6 +289,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             }
 
             throw new InvalidOperationException($"Unexpected activity execution inspection state change operation '{stateChange.Operation}' reached apply phase.");
+        }
+    }
+
+    private async ValueTask ApplyActivityExecutionHierarchyChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (_activityExecutionHierarchyWriter is null)
+            return;
+        foreach (var stateChange in stateChanges)
+        {
+            var projection = stateChange.State;
+            if (!string.IsNullOrWhiteSpace(projection.ExecutionScopeId ?? projection.Provenance.ExecutionScopeId))
+                await _activityExecutionHierarchyWriter.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection), cancellationToken);
         }
     }
 

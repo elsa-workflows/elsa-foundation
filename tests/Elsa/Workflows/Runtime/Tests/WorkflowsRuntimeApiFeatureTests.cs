@@ -33,6 +33,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionWriter));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityExecutionInspectionAccumulator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyReader));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyWriter));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusLookup));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkResumeResolver));
@@ -97,6 +100,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IActivityExecutionInspectionStore>();
         provider.GetRequiredService<IActivityExecutionInspectionWriter>();
         provider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>();
+        provider.GetRequiredService<IActivityExecutionHierarchyStore>();
+        provider.GetRequiredService<IActivityExecutionHierarchyReader>();
+        provider.GetRequiredService<IActivityExecutionHierarchyWriter>();
         provider.GetRequiredService<IBookmarkStateStore>();
         provider.GetRequiredService<IBookmarkStimulusLookup>();
         provider.GetRequiredService<IBookmarkResumeResolver>();

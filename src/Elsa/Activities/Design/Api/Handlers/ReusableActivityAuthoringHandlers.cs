@@ -22,6 +22,7 @@ public sealed class ReusableActivityAuthoringService(
     IActivityDefinitionLayoutStore layoutStore,
     IActivityDraftValidationStore validationStore,
     ICreateActivityDefinitionCommand createDefinition,
+    IUpdateActivityDefinitionPresentationCommand updateDefinitionPresentation,
     ICreateActivityDraftCommand createDraft,
     IReplaceActivityDraftCommand replaceDraft,
     IDiscardActivityDraftCommand discardDraft,
@@ -116,6 +117,31 @@ public sealed class ReusableActivityAuthoringService(
         return new(ToIdentity(definition, authoring), [ToSummary(draft)], []);
     }
 
+    public async Task<ReusableActivityDefinitionDetailsView> UpdateDefinitionAsync(
+        UpdateReusableActivityDefinition command,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.Category))
+            throw BadRequest("'category' is required.");
+        EnsureDisplayName(command.DisplayName);
+
+        var definition = await GetDefinitionEntityAsync(command.DefinitionId, cancellationToken);
+        var authoring = await GetAuthoringAsync(command.DefinitionId, cancellationToken);
+        EnsureVisible(definition.TenantId);
+        EnsureVisible(authoring.TenantId);
+        EnsureDesignAuthority(authoring);
+
+        await updateDefinitionPresentation.ExecuteAsync(new(
+            command.DefinitionId,
+            context.TenantId,
+            command.Category,
+            command.DisplayName,
+            command.Description,
+            timeProvider.GetUtcNow()), cancellationToken);
+
+        return await GetDefinitionAsync(command.DefinitionId, cancellationToken);
+    }
+
     public async Task<ReusableActivityDraftView> CreateDraftAsync(
         CreateReusableActivityDraft command,
         CancellationToken cancellationToken)
@@ -190,6 +216,90 @@ public sealed class ReusableActivityAuthoringService(
         }
 
         return ToDraftView(updated, command.Layout, null);
+    }
+
+    public async Task<ReusableActivityDraftView> MigrateDraftAsync(
+        MigrateReusableActivityDraft command,
+        CancellationToken cancellationToken)
+    {
+        EnsureProviderWrite(command.TargetProviderKey);
+        var current = await GetDraftAsync(command.DraftId, cancellationToken);
+        var authoring = await GetAuthoringAsync(current.DefinitionId, cancellationToken);
+        EnsureVisible(current.TenantId);
+        EnsureDesignAuthority(authoring);
+        EnsureActiveRevision(current, command.ExpectedRevision);
+
+        IActivityProvider targetProvider;
+        try
+        {
+            targetProvider = providers.Resolve(command.TargetProviderKey, command.TargetSchemaVersion);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw MigrationUnsupported(current.State.Provider, command.TargetProviderKey, command.TargetSchemaVersion, [], exception);
+        }
+
+        ActivityManifestMigration migration;
+        try
+        {
+            migration = await targetProvider.MigrateAsync(
+                new(current.State.Provider, command.TargetSchemaVersion),
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw MigrationUnsupported(current.State.Provider, command.TargetProviderKey, command.TargetSchemaVersion, [], exception);
+        }
+
+        if (migration.Manifest is null ||
+            !StringComparer.Ordinal.Equals(migration.Manifest.ProviderKey, command.TargetProviderKey) ||
+            !StringComparer.Ordinal.Equals(migration.Manifest.SchemaVersion, command.TargetSchemaVersion) ||
+            migration.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+        {
+            throw MigrationUnsupported(
+                current.State.Provider,
+                command.TargetProviderKey,
+                command.TargetSchemaVersion,
+                migration.Diagnostics);
+        }
+
+        var currentLayout = await layoutStore.FindDraftLayoutAsync(current.Id, cancellationToken)
+                            ?? throw OperationFailed("The source draft layout is unavailable.");
+        if (currentLayout.Revision != current.Revision)
+            throw StaleRevision(current, command.ExpectedRevision);
+
+        var now = timeProvider.GetUtcNow();
+        var migrated = NewDraft(
+            NewId("activity-draft"),
+            current.DefinitionId,
+            current.SourceVersionId,
+            current.State.Contract,
+            migration.Manifest,
+            now);
+        migrated.State = migrated.State with
+        {
+            Options = new Dictionary<string, string>(current.State.Options, StringComparer.Ordinal)
+        };
+        var migratedLayout = NewDraftLayout(migrated.Id, currentLayout.Records.ToArray(), now);
+
+        try
+        {
+            await createDraft.ExecuteAsync(new(migrated, migratedLayout, authoring.HeadVersionId), cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw Conflict(
+                "activity.definition.stale-head",
+                "Activity definition head is stale",
+                "The definition head changed while the migrated draft was being created.",
+                exception);
+        }
+
+        return ToDraftView(migrated, migratedLayout.Records.ToArray(), null);
     }
 
     public async Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken)
@@ -577,6 +687,13 @@ public sealed class ForkReusableActivityDefinitionHandler(ReusableActivityAuthor
         service.ForkDefinitionAsync(command, cancellationToken);
 }
 
+public sealed class UpdateReusableActivityDefinitionHandler(ReusableActivityAuthoringService service)
+    : ICommandHandler<UpdateReusableActivityDefinition, ReusableActivityDefinitionDetailsView>
+{
+    public Task<ReusableActivityDefinitionDetailsView> Handle(UpdateReusableActivityDefinition command, CancellationToken cancellationToken) =>
+        service.UpdateDefinitionAsync(command, cancellationToken);
+}
+
 public sealed class CreateReusableActivityDraftHandler(ReusableActivityAuthoringService service)
     : ICommandHandler<CreateReusableActivityDraft, ReusableActivityDraftView>
 {
@@ -589,6 +706,13 @@ public sealed class ReplaceReusableActivityDraftHandler(ReusableActivityAuthorin
 {
     public Task<ReusableActivityDraftView> Handle(ReplaceReusableActivityDraft command, CancellationToken cancellationToken) =>
         service.ReplaceDraftAsync(command, cancellationToken);
+}
+
+public sealed class MigrateReusableActivityDraftHandler(ReusableActivityAuthoringService service)
+    : ICommandHandler<MigrateReusableActivityDraft, ReusableActivityDraftView>
+{
+    public Task<ReusableActivityDraftView> Handle(MigrateReusableActivityDraft command, CancellationToken cancellationToken) =>
+        service.MigrateDraftAsync(command, cancellationToken);
 }
 
 public sealed class DiscardReusableActivityDraftHandler(ReusableActivityAuthoringService service)

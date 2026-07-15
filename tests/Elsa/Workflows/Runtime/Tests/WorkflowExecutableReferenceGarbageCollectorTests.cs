@@ -74,6 +74,51 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.NotNull(await _executableStore.FindAsync("artifact-1"));
     }
 
+    [Fact]
+    public async Task Sweep_RetainsExpiredTestRunMaterialWhileExecutionIsLive_ThenCollectsAfterTerminalState()
+    {
+        var templates = new InMemoryExecutableActivityTemplateStore();
+        var template = new ExecutableActivityTemplate(
+            "template-1", "hash-template-1", Executable("unused").RootActivity,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], "test/1",
+            new Dictionary<string, string>(), _now);
+        await templates.SaveAsync(template);
+        var baseExecutable = Executable("artifact-1");
+        var executable = new WorkflowExecutable(
+            baseExecutable.Identity,
+            baseExecutable.RootActivity,
+            baseExecutable.ResumeTargets,
+            baseExecutable.CreatedAt,
+            new Dictionary<string, string> { ["activity.templateHash"] = template.TemplateHash });
+        await _executableStore.SaveAsync(executable);
+        await _sourceReferenceStore.SaveAsync(Reference("wrapper-ref", executable.Identity.ArtifactId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _sourceReferenceStore.SaveAsync(Reference("template-ref", template.TemplateId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        var states = new InMemoryWorkflowExecutionStateStore();
+        await states.SaveAsync(new(
+            "wfexec-1", executable.Identity, WorkflowExecutionStatus.Running, null, _now.AddHours(-1), _now.AddHours(-1), _now, null, null, null, null,
+            new Dictionary<string, string>()));
+        var collector = new WorkflowExecutableReferenceGarbageCollector(
+            _executableStore, _sourceReferenceStore, templates, states, TimeProvider.System,
+            NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+
+        var liveSweep = await collector.SweepAsync(_now);
+
+        Assert.False(liveSweep.DidWork);
+        Assert.NotNull(await _executableStore.FindAsync(executable.Identity.ArtifactId));
+        Assert.NotNull(await templates.FindAsync(template.TemplateId));
+
+        await states.SaveAsync((await states.FindAsync("wfexec-1"))! with
+        {
+            Status = WorkflowExecutionStatus.Completed,
+            CompletedAt = _now
+        });
+        var terminalSweep = await collector.SweepAsync(_now);
+
+        Assert.Equal(2, terminalSweep.DeletedReferenceCount);
+        Assert.Equal(1, terminalSweep.DeletedArtifactCount);
+        Assert.Equal(1, terminalSweep.DeletedActivityTemplateCount);
+    }
+
     private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector() =>
         new(
             _executableStore,

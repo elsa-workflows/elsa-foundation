@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -10,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -26,8 +26,6 @@ public sealed record ActivityTemplateCompilerRequest(
     ActivityDefinitionDraft Draft,
     string CandidateDefinitionVersionId,
     string CandidateVersion,
-    string ProviderFingerprint,
-    IReadOnlyList<ActivityTemplateDependencyRequest> DirectDependencies,
     long LayoutBytes);
 
 public sealed record ActivityTemplateCompilerResult(
@@ -99,16 +97,6 @@ public sealed class ActivityTemplateCompiler(
             x.ParentOccurrenceId,
             x.ChildSlotName,
             x.ChildIndex)).ToArray();
-
-        if (request.DirectDependencies.Count > 0 && !DependencyAssertionsMatch(request.DirectDependencies, authoritativeDependencies))
-        {
-            diagnostics.Add(new(
-                "activity.dependency.assertion-mismatch",
-                ActivityDiagnosticSeverity.Error,
-                "Caller-supplied dependency assertions do not match the authoritative provider manifest.",
-                subject,
-                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
-        }
 
         foreach (var dependencyRequest in authoritativeDependencies
                      .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
@@ -220,8 +208,23 @@ public sealed class ActivityTemplateCompiler(
             request.Draft.State.Contract,
             request.Draft.State.Provider,
             resolved,
-            request.ProviderFingerprint), cancellationToken);
+            provider.CompilerFingerprint), cancellationToken);
         diagnostics.AddRange(compilation.Diagnostics);
+
+        if (!StringComparer.Ordinal.Equals(compilation.ProviderFingerprint, provider.CompilerFingerprint))
+        {
+            diagnostics.Add(new(
+                "activity.provider.contract-invalid",
+                ActivityDiagnosticSeverity.Error,
+                "The activity provider returned a compiler fingerprint different from its registered fingerprint.",
+                subject,
+                new(request.Draft.State.Provider.ProviderKey),
+                "Return the exact compiler fingerprint supplied by the Publishing coordinator.",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["contractMember"] = nameof(ActivityTemplateCompilation.ProviderFingerprint)
+                }));
+        }
 
         if (!ResolvedDependenciesMatch(compilation.DirectDependencies, resolved))
         {
@@ -246,6 +249,27 @@ public sealed class ActivityTemplateCompiler(
                 "The activity provider did not return an executable root.",
                 subject,
                 Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
+        }
+
+        if (compilation.ExecutableRoot is not null)
+        {
+            var declared = compilation.RuntimeRequirements.Distinct().OrderBy(x => x.ConsumerKey, StringComparer.Ordinal).ThenBy(x => x.SchemaVersion, StringComparer.Ordinal);
+            var requiredByNodes = Flatten(compilation.ExecutableRoot)
+                .Select(x => new RuntimeRequirement(x.Descriptor.ConsumerKey, x.Descriptor.SchemaVersion))
+                .Distinct()
+                .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
+                .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal);
+            if (!declared.SequenceEqual(requiredByNodes))
+            {
+                diagnostics.Add(new(
+                    "activity.provider.runtime-requirements-invalid",
+                    ActivityDiagnosticSeverity.Error,
+                    "The activity provider's Runtime consumer requirements do not exactly match its executable nodes.",
+                    subject,
+                    new(request.Draft.State.Provider.ProviderKey),
+                    "Declare every and only the stable consumer/schema pairs used by the compiled executable nodes.",
+                    new Dictionary<string, string>(StringComparer.Ordinal)));
+            }
         }
 
         if (diagnostics.Any(IsError) || compilation.ExecutableRoot is null)
@@ -282,6 +306,11 @@ public sealed class ActivityTemplateCompiler(
             .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
             .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal)
             .ToArray();
+        var storageDriverRequirements = compilation.StorageDriverRequirements
+            .Concat(closure.Values.SelectMany(x => x.StorageDriverRequirements))
+            .Distinct()
+            .OrderBy(x => x.DriverKey, StringComparer.Ordinal)
+            .ToArray();
         var compatibilityMetadata = compilation.ProviderCompatibilityChanges
             .OrderBy(x => x.ChangeId, StringComparer.Ordinal)
             .ToDictionary(x => $"provider.change.{x.ChangeId}", x => $"{x.Impact}:{x.RequiredBump}", StringComparer.Ordinal);
@@ -304,13 +333,14 @@ public sealed class ActivityTemplateCompiler(
         if (diagnostics.Any(IsError))
             return new(null, measurements, resolved, ActivityDiagnosticOrderer.Order(diagnostics));
 
-        var hash = ComputeBehaviorHash(
+        var hash = ExecutableActivityTemplateBehaviorHasher.Compute(
             compilation.ExecutableRoot,
             compilation.TemplateLocalResumeTargets,
             directRuntimeDependencies,
             closedTemplates,
             runtimeRequirements,
-            request.ProviderFingerprint,
+            storageDriverRequirements,
+            provider.CompilerFingerprint,
             compatibilityMetadata);
         var templateId = $"activity-template-{hash["sha256:".Length..]}";
         var executableTemplate = new ExecutableActivityTemplate(
@@ -321,9 +351,10 @@ public sealed class ActivityTemplateCompiler(
             directRuntimeDependencies,
             closedTemplates,
             runtimeRequirements,
-            request.ProviderFingerprint,
+            provider.CompilerFingerprint,
             compatibilityMetadata,
-            timeProvider.GetUtcNow());
+            timeProvider.GetUtcNow(),
+            storageDriverRequirements);
 
         return new(executableTemplate, measurements, resolved, ActivityDiagnosticOrderer.Order(diagnostics))
         {
@@ -476,16 +507,6 @@ public sealed class ActivityTemplateCompiler(
                 Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
     }
 
-    private static bool DependencyAssertionsMatch(
-        IReadOnlyList<ActivityTemplateDependencyRequest> asserted,
-        IReadOnlyList<ActivityTemplateDependencyRequest> authoritative)
-    {
-        static string Key(ActivityTemplateDependencyRequest value) =>
-            $"{value.OccurrenceId}\u001f{value.DefinitionVersionId}\u001f{value.ParentOccurrenceId}\u001f{value.ChildSlotName}\u001f{value.ChildIndex}\u001f{string.Join("\u001e", value.NodeOrigin.Select(x => $"{x.Kind}\u001d{x.Id}"))}";
-        return asserted.Select(Key).Order(StringComparer.Ordinal)
-            .SequenceEqual(authoritative.Select(Key).Order(StringComparer.Ordinal), StringComparer.Ordinal);
-    }
-
     private static bool ResolvedDependenciesMatch(
         IReadOnlyList<ActivityResolvedDependency> providerDependencies,
         IReadOnlyList<ActivityResolvedDependency> authoritative)
@@ -510,60 +531,15 @@ public sealed class ActivityTemplateCompiler(
         };
     }
 
-    private static string ComputeBehaviorHash(
-        ExecutableNode root,
-        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
-        IReadOnlyCollection<ExecutableActivityTemplateDependency> directDependencies,
-        IReadOnlyCollection<ExecutableActivityTemplateIdentity> closedTemplates,
-        IReadOnlyCollection<RuntimeRequirement> runtimeRequirements,
-        string providerFingerprint,
-        IReadOnlyDictionary<string, string> compatibilityMetadata)
+    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
     {
-        var behavior = JsonSerializer.SerializeToElement(new
+        var pending = new Stack<ExecutableNode>();
+        pending.Push(root);
+        while (pending.TryPop(out var node))
         {
-            schemaVersion = "1",
-            root,
-            resumeTargets = resumeTargets.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray(),
-            directDependencies = directDependencies.OrderBy(x => x.OccurrenceId, StringComparer.Ordinal).ThenBy(x => x.DefinitionVersionId, StringComparer.Ordinal).ToArray(),
-            closedTemplates = closedTemplates.OrderBy(x => x.TemplateHash, StringComparer.Ordinal).ThenBy(x => x.TemplateId, StringComparer.Ordinal).ToArray(),
-            runtimeRequirements = runtimeRequirements.OrderBy(x => x.ConsumerKey, StringComparer.Ordinal).ThenBy(x => x.SchemaVersion, StringComparer.Ordinal).ToArray(),
-            providerFingerprint,
-            compatibilityMetadata = compatibilityMetadata.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray()
-        });
-        var canonical = Canonicalize(behavior);
-        return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(canonical))}";
-    }
-
-    private static byte[] Canonicalize(JsonElement element)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, element);
-        return stream.ToArray();
-    }
-
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonical(writer, property.Value);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                    WriteCanonical(writer, item);
-                writer.WriteEndArray();
-                break;
-            default:
-                element.WriteTo(writer);
-                break;
+            yield return node;
+            foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
+                pending.Push(child);
         }
     }
 

@@ -62,6 +62,9 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.StartsWith("artifact-", executable.Identity.ArtifactId, StringComparison.Ordinal);
         Assert.Equal("write-one", executable.RootActivity.ExecutableNodeId);
+        Assert.Equal(
+            new RuntimeRequirement(WellKnownRuntimeActivityConsumers.ClrActivity, RuntimeActivityDescriptor.InitialSchemaVersion),
+            Assert.Single(executable.RuntimeRequirements));
     }
 
     [Fact]
@@ -530,7 +533,7 @@ public sealed class WorkflowExecutableCompilerTests
                 DefinitionId: "definition-1",
                 DefinitionVersionId: "draft:snapshot-1",
                 ArtifactVersion: "draft",
-                State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null),
+                State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null),
                 SourceKind: "WorkflowDraftSnapshot",
                 SourceId: "snapshot-1",
                 SourceVersion: "draft")
@@ -882,7 +885,7 @@ public sealed class WorkflowExecutableCompilerTests
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState(variables ?? [], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState(variables ?? [], rootActivity, [], [], null)
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
@@ -930,7 +933,10 @@ public sealed class WorkflowExecutableCompilerTests
                 ActivityTypeKey = activityTypeKey,
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = inputs ?? []
         };
@@ -948,7 +954,10 @@ public sealed class WorkflowExecutableCompilerTests
                 ActivityTypeKey = activityType.FullName!,
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(
                 new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web)),

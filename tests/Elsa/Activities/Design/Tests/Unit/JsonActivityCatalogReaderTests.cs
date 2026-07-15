@@ -34,7 +34,10 @@ public sealed class JsonActivityCatalogReaderTests : IDisposable
                 "displayName": "Send Email",
                 "category": "Communication",
                 "description": "Sends an email to a recipient.",
-                "descriptorType": "Clr",
+                "providerKey": "acme.clr-activity",
+                "providerSchemaVersion": "1",
+                "consumerKey": "acme.clr-activity",
+                "consumerSchemaVersion": "1",
                 "descriptor": {
                   "typeInfo": {
                     "typeName": "SendEmail",
@@ -58,7 +61,10 @@ public sealed class JsonActivityCatalogReaderTests : IDisposable
         Assert.Equal("Send Email", model.DisplayName);
         Assert.Equal("Communication", model.Category);
         Assert.Equal("Sends an email to a recipient.", model.Description);
-        Assert.Equal("Clr", model.DescriptorType);
+        Assert.Equal("acme.clr-activity", model.ProviderKey);
+        Assert.Equal("1", model.ProviderSchemaVersion);
+        Assert.Equal("acme.clr-activity", model.ConsumerKey);
+        Assert.Equal("1", model.ConsumerSchemaVersion);
 
         // The descriptor is left as a raw JsonElement — the runtime constructor that owns the type
         // materializes it; the design domain never deserializes it.

@@ -83,6 +83,17 @@ public sealed class ActivityUpgradePlanTests
     }
 
     [Fact]
+    public async Task Planner_orders_diagnostics_by_the_complete_canonical_location_key()
+    {
+        var later = Diagnostic("/z");
+        var earlier = Diagnostic("/a");
+
+        var plan = await Planner(new([], [later, earlier]), new PlanStore()).PlanAsync(Request());
+
+        Assert.Equal(["/a", "/z"], plan.Diagnostics.Select(x => x.Location!.JsonPointer));
+    }
+
+    [Fact]
     public async Task Post_rewrite_candidate_is_compiled_and_dependency_change_requires_minor_bump()
     {
         var baseline = Publication("base", "owner", "hash-base");
@@ -166,6 +177,38 @@ public sealed class ActivityUpgradePlanTests
     }
 
     [Fact]
+    public async Task Apply_rejects_an_explicit_empty_selection_instead_of_expanding_it_to_all_steps()
+    {
+        var mutations = new RecordingMutationStore();
+        var plan = ReadyPlan();
+        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), mutations, new Clock(Now));
+
+        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
+            await command.ApplyAsync(new(plan.PlanId, [])));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+        Assert.Equal(0, mutations.Calls);
+    }
+
+    [Fact]
+    public async Task Apply_handler_exposes_an_explicit_empty_selection_as_the_canonical_request_error()
+    {
+        var plan = ReadyPlan();
+        var store = new PlanStore(plan);
+        var handler = new ApplyActivityUpgradePlanHandler(
+            new ApplyActivityUpgradePlanCommand(store, new RecordingMutationStore(), new Clock(Now)),
+            store,
+            new AuthoringContext(null));
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            handler.Handle(new(plan.PlanId, []), default));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+    }
+
+    [Fact]
     public async Task Stale_apply_reports_conflict_and_commits_no_partial_draft_edits()
     {
         var plan = ReadyPlan();
@@ -225,15 +268,63 @@ public sealed class ActivityUpgradePlanTests
         var store = new PlanStore(plan);
         var context = new AuthoringContext("tenant-b");
         var applier = new RecordingApplier();
+        var publications = new PublicationStore(Publication("old", "dependency", "hash-old"), Publication("new", "dependency", "hash-new"));
 
         var readException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            new GetActivityUpgradePlanHandler(store, context).Handle(new(plan.PlanId), default));
+            new GetActivityUpgradePlanHandler(store, publications, context).Handle(new(plan.PlanId), default));
         var applyException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
             new ApplyActivityUpgradePlanHandler(applier, store, context).Handle(new(plan.PlanId), default));
 
         Assert.Equal("activity.upgrade.plan-not-found", readException.ErrorCode);
         Assert.Equal("activity.upgrade.plan-not-found", applyException.ErrorCode);
         Assert.Equal(0, applier.Calls);
+    }
+
+    [Fact]
+    public async Task Create_handler_translates_invalid_plan_arguments_to_the_canonical_request_error()
+    {
+        var handler = new CreateActivityUpgradePlanHandler(
+            Planner(new([], []), new PlanStore()),
+            new PublicationStore(),
+            new AuthoringContext(null));
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            handler.Handle(new([], [], true, false), default));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Upgrade_plan_view_projects_nested_exact_version_identities_and_canonical_diagnostics()
+    {
+        var later = Diagnostic("/z");
+        var earlier = Diagnostic("/a");
+        var plan = ReadyPlan();
+        plan = plan with
+        {
+            Diagnostics = [later, earlier],
+            Steps = [plan.Steps[0] with { Diagnostics = [later, earlier] }, plan.Steps[1]]
+        };
+        var publications = new PublicationStore(
+            Publication("old", "dependency", "hash-old"),
+            Publication("new", "dependency", "hash-new"));
+
+        var view = await plan.ToViewAsync(publications);
+
+        var replacement = Assert.Single(view.Replacements);
+        Assert.Equal(new("dependency", "old", "1.0.0", "hash-old"), replacement.From);
+        Assert.Equal(new("dependency", "new", "2.0.0", "hash-new"), replacement.To);
+        Assert.Equal(["/a", "/z"], view.Diagnostics.Select(x => x.Location!.JsonPointer));
+        Assert.Equal(["/a", "/z"], view.Steps[0].Diagnostics.Select(x => x.Location!.JsonPointer));
+
+        var json = JsonSerializer.Serialize(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Contains("\"from\":{\"definitionId\":\"dependency\",\"versionId\":\"old\",\"version\":\"1.0.0\",\"templateHash\":\"hash-old\"}", json, StringComparison.Ordinal);
+        Assert.Contains("\"to\":{\"definitionId\":\"dependency\",\"versionId\":\"new\",\"version\":\"2.0.0\",\"templateHash\":\"hash-new\"}", json, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(json);
+        var replacementJson = document.RootElement.GetProperty("replacements")[0];
+        Assert.False(replacementJson.TryGetProperty("fromVersionId", out _));
+        Assert.False(replacementJson.TryGetProperty("toVersionId", out _));
     }
 
     private static ActivityUpgradePlanner Planner(
@@ -271,6 +362,14 @@ public sealed class ActivityUpgradePlanTests
 
     private static ActivityContract Contract() => new("1", [], [], []);
     private static ActivityProviderManifest Provider() => new("graph", "1", JsonDocument.Parse("{}").RootElement.Clone());
+
+    private static ActivityDiagnostic Diagnostic(string pointer) => new(
+        "activity.test",
+        ActivityDiagnosticSeverity.Error,
+        "Test diagnostic.",
+        new("ActivityDraft", "draft-a"),
+        new(JsonPointer: pointer),
+        Metadata: new Dictionary<string, string>());
 
     private static ActivityDefinitionVersionPublication Publication(string id, string definitionId, string hash) => new()
     {

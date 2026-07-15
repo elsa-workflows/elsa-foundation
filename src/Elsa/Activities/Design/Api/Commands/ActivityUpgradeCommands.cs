@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Design.Api.Commands;
 
@@ -11,5 +12,5 @@ public sealed record CreateActivityUpgradePlan(
     bool CreateDraftsForPublishedDependents = false) : ICommand<ActivityUpgradePlanView>;
 
 public sealed record ApplyActivityUpgradePlan(
-    string PlanId,
+    [property: JsonIgnore] string PlanId,
     IReadOnlyList<string>? SelectedStepIds = null) : ICommand<ActivityUpgradeApplyResultView>;

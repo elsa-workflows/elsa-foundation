@@ -41,7 +41,7 @@ public class GroundworkWorkflowDefinitionDraftStoreTests
         {
             Id = id,
             WorkflowDefinitionId = definitionId,
-            State = new WorkflowDefinitionState([], null, [], [], null, null),
+            State = new WorkflowDefinitionState([], null, [], [], null),
         };
 
     [Fact]

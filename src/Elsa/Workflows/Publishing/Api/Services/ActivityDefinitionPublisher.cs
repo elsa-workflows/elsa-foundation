@@ -11,6 +11,7 @@ using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Publishing.Api.Contracts;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -18,12 +19,11 @@ public sealed record PublishActivityDefinitionRequest(
     string DraftId,
     long ExpectedDraftRevision,
     string? ExpectedDefinitionHeadVersionId,
-    string Version,
-    string ProviderFingerprint,
-    IReadOnlyList<ActivityTemplateDependencyRequest> DirectDependencies);
+    string Version);
 
 public sealed record PublishActivityDefinitionResult(
     ActivityPublicationResult Publication,
+    ActivityDefinitionVersionPublication VersionPublication,
     ExecutableActivityTemplate Template,
     WorkflowExecutableSourceReference SourceReference,
     ActivityResourceMeasurements Measurements,
@@ -63,6 +63,7 @@ public sealed class ActivityDefinitionPublisher(
     IActivityDraftValidator validator,
     IActivityVersionDiffer differ,
     IActivityTemplateCompiler compiler,
+    IActivityPublishingAuthorizationContext authorization,
     ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commitCommand,
     IDistributedLockProvider lockProvider,
     IIdentityGenerator identityGenerator,
@@ -74,13 +75,17 @@ public sealed class ActivityDefinitionPublisher(
     {
         var draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
                     ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
+        EnsureAuthorized(draft.TenantId);
         await using var lockHandle = await lockProvider.AcquireLockAsync(DefinitionLockKey(draft.DefinitionId), null, cancellationToken);
 
         draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
                 ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
+        EnsureAuthorized(draft.TenantId);
         var definition = await definitions.GetAsync(draft.DefinitionId, cancellationToken);
+        EnsureAuthorized(definition.TenantId);
         var authoring = await authoringStore.FindAsync(definition.Id, cancellationToken)
                         ?? throw Reject("activity.definition.authoring-not-found", "Activity definition authoring state was not found.", [], true);
+        EnsureAuthorized(authoring.TenantId);
         EnsureExpectedState(request, draft, authoring);
 
         var validation = await validator.ValidateAsync(new(
@@ -103,6 +108,7 @@ public sealed class ActivityDefinitionPublisher(
 
         var layout = await layoutStore.FindDraftLayoutAsync(draft.Id, cancellationToken)
                      ?? throw Reject("activity.draft.layout-not-found", "The draft layout was not found.", [], true);
+        EnsureAuthorized(layout.TenantId);
         if (layout.Revision != draft.Revision)
             throw Reject("activity.draft.stale-layout", "The draft layout does not match the expected draft revision.", [], true);
 
@@ -112,8 +118,6 @@ public sealed class ActivityDefinitionPublisher(
             draft,
             versionId,
             request.Version,
-            request.ProviderFingerprint,
-            request.DirectDependencies,
             ComputeLayoutBytes(layout.Records)), cancellationToken);
         if (!compilation.IsSuccessful || compilation.Template is null)
             throw Reject("activity.publication.invalid", "Activity publication was rejected during compilation.", compilation.Diagnostics);
@@ -122,9 +126,7 @@ public sealed class ActivityDefinitionPublisher(
             ? null
             : await publicationStore.FindAsync(authoring.HeadVersionId, cancellationToken)
               ?? throw Reject("activity.definition.head-invalid", "The current definition head publication was not found.", [], true);
-        var diff = head is null
-            ? null
-            : await ComputeDiffAsync(head, versionId, request.Version, draft, compilation, cancellationToken);
+        var diff = await ComputeDiffAsync(head, versionId, request.Version, draft, layout, compilation, cancellationToken);
         var semVerDiagnostic = ValidateRequestedBump(head?.Version, requestedVersion, diff?.RequiredBump ?? ActivityVersionBump.None, draft);
         if (semVerDiagnostic is not null)
             throw Reject("activity.publication.invalid", "The requested activity version is insufficient.", [semVerDiagnostic]);
@@ -146,7 +148,7 @@ public sealed class ActivityDefinitionPublisher(
             draft,
             versionId,
             request.Version,
-            request.ProviderFingerprint,
+            compilation.Template.ProviderFingerprint,
             sourceReferenceId,
             compilation.Template,
             compilation.Measurements,
@@ -205,6 +207,7 @@ public sealed class ActivityDefinitionPublisher(
 
         return new(
             committed,
+            publication,
             compilation.Template,
             sourceReference,
             compilation.Measurements,
@@ -227,38 +230,78 @@ public sealed class ActivityDefinitionPublisher(
             throw Reject("activity.definition.content-authority", "This activity definition is not Design-owned.", [], true);
     }
 
+    private void EnsureAuthorized(string? tenantId)
+    {
+        if (!authorization.CanAccessTenant(tenantId))
+            throw Reject(
+                "activity.tenant.reference-denied",
+                "The requested activity identity is outside the caller's authorized scope.",
+                []);
+    }
+
     private async ValueTask<ActivityVersionDiff> ComputeDiffAsync(
-        ActivityDefinitionVersionPublication head,
+        ActivityDefinitionVersionPublication? head,
         string candidateVersionId,
         string candidateVersion,
         ActivityDefinitionDraft draft,
+        ActivityDefinitionDraftLayout candidateLayout,
         ActivityTemplateCompilerResult compilation,
         CancellationToken cancellationToken)
     {
-        var fromEdges = await dependencyStore.ListOutboundAsync(head.DefinitionVersionId, cancellationToken);
-        var fromDependencies = new List<ActivityDependencyItem>(fromEdges.Count);
-        foreach (var edge in fromEdges.OrderBy(x => x.OccurrenceId, StringComparer.Ordinal))
+        var fromDependencies = new List<ActivityDependencyItem>();
+        ActivityDefinitionVersionLayout? headLayout = null;
+        if (head is not null)
         {
-            var dependency = await publicationStore.FindAsync(edge.DependencyVersionId, cancellationToken)
-                             ?? throw Reject(
-                                 "activity.dependency.version-not-found",
-                                 $"Published dependency version '{edge.DependencyVersionId}' was not found while comparing the current head.",
-                                 [],
-                                 true);
-            fromDependencies.Add(ToDependencyItem(head, dependency, edge));
+            var fromEdges = await dependencyStore.ListOutboundAsync(head.DefinitionVersionId, cancellationToken);
+            foreach (var edge in fromEdges.OrderBy(x => x.OccurrenceId, StringComparer.Ordinal))
+            {
+                var dependency = await publicationStore.FindAsync(edge.DependencyVersionId, cancellationToken)
+                                 ?? throw Reject(
+                                     "activity.dependency.version-not-found",
+                                     $"Published dependency version '{edge.DependencyVersionId}' was not found while comparing the current head.",
+                                     [],
+                                     true);
+                fromDependencies.Add(ToDependencyItem(head, dependency, edge));
+            }
+
+            headLayout = await layoutStore.FindVersionLayoutAsync(head.DefinitionVersionId, cancellationToken);
         }
 
+        var emptyContract = new ActivityContract(draft.State.Contract.ContractSchemaVersion, [], [], []);
         return await differ.DiffAsync(new(
-            new("ActivityVersion", head.DefinitionId, head.DefinitionVersionId, Version: head.Version, TemplateHash: head.TemplateHash),
-            new("ActivityVersion", head.DefinitionId, candidateVersionId, Version: candidateVersion, TemplateHash: compilation.Template!.TemplateHash),
-            head.Contract,
+            head is null
+                ? new("ActivityDefinitionBaseline", draft.DefinitionId)
+                : new("ActivityVersion", head.DefinitionId, head.DefinitionVersionId, Version: head.Version, TemplateHash: head.TemplateHash),
+            new("ActivityVersion", draft.DefinitionId, candidateVersionId, Version: candidateVersion, TemplateHash: compilation.Template!.TemplateHash),
+            head?.Contract ?? emptyContract,
             draft.State.Contract,
-            head.Provider,
+            head?.Provider ?? draft.State.Provider,
             draft.State.Provider,
             fromDependencies,
-            compilation.DirectDependencies.Select(x => ToDependencyItem(head.DefinitionId, candidateVersionId, candidateVersion, compilation.Template.TemplateHash, x)).ToArray()),
+            compilation.DirectDependencies.Select(x => ToDependencyItem(draft.DefinitionId, candidateVersionId, candidateVersion, compilation.Template.TemplateHash, x)).ToArray(),
+            compilation.ProviderCompatibilityChanges,
+            FromImplementation: head is null ? null : Implementation(head, headLayout),
+            ToImplementation: new(
+                compilation.Template.ProviderFingerprint,
+                compilation.Measurements.LocalNodeCount,
+                compilation.Template.ResumeTargets.Count,
+                ActivityLayoutHasher.Compute(candidateLayout.Records),
+                candidateLayout.Records.Count,
+                compilation.Template.RuntimeRequirements
+                    .Select(x => new ActivityRuntimeRequirementDeclaration(x.ConsumerKey, x.SchemaVersion))
+                    .ToArray())),
             cancellationToken);
     }
+
+    private static ActivityVersionImplementationFacts Implementation(
+        ActivityDefinitionVersionPublication publication,
+        ActivityDefinitionVersionLayout? layout) => new(
+        publication.ProviderFingerprint,
+        publication.ResourceMeasurements.LocalNodeCount,
+        publication.ResumeTargetCount,
+        layout is null ? null : ActivityLayoutHasher.Compute(layout.Records),
+        layout?.Records.Count,
+        publication.RuntimeRequirements.ToArray());
 
     private static ActivityDependencyItem ToDependencyItem(
         ActivityDefinitionVersionPublication owner,
@@ -359,7 +402,10 @@ public sealed class ActivityDefinitionPublisher(
     {
         Id = versionId,
         TenantId = definition.TenantId,
-        DescriptorType = template.Root.Descriptor.ConsumerKey,
+        ProviderKey = draft.State.Provider.ProviderKey,
+        ProviderSchemaVersion = draft.State.Provider.SchemaVersion,
+        ConsumerKey = template.Root.Descriptor.ConsumerKey,
+        ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
         DescriptorPayload = template.Root.Descriptor.Payload,
         SourceKind = "ActivityDefinitionDraft",
         SourceId = draft.Id,

@@ -48,7 +48,7 @@ public sealed class ActivityTemplatePlacer(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ValidateExactBinding(request.Publication, request.Template, request.SourceReference);
+        ValidateExactBinding(request.Publication, request.Template, request.SourceReference, directSelection: true);
 
         var generatedIds = new HashSet<string>(StringComparer.Ordinal);
         var stack = new Stack<PlacementFrame>();
@@ -67,7 +67,10 @@ public sealed class ActivityTemplatePlacer(
                                ?? throw new InvalidOperationException($"Exact activity dependency template '{dependency.TemplateId}' was not found during placement.");
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new InvalidOperationException($"Exact activity dependency Source Reference '{publication.SourceReferenceId}' was not found during placement.");
-                ValidateExactBinding(publication, template, sourceReference);
+                // This exact child was already closed into the immutable selected parent template. Retirement
+                // blocks new direct catalog selection but does not invalidate that retained closure; revocation
+                // remains the stronger placement-time policy fact.
+                ValidateExactBinding(publication, template, sourceReference, directSelection: false);
                 if (!StringComparer.Ordinal.Equals(dependency.TemplateHash, template.TemplateHash) ||
                     !StringComparer.Ordinal.Equals(dependency.DefinitionId, publication.DefinitionId) ||
                     !StringComparer.Ordinal.Equals(dependency.Version, publication.Version))
@@ -148,7 +151,7 @@ public sealed class ActivityTemplatePlacer(
 
             var isBoundary = ReferenceEquals(current.Node, frame.Template.Root);
             var descriptor = isBoundary
-                ? StampBoundaryDescriptor(current.Node.Descriptor, frame, frame.Children)
+                ? StampBoundaryDescriptor(current.Node.Descriptor, frame, frame.Children, nodeIds)
                 : current.Node.Descriptor;
             var metadata = current.Node.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
             metadata["activity.invocationOrigin"] = JsonSerializer.Serialize(frame.Origin.Segments);
@@ -190,7 +193,8 @@ public sealed class ActivityTemplatePlacer(
             resumeTargets.Add(id, target.Value with
             {
                 ResumeTargetId = id,
-                ExecutableNodeId = nodeIds[target.Value.ExecutableNodeId]
+                ExecutableNodeId = nodeIds[target.Value.ExecutableNodeId],
+                LocalResumeTargetId = target.Value.LocalResumeTargetId ?? target.Value.ResumeTargetId
             });
         }
         foreach (var child in frame.Children)
@@ -317,7 +321,8 @@ public sealed class ActivityTemplatePlacer(
     private RuntimeActivityDescriptor StampBoundaryDescriptor(
         RuntimeActivityDescriptor descriptor,
         PlacementFrame frame,
-        IReadOnlyList<PlacementBuild> children)
+        IReadOnlyList<PlacementBuild> children,
+        IReadOnlyDictionary<string, string> placedNodeIds)
     {
         if (descriptor.Payload.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException($"Boundary descriptor '{descriptor.ConsumerKey}/{descriptor.SchemaVersion}' must contain an object payload.");
@@ -327,6 +332,11 @@ public sealed class ActivityTemplatePlacer(
         values["version"] = JsonSerializer.SerializeToElement(frame.Publication.Version);
         values["templateHash"] = JsonSerializer.SerializeToElement(frame.Template.TemplateHash);
         values["sourceReferenceId"] = JsonSerializer.SerializeToElement(frame.SourceReference.SourceReferenceId);
+        if (values.TryGetValue("entryNodeId", out var localEntry) && localEntry.ValueKind == JsonValueKind.String &&
+            placedNodeIds.TryGetValue(localEntry.GetString() ?? string.Empty, out var placedEntryNodeId))
+        {
+            values["entryNodeId"] = JsonSerializer.SerializeToElement(placedEntryNodeId);
+        }
         if (values.TryGetValue("entryOccurrenceId", out var entry) && entry.ValueKind == JsonValueKind.String)
         {
             var entryOccurrenceId = entry.GetString();
@@ -356,9 +366,14 @@ public sealed class ActivityTemplatePlacer(
     private static void ValidateExactBinding(
         ActivityDefinitionVersionPublication publication,
         ExecutableActivityTemplate template,
-        WorkflowExecutableSourceReference reference)
+        WorkflowExecutableSourceReference reference,
+        bool directSelection)
     {
-        if (publication.Lifecycle != Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionLifecycle.Active ||
+        var lifecycleAllowed = directSelection
+            ? publication.Lifecycle == Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionLifecycle.Active
+            : publication.Lifecycle is Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionLifecycle.Active
+                or Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionLifecycle.Retired;
+        if (!lifecycleAllowed ||
             !StringComparer.Ordinal.Equals(publication.TemplateId, template.TemplateId) ||
             !StringComparer.Ordinal.Equals(publication.TemplateHash, template.TemplateHash) ||
             !StringComparer.Ordinal.Equals(publication.SourceReferenceId, reference.SourceReferenceId) ||

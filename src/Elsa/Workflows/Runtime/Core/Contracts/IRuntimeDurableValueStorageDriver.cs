@@ -24,4 +24,6 @@ public interface IRuntimeDurableValueStorageDriver
 public interface IRuntimeDurableValueStorageDriverRegistry
 {
     IRuntimeDurableValueStorageDriver GetRequired(string driverKey);
+    bool Contains(string driverKey);
+    IReadOnlyCollection<string> DriverKeys { get; }
 }

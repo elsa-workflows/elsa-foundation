@@ -35,9 +35,23 @@ public sealed class ActivityTemplateRegistryTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => discoverer.DiscoverDependenciesAsync(request, cancellation.Token).AsTask());
     }
 
+    [Fact]
+    public async Task Provider_diagnostics_cannot_disclose_messages_subjects_paths_remediation_or_metadata()
+    {
+        var registry = new ActivityTemplateDependencyDiscovererRegistry([new DisclosingDiscoverer()]);
+        var result = await registry.Resolve("provider", "1").DiscoverDependenciesAsync(new(
+            "definition", "draft", 1, new("provider", "1", System.Text.Json.JsonSerializer.SerializeToElement(new { }))));
+
+        var serialized = System.Text.Json.JsonSerializer.Serialize(Assert.Single(result.Diagnostics));
+        Assert.DoesNotContain("secret", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("tenant-private", serialized, StringComparison.Ordinal);
+        Assert.Contains("provider.validation.failed", serialized, StringComparison.Ordinal);
+    }
+
     private sealed class Compiler(string providerKey, IReadOnlySet<string> schemas) : IActivityTemplateProviderCompiler
     {
         public string ProviderKey => providerKey;
+        public string CompilerFingerprint => $"{providerKey}/compiler/1";
         public IReadOnlySet<string> SupportedManifestSchemas => schemas;
         public ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
@@ -51,5 +65,23 @@ public sealed class ActivityTemplateRegistryTests
             cancellationToken.ThrowIfCancellationRequested();
             throw new InvalidOperationException("secret provider detail");
         }
+    }
+
+    private sealed class DisclosingDiscoverer : IActivityTemplateDependencyDiscoverer
+    {
+        public string ProviderKey => "provider";
+        public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
+
+        public ValueTask<ActivityTemplateDependencyDiscovery> DiscoverDependenciesAsync(
+            ActivityTemplateDependencyDiscoveryRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityTemplateDependencyDiscovery([], [new(
+                "provider.validation.failed",
+                ActivityDiagnosticSeverity.Error,
+                "secret manifest payload",
+                new("ActivityDraft", "tenant-private"),
+                new("provider", "/secret/expression"),
+                "Paste the secret into a log.",
+                new Dictionary<string, string> { ["secret"] = "tenant-private" })]));
     }
 }

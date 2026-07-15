@@ -34,6 +34,7 @@ public sealed class GroundworkReusableActivityStores(
     IActivityDirectDependencyStore,
     IActivityDependencyProjectionStore,
     ICreateActivityDefinitionCommand,
+    IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
     IReplaceActivityDraftCommand,
     IDiscardActivityDraftCommand,
@@ -239,6 +240,38 @@ public sealed class GroundworkReusableActivityStores(
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, request.InitialLayout, 0)
             ],
             cancellationToken);
+    }
+
+    public async Task<ActivityDefinition> ExecuteAsync(
+        UpdateActivityDefinitionPresentationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var definition = await LoadAsync<ActivityDefinition>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            request.DefinitionId,
+            cancellationToken)
+            ?? throw Missing($"Activity definition '{request.DefinitionId}' was not found.");
+        var authoring = await RequiredAuthoringAsync(request.DefinitionId, cancellationToken);
+        EnsureDesignAuthority(authoring.Entity);
+        if (!StringComparer.Ordinal.Equals(definition.Entity.TenantId, authoring.Entity.TenantId))
+            throw Conflict($"Activity definition '{request.DefinitionId}' tenant does not match its authoring state.");
+        if (!IsVisible(definition.Entity.TenantId, request.TenantId) || !IsVisible(authoring.Entity.TenantId, request.TenantId))
+            throw Conflict($"Activity definition '{request.DefinitionId}' is outside the caller tenant scope.");
+
+        definition.Entity.Category = request.Category;
+        definition.Entity.DisplayName = request.DisplayName;
+        definition.Entity.Description = request.Description;
+        definition.Entity.LastModifiedAt = request.LastModifiedAt;
+
+        await store.SaveAllAsync(
+            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+            [Save(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                definition.Entity,
+                definition.Envelope.Version)],
+            cancellationToken);
+        return definition.Entity;
     }
 
     public async Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default)

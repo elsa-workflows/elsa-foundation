@@ -1,8 +1,8 @@
 # Extension points — Activities.Runtime domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtime` — the composition root where `ActivitiesRuntimeFeature` registers the activity construction factory, the descriptor-type → constructor registry, the single aggregating `RegisterActivityConstructors` handler, and the startup task that drives the Registry + StartUp Task pattern.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtime` — the composition root where `ActivitiesRuntimeFeature` registers the activity construction factory, the stable consumer-key/schema registry, the single aggregating `RegisterActivityConstructors` handler, and the startup task that drives the Registry + StartUp Task pattern.
 
-> Carries **no** `Elsa.*.Design.*` dependency (Elsa §E2.2). Construction is discriminated by the descriptor type's `FullName`, not a `Kind` string.
+> Carries **no** `Elsa.*.Design.*` dependency (Elsa §E2.2). Construction is discriminated by the provider-neutral `(ConsumerKey, SchemaVersion)` pair in the executable artifact. CLR type names are payload details owned by the CLR consumer, never universal dispatch identity.
 
 ---
 
@@ -30,15 +30,17 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** CLR reconciliation records the activity version as `Trigger`; publish-time compilation also reads the marker from the CLR construction descriptor so legacy catalog rows authored before the marker was persisted still compile into routable trigger nodes.
 - **Related runtime seam:** `IActivityTriggerStimulusProvider` in `Elsa.Workflows.Runtime.Core`; a marked activity must have a provider contributed by its owning feature.
 
-### `IActivityConstructor<TDescriptor>` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Contribution (one constructor per descriptor type).
-- **Signature:** `string DescriptorType { get; }`; `ValueTask<IActivity> Construct(TDescriptor descriptor, IDictionary<string, InputArgument>?, IDictionary<string, OutputArgument>?, CancellationToken)` (with the non-generic `IActivityConstructor` bridge that owns `payload.Deserialize<TDescriptor>()`).
+### `IActivityConstructor` / `IActivityConstructor<TDescriptor>` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Contribution (one constructor claim per stable consumer key and supported schema version).
+- **Signature:** `string ConsumerKey { get; }`, `IReadOnlySet<string> SupportedSchemaVersions { get; }`, and `ConstructAsync(RuntimeActivityDescriptor, ...)`. The generic bridge owns `payload.Deserialize<TDescriptor>()`; its convenience contract supports schema `1` by default.
 - **Register:** `services.AddSingleton<IActivityConstructor, MyConstructor>()`.
-- **Aggregated by:** the single `RegisterActivityConstructors : IEventHandler<OnActivityConstructorsInitializing>` (this feature), which collects every registered constructor and adds it to the registry. The registry enforces one-constructor-per-`DescriptorType` (throws on a duplicate).
+- **Aggregated by:** the single `RegisterActivityConstructors : IEventHandler<OnActivityConstructorsInitializing>` (this feature), which collects every registered constructor and adds it to the registry. The registry rejects duplicate `(ConsumerKey, SchemaVersion)` claims.
 
 **Known implementations (shipped):**
-- `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(descriptor type `Elsa.Primitives.Models.ClrActivityDescriptor`; the default/primitive CLR kind — resolves the activity's stable alias via `IWellKnownTypeRegistry`)*
-- `Elsa.Activities.Composition.Runtime` — `WorkflowActivityConstructor` *(descriptor type `Elsa.Workflows.Primitives.Models.WorkflowIdentity`; the Workflow kind)*
+- `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(consumer `elsa.clr-activity`, schema `1`; resolves the payload's stable activity alias via `IWellKnownTypeRegistry`)*.
+- `Elsa.Activities.Graph.Runtime` — `GraphActivityConstructor` *(consumer `elsa.graph-activity`, schema `1`; constructs an inline composite whose children execute inside the same workflow execution)*.
+
+There is deliberately no workflow-definition consumer. Starting another workflow remains the explicit `ExecuteWorkflow` operation; reusable graph-backed activities expand as activity execution within the current workflow rather than creating a child workflow.
 
 ### `IActivityChildCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Activity-owned continuation handler.

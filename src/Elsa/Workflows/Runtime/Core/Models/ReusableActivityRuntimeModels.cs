@@ -20,7 +20,8 @@ public sealed class ExecutableActivityTemplate
         IReadOnlyCollection<RuntimeRequirement> runtimeRequirements,
         string providerFingerprint,
         IReadOnlyDictionary<string, string> compatibilityMetadata,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(templateId);
         ArgumentException.ThrowIfNullOrWhiteSpace(templateHash);
@@ -40,7 +41,18 @@ public sealed class ExecutableActivityTemplate
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
         DirectDependencies = Array.AsReadOnly(directDependencies.ToArray());
         ClosedTemplates = Array.AsReadOnly(closedTemplates.ToArray());
-        RuntimeRequirements = Array.AsReadOnly(runtimeRequirements.Distinct().OrderBy(item => item.ConsumerKey, StringComparer.Ordinal).ThenBy(item => item.SchemaVersion, StringComparer.Ordinal).ToArray());
+        RuntimeRequirements = Array.AsReadOnly(runtimeRequirements
+            .Concat(nodes.Select(node => new RuntimeRequirement(node.Descriptor.ConsumerKey, node.Descriptor.SchemaVersion)))
+            .Distinct()
+            .OrderBy(item => item.ConsumerKey, StringComparer.Ordinal)
+            .ThenBy(item => item.SchemaVersion, StringComparer.Ordinal)
+            .ToArray());
+        StorageDriverRequirements = Array.AsReadOnly((storageDriverRequirements ?? [])
+            .Concat(nodes.SelectMany(node => node.OutputCaptures.Values)
+                .Select(capture => new RuntimeStorageDriverRequirement(capture.StorageDriverKey)))
+            .Distinct()
+            .OrderBy(item => item.DriverKey, StringComparer.Ordinal)
+            .ToArray());
         ProviderFingerprint = providerFingerprint;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
         CreatedAt = createdAt;
@@ -54,6 +66,7 @@ public sealed class ExecutableActivityTemplate
     public IReadOnlyCollection<ExecutableActivityTemplateDependency> DirectDependencies { get; }
     public IReadOnlyCollection<ExecutableActivityTemplateIdentity> ClosedTemplates { get; }
     public IReadOnlyCollection<RuntimeRequirement> RuntimeRequirements { get; }
+    public IReadOnlyCollection<RuntimeStorageDriverRequirement> StorageDriverRequirements { get; }
     public string ProviderFingerprint { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
     public DateTimeOffset CreatedAt { get; }

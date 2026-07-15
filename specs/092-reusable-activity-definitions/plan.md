@@ -270,19 +270,22 @@ This scenario and the Runtime -> Design architecture guard are release gates; lo
 
 ```bash
 dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj -c Release
+dotnet test tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj -c Release
+dotnet test tests/Elsa/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj -c Release
 dotnet test tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj -c Release
 dotnet test tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj -c Release
 dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj -c Release
 dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj -c Release
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release
+dotnet test tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj -c Release
 dotnet build Elsa.Server.slnx -c Release
 ```
 
-New graph-provider/import test project paths are added to this list when their projects are created; `quickstart.md` owns the plan-stage validation walkthrough.
+`quickstart.md` owns the validation walkthrough and recorded implementation evidence.
 
 ## Frontend Grilling Handoff
 
-The right time to grill the Studio/frontend design is **after this spec/plan is accepted and before Slice A API models or Slice E inspection endpoints are frozen in code**. The frontend session should treat runtime identity, exact pinning, atomic publication, and durability semantics as fixed, while challenging:
+The backend seams are now implementation-tested and stable enough to grill the Studio/frontend design. The frontend session should treat runtime identity, exact pinning, atomic publication, and durability semantics as fixed, while challenging:
 
 - definition/draft/version navigation and parallel-draft visibility;
 - contract editor states for absent/null/present values and expression defaults;
@@ -292,7 +295,7 @@ The right time to grill the Studio/frontend design is **after this spec/plan is 
 - click-through runtime hierarchy, retries/loops, aggregate versus outer status, cursors, layout fallback, and redaction;
 - test-run status and comparison with published behavior.
 
-Feedback that changes wire/read-model usability can still amend the contracts at that point without reopening Runtime execution semantics.
+Feedback may still propose additive wire/read-model refinements, but incompatible changes must be assessed explicitly against the implemented backend contract rather than silently reopening Runtime execution semantics.
 
 ## Complexity Tracking
 

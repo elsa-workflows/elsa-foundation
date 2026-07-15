@@ -12,8 +12,8 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
 - **What it does:** reads either the single `JsonReconciliationOptions.FilePath` or each
   `JsonReconciliationOptions.Files` entry (in ascending `Order`) via `IJsonActivityCatalogReader` and
   returns the concatenated `ActivityVersionReconciliationModel[]`. Each model's `Descriptor` is left as
-  a raw `JsonElement` paired with its `DescriptorType` string — the reconciliation handler persists that
-  pair opaquely and never resolves the descriptor type. Ordering lets an author stage dependencies
+  raw `JsonElement` paired with explicit provider and consumer key/schema identities. Reconciliation
+  persists those values opaquely and never resolves a CLR descriptor type. Ordering lets an author stage dependencies
   (e.g. plain activities first, workflow-backed activities that reference them second).
 - **Register:** `services.AddScoped<IActivityReconciliationSource, JsonActivityReconciliationSource>()`
   (done by `JsonActivityReconciliationFeature`).

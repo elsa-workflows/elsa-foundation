@@ -117,6 +117,16 @@ internal sealed class InMemoryActivityExecutionHierarchyStore : IActivityExecuti
             return ValueTask.FromResult(_layouts.GetValueOrDefault((workflowExecutionId, activityExecutionId)));
     }
 
+    public ValueTask<ActivityExecutionBoundary?> FindBoundaryAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return ValueTask.FromResult<ActivityExecutionBoundary?>(null);
+    }
+
     private static bool IsAfter(ActivityExecutionHierarchyRecord record, long sequence, string activityExecutionId) =>
         record.ExecutionSequence > sequence ||
         record.ExecutionSequence == sequence && StringComparer.Ordinal.Compare(record.ActivityExecutionId, activityExecutionId) > 0;

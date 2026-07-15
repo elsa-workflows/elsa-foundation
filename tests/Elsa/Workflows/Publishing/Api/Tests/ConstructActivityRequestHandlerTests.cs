@@ -17,10 +17,10 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class ConstructActivityRequestHandlerTests
 {
     [Fact]
-    public async Task PassesTheRowsDescriptorTypeAndOpaquePayloadToTheFactory()
+    public async Task PassesStableConsumerSchemaAndOpaquePayloadToTheFactory()
     {
         var payload = JsonSerializer.SerializeToElement(new { TypeName = "WriteLine" });
-        var version = Version("v1", "def1", "1.0.0", descriptorType: "Elsa.Primitives.Models.ClrActivityDescriptor", payload: payload);
+        var version = Version("v1", "def1", "1.0.0", consumerKey: WellKnownRuntimeActivityConsumers.ClrActivity, payload: payload);
         var factory = new FakeActivityFactory(new StubActivity());
         var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]), factory);
 
@@ -38,7 +38,7 @@ public sealed class ConstructActivityRequestHandlerTests
     public async Task ProjectsBothSeamsIntoTheView()
     {
         var version = Version("v1", "def1", "2.0.0",
-            descriptorType: "Elsa.Workflows.Primitives.Models.WorkflowIdentity",
+            consumerKey: "test.consumer",
             payload: JsonSerializer.SerializeToElement(new { }),
             inputs: [new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null)],
             outputs: [new OutputDefinition("result", "Result", new TypeReference("Object"), null, "Result", null)]);
@@ -47,7 +47,10 @@ public sealed class ConstructActivityRequestHandlerTests
         var view = await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
 
         // Design side.
-        Assert.Equal("Elsa.Workflows.Primitives.Models.WorkflowIdentity", view.DescriptorType);
+        Assert.Equal("test.provider", view.ProviderKey);
+        Assert.Equal("1", view.ProviderSchemaVersion);
+        Assert.Equal("test.consumer", view.ConsumerKey);
+        Assert.Equal("1", view.ConsumerSchemaVersion);
         var input = Assert.Single(view.Inputs);
         Assert.Equal("text", input.ReferenceKey);
         Assert.Equal("String", input.TypeName);
@@ -64,14 +67,17 @@ public sealed class ConstructActivityRequestHandlerTests
         string id,
         string definitionId,
         string version,
-        string descriptorType,
+        string consumerKey,
         JsonElement payload,
         IEnumerable<InputDefinition>? inputs = null,
         IEnumerable<OutputDefinition>? outputs = null) =>
         new(version, definitionId)
         {
             Id = id,
-            DescriptorType = descriptorType,
+            ProviderKey = "test.provider",
+            ProviderSchemaVersion = "1",
+            ConsumerKey = consumerKey,
+            ConsumerSchemaVersion = "1",
             DescriptorPayload = payload,
             Inputs = inputs ?? [],
             Outputs = outputs ?? []

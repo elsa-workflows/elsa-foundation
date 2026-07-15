@@ -12,8 +12,8 @@ namespace Elsa.Activities.Design.Tests.Integration;
 /// <summary>
 /// Drives the real <see cref="JsonActivityReconciliationSource"/> (with the real reader + shared
 /// serializer) through the real reconciliation handler + reconciler against an in-memory catalog. The
-/// author-authored JSON carries verbose UI metadata and a polymorphic <c>Clr</c> implementation
-/// descriptor; the tests prove the kind/descriptor deserialize and reconcile correctly, that multiple
+/// author-authored JSON carries verbose UI metadata, stable provider/consumer identities, and an opaque
+/// descriptor; the tests prove the identity/payload deserialize and reconcile correctly, that multiple
 /// files are concatenated in ascending <c>Order</c>, and that an unconfigured source identity faults.
 /// </summary>
 public sealed class JsonReconciliationTests : IDisposable
@@ -129,7 +129,10 @@ public sealed class JsonReconciliationTests : IDisposable
           "displayName": "Send Email",
           "category": "Communication",
           "description": "Sends an email to a recipient.",
-          "descriptorType": "Clr",
+          "providerKey": "elsa.clr-activity",
+          "providerSchemaVersion": "1",
+          "consumerKey": "elsa.clr-activity",
+          "consumerSchemaVersion": "1",
           "descriptor": {
             "typeInfo": {
               "typeName": "SendEmail",
@@ -159,7 +162,10 @@ public sealed class JsonReconciliationTests : IDisposable
           "activityTypeKey": "Acme.Activities.WriteLine",
           "displayName": "Write Line",
           "category": "Primitives",
-          "descriptorType": "Clr",
+          "providerKey": "elsa.clr-activity",
+          "providerSchemaVersion": "1",
+          "consumerKey": "elsa.clr-activity",
+          "consumerSchemaVersion": "1",
           "descriptor": {
             "typeInfo": {
               "typeName": "WriteLine",

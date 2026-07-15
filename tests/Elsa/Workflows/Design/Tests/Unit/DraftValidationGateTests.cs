@@ -138,7 +138,7 @@ public sealed class DraftValidationGateTests
     {
         public string Id => "draft-1";
         public string WorkflowDefinitionId => "wf-1";
-        public WorkflowDefinitionState State { get; } = new([], null, [], [], null, null);
+        public WorkflowDefinitionState State { get; } = new([], null, [], [], null);
         public DateTimeOffset CreatedAt => DateTimeOffset.UtcNow;
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;
     }

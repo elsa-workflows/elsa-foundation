@@ -8,6 +8,8 @@ using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Persistence.Groundwork.Tests;
 
@@ -34,6 +36,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
@@ -112,6 +115,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind:
                 await new GroundworkActivityExecutionInspectionStore(store, Serializer).SaveAsync(Projection());
                 break;
+            case ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind:
+                await new GroundworkActivityExecutionHierarchyStore(store, Serializer).SaveAsync(HierarchyRecord());
+                break;
             case ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind:
                 await new GroundworkWorkflowExecutionStateStore(store, Serializer).SaveAsync(WorkflowState());
                 break;
@@ -169,6 +175,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkActivityExecutionStateStore(store, Serializer).FindAsync(Wf, "ae-1"))?.Status,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind =>
             (await new GroundworkActivityExecutionInspectionStore(store, Serializer).FindAsync(Wf, "ae-1"))?.ActivityExecutionId,
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind =>
+            (await new GroundworkActivityExecutionHierarchyStore(store, Serializer, CursorCodec())
+                .FindBoundaryAsync(Wf, "ae-1"))?.DefinitionVersionId,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind =>
             (await new GroundworkWorkflowExecutionStateStore(store, Serializer).FindAsync(Wf))?.Status,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind =>
@@ -213,6 +222,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => "artifact-1",
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind => ActivityExecutionStatus.Running,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind => "ae-1",
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind => "activity-ver-1",
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind => WorkflowExecutionStatus.Completed,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind => "value-dv-1",
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind => 7L,
@@ -307,7 +317,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
             {
-                ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" })
+                ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" }, "local-resume-1")
             },
             createdAt: DateTimeOffset.UnixEpoch,
             compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
@@ -422,6 +432,28 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         Metadata: new Dictionary<string, string>(),
         ExecutionScopeId: "scope-1",
         Attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null));
+
+    private static ActivityExecutionHierarchyRecord HierarchyRecord() =>
+        ActivityExecutionHierarchyProjector.FromInspection(Projection() with
+        {
+            ExecutionScopeId = "ae-1",
+            Provenance = ActivitySchedulingProvenance.From(
+                Wf, null, null, null, null, null, "ae-1", "test",
+                attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null)),
+            Metadata = new Dictionary<string, string>
+            {
+                ["activity.definitionId"] = "activity-def-1",
+                ["activity.definitionVersionId"] = "activity-ver-1",
+                ["activity.version"] = "1.0.0",
+                ["activity.templateHash"] = "template-hash-1"
+            }
+        });
+
+    private static HmacActivityExecutionHierarchyCursorCodec CursorCodec() => new(
+        Options.Create(new ActivityExecutionHierarchyCursorOptions
+        {
+            SigningKey = "fixture-signing-key-that-is-at-least-thirty-two-bytes"
+        }));
 
     private static WorkflowExecutionState WorkflowState() => new(
         Wf,

@@ -14,9 +14,15 @@ public sealed class Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(
     IWorkflowDefinitionVersionFactory versionFactory)
 {
     public async ValueTask<IWorkflowDefinitionVersion> Map(Elsa3WorkflowDefinition definition, CancellationToken cancellationToken)
+        => await Map(definition, new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal), cancellationToken);
+
+    public async ValueTask<IWorkflowDefinitionVersion> Map(
+        Elsa3WorkflowDefinition definition,
+        IReadOnlyDictionary<string, Elsa3ActivityExactReplacement> replacements,
+        CancellationToken cancellationToken)
     {
         var workflowDefinition = definitionFactory.Create(definition.Name, definition.Description, definition.DefinitionId);
-        var state = await stateMapper.Map(definition, cancellationToken);
+        var state = await stateMapper.Map(definition, replacements, cancellationToken);
 
         return versionFactory.Create(
             workflowDefinition,

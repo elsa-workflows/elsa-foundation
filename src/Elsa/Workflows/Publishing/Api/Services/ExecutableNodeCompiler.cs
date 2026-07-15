@@ -57,7 +57,10 @@ public sealed class ExecutableNodeCompiler(
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");
-        var descriptor = CompileRuntimeDescriptor(activityVersion.DescriptorType, activityVersion.DescriptorPayload);
+        var descriptor = new RuntimeActivityDescriptor(
+            activityVersion.ConsumerKey,
+            activityVersion.ConsumerSchemaVersion,
+            activityVersion.DescriptorPayload);
         var clrActivityType = ResolveClrActivityType(descriptor);
         var activityType = clrActivityType is null
             ? catalogActivityType
@@ -146,21 +149,6 @@ public sealed class ExecutableNodeCompiler(
         }
 
         return resumeTargets;
-    }
-
-    private static RuntimeActivityDescriptor CompileRuntimeDescriptor(string descriptorType, JsonElement descriptorPayload)
-    {
-        var consumerKey = descriptorType switch
-        {
-            var value when StringComparer.Ordinal.Equals(value, typeof(ClrActivityDescriptor).FullName) => WellKnownRuntimeActivityConsumers.ClrActivity,
-            "Elsa.Workflows.Primitives.Models.WorkflowIdentity" => WellKnownRuntimeActivityConsumers.WorkflowDefinitionActivity,
-            _ => descriptorType
-        };
-
-        return new RuntimeActivityDescriptor(
-            consumerKey,
-            RuntimeActivityDescriptor.InitialSchemaVersion,
-            descriptorPayload);
     }
 
     private Type? ResolveClrActivityType(RuntimeActivityDescriptor descriptor)

@@ -16,6 +16,8 @@ public sealed class ActivityVersionDiffTests
         { "required input without default added", Contract(), Contract(inputs: [Input("added", required: true)]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "optional output added", Contract(), Contract(outputs: [Output("added")]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
         { "required output added", Contract(), Contract(outputs: [Output("added", required: true)]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
+        { "optional output becomes required", Contract(outputs: [Output("value")]), Contract(outputs: [Output("value", required: true)]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
+        { "required output becomes optional", Contract(outputs: [Output("value", required: true)]), Contract(outputs: [Output("value")]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "non-emitted outcome added", Contract(), Contract(outcomes: [Outcome("added")]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
         { "emitted outcome added", Contract(), Contract(outcomes: [Outcome("added", emitted: true)]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "input removed", Contract(inputs: [Input("value")]), Contract(), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },

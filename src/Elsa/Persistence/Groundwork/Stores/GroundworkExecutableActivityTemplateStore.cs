@@ -88,6 +88,22 @@ public sealed class GroundworkExecutableActivityTemplateStore(
         };
     }
 
+    public async ValueTask<IReadOnlyCollection<ExecutableActivityTemplate>> ListAsync(CancellationToken cancellationToken = default) =>
+        (await QueryDocumentsAsync<TemplateDocument, ExecutableActivityTemplate>(
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateByCollection,
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateCollection,
+            document => document.Template,
+            cancellationToken)).ToArray();
+
+    public async ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(templateId);
+        if (await FindAsync(templateId, cancellationToken) is null)
+            return false;
+        await DeleteDocumentAsync(templateId, cancellationToken);
+        return true;
+    }
+
     private void EnsureSameIdentityAndContent(ExecutableActivityTemplate existing, ExecutableActivityTemplate candidate)
     {
         if (!StringComparer.Ordinal.Equals(existing.TemplateHash, candidate.TemplateHash))

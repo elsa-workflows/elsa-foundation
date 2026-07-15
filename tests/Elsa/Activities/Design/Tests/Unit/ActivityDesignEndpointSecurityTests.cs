@@ -34,14 +34,19 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Definitions.List")]
     [InlineData("Definitions.ListDrafts")]
     [InlineData("Definitions.ListVersions")]
+    [InlineData("Definitions.Update")]
     [InlineData("Drafts.Diff")]
     [InlineData("Drafts.Discard")]
     [InlineData("Drafts.Get")]
+    [InlineData("Drafts.MigrateProvider")]
     [InlineData("Drafts.Replace")]
     [InlineData("Drafts.Validate")]
     [InlineData("Versions.Diff")]
     [InlineData("Versions.Dependencies")]
     [InlineData("Versions.Get")]
+    [InlineData("Versions.Restore")]
+    [InlineData("Versions.Retire")]
+    [InlineData("Versions.Revoke")]
     public void Endpoint_requires_a_permission_and_is_not_anonymous(string relativeTypeName)
     {
         var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
@@ -75,9 +80,11 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Definitions.List",
             "Definitions.ListDrafts",
             "Definitions.ListVersions",
+            "Definitions.Update",
             "Drafts.Diff",
             "Drafts.Discard",
             "Drafts.Get",
+            "Drafts.MigrateProvider",
             "Drafts.Replace",
             "Drafts.Validate",
             "UpgradePlans.Apply",
@@ -85,7 +92,10 @@ public sealed class ActivityDesignEndpointSecurityTests
             "UpgradePlans.Get",
             "Versions.Diff",
             "Versions.Dependencies",
-            "Versions.Get"
+            "Versions.Get",
+            "Versions.Restore",
+            "Versions.Retire",
+            "Versions.Revoke"
         ];
 
         Assert.Equal(covered.OrderBy(n => n, StringComparer.Ordinal), endpointTypes);

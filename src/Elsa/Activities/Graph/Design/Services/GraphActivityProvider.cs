@@ -20,6 +20,7 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(IActivityStructureService activityStructureService) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
 {
     public const string Key = "elsa.activity-graph";
+    public const string Fingerprint = "elsa.activity-graph/compiler/1.0.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -29,6 +30,7 @@ public sealed class GraphActivityProvider(IActivityStructureService activityStru
     };
 
     public string ProviderKey => Key;
+    public string CompilerFingerprint => Fingerprint;
     public IReadOnlySet<string> SupportedManifestSchemas => Schemas;
 
     public ValueTask<ActivityContractProposal> ProposeContractAsync(
@@ -116,6 +118,13 @@ public sealed class GraphActivityProvider(IActivityStructureService activityStru
             new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal),
             directDependencies,
             [new RuntimeRequirement(RuntimeConsumerKey, RuntimeDescriptorSchemaVersion)],
+            request.Contract.Inputs.Select(x => x.StorageDriverKey)
+                .Concat(request.Contract.Outputs.Select(x => x.StorageDriverKey))
+                .Concat(graph.Variables.Select(x => x.StorageDriverKey))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .Select(x => new RuntimeStorageDriverRequirement(x))
+                .ToArray(),
             measurements,
             request.ProviderFingerprint,
             [],
@@ -637,6 +646,7 @@ public sealed class GraphActivityProvider(IActivityStructureService activityStru
         IReadOnlyList<ActivityDiagnostic> diagnostics) => new(
         null,
         new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal),
+        [],
         [],
         [],
         new(0, 0, 0, 0, 0, 0, 0),

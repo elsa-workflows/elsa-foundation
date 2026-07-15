@@ -59,6 +59,26 @@ public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivit
             return ValueTask.FromResult(_byHash.GetValueOrDefault(templateHash));
     }
 
+    public ValueTask<IReadOnlyCollection<ExecutableActivityTemplate>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return ValueTask.FromResult<IReadOnlyCollection<ExecutableActivityTemplate>>(_byId.Values.ToArray());
+    }
+
+    public ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(templateId);
+        lock (_gate)
+        {
+            if (!_byId.Remove(templateId, out var template))
+                return ValueTask.FromResult(false);
+            _byHash.Remove(template.TemplateHash);
+            return ValueTask.FromResult(true);
+        }
+    }
+
     private static void EnsureSameIdentityAndContent(ExecutableActivityTemplate existing, ExecutableActivityTemplate candidate)
     {
         if (!StringComparer.Ordinal.Equals(existing.TemplateHash, candidate.TemplateHash))

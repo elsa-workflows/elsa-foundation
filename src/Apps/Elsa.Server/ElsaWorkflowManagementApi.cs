@@ -181,7 +181,6 @@ internal static class ElsaWorkflowManagementApi
                 RootActivity: activity,
                 Inputs: [],
                 Outputs: [],
-                WorkflowActivityOptions: null,
                 StrategyOptions: null);
 
             var submit = services.GetRequiredService<ISubmitWorkflowDefinitionCommand>();

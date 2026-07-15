@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Design.Api.Commands;
 
@@ -27,7 +28,7 @@ public sealed record CreateReusableActivityDefinition(
     IReadOnlyList<ActivityLayoutRecord> Layout) : ICommand<ReusableActivityDefinitionDetailsView>;
 
 public sealed record ForkReusableActivityDefinition(
-    string DefinitionId,
+    [property: JsonIgnore] string DefinitionId,
     string SourceVersionId,
     string ActivityTypeKey,
     string Category,
@@ -36,23 +37,35 @@ public sealed record ForkReusableActivityDefinition(
     string TargetProviderKey,
     string TargetProviderSchemaVersion) : ICommand<ReusableActivityDefinitionDetailsView>;
 
+public sealed record UpdateReusableActivityDefinition(
+    [property: JsonIgnore] string DefinitionId,
+    string Category,
+    string DisplayName,
+    string? Description) : ICommand<ReusableActivityDefinitionDetailsView>;
+
 public sealed record CreateReusableActivityDraft(
-    string DefinitionId,
+    [property: JsonIgnore] string DefinitionId,
     string? SourceVersionId,
     ActivityProviderManifest? Provider = null,
     ActivityContractView? Contract = null,
     IReadOnlyList<ActivityLayoutRecord>? Layout = null) : ICommand<ReusableActivityDraftView>;
 
 public sealed record ReplaceReusableActivityDraft(
-    string DraftId,
+    [property: JsonIgnore] string DraftId,
     long ExpectedRevision,
     ActivityContractView Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityLayoutRecord> Layout) : ICommand<ReusableActivityDraftView>;
 
-public sealed record DiscardReusableActivityDraft(string DraftId, long ExpectedRevision) : ICommand;
+public sealed record DiscardReusableActivityDraft([property: JsonIgnore] string DraftId, long ExpectedRevision) : ICommand;
 
-public sealed record ValidateReusableActivityDraft(string DraftId, long ExpectedRevision) : ICommand<ActivityDraftValidationView>;
+public sealed record ValidateReusableActivityDraft([property: JsonIgnore] string DraftId, long ExpectedRevision) : ICommand<ActivityDraftValidationView>;
+
+public sealed record MigrateReusableActivityDraft(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedRevision,
+    string TargetProviderKey,
+    string TargetSchemaVersion) : ICommand<ReusableActivityDraftView>;
 
 public sealed record ListReusableActivityDefinitions : IRequest<IReadOnlyList<ActivityDefinitionIdentityView>>;
 

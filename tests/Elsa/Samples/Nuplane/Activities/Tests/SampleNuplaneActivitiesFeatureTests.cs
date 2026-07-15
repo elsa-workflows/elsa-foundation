@@ -31,7 +31,9 @@ public sealed class SampleNuplaneActivitiesFeatureTests
         var activity = Assert.Single(await source.Read(CancellationToken.None));
 
         Assert.Equal(typeof(SayHelloFromNuplane).FullName, activity.ActivityTypeKey);
-        Assert.Equal(typeof(SampleNuplaneActivityDescriptor).FullName, activity.DescriptorType);
+        Assert.Equal(SampleNuplaneActivityConstructor.ConsumerKeyValue, activity.ConsumerKey);
+        Assert.Equal("1", activity.ConsumerSchemaVersion);
+        Assert.IsType<SampleNuplaneActivityDescriptor>(activity.Descriptor);
         Assert.Equal("Say Hello From Nuplane", activity.DisplayName);
         Assert.Contains(activity.Inputs, x => x.Name == nameof(SayHelloFromNuplane.Recipient));
     }

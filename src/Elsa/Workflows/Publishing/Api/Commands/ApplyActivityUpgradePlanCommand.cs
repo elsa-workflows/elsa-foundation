@@ -26,7 +26,9 @@ public sealed class ApplyActivityUpgradePlanCommand(
             throw Rejected(422, "activity.upgrade.plan-blocked", "The activity upgrade plan contains blocking diagnostics.", plan.Diagnostics);
 
         var ready = plan.Steps.Where(x => x.Diagnostics.All(d => d.Severity != ActivityDiagnosticSeverity.Error)).ToArray();
-        var selectedIds = request.SelectedStepIds is null or { Count: 0 }
+        if (request.SelectedStepIds is { Count: 0 })
+            throw Rejected(400, "activity.request.invalid", "selectedStepIds must be omitted or contain at least one upgrade step identity.");
+        var selectedIds = request.SelectedStepIds is null
             ? ready.Select(x => x.StepId).ToHashSet(StringComparer.Ordinal)
             : request.SelectedStepIds.ToHashSet(StringComparer.Ordinal);
         if (selectedIds.Count != (request.SelectedStepIds?.Count ?? selectedIds.Count) || selectedIds.Any(id => ready.All(x => !StringComparer.Ordinal.Equals(x.StepId, id))))

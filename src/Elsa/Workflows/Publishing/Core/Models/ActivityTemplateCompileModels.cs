@@ -20,6 +20,7 @@ public sealed record ActivityTemplateCompilation(
     IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> TemplateLocalResumeTargets,
     IReadOnlyList<ActivityResolvedDependency> DirectDependencies,
     IReadOnlyList<RuntimeRequirement> RuntimeRequirements,
+    IReadOnlyList<RuntimeStorageDriverRequirement> StorageDriverRequirements,
     ActivityResourceMeasurements ResourceMeasurements,
     string ProviderFingerprint,
     IReadOnlyList<ActivityVersionChange> ProviderCompatibilityChanges,

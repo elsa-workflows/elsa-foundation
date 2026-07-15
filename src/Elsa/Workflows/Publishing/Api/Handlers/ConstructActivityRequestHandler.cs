@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 /// THE BRIDGE. Three moves, each touching exactly one seam:
 /// <list type="number">
 ///   <item><b>Read</b> the persisted definition version — the Design seam hands over an opaque
-///   <c>(DescriptorType, DescriptorPayload)</c> plus the argument definitions.</item>
+///   stable provider/consumer identities, schema versions, and an opaque descriptor payload.</item>
 ///   <item><b>Invoke</b> <see cref="IActivityFactory"/> — the Runtime seam dispatches on the stable
 ///   consumer/schema pair and returns a whole <c>IActivity</c>.</item>
 ///   <item><b>Project</b> both sides into one view so the crossing is visible.</item>
@@ -35,8 +35,8 @@ public sealed class ConstructActivityRequestHandler(
         // 2. Invoke — the Runtime seam. Construct-only: no author values to bind yet.
         var activity = await factory.Create(
             new RuntimeActivityDescriptor(
-                ToRuntimeConsumerKey(version.DescriptorType),
-                RuntimeActivityDescriptor.InitialSchemaVersion,
+                version.ConsumerKey,
+                version.ConsumerSchemaVersion,
                 version.DescriptorPayload),
             inputs: null,
             outputs: null,
@@ -45,7 +45,10 @@ public sealed class ConstructActivityRequestHandler(
         // 3. Project — both sides in one payload.
         return new ConstructedActivityView(
             ActivityVersionId: version.Id,
-            DescriptorType: version.DescriptorType,
+            ProviderKey: version.ProviderKey,
+            ProviderSchemaVersion: version.ProviderSchemaVersion,
+            ConsumerKey: version.ConsumerKey,
+            ConsumerSchemaVersion: version.ConsumerSchemaVersion,
             RuntimeType: activity.GetType().FullName ?? activity.GetType().Name,
             Properties: ReadConcreteProperties(activity),
             SyntheticProperties: activity.SyntheticProperties,
@@ -54,16 +57,9 @@ public sealed class ConstructActivityRequestHandler(
             Outputs: version.Outputs.Select(o => new ArgumentView(o.ReferenceKey, o.Name, o.Type.Alias)).ToArray());
     }
 
-    private static string ToRuntimeConsumerKey(string designDescriptorType) => designDescriptorType switch
-    {
-        "Elsa.Primitives.Models.ClrActivityDescriptor" => WellKnownRuntimeActivityConsumers.ClrActivity,
-        "Elsa.Workflows.Primitives.Models.WorkflowIdentity" => WellKnownRuntimeActivityConsumers.WorkflowDefinitionActivity,
-        _ => designDescriptorType
-    };
-
     /// <summary>
-    /// The activity's own (concrete-type-declared) properties — e.g. <c>WorkflowIdentity</c> on the
-    /// workflow-backed activity, or a primitive's typed <c>InputArgument</c> properties. Base
+    /// The activity's own (concrete-type-declared) properties, such as a primitive's typed
+    /// <c>InputArgument</c> properties. Base
     /// <c>IActivity</c> bookkeeping (Id, Name, the bags) is excluded via <c>DeclaredOnly</c>.
     /// </summary>
     private static IReadOnlyDictionary<string, string?> ReadConcreteProperties(IActivity activity)

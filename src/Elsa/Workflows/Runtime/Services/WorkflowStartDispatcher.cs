@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -57,9 +58,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // References for this artifact and gates on them. A published dispatch requires a live Published
         // reference; a test-run dispatch requires a live TestRun reference and enforces its ExpiresAt. The
         // rejection reason distinguishes "no live reference" from "reference expired".
-        await GateOnReferenceAsync(request.ArtifactId, requiredScope, cancellationToken);
+        var sourceReference = await GateOnReferenceAsync(request, requiredScope, cancellationToken);
 
-        return await DispatchCoreAsync(request, executable, dispatchOptions, cancellationToken);
+        return await DispatchCoreAsync(request, executable, sourceReference?.SourceReferenceId, dispatchOptions, cancellationToken);
     }
 
     // Resolves the artifact's Source References and enforces the reference-derived scope/expiry gate.
@@ -69,20 +70,29 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     // artifact store without publishing a reference; gating those out would turn a storage primitive into a publish
     // gate. The gate therefore engages only once at least one reference exists for the artifact — which is exactly the
     // published and test-run flows this slice rewired to always append one.
-    private async ValueTask GateOnReferenceAsync(
-        string artifactId,
+    private async ValueTask<WorkflowExecutableSourceReference?> GateOnReferenceAsync(
+        WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope,
         CancellationToken cancellationToken)
     {
+        var artifactId = request.ArtifactId;
         var references = await _sourceReferenceStore.ListByArtifactAsync(artifactId, cancellationToken);
         if (references.Count == 0)
-            return;
+            return null;
 
         var now = _timeProvider.GetUtcNow();
         var scopedReferences = references.Where(reference => reference.Scope == requiredScope).ToArray();
 
-        if (scopedReferences.Any(reference => reference.IsLive(now)))
-            return;
+        var live = scopedReferences.Where(reference => reference.IsLive(now)).ToArray();
+        if (request.Metadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var requestedReferenceId))
+        {
+            var requested = live.SingleOrDefault(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, requestedReferenceId));
+            if (requested is null)
+                throw new WorkflowExecutableReferenceRejectedException(artifactId, requiredScope, WorkflowExecutableReferenceRejectionReason.NoLiveReference);
+            return requested;
+        }
+        if (live.Length > 0)
+            return live.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.SourceReferenceId, StringComparer.Ordinal).First();
 
         // No live reference of the required scope. Distinguish the test-run-lapsed case (a non-retired reference
         // that is present but past its expiry) from the absent/retired/wrong-scope case, so an expired test run is
@@ -97,12 +107,13 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutable executable,
+        string? sourceReferenceId,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
-        var metadata = CreateDispatchMetadata(request, executable.Identity);
+        var metadata = CreateDispatchMetadata(request, executable.Identity, sourceReferenceId);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: executable.Identity,
             requestedArtifactId: request.ArtifactId,
@@ -148,7 +159,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     private static IReadOnlyDictionary<string, string> CreateDispatchMetadata(
         WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutableIdentity identity)
+        WorkflowExecutableIdentity identity,
+        string? sourceReferenceId)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
@@ -156,6 +168,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         metadata["runtime.artifactId"] = identity.ArtifactId;
         metadata["runtime.artifactVersion"] = identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
+        if (sourceReferenceId is not null)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 

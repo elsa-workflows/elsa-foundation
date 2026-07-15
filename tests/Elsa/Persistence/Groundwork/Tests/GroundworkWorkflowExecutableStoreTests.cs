@@ -51,6 +51,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal(2, found.Nodes.Count);
         Assert.True(found.NodesById.ContainsKey("child"));
         Assert.Equal("slice-1", found.CompatibilityMetadata["slice"]);
+        Assert.Equal(
+            ["Elsa.Activities.SendEmailDescriptor", "Elsa.Activities.SequenceDescriptor"],
+            found.RuntimeRequirements.Select(x => x.ConsumerKey).Order(StringComparer.Ordinal));
+        Assert.Equal("sample.external", Assert.Single(found.StorageDriverRequirements).DriverKey);
 
         var all = await store.ListAsync();
         Assert.Equal(2, all.Count);
@@ -249,7 +253,8 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" })
             },
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
+            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
+            storageDriverRequirements: [new RuntimeStorageDriverRequirement("sample.external")]);
     }
 
     private static WorkflowExecutableSourceReference Reference(

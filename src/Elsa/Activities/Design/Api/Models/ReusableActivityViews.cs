@@ -213,15 +213,11 @@ public sealed record ReusableActivityVersionView(
     ActivityDefinitionVersionLifecycle Lifecycle,
     DateTimeOffset PublishedAt);
 
-public sealed record ActivityProblemDetailsView(
-    string Type,
-    string Title,
-    int Status,
-    string Detail,
-    string Instance,
-    string ErrorCode,
-    string TraceId,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+public sealed record ReusableActivityVersionLifecycleView(
+    string VersionId,
+    ActivityDefinitionVersionLifecycle Lifecycle,
+    string Reason,
+    DateTimeOffset ChangedAt);
 
 public sealed class ActivityAuthoringException(
     int statusCode,

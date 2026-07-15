@@ -89,12 +89,15 @@ public sealed class ReadContractSurfaceTests
         Assert.Equal(typeof(string), versionProperty!.PropertyType);
     }
 
-    [Fact] // T042 (SC-002) — the descriptor read surface is the opaque (DescriptorType, DescriptorPayload) pair.
-    public void IActivityDefinitionVersion_ExposesDescriptorTypeAndPayload()
+    [Fact]
+    public void IActivityDefinitionVersion_ExposesStableProviderConsumerSchemasAndPayload()
     {
-        var descriptorType = typeof(IActivityDefinitionVersion).GetProperty(nameof(IActivityDefinitionVersion.DescriptorType));
-        Assert.NotNull(descriptorType);
-        Assert.Equal(typeof(string), descriptorType!.PropertyType);
+        var properties = typeof(IActivityDefinitionVersion).GetProperties().ToDictionary(x => x.Name);
+        Assert.Equal(typeof(string), properties[nameof(IActivityDefinitionVersion.ProviderKey)].PropertyType);
+        Assert.Equal(typeof(string), properties[nameof(IActivityDefinitionVersion.ProviderSchemaVersion)].PropertyType);
+        Assert.Equal(typeof(string), properties[nameof(IActivityDefinitionVersion.ConsumerKey)].PropertyType);
+        Assert.Equal(typeof(string), properties[nameof(IActivityDefinitionVersion.ConsumerSchemaVersion)].PropertyType);
+        Assert.DoesNotContain("DescriptorType", properties.Keys);
 
         var descriptorPayload = typeof(IActivityDefinitionVersion).GetProperty(nameof(IActivityDefinitionVersion.DescriptorPayload));
         Assert.NotNull(descriptorPayload);

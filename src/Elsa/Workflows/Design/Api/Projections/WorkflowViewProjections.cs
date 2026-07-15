@@ -19,7 +19,6 @@ public static class WorkflowViewProjections
             state.RootActivity,
             state.Inputs,
             state.Outputs,
-            state.WorkflowActivityOptions,
             state.StrategyOptions);
 
     public static WorkflowDefinitionState ToState(this WorkflowDefinitionStateView view) =>
@@ -28,7 +27,6 @@ public static class WorkflowViewProjections
             view.RootActivity,
             view.Inputs ?? [],
             view.Outputs ?? [],
-            view.WorkflowActivityOptions,
             view.StrategyOptions);
 
     public static WorkflowDefinitionVersionDetailsView ToDetailsView(this IWorkflowDefinitionVersion version, IEnumerable<IDesignMetadataRecord>? layout = null) =>

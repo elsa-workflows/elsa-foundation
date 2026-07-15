@@ -16,6 +16,7 @@
       "resume-1": {
         "executableNodeId": "node-child",
         "handlerKey": "Bookmark",
+        "localResumeTargetId": "local-resume-1",
         "metadata": {
           "stimulus": "Http"
         },
@@ -78,6 +79,17 @@
       "metadata": {},
       "outputCaptures": {},
       "structure": null
-    }
+    },
+    "runtimeRequirements": [
+      {
+        "consumerKey": "Elsa.Activities.SendEmailDescriptor",
+        "schemaVersion": "1"
+      },
+      {
+        "consumerKey": "Elsa.Activities.SequenceDescriptor",
+        "schemaVersion": "1"
+      }
+    ],
+    "storageDriverRequirements": []
   }
 }

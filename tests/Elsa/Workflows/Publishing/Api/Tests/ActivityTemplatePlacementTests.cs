@@ -58,6 +58,38 @@ public sealed class ActivityTemplatePlacementTests
     }
 
     [Fact]
+    public async Task Repeated_resumable_placements_keep_local_target_identity_but_namespace_canonical_ids()
+    {
+        var root = Node("wait");
+        var template = new ExecutableActivityTemplate(
+            "template-wait", "hash-wait", root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>
+            {
+                ["resume-target:delivery"] = new("resume-target:delivery", root.ExecutableNodeId, "OnDelivery", new Dictionary<string, string>())
+            },
+            [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+        var publication = Publication("definition-wait", "version-wait", "type.wait", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = new ActivityTemplatePlacer(
+            new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]), new Sha256ActivityPlacementHasher());
+        ActivityTemplatePlacementRequest Request(string authoredNode) => new(
+            publication, template, reference,
+            new([
+                new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow"),
+                new(ActivityInvocationOriginSegmentKind.AuthoredNode, authoredNode),
+                new(ActivityInvocationOriginSegmentKind.TemplateBoundary, publication.DefinitionVersionId)
+            ]),
+            publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>());
+
+        var first = Assert.Single((await placer.PlaceAsync(Request("first"))).ResumeTargets.Values);
+        var second = Assert.Single((await placer.PlaceAsync(Request("second"))).ResumeTargets.Values);
+
+        Assert.NotEqual(first.ResumeTargetId, second.ResumeTargetId);
+        Assert.Equal("resume-target:delivery", first.LocalResumeTargetId);
+        Assert.Equal(first.LocalResumeTargetId, second.LocalResumeTargetId);
+    }
+
+    [Fact]
     public async Task Unrelated_sibling_changes_do_not_renumber_an_existing_subtree()
     {
         var beforeFixture = Fixture.Create();
@@ -72,6 +104,27 @@ public sealed class ActivityTemplatePlacementTests
             return Assert.Single(ifNode.ChildSlots, x => x.Name == "If.Then").Activities.Single();
         }
         Assert.Equal(Then(before.Root).ExecutableNodeId, Then(after.Root).ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Retired_exact_child_closed_into_selected_parent_remains_placeable()
+    {
+        var fixture = Fixture.Create(nestedLifecycle: ActivityDefinitionVersionLifecycle.Retired);
+
+        var placement = await fixture.Placer.PlaceAsync(fixture.Request);
+
+        Assert.NotNull(placement.Root);
+    }
+
+    [Fact]
+    public async Task Revoked_closed_child_and_retired_direct_selection_are_blocked()
+    {
+        var revoked = Fixture.Create(nestedLifecycle: ActivityDefinitionVersionLifecycle.Revoked);
+        var retiredRoot = Fixture.Create();
+        retiredRoot.Request.Publication.Lifecycle = ActivityDefinitionVersionLifecycle.Retired;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => revoked.Placer.PlaceAsync(revoked.Request).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => retiredRoot.Placer.PlaceAsync(retiredRoot.Request).AsTask());
     }
 
     [Fact]
@@ -113,7 +166,10 @@ public sealed class ActivityTemplatePlacementTests
 
     private sealed record Fixture(ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request)
     {
-        public static Fixture Create(IActivityPlacementHasher? hasher = null, bool includeUnrelatedRoot = false)
+        public static Fixture Create(
+            IActivityPlacementHasher? hasher = null,
+            bool includeUnrelatedRoot = false,
+            ActivityDefinitionVersionLifecycle nestedLifecycle = ActivityDefinitionVersionLifecycle.Active)
         {
             var thenTemplate = Template("template-then", "hash-then", Node("then"));
             var elseTemplate = Template("template-else", "hash-else", Node("else"));
@@ -142,6 +198,7 @@ public sealed class ActivityTemplatePlacementTests
                 Publication("definition-else", "version-else", "type.else", elseTemplate),
                 Publication("definition-unrelated", "version-unrelated", "type.unrelated", unrelatedTemplate)
             };
+            publications.Single(x => x.DefinitionVersionId == "version-then").Lifecycle = nestedLifecycle;
             var references = publications.Select(x => Reference(x, new ExecutableLayoutSidecar([
                 new(x.DefinitionVersionId, ActivityInvocationOrigin.Empty, x.TemplateHash,
                     [new("local", "authored", "local", 10, 20)], [])

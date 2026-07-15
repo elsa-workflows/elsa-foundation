@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
@@ -22,6 +23,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Definitions.Fork", "POST", "design/activities/definitions/{definitionId}/forks" },
         { "Definitions.List", "GET", "design/activities/definitions" },
         { "Definitions.Get", "GET", "design/activities/definitions/{definitionId}" },
+        { "Definitions.Update", "PATCH", "design/activities/definitions/{definitionId}" },
         { "Definitions.AddDraft", "POST", "design/activities/definitions/{definitionId}/drafts" },
         { "Definitions.ListDrafts", "GET", "design/activities/definitions/{definitionId}/drafts" },
         { "Definitions.ListVersions", "GET", "design/activities/definitions/{definitionId}/versions" },
@@ -29,10 +31,17 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Drafts.Replace", "PUT", "design/activities/drafts/{draftId}" },
         { "Drafts.Discard", "DELETE", "design/activities/drafts/{draftId}" },
         { "Drafts.Validate", "POST", "design/activities/drafts/{draftId}/validate" },
+        { "Drafts.MigrateProvider", "POST", "design/activities/drafts/{draftId}/migrate-provider" },
         { "Drafts.Diff", "POST", "design/activities/drafts/{draftId}/diff" },
         { "Versions.Diff", "GET", "design/activities/versions/{fromVersionId}/diff/{toVersionId}" },
         { "Versions.Dependencies", "GET", "design/activities/versions/{versionId}/dependencies" },
-        { "Versions.Get", "GET", "design/activities/versions/{versionId}" }
+        { "Versions.Get", "GET", "design/activities/versions/{versionId}" },
+        { "Versions.Retire", "POST", "design/activities/versions/{versionId}/retire" },
+        { "Versions.Restore", "POST", "design/activities/versions/{versionId}/restore" },
+        { "Versions.Revoke", "POST", "design/activities/versions/{versionId}/revoke" },
+        { "UpgradePlans.Create", "POST", "design/activities/upgrade-plans" },
+        { "UpgradePlans.Get", "GET", "design/activities/upgrade-plans/{planId}" },
+        { "UpgradePlans.Apply", "POST", "design/activities/upgrade-plans/{planId}/apply" }
     };
 
     [Theory]
@@ -43,6 +52,47 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
         Assert.Equal(verb, Assert.Single(definition.Verbs));
         Assert.Equal(route, Assert.Single(definition.Routes));
+    }
+
+    [Fact]
+    public void Route_bound_identifiers_are_not_part_of_mutating_request_bodies()
+    {
+        object[] requests =
+        [
+            new ForkReusableActivityDefinition("definition-route", "source-version", "activity.type", "Category", "Display", null, "provider", "1"),
+            new CreateReusableActivityDraft("definition-route", null),
+            new ReplaceReusableActivityDraft(
+                "draft-route",
+                3,
+                new("1", [], [], []),
+                new("provider", "1", Json("{}")),
+                []),
+            new DiscardReusableActivityDraft("draft-route", 3),
+            new ValidateReusableActivityDraft("draft-route", 3),
+            new MigrateReusableActivityDraft("draft-route", 3, "provider", "2"),
+            new RetireReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
+            new RestoreReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Retired, "reason"),
+            new RevokeReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
+            new PreviewActivityDraftDiff("draft-route", 3, "base-version"),
+            new ApplyActivityUpgradePlan("plan-route", ["step-1"])
+        ];
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        foreach (var request in requests)
+        {
+            var json = JsonSerializer.Serialize(request, request.GetType(), options);
+            Assert.DoesNotContain("definition-route", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("draft-route", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("version-route", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("plan-route", json, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(
+            "{\"expectedRevision\":3,\"baseVersionId\":\"base-version\"}",
+            JsonSerializer.Serialize(new PreviewActivityDraftDiff("draft-route", 3, "base-version"), options));
+        Assert.Equal(
+            "{\"selectedStepIds\":[\"step-1\"]}",
+            JsonSerializer.Serialize(new ApplyActivityUpgradePlan("plan-route", ["step-1"]), options));
     }
 
     [Fact]
@@ -63,6 +113,23 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains("\"providerKey\":\"elsa.activity-graph\"", json, StringComparison.Ordinal);
         Assert.Contains("\"payload\":{\"secret\":42}", json, StringComparison.Ordinal);
         Assert.DoesNotContain("tenantId", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Update_request_body_is_exactly_the_documented_presentation_metadata_shape()
+    {
+        var request = new UpdateReusableActivityDefinition(
+            "activity-def-order-total",
+            "Finance",
+            "Calculate invoice total",
+            "Updated description");
+
+        var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal("{\"category\":\"Finance\",\"displayName\":\"Calculate invoice total\",\"description\":\"Updated description\"}", json);
+        Assert.DoesNotContain("definitionId", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("activityTypeKey", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("tenant", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -134,6 +201,44 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains("\"errorCode\":\"activity.draft.stale-revision\"", json, StringComparison.Ordinal);
         Assert.Contains("\"diagnostics\":[]", json, StringComparison.Ordinal);
         Assert.DoesNotContain("providerManifest", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Problem_details_never_exposes_internal_exception_messages()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/design/activities/dependencies";
+        context.TraceIdentifier = "trace-1";
+        var exception = new ActivityAuthoringException(
+            StatusCodes.Status500InternalServerError,
+            "activity.dependency.query-failed",
+            "Dependency query failed",
+            "Database connection string and provider details must remain private.");
+
+        var problem = ActivityProblemDetails.From(exception, context);
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, problem.Status);
+        Assert.Equal("activity.operation.failed", problem.ErrorCode);
+        Assert.Equal("The activity operation failed.", problem.Detail);
+        Assert.DoesNotContain("connection string", JsonSerializer.Serialize(problem), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Diagnostics_serialize_empty_metadata_as_an_object_and_severity_as_a_string()
+    {
+        var diagnostic = new ActivityDiagnostic(
+            "activity.contract.invalid",
+            ActivityDiagnosticSeverity.Error,
+            "The contract is invalid.",
+            new("ActivityDraft", "draft-1"));
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+
+        var json = JsonSerializer.Serialize(diagnostic, options);
+
+        Assert.Contains("\"severity\":\"Error\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"metadata\":{}", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"metadata\":null", json, StringComparison.Ordinal);
     }
 
     [Fact]

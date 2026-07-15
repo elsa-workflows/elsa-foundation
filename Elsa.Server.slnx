@@ -23,10 +23,6 @@
     <Project Path="src/Elsa/Activities/Scripting/Elsa.Activities.Scripting.csproj" />
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Activities/Composition/">
-    <Project Path="src/Elsa/Activities/Composition/Design/Elsa.Activities.Composition.Design.csproj" />
-    <Project Path="src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj" />
-  </Folder>
   <Folder Name="/src/Elsa/Activities/Graph/">
     <Project Path="src/Elsa/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
     <Project Path="src/Elsa/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
@@ -264,9 +260,6 @@
   <Folder Name="/tests/Elsa/" />
   <Folder Name="/tests/Elsa/Activities/">
     <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Activities/Composition/">
-    <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/ControlFlow/">
     <Project Path="tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj" />
