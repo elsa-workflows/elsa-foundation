@@ -7,6 +7,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -127,10 +128,16 @@ public sealed class PublicationManagementEndpointTests
             .Single(method => method.Name == nameof(Factory.Create)
                               && method.IsGenericMethodDefinition
                               && method.GetParameters() is [var first, var rest]
-                              && first.ParameterType == typeof(Action<DefaultHttpContext>)
+                              && first.ParameterType == typeof(DefaultHttpContext)
                               && rest.ParameterType == typeof(object[]))
             .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
+
+        // Factory.Create otherwise falls back to FastEndpoints' process-global service resolver. A real
+        // FastEndpoints host in this test assembly can replace and dispose that resolver concurrently.
+        // Supplying request services keeps this configuration-only test independent of that shared state.
+        using var serviceProvider = new ServiceCollection().AddServicesForUnitTesting().BuildServiceProvider();
+        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider };
+        var endpoint = (BaseEndpoint)create.Invoke(null, [httpContext, dependencies])!;
         endpoint.Configure();
         return endpoint.Definition;
     }
