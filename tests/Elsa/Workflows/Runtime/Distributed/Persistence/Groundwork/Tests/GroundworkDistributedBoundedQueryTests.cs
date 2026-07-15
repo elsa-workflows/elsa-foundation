@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -12,7 +13,10 @@ public sealed class GroundworkDistributedBoundedQueryTests
         var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
         var queries = new RecordingBoundedDocumentStore();
         var placements = new GroundworkExecutionPlacementStore(documents, queries);
-        var transport = new GroundworkExecutionCommandTransport(documents, queries);
+        var transport = new GroundworkExecutionCommandTransport(
+            documents,
+            GroundworkDistributedTestAccess.Scoped(),
+            queries);
 
         await placements.ListAsync();
         await transport.ListPendingExecutionIdsAsync(DateTimeOffset.UtcNow);
@@ -38,6 +42,32 @@ public sealed class GroundworkDistributedBoundedQueryTests
                 DistributedGroundworkStorageManifest.ListByWorkflowExecutionQuery,
                 DistributedGroundworkStorageManifest.WorkflowExecutionIdField,
                 "execution-1"));
+    }
+
+    [Fact]
+    public async Task SendRejectsEnvelopeFromAnotherPartitionBeforeProviderIo()
+    {
+        var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var transport = new GroundworkExecutionCommandTransport(
+            documents,
+            GroundworkDistributedTestAccess.Scoped("tenant-a"),
+            queries);
+        var now = DateTimeOffset.UtcNow;
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await transport.SendAsync(
+                "execution-1",
+                DistributedStoreHarness.Envelope("execution-1", "envelope-1", now, "tenant-b"),
+                now));
+
+        Assert.Equal("The requested resource does not belong to the current persistence scope.", exception.Message);
+        Assert.Empty(queries.Observed);
+        Assert.Equal(0, documents.LoadCount);
+        Assert.Equal(0, documents.SaveCount);
+        Assert.Equal(0, documents.DeleteCount);
+        Assert.Equal(0, documents.BeginCount);
+        Assert.Empty(documents.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind));
     }
 
     private static void AssertQuery(

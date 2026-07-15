@@ -23,11 +23,14 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
         // participant in the multi-implementation IRecurringTask collection, preserved as a composition contract.
         Assert.Contains(services, d => d.ServiceType == typeof(IDurableTimerStore));
 
-        Assert.Contains(services, d => d.ServiceType == typeof(IDurableTimerScheduler));
+        Assert.Contains(services, d =>
+            d.ServiceType == typeof(IDurableTimerScheduler) &&
+            d.Lifetime == ServiceLifetime.Scoped);
 
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IRecurringTask) &&
-            d.ImplementationType == typeof(DurableTimerPumpTask));
+            d.ImplementationFactory is not null &&
+            d.Lifetime == ServiceLifetime.Singleton);
 
         Assert.Contains(services, d => d.ServiceType == typeof(TimeProvider));
     }
@@ -63,7 +66,8 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
 
         // TS-1 (§2.23.1): resolvability, not resolved-implementation-type pinning.
         provider.GetRequiredService<IDurableTimerStore>();
-        provider.GetRequiredService<IDurableTimerScheduler>();    }
+        provider.GetRequiredService<IDurableTimerScheduler>();
+    }
 
     [Fact]
     public void DeclaresTasksDependencyAndServerRuntime()

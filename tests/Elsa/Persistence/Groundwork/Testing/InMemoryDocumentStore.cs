@@ -22,15 +22,31 @@ namespace Elsa.Persistence.Groundwork.Testing;
 /// compatibility tests, and provides a working cross-document unit of work mirroring the relational
 /// provider's <see cref="TransactionBoundary.CrossUnitAtomic"/> boundary.
 /// </remarks>
-public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentStore, IBoundedDocumentStore
+public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStore
 {
+    private readonly StorageManifest manifest;
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
     private readonly Lock _gate = new();
+    private int _saveCount;
+    private int _loadCount;
+    private int _deleteCount;
+    private int _beginCount;
 
-    public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
+    public InMemoryDocumentStore(StorageManifest manifest, DocumentStoreAccess? access = null)
+    {
+        this.manifest = manifest ?? throw new ArgumentNullException(nameof(manifest));
+        Access = access ?? GroundworkTestAccess.ForManifest(manifest);
+    }
+
+    public DocumentStoreAccess Access { get; }
+    public int SaveCount => Volatile.Read(ref _saveCount);
+    public int LoadCount => Volatile.Read(ref _loadCount);
+    public int DeleteCount => Volatile.Read(ref _deleteCount);
+    public int BeginCount => Volatile.Read(ref _beginCount);
 
     public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _saveCount);
         lock (_gate)
         {
             var key = (request.DocumentKind, request.Id);
@@ -66,8 +82,11 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
         return existing.Version == expected ? null : DocumentStoreWriteResult.ConcurrencyConflict;
     }
 
-    public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_docs.GetValueOrDefault((documentKind, id)));
+    public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _loadCount);
+        return Task.FromResult(_docs.GetValueOrDefault((documentKind, id)));
+    }
 
     // Test-only: enumerate the stored envelopes of a kind. The golden-fixture compatibility test uses
     // this to discover the composite document id the bridge assigned, so it can re-seed the same id under
@@ -77,6 +96,7 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
 
     public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _deleteCount);
         lock (_gate)
         {
             var key = (request.DocumentKind, request.Id);
@@ -209,8 +229,11 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
     // provider's CrossUnitAtomic boundary (stage Save/Delete, read-your-writes, all-or-nothing commit). ---
     public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
 
-    public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
-        Task.FromResult<IDocumentUnitOfWork>(new InMemoryDocumentUnitOfWork(this));
+    public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _beginCount);
+        return Task.FromResult<IDocumentUnitOfWork>(new InMemoryDocumentUnitOfWork(this));
+    }
 
     private sealed class InMemoryDocumentUnitOfWork(InMemoryDocumentStore store) : IDocumentUnitOfWork
     {

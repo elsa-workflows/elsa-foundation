@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Npgsql;
@@ -7,9 +8,10 @@ namespace Elsa.Persistence.Groundwork.PostgreSql;
 
 internal sealed class PostgreSqlWorkflowExecutionStatePageQuery(
     string connectionString,
-    GroundworkDocumentStoreHolder documentStoreHolder,
-    IGroundworkRuntimeDocumentSerializer serializer)
-    : RelationalGroundworkWorkflowExecutionStatePageQuery(documentStoreHolder, serializer)
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    GroundworkWorkflowExecutionStatePageRouteSource routeSource)
+    : RelationalGroundworkWorkflowExecutionStatePageQuery(serializer, accessContextAccessor, routeSource)
 {
     protected override DbConnection CreateConnection() => new NpgsqlConnection(connectionString);
     protected override string QuoteIdentifier(string identifier) =>

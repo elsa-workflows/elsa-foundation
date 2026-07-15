@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using global::Groundwork.Documents.Store;
@@ -32,12 +33,11 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
     {
         var services = ConfiguredServices();
 
-        // IDocumentStore resolves from the shared holder, which is populated once at startup by the initializer
-        // (registered as both a hosted service and a shell initializer). The handle is owned by the holder, not
-        // registered in DI, so the wiring is asserted through the holder + initializer instead.
+        // IDocumentStore is scoped and opens immutable access-bound provider sessions from the static source
+        // published at startup by the initializer (registered as both hosted and shell initializer).
         Assert.Single(services, d => d.ServiceType == typeof(IDocumentStore));
         Assert.Single(services, d => d.ServiceType == typeof(IBoundedDocumentStore));
-        Assert.Single(services, d => d.ServiceType == typeof(GroundworkDocumentStoreHolder));
+        Assert.Single(services, d => d.ServiceType == typeof(GroundworkStoreSessionSource));
         Assert.Single(services, d => d.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
         Assert.Contains(services, d => d.ServiceType == typeof(IHostedService));
         Assert.Contains(services, d => d.ServiceType == typeof(IShellInitializer));
@@ -89,7 +89,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         feature.ConfigureServices(services);
         feature.ConfigureServices(services);
 
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkDocumentStoreHolder));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStoreSessionSource));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
@@ -112,7 +112,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         Assert.Contains("connection details were suppressed", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(connectionString, exception.ToString(), StringComparison.Ordinal);
-        Assert.False(provider.GetRequiredService<GroundworkDocumentStoreHolder>().IsInitialized);
+        Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
     }
 
     private static void AssertBridge<TContract, TImplementation>(ServiceCollection services)

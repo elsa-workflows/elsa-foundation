@@ -39,7 +39,7 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IActivityFactory, ActivityFactory>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
-        services.TryAddSingleton<ActivityFaultIncidentRecorder>();
+        services.TryAddScoped<ActivityFaultIncidentRecorder>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInvokeActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowParentActivityCompletionSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowResumeBookmarkSchedulerWorkHandler>());

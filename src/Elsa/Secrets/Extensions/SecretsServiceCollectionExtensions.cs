@@ -39,8 +39,10 @@ public static class SecretsServiceCollectionExtensions
             new LoggingSecretAuditSink((sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger<LoggingSecretAuditSink>()));
         services.TryAddSingleton<SecretLifecyclePolicy>();
         services.TryAddSingleton<SecretModelMapper>();
-        services.TryAddSingleton<ISecretManager, DefaultSecretManager>();
-        services.TryAddSingleton<ISecretValueResolver, DefaultSecretValueResolver>();
+        // These operation facades consume the host-selected repository, which is scoped for durable providers.
+        // Keeping the facades scoped prevents one request from capturing another request's access context.
+        services.TryAddScoped<ISecretManager, DefaultSecretManager>();
+        services.TryAddScoped<ISecretValueResolver, DefaultSecretValueResolver>();
         services.TryAddSingleton<ISecretStoreRegistry, SecretStoreRegistry>();
         services.TryAddSingleton<ISecretTypeRegistry, SecretTypeRegistry>();
 

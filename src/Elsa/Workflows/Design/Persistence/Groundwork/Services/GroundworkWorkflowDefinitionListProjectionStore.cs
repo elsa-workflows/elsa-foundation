@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -20,10 +21,11 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
     public GroundworkWorkflowDefinitionListProjectionStore(
         IDocumentStore store,
         IBoundedDocumentStore boundedStore,
-        IPayloadSerializer payloadSerializer)
+        IPayloadSerializer payloadSerializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
     {
         var serialization = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
-        _drafts = new GroundworkWorkflowDefinitionDraftDocumentStore(store, serialization, boundedStore);
+        _drafts = new GroundworkWorkflowDefinitionDraftDocumentStore(store, serialization, accessContextAccessor, boundedStore);
         _versions = new GroundworkReadStore<WorkflowDefinitionVersion>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
@@ -34,12 +36,16 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
             boundedStore);
     }
 
-    public GroundworkWorkflowDefinitionListProjectionStore(IDocumentStore store, IPayloadSerializer payloadSerializer)
+    public GroundworkWorkflowDefinitionListProjectionStore(
+        IDocumentStore store,
+        IPayloadSerializer payloadSerializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
         : this(
             store,
             store as IBoundedDocumentStore ?? throw new InvalidOperationException(
                 "Workflow-definition projection queries require an admitted bounded document-store runtime."),
-            payloadSerializer)
+            payloadSerializer,
+            accessContextAccessor)
     {
     }
 

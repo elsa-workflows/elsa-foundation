@@ -8,34 +8,43 @@ This catalog covers the **schema-versioning** seams added so persisted runtime s
 
 The runtime persistence seams are backed by a Groundwork document store only when a host composes a
 provider shell feature. The provider choice is the host's; runtime and domain code reference only the
-neutral ports. Each provider feature registers the concrete `IDocumentStore` and calls
+neutral ports. Each provider feature registers a scoped access-bound `IDocumentStore` adapter and calls
 `AddGroundworkRuntimeStores()` (runtime-only) or the unified registration (all lanes).
 
 | Shell feature | Provider | Scope | Registration |
 |---|---|---|---|
 | `GroundworkRuntimePersistenceSqlite` | SQLite | Runtime only | `SqliteGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceSqlite` | SQLite | Runtime + workflows-design + activities-design | `AddGroundworkSqliteUnifiedPersistence` |
+| `GroundworkUnifiedPersistenceSqlite` | SQLite | All seven persistence families | `AddGroundworkSqliteUnifiedPersistence` |
 | `GroundworkRuntimePersistencePostgreSql` | PostgreSQL | Runtime only | `PostgreSqlGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | Runtime + workflows-design + activities-design | `AddGroundworkPostgreSqlUnifiedPersistence` |
+| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | All seven persistence families | `AddGroundworkPostgreSqlUnifiedPersistence` |
+| `GroundworkRuntimePersistenceSqlServer` | SQL Server | Runtime only | `SqlServerGroundworkRuntimePersistenceShellFeature` |
+| `GroundworkUnifiedPersistenceSqlServer` | SQL Server | All seven persistence families | `AddGroundworkSqlServerUnifiedPersistence` |
+| `GroundworkRuntimePersistenceMongoDb` | MongoDB replica set | Runtime only | `MongoDbGroundworkRuntimePersistenceShellFeature` |
+| `GroundworkUnifiedPersistenceMongoDb` | MongoDB replica set | All seven persistence families | `AddGroundworkMongoDbUnifiedPersistence` |
 
-The unified features share one provider-neutral union manifest (`GroundworkUnifiedManifest` in
-`Elsa.Persistence.Groundwork.Unified`), so the composition of the three lanes' document kinds is defined
-once and materialized per provider. SQLite stays the default composition; PostgreSQL is opt-in via
+The unified features share one host-selected provider-neutral manifest snapshot, so Runtime, IAM, Secrets,
+Distributed Runtime, Workflows Design, Activities Design, and Publishing document kinds are defined once and
+admitted per provider. SQLite stays the default composition; PostgreSQL is opt-in via
 `shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
 
-**Startup materialization — async initialization.** Materializing the document store (opening the connection
-and applying the manifest schema) is async, so it is not done inside the synchronous `ConfigureServices`
-factory. Instead each provider registers a document-store initializer as **both** an `IHostedService` (plain
+**Startup admission — async initialization.** Runtime startup inspects the deployment-applied physical schema
+and publishes immutable provider resources, so it is not done inside the synchronous `ConfigureServices`
+factory. Each provider registers a document-store initializer as **both** an `IHostedService` (plain
 hosts / tests) and a CShells `IShellInitializer` in the `LifecyclePhase.Prepare` phase (shell-composed hosts,
-where shell-scoped hosted services do not run). The initializer awaits store creation once at host startup and
-populates a shared, provider-neutral `GroundworkDocumentStoreHolder`; the registered `IDocumentStore` resolves
-from that holder, so consumers still resolve a fully-initialized singleton with no synchronous block on the
-resolving thread. The `Prepare` phase guarantees the store is ready before any other shell initializer that
-reads it, and both host lifecycles await the initializer before request handling begins. The
-`AddGroundwork{Sqlite,PostgreSql}UnifiedPersistence` and provider shell-feature signatures are unchanged. A
+where shell-scoped hosted services do not run). The initializer admits the selected manifest once and publishes
+a provider-owned `GroundworkStoreSessionSource`. Each scoped adapter invocation acquires a fresh immutable
+Groundwork session bound to the current provider-neutral `PersistenceAccessContext`; no mutable ambient scope or
+application-wide store instance is retained. The `Prepare` phase guarantees the source is ready before any
+initializer reads it, and both host lifecycles await the initializer before request handling begins. The
+four unified provider registrations and provider shell-feature signatures are unchanged. A
 bare `IServiceProvider` built without a host lifecycle (e.g. some tests) has no hook to run the initializer, so
-it must drive it explicitly before resolving `IDocumentStore` — resolving beforehand throws a descriptive
-`InvalidOperationException` rather than silently blocking.
+it must drive it explicitly before the first provider operation. `IDocumentStore` resolves beforehand as a
+`GroundworkScopedDocumentStore`; its first operation throws a descriptive `InvalidOperationException` until the
+session source is admitted. Resolution itself never blocks or performs provider I/O.
+
+MongoDB keeps one validate-only admitted handle for the provider lifetime and derives access-bound stores from
+that immutable runtime. It does not create a client, probe topology, or repeat schema admission for each scoped
+operation. Disposing the session source drains an in-flight store binding before it releases the provider handle.
 
 **Query-shape validation (PostgreSQL).** The PostgreSQL Groundwork provider serves the same query shapes
 Elsa already relies on for SQLite: `PostgreSqlDocumentStore` derives from the shared
@@ -47,12 +56,21 @@ workarounds — no equality-only restriction applies to this provider's publishe
 
 ## Override — replacement contracts
 
-Exactly one implementation is active per runtime host (registered with `TryAddSingleton` in `AddGroundworkRuntimeStores()`, so a host may replace either default).
+Exactly one implementation is active per runtime host. Logic-bearing runtime stores are scoped so request
+access cannot cross DI scopes; immutable serializers, manifests, and admitted provider resources use their
+reviewed longer-lived registrations.
 
 | Contract | Default implementation | Responsibility |
 |---|---|---|
 | `IGroundworkRuntimeDocumentSerializer` | `GroundworkRuntimeDocumentSerializer` | Owns the frozen bridge `JsonSerializerOptions`; stamps each document with its kind's current schema version on write and enforces the stamp on read (deserialize current, upcast older, fail loudly on unknown/future). The single sanctioned serialization surface for runtime documents — stores must not call `System.Text.Json` directly. |
 | `IGroundworkRuntimeDocumentUpcasterRegistry` | `GroundworkRuntimeDocumentUpcasterRegistry` | Indexes contributed upcasters per kind and applies them one version at a time; validates the chain **eagerly at construction** (duplicate step, chain gap, step at/beyond a kind's current version, or an incomplete known-kind chain all fail at startup). |
+| `IGroundworkStoreSessionFactory` | `GroundworkStoreSessionFactory` | Maps the current provider-neutral context to one immutable access-bound session. `ExecutePrivilegedAcrossScopesAsync` rejects every non-across-scope context before provider acquisition, records acquisition, disposes the provider lease, then records exactly one terminal outcome. |
+| `IGroundworkPrivilegedAccessEmitter` | Scoped `GroundworkPrivilegedAccessRecorder` writing to the singleton bounded `GroundworkPrivilegedAccessSink` | Emits correlated, sanitized acquisition/outcome records. Scoped tenant identities are represented by a stable SHA-256 reference; raw tenants and exception messages never become metric labels or retained event fields. |
+
+Tenant-agnostic design-store query flags are query intent only. They never grant authority: the caller must
+already hold a named `PersistenceAccessContext.PrivilegedAcrossScopes` context, and the adapter executes only
+the admitted bounded collection route. Ordinary and privileged-but-scoped contexts fail before provider
+resources are opened.
 
 ## Extend — contribution (fan-in)
 

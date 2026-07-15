@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -15,21 +16,27 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentStore, IWorkflowExecutionStateStore
 {
+    private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
     private readonly IGroundworkWorkflowExecutionStatePageQuery? _pageQuery;
     private readonly IBoundedDocumentStore? _queries;
 
-    public GroundworkWorkflowExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-        : this(store, serializer, null, null)
+    public GroundworkWorkflowExecutionStateStore(
+        IDocumentStore store,
+        IGroundworkRuntimeDocumentSerializer serializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(store, serializer, accessContextAccessor, null, null)
     {
     }
 
     public GroundworkWorkflowExecutionStateStore(
         IDocumentStore store,
         IGroundworkRuntimeDocumentSerializer serializer,
+        IPersistenceAccessContextAccessor accessContextAccessor,
         IGroundworkWorkflowExecutionStatePageQuery? pageQuery,
         IBoundedDocumentStore? boundedStore = null)
         : base(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)
     {
+        _accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
         _pageQuery = pageQuery;
         _queries = boundedStore ?? store as IBoundedDocumentStore;
     }
@@ -41,6 +48,7 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
+        _accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
 
         var document = WorkflowExecutionStateDocument.From(state);
         await SaveDocumentAsync(state.WorkflowExecutionId, document, cancellationToken);
@@ -67,9 +75,13 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
 
     public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
-        CancellationToken cancellationToken = default) =>
-        _pageQuery?.QueryPageAsync(query, cancellationToken)
-        ?? throw new NotSupportedException("The active Groundwork provider has no bounded workflow execution history query plan.");
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        _accessContextAccessor.Current.EnsureTenantScope(query.TenantId);
+        return _pageQuery?.QueryPageAsync(query, cancellationToken)
+            ?? throw new NotSupportedException("The active Groundwork provider has no bounded workflow execution history query plan.");
+    }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {

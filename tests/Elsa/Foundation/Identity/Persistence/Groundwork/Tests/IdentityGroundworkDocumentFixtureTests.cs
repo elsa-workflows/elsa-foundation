@@ -83,16 +83,16 @@ public sealed class IdentityGroundworkDocumentFixtureTests
         switch (kind)
         {
             case var _ when kind == IdentityStorageManifest.UserDocumentKind:
-                await new GroundworkUserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
+                await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
                 break;
             case var _ when kind == IdentityStorageManifest.RoleDocumentKind:
-                await new GroundworkRoleStore(docStore).SaveAsync(IdentityGroundworkFixtures.Role());
+                await IdentityGroundworkFixtures.RoleStore(docStore).SaveAsync(IdentityGroundworkFixtures.Role());
                 break;
             case var _ when kind == IdentityStorageManifest.ExternalIdentityDocumentKind:
-                await new GroundworkExternalIdentityStore(docStore).SaveAsync(IdentityGroundworkFixtures.ExternalIdentity());
+                await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).SaveAsync(IdentityGroundworkFixtures.ExternalIdentity());
                 break;
             case var _ when kind == IdentityStorageManifest.TenantMembershipDocumentKind:
-                await new GroundworkTenantMembershipStore(docStore).SaveAsync(IdentityGroundworkFixtures.TenantMembership());
+                await IdentityGroundworkFixtures.TenantMembershipStore(docStore).SaveAsync(IdentityGroundworkFixtures.TenantMembership());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown identity document kind.");
@@ -102,13 +102,13 @@ public sealed class IdentityGroundworkDocumentFixtureTests
     private static async Task<string?> ReadSpotCheckAsync(string kind, IDocumentStore docStore)
     {
         if (kind == IdentityStorageManifest.UserDocumentKind)
-            return (await new GroundworkUserStore(docStore).FindAsync("tenant-1", "user-1"))?.UserName;
+            return (await IdentityGroundworkFixtures.UserStore(docStore).FindAsync("tenant-1", "user-1"))?.UserName;
         if (kind == IdentityStorageManifest.RoleDocumentKind)
-            return (await new GroundworkRoleStore(docStore).FindAsync("tenant-1", "role-1"))?.Name;
+            return (await IdentityGroundworkFixtures.RoleStore(docStore).FindAsync("tenant-1", "role-1"))?.Name;
         if (kind == IdentityStorageManifest.ExternalIdentityDocumentKind)
-            return (await new GroundworkExternalIdentityStore(docStore).FindBySubjectAsync("tenant-1", "google", "sub-123"))?.UserId;
+            return (await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).FindBySubjectAsync("tenant-1", "google", "sub-123"))?.UserId;
         if (kind == IdentityStorageManifest.TenantMembershipDocumentKind)
-            return (await new GroundworkTenantMembershipStore(docStore).FindAsync("tenant-1", "user-1"))?.Status.ToString();
+            return (await IdentityGroundworkFixtures.TenantMembershipStore(docStore).FindAsync("tenant-1", "user-1"))?.Status.ToString();
         throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown identity document kind.");
     }
 

@@ -17,7 +17,7 @@ internal static class WorkflowExecutionHistoryProviderConformance
         };
         var nearMatches = new[]
         {
-            match with { WorkflowExecutionId = "wf-other-tenant", TenantId = "tenant-2" },
+            match with { WorkflowExecutionId = "wf-no-explicit-tenant", TenantId = null },
             match with
             {
                 WorkflowExecutionId = "wf-other-definition",
@@ -41,7 +41,7 @@ internal static class WorkflowExecutionHistoryProviderConformance
 
         var cases = new (string RejectedId, WorkflowExecutionStatePageQuery Query)[]
         {
-            ("wf-other-tenant", new(PageSize: 20, TenantId: "tenant-1")),
+            ("wf-no-explicit-tenant", new(PageSize: 20, TenantId: "tenant-1")),
             ("wf-other-definition", new(PageSize: 20, DefinitionId: "definition-1")),
             ("wf-other-status", new(PageSize: 20, Status: WorkflowExecutionStatus.Completed)),
             ("wf-other-run-kind", new(PageSize: 20, RunKind: WorkflowRunKind.PublishedRun)),

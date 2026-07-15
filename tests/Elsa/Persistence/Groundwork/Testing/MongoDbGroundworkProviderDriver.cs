@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Manifests;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -89,7 +90,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 $"elsa_groundwork_standalone_{Guid.NewGuid():N}",
                 ElsaRuntimeStorageManifest.Create(),
                 new ProviderIdentity("groundwork-mongodb", PackageVersion),
-                DocumentStoreAccess.Global,
+                GroundworkTestAccess.DefaultScoped,
                 cancellationToken: cancellationToken);
             try
             {
@@ -162,8 +163,19 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         await client.DropDatabaseAsync(_databaseName, cancellationToken);
     }
 
+    protected override ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken) =>
+        OpenClientCoreAsync(
+            clientId,
+            ElsaRuntimeStorageManifest.Create(),
+            GroundworkTestAccess.DefaultScoped,
+            cancellationToken);
+
     protected override async ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
         Guid clientId,
+        StorageManifest manifest,
+        DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
         // The string factory constructs a new MongoClient for every handle. Two open driver clients are
@@ -171,9 +183,9 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         var handle = await MongoDbDocumentStoreFactory.CreateAsync(
             RequiredConnectionString(),
             _databaseName,
-            ElsaRuntimeStorageManifest.Create(),
+            manifest,
             new ProviderIdentity("groundwork-mongodb", PackageVersion),
-            DocumentStoreAccess.Global,
+            access,
             cancellationToken: cancellationToken);
         var services = new ServiceCollection()
             .AddSingleton(handle.Store)
@@ -312,14 +324,14 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 _databaseName,
                 ElsaRuntimeStorageManifest.Create(),
                 new ProviderIdentity("groundwork-mongodb", PackageVersion),
-                DocumentStoreAccess.Global,
+                GroundworkTestAccess.DefaultScoped,
                 cancellationToken: cancellationToken);
             secondHandle = await MongoDbDocumentStoreFactory.CreateAsync(
                 connectionString,
                 _databaseName,
                 ElsaRuntimeStorageManifest.Create(),
                 new ProviderIdentity("groundwork-mongodb", PackageVersion),
-                DocumentStoreAccess.Global,
+                GroundworkTestAccess.DefaultScoped,
                 cancellationToken: cancellationToken);
             if (ReferenceEquals(firstHandle.Store, secondHandle.Store))
                 throw UnsupportedTopology();

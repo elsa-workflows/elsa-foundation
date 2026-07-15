@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -20,8 +21,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite;
 public sealed class SqliteGroundworkDocumentStoreInitializer(
     string connectionString,
     IServiceScopeFactory scopeFactory,
-    IServiceProvider serviceProvider,
-    GroundworkDocumentStoreHolder holder) : IHostedService, IShellInitializer
+    GroundworkStoreSessionSource sessionSource) : IHostedService, IShellInitializer
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
@@ -66,29 +66,33 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                 route.StorageUnit.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind);
             if (workflowRoute is not null)
             {
-                var historyQuery = serviceProvider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
+                var historyQuery = scope.ServiceProvider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
                 historyQuery.Bind(workflowRoute);
                 await historyQuery.PrepareAsync(cancellationToken);
             }
 
-            if (!holder.IsInitialized)
+            if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                var store = new SqlitePhysicalDocumentStore(
-                    connectionString,
-                    manifest,
-                    source.PhysicalTarget.Routes,
-                    DocumentStoreAccess.Global);
-                var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-                    source.PhysicalTarget.Routes.Select(route =>
-                        KeyValuePair.Create<string, IBoundedDocumentStore>(
-                            route.StorageUnit.Value,
-                            SqlitePhysicalQueryRuntime.Create(
-                                store,
-                                manifest,
-                                route,
-                                source.PhysicalTarget.Provider))));
-                holder.TrySet(store, boundedStore);
+                sessionSource.TrySet((access, ct) =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var store = new SqlitePhysicalDocumentStore(
+                        connectionString,
+                        manifest,
+                        source.PhysicalTarget.Routes,
+                        access);
+                    var boundedStore = new GroundworkBoundedDocumentStoreRouter(
+                        source.PhysicalTarget.Routes.Select(route =>
+                            KeyValuePair.Create<string, IBoundedDocumentStore>(
+                                route.StorageUnit.Value,
+                                SqlitePhysicalQueryRuntime.Create(
+                                    store,
+                                    manifest,
+                                    route,
+                                    source.PhysicalTarget.Provider))));
+                    return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
+                });
             }
 
             initialized = true;

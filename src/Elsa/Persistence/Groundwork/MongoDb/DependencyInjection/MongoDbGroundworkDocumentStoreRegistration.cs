@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,9 +33,7 @@ public static class MongoDbGroundworkDocumentStoreRegistration
         }
 
         services.AddGroundworkStorageComposition();
-        services.RemoveAll<IDocumentStore>();
-        services.RemoveAll<IBoundedDocumentStore>();
-        services.TryAddSingleton<GroundworkDocumentStoreHolder>();
+        services.AddGroundworkStoreSessions();
 
         // MongoDB does not yet advertise a bounded workflow-history page adapter. Remove a stale
         // relational provider registration when the host changes its selected provider leaf.
@@ -44,7 +43,7 @@ public static class MongoDbGroundworkDocumentStoreRegistration
         services.AddSingleton(serviceProvider => new MongoDbGroundworkDocumentStoreInitializer(
             connectionString,
             databaseName,
-            serviceProvider.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            serviceProvider.GetRequiredService<GroundworkStoreSessionSource>(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             serviceProvider.GetRequiredService<IMongoDbGroundworkRuntimeAdmission>()));
         services.AddHostedService(serviceProvider =>
@@ -58,10 +57,6 @@ public static class MongoDbGroundworkDocumentStoreRegistration
             RegistrationIndex: 0,
             IsExplicit: true,
             Source: $"{nameof(MongoDbGroundworkDocumentStoreRegistration)}.{nameof(AddMongoDbGroundworkDocumentStore)}"));
-        services.AddSingleton<IDocumentStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<GroundworkDocumentStoreHolder>().Store);
-        services.AddSingleton<IBoundedDocumentStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<GroundworkDocumentStoreHolder>().BoundedStore);
         return services;
     }
 }

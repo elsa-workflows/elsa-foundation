@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -9,13 +10,14 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 /// <summary>
 /// Replaces the default in-memory identity stores with Groundwork-backed, durable stores so users, roles,
 /// external identities, and tenant memberships survive process restarts. Each store is registered as its
-/// own singleton (unlike the in-memory store, which is a single object cast to four interfaces) because
-/// the Groundwork stores are stateless bridges over a shared <see cref="Groundwork.Documents.Store.IDocumentStore"/>.
+/// own scoped service (unlike the in-memory store, which is a single object cast to four interfaces) so
+/// immutable persistence access and operation state cannot cross request boundaries.
 /// </summary>
 public static class GroundworkIdentityStoresRegistration
 {
     public static IServiceCollection AddGroundworkIdentityStores(this IServiceCollection services)
     {
+        services.AddPersistenceCore();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, IdentityGroundworkStorageManifestSource>());
 
@@ -24,10 +26,10 @@ public static class GroundworkIdentityStoresRegistration
         services.RemoveAll<IExternalIdentityStore>();
         services.RemoveAll<ITenantMembershipStore>();
 
-        services.AddSingleton<IUserStore, GroundworkUserStore>();
-        services.AddSingleton<IRoleStore, GroundworkRoleStore>();
-        services.AddSingleton<IExternalIdentityStore, GroundworkExternalIdentityStore>();
-        services.AddSingleton<ITenantMembershipStore, GroundworkTenantMembershipStore>();
+        services.AddScoped<IUserStore, GroundworkUserStore>();
+        services.AddScoped<IRoleStore, GroundworkRoleStore>();
+        services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();
+        services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
 
         return services;
     }

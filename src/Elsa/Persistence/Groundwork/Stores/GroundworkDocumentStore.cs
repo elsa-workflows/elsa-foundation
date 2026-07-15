@@ -6,7 +6,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
 /// Shared base for the Groundwork document-store bridges. Each bridge maps a runtime domain contract onto
-/// the provider-neutral <see cref="IDocumentStore"/> and repeats the same serialize→save, load→project and
+/// the scoped <see cref="IDocumentStore"/> adapter and repeats the same serialize→save, load→project and
 /// query→project plumbing. This base factors out that mechanical store interaction while every bridge keeps
 /// its own document-envelope shape, key composition and query set.
 /// </summary>
@@ -24,7 +24,7 @@ public abstract class GroundworkDocumentStore(
 {
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
 
-    /// <summary>The provider-neutral document store the bridge writes through.</summary>
+    /// <summary>The scoped document-store adapter the bridge writes through.</summary>
     protected IDocumentStore Store { get; } = store;
 
     /// <summary>The runtime document serializer that stamps and versions the document content.</summary>

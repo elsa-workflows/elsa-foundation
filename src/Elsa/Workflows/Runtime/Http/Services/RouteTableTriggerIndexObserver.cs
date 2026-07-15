@@ -34,7 +34,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// only gates <em>whether</em> to refresh, never <em>what</em> the refreshed table contains.
 /// </para>
 /// <para>
-/// <b>Lifetime.</b> The indexer is a shell singleton. This observer is a singleton that delegates the read-then-swap
+/// <b>Lifetime.</b> The indexer is scoped to the publication operation. This observer is a singleton that delegates the read-then-swap
 /// to the shared <see cref="IHttpEndpointRouteTableSynchronizer"/>, which serializes every refresh (publish, run,
 /// startup) under one lock so a stale read can never clobber a newer swap (spec 089 D review fix). An exception
 /// propagates and fails the publish, matching the indexer's failure policy — and the known-non-HTTP set is

@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
@@ -12,6 +13,40 @@ namespace Elsa.Persistence.Groundwork.Tests;
 // bridges are provider-neutral, and round-tripping proves the runtime state survives serialization.
 public sealed class GroundworkRuntimeStateStoreTests
 {
+    [Fact]
+    public async Task Workflow_execution_write_rejects_explicit_wrong_tenant_before_store_io()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"));
+        var state = WorkflowState("wf-1", WorkflowExecutionStatus.Running) with { TenantId = "tenant-b" };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(state).AsTask());
+
+        Assert.Equal(0, documentStore.SaveCount);
+        Assert.Empty(documentStore.Snapshot(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+    }
+
+    [Fact]
+    public async Task Workflow_execution_query_rejects_explicit_wrong_tenant_before_provider_query()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var pageQuery = new RecordingPageQuery();
+        var store = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            pageQuery,
+            documentStore);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10, TenantId: "tenant-b")).AsTask());
+
+        Assert.Equal(0, pageQuery.QueryCount);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -78,6 +113,7 @@ public sealed class GroundworkRuntimeStateStoreTests
         IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
             null,
             fixture.BoundedDocumentStore);
 
@@ -313,6 +349,25 @@ public sealed class GroundworkRuntimeStateStoreTests
         {
             RunKind = runKind
         };
+
+    private sealed class RecordingPageQuery : IGroundworkWorkflowExecutionStatePageQuery
+    {
+        public int QueryCount { get; private set; }
+
+        public void Bind(global::Groundwork.Core.PhysicalStorage.ExecutableStorageRoute route)
+        {
+        }
+
+        public ValueTask PrepareAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+            WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            QueryCount++;
+            throw new InvalidOperationException("The provider query should not run for a mismatched tenant.");
+        }
+    }
 
     private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId) => new(
         durableValueId,

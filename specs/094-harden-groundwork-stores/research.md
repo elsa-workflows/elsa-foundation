@@ -178,12 +178,13 @@ evidence or invalid-objective rationale, named architect, decision, and date.
 | Existing test | Objective | Replacement evidence / rationale | Architect | Decision | Date |
 |---|---|---|---|---|---|
 | tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionStatePagingTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkWorkflowExecutionStatePagingTests.Sqlite_startup_upgrades_v2_history_before_the_first_page_query | Prove the runtime upgrades stored execution-history documents before serving the first page query. | Replaced by `Sqlite_startup_does_not_rewrite_v2_history`, which proves the ratified deployment-owned schema boundary: runtime startup is read-only and preserves the existing v2 document; schema changes belong to the CLI. This is greenfield software, so no released runtime-upgrade behavior is being withdrawn. | Sipke Schoorstra | Approved | 2026-07-15 |
+| tests/Elsa/Persistence/Groundwork/Tests/GroundworkDocumentStoreHolderTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkDocumentStoreHolderTests.Concurrent_publication_selects_one_complete_state_and_disposes_every_owner_once | Prove concurrent provider publication selects exactly one complete state, disposes every losing owner once, and disposes the winning owner exactly once across repeated shutdown calls. | Replaced by `tests/Elsa/Persistence/Groundwork/Tests/GroundworkStoreSessionSourceTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkStoreSessionSourceTests.Concurrent_publication_selects_one_complete_state_and_disposes_every_owner_once`, which preserves the objective against the scoped session-source seam that supersedes the application-wide holder. `Disposal_waits_for_an_inflight_open_and_rejects_every_later_open` and `Disposed_uninitialized_source_rejects_publication_and_open` add disposal/open race and terminal-state coverage. | Sipke Schoorstra | Approved | 2026-07-15 |
 
 ## Primary Affected Paths
 
 - `Directory.Packages.props`
 - `src/Elsa/Persistence/Core/`
-- `src/Elsa/Persistence/Groundwork/GroundworkDocumentStoreHolder.cs`
+- `src/Elsa/Persistence/Groundwork/Scoping/GroundworkStoreSessionSource.cs`
 - `src/Elsa/Persistence/Groundwork/Unified/GroundworkUnifiedManifest.cs`
 - `src/Elsa/Persistence/Groundwork/{Stores,Querying,Serialization}/`
 - `src/Elsa/Persistence/Groundwork/{Sqlite,SqlServer,PostgreSql,MongoDb}/`

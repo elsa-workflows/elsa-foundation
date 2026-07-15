@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
@@ -31,6 +32,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// </remarks>
 public sealed class GroundworkExecutionCommandTransport(
     IDocumentStore store,
+    IPersistenceAccessContextAccessor accessContextAccessor,
     IBoundedDocumentStore? boundedStore = null) : IExecutionCommandTransport
 {
     private const string Kind = DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind;
@@ -44,6 +46,7 @@ public sealed class GroundworkExecutionCommandTransport(
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(envelope);
         cancellationToken.ThrowIfCancellationRequested();
+        accessContextAccessor.Current.EnsureScope(new PersistenceScope(envelope.Partition.Value));
 
         for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
         {

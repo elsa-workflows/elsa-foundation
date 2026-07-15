@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -22,14 +23,18 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
     IInlineEventPublisher inlineEventPublisher,
     IWorkflowDefinitionVersionStore versionStore,
     IIdentityGenerator identityGenerator,
-    ISystemClock clock)
+    ISystemClock clock,
+    IPersistenceAccessContextAccessor accessContextAccessor)
     : IPromoteDraftToVersionCommand
 {
     public async Task<string> Execute(string draftId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(draftId);
 
-        var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer));
+        var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
+            store,
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+            accessContextAccessor);
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
 
         await using var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken);
@@ -69,18 +74,20 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
                 WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind),
             [
-                GroundworkDocumentWriter.ToSaveRequest(
+                GroundworkDocumentWriter.ToTenantScopedSaveRequest(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
                     WorkflowsDesignStorageManifest.SchemaVersion,
                     version,
-                    GroundworkDesignDocumentSerialization.Create(payloadSerializer)),
-                GroundworkDocumentWriter.ToSaveRequest(
+                    GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+                    accessContextAccessor.Current),
+                GroundworkDocumentWriter.ToTenantScopedSaveRequest(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
                     WorkflowsDesignStorageManifest.SchemaVersion,
                     versionLayout,
-                    GroundworkDesignJson.Options)
+                    GroundworkDesignJson.Options,
+                    accessContextAccessor.Current)
             ],
             cancellationToken);
 

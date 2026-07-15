@@ -227,6 +227,12 @@ public sealed class ArchitectureGuardTests
         Assert.Equal(3, Regex.Matches(checkpointSource, @"\bPortableDocumentQuery\b").Count);
         Assert.Equal(4, Regex.Matches(checkpointSource, "Runtime checkpoint commit unit-of-work does not query documents.").Count);
 
+        const string scopedAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkScopedDocumentStore.cs";
+        var scopedAdapterSource = File.ReadAllText(Path.Combine(RepoRoot, scopedAdapterPath));
+        Assert.Single(Regex.Matches(scopedAdapterSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(scopedAdapterSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Equal(7, Regex.Matches(scopedAdapterSource, @"WithDocumentsAsync\(store => store\.").Count);
+
         var forbiddenTypes = new[] { "DocumentStoreQuery", "PortableDocumentQuery" };
         var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
             .Select(file => new
@@ -235,7 +241,9 @@ public sealed class ArchitectureGuardTests
                 RelativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')
             })
             .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
-            .Where(candidate => !StringComparer.Ordinal.Equals(candidate.RelativePath, checkpointAdapterPath))
+            .Where(candidate =>
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, checkpointAdapterPath) &&
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterPath))
             .SelectMany(candidate =>
             {
                 var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));

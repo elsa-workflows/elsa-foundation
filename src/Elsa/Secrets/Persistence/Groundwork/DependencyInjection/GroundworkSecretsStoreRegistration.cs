@@ -14,7 +14,7 @@ public static class GroundworkSecretsStoreRegistration
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, SecretsGroundworkStorageManifestSource>());
 
         services.RemoveAll<ISecretRepository>();
-        services.AddSingleton<ISecretRepository, GroundworkSecretRepository>();
+        services.AddScoped<ISecretRepository, GroundworkSecretRepository>();
         return services;
     }
 }

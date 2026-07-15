@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.MongoDb.Unified;
@@ -11,6 +12,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.Scoping;
 using Groundwork.MongoDb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -105,14 +107,25 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
         var provider = services.BuildServiceProvider();
         try
         {
-            Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IDocumentStore>());
+            Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
             var initializer = provider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>();
 
             await initializer.InitializeAsync();
 
-            Assert.Same(admission.Store, provider.GetRequiredService<IDocumentStore>());
+            var resources = await provider.GetRequiredService<GroundworkStoreSessionSource>()
+                .OpenAsync(GroundworkTestAccess.DefaultScoped);
+            var globalResources = await provider.GetRequiredService<GroundworkStoreSessionSource>()
+                .OpenAsync(DocumentStoreAccess.Global);
+            Assert.NotSame(resources.DocumentStore, globalResources.DocumentStore);
+            Assert.Equal(GroundworkTestAccess.DefaultScoped, resources.DocumentStore.Access);
+            Assert.Equal(DocumentStoreAccess.Global, globalResources.DocumentStore.Access);
+            Assert.Null(resources.Lease);
+            Assert.Null(globalResources.Lease);
             Assert.Equal(1, admission.TopologyInspections);
             Assert.Equal(1, admission.OpenAttempts);
+            Assert.Equal(
+                [GroundworkTestAccess.DefaultScoped, DocumentStoreAccess.Global],
+                admission.Accesses);
             Assert.Equal(MongoDbGroundworkCapabilities.Provider, admission.Source!.PhysicalTarget.Provider);
             Assert.Equal(["elsa-workflows-runtime"], admission.Source.Snapshot.SelectedFeatures);
             AssertExactMongoTarget(admission.Source);
@@ -127,30 +140,6 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
         }
 
         Assert.True(admission.Handle.IsDisposed);
-    }
-
-    [Fact]
-    public async Task Losing_MongoDB_publication_disposes_the_unpublished_handle()
-    {
-        var holder = new GroundworkDocumentStoreHolder();
-        var winningStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var winningHandle = new RecordingHandle();
-        var losingStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var losingHandle = new RecordingHandle();
-        Assert.True(holder.TrySet(winningStore, winningStore, winningHandle));
-
-        var published = await MongoDbGroundworkRuntimeAdmission.PublishOrDisposeAsync(
-            holder,
-            losingStore,
-            losingHandle);
-
-        Assert.False(published);
-        Assert.Same(winningStore, holder.Store);
-        Assert.True(losingHandle.IsDisposed);
-        Assert.False(winningHandle.IsDisposed);
-
-        await holder.DisposeAsync();
-        Assert.True(winningHandle.IsDisposed);
     }
 
     [Fact]
@@ -182,7 +171,9 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
                 "elsa-workflows-runtime-distributed"
             ], admission.Source!.Snapshot.SelectedFeatures);
             AssertExactMongoTarget(admission.Source);
-            Assert.Same(admission.Store, provider.GetRequiredService<IDocumentStore>());
+            var resources = await provider.GetRequiredService<GroundworkStoreSessionSource>()
+                .OpenAsync(GroundworkTestAccess.DefaultScoped);
+            Assert.Same(Assert.Single(admission.Stores), resources.DocumentStore);
         }
         finally
         {
@@ -215,7 +206,9 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
 
         public GroundworkPhysicalSchemaManifestSource? Source { get; private set; }
 
-        public IDocumentStore? Store { get; private set; }
+        public List<DocumentStoreAccess> Accesses { get; } = [];
+
+        public List<IDocumentStore> Stores { get; } = [];
 
         public RecordingHandle Handle { get; } = new();
 
@@ -241,14 +234,22 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
             string connectionString,
             string databaseName,
             GroundworkPhysicalSchemaManifestSource source,
-            GroundworkDocumentStoreHolder holder,
+            GroundworkStoreSessionSource sessionSource,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             OpenAttempts++;
             Source = source;
-            Store = new InMemoryDocumentStore(source.CreateManifest());
-            holder.TrySet(Store, (IBoundedDocumentStore)Store, Handle);
+            sessionSource.TrySet(
+                (access, ct) =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var store = new InMemoryDocumentStore(source.CreateManifest(), access);
+                    Accesses.Add(access);
+                    Stores.Add(store);
+                    return ValueTask.FromResult(new GroundworkStoreSessionResources(store, store));
+                },
+                Handle);
             return ValueTask.CompletedTask;
         }
     }

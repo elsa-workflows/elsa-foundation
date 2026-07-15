@@ -26,14 +26,30 @@ public sealed class ActivitiesRuntimeFeatureTests
         // resolved set below; the startup task) are preserved as composition contracts.
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask) && d.ImplementationType == typeof(RegisterActivityTypesStartupTask));
 
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
 
-        provider.GetRequiredService<IActivityFactory>();
+        scope.ServiceProvider.GetRequiredService<IActivityFactory>();
         provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
-        provider.GetRequiredService<ActivityFaultIncidentRecorder>();
+        scope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowInvokeActivitySchedulerWorkHandler);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowParentActivityCompletionSchedulerWorkHandler);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowResumeBookmarkSchedulerWorkHandler);
+    }
+
+    [Fact]
+    public void Fault_incident_recorder_is_scoped_with_its_inspection_accumulator()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var firstScope = provider.CreateScope();
+        using var secondScope = provider.CreateScope();
+
+        var first = firstScope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
+        Assert.Same(first, firstScope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>());
+        Assert.NotSame(first, secondScope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>());
     }
 
     [Fact] // T018 (G27) — the descriptor-type-driven construction seam: registry + factory + the

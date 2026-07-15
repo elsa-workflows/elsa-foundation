@@ -1,6 +1,8 @@
 using CShells.Lifecycle;
 using Groundwork.Documents.Store;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
@@ -11,13 +13,11 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 
 /// <summary>
-/// Shared wiring that registers the one SQLite-backed Groundwork <see cref="IDocumentStore"/> for both the
-/// runtime-only and unified provider registrations. The store is created once after read-only schema admission by a
+/// Shared wiring that registers SQLite-backed scoped Groundwork sessions for both the runtime-only and
+/// unified provider registrations. A static provider factory is published after read-only schema admission by a
 /// <see cref="SqliteGroundworkDocumentStoreInitializer"/> (run as both a hosted service and a CShells shell
-/// initializer, in the <see cref="LifecyclePhase.Prepare"/> phase) which populates a shared
-/// <see cref="GroundworkDocumentStoreHolder"/>; <see cref="IDocumentStore"/> resolves from that holder, so
-/// consumers get a fully-initialized singleton with no synchronous block on the resolving thread. The initializer
-/// never applies or repairs schema.
+/// initializer, in the <see cref="LifecyclePhase.Prepare"/> phase). Scoped <see cref="IDocumentStore"/> adapters
+/// then acquire immutable access-bound sessions without retaining request state. The initializer never applies or repairs schema.
 /// </summary>
 public static class SqliteGroundworkDocumentStoreRegistration
 {
@@ -32,19 +32,17 @@ public static class SqliteGroundworkDocumentStoreRegistration
         if (services.Any(descriptor => descriptor.ServiceType == typeof(SqliteGroundworkDocumentStoreInitializer)))
             return services;
 
-        services.RemoveAll<IDocumentStore>();
-        services.RemoveAll<IBoundedDocumentStore>();
-        services.TryAddSingleton<GroundworkDocumentStoreHolder>();
+        services.AddGroundworkStoreSessions();
         services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
-        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(sp => new SqliteWorkflowExecutionStatePageQuery(
+        services.AddScoped<IGroundworkWorkflowExecutionStatePageQuery>(sp => new SqliteWorkflowExecutionStatePageQuery(
             connectionString,
-            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
-            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
+            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
+            sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
+            sp.GetRequiredService<GroundworkWorkflowExecutionStatePageRouteSource>()));
         services.AddSingleton(sp => new SqliteGroundworkDocumentStoreInitializer(
             connectionString,
             sp.GetRequiredService<IServiceScopeFactory>(),
-            sp,
-            sp.GetRequiredService<GroundworkDocumentStoreHolder>()));
+            sp.GetRequiredService<GroundworkStoreSessionSource>()));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(
@@ -54,8 +52,6 @@ public static class SqliteGroundworkDocumentStoreRegistration
             RegistrationIndex: 0,
             IsExplicit: true,
             Source: $"{nameof(SqliteGroundworkDocumentStoreRegistration)}.{nameof(AddSqliteGroundworkDocumentStore)}"));
-        services.TryAddSingleton<IDocumentStore>(sp => sp.GetRequiredService<GroundworkDocumentStoreHolder>().Store);
-        services.TryAddSingleton<IBoundedDocumentStore>(sp => sp.GetRequiredService<GroundworkDocumentStoreHolder>().BoundedStore);
         return services;
     }
 }

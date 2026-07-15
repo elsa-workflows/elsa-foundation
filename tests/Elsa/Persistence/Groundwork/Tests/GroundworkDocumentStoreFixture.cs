@@ -22,14 +22,20 @@ internal sealed class GroundworkDocumentStoreFixture(
 
     public IBoundedDocumentStore BoundedDocumentStore { get; } = boundedDocumentStore;
 
-    public static GroundworkDocumentStoreFixture Create(string provider, StorageManifest? manifest = null) => provider switch
-    {
-        "sqlite" => CreateSqlite("Data Source=:memory:", manifest),
-        "memory" => CreateInMemory(manifest),
-        _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
-    };
+    public static GroundworkDocumentStoreFixture Create(
+        string provider,
+        StorageManifest? manifest = null,
+        DocumentStoreAccess? access = null) => provider switch
+        {
+            "sqlite" => CreateSqlite("Data Source=:memory:", manifest, access),
+            "memory" => CreateInMemory(manifest, access),
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
+        };
 
-    public static GroundworkDocumentStoreFixture CreateSqlite(string connectionString, StorageManifest? manifest = null)
+    public static GroundworkDocumentStoreFixture CreateSqlite(
+        string connectionString,
+        StorageManifest? manifest = null,
+        DocumentStoreAccess? access = null)
     {
         TemporarySqliteDatabase? database = null;
         if (connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase))
@@ -44,7 +50,7 @@ internal sealed class GroundworkDocumentStoreFixture(
                 connectionString,
                 selectedManifest,
                 SqliteProvider,
-                DocumentStoreAccess.Global)
+                access ?? GroundworkTestAccess.ForManifest(selectedManifest))
             .GetAwaiter()
             .GetResult();
 
@@ -54,9 +60,11 @@ internal sealed class GroundworkDocumentStoreFixture(
             database);
     }
 
-    private static GroundworkDocumentStoreFixture CreateInMemory(StorageManifest? manifest)
+    private static GroundworkDocumentStoreFixture CreateInMemory(
+        StorageManifest? manifest,
+        DocumentStoreAccess? access)
     {
-        var store = new InMemoryDocumentStore(manifest ?? ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(manifest ?? ElsaRuntimeStorageManifest.Create(), access);
         return new GroundworkDocumentStoreFixture(store, store);
     }
 

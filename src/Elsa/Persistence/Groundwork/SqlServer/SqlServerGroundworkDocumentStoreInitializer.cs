@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
@@ -21,22 +22,19 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
 {
     private readonly string _connectionString;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly GroundworkDocumentStoreHolder _holder;
+    private readonly GroundworkStoreSessionSource _sessionSource;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _initialized;
 
     internal SqlServerGroundworkDocumentStoreInitializer(
         string connectionString,
         IServiceScopeFactory scopeFactory,
-        IServiceProvider serviceProvider,
-        GroundworkDocumentStoreHolder holder)
+        GroundworkStoreSessionSource sessionSource)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         _connectionString = connectionString;
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        _holder = holder ?? throw new ArgumentNullException(nameof(holder));
+        _sessionSource = sessionSource ?? throw new ArgumentNullException(nameof(sessionSource));
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -70,28 +68,33 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                     StringComparison.Ordinal));
             if (historyRoute is not null)
             {
-                var historyQuery = _serviceProvider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
+                await using var queryScope = _scopeFactory.CreateAsyncScope();
+                var historyQuery = queryScope.ServiceProvider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
                 historyQuery.Bind(historyRoute);
                 await historyQuery.PrepareAsync(cancellationToken);
             }
-            if (!_holder.IsInitialized)
+            if (!_sessionSource.IsInitialized)
             {
                 var manifest = schemaSource.CreateManifest();
-                var store = new SqlServerPhysicalDocumentStore(
-                    _connectionString,
-                    manifest,
-                    admission.PhysicalTarget.Routes,
-                    DocumentStoreAccess.Global);
-                var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-                    admission.PhysicalTarget.Routes.Select(route =>
-                        KeyValuePair.Create<string, IBoundedDocumentStore>(
-                            route.StorageUnit.Value,
-                            SqlServerPhysicalQueryRuntime.Create(
-                                store,
-                                manifest,
-                                route,
-                                admission.PhysicalTarget.Provider))));
-                _holder.TrySet(store, boundedStore);
+                _sessionSource.TrySet((access, ct) =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var store = new SqlServerPhysicalDocumentStore(
+                        _connectionString,
+                        manifest,
+                        admission.PhysicalTarget.Routes,
+                        access);
+                    var boundedStore = new GroundworkBoundedDocumentStoreRouter(
+                        admission.PhysicalTarget.Routes.Select(route =>
+                            KeyValuePair.Create<string, IBoundedDocumentStore>(
+                                route.StorageUnit.Value,
+                                SqlServerPhysicalQueryRuntime.Create(
+                                    store,
+                                    manifest,
+                                    route,
+                                    admission.PhysicalTarget.Provider))));
+                    return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
+                });
             }
 
             _initialized = true;

@@ -1,6 +1,8 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Groundwork.Documents.Store;
@@ -31,22 +33,20 @@ public static class SqlServerGroundworkDocumentStoreRegistration
         }
 
         services.AddGroundworkStorageComposition();
-        services.RemoveAll<IDocumentStore>();
-        services.RemoveAll<IBoundedDocumentStore>();
-        services.TryAddSingleton<GroundworkDocumentStoreHolder>();
+        services.AddGroundworkStoreSessions();
 
         services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
-        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(serviceProvider =>
+        services.AddScoped<IGroundworkWorkflowExecutionStatePageQuery>(serviceProvider =>
             new SqlServerWorkflowExecutionStatePageQuery(
                 connectionString,
-                serviceProvider.GetRequiredService<GroundworkDocumentStoreHolder>(),
-                serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
+                serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
+                serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                serviceProvider.GetRequiredService<GroundworkWorkflowExecutionStatePageRouteSource>()));
 
         services.AddSingleton(serviceProvider => new SqlServerGroundworkDocumentStoreInitializer(
             connectionString,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            serviceProvider,
-            serviceProvider.GetRequiredService<GroundworkDocumentStoreHolder>()));
+            serviceProvider.GetRequiredService<GroundworkStoreSessionSource>()));
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<SqlServerGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(serviceProvider =>
@@ -58,10 +58,6 @@ public static class SqlServerGroundworkDocumentStoreRegistration
             RegistrationIndex: 0,
             IsExplicit: true,
             Source: $"{nameof(SqlServerGroundworkDocumentStoreRegistration)}.{nameof(AddSqlServerGroundworkDocumentStore)}"));
-        services.AddSingleton<IDocumentStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<GroundworkDocumentStoreHolder>().Store);
-        services.AddSingleton<IBoundedDocumentStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<GroundworkDocumentStoreHolder>().BoundedStore);
         return services;
     }
 }

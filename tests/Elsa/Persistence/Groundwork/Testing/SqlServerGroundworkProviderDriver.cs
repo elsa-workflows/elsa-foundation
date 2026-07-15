@@ -2,6 +2,7 @@ using System.Data.SqlTypes;
 using System.Xml.Linq;
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Manifests;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.SqlServer;
@@ -88,8 +89,19 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         _connectionString = TargetConnectionString();
     }
 
+    protected override ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken) =>
+        OpenClientCoreAsync(
+            clientId,
+            ElsaRuntimeStorageManifest.Create(),
+            GroundworkTestAccess.DefaultScoped,
+            cancellationToken);
+
     protected override async ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
         Guid clientId,
+        StorageManifest manifest,
+        DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
         var connectionString = new SqlConnectionStringBuilder(RequiredConnectionString())
@@ -98,9 +110,9 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         }.ConnectionString;
         var store = await SqlServerDocumentStoreFactory.CreateAsync(
             connectionString,
-            ElsaRuntimeStorageManifest.Create(),
+            manifest,
             new ProviderIdentity("groundwork-sqlserver", PackageVersion),
-            DocumentStoreAccess.Global,
+            access,
             cancellationToken: cancellationToken);
         var services = new ServiceCollection()
             .AddSingleton(store)

@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Microsoft.Data.SqlClient;
@@ -7,9 +8,10 @@ namespace Elsa.Persistence.Groundwork.SqlServer;
 
 internal sealed class SqlServerWorkflowExecutionStatePageQuery(
     string connectionString,
-    GroundworkDocumentStoreHolder documentStoreHolder,
-    IGroundworkRuntimeDocumentSerializer serializer)
-    : RelationalGroundworkWorkflowExecutionStatePageQuery(documentStoreHolder, serializer)
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    GroundworkWorkflowExecutionStatePageRouteSource routeSource)
+    : RelationalGroundworkWorkflowExecutionStatePageQuery(serializer, accessContextAccessor, routeSource)
 {
     protected override DbConnection CreateConnection() => new SqlConnection(connectionString);
     protected override string QuoteIdentifier(string identifier) => $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";

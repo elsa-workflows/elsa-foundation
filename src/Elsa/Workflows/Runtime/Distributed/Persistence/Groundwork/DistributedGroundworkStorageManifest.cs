@@ -63,7 +63,7 @@ public static class DistributedGroundworkStorageManifest
         StorageIntent.PortableDocument(),
         LifecyclePolicy.Mutable,
         IdentityPolicy.StringId(),
-        TenancyPolicy.Global,
+        TenancyPolicy.Scoped,
         ConcurrencyPolicy.Optimistic(),
         SerializationPolicy.Json(),
         indexes,

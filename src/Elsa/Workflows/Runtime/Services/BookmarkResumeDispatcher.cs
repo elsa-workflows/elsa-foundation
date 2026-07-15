@@ -14,6 +14,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
     private readonly IWorkflowExecutionActorProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutionPartitionAccessor? _partitionAccessor;
 
     public BookmarkResumeDispatcher(
         IBookmarkStimulusLookup bookmarkStimulusLookup,
@@ -22,7 +23,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         IBookmarkResumeResolver bookmarkResumeResolver,
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator)
-        : this(bookmarkStimulusLookup, workflowExecutionStateStore, workflowExecutableStore, bookmarkResumeResolver, agentProvider, idGenerator, TimeProvider.System)
+        : this(bookmarkStimulusLookup, workflowExecutionStateStore, workflowExecutableStore, bookmarkResumeResolver, agentProvider, idGenerator, TimeProvider.System, null)
     {
     }
 
@@ -34,6 +35,19 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
+        : this(bookmarkStimulusLookup, workflowExecutionStateStore, workflowExecutableStore, bookmarkResumeResolver, agentProvider, idGenerator, timeProvider, null)
+    {
+    }
+
+    public BookmarkResumeDispatcher(
+        IBookmarkStimulusLookup bookmarkStimulusLookup,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowExecutableStore workflowExecutableStore,
+        IBookmarkResumeResolver bookmarkResumeResolver,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor)
     {
         ArgumentNullException.ThrowIfNull(bookmarkStimulusLookup);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
@@ -50,6 +64,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         _agentProvider = agentProvider;
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
+        _partitionAccessor = partitionAccessor;
     }
 
     public async ValueTask<BookmarkResumeDispatchResult> DispatchAsync(
@@ -108,6 +123,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         }
 
         var metadata = CreateMetadata(request, bookmark, workflowExecution.PinnedExecutable);
+        var partition = CurrentPartition();
         var payload = JsonSerializer.SerializeToElement(new RuntimeResumeBookmarkCommandPayload(
             pinnedExecutable: workflowExecution.PinnedExecutable,
             bookmarkId: bookmark.BookmarkId,
@@ -132,14 +148,16 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             idempotencyKey: CreateIdempotencyKey(request, bookmark),
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: now,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
         var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: request.WorkflowExecutionId,
             reason: WorkflowExecutionActorActivationReason.ResumeBookmark,
             requestedAt: now,
             requestedBy: request.RequestedBy,
             requiredCapabilities: WorkflowExecutionActorCapabilities.None,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
         var commandDispatch = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
@@ -179,6 +197,14 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         request.IdempotencyKey is not null
             ? $"{request.WorkflowExecutionId}:bookmark-resume:{bookmark.BookmarkId}:{request.StimulusType}:{request.StimulusHash}:{request.IdempotencyKey}"
             : $"{request.WorkflowExecutionId}:bookmark-resume:{bookmark.BookmarkId}:{request.StimulusType}:{request.StimulusHash}";
+
+    private WorkflowExecutionPartition CurrentPartition()
+    {
+        if (_partitionAccessor is null)
+            return new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+
+        return _partitionAccessor.Current;
+    }
 
     private static BookmarkResumeDispatchStatus MapDispatchStatus(WorkflowExecutionCommandDispatchStatus status) =>
         status switch
