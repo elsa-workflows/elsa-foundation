@@ -300,6 +300,28 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     }
 
     [Fact]
+    public void Sqlite_Provider_Prepare_Metadata_Matches_By_Type_After_Earlier_Initializers()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IShellInitializer, EarlierInitializer>();
+
+        new SqliteGroundworkRuntimePersistenceShellFeature
+        {
+            ConnectionString = "Data Source=registration.db"
+        }.ConfigureServices(services);
+
+        var registration = Assert.Single(
+            services
+                .Where(descriptor => descriptor.ServiceType == typeof(ShellInitializerRegistration))
+                .Select(descriptor => descriptor.ImplementationInstance)
+                .OfType<ShellInitializerRegistration>(),
+            candidate => candidate.InitializerType == typeof(SqliteGroundworkDocumentStoreInitializer));
+
+        Assert.Equal(LifecyclePhase.Prepare, registration.Phase);
+        Assert.Equal(-1, registration.RegistrationIndex);
+    }
+
+    [Fact]
     public async Task Composed_Sqlite_Feature_Persists_Across_Restart()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"gw-compose-{Guid.NewGuid():N}.db");
@@ -372,5 +394,10 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
             File.Delete(_path);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class EarlierInitializer : IShellInitializer
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

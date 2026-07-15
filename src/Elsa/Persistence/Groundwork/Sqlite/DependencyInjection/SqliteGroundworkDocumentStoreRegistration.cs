@@ -49,7 +49,7 @@ public static class SqliteGroundworkDocumentStoreRegistration
             typeof(SqliteGroundworkDocumentStoreInitializer),
             LifecyclePhase.Prepare,
             Order: 0,
-            RegistrationIndex: 0,
+            RegistrationIndex: -1,
             IsExplicit: true,
             Source: $"{nameof(SqliteGroundworkDocumentStoreRegistration)}.{nameof(AddSqliteGroundworkDocumentStore)}"));
         return services;

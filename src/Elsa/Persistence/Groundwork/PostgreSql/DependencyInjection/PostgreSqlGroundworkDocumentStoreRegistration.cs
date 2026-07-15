@@ -49,7 +49,7 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             typeof(PostgreSqlGroundworkDocumentStoreInitializer),
             LifecyclePhase.Prepare,
             Order: 0,
-            RegistrationIndex: 0,
+            RegistrationIndex: -1,
             IsExplicit: true,
             Source: $"{nameof(PostgreSqlGroundworkDocumentStoreRegistration)}.{nameof(AddPostgreSqlGroundworkDocumentStore)}"));
         return services;

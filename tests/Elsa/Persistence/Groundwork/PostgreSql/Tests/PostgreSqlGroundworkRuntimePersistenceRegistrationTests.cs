@@ -43,7 +43,13 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         Assert.Contains(services, d => d.ServiceType == typeof(IShellInitializer));
         Assert.Contains(services, d =>
             d.ServiceType == typeof(ShellInitializerRegistration)
-            && d.ImplementationInstance is ShellInitializerRegistration { Phase: LifecyclePhase.Prepare });
+            && d.ImplementationInstance is ShellInitializerRegistration
+            {
+                InitializerType: var initializerType,
+                Phase: LifecyclePhase.Prepare,
+                RegistrationIndex: -1
+            }
+            && initializerType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
     }
 
     [Fact]

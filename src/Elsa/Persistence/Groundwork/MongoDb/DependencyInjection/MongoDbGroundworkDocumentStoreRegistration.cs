@@ -54,7 +54,7 @@ public static class MongoDbGroundworkDocumentStoreRegistration
             typeof(MongoDbGroundworkDocumentStoreInitializer),
             LifecyclePhase.Prepare,
             Order: 0,
-            RegistrationIndex: 0,
+            RegistrationIndex: -1,
             IsExplicit: true,
             Source: $"{nameof(MongoDbGroundworkDocumentStoreRegistration)}.{nameof(AddMongoDbGroundworkDocumentStore)}"));
         return services;
