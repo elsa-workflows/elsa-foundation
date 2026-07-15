@@ -42,8 +42,7 @@ public sealed class RuntimeValueBindingContractTests
             authoredActivityId: "activity-send",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
             metadata: new Dictionary<string, string>());
@@ -222,8 +221,7 @@ public sealed class RuntimeValueBindingContractTests
             authoredActivityId: "activity-send",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
             metadata: metadata);
@@ -297,8 +295,7 @@ public sealed class RuntimeValueBindingContractTests
             authoredActivityId: "activity-send",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
             metadata: new Dictionary<string, string>());

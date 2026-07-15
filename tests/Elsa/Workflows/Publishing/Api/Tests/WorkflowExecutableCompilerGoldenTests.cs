@@ -199,8 +199,12 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         authoredActivityId = node.AuthoredActivityId,
         activityType = node.ActivityType,
         activityTypeVersion = node.ActivityTypeVersion,
-        descriptorType = node.DescriptorType,
-        descriptorPayload = node.DescriptorPayload,
+        descriptor = new
+        {
+            consumerKey = node.Descriptor.ConsumerKey,
+            payload = node.Descriptor.Payload,
+            schemaVersion = node.Descriptor.SchemaVersion
+        },
         metadata = Ordered(node.Metadata),
         structure = node.Structure is null
             ? null

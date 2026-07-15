@@ -116,8 +116,7 @@ public sealed class SequenceRuntimeTests
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SequenceActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SequenceActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SequenceDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -143,8 +142,7 @@ public sealed class SequenceRuntimeTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ProbeDescriptor([ActivityOutcomes.Done])),
+            descriptor: new RuntimeActivityDescriptor(ProbeActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ProbeDescriptor([ActivityOutcomes.Done]))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -190,8 +188,8 @@ public sealed class SequenceRuntimeTests
 
     private sealed class SequenceActivityConstructor : IActivityConstructor<SequenceDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(SequenceDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,
@@ -212,8 +210,8 @@ public sealed class SequenceRuntimeTests
 
     private sealed class ProbeActivityConstructor : IActivityConstructor<ProbeDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ProbeDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ProbeDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

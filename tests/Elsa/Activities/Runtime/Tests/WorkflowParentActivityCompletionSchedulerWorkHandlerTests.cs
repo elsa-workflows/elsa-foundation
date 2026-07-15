@@ -95,6 +95,46 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CheckpointParticipant_CommitsOutputsDoneStateAndParentIntentExactlyOnce()
+    {
+        var attempt = new ActivityExecutionAttemptLineage(1, "actexec-parent", null);
+        var parentState = NewState("actexec-parent", "node-parent", ActivityExecutionStatus.Running) with
+        {
+            ExecutionScopeId = "actexec-parent",
+            Attempt = attempt,
+            Provenance = ActivitySchedulingProvenance.From(
+                "wfexec-1", null, null, null, null, null, "actexec-parent", "test", attempt: attempt)
+        };
+        await _executableStore.SaveAsync(NewExecutableWithOutputCapture());
+        await _activityStateStore.SaveAsync(parentState);
+        await _activityStateStore.SaveAsync(NewState("actexec-child", "node-child", ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
+        await using var provider = NewProvider(new RecordingActivityFactory(new CheckpointParticipantCompositeActivity()));
+        var handler = NewHandler(provider);
+        var workItem = NewParentCompletionWorkItem();
+
+        await handler.HandleAsync(workItem);
+        await handler.HandleAsync(workItem);
+
+        var write = Assert.Single(_checkpointWriter.ListCommits());
+        var completed = Assert.Single(write.Commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal(ActivityExecutionStatus.Completed, completed.Status);
+        Assert.Equal<string>([ActivityOutcomes.Done], JsonSerializer.Deserialize<string[]>(completed.Metadata[RuntimeMetadataKeys.CompletionOutcomeNames])!);
+        Assert.Equal("actexec-parent", completed.ExecutionScopeId);
+        Assert.Equal(attempt, completed.Attempt);
+        Assert.Equal(2, write.Commit.StateChanges.DurableValues.Count);
+        Assert.Contains(write.Commit.StateChanges.DurableValues, change => change.State.DurableValueId == "scope-output");
+        Assert.Contains(write.Commit.StateChanges.DurableValues, change => change.State.DurableValueId == "durable-result");
+        Assert.Single(write.Commit.PostCommitIntents);
+
+        var stored = await _durableValueStateStore.ListAsync("wfexec-1");
+        Assert.Equal(2, stored.Count);
+        Assert.Equal("completed", (await _durableValueStateStore.FindAsync("wfexec-1", "durable-result"))?.InlineValue?.GetString());
+        var completionWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.CompleteActivity);
+        Assert.Equal("actexec-parent", completionWork.ExecutionScopeId);
+        Assert.Equal(attempt, completionWork.Attempt);
+    }
+
+    [Fact]
     public async Task HandleAsync_RecordsFaultedParentInspectionWhenChildCompletionHandlerThrows()
     {
         await _executableStore.SaveAsync(NewExecutable());
@@ -268,14 +308,45 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
+    private static WorkflowExecutable NewExecutableWithOutputCapture()
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var child = NewNode("node-child", document.RootElement);
+        var parent = new ExecutableNode(
+            executableNodeId: "node-parent",
+            authoredActivityId: "authored-node-parent",
+            activityType: "test/activity",
+            activityTypeVersion: "1.0.0",
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
+            {
+                ["result"] = new(
+                    "result",
+                    "result",
+                    new RuntimeValueTypeDescriptor("primitive", "string", null),
+                    DurableValueLifecycle.Result,
+                    DurableValueStorage.Inline,
+                    captureOnSuccessfulCompletion: true)
+            },
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot("children", [child])]);
+
+        return new WorkflowExecutable(
+            NewIdentity(),
+            parent,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UtcNow,
+            new Dictionary<string, string>());
+    }
+
     private static ExecutableNode WithChildren(ExecutableNode root, IReadOnlyCollection<ExecutableNode> children) =>
         new(
             executableNodeId: root.ExecutableNodeId,
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
             outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
@@ -290,8 +361,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: descriptorPayload.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptorPayload.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -302,10 +372,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
     private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
     {
         public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+            RuntimeActivityDescriptor descriptor,
+            IReadOnlyDictionary<string, InputArgument>? inputs,
+            IReadOnlyDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(activity);
     }
@@ -351,6 +420,53 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             var runtimeContext = Assert.IsAssignableFrom<IRuntimeActivityExecutionContext>(context.ParentContext);
             runtimeContext.ScheduleChildActivity("node-child");
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class CheckpointParticipantCompositeActivity : IActivity, IActivityChildCompletionHandler, IRuntimeActivityCheckpointParticipant
+    {
+        public string Id { get; set; } = string.Empty;
+        public string NodeId { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public string Type { get; set; } = "test/activity";
+        public string Version { get; set; } = "1.0.0";
+        public Dictionary<string, object> CustomProperties { get; set; } = new();
+        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
+        public Dictionary<string, object> Metadata { get; set; } = new();
+
+        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
+        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context) => ValueTask.CompletedTask;
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default)
+        {
+            context.RecordActivityOutput("result", "completed");
+            context.CompleteCompositeActivity([ActivityOutcomes.Done]);
+            var state = new DurableValueState(
+                "scope-output",
+                context.WorkflowExecutionId,
+                "scope-output",
+                new RuntimeValueTypeDescriptor("primitive", "string", null),
+                DurableValueLifecycle.Instance,
+                DurableValueStorage.Inline,
+                JsonSerializer.SerializeToElement("completed"),
+                null,
+                context.ActivityExecutionState.Execution.ActivityExecutionId,
+                capturedAt,
+                new Dictionary<string, string>());
+            return ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>(
+                [new RuntimeStateChange<DurableValueState>(state.DurableValueId, RuntimeStateChangeOperation.Upsert, state, state.Metadata)]);
         }
     }
 

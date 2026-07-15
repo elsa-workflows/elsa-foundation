@@ -71,6 +71,29 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
+    public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = new SchedulerWorkItemKey(workflowExecutionId, workItemId);
+            if (!_workItemsByScopedId.Remove(key))
+                return new ValueTask<bool>(false);
+            if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue))
+                return new ValueTask<bool>(false);
+
+            var retained = queue.Where(item => !StringComparer.Ordinal.Equals(item.WorkItemId, workItemId)).ToArray();
+            if (retained.Length == 0)
+                _queuesByWorkflowExecutionId.Remove(workflowExecutionId);
+            else
+                _queuesByWorkflowExecutionId[workflowExecutionId] = new Queue<RuntimeSchedulerWorkItem>(retained);
+            return new ValueTask<bool>(true);
+        }
+    }
+
     public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default)
     {
         if (limit <= 0)

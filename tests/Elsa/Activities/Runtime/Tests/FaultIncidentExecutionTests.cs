@@ -3,6 +3,7 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -77,6 +78,7 @@ public sealed class FaultIncidentExecutionTests
 
     private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)
     {
+        await ActivityConstructorTestHost.InitializeAsync(provider);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
@@ -102,8 +104,7 @@ public sealed class FaultIncidentExecutionTests
             authoredActivityId: "authored-fault",
             activityType: typeof(Fault).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: FaultActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new FaultDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(FaultActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new FaultDescriptor())),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -151,8 +152,8 @@ public sealed class FaultIncidentExecutionTests
 
     private sealed class FaultActivityConstructor : IActivityConstructor<FaultDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(FaultDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(FaultDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

@@ -4,38 +4,46 @@ using Elsa.Activities.Runtime.Core.Models;
 namespace Elsa.Activities.Runtime.Core.Contracts;
 
 /// <summary>
-/// Non-generic, registry-stored construction contributor. One per descriptor type. The
-/// <see cref="DescriptorType"/> is the registry key (a descriptor type's <c>FullName</c>),
-/// derived from <c>typeof(TDescriptor)</c> — never hand-authored. A <b>contribution</b> contract
-/// (framework §2.6.1): features contribute a constructor for the descriptor type they own.
+/// Runtime construction contributor keyed by a stable consumer key and supported descriptor schemas.
 /// </summary>
 public interface IActivityConstructor
 {
-    /// <summary>The descriptor type's <c>FullName</c> this constructor handles (the registry key).</summary>
-    string DescriptorType { get; }
+    string ConsumerKey { get; }
+    IReadOnlySet<string> SupportedSchemaVersions { get; }
 
-    /// <summary>
-    /// Construct a fully-wired <see cref="IActivity"/> from the serialized descriptor payload and the
-    /// author-filled input/output arguments. The implementation deserializes the payload into its
-    /// concrete descriptor type — the design domain never does. The returned activity is whole:
-    /// type resolved, descriptor-sourced state applied, author arguments bound.
-    /// </summary>
-    ValueTask<IActivity> Construct(
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+    ValueTask<IActivity> ConstructAsync(
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument> inputs,
+        IReadOnlyDictionary<string, OutputArgument> outputs,
         CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Typed construction contributor for descriptor type <typeparamref name="TDescriptor"/>. Each
-/// implementation provides a one-line bridge to the non-generic <see cref="IActivityConstructor"/>
-/// that owns deserialization (<c>payload.Deserialize&lt;TDescriptor&gt;()</c>) and exposes
-/// <c>DescriptorType =&gt; typeof(TDescriptor).FullName!</c>. No shared base class.
+/// Typed construction contributor for payload type <typeparamref name="TDescriptor"/>. The generic
+/// bridge owns JSON deserialization while the implementation supplies its stable
+/// <see cref="IActivityConstructor.ConsumerKey"/>; schema 1 is declared by this convenience contract.
 /// </summary>
 public interface IActivityConstructor<TDescriptor> : IActivityConstructor
     where TDescriptor : class
 {
+    IReadOnlySet<string> IActivityConstructor.SupportedSchemaVersions =>
+        new HashSet<string>(StringComparer.Ordinal) { RuntimeActivityDescriptor.InitialSchemaVersion };
+
+    ValueTask<IActivity> IActivityConstructor.ConstructAsync(
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument> inputs,
+        IReadOnlyDictionary<string, OutputArgument> outputs,
+        CancellationToken cancellationToken)
+    {
+        var typedDescriptor = descriptor.Payload.Deserialize<TDescriptor>()
+            ?? throw new InvalidOperationException($"Runtime descriptor for consumer '{descriptor.ConsumerKey}' resolved to null.");
+        return Construct(
+            typedDescriptor,
+            inputs as IDictionary<string, InputArgument> ?? inputs.ToDictionary(),
+            outputs as IDictionary<string, OutputArgument> ?? outputs.ToDictionary(),
+            cancellationToken);
+    }
+
     ValueTask<IActivity> Construct(
         TDescriptor descriptor,
         IDictionary<string, InputArgument>? inputs,

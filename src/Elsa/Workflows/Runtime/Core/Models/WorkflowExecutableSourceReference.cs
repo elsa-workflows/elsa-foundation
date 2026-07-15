@@ -29,10 +29,14 @@ public sealed record WorkflowExecutableSourceReference(
     DateTimeOffset? ExpiresAt = null,
     DateTimeOffset? DeletedAt = null,
     string? DeletedReason = null,
-    IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null)
+    IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null,
+    ExecutableLayoutSidecar? LayoutSidecar = null)
 {
     /// <summary>The publish-time layout sidecar copied from the definition version's layout store; may be empty.</summary>
     public IReadOnlyList<WorkflowExecutableLayoutRecord> Layout { get; init; } = Layout ?? [];
+
+    /// <summary>Boundary-scoped historical layout used for reusable-activity click-through inspection.</summary>
+    public ExecutableLayoutSidecar LayoutSidecar { get; init; } = LayoutSidecar ?? ExecutableLayoutSidecar.Empty;
 
     /// <summary>True while the reference is neither retired nor past its expiry at <paramref name="now"/>.</summary>
     public bool IsLive(DateTimeOffset now) => DeletedAt is null && !IsExpired(now);

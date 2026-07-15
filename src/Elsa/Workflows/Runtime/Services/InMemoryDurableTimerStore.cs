@@ -63,6 +63,20 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         }
     }
 
+    public ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return new ValueTask<IReadOnlyCollection<DurableTimer>>(_timers.Values
+                .Where(timer => StringComparer.Ordinal.Equals(timer.WorkflowExecutionId, workflowExecutionId))
+                .OrderBy(timer => timer.TimerId, StringComparer.Ordinal)
+                .ToArray());
+        }
+    }
+
     public ValueTask DeleteAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);

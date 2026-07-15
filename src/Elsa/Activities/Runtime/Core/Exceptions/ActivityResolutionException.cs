@@ -1,9 +1,36 @@
 namespace Elsa.Activities.Runtime.Core.Exceptions;
 
 /// <summary>
-/// Domain-failure thrown when the activity factory or resolver registry cannot resolve a
-/// descriptor's kind to a CLR type (e.g. unknown kind, missing module). Per Elsa §E2.6.1
-/// this is a runtime/domain path failure, not a system failure — callers may catch and
-/// translate to a graceful response.
+/// Base domain failure for executable activity activation. Missing consumers and unsupported
+/// schemas are deployment/artifact compatibility failures and are not ordinary retryable activity
+/// failures.
 /// </summary>
-public sealed class ActivityResolutionException(string message) : Exception(message);
+public class ActivityResolutionException(
+    string message,
+    string consumerKey,
+    string schemaVersion,
+    Exception? innerException = null) : Exception(message, innerException)
+{
+    public string ConsumerKey { get; } = consumerKey;
+    public string SchemaVersion { get; } = schemaVersion;
+}
+
+/// <summary>No Runtime consumer is registered for the persisted consumer key.</summary>
+public sealed class UnknownActivityConsumerException(string consumerKey, string schemaVersion)
+    : ActivityResolutionException(
+        $"No activity constructor is registered for Runtime consumer '{consumerKey}' and schema '{schemaVersion}'. The feature that owns this consumer may not be installed.",
+        consumerKey,
+        schemaVersion);
+
+/// <summary>The Runtime consumer is installed, but does not support the persisted descriptor schema.</summary>
+public sealed class UnsupportedActivityDescriptorSchemaException(
+    string consumerKey,
+    string schemaVersion,
+    IReadOnlyCollection<string> supportedSchemaVersions)
+    : ActivityResolutionException(
+        $"Runtime consumer '{consumerKey}' does not support descriptor schema '{schemaVersion}'. Supported schemas: {string.Join(", ", supportedSchemaVersions.Order(StringComparer.Ordinal))}.",
+        consumerKey,
+        schemaVersion)
+{
+    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = supportedSchemaVersions.ToArray();
+}

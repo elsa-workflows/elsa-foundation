@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
@@ -319,8 +320,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(serializer, typeof(SequenceActivity))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -498,8 +498,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(serializer, typeof(SequenceActivity))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -533,8 +532,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(WriteHttpResponse).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(WriteHttpResponse)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(serializer, typeof(WriteHttpResponse))),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -550,8 +548,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(StallingActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(StallingActivity)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(serializer, typeof(StallingActivity))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 [nameof(StallingActivity.Duration)] = LiteralBinding(nameof(StallingActivity.Duration), duration.ToString("c"), "System.TimeSpan")
@@ -748,8 +745,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId ?? "node-http-endpoint"}",
             activityType: HttpEndpoint.ActivityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(HttpEndpoint)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(serializer, typeof(HttpEndpoint))),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>
             {

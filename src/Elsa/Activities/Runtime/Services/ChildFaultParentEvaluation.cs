@@ -72,6 +72,8 @@ internal static class ChildFaultParentEvaluation
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: commandMetadata,
-            envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
+            envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
+            executionScopeId: parentState.ExecutionScopeId ?? parentState.Provenance.ExecutionScopeId,
+            attempt: parentState.Attempt ?? parentState.Provenance.Attempt);
     }
 }

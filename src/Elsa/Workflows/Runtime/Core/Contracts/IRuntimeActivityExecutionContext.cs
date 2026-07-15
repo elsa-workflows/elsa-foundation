@@ -82,4 +82,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     bool WorkflowOutputAssignmentRequested { get; }
 
     IReadOnlyDictionary<string, object?> RequestedWorkflowOutputs { get; }
+
+    /// <summary>Records an ordinary activity output by its stable runtime name.</summary>
+    void RecordActivityOutput(string outputName, object? value);
 }

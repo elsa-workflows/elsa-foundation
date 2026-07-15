@@ -223,6 +223,7 @@ public sealed class ArchitectureGuardTests
                 "Elsa.Activities.Runtime.Core",
                 "Elsa.Activities.Primitives",
                 "Elsa.Activities.Composition.Runtime",
+                "Elsa.Activities.Graph.Runtime",
             ],
             IsDesignReference);
 
@@ -234,6 +235,8 @@ public sealed class ArchitectureGuardTests
             "Elsa.Activities.Primitives",
             "Elsa.Activities.Composition.Runtime",
             "Elsa.Activities.Composition.Design",
+            "Elsa.Activities.Graph.Runtime",
+            "Elsa.Activities.Graph.Design",
             "Elsa.Activities.Design.Reconciliation.Clr",
         ];
         var featureSet = featureProjects.ToHashSet(StringComparer.Ordinal);
@@ -398,7 +401,8 @@ public sealed class ArchitectureGuardTests
         project.Name == "Elsa.Workflows.Runtime"
         || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
         || project.Name == "Elsa.Activities.Runtime"
-        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal);
+        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal)
+        || project.Name == "Elsa.Activities.Graph.Runtime";
 
     [Fact]
     public void Source_scan_strips_interpolated_string_text_but_preserves_interpolation_code()

@@ -22,11 +22,13 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
 
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<InMemoryWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<InMemoryExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
     }
 
     [Fact]
@@ -54,6 +56,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<GroundworkExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
         Assert.IsType<GroundworkActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<GroundworkWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<GroundworkDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
@@ -96,7 +99,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         // With no contributed upcasters the enumerable is empty, yet the registry still constructs (its
         // eager validation over an empty set is a no-op).
-        Assert.Empty(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>());
+        Assert.Equal(3, provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>().Count());
         Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
     }
 

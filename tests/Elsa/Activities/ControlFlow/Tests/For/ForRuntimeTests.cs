@@ -148,8 +148,7 @@ public sealed class ForRuntimeTests
             authoredActivityId: "authored-for",
             activityType: typeof(ForActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ForDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(ForActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Start"] = IntBinding("Start", start),
@@ -184,8 +183,8 @@ public sealed class ForRuntimeTests
 
     private sealed class ForActivityConstructor : IActivityConstructor<ForDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ForDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ForDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

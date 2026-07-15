@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -77,6 +78,54 @@ public static class RuntimeInputBindingStateProjection
             InstanceName: identity.InstanceName,
             StimulusInput: ProjectStimulusInput(materialized),
             TriggerNodeId: ProjectTriggerNodeId(materialized));
+    }
+
+    /// <summary>
+    /// Driver-aware projection used by execution handlers. Durable values carrying an explicit stable storage
+    /// driver are decoded through that driver before entering workflow-variable/input/output expression state;
+    /// legacy inline states without a driver marker retain the existing JSON-element projection.
+    /// </summary>
+    public static async ValueTask<RuntimeInputBindingStateProjectionSet> ProjectAllAsync(
+        IEnumerable<DurableValueState> durableValues,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+        ArgumentNullException.ThrowIfNull(storageDrivers);
+        var materialized = durableValues as IReadOnlyCollection<DurableValueState> ?? durableValues.ToArray();
+        var identity = RuntimeIdentityStateProjection.Project(materialized);
+        return new RuntimeInputBindingStateProjectionSet(
+            WorkflowInputs: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.InputName, storageDrivers, cancellationToken),
+            WorkflowVariables: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.VariableName, storageDrivers, cancellationToken),
+            ActivityOutputValues: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.OutputName, storageDrivers, cancellationToken),
+            CorrelationId: identity.CorrelationId,
+            InstanceName: identity.InstanceName,
+            StimulusInput: ProjectStimulusInput(materialized),
+            TriggerNodeId: ProjectTriggerNodeId(materialized));
+    }
+
+    private static async ValueTask<IReadOnlyDictionary<string, object?>> ProjectByMetadataKeyAsync(
+        IEnumerable<DurableValueState> durableValues,
+        string nameMetadataKey,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var durableValue in durableValues
+                     .Where(value => value.Metadata.ContainsKey(nameMetadataKey))
+                     .OrderBy(value => value.CapturedAt))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            object? value;
+            if (durableValue.Metadata.TryGetValue(RuntimeMetadataKeys.StorageDriverKey, out var driverKey))
+                value = await storageDrivers.GetRequired(driverKey).DecodeAsync(durableValue, cancellationToken);
+            else if (durableValue.InlineValue.HasValue)
+                value = durableValue.InlineValue.Value;
+            else
+                continue;
+            result[durableValue.Metadata[nameMetadataKey]] = value;
+        }
+        return result;
     }
 
     /// <summary>

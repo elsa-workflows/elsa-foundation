@@ -53,7 +53,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal("hello", activity.ObservedText);
         Assert.Equal("actexec-1", activity.Id);
         Assert.Equal("node-start", activity.NodeId);
-        Assert.Equal("test", factory.LastDescriptorType);
+        Assert.Equal("test", factory.LastConsumerKey);
         Assert.Single(factory.LastInputs);
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
@@ -507,6 +507,51 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CheckpointParticipant_CommitsBoundaryStateValuesAndFirstChildIntentTogether()
+    {
+        var activity = new CheckpointParticipantActivity();
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var write = Assert.Single(_checkpointWriter.ListCommits());
+        var boundaryState = Assert.Single(write.Commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal("actexec-1", boundaryState.ExecutionScopeId);
+        Assert.Equal(new ActivityExecutionAttemptLineage(1, "actexec-1", null), boundaryState.Attempt);
+        Assert.Equal(boundaryState.ExecutionScopeId, boundaryState.Provenance.ExecutionScopeId);
+        Assert.Equal(boundaryState.Attempt, boundaryState.Provenance.Attempt);
+        Assert.Equal("scope-entry", Assert.Single(write.Commit.StateChanges.DurableValues).State.DurableValueId);
+
+        var childWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.ScheduleActivity);
+        Assert.Equal("actexec-1", childWork.ExecutionScopeId);
+        Assert.NotNull(childWork.Attempt);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_CheckpointParticipant_WhenMandatoryCommitFails_PublishesNoPartialBoundaryState()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(
+            new RecordingActivityFactory(new CheckpointParticipantActivity()),
+            includeInspection: true,
+            checkpointWriter: new ThrowingCheckpointWriter());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity())).AsTask());
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+        Assert.Null(state.ExecutionScopeId);
+        Assert.Empty(await _durableValueStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
     public async Task HandleAsync_FaultsActivityWhenDuplicateBookmarkRequestsAreRecorded()
     {
         var activity = new DuplicateBookmarkRequestActivity();
@@ -883,7 +928,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         bool includeInspection = false,
         IRuntimePayloadCapturePolicy? payloadCapturePolicy = null,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
-        IExpressionEvaluator? expressionEvaluator = null)
+        IExpressionEvaluator? expressionEvaluator = null,
+        IRuntimeCheckpointCommitStore? checkpointWriter = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => factory);
@@ -904,7 +950,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
         services.AddSingleton(_incidentStateStore);
         services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
-        services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => checkpointWriter ?? _checkpointWriter);
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         if (includeInspection)
             services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
@@ -1045,8 +1091,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
             outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
@@ -1065,8 +1110,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: descriptorPayload.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptorPayload.Clone()),
             inputBindings: inputBinding is null
                 ? new Dictionary<string, RuntimeInputBinding>()
                 : new Dictionary<string, RuntimeInputBinding> { ["Text"] = inputBinding },
@@ -1113,19 +1157,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
     {
         public int CreateCalls { get; private set; }
-        public string? LastDescriptorType { get; private set; }
-        public IDictionary<string, InputArgument> LastInputs { get; private set; } = new Dictionary<string, InputArgument>();
-        public IDictionary<string, OutputArgument> LastOutputs { get; private set; } = new Dictionary<string, OutputArgument>();
+        public string? LastConsumerKey { get; private set; }
+        public IReadOnlyDictionary<string, InputArgument> LastInputs { get; private set; } = new Dictionary<string, InputArgument>();
+        public IReadOnlyDictionary<string, OutputArgument> LastOutputs { get; private set; } = new Dictionary<string, OutputArgument>();
 
         public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+            RuntimeActivityDescriptor descriptor,
+            IReadOnlyDictionary<string, InputArgument>? inputs,
+            IReadOnlyDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default)
         {
             CreateCalls++;
-            LastDescriptorType = descriptorType;
+            LastConsumerKey = descriptor.ConsumerKey;
             LastInputs = inputs ?? new Dictionary<string, InputArgument>();
             LastOutputs = outputs ?? new Dictionary<string, OutputArgument>();
             if (activity is RecordingActivity recordingActivity && LastInputs.TryGetValue("Text", out var text))
@@ -1140,10 +1183,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private sealed class ThrowingActivityFactory(Exception exception) : IActivityFactory
     {
         public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+            RuntimeActivityDescriptor descriptor,
+            IReadOnlyDictionary<string, InputArgument>? inputs,
+            IReadOnlyDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default) =>
             throw exception;
     }
@@ -1269,6 +1311,53 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             base.Execute(context);
             ((IRuntimeActivityExecutionContext)context).ScheduleChildActivity("node-other");
         }
+    }
+
+    private sealed class CheckpointParticipantActivity : RecordingActivity, IRuntimeActivityCheckpointParticipant
+    {
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            base.Execute(context);
+            ((IRuntimeActivityExecutionContext)context).ScheduleChildActivity("node-other");
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default)
+        {
+            var state = new DurableValueState(
+                "scope-entry",
+                context.WorkflowExecutionId,
+                "scope-entry",
+                new RuntimeValueTypeDescriptor("primitive", "string", null),
+                DurableValueLifecycle.Instance,
+                DurableValueStorage.Inline,
+                JsonSerializer.SerializeToElement("captured"),
+                null,
+                context.ActivityExecutionState.Execution.ActivityExecutionId,
+                capturedAt,
+                new Dictionary<string, string>());
+            return ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>(
+                [new RuntimeStateChange<DurableValueState>(state.DurableValueId, RuntimeStateChangeOperation.Upsert, state, state.Metadata)]);
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
+    }
+
+    private sealed class ThrowingCheckpointWriter : IRuntimeCheckpointCommitStore
+    {
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<RuntimeCheckpointCommitStoreResult>(new InvalidOperationException("checkpoint failpoint"));
     }
 
     private sealed class DuplicateBookmarkRequestActivity : ActivityBase

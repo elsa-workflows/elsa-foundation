@@ -18,6 +18,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IIncidentStateStore? _incidentStateStore;
     private readonly IExecutionLivenessStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
+    private readonly IActivityScopeCleanupStore? _activityScopeCleanupStore;
 
     /// <summary>
     /// Creates the in-memory commit store. RT-8: the seven telescoping constructors collapsed into this single primary
@@ -33,7 +34,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IIncidentStateStore? incidentStateStore = null,
         IExecutionLivenessStateStore? operationalStateStore = null,
         ISchedulerStateStore? schedulerStateStore = null,
-        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null)
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
+        IActivityScopeCleanupStore? activityScopeCleanupStore = null)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
@@ -43,6 +45,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _incidentStateStore = incidentStateStore;
         _operationalStateStore = operationalStateStore;
         _schedulerStateStore = schedulerStateStore;
+        _activityScopeCleanupStore = activityScopeCleanupStore;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -78,6 +81,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
             await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, cancellationToken);
             await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, cancellationToken);
+            await ApplyActivityScopeCleanupsAsync(commit.StateChanges.ActivityScopeCleanups, cancellationToken);
 
             try
             {
@@ -385,6 +389,21 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             throw new InvalidOperationException($"Unexpected operational state change operation '{stateChange.Operation}' reached apply phase.");
         }
+    }
+
+    private async ValueTask ApplyActivityScopeCleanupsAsync(
+        IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups,
+        CancellationToken cancellationToken)
+    {
+        if (_activityScopeCleanupStore is null)
+        {
+            if (cleanups.Count != 0)
+                throw new InvalidOperationException("The checkpoint contains activity-scope cleanup but no cleanup store is configured.");
+            return;
+        }
+
+        foreach (var cleanup in cleanups)
+            await _activityScopeCleanupStore.ApplyAsync(cleanup, cancellationToken);
     }
 
     private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)

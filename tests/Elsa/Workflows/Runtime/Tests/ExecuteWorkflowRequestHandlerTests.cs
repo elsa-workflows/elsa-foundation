@@ -75,8 +75,7 @@ public sealed class ExecuteWorkflowRequestHandlerTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: System.Text.Json.JsonSerializer.SerializeToElement(new { type = "test" }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, System.Text.Json.JsonSerializer.SerializeToElement(new { type = "test" })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

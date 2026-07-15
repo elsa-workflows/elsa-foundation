@@ -1,6 +1,7 @@
 using System.Reflection;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
@@ -12,8 +13,8 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 /// <list type="number">
 ///   <item><b>Read</b> the persisted definition version — the Design seam hands over an opaque
 ///   <c>(DescriptorType, DescriptorPayload)</c> plus the argument definitions.</item>
-///   <item><b>Invoke</b> <see cref="IActivityFactory"/> — the Runtime seam dispatches on the descriptor
-///   type to the owning constructor and returns a whole <c>IActivity</c>.</item>
+///   <item><b>Invoke</b> <see cref="IActivityFactory"/> — the Runtime seam dispatches on the stable
+///   consumer/schema pair and returns a whole <c>IActivity</c>.</item>
 ///   <item><b>Project</b> both sides into one view so the crossing is visible.</item>
 /// </list>
 /// Unit 006 is construct-only, so no author values are bound here — the inputs/outputs bags are left
@@ -33,8 +34,10 @@ public sealed class ConstructActivityRequestHandler(
 
         // 2. Invoke — the Runtime seam. Construct-only: no author values to bind yet.
         var activity = await factory.Create(
-            version.DescriptorType,
-            version.DescriptorPayload,
+            new RuntimeActivityDescriptor(
+                ToRuntimeConsumerKey(version.DescriptorType),
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                version.DescriptorPayload),
             inputs: null,
             outputs: null,
             cancellationToken);
@@ -50,6 +53,13 @@ public sealed class ConstructActivityRequestHandler(
             Inputs: version.Inputs.Select(i => new ArgumentView(i.ReferenceKey, i.Name, i.Type.Alias)).ToArray(),
             Outputs: version.Outputs.Select(o => new ArgumentView(o.ReferenceKey, o.Name, o.Type.Alias)).ToArray());
     }
+
+    private static string ToRuntimeConsumerKey(string designDescriptorType) => designDescriptorType switch
+    {
+        "Elsa.Primitives.Models.ClrActivityDescriptor" => WellKnownRuntimeActivityConsumers.ClrActivity,
+        "Elsa.Workflows.Primitives.Models.WorkflowIdentity" => WellKnownRuntimeActivityConsumers.WorkflowDefinitionActivity,
+        _ => designDescriptorType
+    };
 
     /// <summary>
     /// The activity's own (concrete-type-declared) properties — e.g. <c>WorkflowIdentity</c> on the

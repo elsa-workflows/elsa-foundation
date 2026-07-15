@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Querying\Elsa.Persistence.Groundwork.Querying.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />

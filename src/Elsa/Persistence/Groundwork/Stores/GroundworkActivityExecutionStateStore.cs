@@ -20,7 +20,11 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.ActivityExecutionId);
 
-        var document = new ActivityExecutionStateDocument(state.Execution.WorkflowExecutionId, state);
+        var document = new ActivityExecutionStateDocument(
+            state.Execution.WorkflowExecutionId,
+            state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
+            state.Attempt ?? state.Provenance.Attempt,
+            state);
         await SaveDocumentAsync(
             DocumentId.Compose(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId),
             document,
@@ -63,5 +67,9 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
             .ToArray();
     }
 
-    private sealed record ActivityExecutionStateDocument(string WorkflowExecutionId, ActivityExecutionState State);
+    private sealed record ActivityExecutionStateDocument(
+        string WorkflowExecutionId,
+        string? ExecutionScopeId,
+        ActivityExecutionAttemptLineage? Attempt,
+        ActivityExecutionState State);
 }

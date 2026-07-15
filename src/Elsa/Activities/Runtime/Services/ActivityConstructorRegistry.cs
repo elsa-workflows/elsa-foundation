@@ -4,24 +4,39 @@ using Elsa.Activities.Runtime.Core.Exceptions;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// Default in-memory <see cref="IActivityConstructorRegistry"/>. One instance per host; populated at
-/// startup, read synchronously afterward. Enforces one-constructor-per-descriptor-type: a second,
-/// differently-typed constructor for the same descriptor type throws
-/// <see cref="DuplicateActivityConstructorException"/> (re-adding the same constructor type is idempotent).
+/// Default in-memory <see cref="IActivityConstructorRegistry"/>. Enforces one constructor per exact
+/// Runtime consumer/schema pair: every second claim for the same pair throws
+/// <see cref="DuplicateActivityConstructorException"/>, including another instance of the same type.
 /// </summary>
 public sealed class ActivityConstructorRegistry : IActivityConstructorRegistry
 {
-    private readonly Dictionary<string, IActivityConstructor> _byType = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string ConsumerKey, string SchemaVersion), IActivityConstructor> _constructors = new();
     private readonly Lock _gate = new();
 
     public void Add(IActivityConstructor constructor)
     {
         lock (_gate)
         {
-            if (_byType.TryGetValue(constructor.DescriptorType, out var existing) && existing.GetType() != constructor.GetType())
-                throw new DuplicateActivityConstructorException(constructor.DescriptorType, existing.GetType(), constructor.GetType());
+            ArgumentException.ThrowIfNullOrWhiteSpace(constructor.ConsumerKey);
+            if (constructor.SupportedSchemaVersions.Count == 0)
+                throw new ArgumentException($"Activity constructor '{constructor.GetType().FullName}' must support at least one descriptor schema.", nameof(constructor));
 
-            _byType[constructor.DescriptorType] = constructor;
+            var keys = constructor.SupportedSchemaVersions.Select(schemaVersion =>
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(schemaVersion);
+                return (ConsumerKey: constructor.ConsumerKey, SchemaVersion: schemaVersion);
+            }).ToArray();
+
+            // Preflight every claim before mutating so a conflict on a later schema cannot leave a
+            // partially registered multi-schema constructor.
+            foreach (var key in keys)
+            {
+                if (_constructors.TryGetValue(key, out var existing))
+                    throw new DuplicateActivityConstructorException(key.ConsumerKey, key.SchemaVersion, existing.GetType(), constructor.GetType());
+            }
+
+            foreach (var key in keys)
+                _constructors[key] = constructor;
         }
     }
 
@@ -31,14 +46,26 @@ public sealed class ActivityConstructorRegistry : IActivityConstructorRegistry
             Add(constructor);
     }
 
-    public IActivityConstructor Resolve(string descriptorType)
+    public IActivityConstructor Resolve(string consumerKey, string schemaVersion)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(schemaVersion);
+
         lock (_gate)
         {
-            if (!_byType.TryGetValue(descriptorType, out var constructor))
-                throw new UnknownDescriptorTypeException(descriptorType);
+            if (_constructors.TryGetValue((consumerKey, schemaVersion), out var constructor))
+                return constructor;
 
-            return constructor;
+            var supportedSchemas = _constructors.Keys
+                .Where(key => StringComparer.Ordinal.Equals(key.ConsumerKey, consumerKey))
+                .Select(key => key.SchemaVersion)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
+            if (supportedSchemas.Length == 0)
+                throw new UnknownActivityConsumerException(consumerKey, schemaVersion);
+
+            throw new UnsupportedActivityDescriptorSchemaException(consumerKey, schemaVersion, supportedSchemas);
         }
     }
 }

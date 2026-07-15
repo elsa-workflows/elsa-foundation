@@ -78,8 +78,7 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
             authoredActivityId: "authored-flowchart",
             activityType: typeof(FlowchartActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: FlowchartActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(FlowchartActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new FlowchartDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -108,8 +107,7 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ProbeDescriptor(outcomes ?? [ActivityOutcomes.Done])),
+            descriptor: new RuntimeActivityDescriptor(ProbeActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ProbeDescriptor(outcomes ?? [ActivityOutcomes.Done]))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -152,8 +150,8 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
 
     private sealed class FlowchartActivityConstructor : IActivityConstructor<FlowchartDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(FlowchartDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(FlowchartDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,
@@ -174,8 +172,8 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
 
     private sealed class ProbeActivityConstructor : IActivityConstructor<ProbeDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ProbeDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ProbeDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

@@ -54,6 +54,7 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />

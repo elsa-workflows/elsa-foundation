@@ -11,6 +11,7 @@
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
+          "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesSequence": {},
           "ClrActivityReconciliation": {

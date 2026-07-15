@@ -133,8 +133,7 @@ public sealed class RunJavaScriptExecutionAccessorsTests : IDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: "Test.Expression",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Value"] = new(

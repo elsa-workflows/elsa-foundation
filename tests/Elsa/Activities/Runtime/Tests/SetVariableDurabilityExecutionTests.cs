@@ -93,8 +93,7 @@ public sealed class SetVariableDurabilityExecutionTests
             authoredActivityId: "authored-set",
             activityType: typeof(SetVariable).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SetVariableDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SetVariableDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SetVariableDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SetVariableDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Variable"] = StringLiteral("Variable", "greeting"),
@@ -108,8 +107,7 @@ public sealed class SetVariableDurabilityExecutionTests
             authoredActivityId: "authored-read",
             activityType: "test/variable-read-probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: VariableReadProbeDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new VariableReadProbeDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(VariableReadProbeDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new VariableReadProbeDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 // Real JS expression over the workflow-scope variable: resolves the current projected value.
@@ -146,8 +144,7 @@ public sealed class SetVariableDurabilityExecutionTests
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SequenceConstructor.SequenceDescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SequenceConstructor.SequenceConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SequenceDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -179,12 +176,12 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private sealed record SetVariableDescriptor
     {
-        public static string DescriptorTypeKey => typeof(SetVariableDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(SetVariableDescriptor).FullName!;
     }
 
     private sealed class SetVariableConstructor : IActivityConstructor<SetVariableDescriptor>
     {
-        public string DescriptorType => SetVariableDescriptor.DescriptorTypeKey;
+        public string ConsumerKey => SetVariableDescriptor.ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new SetVariableDescriptor(), inputs, outputs, cancellationToken);
@@ -202,7 +199,7 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private sealed record VariableReadProbeDescriptor
     {
-        public static string DescriptorTypeKey => typeof(VariableReadProbeDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(VariableReadProbeDescriptor).FullName!;
     }
 
     private sealed class VariableReadProbe
@@ -213,7 +210,7 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private sealed class VariableReadProbeConstructor(VariableReadProbe probe) : IActivityConstructor<VariableReadProbeDescriptor>
     {
-        public string DescriptorType => VariableReadProbeDescriptor.DescriptorTypeKey;
+        public string ConsumerKey => VariableReadProbeDescriptor.ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new VariableReadProbeDescriptor(), inputs, outputs, cancellationToken);
@@ -236,8 +233,8 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
     {
-        public static string SequenceDescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => SequenceDescriptorTypeKey;
+        public static string SequenceConsumerKey => typeof(SequenceDescriptor).FullName!;
+        public string ConsumerKey => SequenceConsumerKey;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             new(new SequenceActivity());

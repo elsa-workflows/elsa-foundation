@@ -181,8 +181,7 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             authoredActivityId: "authored-node-set-output",
             activityType: typeof(SetOutput).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: TestDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new TestDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(TestDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new TestDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["OutputName"] = Literal("OutputName", JsonSerializer.SerializeToElement(OutputName), "System.String"),
@@ -212,12 +211,12 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
 
     private sealed record TestDescriptor
     {
-        public static string DescriptorTypeKey => typeof(TestDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(TestDescriptor).FullName!;
     }
 
     private sealed class SetOutputConstructor : IActivityConstructor<TestDescriptor>
     {
-        public string DescriptorType => TestDescriptor.DescriptorTypeKey;
+        public string ConsumerKey => TestDescriptor.ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new TestDescriptor(), inputs, outputs, cancellationToken);

@@ -13,6 +13,7 @@ using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
+using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
@@ -182,6 +183,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
             typeof(ActivitiesFlowchartFeature).Assembly,
+            typeof(GraphActivitiesRuntimeFeature).Assembly,
             // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
             // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
             // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly

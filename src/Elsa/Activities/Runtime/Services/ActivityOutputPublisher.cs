@@ -43,13 +43,15 @@ internal static class ActivityOutputPublisher
         }
     }
 
-    public static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildDurableOutputChanges(
+    public static ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> BuildDurableOutputChangesAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
         ExecutableNode executableNode,
         IReadOnlyCollection<RecordedActivityOutput> outputs,
-        DateTimeOffset capturedAt) =>
-        BuildDurableOutputChanges(workItem, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId, executableNode, outputs, capturedAt);
+        DateTimeOffset capturedAt,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        CancellationToken cancellationToken = default) =>
+        BuildDurableOutputChangesAsync(workItem, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId, executableNode, outputs, capturedAt, storageDrivers, cancellationToken);
 
     /// <summary>
     /// Builds the durable-value upserts for an activity's <c>CaptureOnSuccessfulCompletion</c> outputs, keyed on the
@@ -58,57 +60,63 @@ internal static class ActivityOutputPublisher
     /// persist outputs identically — a resume target that sets outputs (e.g. the mid-flow <c>HttpEndpoint</c>,
     /// spec 089 D) durably captures them exactly as a synchronous completion does.
     /// </summary>
-    public static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildDurableOutputChanges(
+    public static async ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> BuildDurableOutputChangesAsync(
         RuntimeSchedulerWorkItem workItem,
         string activityExecutionId,
         string executableNodeId,
         ExecutableNode executableNode,
         IReadOnlyCollection<RecordedActivityOutput> outputs,
-        DateTimeOffset capturedAt)
+        DateTimeOffset capturedAt,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(storageDrivers);
         var outputByName = outputs.ToDictionary(output => output.OutputName, StringComparer.Ordinal);
-        return executableNode.OutputCaptures.Values
+        var captures = executableNode.OutputCaptures.Values
             .Where(capture => capture.CaptureOnSuccessfulCompletion)
             .Where(capture => outputByName.ContainsKey(capture.OutputName))
-            .Select(capture => NewDurableValueChange(workItem, activityExecutionId, executableNodeId, capture, outputByName[capture.OutputName], capturedAt))
             .ToArray();
+        var drivers = captures.ToDictionary(
+            capture => capture.OutputName,
+            capture => storageDrivers.GetRequired(capture.StorageDriverKey),
+            StringComparer.Ordinal);
+        var changes = new List<RuntimeStateChange<DurableValueState>>(captures.Length);
+        foreach (var capture in captures)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var output = outputByName[capture.OutputName];
+            var encoding = await drivers[capture.OutputName].EncodeAsync(output.Value, capture.Type, cancellationToken);
+            changes.Add(NewDurableValueChange(workItem, activityExecutionId, executableNodeId, capture, encoding, capturedAt));
+        }
+        return changes;
     }
 
-    public static RuntimeStateChange<DurableValueState> NewDurableValueChange(
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeInvokeActivityCommandPayload invokePayload,
-        RuntimeOutputCapture capture,
-        RecordedActivityOutput output,
-        DateTimeOffset capturedAt) =>
-        NewDurableValueChange(workItem, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId, capture, output, capturedAt);
-
-    public static RuntimeStateChange<DurableValueState> NewDurableValueChange(
+    private static RuntimeStateChange<DurableValueState> NewDurableValueChange(
         RuntimeSchedulerWorkItem workItem,
         string activityExecutionId,
         string executableNodeId,
         RuntimeOutputCapture capture,
-        RecordedActivityOutput output,
+        RuntimeDurableValueEncoding encoding,
         DateTimeOffset capturedAt)
     {
-        if (capture.Storage == DurableValueStorage.External)
-            throw new InvalidOperationException($"Output capture '{capture.OutputName}' targets external durable value storage, which is not implemented by the runtime invocation handler.");
-
         var metadata = capture.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
         metadata[RuntimeMetadataKeys.CommandId] = workItem.CommandId;
         metadata[RuntimeMetadataKeys.OutputName] = capture.OutputName;
         metadata[RuntimeMetadataKeys.ActivityExecutionId] = activityExecutionId;
         metadata[RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId;
+        metadata[RuntimeMetadataKeys.StorageDriverKey] = capture.StorageDriverKey;
         var durableValueId = $"durable-{capture.ValueId}";
+        var encodedType = capture.Type with { Id = capture.StorageDriverKey };
         var state = new DurableValueState(
             durableValueId: durableValueId,
             workflowExecutionId: workItem.WorkflowExecutionId,
             valueId: capture.ValueId,
-            type: capture.Type,
+            type: encodedType,
             lifecycle: capture.Lifecycle,
-            storage: capture.Storage,
-            inlineValue: capture.Storage is DurableValueStorage.Inline or DurableValueStorage.Custom ? SerializeOutputValue(output.Value) : null,
-            externalReference: null,
+            storage: encoding.Storage,
+            inlineValue: encoding.InlineValue,
+            externalReference: encoding.ExternalReference,
             sourceActivityExecutionId: activityExecutionId,
             capturedAt: capturedAt,
             metadata: metadata);
@@ -174,6 +182,23 @@ internal static class ActivityOutputPublisher
         ExecutableNode executableNode,
         IReadOnlyCollection<RecordedActivityOutput> outputs,
         DateTimeOffset capturedAt) =>
+        BuildOutputValueSnapshots(
+            payloadCapturePolicy,
+            workItem,
+            invokePayload.ActivityExecutionId,
+            invokePayload.ExecutableNodeId,
+            executableNode,
+            outputs,
+            capturedAt);
+
+    public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
+        RuntimeSchedulerWorkItem workItem,
+        string activityExecutionId,
+        string executableNodeId,
+        ExecutableNode executableNode,
+        IReadOnlyCollection<RecordedActivityOutput> outputs,
+        DateTimeOffset capturedAt) =>
         outputs
             .Select(output =>
             {
@@ -183,12 +208,12 @@ internal static class ActivityOutputPublisher
                     RuntimePayloadCaptureSubject.ActivityOutput,
                     workItem.WorkflowExecutionId,
                     capturedAt,
-                    activityExecutionId: invokePayload.ActivityExecutionId,
+                    activityExecutionId: activityExecutionId,
                     valueName: output.OutputName,
                     type: type,
                     metadata: new Dictionary<string, string>
                     {
-                        [RuntimeMetadataKeys.ExecutableNodeId] = invokePayload.ExecutableNodeId,
+                        [RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId,
                         [RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId
                     }));
                 return ActivityExecutionInspectionValueSnapshot.FromDecision(

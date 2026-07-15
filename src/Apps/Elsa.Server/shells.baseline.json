@@ -19,6 +19,7 @@
           "WorkflowsDesignApi": {},
           "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignApi": {},
+          "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},

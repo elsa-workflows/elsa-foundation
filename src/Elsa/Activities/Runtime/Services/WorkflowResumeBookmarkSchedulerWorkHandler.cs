@@ -141,7 +141,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-            projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+            projections = await RuntimeInputBindingStateProjection.ProjectAllAsync(
+                durableValues,
+                serviceProvider.GetService<IRuntimeDurableValueStorageDriverRegistry>() ??
+                new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
+                cancellationToken);
             workflowVariables = projections.WorkflowVariables;
             workflowInputValues = projections.WorkflowInputs;
             activityOutputValues = projections.ActivityOutputValues;
@@ -187,10 +191,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
             // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
             activity = await activityFactory.Create(
-                executableNode.DescriptorType,
-                executableNode.DescriptorPayload,
+                executableNode.Descriptor,
                 inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-                ActivityOutputPublisher.BuildOutputArguments(executableNode),
+                ActivityOutputPublisher.BuildOutputArguments(executableNode).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
                 cancellationToken);
 
             activity.NodeId = executableNode.ExecutableNodeId;
@@ -262,8 +265,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // resume callback that sets outputs (e.g. the mid-flow HttpEndpoint's Result/RouteData/ParsedContent, spec
         // 089 D) captures them to durable values, not just inspection snapshots. Folded into the consumption
         // checkpoint alongside the workflow-scope variable write-back so it commits atomically with the consumption.
-        var durableOutputChanges = ActivityOutputPublisher.BuildDurableOutputChanges(
-            workItem, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId, executableNode, recordedOutputs, _timeProvider.GetUtcNow());
+        var durableOutputChanges = await ActivityOutputPublisher.BuildDurableOutputChangesAsync(
+            workItem,
+            resumePayload.ActivityExecutionId,
+            resumePayload.ExecutableNodeId,
+            executableNode,
+            recordedOutputs,
+            _timeProvider.GetUtcNow(),
+            serviceProvider.GetService<IRuntimeDurableValueStorageDriverRegistry>() ??
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
+            cancellationToken);
         var durableValueChanges = workflowVariableWriteBackChanges.Concat(durableOutputChanges).ToArray();
 
         var completedState = CompleteActivity(workItem, resumePayload, state, SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
@@ -297,7 +308,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             sequence: resumeWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: resumeWorkItem.CommandMetadata,
-            envelopeMetadata: resumeWorkItem.EnvelopeMetadata);
+            envelopeMetadata: resumeWorkItem.EnvelopeMetadata,
+            executionScopeId: completedState.ExecutionScopeId ?? completedState.Provenance.ExecutionScopeId,
+            attempt: completedState.Attempt ?? completedState.Provenance.Attempt);
     }
 
     private static RuntimeResumeBookmarkCommandPayload DeserializeResumePayload(RuntimeSchedulerWorkItem workItem) =>

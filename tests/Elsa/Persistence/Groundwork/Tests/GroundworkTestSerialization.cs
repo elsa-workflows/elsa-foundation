@@ -10,11 +10,16 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// </summary>
 internal static class GroundworkTestSerialization
 {
-    /// <summary>The default upcaster registry with no contributed upcasters.</summary>
+    /// <summary>The default upcaster registry with the production historical compatibility steps.</summary>
     public static readonly IGroundworkRuntimeDocumentUpcasterRegistry UpcasterRegistry =
-        new GroundworkRuntimeDocumentUpcasterRegistry([]);
+        new GroundworkRuntimeDocumentUpcasterRegistry(
+        [
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind),
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind),
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind)
+        ]);
 
-    /// <summary>The production default serializer, wired to an empty upcaster registry.</summary>
+    /// <summary>The production default serializer, wired to the production compatibility chain.</summary>
     public static readonly IGroundworkRuntimeDocumentSerializer Serializer =
         new GroundworkRuntimeDocumentSerializer(UpcasterRegistry);
 }

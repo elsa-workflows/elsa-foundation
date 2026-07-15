@@ -1,0 +1,30 @@
+using CShells.Features;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
+
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Workflows")]
+[ManifestFeatureCategory("Publishing")]
+[ManifestFeatureCategory("Persistence")]
+[ShellFeature(
+    name: "WorkflowsPublishingGroundwork",
+    DisplayName = "Workflows Publishing (Groundwork)",
+    Description = "Atomic reusable-activity publication across Design and Runtime Groundwork units.")]
+public sealed class PublishingGroundworkFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, GroundworkActivityPublicationCommand>();
+        services.AddScoped<GroundworkActivityUpgradePlanStore>();
+        services.AddScoped<IActivityUpgradeDiscoverySource>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
+        services.AddScoped<IActivityUpgradePlanMutationStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
+        services.AddScoped<IActivityDependencyProjectionRebuildCoordinator, GroundworkActivityDependencyProjectionRebuildCoordinator>();
+    }
+}

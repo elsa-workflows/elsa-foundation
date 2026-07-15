@@ -23,7 +23,8 @@ public sealed class PublishWorkflowRequestHandler(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowTriggerIndexer triggerIndexer,
-    IWorkflowDefinitionVersionLayoutStore layoutStore)
+    IWorkflowDefinitionVersionLayoutStore layoutStore,
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -84,6 +85,7 @@ public sealed class PublishWorkflowRequestHandler(
             CreatedAt: now,
             PublishedAt: now,
             Scope: WorkflowExecutableReferenceScope.Published,
-            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout));
+            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId));
     }
 }

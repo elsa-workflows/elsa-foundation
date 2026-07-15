@@ -21,6 +21,8 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddSingleton<IBookmarkStateStore, GroundworkBookmarkStateStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddSingleton<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>();
+        services.RemoveAll<IExecutableActivityTemplateStore>();
+        services.AddSingleton<IExecutableActivityTemplateStore, GroundworkExecutableActivityTemplateStore>();
         services.RemoveAll<IWorkflowExecutableSourceReferenceStore>();
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore, GroundworkWorkflowExecutableSourceReferenceStore>();
         services.RemoveAll<IActivityExecutionStateStore>();
@@ -56,6 +58,12 @@ public static class GroundworkRuntimeStoreRegistration
         // serializer, which stamps per-kind schema versions on write and enforces them (with upcasting)
         // on read. TryAdd keeps host-supplied replacements and contributed upcasters intact.
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
+        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind));
+        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind));
+        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind));
         services.TryAddSingleton<IGroundworkRuntimeDocumentUpcasterRegistry, GroundworkRuntimeDocumentUpcasterRegistry>();
 
         // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the

@@ -22,6 +22,8 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
             var document = new ActivityExecutionInspectionProjectionDocument(
                 projection.WorkflowExecutionId,
                 projection.AuthoredActivityId,
+                projection.ExecutionScopeId,
+                projection.Attempt,
                 ActivityExecutionInspectionSummaryProjection.FromProjection(projection),
                 projection);
 
@@ -97,6 +99,8 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
     private sealed record ActivityExecutionInspectionProjectionDocument(
         string WorkflowExecutionId,
         string AuthoredActivityId,
+        string? ExecutionScopeId,
+        ActivityExecutionAttemptLineage? Attempt,
         ActivityExecutionInspectionSummaryProjection? Summary,
         ActivityExecutionInspectionProjection Projection);
 }

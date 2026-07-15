@@ -432,8 +432,7 @@ public sealed class HttpEndpointExecutionTests
             authoredActivityId: "authored-http-endpoint",
             activityType: HttpEndpoint.ActivityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, typeof(HttpEndpoint)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, typeof(HttpEndpoint))),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>
             {
@@ -490,8 +489,7 @@ public sealed class HttpEndpointExecutionTests
             authoredActivityId: node.AuthoredActivityId,
             activityType: node.ActivityType,
             activityTypeVersion: node.ActivityTypeVersion,
-            descriptorType: node.DescriptorType,
-            descriptorPayload: node.DescriptorPayload,
+            descriptor: node.Descriptor,
             inputBindings: inputBindings,
             outputCaptures: node.OutputCaptures,
             metadata: node.Metadata);
@@ -520,8 +518,7 @@ public sealed class HttpEndpointExecutionTests
             authoredActivityId: node.AuthoredActivityId,
             activityType: node.ActivityType,
             activityTypeVersion: node.ActivityTypeVersion,
-            descriptorType: node.DescriptorType,
-            descriptorPayload: node.DescriptorPayload,
+            descriptor: node.Descriptor,
             inputBindings: inputBindings,
             outputCaptures: node.OutputCaptures,
             metadata: node.Metadata);

@@ -21,21 +21,22 @@ namespace Elsa.Activities.Composition.Runtime.Constructors;
 /// on the design side — so it round-trips faithfully regardless of casing/converter conventions.
 /// </remarks>
 public sealed class WorkflowActivityConstructor(IServiceProvider serviceProvider, IPayloadSerializer payloadSerializer)
-    : IActivityConstructor<WorkflowIdentity>
+    : IActivityConstructor
 {
-    public string DescriptorType => typeof(WorkflowIdentity).FullName!;
+    public string ConsumerKey => WellKnownRuntimeActivityConsumers.WorkflowDefinitionActivity;
+    public IReadOnlySet<string> SupportedSchemaVersions { get; } = new HashSet<string>(StringComparer.Ordinal) { RuntimeActivityDescriptor.InitialSchemaVersion };
 
-    ValueTask<IActivity> IActivityConstructor.Construct(
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+    public ValueTask<IActivity> ConstructAsync(
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument> inputs,
+        IReadOnlyDictionary<string, OutputArgument> outputs,
         CancellationToken cancellationToken)
-        => Construct(payloadSerializer.Deserialize<WorkflowIdentity>(payload), inputs, outputs, cancellationToken);
+        => Construct(payloadSerializer.Deserialize<WorkflowIdentity>(descriptor.Payload), inputs, outputs, cancellationToken);
 
     public ValueTask<IActivity> Construct(
         WorkflowIdentity descriptor,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+        IReadOnlyDictionary<string, InputArgument>? inputs,
+        IReadOnlyDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken)
     {
         var activity = ActivatorUtilities.CreateInstance<WorkflowDefinitionActivity>(serviceProvider);

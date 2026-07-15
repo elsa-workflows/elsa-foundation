@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -308,8 +309,7 @@ public sealed class WorkflowExecutableInspectorTests
             authoredActivityId: $"authored-{id}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: $"{activityType}Descriptor",
-            descriptorPayload: descriptorPayload ?? JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor($"{activityType}Descriptor", RuntimeActivityDescriptor.InitialSchemaVersion, descriptorPayload ?? JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -323,8 +323,7 @@ public sealed class WorkflowExecutableInspectorTests
             authoredActivityId: "authored-child",
             activityType: "WriteLine",
             activityTypeVersion: "1.0.0",
-            descriptorType: "WriteLineDescriptor",
-            descriptorPayload: JsonDocument.Parse("{}").RootElement,
+            descriptor: new RuntimeActivityDescriptor("WriteLineDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, JsonDocument.Parse("{}").RootElement),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Text"] = new(

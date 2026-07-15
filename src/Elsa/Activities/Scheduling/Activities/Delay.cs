@@ -66,7 +66,9 @@ public sealed class Delay : CodeActivity
                 StimulusType: DurableTimerConstants.TimerStimulusType,
                 StimulusHash: stimulusHash,
                 DueTime: dueTime,
-                CreatedAt: now),
+                CreatedAt: now,
+                ActivityExecutionId: activityExecutionId,
+                ExecutionScopeId: runtimeContext.ActivityExecutionState.ExecutionScopeId ?? runtimeContext.ActivityExecutionState.Provenance.ExecutionScopeId),
             context.CancellationToken);
 
         // ExpiresAt is intentionally null: the timer owns the deadline, not the bookmark expiry.

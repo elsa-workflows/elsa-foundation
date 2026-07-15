@@ -349,8 +349,7 @@ public sealed class WorkflowVariableSuspendResumeWriteBackTests
             authoredActivityId: $"authored-{RootNodeId}",
             activityType: "test/container",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "test" }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -378,8 +377,7 @@ public sealed class WorkflowVariableSuspendResumeWriteBackTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "test" }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" })),
             inputBindings: inputBinding is null
                 ? new Dictionary<string, RuntimeInputBinding>()
                 : new Dictionary<string, RuntimeInputBinding> { ["Value"] = inputBinding },
@@ -399,10 +397,9 @@ public sealed class WorkflowVariableSuspendResumeWriteBackTests
     private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
     {
         public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+            RuntimeActivityDescriptor descriptor,
+            IReadOnlyDictionary<string, InputArgument>? inputs,
+            IReadOnlyDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default)
         {
             if (activity is RecordingCounterActivity counterActivity && inputs is not null && inputs.TryGetValue("Value", out var value))

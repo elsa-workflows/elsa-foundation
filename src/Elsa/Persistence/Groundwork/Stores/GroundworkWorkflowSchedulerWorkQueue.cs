@@ -42,6 +42,8 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
         var document = new WorkQueueEnvelope(
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
             workItem.WorkflowExecutionId,
+            workItem.ExecutionScopeId,
+            workItem.Attempt,
             workItem);
         await SaveDocumentAsync(documentId, document, cancellationToken);
 
@@ -73,6 +75,19 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
         await DeleteDocumentAsync(GroundworkCompositeDocumentId.From(workItem.WorkflowExecutionId, workItem.WorkItemId), cancellationToken);
 
         return workItem;
+    }
+
+    public async ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var existing = await LoadDocumentAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
+            GroundworkCompositeDocumentId.From(workflowExecutionId, workItemId), envelope => envelope.Item, cancellationToken);
+        if (existing is null)
+            return false;
+        await DeleteDocumentAsync(GroundworkCompositeDocumentId.From(workflowExecutionId, workItemId), cancellationToken);
+        return true;
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default)
@@ -109,5 +124,10 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
 
     // The constant collection partition lets the system-wide pending-executions sweep use a keyword
     // equality index instead of a provider-wide scan, mirroring the other list-capable bridges.
-    private sealed record WorkQueueEnvelope(string Collection, string WorkflowExecutionId, RuntimeSchedulerWorkItem Item);
+    private sealed record WorkQueueEnvelope(
+        string Collection,
+        string WorkflowExecutionId,
+        string? ExecutionScopeId,
+        ActivityExecutionAttemptLineage? Attempt,
+        RuntimeSchedulerWorkItem Item);
 }

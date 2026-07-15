@@ -99,8 +99,7 @@ public sealed class DelayExecutionTests
             authoredActivityId: "authored-delay",
             activityType: typeof(Delay).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: DelayDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new DelayDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(DelayDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new DelayDescriptor())),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -127,12 +126,12 @@ public sealed class DelayExecutionTests
 
     private sealed record DelayDescriptor
     {
-        public static string DescriptorTypeKey => typeof(DelayDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(DelayDescriptor).FullName!;
     }
 
     private sealed class DelayConstructor : IActivityConstructor<DelayDescriptor>
     {
-        public string DescriptorType => DelayDescriptor.DescriptorTypeKey;
+        public string ConsumerKey => DelayDescriptor.ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new DelayDescriptor(), inputs, outputs, cancellationToken);

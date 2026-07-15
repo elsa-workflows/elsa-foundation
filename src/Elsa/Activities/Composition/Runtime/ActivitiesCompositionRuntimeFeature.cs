@@ -8,8 +8,8 @@ namespace Elsa.Activities.Composition.Runtime;
 
 /// <summary>
 /// Runtime-side of the Workflow activity kind: the <c>WorkflowDefinitionActivity</c> backing type
-/// and the <c>WorkflowActivityConstructor</c> (descriptor type
-/// <c>Elsa.Workflows.Primitives.Models.WorkflowIdentity</c>). References no <c>Elsa.*.Design.*</c> project
+/// and the <c>WorkflowActivityConstructor</c> (Runtime consumer
+/// <c>elsa.workflow-definition-activity</c>, schema 1). References no <c>Elsa.*.Design.*</c> project
 /// (Elsa §E2.2). Contributes its constructor to the runtime constructor registry via DI.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]

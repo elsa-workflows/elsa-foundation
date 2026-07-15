@@ -24,8 +24,8 @@ public sealed record FaultingDescriptor(string Message);
 /// <summary>Constructs <see cref="FaultingActivity"/> instances from their descriptor.</summary>
 public sealed class FaultingActivityConstructor : IActivityConstructor<FaultingDescriptor>
 {
-    public static string DescriptorTypeKey => typeof(FaultingDescriptor).FullName!;
-    public string DescriptorType => DescriptorTypeKey;
+    public static string ConsumerKeyValue => typeof(FaultingDescriptor).FullName!;
+    public string ConsumerKey => ConsumerKeyValue;
 
     public ValueTask<IActivity> Construct(
         JsonElement payload,

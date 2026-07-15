@@ -16,7 +16,7 @@ Keys are lower-case namespaced strings. They are persisted/wire identities and t
 
 ## 2. Design provider strategy
 
-`IActivityProvider` is a provider-keyed strategy, registered into an `IActivityProviderRegistry` through the existing Registry + StartUp Task pattern. One provider owns one `ProviderKey`; duplicate keys fail startup.
+`IActivityProvider` is a provider-keyed Design strategy, registered into an `IActivityProviderRegistry` through the existing Registry + StartUp Task pattern. One provider owns one `ProviderKey`; duplicate keys fail startup.
 
 Illustrative contract:
 
@@ -35,15 +35,13 @@ public interface IActivityProvider
         ActivityContract contract,
         CancellationToken cancellationToken);
 
-    ValueTask<ActivityTemplateCompilation> CompileAsync(
-        ActivityTemplateCompilationRequest request,
-        CancellationToken cancellationToken);
-
     ValueTask<ActivityManifestMigration> MigrateAsync(
         ActivityManifestMigrationRequest request,
         CancellationToken cancellationToken);
 }
 ```
+
+Typed executable compilation is a separate `IActivityTemplateCompiler` contract owned by Workflow Publishing Core and keyed by the same provider key/schema. Publishing Core is the sanctioned bridge that can reference both Activity Design Core models and Runtime Core executable models. A provider feature can implement both contracts, but Activity Design Core does not reference Runtime or Publishing to express the Design strategy.
 
 Rules:
 
@@ -55,10 +53,11 @@ Rules:
 
 ## 3. Compilation request and result
 
-### `ActivityTemplateCompilationRequest`
+### Publishing `ActivityTemplateCompilationRequest`
 
 ```text
 DefinitionId
+Stable ActivityTypeKey
 DraftId + Revision
 CandidateVersion
 Authoritative ActivityContract
@@ -146,10 +145,6 @@ Rules:
   "consumerKey": "elsa.graph-activity",
   "schemaVersion": "1",
   "payload": {
-    "definitionId": "activity-def-1",
-    "definitionVersionId": "activity-ver-2",
-    "version": "2.0.0",
-    "templateHash": "sha256-template-2",
     "entryNodeId": "template-node-entry",
     "requiredInputReferenceKeys": ["order"],
     "requiredOutputReferenceKeys": ["total"]
@@ -157,7 +152,10 @@ Rules:
 }
 ```
 
-The payload contains Runtime execution facts only. It does not contain a Design provider manifest or require a Design store.
+The immutable template payload contains behavioral Runtime execution facts only. It does not contain a
+definition/version/source identity, Design provider manifest, or Design-store dependency. Publication binds
+the exact definition version to the template through the immutable version record and Source Reference;
+workflow placement stamps that execution/source identity onto the placed executable node.
 
 `IActivityConstructor` becomes stable-key/schema driven:
 

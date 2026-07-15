@@ -131,8 +131,7 @@ public sealed class WhileRealExpressionRuntimeTests
             authoredActivityId: "authored-body",
             activityType: CounterBody.ActivityTypeName,
             activityTypeVersion: "1.0.0",
-            descriptorType: CounterBodyConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new CounterBodyDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(CounterBodyConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new CounterBodyDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Next"] = JavaScriptInt("(output.count == null ? 0 : output.count) + 1")
@@ -166,8 +165,7 @@ public sealed class WhileRealExpressionRuntimeTests
             authoredActivityId: "authored-body",
             activityType: CounterBody.ActivityTypeName,
             activityTypeVersion: "1.0.0",
-            descriptorType: CounterBodyConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new CounterBodyDescriptor(VariableName: "counter")),
+            descriptor: new RuntimeActivityDescriptor(CounterBodyConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new CounterBodyDescriptor(VariableName: "counter"))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Next"] = JavaScriptInt("(variables.counter == null ? 0 : variables.counter) + 1")
@@ -210,8 +208,7 @@ public sealed class WhileRealExpressionRuntimeTests
             authoredActivityId: "authored-while",
             activityType: typeof(WhileActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: WhileActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new WhileDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(WhileActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new WhileDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding> { ["Condition"] = conditionBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -264,8 +261,8 @@ public sealed class WhileRealExpressionRuntimeTests
 
     private sealed class CounterBodyConstructor : IActivityConstructor<CounterBodyDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(CounterBodyDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(CounterBodyDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,
@@ -293,8 +290,8 @@ public sealed class WhileRealExpressionRuntimeTests
 
     private sealed class WhileActivityConstructor : IActivityConstructor<WhileDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(WhileDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(WhileDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

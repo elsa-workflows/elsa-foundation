@@ -93,7 +93,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
                 DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                ElsaRuntimeDocumentVersions.Stamp(ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind)),
                 GroundworkTestSerialization.Serializer.SerializeForComparison(document)));
         var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
 
@@ -181,7 +181,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.FindAsync("wf-1", "ae-1").AsTask());
 
-        Assert.IsType<JsonException>(exception.InnerException);
+        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
         Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
         Assert.Contains("ae-1", exception.Message, StringComparison.Ordinal);
     }

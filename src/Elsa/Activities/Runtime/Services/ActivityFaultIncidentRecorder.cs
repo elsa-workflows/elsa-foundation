@@ -140,6 +140,7 @@ public sealed class ActivityFaultIncidentRecorder
 
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
+        AddCausationMetadata(metadata, request.Exception);
 
         return metadata;
     }
@@ -165,6 +166,7 @@ public sealed class ActivityFaultIncidentRecorder
             metadata[item.Key] = item.Value;
 
         AddExceptionMetadata(metadata, faultInfo, request.Exception);
+        AddCausationMetadata(metadata, request.Exception);
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
 
         return request.State with
@@ -189,6 +191,7 @@ public sealed class ActivityFaultIncidentRecorder
         foreach (var item in NewBaseMetadata(request))
             metadata[item.Key] = item.Value;
         AddExceptionMetadata(metadata, faultInfo, request.Exception);
+        AddCausationMetadata(metadata, request.Exception);
 
         return new IncidentState(
             incidentId: incidentId,
@@ -218,6 +221,17 @@ public sealed class ActivityFaultIncidentRecorder
 
         metadata[RuntimeMetadataKeys.FaultInnerType] = inner.GetType().FullName ?? inner.GetType().Name;
         metadata[RuntimeMetadataKeys.FaultInnerMessage] = inner.Message;
+    }
+
+    private static void AddCausationMetadata(IDictionary<string, string> metadata, Exception exception)
+    {
+        if (exception is not IActivityFaultCausation causation)
+            return;
+
+        metadata[RuntimeMetadataKeys.CausalIncidentId] = causation.CausalIncidentId;
+        metadata[RuntimeMetadataKeys.CausalActivityExecutionId] = causation.CausalActivityExecutionId;
+        metadata[RuntimeMetadataKeys.CausalExecutableNodeId] = causation.CausalExecutableNodeId;
+        metadata[RuntimeMetadataKeys.CausationKind] = causation.CausationKind;
     }
 }
 

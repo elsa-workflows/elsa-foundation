@@ -54,7 +54,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.True(activity.ContextResumeInvoked);
         Assert.Equal("actexec-1", activity.Id);
         Assert.Equal("node-wait", activity.NodeId);
-        Assert.Equal("test", factory.LastDescriptorType);
+        Assert.Equal("test", factory.LastConsumerKey);
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
@@ -679,8 +679,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: descriptorPayload.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptorPayload.Clone()),
             inputBindings: inputBinding is null
                 ? new Dictionary<string, RuntimeInputBinding>()
                 : new Dictionary<string, RuntimeInputBinding> { ["Text"] = inputBinding },
@@ -711,17 +710,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
     {
         public int CreateCalls { get; private set; }
-        public string? LastDescriptorType { get; private set; }
+        public string? LastConsumerKey { get; private set; }
 
         public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+            RuntimeActivityDescriptor descriptor,
+            IReadOnlyDictionary<string, InputArgument>? inputs,
+            IReadOnlyDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default)
         {
             CreateCalls++;
-            LastDescriptorType = descriptorType;
+            LastConsumerKey = descriptor.ConsumerKey;
             if (activity is OutputProducingResumeTargetActivity outputProducingActivity && outputs is not null && outputs.TryGetValue("customer", out var customer))
                 outputProducingActivity.Customer = (OutputArgument<object?>)customer;
             return ValueTask.FromResult(activity);
@@ -731,10 +729,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private sealed class ThrowingActivityFactory(Exception exception) : IActivityFactory
     {
         public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+            RuntimeActivityDescriptor descriptor,
+            IReadOnlyDictionary<string, InputArgument>? inputs,
+            IReadOnlyDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default) =>
             throw exception;
     }

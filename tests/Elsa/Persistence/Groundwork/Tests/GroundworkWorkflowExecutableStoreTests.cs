@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -43,7 +44,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal("customerEmail", binding.DurableValue!.ValueId);
 
         // Raw descriptor payload survives as JSON.
-        Assert.Equal("Send", found.RootActivity.DescriptorPayload.GetProperty("kind").GetString());
+        Assert.Equal("Send", found.RootActivity.Descriptor.Payload.GetProperty("kind").GetString());
 
         // Resume targets and recomputed projections survive.
         Assert.Equal("node-child", found.ResumeTargets["resume-1"].ExecutableNodeId);
@@ -213,8 +214,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             authoredActivityId: "authored-child",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SendEmailDescriptor",
-            descriptorPayload: Json("""{ "kind": "Send" }"""),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SendEmailDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
@@ -230,8 +230,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             authoredActivityId: "authored-root",
             activityType: "Elsa.Sequence",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SequenceDescriptor",
-            descriptorPayload: Json("""{ "kind": "Send" }"""),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SequenceDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),

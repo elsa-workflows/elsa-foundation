@@ -28,10 +28,19 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Availability.ListDiagnostics")]
     [InlineData("Availability.SaveSettings")]
     [InlineData("Definitions.Add")]
+    [InlineData("Definitions.AddDraft")]
+    [InlineData("Definitions.Fork")]
     [InlineData("Definitions.Get")]
     [InlineData("Definitions.List")]
+    [InlineData("Definitions.ListDrafts")]
     [InlineData("Definitions.ListVersions")]
-    [InlineData("Versions.Add")]
+    [InlineData("Drafts.Diff")]
+    [InlineData("Drafts.Discard")]
+    [InlineData("Drafts.Get")]
+    [InlineData("Drafts.Replace")]
+    [InlineData("Drafts.Validate")]
+    [InlineData("Versions.Diff")]
+    [InlineData("Versions.Dependencies")]
     [InlineData("Versions.Get")]
     public void Endpoint_requires_a_permission_and_is_not_anonymous(string relativeTypeName)
     {
@@ -60,10 +69,22 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Availability.ListDiagnostics",
             "Availability.SaveSettings",
             "Definitions.Add",
+            "Definitions.AddDraft",
+            "Definitions.Fork",
             "Definitions.Get",
             "Definitions.List",
+            "Definitions.ListDrafts",
             "Definitions.ListVersions",
-            "Versions.Add",
+            "Drafts.Diff",
+            "Drafts.Discard",
+            "Drafts.Get",
+            "Drafts.Replace",
+            "Drafts.Validate",
+            "UpgradePlans.Apply",
+            "UpgradePlans.Create",
+            "UpgradePlans.Get",
+            "Versions.Diff",
+            "Versions.Dependencies",
             "Versions.Get"
         ];
 

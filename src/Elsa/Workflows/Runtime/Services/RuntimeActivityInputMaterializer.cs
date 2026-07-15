@@ -4,6 +4,7 @@ using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
@@ -14,6 +15,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 {
     public const string InputTypeMetadataKey = "typeName";
     private readonly IRuntimeInputBindingResolver _inputBindingResolver;
+    private readonly IRuntimeDurableValueStorageDriverRegistry? _storageDrivers;
 
     public RuntimeActivityInputMaterializer()
         : this(new RuntimeInputBindingResolver())
@@ -25,6 +27,16 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
 
         _inputBindingResolver = inputBindingResolver;
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+        ArgumentNullException.ThrowIfNull(storageDrivers);
+        _inputBindingResolver = inputBindingResolver;
+        _storageDrivers = storageDrivers;
     }
 
     public ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
@@ -50,10 +62,17 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(resolutionContext);
 
         var inputs = new List<RuntimeMaterializedActivityInput>();
+        var retryInputs = RetryInputs(resolutionContext);
 
         foreach (var (inputName, binding) in node.InputBindings)
         {
             var type = ResolveInputType(binding, node.ExecutableNodeId, inputName);
+            if (retryInputs.Remove(inputName, out var retryState))
+            {
+                var retryValue = await DecodeRetryInputAsync(retryState, cancellationToken);
+                inputs.Add(BuildInput(node.ExecutableNodeId, inputName, type, CoerceToType(retryValue, type)));
+                continue;
+            }
             var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
 
             object? value;
@@ -67,7 +86,43 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             inputs.Add(BuildInput(node.ExecutableNodeId, inputName, type, value));
         }
 
+
+        foreach (var (inputName, retryState) in retryInputs.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            var retryValue = await DecodeRetryInputAsync(retryState, cancellationToken);
+            inputs.Add(BuildInput(node.ExecutableNodeId, inputName, retryValue?.GetType() ?? typeof(object), retryValue));
+        }
+
         return inputs;
+    }
+
+    private static Dictionary<string, DurableValueState> RetryInputs(RuntimeInputBindingResolutionContext context)
+    {
+        var result = new Dictionary<string, DurableValueState>(StringComparer.Ordinal);
+        foreach (var state in context.DurableValuesByValueId.Values)
+        {
+            if (!StringComparer.Ordinal.Equals(state.SourceActivityExecutionId, context.ActivityExecutionId) ||
+                !state.Metadata.ContainsKey(RuntimeMetadataKeys.RetrySourceActivityExecutionId) ||
+                !state.Metadata.TryGetValue(RuntimeMetadataKeys.BoundaryInputName, out var inputName))
+            {
+                continue;
+            }
+
+            if (!result.TryAdd(inputName, state))
+                throw new InvalidOperationException($"Retry input snapshot contains duplicate input name '{inputName}'.");
+        }
+
+        return result;
+    }
+
+    private async ValueTask<object?> DecodeRetryInputAsync(DurableValueState state, CancellationToken cancellationToken)
+    {
+        var driverKey = state.Type.Id;
+        if (string.IsNullOrWhiteSpace(driverKey))
+            throw new InvalidOperationException($"Retry input durable value '{state.DurableValueId}' has no storage-driver key.");
+        if (_storageDrivers is null)
+            throw new InvalidOperationException("Retry input materialization requires the durable-value storage-driver registry.");
+        return await _storageDrivers.GetRequired(driverKey).DecodeAsync(state, cancellationToken);
     }
 
     private static async ValueTask<object?> EvaluateExpressionAsync(

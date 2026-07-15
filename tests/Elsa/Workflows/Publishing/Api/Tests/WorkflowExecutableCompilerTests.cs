@@ -3,7 +3,11 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
@@ -11,6 +15,7 @@ using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -20,6 +25,7 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -56,6 +62,174 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.StartsWith("artifact-", executable.Identity.ArtifactId, StringComparison.Ordinal);
         Assert.Equal("write-one", executable.RootActivity.ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Resolves_exact_reusable_version_places_template_and_compiles_expression_default()
+    {
+        var contract = new ActivityContract("1", [new ActivityInputContract(
+            "value", "Value", new TypeReference("Int32"), true,
+            new("JavaScript", JsonSerializer.SerializeToElement("40 + 2")), "elsa.json")], [new ActivityOutputContract(
+            "result", "Result", new TypeReference("Int32"), true, "elsa.json")], []);
+        var root = new ExecutableNode(
+            "local-root", "local-root", "test.boundary", "1",
+            new("test.boundary", "1", JsonSerializer.SerializeToElement(new { plan = 1 })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
+                "local-child", "local-child", "test.child", "1",
+                new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])]);
+        var template = new ExecutableActivityTemplate(
+            "template-reusable", "hash-reusable", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+        var publication = new ActivityDefinitionVersionPublication
+        {
+            Id = "version-reusable",
+            DefinitionVersionId = "version-reusable",
+            DefinitionId = "definition-reusable",
+            Version = "3.2.1",
+            ActivityTypeKey = "activity.reusable",
+            Contract = contract,
+            Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
+            TemplateId = template.TemplateId,
+            TemplateHash = template.TemplateHash,
+            SourceReferenceId = "source-reusable",
+            ProviderFingerprint = "fingerprint",
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 0,
+            RuntimeRequirements = [],
+            Lifecycle = ActivityDefinitionVersionLifecycle.Active
+        };
+        var sourceReference = new WorkflowExecutableSourceReference(
+            "source-reusable", template.TemplateId, "ActivityDefinitionVersion", publication.DefinitionVersionId,
+            publication.Version, publication.DefinitionId, publication.DefinitionVersionId, publication.Version,
+            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, WorkflowExecutableReferenceScope.Published,
+            LayoutSidecar: new ExecutableLayoutSidecar([new(
+                "layout", ActivityInvocationOrigin.Empty, template.TemplateHash,
+                [new("local-root", "local-root", "local-root", 1, 2)], [])]));
+        var sidecars = new WorkflowExecutablePlacementSidecarContext();
+        var outputTarget = new WorkflowArgumentState(
+            "result",
+            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result", declaringScopeId = "workflow" }), "Variable"),
+            null, null, null, null);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(
+                new ActivityNode("use-reusable", publication.DefinitionVersionId, [], [outputTarget]),
+                [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
+            new FakeActivityVersionStore([]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            new ReusablePublicationStore(publication),
+            new ReusableTemplateReader(template),
+            new ReusableSourceReader(sourceReference),
+            sidecars);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("activity.reusable", executable.RootActivity.ActivityType);
+        Assert.Matches("^node-[0-9a-f]{64}$", executable.RootActivity.ExecutableNodeId);
+        var binding = executable.RootActivity.InputBindings["Value"];
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal("JavaScript", binding.Expression!.Language);
+        Assert.Equal("40 + 2", binding.Expression.Expression);
+        var capture = executable.RootActivity.OutputCaptures["Result"];
+        Assert.Equal("variable:CallerResult", capture.ValueId);
+        Assert.Equal("CallerResult", capture.Metadata[RuntimeMetadataKeys.VariableName]);
+        Assert.True(capture.CaptureOnSuccessfulCompletion);
+        Assert.Equal("version-reusable", executable.RootActivity.Descriptor.Payload.GetProperty("definitionVersionId").GetString());
+        Assert.Single(sidecars.Get("version-1").BoundarySegments);
+
+        var captured = await CompleteReusableBoundaryAsync(
+            executable,
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
+            42);
+        Assert.Equal(42, captured.InlineValue?.GetInt32());
+        Assert.Equal("CallerResult", captured.Metadata[RuntimeMetadataKeys.VariableName]);
+    }
+
+    [Fact]
+    public async Task Reusable_output_capture_preserves_a_custom_driver_and_non_serializable_value_through_runtime_completion()
+    {
+        var driver = new OpaqueOutputStorageDriver();
+        var storageDrivers = new RuntimeDurableValueStorageDriverRegistry(
+            [new JsonRuntimeDurableValueStorageDriver(), driver]);
+        var contract = new ActivityContract(
+            "1",
+            [],
+            [new("result", "Result", new TypeReference("Object"), true, driver.DriverKey)],
+            []);
+        var outputTarget = new WorkflowArgumentState(
+            "result",
+            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result" }), "Variable"),
+            null, null, null, null);
+        var captures = new RuntimeOutputCaptureCompiler(storageDrivers).CompileBoundaryOutputs(
+            "use-reusable",
+            contract.Outputs,
+            [outputTarget],
+            [new("caller-result", "CallerResult", new TypeReference("Object"), null, null)]);
+        var root = new ExecutableNode(
+            "local-root", "local-root", "test.boundary", "1",
+            new("test.boundary", "1", JsonSerializer.SerializeToElement(new { plan = 1 })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
+                "local-child", "local-child", "test.child", "1",
+                new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])]);
+        var template = new ExecutableActivityTemplate(
+            "template-custom", "hash-custom", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+        var publication = new ActivityDefinitionVersionPublication
+        {
+            Id = "version-custom",
+            DefinitionVersionId = "version-custom",
+            DefinitionId = "definition-custom",
+            Version = "1.0.0",
+            ActivityTypeKey = "activity.custom-output",
+            Contract = contract,
+            Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
+            TemplateId = template.TemplateId,
+            TemplateHash = template.TemplateHash,
+            SourceReferenceId = "source-custom",
+            ProviderFingerprint = "fingerprint",
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 0,
+            RuntimeRequirements = []
+        };
+        var sourceReference = new WorkflowExecutableSourceReference(
+            "source-custom", template.TemplateId, "ActivityDefinitionVersion", publication.DefinitionVersionId,
+            publication.Version, publication.DefinitionId, publication.DefinitionVersionId, publication.Version,
+            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, WorkflowExecutableReferenceScope.Published,
+            LayoutSidecar: new ExecutableLayoutSidecar([new(
+                "layout-custom", ActivityInvocationOrigin.Empty, template.TemplateHash,
+                [new("local-root", "local-root", "local-root", 0, 0)], [])]));
+        var placer = new ActivityTemplatePlacer(
+            new ReusablePublicationStore(publication),
+            new ReusableTemplateReader(template),
+            new ReusableSourceReader(sourceReference),
+            new Sha256ActivityPlacementHasher());
+        var placed = await placer.PlaceAsync(new(
+            publication,
+            template,
+            sourceReference,
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.AuthoredNode, "use-reusable")]),
+            publication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(),
+            captures));
+        var executable = new WorkflowExecutable(
+            new("artifact-custom", "workflow", "workflow-version", "1.0.0", "hash-workflow"),
+            placed.Root,
+            placed.ResumeTargets,
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>());
+        var opaque = new OpaqueOutput(() => { });
+
+        var captured = await CompleteReusableBoundaryAsync(executable, storageDrivers, opaque);
+        var projections = await RuntimeInputBindingStateProjection.ProjectAllAsync([captured], storageDrivers);
+
+        Assert.Equal(driver.DriverKey, placed.Root.OutputCaptures["Result"].StorageDriverKey);
+        Assert.Equal(DurableValueStorage.External, captured.Storage);
+        Assert.Equal(driver.DriverKey, captured.Type.Id);
+        Assert.Same(opaque, projections.WorkflowVariables["CallerResult"]);
     }
 
     [Fact]
@@ -441,6 +615,221 @@ public sealed class WorkflowExecutableCompilerTests
         await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(now)).AsTask());
     }
 
+    private static async Task<DurableValueState> CompleteReusableBoundaryAsync(
+        WorkflowExecutable executable,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        object? outputValue)
+    {
+        const string workflowExecutionId = "wfexec-reusable";
+        const string boundaryExecutionId = "actexec-reusable";
+        const string childExecutionId = "actexec-reusable-child";
+        var boundary = executable.RootActivity;
+        var child = Assert.Single(boundary.ChildSlots.SelectMany(x => x.Activities));
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var activityStore = new InMemoryActivityExecutionStateStore();
+        var schedulerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var durableStore = new InMemoryDurableValueStateStore();
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: null,
+            activityExecutionStateStore: activityStore,
+            bookmarkStateStore: null,
+            durableValueStateStore: durableStore,
+            incidentStateStore: incidentStore,
+            operationalStateStore: null,
+            schedulerStateStore: null,
+            activityExecutionInspectionWriter: inspectionStore);
+
+        await executableStore.SaveAsync(executable);
+        await activityStore.SaveAsync(RuntimeState(boundaryExecutionId, boundary, ActivityExecutionStatus.Running));
+        await activityStore.SaveAsync(RuntimeState(childExecutionId, child, ActivityExecutionStatus.Completed, boundaryExecutionId));
+
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityFactory>(_ => new FixedActivityFactory(new OutputtingCompositeActivity(outputValue)));
+        services.AddSingleton<IExpressionEvaluator, ConstantExpressionEvaluator>();
+        services.AddSingleton<IWorkflowExecutableStore>(executableStore);
+        services.AddSingleton<IActivityExecutionStateStore>(activityStore);
+        services.AddSingleton<IWorkflowSchedulerWorkQueue>(schedulerQueue);
+        services.AddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
+        services.AddSingleton(storageDrivers);
+        services.AddSingleton<IDurableValueStateStore>(durableStore);
+        services.AddSingleton<IIncidentStateStore>(incidentStore);
+        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
+        services.AddSingleton<IActivityExecutionInspectionStore>(inspectionStore);
+        services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(checkpointStore);
+        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
+        services.AddSingleton<RuntimeCheckpointCommitter>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ActivityFaultIncidentRecorder>();
+        await using var provider = services.BuildServiceProvider();
+        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
+            new RuntimeActivityInputMaterializer(),
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            TimeProvider.System);
+        var now = DateTimeOffset.UtcNow;
+        var payload = new RuntimeCompleteActivityCommandPayload(
+            executable.Identity,
+            boundary.ExecutableNodeId,
+            boundaryExecutionId,
+            parentActivityExecutionId: null,
+            branchId: null,
+            outcomeNames: [ActivityOutcomes.Done],
+            reason: RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+            completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
+            completedChildActivityExecutionId: childExecutionId);
+        var workItem = new RuntimeSchedulerWorkItem(
+            "work-reusable-complete",
+            workflowExecutionId,
+            "command-reusable-complete",
+            WorkflowExecutionCommandKind.CompleteActivity,
+            "envelope-reusable",
+            "reusable-complete",
+            now,
+            now,
+            1,
+            JsonSerializer.SerializeToElement(payload),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>());
+
+        await handler.HandleAsync(workItem);
+
+        var captured = await durableStore.FindAsync(workflowExecutionId, "durable-variable:CallerResult");
+        if (captured is not null)
+            return captured;
+        var stored = await durableStore.ListAsync(workflowExecutionId);
+        var incidents = await incidentStore.ListAsync(workflowExecutionId);
+        throw new Xunit.Sdk.XunitException(
+            $"Normal Runtime boundary completion did not write the compiled caller output target. " +
+            $"Stored=[{string.Join(',', stored.Select(x => x.DurableValueId))}], " +
+            $"Incidents=[{string.Join(" | ", incidents.Select(x => $"{x.FailureType}:{x.Message}"))}].");
+    }
+
+    private static ActivityExecutionState RuntimeState(
+        string activityExecutionId,
+        ExecutableNode node,
+        ActivityExecutionStatus status,
+        string? parentActivityExecutionId = null) => new(
+        Execution: new ActivityExecution(
+            activityExecutionId,
+            "wfexec-reusable",
+            node.ExecutableNodeId,
+            node.AuthoredActivityId,
+            node.ActivityType,
+            node.ActivityTypeVersion),
+        Status: status,
+        SubStatus: null,
+        ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-2),
+        StartedAt: DateTimeOffset.UtcNow.AddMinutes(-1),
+        CompletedAt: status == ActivityExecutionStatus.Completed ? DateTimeOffset.UtcNow : null,
+        SchedulingActivityExecutionId: null,
+        ParentActivityExecutionId: parentActivityExecutionId,
+        BranchId: null,
+        IterationId: null,
+        CallStackDepth: null,
+        BookmarkIds: [],
+        IncidentIds: [],
+        FaultCount: 0,
+        AggregateFaultCount: 0,
+        Metadata: new Dictionary<string, string>());
+
+    private sealed class ConstantExpressionEvaluator : IExpressionEvaluator
+    {
+        public ValueTask<T?> EvaluateAsync<T>(
+            IExpression expression,
+            IExpressionExecutionContext context,
+            IExpressionEvaluatorOptions? options = default) =>
+            ValueTask.FromResult((T?)(object)42);
+
+        public ValueTask<object?> EvaluateAsync(
+            IExpression expression,
+            Type returnType,
+            IExpressionExecutionContext context,
+            IExpressionEvaluatorOptions? options = default) =>
+            ValueTask.FromResult<object?>(42);
+    }
+
+    private sealed class FixedActivityFactory(IActivity activity) : IActivityFactory
+    {
+        public ValueTask<IActivity> Create(
+            RuntimeActivityDescriptor descriptor,
+            IReadOnlyDictionary<string, InputArgument>? inputs,
+            IReadOnlyDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(activity);
+    }
+
+    private sealed class OutputtingCompositeActivity(object? outputValue) : IActivity, IActivityChildCompletionHandler, IRuntimeActivityCheckpointParticipant
+    {
+        public string Id { get; set; } = string.Empty;
+        public string NodeId { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public string Type { get; set; } = "test.boundary";
+        public string Version { get; set; } = "1";
+        public Dictionary<string, object> CustomProperties { get; set; } = new();
+        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
+        public Dictionary<string, object> Metadata { get; set; } = new();
+        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
+        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context) => ValueTask.CompletedTask;
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default)
+        {
+            context.RecordActivityOutput("Result", outputValue);
+            context.CompleteCompositeActivity([ActivityOutcomes.Done]);
+            return ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
+        }
+    }
+
+    private sealed class OpaqueOutput(Action callback)
+    {
+        public Action Callback { get; } = callback;
+    }
+
+    private sealed class OpaqueOutputStorageDriver : IRuntimeDurableValueStorageDriver
+    {
+        private readonly Dictionary<string, object?> _values = new(StringComparer.Ordinal);
+        private int _next;
+        public string DriverKey => "test.opaque.external";
+
+        public ValueTask<RuntimeDurableValueEncoding> EncodeAsync(
+            object? value,
+            RuntimeValueTypeDescriptor type,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var locator = $"opaque-{Interlocked.Increment(ref _next)}";
+            _values.Add(locator, value);
+            return ValueTask.FromResult(new RuntimeDurableValueEncoding(
+                DurableValueStorage.External,
+                null,
+                new DurableValueExternalReference(DriverKey, locator, new Dictionary<string, string>())));
+        }
+
+        public ValueTask<object?> DecodeAsync(DurableValueState state, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!StringComparer.Ordinal.Equals(state.Type.Id, DriverKey) ||
+                state.ExternalReference is not { } reference ||
+                !_values.TryGetValue(reference.Locator, out var value))
+            {
+                throw new InvalidOperationException($"Durable value '{state.DurableValueId}' is not encoded by '{DriverKey}'.");
+            }
+            return ValueTask.FromResult(value);
+        }
+    }
+
     private static WorkflowExecutableCompileRequest NewRequest(DateTimeOffset now) =>
         new(
             VersionId: "version-1",
@@ -486,12 +875,14 @@ public sealed class WorkflowExecutableCompilerTests
             registry);
     }
 
-    private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
+    private static WorkflowDefinitionVersion WorkflowVersion(
+        ActivityNode? rootActivity,
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
         new("definition-1", "1.0.0")
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState(variables ?? [], rootActivity, [], [], null, null)
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
@@ -604,5 +995,25 @@ public sealed class WorkflowExecutableCompilerTests
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class ReusablePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
+    {
+        public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) => Task.FromResult(definitionVersionId == publication.DefinitionVersionId ? publication : null);
+        public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>(definitionId == publication.DefinitionId ? [publication] : []);
+    }
+
+    private sealed class ReusableTemplateReader(ExecutableActivityTemplate template) : IExecutableActivityTemplateReader
+    {
+        public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult(templateId == template.TemplateId ? template : null);
+        public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult(templateHash == template.TemplateHash ? template : null);
+    }
+
+    private sealed class ReusableSourceReader(WorkflowExecutableSourceReference reference) : IWorkflowExecutableSourceReferenceReader
+    {
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => ValueTask.FromResult(sourceReferenceId == reference.SourceReferenceId ? reference : null);
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(artifactId == reference.ArtifactId ? [reference] : []);
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([reference]);
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
     }
 }

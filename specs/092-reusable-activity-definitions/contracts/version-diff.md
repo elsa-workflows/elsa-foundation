@@ -70,10 +70,13 @@ If `baseVersionId` is null, the current observed definition head is used and ret
 
 ### Identity view
 
-`kind` is `ActivityVersion` or `ActivityDraft`. The view always pins the exact compared material:
+`kind` is `ActivityVersion`, `ActivityDraft`, or `ActivityDefinitionBaseline`. The view always pins the exact compared material:
 
 - immutable version: `versionId`, semantic `version`, and `templateHash`;
 - draft: `draftId`, `revision`, and candidate `templateHash` when deterministic compilation succeeds.
+- first-publication baseline: `ActivityDefinitionBaseline` with `definitionId` and all version, draft,
+  revision, semantic-version, and template-hash fields null. This explicitly represents an empty
+  lineage baseline and must not be presented as an immutable version.
 
 Diff may still return contract/provider changes when candidate compilation fails. In that case `templateHash` is null and `diagnostics` explains why; publication remains blocked.
 
@@ -224,7 +227,12 @@ Opaque provider manifests and Runtime descriptor payloads are never returned by 
 | Presentation or layout only | Patch |
 | No change | None |
 
-Provider changes and dependency version changes are behavioral by default. The provider compiler may prove a stronger requirement (for example Major); it may not classify a baseline Major change as Minor/Patch.
+Provider changes, implementation/template changes, Runtime-requirement additions, and dependency
+changes are behavioral and require at least Minor/Compatible by default. Runtime-requirement removal
+or incompatible schema change is Major/Breaking. The provider compiler may prove a stronger
+requirement (for example Major); it may not classify a baseline requirement more weakly.
+`Patch`/`NonBehavioral` is reserved for presentation or provenance changes for which
+`behaviorChanged` is false.
 
 ## 6. Rename handling
 

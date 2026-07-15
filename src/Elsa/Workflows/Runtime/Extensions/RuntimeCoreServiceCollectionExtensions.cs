@@ -42,6 +42,8 @@ public static class RuntimeCoreServiceCollectionExtensions
 
         // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>());
+        services.TryAddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
 
         // MS-9 self-instrumentation: the engine hot path (drain/dispatch/activity-execute/checkpoint-commit) resolves an
         // IWorkflowEngineTracer. The default is a no-op that returns null spans at zero cost, so the fenced drain/commit
@@ -50,6 +52,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
@@ -59,6 +62,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Stateless merge helper over runtime stores; singleton avoids captive scopes in singleton scheduler handlers.
         services.TryAddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
         services.TryAddSingleton<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
         services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
         services.TryAddSingleton<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
@@ -93,6 +97,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
+        services.TryAddSingleton<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddSingleton<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, WorkflowSchedulerCommandRouter>();
@@ -162,6 +167,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCreateBookmarkSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCancelSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCancelActivityScopeSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowRetryActivityBoundarySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingActivityInvocationSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());

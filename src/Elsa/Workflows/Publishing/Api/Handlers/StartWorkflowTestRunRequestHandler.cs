@@ -29,7 +29,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowDefinitionVersionLayoutStore layoutStore,
     IWorkflowTestRunStore testRunStore,
     IWorkflowStartDispatcher startDispatcher,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
 {
@@ -48,7 +49,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         IWorkflowDefinitionVersionLayoutStore layoutStore,
         IWorkflowTestRunStore testRunStore,
         IWorkflowStartDispatcher startDispatcher)
-        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, TimeProvider.System)
+        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, TimeProvider.System, null)
     {
     }
 
@@ -260,7 +261,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             PublishedAt: null,
             Scope: WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt: expiresAt,
-            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout));
+            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId));
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

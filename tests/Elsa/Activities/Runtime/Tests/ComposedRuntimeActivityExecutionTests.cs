@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -30,6 +31,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
+        await ActivityConstructorTestHost.InitializeAsync(provider);
         var executable = NewExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
@@ -77,6 +79,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
+        await ActivityConstructorTestHost.InitializeAsync(provider);
         await using var requestScope = provider.CreateAsyncScope();
         var executable = NewExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
@@ -107,6 +110,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
+        await ActivityConstructorTestHost.InitializeAsync(provider);
         await using var requestScope = provider.CreateAsyncScope();
         var executable = NewExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
@@ -157,6 +161,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
+        await ActivityConstructorTestHost.InitializeAsync(provider);
         var executable = NewCompositeExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var startEnvelope = NewStartEnvelope(executable.Identity);
@@ -250,8 +255,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
             authoredActivityId: "authored-node-start",
             activityType: "test/probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(descriptor),
+            descriptor: new RuntimeActivityDescriptor(ProbeActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(descriptor)),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -269,13 +273,17 @@ public sealed class ComposedRuntimeActivityExecutionTests
         var child = NewNode(
             executableNodeId: "node-child",
             activityType: "test/probe",
-            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ProbeActivityDescriptor("probe")));
+            descriptor: new RuntimeActivityDescriptor(
+                ProbeActivityConstructor.ConsumerKeyValue,
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new ProbeActivityDescriptor("probe"))));
         var parent = NewNode(
             executableNodeId: "node-parent",
             activityType: "test/parent",
-            descriptorType: ParentCompositeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ParentCompositeActivityDescriptor("parent")),
+            descriptor: new RuntimeActivityDescriptor(
+                ParentCompositeActivityConstructor.ConsumerKeyValue,
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new ParentCompositeActivityDescriptor("parent"))),
             childSlots:
             [
                 new ExecutableChildSlot("children", [child])
@@ -292,16 +300,14 @@ public sealed class ComposedRuntimeActivityExecutionTests
     private static ExecutableNode NewNode(
         string executableNodeId,
         string activityType,
-        string descriptorType,
-        JsonElement descriptorPayload,
+        RuntimeActivityDescriptor descriptor,
         IReadOnlyCollection<ExecutableChildSlot>? childSlots = null) =>
         new(
             executableNodeId: executableNodeId,
             authoredActivityId: $"authored-{executableNodeId}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: descriptorType,
-            descriptorPayload: descriptorPayload,
+            descriptor: descriptor,
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -309,9 +315,9 @@ public sealed class ComposedRuntimeActivityExecutionTests
 
     private sealed class ProbeActivityConstructor : IActivityConstructor<ProbeActivityDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ProbeActivityDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(ProbeActivityDescriptor).FullName!;
 
-        public string DescriptorType => DescriptorTypeKey;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,
@@ -346,9 +352,9 @@ public sealed class ComposedRuntimeActivityExecutionTests
 
     private sealed class ParentCompositeActivityConstructor : IActivityConstructor<ParentCompositeActivityDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ParentCompositeActivityDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(ParentCompositeActivityDescriptor).FullName!;
 
-        public string DescriptorType => DescriptorTypeKey;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

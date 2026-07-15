@@ -3,6 +3,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Events;
 using Elsa.Expressions;
@@ -121,8 +122,7 @@ public sealed class SetVariableTypedBindingTests
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SequenceConstructor.SequenceDescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SequenceConstructor.SequenceConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SequenceDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -140,9 +140,8 @@ public sealed class SetVariableTypedBindingTests
             activityType: typeof(Elsa.Activities.Primitives.Activities.SetVariable).FullName!,
             activityTypeVersion: "1.0.0",
             // The real CLR descriptor — construction flows through ClrActivityConstructor + ActivityArgumentBinder.
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: JsonSerializer.SerializeToElement(
-                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Primitives.Activities.SetVariable)))),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Primitives.Activities.SetVariable))))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 // Variable name is itself a typed String binding; Value is the typed binding under test.
@@ -192,8 +191,8 @@ public sealed class SetVariableTypedBindingTests
 
     private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
     {
-        public static string SequenceDescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => SequenceDescriptorTypeKey;
+        public static string SequenceConsumerKey => typeof(SequenceDescriptor).FullName!;
+        public string ConsumerKey => SequenceConsumerKey;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, Elsa.Activities.Runtime.Core.Models.InputArgument>? inputs, IDictionary<string, Elsa.Activities.Runtime.Core.Models.OutputArgument>? outputs, CancellationToken cancellationToken) =>
             new(new SequenceActivity());

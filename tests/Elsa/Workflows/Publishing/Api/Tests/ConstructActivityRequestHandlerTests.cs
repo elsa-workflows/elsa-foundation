@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
@@ -25,7 +26,8 @@ public sealed class ConstructActivityRequestHandlerTests
 
         await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
 
-        Assert.Equal("Elsa.Primitives.Models.ClrActivityDescriptor", factory.LastDescriptorType);
+        Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, factory.LastDescriptor!.ConsumerKey);
+        Assert.Equal(RuntimeActivityDescriptor.InitialSchemaVersion, factory.LastDescriptor.SchemaVersion);
         Assert.Equal("WriteLine", factory.LastPayload.GetProperty("TypeName").GetString());
         // Construct-only: no author values are bound yet.
         Assert.Null(factory.LastInputs);

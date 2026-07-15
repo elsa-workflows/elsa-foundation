@@ -188,7 +188,10 @@ Old provider schemas remain immutable. A provider migration clones a version int
 | `Contract` | `ActivityContract` | Immutable authoritative contract snapshot. |
 | `Provider` | `ActivityProviderManifest` | Immutable provider source retained for inspect/clone/migrate. |
 | `TemplateId`, `TemplateHash` | strings | Exact Runtime template identity. |
+| `SourceReferenceId` | string | Exact retained publication reference that owns the immutable version layout and artifact lifetime. |
 | `ProviderFingerprint` | string | Exact provider/compiler identity used to compile. |
+| `DirectDependencyCount`, `ClosedTemplateCount` | non-negative integers | Publication-time summary facts validated against the authoritative direct edges and closed template. |
+| `RuntimeRequirements` | exact consumer/schema pairs | Closed Runtime activation requirements copied from the executable template for version reads and deployment preflight. |
 | `PublishedAt` | timestamp | Publication fact. |
 | `Lifecycle` | enum | `Active`, `Retired`, or `Revoked`; not part of template hash. |
 
@@ -209,7 +212,7 @@ Runtime-owned, content-addressed execution material.
 |---|---|---|
 | `TemplateId` | string | Derived from full behavior hash. |
 | `TemplateHash` | string | SHA-256 of canonical behavioral execution material only. |
-| `Root` | `ExecutableNode` | Runtime-owned compiled root. |
+| `Root` | `ExecutableNode` | Runtime-owned, purely behavioral compiled root; no publication/version identity. |
 | `NodesById` | node map | Immutable flattened lookup of the template's own nodes. |
 | `ResumeTargets` | target map | Template-local target identities before placement namespace. |
 | `DirectDependencies` | dependency list | Exact child version/template identities with origin. |
@@ -219,7 +222,9 @@ Runtime-owned, content-addressed execution material.
 | `CompatibilityMetadata` | string map | Runtime compatibility facts only. |
 | `CreatedAt` | timestamp | Storage fact excluded from behavior hash. |
 
-No source definition, draft, Design provider type, or layout is needed to execute this template.
+No source definition, definition version, draft, Design provider type, or layout is embedded in the
+template. The immutable version and Source Reference bind publication identity to the behavioral template;
+workflow placement stamps exact execution/source identity onto placed executable nodes.
 
 ### 3.4 `RuntimeActivityDescriptor`
 

@@ -26,11 +26,15 @@ public static class ElsaRuntimeStorageManifest
     public const string ByCollectionIndex = "by-collection";
     public const string ByStimulusIndex = "by-stimulus";
     public const string ByArtifactIndex = "by-artifact";
+    public const string ByTemplateHashIndex = "by-template-hash";
+    public const string ByExecutionScopeIndex = "by-execution-scope";
     public const string ByParentActivityExecutionIndex = "by-parent-activity-execution";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
     public const string ArtifactIdField = "artifactId";
+    public const string TemplateHashField = "templateHash";
+    public const string ExecutionScopeIdField = "executionScopeId";
     // Nested dot-path into the persisted activity-execution document: the parent id already lives under
     // the document's "state" envelope, so indexing this path adds an index over an EXISTING serialized
     // field without changing the document shape. Groundwork index fields are dot-paths resolved by walking
@@ -61,6 +65,14 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public const string WorkflowExecutableCollection = "workflowExecutable";
 
+    // Content-addressed reusable-activity execution material. The future Groundwork adapter stores a
+    // thin envelope { collection, templateHash, template }; indexes therefore target the lifted flat
+    // envelope fields, never the nested template payload.
+    public const string ExecutableActivityTemplateDocumentKind = "executableActivityTemplate";
+    public const string ExecutableActivityTemplateCollection = "executableActivityTemplate";
+    public const string ExecutableActivityTemplateByCollection = ByCollectionIndex;
+    public const string ExecutableActivityTemplateByHash = ByTemplateHashIndex;
+
     // Per-publish source references into the content-addressed artifact store (ADR 0038/0039/0040). One document
     // per reference; carries source identity, scope/expiry, retirement facts and the embedded layout sidecar.
     public const string WorkflowExecutableSourceReferenceDocumentKind = "workflowExecutableSourceReference";
@@ -86,6 +98,13 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public const string ActivityExecutionStateByParent = ByParentActivityExecutionIndex;
     public const string ActivityExecutionInspectionDocumentKind = "activityExecutionInspection";
+
+    // Committed descendant relation projection. The future Groundwork adapter stores
+    // { workflowExecutionId, executionScopeId, activityExecutionId, executionSequence, record } so
+    // scope and workflow lookups stay on flat envelope fields and do not couple indexes to the read model.
+    public const string ActivityExecutionHierarchyDocumentKind = "activityExecutionHierarchy";
+    public const string ActivityExecutionHierarchyByWorkflowExecution = ByWorkflowExecutionIndex;
+    public const string ActivityExecutionHierarchyByExecutionScope = ByExecutionScopeIndex;
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
     public const string DurableValueStateDocumentKind = "durableValueState";
     public const string SchedulerStateDocumentKind = "schedulerState";
@@ -164,6 +183,17 @@ public static class ElsaRuntimeStorageManifest
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)]),
             Unit(
+                ExecutableActivityTemplateDocumentKind,
+                "Executable activity template",
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(ByTemplateHashIndex, TemplateHashField, isUnique: true)
+                ],
+                [
+                    Query("list-all", ByCollectionIndex),
+                    Query("find-by-template-hash", ByTemplateHashIndex)
+                ]),
+            Unit(
                 WorkflowExecutableSourceReferenceDocumentKind,
                 "Workflow executable source reference",
                 [
@@ -190,6 +220,17 @@ public static class ElsaRuntimeStorageManifest
                 "Activity execution inspection projection",
                 [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
                 [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+            Unit(
+                ActivityExecutionHierarchyDocumentKind,
+                "Activity execution hierarchy projection",
+                [
+                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    Keyword(ByExecutionScopeIndex, ExecutionScopeIdField)
+                ],
+                [
+                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query("list-by-execution-scope", ByExecutionScopeIndex)
+                ]),
             Unit(
                 WorkflowExecutionStateDocumentKind,
                 "Workflow execution state",
@@ -314,11 +355,11 @@ public static class ElsaRuntimeStorageManifest
         QuerySortSupport.None,
         QueryPagingSupport.Offset);
 
-    private static IndexDeclaration Keyword(string identity, string field) => new(
+    private static IndexDeclaration Keyword(string identity, string field, bool isUnique = false) => new(
         identity,
         [new IndexField(field)],
         IndexValueKind.Keyword,
-        false,
+        isUnique,
         true,
         MissingValueBehavior.Excluded,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });

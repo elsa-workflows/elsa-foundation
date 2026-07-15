@@ -12,7 +12,8 @@ public sealed class RuntimeOutputCapture
         DurableValueLifecycle lifecycle,
         DurableValueStorage storage,
         bool captureOnSuccessfulCompletion,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputName);
         ArgumentException.ThrowIfNullOrWhiteSpace(valueId);
@@ -23,6 +24,7 @@ public sealed class RuntimeOutputCapture
 
         if (storage == DurableValueStorage.None)
             throw new ArgumentException("Output capture must declare a durable storage strategy.", nameof(storage));
+        ArgumentException.ThrowIfNullOrWhiteSpace(storageDriverKey);
 
         OutputName = outputName;
         ValueId = valueId;
@@ -30,6 +32,7 @@ public sealed class RuntimeOutputCapture
         Lifecycle = lifecycle;
         Storage = storage;
         CaptureOnSuccessfulCompletion = captureOnSuccessfulCompletion;
+        StorageDriverKey = storageDriverKey;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
@@ -39,5 +42,6 @@ public sealed class RuntimeOutputCapture
     public DurableValueLifecycle Lifecycle { get; }
     public DurableValueStorage Storage { get; }
     public bool CaptureOnSuccessfulCompletion { get; }
+    public string StorageDriverKey { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }

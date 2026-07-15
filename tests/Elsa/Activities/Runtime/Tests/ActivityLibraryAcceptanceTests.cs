@@ -231,8 +231,7 @@ public sealed class ActivityLibraryAcceptanceTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForEachConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(ForEachConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForEachDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Collection"] = Literal("Collection", JsonSerializer.SerializeToElement(collection), ObjectTypeName)
@@ -259,8 +258,7 @@ public sealed class ActivityLibraryAcceptanceTests
             authoredActivityId: "authored-if",
             activityType: typeof(IfActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: IfConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new IfDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(IfConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new IfDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Condition"] = JavaScript("Condition", "variables.count === 3", BooleanTypeName)
@@ -293,8 +291,7 @@ public sealed class ActivityLibraryAcceptanceTests
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SequenceConstructor.SequenceDescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SequenceConstructor.SequenceConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SequenceDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -313,8 +310,7 @@ public sealed class ActivityLibraryAcceptanceTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(SetVariable).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SetVariableConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SetVariableDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SetVariableConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SetVariableDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Variable"] = Literal("Variable", JsonSerializer.SerializeToElement(variableName), StringTypeName),
@@ -347,13 +343,13 @@ public sealed class ActivityLibraryAcceptanceTests
 
     private sealed record SetVariableDescriptor
     {
-        public static string DescriptorTypeKey => typeof(SetVariableDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(SetVariableDescriptor).FullName!;
     }
 
     private sealed class SetVariableConstructor : IActivityConstructor<SetVariableDescriptor>
     {
-        public static string DescriptorTypeKey => SetVariableDescriptor.DescriptorTypeKey;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => SetVariableDescriptor.ConsumerKeyValue;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new SetVariableDescriptor(), inputs, outputs, cancellationToken);
@@ -377,8 +373,8 @@ public sealed class ActivityLibraryAcceptanceTests
 
     private sealed class ForEachConstructor : IActivityConstructor<ForEachDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ForEachDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ForEachDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new ForEachDescriptor(), inputs, outputs, cancellationToken);
@@ -396,8 +392,8 @@ public sealed class ActivityLibraryAcceptanceTests
 
     private sealed class IfConstructor : IActivityConstructor<IfDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(IfDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(IfDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new IfDescriptor(), inputs, outputs, cancellationToken);
@@ -415,8 +411,8 @@ public sealed class ActivityLibraryAcceptanceTests
 
     private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
     {
-        public static string SequenceDescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => SequenceDescriptorTypeKey;
+        public static string SequenceConsumerKey => typeof(SequenceDescriptor).FullName!;
+        public string ConsumerKey => SequenceConsumerKey;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             new(new SequenceActivity());
