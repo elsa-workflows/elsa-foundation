@@ -161,5 +161,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/091-structured-logs-replay-cursors/plan.md
+at specs/092-reusable-activity-definitions/plan.md
 <!-- SPECKIT END -->
