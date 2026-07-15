@@ -24,6 +24,14 @@ internal static class GroundworkProviderRegistrationAssertions
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStoreSessionSource));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(TInitializer));
+        var lifecycleRegistration = Assert.Single(
+            services
+                .Where(descriptor => descriptor.ServiceType == typeof(ShellInitializerRegistration))
+                .Select(descriptor => descriptor.ImplementationInstance)
+                .OfType<ShellInitializerRegistration>(),
+            candidate => candidate.InitializerType == typeof(TInitializer));
+        Assert.Equal(LifecyclePhase.Prepare, lifecycleRegistration.Phase);
+        Assert.Equal(-1, lifecycleRegistration.RegistrationIndex);
 
         var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateScopes = true });
