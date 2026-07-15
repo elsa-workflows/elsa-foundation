@@ -4,15 +4,20 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
-using Microsoft.Extensions.Logging;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Availability;
 
-internal sealed class ListDiagnostics(IRequestSender requestSender, ILogger<ListDiagnostics> logger) : ElsaRequestHandlerEndpoint<ListActivityAvailabilityDiagnostics, ActivityAvailabilityDiagnostics>(requestSender, logger)
+internal sealed class ListDiagnostics(IRequestSender requestSender) : ElsaEndpointWithoutRequest<ActivityAvailabilityDiagnostics>
 {
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("availability/diagnostics"));
         ConfigurePermissions(PermissionNames.ActivityDesignRead);
+    }
+
+    public override async Task HandleAsync(CancellationToken cancellationToken)
+    {
+        var response = await requestSender.Send(new ListActivityAvailabilityDiagnostics(), cancellationToken);
+        await Send.OkAsync(response, cancellationToken);
     }
 }
