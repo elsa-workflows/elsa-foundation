@@ -16,8 +16,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// writer wins. Reloading after a conflict both preserves first-writer-wins semantics and validates that a
 /// bounded physical identity still belongs to the requested logical incident.
 /// </remarks>
-public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.IncidentStateDocumentKind), IIncidentStateStore
+public sealed class GroundworkIncidentStateStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.IncidentStateDocumentKind, boundedStore), IIncidentStateStore
 {
     public async ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default)
     {
@@ -80,7 +83,11 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundwo
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         return await QueryDocumentsAsync<IncidentState, IncidentState>(
-            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, state => state, cancellationToken);
+            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
+            state => state,
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)

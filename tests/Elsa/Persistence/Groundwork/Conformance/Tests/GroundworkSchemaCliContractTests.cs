@@ -82,7 +82,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
                         "sqlite-file",
                         new HashSet<string>(StringComparer.Ordinal)),
                     []),
-                ProviderPhysicalNameNormalizer.Identity,
+                SqliteGroundworkCapabilities.PhysicalNames,
                 CancellationToken.None);
         var deploymentSource = serviceProvider.GetRequiredService<IPhysicalSchemaManifestSource>();
 
@@ -431,7 +431,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
             [],
             naming,
             capabilities,
-            ProviderPhysicalNameNormalizer.Identity);
+            SqliteGroundworkCapabilities.PhysicalNames);
         var validation = new GroundworkStorageCompositionValidator().Validate(request);
         if (!validation.IsValid || validation.Snapshot is null)
             throw new InvalidOperationException(string.Join("; ", validation.Diagnostics.Select(x => x.Message)));

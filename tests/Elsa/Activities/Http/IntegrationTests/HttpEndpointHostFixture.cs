@@ -11,6 +11,7 @@ using Elsa.Expressions;
 using Elsa.Http.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
@@ -84,7 +85,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     public IServiceProvider Services => _host.Services;
 
-    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
+    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null, null);
 
     /// <summary>
     /// Starts the production HTTP runtime against an isolated Groundwork SQLite database and applies the requested
@@ -97,13 +98,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
+        var connectionString = $"Data Source={databasePath}";
 
         return StartAsync(
             services =>
             {
                 new SqliteGroundworkRuntimePersistenceShellFeature
                 {
-                    ConnectionString = $"Data Source={databasePath}"
+                    ConnectionString = connectionString
                 }.ConfigureServices(services);
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
@@ -112,12 +114,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     MaxSegmentCheckpoints = maxSegmentCheckpoints
                 }.PostConfigureServices(services);
             },
-            databaseDirectory);
+            databaseDirectory,
+            connectionString);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
         Action<IServiceCollection>? configurePersistence,
-        string? databaseDirectory)
+        string? databaseDirectory,
+        string? groundworkSqliteConnectionString)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -216,6 +220,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             })
             .Build();
 
+        if (groundworkSqliteConnectionString is not null)
+            await host.Services.ApplySqliteGroundworkSchemaAsync(groundworkSqliteConnectionString);
         await host.StartAsync();
 
         RunStartupTasks(host.Services);
@@ -725,8 +731,17 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
     public async Task<int> CountPhysicalCheckpointCommitsAsync()
     {
-        var result = await Services.GetRequiredService<IDocumentStore>()
-            .QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+        var result = await Services.GetRequiredService<IBoundedDocumentStore>()
+            .QueryAsync(
+                new DocumentQuery(
+                    ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+                    ElsaRuntimeStorageManifest.ListCheckpointCommitsQuery,
+                    [
+                        DocumentQueryClause.Of(
+                            DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.CollectionField,
+                                ElsaRuntimeStorageManifest.CheckpointCommitCollection))
+                    ]));
         return checked((int)result.TotalCount);
     }
 

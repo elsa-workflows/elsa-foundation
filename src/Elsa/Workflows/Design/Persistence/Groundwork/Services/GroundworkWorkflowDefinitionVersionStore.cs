@@ -29,14 +29,17 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
     public GroundworkWorkflowDefinitionVersionStore(
         IDocumentStore store,
         IWorkflowDefinitionStore definitions,
-        IPayloadSerializer payloadSerializer)
+        IPayloadSerializer payloadSerializer,
+        IBoundedDocumentStore? boundedStore = null)
     {
         _reads = new GroundworkReadStore<WorkflowDefinitionVersion>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            WorkflowsDesignStorageManifest.ListAllQuery,
+            WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
-            GroundworkDesignDocumentSerialization.Create(payloadSerializer));
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+            boundedStore);
         _definitions = definitions;
     }
 

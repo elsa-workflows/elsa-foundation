@@ -25,8 +25,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// (<see cref="WorkflowExecutionCommandDeliveryMode.AtLeastOnce"/>) — consumers dedupe by idempotency key.
 /// </para>
 /// </remarks>
-public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind), IWorkflowSchedulerWorkQueue
+public sealed class GroundworkWorkflowSchedulerWorkQueue(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, boundedStore), IWorkflowSchedulerWorkQueue
 {
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
@@ -94,7 +97,8 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
         cancellationToken.ThrowIfCancellationRequested();
 
         var items = await QueryDocumentsAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
             envelope => envelope.Item,
             cancellationToken);
@@ -110,7 +114,11 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
     private async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListOrderedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
         var items = await QueryDocumentsAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
-            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, envelope => envelope.Item, cancellationToken);
+            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
+            envelope => envelope.Item,
+            cancellationToken);
 
         return items
             .OrderBy(item => item.RecordedAt)

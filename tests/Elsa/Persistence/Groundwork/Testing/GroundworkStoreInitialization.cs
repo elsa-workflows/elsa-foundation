@@ -30,7 +30,7 @@ public static class GroundworkStoreInitialization
             provider,
             SqliteGroundworkCapabilities.Runtime(),
             "sqlite-file",
-            ProviderPhysicalNameNormalizer.Identity,
+            SqliteGroundworkCapabilities.PhysicalNames,
             cancellationToken);
         await using var connection = new SqliteConnection(connectionString);
         var result = await PhysicalSchemaApplication.ApplyAsync(

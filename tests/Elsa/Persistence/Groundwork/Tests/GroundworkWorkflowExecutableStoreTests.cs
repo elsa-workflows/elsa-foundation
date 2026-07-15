@@ -289,7 +289,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     {
         await using var fixture = CreateStore(provider);
         IWorkflowExecutableSourceReferenceStore store =
-            new GroundworkWorkflowExecutableSourceReferenceStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                fixture.BoundedDocumentStore);
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
         await store.SaveAsync(Reference("ref-1", "artifact-1", WorkflowExecutableReferenceScope.Published, publishedAt: now));
@@ -317,7 +320,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     {
         await using var fixture = CreateStore(provider);
         IWorkflowExecutableSourceReferenceStore store =
-            new GroundworkWorkflowExecutableSourceReferenceStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                fixture.BoundedDocumentStore);
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
         await store.SaveAsync(Reference("ref-live", "artifact-1", WorkflowExecutableReferenceScope.Published, publishedAt: now));

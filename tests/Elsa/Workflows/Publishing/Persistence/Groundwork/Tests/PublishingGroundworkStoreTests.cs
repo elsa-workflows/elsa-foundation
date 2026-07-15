@@ -56,6 +56,21 @@ public sealed class PublishingGroundworkStoreTests
                 "publication-1"));
     }
 
+    [Fact]
+    public async Task DeleteExpiredUsesItsDeclaredPredicateOrderingAndBound()
+    {
+        var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var reviews = new GroundworkPublicationSnapshotReviewStore(
+            documents,
+            new PublishingGroundworkDocumentSerializer(),
+            queries);
+
+        await reviews.DeleteExpiredAsync(Now, 17);
+
+        AssertDeleteExpiredQuery(Assert.Single(queries.Observed), Now, 17);
+    }
+
     [Theory]
     [InlineData("memory")]
     [InlineData("sqlite")]
@@ -119,13 +134,13 @@ public sealed class PublishingGroundworkStoreTests
     {
         await using var fixture = await PublishingStoreFixture.CreateAsync(provider);
         var serializer = new PublishingGroundworkDocumentSerializer();
-        var firstReplica = new GroundworkPublicationSnapshotReviewStore(fixture.Store, serializer);
+        var firstReplica = ReviewStore(fixture.Store, serializer);
         var review = Review("token-1", Now.AddMinutes(15));
 
         Assert.True(await firstReplica.TryAddAsync(review));
         await fixture.RestartAsync();
-        firstReplica = new GroundworkPublicationSnapshotReviewStore(fixture.Store, serializer);
-        var secondReplica = new GroundworkPublicationSnapshotReviewStore(fixture.Store, serializer);
+        firstReplica = ReviewStore(fixture.Store, serializer);
+        var secondReplica = ReviewStore(fixture.Store, serializer);
         Assert.Equal(review, await secondReplica.FindAsync(review.PreflightToken));
 
         var consumers = await Task.WhenAll(
@@ -133,15 +148,19 @@ public sealed class PublishingGroundworkStoreTests
             secondReplica.TryConsumeAsync(review.PreflightToken).AsTask());
         Assert.Single(consumers, consumed => consumed);
 
-        Assert.True(await firstReplica.TryAddAsync(Review("expired-1", Now.AddMinutes(-1))));
-        Assert.True(await firstReplica.TryAddAsync(Review("expired-2", Now.AddMinutes(-2))));
+        Assert.True(await firstReplica.TryAddAsync(Review("000-active", Now.AddMinutes(30))));
+        Assert.True(await firstReplica.TryAddAsync(Review("expired-newer", Now.AddMinutes(-1))));
+        Assert.True(await firstReplica.TryAddAsync(Review("expired-oldest", Now.AddMinutes(-2))));
         Assert.Equal(1, await firstReplica.DeleteExpiredAsync(Now, maxCount: 1));
-        Assert.Single(new[]
-        {
-            await firstReplica.FindAsync("expired-1"),
-            await firstReplica.FindAsync("expired-2")
-        }, item => item is not null);
+        Assert.Null(await firstReplica.FindAsync("expired-oldest"));
+        Assert.NotNull(await firstReplica.FindAsync("expired-newer"));
+        Assert.NotNull(await firstReplica.FindAsync("000-active"));
     }
+
+    private static GroundworkPublicationSnapshotReviewStore ReviewStore(
+        IDocumentStore store,
+        PublishingGroundworkDocumentSerializer serializer) =>
+        new(store, serializer, new PublishingTestBoundedDocumentStore(store));
 
     private static PublicationSnapshotReview Review(string token, DateTimeOffset expiresAt) => new(
         token, "sha256:candidate", "definition-1", PublicationAction.Replace, "default",
@@ -175,6 +194,20 @@ public sealed class PublishingGroundworkStoreTests
         Assert.Equal(path, comparison.Path);
         Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
         Assert.Equal(value, Assert.Single(comparison.Values));
+    }
+
+    private static void AssertDeleteExpiredQuery(DocumentQuery query, DateTimeOffset expiresAtOrBefore, int maxCount)
+    {
+        Assert.Equal(PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind, query.DocumentKind);
+        Assert.Equal(PublishingGroundworkStorageManifest.DeleteExpiredQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(PublishingGroundworkStorageManifest.ExpiresAtField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
+        Assert.Equal(expiresAtOrBefore, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
+        var order = Assert.Single(query.Order);
+        Assert.Equal(PublishingGroundworkStorageManifest.ExpiresAtField, order.Path);
+        Assert.Equal(global::Groundwork.Core.PhysicalStorage.PhysicalSortDirection.Ascending, order.Direction);
+        Assert.Equal(maxCount, query.Take);
     }
 
     private sealed record Stores(

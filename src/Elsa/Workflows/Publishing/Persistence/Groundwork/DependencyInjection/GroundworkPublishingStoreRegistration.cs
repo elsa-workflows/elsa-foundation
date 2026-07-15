@@ -48,7 +48,9 @@ public static class GroundworkPublishingStoreRegistration
             boundedDocumentStoreFactory(sp)));
         services.RemoveAll<IPublicationSnapshotReviewStore>();
         services.AddSingleton<IPublicationSnapshotReviewStore>(sp => new GroundworkPublicationSnapshotReviewStore(
-            documentStoreFactory(sp), sp.GetRequiredService<PublishingGroundworkDocumentSerializer>()));
+            documentStoreFactory(sp),
+            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
+            boundedDocumentStoreFactory(sp)));
         return services;
     }
 }

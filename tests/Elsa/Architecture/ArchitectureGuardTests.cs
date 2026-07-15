@@ -215,6 +215,40 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Groundwork_production_reads_use_only_admitted_bounded_query_APIs()
+    {
+        var productionTargets = XDocument.Load(Path.Combine(RepoRoot, "src", "Elsa", "Directory.Build.targets"));
+        var warningsAsErrors = productionTargets.Descendants("WarningsAsErrors").Single().Value;
+        Assert.Contains("GW0004", warningsAsErrors.Split(';', StringSplitOptions.RemoveEmptyEntries));
+
+        const string checkpointAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs";
+        var checkpointSource = File.ReadAllText(Path.Combine(RepoRoot, checkpointAdapterPath));
+        Assert.Single(Regex.Matches(checkpointSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(checkpointSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Equal(4, Regex.Matches(checkpointSource, "Runtime checkpoint commit unit-of-work does not query documents.").Count);
+
+        var forbiddenTypes = new[] { "DocumentStoreQuery", "PortableDocumentQuery" };
+        var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
+            .Select(file => new
+            {
+                File = file,
+                RelativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')
+            })
+            .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
+            .Where(candidate => !StringComparer.Ordinal.Equals(candidate.RelativePath, checkpointAdapterPath))
+            .SelectMany(candidate =>
+            {
+                var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));
+                return forbiddenTypes
+                    .Where(type => Regex.IsMatch(source, $@"\b{type}\b"))
+                    .Select(type => $"{candidate.RelativePath}: {type}");
+            })
+            .ToArray();
+
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
     public void Server_catalogs_http_endpoint_feature_and_its_runtime_dependency()
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");

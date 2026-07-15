@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Serialization;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -18,8 +19,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public abstract class GroundworkDocumentStore(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
-    string documentKind)
+    string documentKind,
+    IBoundedDocumentStore? boundedStore = null)
 {
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
+
     /// <summary>The provider-neutral document store the bridge writes through.</summary>
     protected IDocumentStore Store { get; } = store;
 
@@ -28,6 +32,10 @@ public abstract class GroundworkDocumentStore(
 
     /// <summary>The document kind this bridge owns.</summary>
     protected string DocumentKind { get; } = documentKind;
+
+    /// <summary>The admitted bounded-query runtime compiled for this bridge's document kind.</summary>
+    protected IBoundedDocumentStore BoundedStore => _boundedStore ?? throw new InvalidOperationException(
+        $"Document queries for '{DocumentKind}' require an admitted bounded document-store runtime.");
 
     /// <summary>Serialises <paramref name="document"/> under this bridge's kind and upserts it under <paramref name="documentId"/>.</summary>
     protected Task<DocumentStoreWriteResult> SaveDocumentAsync<TDocument>(
@@ -52,10 +60,20 @@ public abstract class GroundworkDocumentStore(
         return envelope is null ? null : project(Serializer.Deserialize<TDocument>(envelope));
     }
 
-    /// <summary>Queries the declared <paramref name="index"/> for <paramref name="value"/> and projects every matching document.</summary>
-    protected async ValueTask<IReadOnlyList<TResult>> QueryDocumentsAsync<TDocument, TResult>(string index, string value, Func<TDocument, TResult> project, CancellationToken cancellationToken)
+    /// <summary>Executes one declared equality query and projects every matching document.</summary>
+    protected async ValueTask<IReadOnlyList<TResult>> QueryDocumentsAsync<TDocument, TResult>(
+        string queryIdentity,
+        string fieldPath,
+        string value,
+        Func<TDocument, TResult> project,
+        CancellationToken cancellationToken)
     {
-        var envelopes = await Store.QueryAsync(new DocumentStoreQuery(DocumentKind, index, value), cancellationToken);
-        return envelopes.Select(envelope => project(Serializer.Deserialize<TDocument>(envelope))).ToArray();
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+            cancellationToken);
+        return result.Documents.Select(envelope => project(Serializer.Deserialize<TDocument>(envelope))).ToArray();
     }
 }

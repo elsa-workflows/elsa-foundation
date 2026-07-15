@@ -27,9 +27,11 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
         _versions = new GroundworkReadStore<WorkflowDefinitionVersion>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            WorkflowsDesignStorageManifest.ListAllQuery,
+            WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
-            serialization);
+            serialization,
+            boundedStore);
     }
 
     public GroundworkWorkflowDefinitionListProjectionStore(IDocumentStore store, IPayloadSerializer payloadSerializer)

@@ -11,8 +11,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// collection partition (for the unfiltered <see cref="ListAllAsync"/>), so both lists run through the
 /// declared-index equality query every provider supports.
 /// </summary>
-public sealed class GroundworkExecutionLivenessStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind), IExecutionLivenessStateStore
+public sealed class GroundworkExecutionLivenessStateStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind, boundedStore), IExecutionLivenessStateStore
 {
     public async ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
     {
@@ -43,12 +46,17 @@ public sealed class GroundworkExecutionLivenessStateStore(IDocumentStore store, 
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         return await QueryDocumentsAsync<ExecutionLivenessStateDocument, ExecutionLivenessState>(
-            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, document => document.State, cancellationToken);
+            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
+            document => document.State,
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default) =>
         await QueryDocumentsAsync<ExecutionLivenessStateDocument, ExecutionLivenessState>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
             document => document.State,
             cancellationToken);

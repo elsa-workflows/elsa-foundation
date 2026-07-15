@@ -302,6 +302,28 @@ public class UnifiedGroundworkHostTests
     }
 
     [Fact]
+    public async Task Publication_expiry_cleanup_uses_the_admitted_physical_range_route()
+    {
+        await using var provider = await BuildHostAsync();
+        var store = provider.GetRequiredService<IPublicationSnapshotReviewStore>();
+        var cutoff = DateTimeOffset.Parse("2026-07-15T12:00:00Z");
+        var oldestExpired = SnapshotReview("review-oldest", cutoff.AddMinutes(-2));
+        var newestExpired = SnapshotReview("review-newest", cutoff.AddMinutes(-1));
+        var active = SnapshotReview("review-active", cutoff.AddMinutes(1));
+
+        Assert.True(await store.TryAddAsync(oldestExpired));
+        Assert.True(await store.TryAddAsync(newestExpired));
+        Assert.True(await store.TryAddAsync(active));
+
+        var deleted = await store.DeleteExpiredAsync(cutoff, maxCount: 1);
+
+        Assert.Equal(1, deleted);
+        Assert.Null(await store.FindAsync(oldestExpired.PreflightToken));
+        Assert.NotNull(await store.FindAsync(newestExpired.PreflightToken));
+        Assert.NotNull(await store.FindAsync(active.PreflightToken));
+    }
+
+    [Fact]
     public async Task Workflows_design_reads_run_off_the_unified_database()
     {
         await using var provider = await BuildHostAsync();
@@ -381,6 +403,22 @@ public class UnifiedGroundworkHostTests
 
     private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
         store.SaveAsync(new SaveDocumentRequest(kind, id, "1.0.0", $"{{\"collection\":\"{collection}\"}}"));
+
+    private static PublicationSnapshotReview SnapshotReview(string token, DateTimeOffset expiresAt) => new(
+        token,
+        "sha256:candidate",
+        "definition-1",
+        PublicationAction.Replace,
+        "default",
+        PublicationPolicySource.Request,
+        PolicyRevision: null,
+        RequestedAction: null,
+        RequestedSlotName: null,
+        RequestedExpectedPublicationId: null,
+        SlotRevision: 0,
+        ActivePublicationId: null,
+        TenantId: null,
+        ExpiresAt: expiresAt);
 
     private sealed class TemporarySqliteDatabase : IAsyncDisposable
     {

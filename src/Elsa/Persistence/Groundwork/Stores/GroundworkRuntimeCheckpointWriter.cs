@@ -205,7 +205,11 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     {
         try
         {
-            var marker = new CheckpointCommitMarker(commit.CommitId, commit.WorkflowExecutionId, commit.Checkpoint.OccurredAt);
+            var marker = new CheckpointCommitMarker(
+                commit.CommitId,
+                commit.WorkflowExecutionId,
+                commit.Checkpoint.OccurredAt,
+                ElsaRuntimeStorageManifest.CheckpointCommitCollection);
             var (schemaVersion, content) = _serializer.Serialize(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, marker);
             var result = await store.SaveAsync(
                 new SaveDocumentRequest(
@@ -437,7 +441,11 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         }
     }
 
-    private sealed record CheckpointCommitMarker(string CommitId, string WorkflowExecutionId, DateTimeOffset OccurredAt);
+    private sealed record CheckpointCommitMarker(
+        string CommitId,
+        string WorkflowExecutionId,
+        DateTimeOffset OccurredAt,
+        string Collection);
 
     private sealed record GroundworkApplyStores(
         IWorkflowExecutionStateStore WorkflowExecutionStateStore,
@@ -480,17 +488,25 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             unitOfWork.DeleteAsync(request, cancellationToken);
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Nested document unit-of-work scopes are not supported.");

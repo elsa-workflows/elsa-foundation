@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -15,20 +16,26 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentStore, IWorkflowExecutionStateStore
 {
     private readonly IGroundworkWorkflowExecutionStatePageQuery? _pageQuery;
+    private readonly IBoundedDocumentStore? _queries;
 
     public GroundworkWorkflowExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-        : this(store, serializer, null)
+        : this(store, serializer, null, null)
     {
     }
 
     public GroundworkWorkflowExecutionStateStore(
         IDocumentStore store,
         IGroundworkRuntimeDocumentSerializer serializer,
-        IGroundworkWorkflowExecutionStatePageQuery? pageQuery)
+        IGroundworkWorkflowExecutionStatePageQuery? pageQuery,
+        IBoundedDocumentStore? boundedStore = null)
         : base(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)
     {
         _pageQuery = pageQuery;
+        _queries = boundedStore ?? store as IBoundedDocumentStore;
     }
+
+    private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
+        "Workflow-execution queries require an admitted bounded document-store runtime.");
 
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -49,12 +56,14 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
             workflowExecutionId, document => document.State, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
-        await QueryDocumentsAsync<WorkflowExecutionStateDocument, WorkflowExecutionState>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
-            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-            document => document.State,
-            cancellationToken);
+    public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await QueryAllAsync(cancellationToken);
+        return result.Documents
+            .Select(Serializer.Deserialize<WorkflowExecutionStateDocument>)
+            .Select(document => document.State)
+            .ToArray();
+    }
 
     public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
@@ -64,19 +73,27 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {
-        var envelopes = await Store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind),
-            cancellationToken);
+        var result = await QueryAllAsync(cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(ReadPinnedExecutableArtifactId)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
     }
+
+    private Task<DocumentQueryResult> QueryAllAsync(CancellationToken cancellationToken) =>
+        Queries.QueryAsync(
+            new DocumentQuery(
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                ElsaRuntimeStorageManifest.ListWorkflowExecutionsQuery,
+                [
+                    DocumentQueryClause.Of(
+                        DocumentQueryComparison.Equal(
+                            ElsaRuntimeStorageManifest.CollectionField,
+                            ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection))
+                ]),
+            cancellationToken);
 
     public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
@@ -112,7 +129,7 @@ internal sealed record WorkflowExecutionStateDocument(
     long HistorySortTicks)
 {
     public static WorkflowExecutionStateDocument From(WorkflowExecutionState state) => new(
-        ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection,
         state,
         WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks);
 }

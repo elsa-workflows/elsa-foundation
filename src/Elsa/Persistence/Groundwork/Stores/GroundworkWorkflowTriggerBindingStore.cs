@@ -13,10 +13,17 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// PostgreSQL, MongoDB) is chosen by the host through feature composition and never leaks into this bridge
 /// or into runtime domain code.
 /// </summary>
-public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+public sealed class GroundworkWorkflowTriggerBindingStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
     : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind), IWorkflowTriggerBindingStore
 {
     private const string ProjectionKind = "triggerBindings";
+    private readonly IBoundedDocumentStore? _queries = boundedStore ?? store as IBoundedDocumentStore;
+
+    private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
+        "Workflow trigger-binding queries require an admitted bounded document-store runtime.");
 
     public async ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
@@ -51,11 +58,11 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
-        return result.Documents
-            .Select(envelope => Serializer.Deserialize<WorkflowTriggerBinding>(envelope))
-            .Where(binding => StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
-            .ToArray();
+        return await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
+            ElsaRuntimeStorageManifest.PublicationIdField,
+            publicationId,
+            cancellationToken);
     }
 
     public async ValueTask ActivatePublicationAsync(
@@ -129,8 +136,11 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         // The cross-artifact index is keyed by stimulus hash only (every provider supports single-field
         // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
         // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
-        var bindings = await QueryDocumentsAsync<WorkflowTriggerBinding, WorkflowTriggerBinding>(
-            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulus, stimulusHash, binding => binding, cancellationToken);
+        var bindings = await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusQuery,
+            ElsaRuntimeStorageManifest.StimulusHashField,
+            stimulusHash,
+            cancellationToken);
 
         return bindings
             .Where(binding =>
@@ -143,25 +153,38 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
-        return await QueryDocumentsAsync<WorkflowTriggerBinding, WorkflowTriggerBinding>(
-            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByArtifact, artifactId, binding => binding, cancellationToken);
+        return await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByArtifactQuery,
+            ElsaRuntimeStorageManifest.ArtifactIdField,
+            artifactId,
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
 
-        // No stimulus-type index exists (the cross-artifact index is hash-keyed); a full type-scoped scan is
-        // acceptable because this feeds the startup/refresh route-table rebuild, not a per-request path. A
-        // clause-free PortableDocumentQuery matches every document of this kind, and we narrow to the requested
-        // stimulus type in code — the same defensive filter ListByStimulusAsync applies. No new index is added,
-        // so the persisted document shape and SchemaVersion are unchanged.
-        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
+        var bindings = await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
+            ElsaRuntimeStorageManifest.StimulusTypeField,
+            stimulusType,
+            cancellationToken);
+        return bindings.Where(binding => binding.IsActive).ToArray();
+    }
 
-        return result.Documents
-            .Select(envelope => Serializer.Deserialize<WorkflowTriggerBinding>(envelope))
-            .Where(binding => binding.IsActive && StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
-            .ToArray();
+    private async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> QueryBindingsAsync(
+        string queryIdentity,
+        string fieldPath,
+        string value,
+        CancellationToken cancellationToken)
+    {
+        var result = await Queries.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+            cancellationToken);
+        return result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray();
     }
 
     private static void ValidatePublicationBindings(

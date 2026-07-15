@@ -2,7 +2,6 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified.Composition;
-using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite;
@@ -53,7 +52,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                             "sqlite-file",
                             new HashSet<string>(StringComparer.Ordinal)),
                         []),
-                    ProviderPhysicalNameNormalizer.Identity,
+                    SqliteGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 
             await using var inspectionConnection = new SqliteConnection(connectionString);

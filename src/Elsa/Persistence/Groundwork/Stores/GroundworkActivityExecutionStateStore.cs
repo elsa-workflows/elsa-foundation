@@ -11,8 +11,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// document is wrapped in a thin envelope that stamps a top-level <c>workflowExecutionId</c> for the
 /// declared per-workflow index every provider supports.
 /// </summary>
-public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind), IActivityExecutionStateStore
+public sealed class GroundworkActivityExecutionStateStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, boundedStore), IActivityExecutionStateStore
 {
     public async ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -43,7 +46,11 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         return await QueryDocumentsAsync<ActivityExecutionStateDocument, ActivityExecutionState>(
-            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, document => document.State, cancellationToken);
+            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
+            document => document.State,
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default)
@@ -56,7 +63,11 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
         // without relying on parent activity-execution ids being globally unique. The parent-scoped set is branch-bounded,
         // so the post-filter is over a tiny list.
         var byParent = await QueryDocumentsAsync<ActivityExecutionStateDocument, ActivityExecutionState>(
-            ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex, parentActivityExecutionId, document => document.State, cancellationToken);
+            ElsaRuntimeStorageManifest.ListByParentActivityExecutionQuery,
+            ElsaRuntimeStorageManifest.ParentActivityExecutionIdField,
+            parentActivityExecutionId,
+            document => document.State,
+            cancellationToken);
 
         return byParent
             .Where(state => StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId))

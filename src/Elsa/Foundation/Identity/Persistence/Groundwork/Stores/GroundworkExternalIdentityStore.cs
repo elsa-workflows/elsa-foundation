@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
@@ -10,8 +11,10 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// <c>userKey</c> index (<c>tenantId:userId</c>) so every external identity linked to a user resolves
 /// through the declared index.
 /// </summary>
-public sealed class GroundworkExternalIdentityStore(IDocumentStore store) : IExternalIdentityStore
+public sealed class GroundworkExternalIdentityStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null) : IExternalIdentityStore
 {
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
+
     public async ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
         var envelope = await store.LoadAsync(
@@ -24,12 +27,14 @@ public sealed class GroundworkExternalIdentityStore(IDocumentStore store) : IExt
 
     public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
+        var envelopes = (await BoundedStore.QueryAsync(
+            new DocumentQuery(
                 IdentityStorageManifest.ExternalIdentityDocumentKind,
-                IdentityStorageManifest.ByUserIndex,
-                UserKey(tenantId, userId)),
-            cancellationToken);
+                IdentityStorageManifest.ListExternalIdentitiesByUserQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    IdentityStorageManifest.UserKeyField,
+                    UserKey(tenantId, userId)))]),
+            cancellationToken)).Documents;
 
         return envelopes.Select(Map).ToArray();
     }
@@ -52,6 +57,9 @@ public sealed class GroundworkExternalIdentityStore(IDocumentStore store) : IExt
 
     private static string UserKey(string tenantId, string userId) =>
         $"{IdentityCompositeDocumentId.Normalize(tenantId)}:{IdentityCompositeDocumentId.Normalize(userId)}";
+
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("External identity queries require an admitted bounded document-store runtime.");
 
     private static ExternalIdentityRecord Map(DocumentEnvelope envelope) =>
         JsonSerializer.Deserialize<ExternalIdentityDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!.ExternalIdentity;

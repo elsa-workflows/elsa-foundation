@@ -41,7 +41,10 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddSingleton<IWorkflowExecutionStateStore>(serviceProvider => new GroundworkWorkflowExecutionStateStore(
             serviceProvider.GetRequiredService<IDocumentStore>(),
             serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
-            serviceProvider.GetService<IGroundworkWorkflowExecutionStatePageQuery>()));
+            serviceProvider.GetService<IGroundworkWorkflowExecutionStatePageQuery>(),
+            serviceProvider.GetService<IBoundedDocumentStore>()
+            ?? serviceProvider.GetRequiredService<IDocumentStore>() as IBoundedDocumentStore
+            ?? throw new InvalidOperationException("Workflow-execution queries require an admitted bounded document-store runtime.")));
         services.RemoveAll<IDurableValueStateStore>();
         services.AddSingleton<IDurableValueStateStore, GroundworkDurableValueStateStore>();
         services.RemoveAll<ISchedulerStateStore>();

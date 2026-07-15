@@ -22,6 +22,8 @@ public abstract class GroundworkPublishingStore
     protected IDocumentStore Store { get; }
     protected PublishingGroundworkDocumentSerializer Serializer { get; }
     protected string DocumentKind { get; }
+    protected IBoundedDocumentStore BoundedStore => _queries ?? throw new InvalidOperationException(
+        $"Publishing store '{DocumentKind}' requires a certified bounded document-query runtime.");
 
     protected async ValueTask<(DocumentEnvelope Envelope, T Document)?> LoadAsync<T>(string id, CancellationToken cancellationToken)
     {
@@ -41,13 +43,7 @@ public abstract class GroundworkPublishingStore
         string value,
         CancellationToken cancellationToken)
     {
-        if (_queries is null)
-        {
-            throw new InvalidOperationException(
-                $"Publishing store '{DocumentKind}' requires a certified bounded document-query runtime.");
-        }
-
-        var result = await _queries.QueryAsync(
+        var result = await BoundedStore.QueryAsync(
             new DocumentQuery(
                 DocumentKind,
                 queryIdentity,
