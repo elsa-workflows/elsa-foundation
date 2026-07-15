@@ -50,8 +50,14 @@ internal sealed class DistributedStoreHarness(
         }
     }
 
-    public static DistributedStoreHarness FromDocumentStore(IDocumentStore documentStore, IAsyncDisposable? owner = null) =>
-        new(new GroundworkExecutionPlacementStore(documentStore), new GroundworkExecutionCommandTransport(documentStore), owner);
+    public static DistributedStoreHarness FromDocumentStore(IDocumentStore documentStore, IAsyncDisposable? owner = null)
+    {
+        var queries = documentStore as IBoundedDocumentStore ?? new DistributedTestBoundedDocumentStore(documentStore);
+        return new DistributedStoreHarness(
+            new GroundworkExecutionPlacementStore(documentStore, queries),
+            new GroundworkExecutionCommandTransport(documentStore, queries),
+            owner);
+    }
 
     public static WorkflowExecutionCommandEnvelope Envelope(string executionId, string envelopeId, DateTimeOffset now)
     {

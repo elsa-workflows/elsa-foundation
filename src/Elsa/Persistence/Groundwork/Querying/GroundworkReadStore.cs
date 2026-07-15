@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using System.Text.Json;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Primitives.Entities;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Querying;
@@ -27,26 +28,33 @@ namespace Elsa.Persistence.Groundwork.Querying;
 public class GroundworkReadStore<TEntity> where TEntity : Entity
 {
     private readonly IDocumentStore _store;
+    private readonly IBoundedDocumentStore? _boundedStore;
     private readonly string _documentKind;
-    private readonly string _collectionIndexName;
+    private readonly string _collectionQueryIdentity;
+    private readonly string _collectionFieldPath;
     private readonly string _collectionValue;
     private readonly JsonSerializerOptions _jsonOptions;
 
     /// <param name="store">The provider-neutral document store the host wired to a concrete provider.</param>
     /// <param name="documentKind">The manifest document-kind backing <typeparamref name="TEntity"/>.</param>
-    /// <param name="collectionIndexName">The by-collection keyword index used to enumerate every document of the kind.</param>
+    /// <param name="collectionQueryIdentity">The admitted bounded route used to enumerate every document of the kind.</param>
+    /// <param name="collectionFieldPath">The constant-partition field constrained by the bounded route.</param>
     /// <param name="collectionValue">The constant partition value stamped on every document of the kind.</param>
     /// <param name="jsonOptions">Serialization settings whose camelCase output matches the declared index field names.</param>
     public GroundworkReadStore(
         IDocumentStore store,
         string documentKind,
-        string collectionIndexName,
+        string collectionQueryIdentity,
+        string collectionFieldPath,
         string collectionValue,
-        JsonSerializerOptions jsonOptions)
+        JsonSerializerOptions jsonOptions,
+        IBoundedDocumentStore? boundedStore = null)
     {
         _store = store;
+        _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
         _documentKind = documentKind;
-        _collectionIndexName = collectionIndexName;
+        _collectionQueryIdentity = collectionQueryIdentity;
+        _collectionFieldPath = collectionFieldPath;
         _collectionValue = collectionValue;
         _jsonOptions = jsonOptions;
     }
@@ -79,9 +87,14 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
 
     private async Task<IReadOnlyList<TEntity>> LoadAllAsync(CancellationToken cancellationToken)
     {
-        var envelopes = await _store.QueryAsync(
-            new DocumentStoreQuery(_documentKind, _collectionIndexName, _collectionValue),
-            cancellationToken);
+        var boundedStore = _boundedStore ?? throw new InvalidOperationException(
+            $"Queries for '{_documentKind}' require an admitted bounded document-store runtime.");
+        var envelopes = (await boundedStore.QueryAsync(
+            new DocumentQuery(
+                _documentKind,
+                _collectionQueryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(_collectionFieldPath, _collectionValue))]),
+            cancellationToken)).Documents;
 
         return envelopes.Select(Deserialize).ToList();
     }

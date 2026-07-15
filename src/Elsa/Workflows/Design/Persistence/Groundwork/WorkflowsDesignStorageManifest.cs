@@ -25,6 +25,7 @@ public static class WorkflowsDesignStorageManifest
 
     public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
+    public const string ListAllQuery = "list-all";
 
     public const string WorkflowDefinitionDocumentKind = "workflowDefinition";
 
@@ -55,22 +56,22 @@ public static class WorkflowsDesignStorageManifest
                 WorkflowDefinitionDocumentKind,
                 "Workflow definition",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 WorkflowDefinitionVersionDocumentKind,
                 "Workflow definition version",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 WorkflowDefinitionDraftDocumentKind,
                 "Workflow definition draft",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 WorkflowDefinitionVersionLayoutDocumentKind,
                 "Workflow definition version layout",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)])
+                [Query(ListAllQuery, ByCollectionIndex)])
         ],
         new HashSet<string> { "optimistic-concurrency" },
         []);
@@ -106,5 +107,6 @@ public static class WorkflowsDesignStorageManifest
         false,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
 }

@@ -190,12 +190,17 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task ListSummariesAsync_Wraps_DocumentStore_Exception()
     {
-        var store = new GroundworkActivityExecutionInspectionStore(new ThrowingDocumentStore(new InvalidOperationException("Provider failure.")), GroundworkTestSerialization.Serializer);
+        var failure = new InvalidOperationException("Provider failure.");
+        var store = new GroundworkActivityExecutionInspectionStore(
+            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()),
+            GroundworkTestSerialization.Serializer,
+            new ThrowingBoundedDocumentStore(failure));
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.ListSummariesAsync("wf-1").AsTask());
 
-        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Same(failure, exception.InnerException);
+        Assert.Equal("Provider failure.", exception.InnerException!.Message);
         Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
     }
 
@@ -423,6 +428,21 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             throw exception;
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            throw exception;
+    }
+
+    private sealed class ThrowingBoundedDocumentStore(Exception exception) : IBoundedDocumentStore
+    {
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             throw exception;
     }
 

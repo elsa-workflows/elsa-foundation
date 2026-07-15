@@ -474,19 +474,14 @@
       "tests/Elsa/Persistence/EFCore/Tests/UpsertCommandGeneratorSqlServerTests.cs -\u003E UseSqlServer x 1",
       "tests/Elsa/Persistence/EFCore/Tests/UpsertCommandGeneratorTests.cs -\u003E UseSqlite x 1",
       "tests/Elsa/Workflows/Design/Tests/Infrastructure/WorkflowsDesignTestHost.cs -\u003E UseSqlite x 3",
-      "tests/Elsa/Workflows/Design/Tests/Unit/MigrationSmokeTests.cs -\u003E UseSqlite x 2",
-      "tests/Elsa/Workflows/Design/Tests/Unit/PublishingGroundworkSqliteUpgradeTests.cs -\u003E UseSqlite x 1"
+      "tests/Elsa/Workflows/Design/Tests/Unit/MigrationSmokeTests.cs -\u003E UseSqlite x 2"
     ],
     "HostConfigurationFiles": [
       "src/Apps/Elsa.Server/appsettings.json -\u003E json:$.Logging.LogLevel.Microsoft.EntityFrameworkCore -\u003E EntityFrameworkCore",
       "src/Apps/Elsa.Server/shells.Production.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore",
-      "src/Apps/Elsa.Server/shells.baseline.json -\u003E json:$.CShells.Shells.default.Features.ActivitiesDesignPersistenceEFCoreSqlite -\u003E EFCore",
-      "src/Apps/Elsa.Server/shells.baseline.json -\u003E json:$.CShells.Shells.default.Features.WorkflowsDesignPersistenceEFCoreSqlite -\u003E EFCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.ActivitiesDesignPersistenceEFCoreSqlite -\u003E EFCore",
       "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.DiagnosticsOpenTelemetryPersistenceEFCoreSqlite -\u003E EFCore",
       "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.DiagnosticsStructuredLogsPersistenceEFCoreSqlite -\u003E EFCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.WorkflowsDesignPersistenceEFCoreSqlite -\u003E EFCore"
+      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore"
     ],
     "EfFreeBoundaryViolations": []
   }

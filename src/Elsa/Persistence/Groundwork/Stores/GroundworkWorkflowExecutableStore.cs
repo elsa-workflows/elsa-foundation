@@ -10,8 +10,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// coordinate through provider CAS over the artifact envelope, so a root and physical deletion can
 /// never both win the same race.
 /// </summary>
-public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind), IWorkflowExecutableStore
+public sealed class GroundworkWorkflowExecutableStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, boundedStore), IWorkflowExecutableStore
 {
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
@@ -249,7 +252,8 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
     public async ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
     {
         var executables = await QueryDocumentsAsync<ExecutableDocument, WorkflowExecutable>(
-            ElsaRuntimeStorageManifest.WorkflowExecutableByCollection,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.WorkflowExecutableCollection,
             document => document.Executable,
             cancellationToken);

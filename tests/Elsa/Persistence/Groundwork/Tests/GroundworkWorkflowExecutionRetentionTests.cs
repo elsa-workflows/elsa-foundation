@@ -93,7 +93,9 @@ public sealed class GroundworkWorkflowExecutionRetentionTests
         IGroundworkRuntimeDocumentSerializer? serializer = null) =>
         new GroundworkWorkflowExecutionStateStore(
             fixture.DocumentStore,
-            serializer ?? GroundworkTestSerialization.Serializer);
+            serializer ?? GroundworkTestSerialization.Serializer,
+            null,
+            fixture.BoundedDocumentStore);
 
     private static WorkflowExecutionState State(
         string workflowExecutionId,

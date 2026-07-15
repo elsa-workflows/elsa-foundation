@@ -75,7 +75,11 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task WorkflowExecutionState_RoundTrips_Replaces_And_Lists_All(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            null,
+            fixture.BoundedDocumentStore);
 
         await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Running));
         await store.SaveAsync(WorkflowState("wf-2", WorkflowExecutionStatus.Pending));

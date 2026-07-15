@@ -19,14 +19,16 @@ public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
 {
     private readonly GroundworkReadStore<ActivityDefinition> _reads;
 
-    public GroundworkActivityDefinitionStore(IDocumentStore store)
+    public GroundworkActivityDefinitionStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null)
     {
         _reads = new GroundworkReadStore<ActivityDefinition>(
             store,
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            ActivitiesDesignStorageManifest.ByCollectionIndex,
+            ActivitiesDesignStorageManifest.ListAllQuery,
+            ActivitiesDesignStorageManifest.CollectionField,
             ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
-            GroundworkActivitiesDesignJson.Options);
+            GroundworkActivitiesDesignJson.Options,
+            boundedStore);
     }
 
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default)

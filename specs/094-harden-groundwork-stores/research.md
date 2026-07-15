@@ -171,11 +171,13 @@ Apply the same transition discipline to the scheduler work queue, durable timers
 
 ## Test-removal approval ledger
 
-No existing test is approved for removal by this plan. Delivery boundary 1 records every baseline test objective in the machine ledger. A later implementation PR may remove a test only after adding an exact row here with its objective, replacement evidence or invalid-objective rationale, named architect, decision, and date.
+Delivery boundary 1 records every baseline test objective in the machine ledger. An implementation PR
+may remove or rename a test only after adding an exact row here with its objective, replacement
+evidence or invalid-objective rationale, named architect, decision, and date.
 
 | Existing test | Objective | Replacement evidence / rationale | Architect | Decision | Date |
 |---|---|---|---|---|---|
-| None | No removal requested | Not applicable | Not applicable | No approval | 2026-07-14 |
+| tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionStatePagingTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkWorkflowExecutionStatePagingTests.Sqlite_startup_upgrades_v2_history_before_the_first_page_query | Prove the runtime upgrades stored execution-history documents before serving the first page query. | Replaced by `Sqlite_startup_does_not_rewrite_v2_history`, which proves the ratified deployment-owned schema boundary: runtime startup is read-only and preserves the existing v2 document; schema changes belong to the CLI. This is greenfield software, so no released runtime-upgrade behavior is being withdrawn. | Sipke Schoorstra | Approved | 2026-07-15 |
 
 ## Primary Affected Paths
 

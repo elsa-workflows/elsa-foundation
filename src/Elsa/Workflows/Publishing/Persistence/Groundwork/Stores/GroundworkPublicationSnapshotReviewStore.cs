@@ -1,3 +1,4 @@
+using System.Globalization;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Groundwork.Documents.Store;
@@ -10,8 +11,13 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkPublicationSnapshotReviewStore(
     IDocumentStore store,
-    PublishingGroundworkDocumentSerializer serializer)
-    : GroundworkPublishingStore(store, serializer, PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind),
+    PublishingGroundworkDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkPublishingStore(
+        store,
+        serializer,
+        PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind,
+        boundedStore),
         IPublicationSnapshotReviewStore
 {
     public async ValueTask<bool> TryAddAsync(PublicationSnapshotReview review, CancellationToken cancellationToken = default)
@@ -43,15 +49,19 @@ public sealed class GroundworkPublicationSnapshotReviewStore(
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCount);
-        var result = await Store.QueryAsync(
-            new PortableDocumentQuery(DocumentKind, take: maxCount),
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                PublishingGroundworkStorageManifest.DeleteExpiredQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                    PublishingGroundworkStorageManifest.ExpiresAtField,
+                    expiresAtOrBefore.ToString("O", CultureInfo.InvariantCulture)))],
+                [new DocumentQueryOrder(PublishingGroundworkStorageManifest.ExpiresAtField)],
+                take: maxCount),
             cancellationToken);
         var deleted = 0;
         foreach (var envelope in result.Documents)
         {
-            var review = Serializer.Deserialize<PublicationSnapshotReview>(envelope);
-            if (review.ExpiresAt > expiresAtOrBefore)
-                continue;
             var deletion = await Store.DeleteAsync(
                 new DeleteDocumentRequest(DocumentKind, envelope.Id, envelope.Version),
                 cancellationToken);

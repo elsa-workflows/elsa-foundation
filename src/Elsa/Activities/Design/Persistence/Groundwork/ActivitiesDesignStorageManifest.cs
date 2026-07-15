@@ -24,6 +24,7 @@ public static class ActivitiesDesignStorageManifest
 
     public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
+    public const string ListAllQuery = "list-all";
 
     public const string ActivityDefinitionDocumentKind = "activityDefinition";
 
@@ -49,17 +50,17 @@ public static class ActivitiesDesignStorageManifest
                 ActivityDefinitionDocumentKind,
                 "Activity definition",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 ActivityDefinitionVersionDocumentKind,
                 "Activity definition version",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 ActivityAvailabilitySettingsDocumentKind,
                 "Activity availability settings",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)])
+                [Query(ListAllQuery, ByCollectionIndex)])
         ],
         new HashSet<string> { "optimistic-concurrency" },
         []);
@@ -95,5 +96,6 @@ public static class ActivitiesDesignStorageManifest
         false,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
 }

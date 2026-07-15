@@ -5,8 +5,13 @@ using Groundwork.Documents.Store;
 
 namespace Elsa.Secrets.Persistence.Groundwork.Stores;
 
-public sealed class GroundworkSecretRepository(IDocumentStore store) : ISecretRepository
+public sealed class GroundworkSecretRepository(
+    IDocumentStore store,
+    IBoundedDocumentStore? boundedStore = null) : ISecretRepository
 {
+    private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+        "Secret queries require an admitted bounded document-store runtime.");
+
     public async ValueTask<Secret?> FindAsync(string normalizedName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(normalizedName);
@@ -21,14 +26,16 @@ public sealed class GroundworkSecretRepository(IDocumentStore store) : ISecretRe
 
     public async ValueTask<IReadOnlyCollection<Secret>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
                 SecretsStorageManifest.SecretDocumentKind,
-                SecretsStorageManifest.ByCollectionIndex,
-                SecretsStorageManifest.SecretCollection),
+                SecretsStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    SecretsStorageManifest.CollectionField,
+                    SecretsStorageManifest.SecretCollection))]),
             cancellationToken);
 
-        return envelopes.Select(Map).ToArray();
+        return result.Documents.Select(Map).ToArray();
     }
 
     public async ValueTask<bool> TryAddAsync(Secret secret, CancellationToken cancellationToken = default)

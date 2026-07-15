@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Stores;
@@ -17,6 +18,9 @@ public static class GroundworkRuntimeStoreRegistration
 {
     public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services)
     {
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, RuntimeGroundworkStorageManifestSource>());
+
         // Replace the in-memory defaults registered by the runtime API feature. RemoveAll guarantees
         // the bridge wins regardless of feature composition order.
         services.RemoveAll<IBookmarkStateStore>();
@@ -37,7 +41,10 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddSingleton<IWorkflowExecutionStateStore>(serviceProvider => new GroundworkWorkflowExecutionStateStore(
             serviceProvider.GetRequiredService<IDocumentStore>(),
             serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
-            serviceProvider.GetService<IGroundworkWorkflowExecutionStatePageQuery>()));
+            serviceProvider.GetService<IGroundworkWorkflowExecutionStatePageQuery>(),
+            serviceProvider.GetService<IBoundedDocumentStore>()
+            ?? serviceProvider.GetRequiredService<IDocumentStore>() as IBoundedDocumentStore
+            ?? throw new InvalidOperationException("Workflow-execution queries require an admitted bounded document-store runtime.")));
         services.RemoveAll<IDurableValueStateStore>();
         services.AddSingleton<IDurableValueStateStore, GroundworkDurableValueStateStore>();
         services.RemoveAll<ISchedulerStateStore>();

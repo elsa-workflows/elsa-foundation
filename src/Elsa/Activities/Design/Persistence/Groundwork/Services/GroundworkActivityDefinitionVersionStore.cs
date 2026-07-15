@@ -24,14 +24,17 @@ public sealed class GroundworkActivityDefinitionVersionStore : IActivityDefiniti
     public GroundworkActivityDefinitionVersionStore(
         IDocumentStore store,
         IActivityDefinitionStore definitions,
-        IPayloadSerializer payloadSerializer)
+        IPayloadSerializer payloadSerializer,
+        IBoundedDocumentStore? boundedStore = null)
     {
         _reads = new GroundworkReadStore<ActivityDefinitionVersion>(
             store,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-            ActivitiesDesignStorageManifest.ByCollectionIndex,
+            ActivitiesDesignStorageManifest.ListAllQuery,
+            ActivitiesDesignStorageManifest.CollectionField,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
-            GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer));
+            GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer),
+            boundedStore);
         _definitions = definitions;
     }
 

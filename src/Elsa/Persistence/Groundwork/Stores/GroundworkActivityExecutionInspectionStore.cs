@@ -3,12 +3,16 @@ using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
-public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind), IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
+public sealed class GroundworkActivityExecutionInspectionStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind, boundedStore), IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
 {
     /// <exception cref="GroundworkActivityExecutionInspectionStoreException">Thrown when the Groundwork document store or JSON projection mapping fails.</exception>
     public async ValueTask SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
@@ -57,12 +61,14 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
 
         try
         {
-            var envelopes = await Store.QueryAsync(
-                new DocumentStoreQuery(
+            var envelopes = (await BoundedStore.QueryAsync(
+                new DocumentQuery(
                     DocumentKind,
-                    ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                    workflowExecutionId),
-                cancellationToken);
+                    ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                        workflowExecutionId))]),
+                cancellationToken)).Documents;
 
             return Order(envelopes.Select(MapSummary));
         }

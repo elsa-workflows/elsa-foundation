@@ -18,6 +18,7 @@ internal sealed class GroundworkCoverageLedgerValidator
     private readonly JsonObject _schema;
     private readonly HashSet<string> _baselineEntryIds;
     private readonly string _evidenceRoot;
+    private readonly string _compositionEvidenceRoot;
 
     public GroundworkCoverageLedgerValidator(
         string schemaPath,
@@ -30,8 +31,9 @@ internal sealed class GroundworkCoverageLedgerValidator
         _schema = JsonNode.Parse(File.ReadAllText(schemaPath))?.AsObject()
                   ?? throw new InvalidOperationException($"Coverage-ledger schema '{schemaPath}' is empty.");
         _baselineEntryIds = baselineEntryIds.ToHashSet(StringComparer.Ordinal);
-        _evidenceRoot = Path.GetFullPath(evidenceRoot ??
-                                         Directory.GetParent(Path.GetDirectoryName(Path.GetFullPath(schemaPath))!)!.FullName);
+        _compositionEvidenceRoot = Path.GetFullPath(
+            Directory.GetParent(Path.GetDirectoryName(Path.GetFullPath(schemaPath))!)!.FullName);
+        _evidenceRoot = Path.GetFullPath(evidenceRoot ?? _compositionEvidenceRoot);
     }
 
     public IReadOnlyList<string> Validate(JsonObject ledger)
@@ -76,9 +78,110 @@ internal sealed class GroundworkCoverageLedgerValidator
                         StringValue(ledger, "groundworkVersion"),
                         findings);
             }
+
+            if (ledger["compositionEvidence"] is JsonObject compositionEvidence)
+                ValidateCompositionEvidence(compositionEvidence, entries, findings);
         }
 
         return findings.Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private void ValidateCompositionEvidence(
+        JsonObject compositionEvidence,
+        JsonArray entries,
+        ICollection<string> findings)
+    {
+        var entriesById = entries
+            .OfType<JsonObject>()
+            .Where(entry => StringValue(entry, "id") is not null)
+            .GroupBy(entry => StringValue(entry, "id")!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var coveredRows = StringArray(compositionEvidence, "coveredEntryIds");
+        var coveredSet = coveredRows.ToHashSet(StringComparer.Ordinal);
+
+        foreach (var missing in entriesById.Keys.Where(id => !coveredSet.Contains(id)).Order(StringComparer.Ordinal))
+            findings.Add($"composition evidence: coverage row '{missing}' is missing from ALL32 host selection.");
+        foreach (var unknown in coveredSet.Where(id => !entriesById.ContainsKey(id)).Order(StringComparer.Ordinal))
+            findings.Add($"composition evidence: coverage row '{unknown}' is outside the reviewed ledger denominator.");
+
+        var expectedExternalRows = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            ["#644"] = new HashSet<string>(["iam-user", "iam-role", "iam-external-identity"], StringComparer.Ordinal),
+            ["#660"] = new HashSet<string>(["runtime-diagnostics-settings"], StringComparer.Ordinal)
+        };
+        var links = compositionEvidence["externalAuthorityLinks"] as JsonArray;
+        foreach (var (authority, expectedRows) in expectedExternalRows)
+        {
+            var link = links?.OfType<JsonObject>()
+                .FirstOrDefault(candidate => StringValue(candidate, "authority") == authority);
+            if (link is null)
+            {
+                findings.Add($"composition evidence: external authority '{authority}' is not linked.");
+                continue;
+            }
+
+            var linkedRows = StringArray(link, "coverageRows").ToHashSet(StringComparer.Ordinal);
+            if (!linkedRows.SetEquals(expectedRows))
+            {
+                findings.Add(
+                    $"composition evidence: external authority '{authority}' must link exactly [{string.Join(", ", expectedRows.Order(StringComparer.Ordinal))}].");
+            }
+
+            foreach (var row in linkedRows.Where(entriesById.ContainsKey))
+            {
+                var entry = entriesById[row];
+                if (StringValue(entry, "authority") != authority ||
+                    StringValue(entry, "outcome") != "external-authority-adapter")
+                {
+                    findings.Add(
+                        $"composition evidence: coverage row '{row}' does not preserve external authority '{authority}' as an adapter boundary.");
+                }
+            }
+        }
+
+        ValidateCompositionArtifact(compositionEvidence, findings);
+    }
+
+    private void ValidateCompositionArtifact(
+        JsonObject compositionEvidence,
+        ICollection<string> findings)
+    {
+        var relativePath = StringValue(compositionEvidence, "artifact");
+        if (relativePath is null)
+            return;
+
+        var path = Path.GetFullPath(Path.Combine(
+            _compositionEvidenceRoot,
+            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        var rootPrefix = _compositionEvidenceRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? _compositionEvidenceRoot
+            : _compositionEvidenceRoot + Path.DirectorySeparatorChar;
+        if (!path.StartsWith(rootPrefix, StringComparison.Ordinal) || !File.Exists(path))
+        {
+            findings.Add($"composition evidence: artifact '{relativePath}' is unavailable.");
+            return;
+        }
+
+        var actualSha256 = GroundworkEvidenceArtifactContract.FileSha256(path);
+        if (StringValue(compositionEvidence, "artifactSha256") != actualSha256)
+        {
+            findings.Add($"composition evidence: artifact '{relativePath}' digest does not match its contents.");
+            return;
+        }
+
+        var expectedPayload = GroundworkEvidenceArtifactContract.CompositionArtifactPayload(compositionEvidence);
+        JsonObject? actualPayload;
+        try
+        {
+            actualPayload = JsonNode.Parse(File.ReadAllText(path))?.AsObject();
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            actualPayload = null;
+        }
+
+        if (!JsonNode.DeepEquals(expectedPayload, actualPayload))
+            findings.Add($"composition evidence: artifact '{relativePath}' does not match its durable payload.");
     }
 
     public GroundworkCoverageLedger Load(string ledgerPath)
@@ -886,6 +989,20 @@ internal static class GroundworkEvidenceArtifactContract
         return payload;
     }
 
+    public static JsonObject CompositionArtifactPayload(JsonObject record)
+    {
+        var payload = new JsonObject { ["schemaVersion"] = 1 };
+        foreach (var (name, value) in record)
+        {
+            if (name == "artifactSha256")
+                continue;
+
+            payload[name] = value?.DeepClone();
+        }
+
+        return payload;
+    }
+
     public static string FileSha256(string path) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 }
@@ -896,7 +1013,22 @@ internal sealed record GroundworkCoverageLedger(
     string GroundworkVersion,
     string BaselineRef,
     IReadOnlyList<string> MandatoryProviders,
+    GroundworkCompositionEvidence CompositionEvidence,
     IReadOnlyList<GroundworkCoverageEntry> Entries);
+
+internal sealed record GroundworkCompositionEvidence(
+    string EvidenceId,
+    string Outcome,
+    IReadOnlyList<string> SelectedFeatureIdentities,
+    IReadOnlyList<string> CoveredEntryIds,
+    IReadOnlyList<GroundworkExternalAuthorityLink> ExternalAuthorityLinks,
+    string Artifact,
+    string ArtifactSha256);
+
+internal sealed record GroundworkExternalAuthorityLink(
+    string Authority,
+    string Relationship,
+    IReadOnlyList<string> CoverageRows);
 
 internal sealed record GroundworkCoverageEntry(
     string Id,

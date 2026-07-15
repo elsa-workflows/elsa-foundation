@@ -84,53 +84,111 @@ Provider-specific expected domain results are a test defect.
 Run the unified-host tests for each provider leaf:
 
 ```bash
-dotnet test tests/Elsa/Persistence/Groundwork/Sqlite/Tests/Elsa.Persistence.Groundwork.Sqlite.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj \
   --configuration Release --no-build
 
-dotnet test tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/SqlServer/Tests/Elsa.Persistence.Groundwork.SqlServer.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/MongoDb/Tests/Elsa.Persistence.Groundwork.MongoDb.Tests.csproj \
   --configuration Release --no-build
 ```
 
-The implementation adds equivalent SQL Server and MongoDB projects; add their exact commands here when their project files land. The combined-host scenario selects runtime, IAM, secrets, and distributed runtime, performs one public operation per family, disposes the host, opens a new host over the same database, and re-verifies state.
+The provider matrix selects all seven shipped families: workflow runtime, identity, secrets,
+distributed runtime, workflows design, activities design, and workflows publishing. SQLite and
+PostgreSQL execute the restart-oriented unified-host scenarios; the SQL Server and MongoDB projects
+prove their complete seven-family registration and exact admission target. The MongoDB lane requires
+a writable transaction-capable replica set.
 
 Also run invalid compositions: missing source, duplicate unit, unsupported route/capability, wrong MongoDB topology, and scope-policy conflict. Each must fail before serving work with a stable owner-aware diagnostic.
 
 ## 6. Exercise schema tooling
 
-Build the concrete host schema-source assembly, then set the connection value only through an environment variable:
+Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped all-seven-feature unified leaves register
+`GroundworkAllFeaturesDeploymentSchema` as their runtime authority; its assembly is
+`Elsa.Persistence.Groundwork.ReferenceComposition.dll`:
 
 ```bash
 dotnet groundwork validate \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork plan \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork status \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork apply \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --safe \
   --output json
 ```
 
-For plan gates, exit codes 0 and 2 are expected outcomes; deployment apply requires 0. Destructive or semantic operations require the exact retained plan fingerprint and exact operation approvals. Runtime startup validates readiness and never silently applies pending schema.
+The source passed to `--manifest-type` must be public, parameterless, and implement
+`IPhysicalSchemaManifestSource`. Custom hosts derive a concrete source from
+`GroundworkDeploymentSchemaManifestSource`, select their exact feature manifest-source types, override
+`CreateStorageNamingPolicy` when names are transformed, and register that same source through
+`AddGroundworkStorageComposition<TDeploymentSource>()`. The source type's built assembly is then passed
+to every CLI command. Its parameterless construction must be deterministic and configuration-complete:
+all manifest and host-naming inputs must be encoded by the source type so runtime and the separate CLI
+process reconstruct the same policy definition and resolved target without shared in-memory state. The
+shipped unified leaves do this with
+`GroundworkAllFeaturesDeploymentSchema`; do not point the CLI at the constructor-bound runtime snapshot
+type or at a test fixture. Groundwork's physical target fingerprint remains the value
+reported by the CLI and compared by runtime admission. Elsa's separate composition fingerprint also
+includes the selected feature sources, their manifest versions, durable requirements, topology
+evidence, and naming-policy identity; do not substitute it for the physical target fingerprint.
+
+Use provider values `sqlite`, `postgresql`, `sqlserver`, or `mongodb`. For MongoDB, pass
+`--database <database-name>` whenever the URI supplied through `--connection-env` does not contain a
+database path; for example, a replica-set URI such as `mongodb://host1,host2/?replicaSet=rs0`
+requires `--database elsa`. The runtime host's configured database name and the CLI database must be
+identical.
+
+### Exact command outcomes
+
+| Command | Exit | Outcome | Meaning and mutation contract |
+|---|---:|---|---|
+| `validate --offline` | `0` | `ready` | Manifest, naming, and routes compile; no connection or provider inspection occurs. |
+| `validate` | `0` | `ready` | Live applied history and physical objects are compatible. The report can still list pending operations; validation never applies them. |
+| `validate` | `3` | `blocked` | Compilation, history, or live physical-state validation failed. |
+| `plan` / `status` | `0` | `ready` | The exact target has no pending operations. |
+| `plan` / `status` | `2` | `pending` | One or more operations are pending; retain the reported plan fingerprint for review/apply policy. |
+| `plan` / `status` | `3` | `blocked` | The diff is not applicable under the greenfield/additive policy. |
+| `apply` | `0` | `applied` or `ready` | The authorized plan was applied, or the target already matched. |
+| `apply` | `3` | `blocked` | Validation or application planning rejected the target. |
+| `apply` | `4` | `authorization-required` | The exact plan needs additional safe/destructive/semantic authorization; no target state was published. |
+| Any command | `5` | `invalid` | Invocation, source loading, provider selection, or connection input is invalid. |
+| Any command | `10` | `failed` | Execution failed; exception details are suppressed from output. |
+| Any command | `130` | `cancelled` | Cancellation was observed and unapplied target state was not recorded. |
+
+Exit `2` is an expected result for a plan/status deployment gate, not a tool failure. Deployment
+apply requires exit `0`. Destructive or semantic operations require the exact retained plan
+fingerprint and exact operation approvals.
+
+Runtime admission calls the provider's read-only `IPhysicalSchemaHistoryInspector`, computes the
+same Groundwork diff in memory, and never acquires an application lock or invokes schema apply. It
+blocks startup with `ELSA-GW-SCHEMA-PENDING` when an applicable plan remains and with
+`ELSA-GW-SCHEMA-DRIFT` when durable history or live physical state is incompatible. Operators then
+run and review the CLI workflow above; runtime never silently repairs or applies schema.
 
 ## 7. Supply and consume #646 evidence
 

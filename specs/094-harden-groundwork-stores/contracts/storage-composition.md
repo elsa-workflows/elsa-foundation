@@ -62,6 +62,27 @@ The test matrix includes:
 
 The same selected feature set must compile on every mandatory provider without changing core contracts or domain behavior.
 
+## ALL32 host-selection evidence
+
+The checked-in coverage ledger carries one digest-verified `host-selection-all32` composition record.
+Its selected source identities cover the complete host composition, while the Runtime, IAM, Secrets,
+and Distributed Runtime declarations contribute every one of the 32 durable coverage-row identities
+exactly once. Design, Activities Design, and Publishing remain selected composition sources but do not
+claim rows from this runtime/IAM/secrets/distributed denominator.
+
+This record is composition evidence, not provider conformance evidence and not a new durability
+authority. In particular:
+
+- `iam-user`, `iam-role`, and `iam-external-identity` remain adapter-only links to authority `#644`;
+- `runtime-diagnostics-settings` remains linked source/evidence owned by authority `#660`;
+- each ledger entry retains its own delivery owner, status, and four-provider evidence obligations;
+- the composition artifact proves only that host selection cannot silently omit or duplicate an ALL32
+  durable requirement.
+
+The ledger validator compares the composition record with the exact 32-row denominator, checks the
+external-authority links against the row-level authority fields, and verifies the durable artifact at
+`evidence/composition/host-selection-all32.json` by SHA-256 and payload equality.
+
 ## Scope/session acquisition
 
 The provider materialization object owns static provider resources. A scoped session factory maps the provider-neutral Elsa persistence access context to:
@@ -85,11 +106,23 @@ The host may provide Groundwork's provider-neutral physical name policy and prov
 3. provider renderer/normalizer for length, reserved words, quoting, and uniqueness;
 4. deterministic collision validation.
 
-Provider-specific renderers may make a transformed name legal but may not change which logical storage unit it represents. The same policy instance and resolved-name evidence are used by runtime and CLI planning.
+Provider-specific renderers may make a transformed name legal but may not change which logical
+storage unit it represents. Runtime and the separate CLI process construct the same deterministic
+policy definition and must produce identical resolved-name evidence; they do not share an in-memory
+policy instance.
 
 ## CLI/deployment contract
 
-The repository pins `Groundwork.Tool` to the exact version used by all Groundwork packages. Deployment pipelines can run:
+The repository pins `Groundwork.Tool` to the exact version used by all Groundwork packages. A host
+supplies one public parameterless `GroundworkDeploymentSchemaManifestSource` subtype and registers the
+same type through `AddGroundworkStorageComposition<TDeploymentSource>()`; that makes its selected
+feature sources and host naming policy authoritative for runtime and the separate CLI process. The
+shipped unified leaves use
+`Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema`. Deployment
+source construction must be deterministic and configuration-complete: all inputs that affect the
+manifest or host naming policy are encoded by the selected source type, not supplied through
+runtime-only mutable state. Deployment
+pipelines can run:
 
 ```bash
 dotnet groundwork validate \

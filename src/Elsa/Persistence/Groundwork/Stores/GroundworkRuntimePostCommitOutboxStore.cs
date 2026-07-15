@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -21,8 +22,16 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// in-memory lifecycle exactly, now durable.
 /// </para>
 /// </remarks>
-public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IRuntimePostCommitOutboxStore
+public sealed class GroundworkRuntimePostCommitOutboxStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null) : IRuntimePostCommitOutboxStore
 {
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
+
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("Post-commit outbox queries require an admitted bounded document-store runtime.");
+
     public async ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -57,19 +66,18 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store,
         if (query.OwnerId is not null)
             throw new NotSupportedException("The Groundwork post-commit outbox store does not implement delivery ownership filtering.");
 
-        var envelopes = query.WorkflowExecutionId is { } workflowExecutionId
-            ? await store.QueryAsync(
-                new DocumentStoreQuery(
-                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
-                    ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                    workflowExecutionId),
-                cancellationToken)
-            : await store.QueryAsync(
-                new DocumentStoreQuery(
-                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
-                    ElsaRuntimeStorageManifest.ByCollectionIndex,
-                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind),
-                cancellationToken);
+        var documentQuery = query.WorkflowExecutionId is { } workflowExecutionId
+            ? new DocumentQuery(
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+                ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, workflowExecutionId))])
+            : new DocumentQuery(
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+                ElsaRuntimeStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ElsaRuntimeStorageManifest.CollectionField,
+                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind))]);
+        var envelopes = (await BoundedStore.QueryAsync(documentQuery, cancellationToken)).Documents;
 
         return envelopes
             .Select(Map)

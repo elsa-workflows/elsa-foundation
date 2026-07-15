@@ -35,9 +35,9 @@ public sealed class GroundworkDistributedCasTests
         // Node A goes through the interceptor; node B's competing writes go straight to the shared store.
         var sharedStore = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
         _interceptedStore = new InterceptingDocumentStore(sharedStore);
-        _placementA = new GroundworkExecutionPlacementStore(_interceptedStore);
+        _placementA = new GroundworkExecutionPlacementStore(_interceptedStore, sharedStore);
         _placementB = new GroundworkExecutionPlacementStore(sharedStore);
-        _transportA = new GroundworkExecutionCommandTransport(_interceptedStore);
+        _transportA = new GroundworkExecutionCommandTransport(_interceptedStore, sharedStore);
         _transportB = new GroundworkExecutionCommandTransport(sharedStore);
     }
 

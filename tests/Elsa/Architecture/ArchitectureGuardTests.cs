@@ -198,20 +198,54 @@ public sealed class ArchitectureGuardTests
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
-    public void Server_default_shell_preserves_runtime_and_design_persistence_while_adding_publication_authority(string fileName)
+    public void Server_default_shell_selects_one_unified_Groundwork_persistence_leaf(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
-        Assert.True(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
-            $"{fileName} must preserve the existing runtime Groundwork database across upgrades.");
-        Assert.True(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
-            $"{fileName} must preserve the existing workflow Design EF database across upgrades.");
-        Assert.True(features.ContainsKey("ActivitiesDesignPersistenceEFCoreSqlite"),
-            $"{fileName} must preserve the existing activity Design EF database across upgrades.");
-        Assert.True(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),
-            $"{fileName} must add Publishing durability as an independent persistence lane.");
-        Assert.False(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
-            $"{fileName} must not silently move existing Design data to a different database.");
+        Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
+            $"{fileName} must select one Groundwork SQLite target for all seven persistence families.");
+        Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
+            $"{fileName} must not compose a second Groundwork provider leaf.");
+        Assert.False(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),
+            $"{fileName} must not select the retired standalone Publishing lane.");
+        Assert.False(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
+            $"{fileName} must not override unified workflow-design persistence with EF Core.");
+        Assert.False(features.ContainsKey("ActivitiesDesignPersistenceEFCoreSqlite"),
+            $"{fileName} must not override unified activity-design persistence with EF Core.");
+    }
+
+    [Fact]
+    public void Groundwork_production_reads_use_only_admitted_bounded_query_APIs()
+    {
+        var productionTargets = XDocument.Load(Path.Combine(RepoRoot, "src", "Elsa", "Directory.Build.targets"));
+        var warningsAsErrors = productionTargets.Descendants("WarningsAsErrors").Single().Value;
+        Assert.Contains("GW0004", warningsAsErrors.Split(';', StringSplitOptions.RemoveEmptyEntries));
+
+        const string checkpointAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs";
+        var checkpointSource = File.ReadAllText(Path.Combine(RepoRoot, checkpointAdapterPath));
+        Assert.Single(Regex.Matches(checkpointSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(checkpointSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Equal(4, Regex.Matches(checkpointSource, "Runtime checkpoint commit unit-of-work does not query documents.").Count);
+
+        var forbiddenTypes = new[] { "DocumentStoreQuery", "PortableDocumentQuery" };
+        var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
+            .Select(file => new
+            {
+                File = file,
+                RelativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')
+            })
+            .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
+            .Where(candidate => !StringComparer.Ordinal.Equals(candidate.RelativePath, checkpointAdapterPath))
+            .SelectMany(candidate =>
+            {
+                var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));
+                return forbiddenTypes
+                    .Where(type => Regex.IsMatch(source, $@"\b{type}\b"))
+                    .Select(type => $"{candidate.RelativePath}: {type}");
+            })
+            .ToArray();
+
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -224,17 +258,6 @@ public sealed class ArchitectureGuardTests
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
         Assert.Contains(".WithHostAssemblies()", program, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Server_catalogs_the_dedicated_publishing_persistence_lane()
-    {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
-        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
-
-        Assert.Contains("Elsa.Workflows.Publishing.Persistence.Groundwork.Sqlite", references);
-        Assert.Contains("SqliteGroundworkPublishingPersistenceShellFeature", program, StringComparison.Ordinal);
     }
 
     [Fact]

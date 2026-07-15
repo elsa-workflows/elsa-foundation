@@ -34,9 +34,10 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
 
         await using var provider = services.BuildServiceProvider();
         // Drive the startup initializer, as a host would, so the holder is populated and IDocumentStore resolves.
+        await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
 
-        Assert.IsType<PostgreSqlDocumentStore>(provider.GetRequiredService<IDocumentStore>());
+        Assert.IsType<PostgreSqlPhysicalDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
@@ -84,7 +85,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
     }
 
     [SkippableFact]
-    public async Task PostgreSql_startup_upgrades_v2_history_and_creates_online_indexes_before_queries()
+    public async Task PostgreSql_startup_does_not_rewrite_v2_history_or_create_legacy_indexes()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
 
@@ -109,14 +110,14 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
             command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
             await using var reader = await command.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
-            Assert.Equal("3", reader.GetString(0));
-            Assert.Contains("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
+            Assert.Equal("2", reader.GetString(0));
+            Assert.DoesNotContain("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
         }
 
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname LIKE 'ix_elsa_workflow_history_%';";
-            Assert.Equal(7L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+            Assert.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync()));
         }
 
         var page = await restartedProvider.GetRequiredService<IWorkflowExecutionStateStore>()
@@ -130,6 +131,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
         services.AddWorkflowRuntime();
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
+        await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }

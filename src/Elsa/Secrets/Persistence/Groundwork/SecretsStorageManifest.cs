@@ -12,6 +12,7 @@ public static class SecretsStorageManifest
     public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
     public const string SecretCollection = "secret";
+    public const string ListAllQuery = "list-all";
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-secrets"),
@@ -22,7 +23,7 @@ public static class SecretsStorageManifest
                 SecretDocumentKind,
                 "Secret",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)])
+                [Query(ListAllQuery, ByCollectionIndex)])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);
@@ -58,5 +59,6 @@ public static class SecretsStorageManifest
         false,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
 }

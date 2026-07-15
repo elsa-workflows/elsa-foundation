@@ -20,14 +20,16 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
 {
     private readonly GroundworkReadStore<WorkflowDefinition> _reads;
 
-    public GroundworkWorkflowDefinitionStore(IDocumentStore store)
+    public GroundworkWorkflowDefinitionStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null)
     {
         _reads = new GroundworkReadStore<WorkflowDefinition>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            WorkflowsDesignStorageManifest.ListAllQuery,
+            WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
-            GroundworkDesignJson.Options);
+            GroundworkDesignJson.Options,
+            boundedStore);
     }
 
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default)

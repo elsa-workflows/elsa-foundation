@@ -17,7 +17,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task RoundTrips_Across_Providers(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IBookmarkStateStore store = CreateBridge(fixture);
 
         var a1 = Bookmark("wf-1", "bm-a", stimulus: "Http", payload: new { url = "/orders" });
         var a2 = Bookmark("wf-1", "bm-b", stimulus: "Timer");
@@ -50,7 +50,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task Save_Replaces_Existing_State(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IBookmarkStateStore store = CreateBridge(fixture);
 
         await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "Http"));
         await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "Timer"));
@@ -66,7 +66,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task Delete_Removes_State_And_Reports_Existence(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IBookmarkStateStore store = CreateBridge(fixture);
 
         await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "Http"));
 
@@ -82,7 +82,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task Find_Returns_Null_When_Absent(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IBookmarkStateStore store = CreateBridge(fixture);
 
         Assert.Null(await store.FindAsync("missing", "missing"));
         Assert.Empty(await store.ListAsync("missing"));
@@ -96,7 +96,7 @@ public sealed class GroundworkBookmarkStateStoreTests
         // Spec 089 D (T004a): the Groundwork type-scoped scan returns every bookmark of a stimulus type regardless
         // of hash/execution, narrowing out other types — mirroring the sibling trigger-binding-store by-type scan.
         await using var fixture = CreateStore(provider);
-        IBookmarkStimulusIndex index = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IBookmarkStimulusIndex index = CreateBridge(fixture);
         var store = (IBookmarkStateStore)index;
 
         await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "HttpEndpoint", stimulusHash: "h1"));
@@ -128,4 +128,10 @@ public sealed class GroundworkBookmarkStateStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private static GroundworkBookmarkStateStore CreateBridge(GroundworkDocumentStoreFixture fixture) =>
+        new(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
 }

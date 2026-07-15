@@ -12,8 +12,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// for <see cref="ListForWorkflowExecutionAsync"/>; global states carry a null id and are correctly
 /// excluded from the per-workflow index.
 /// </summary>
-public sealed class GroundworkWorkflowHoldStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind), IWorkflowHoldStateStore
+public sealed class GroundworkWorkflowHoldStateStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, boundedStore), IWorkflowHoldStateStore
 {
     public async ValueTask<WorkflowHoldState> SaveAsync(WorkflowHoldState state, CancellationToken cancellationToken = default)
     {
@@ -42,12 +45,17 @@ public sealed class GroundworkWorkflowHoldStateStore(IDocumentStore store, IGrou
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         return await QueryDocumentsAsync<WorkflowHoldStateDocument, WorkflowHoldState>(
-            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, document => document.State, cancellationToken);
+            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
+            document => document.State,
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowHoldState>> ListAllAsync(CancellationToken cancellationToken = default) =>
         await QueryDocumentsAsync<WorkflowHoldStateDocument, WorkflowHoldState>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind,
             document => document.State,
             cancellationToken);

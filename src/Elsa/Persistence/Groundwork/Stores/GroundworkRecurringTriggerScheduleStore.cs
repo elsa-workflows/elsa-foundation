@@ -28,8 +28,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// both claim the same occurrence.
 /// </para>
 /// </remarks>
-public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind), IRecurringTriggerScheduleStore
+public sealed class GroundworkRecurringTriggerScheduleStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, boundedStore), IRecurringTriggerScheduleStore
 {
     private const string ProjectionKind = "recurringSchedules";
 
@@ -69,7 +72,8 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
         var schedules = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
             envelope => envelope.Schedule,
             cancellationToken);
@@ -130,7 +134,8 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         cancellationToken.ThrowIfCancellationRequested();
 
         var schedules = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
             envelope => envelope.Schedule,
             cancellationToken);
@@ -173,7 +178,8 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         cancellationToken.ThrowIfCancellationRequested();
 
         var owned = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ByArtifactIndex,
+            ElsaRuntimeStorageManifest.ListByArtifactQuery,
+            ElsaRuntimeStorageManifest.ArtifactIdField,
             artifactId,
             envelope => envelope.Schedule,
             cancellationToken);

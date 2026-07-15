@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Persistence.Groundwork.Querying;
 
@@ -8,9 +9,10 @@ namespace Elsa.Persistence.Groundwork.Querying;
 /// </summary>
 public interface IGroundworkWorkflowExecutionStatePageQuery
 {
-    /// <summary>
-    /// Performs provider-owned history schema preparation during host startup, before requests are accepted.
-    /// </summary>
+    /// <summary>Binds this query to the exact admitted workflow-execution-state route.</summary>
+    void Bind(ExecutableStorageRoute route);
+
+    /// <summary>Completes read-only query preparation during host startup.</summary>
     ValueTask PrepareAsync(CancellationToken cancellationToken = default);
 
     ValueTask<WorkflowExecutionStatePage> QueryPageAsync(

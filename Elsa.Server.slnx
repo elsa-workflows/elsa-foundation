@@ -158,6 +158,7 @@
     <Project Path="src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/Querying/Elsa.Persistence.Groundwork.Querying.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/Unified/Elsa.Persistence.Groundwork.Unified.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/Groundwork/MongoDb/">
@@ -236,9 +237,8 @@
     <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Workflows/Publishing/Persistence/Groundwork/">
+  <Folder Name="/src/Elsa/Workflows/Publishing/Persistence/">
     <Project Path="src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
-    <Project Path="src/Elsa/Workflows/Publishing/Persistence/Groundwork/Sqlite/Elsa.Workflows.Publishing.Persistence.Groundwork.Sqlite.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/">
     <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />

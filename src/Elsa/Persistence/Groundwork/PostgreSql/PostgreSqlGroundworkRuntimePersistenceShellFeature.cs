@@ -2,7 +2,6 @@ using CShells.Features;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.PostgreSql.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Groundwork.Core.Capabilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql;
@@ -37,10 +36,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceShellFeature : IShellF
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
 
-        services.AddPostgreSqlGroundworkDocumentStore(
-            connectionString,
-            ElsaRuntimeStorageManifest.Create(),
-            new ProviderIdentity("groundwork-postgresql", "1.0.0"));
+        services.AddPostgreSqlGroundworkDocumentStore(connectionString);
 
         services.AddGroundworkRuntimeStores();
     }

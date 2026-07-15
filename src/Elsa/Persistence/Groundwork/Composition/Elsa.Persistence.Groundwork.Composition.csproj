@@ -10,4 +10,8 @@
     <PackageReference Include="Groundwork.Core" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+  </ItemGroup>
+
 </Project>

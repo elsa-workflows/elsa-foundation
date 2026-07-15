@@ -23,12 +23,15 @@ public static class IdentityStorageManifest
 
     public const string ByEmailIndex = "by-email";
     public const string EmailKeyField = "emailKey";
+    public const string FindUserByEmailQuery = "find-by-email";
 
     public const string ByTenantIndex = "by-tenant";
     public const string TenantKeyField = "tenantKey";
+    public const string ListRolesByTenantQuery = "list-by-tenant";
 
     public const string ByUserIndex = "by-user";
     public const string UserKeyField = "userKey";
+    public const string ListExternalIdentitiesByUserQuery = "list-by-user";
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-identity"),
@@ -39,17 +42,17 @@ public static class IdentityStorageManifest
                 UserDocumentKind,
                 "Identity User",
                 [Keyword(ByEmailIndex, EmailKeyField)],
-                [Query("find-by-email", ByEmailIndex)]),
+                [Query(FindUserByEmailQuery, ByEmailIndex)]),
             Unit(
                 RoleDocumentKind,
                 "Identity Role",
                 [Keyword(ByTenantIndex, TenantKeyField)],
-                [Query("list-by-tenant", ByTenantIndex)]),
+                [Query(ListRolesByTenantQuery, ByTenantIndex)]),
             Unit(
                 ExternalIdentityDocumentKind,
                 "Identity External Identity",
                 [Keyword(ByUserIndex, UserKeyField)],
-                [Query("list-by-user", ByUserIndex)]),
+                [Query(ListExternalIdentitiesByUserQuery, ByUserIndex)]),
             Unit(
                 TenantMembershipDocumentKind,
                 "Identity Tenant Membership",
@@ -90,5 +93,6 @@ public static class IdentityStorageManifest
         false,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
 }
