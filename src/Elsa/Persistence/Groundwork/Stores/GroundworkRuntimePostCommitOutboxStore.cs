@@ -33,12 +33,21 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store,
         var existing = await LoadAsync(item.OutboxItemId, cancellationToken);
         if (existing is not null)
         {
-            if (IsSamePendingIntent(existing, item))
+            if (IsSamePendingIntent(existing.Item, item))
                 return;
             throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
         }
 
-        await SaveAsync(item, cancellationToken);
+        var result = await SaveAsync(item, expectedVersion: 0, cancellationToken);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return;
+        if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+            throw new InvalidOperationException($"Groundwork rejected post-commit outbox item '{item.OutboxItemId}' with status '{result.Status}'.");
+
+        existing = await LoadAsync(item.OutboxItemId, cancellationToken)
+            ?? throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' conflicted during creation but could not be reloaded.");
+        if (!IsSamePendingIntent(existing.Item, item))
+            throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
     }
 
     public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default)
@@ -80,54 +89,70 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store,
         var existing = await LoadAsync(result.OutboxItemId, cancellationToken);
         if (existing is null)
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found.");
-        if (existing.IsTerminal)
+        if (existing.Item.IsTerminal)
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
 
-        var deliveryAttemptCount = existing.DeliveryAttemptCount + 1;
-        var status = NormalizeDeliveryStatus(existing, result.Status, deliveryAttemptCount);
+        var deliveryAttemptCount = existing.Item.DeliveryAttemptCount + 1;
+        var status = NormalizeDeliveryStatus(existing.Item, result.Status, deliveryAttemptCount);
         DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
-            ? NextRetryAvailableAt(existing, result.RecordedAt)
+            ? NextRetryAvailableAt(existing.Item, result.RecordedAt)
             : null;
 
         var updated = new RuntimePostCommitOutboxItem(
-            outboxItemId: existing.OutboxItemId,
-            intent: existing.Intent,
+            outboxItemId: existing.Item.OutboxItemId,
+            intent: existing.Item.Intent,
             status: status,
-            recordedAt: existing.RecordedAt,
+            recordedAt: existing.Item.RecordedAt,
             availableAt: availableAt,
-            retryPolicy: existing.RetryPolicy,
+            retryPolicy: existing.Item.RetryPolicy,
             deliveryAttemptCount: deliveryAttemptCount,
             deliveringOwnerId: null,
             deliveryStartedAt: null,
             deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             lastFailureMessage: result.FailureMessage,
-            metadata: existing.Metadata);
+            metadata: existing.Item.Metadata);
 
-        await SaveAsync(updated, cancellationToken);
+        var writeResult = await SaveAsync(updated, existing.Version, cancellationToken);
+        if (writeResult.Status == DocumentStoreWriteStatus.Saved)
+            return;
+
+        if (writeResult.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+            await LoadAsync(result.OutboxItemId, cancellationToken);
+        throw new InvalidOperationException($"Groundwork rejected the delivery result for post-commit outbox item '{result.OutboxItemId}' with status '{writeResult.Status}'.");
     }
 
-    private async ValueTask<RuntimePostCommitOutboxItem?> LoadAsync(string outboxItemId, CancellationToken cancellationToken)
+    private async ValueTask<LoadedOutboxItem?> LoadAsync(string outboxItemId, CancellationToken cancellationToken)
     {
         var envelope = await store.LoadAsync(
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
-            outboxItemId,
+            GroundworkPhysicalDocumentId.FromLogicalId(outboxItemId),
             cancellationToken);
-        return envelope is null ? null : Map(envelope);
+        if (envelope is null)
+            return null;
+
+        var item = Map(envelope);
+        if (!StringComparer.Ordinal.Equals(item.OutboxItemId, outboxItemId))
+            throw new InvalidOperationException($"Groundwork physical document identity collision detected for post-commit outbox item '{outboxItemId}'.");
+        return new LoadedOutboxItem(item, envelope.Version);
     }
 
-    private async ValueTask SaveAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken)
+    private async ValueTask<DocumentStoreWriteResult> SaveAsync(
+        RuntimePostCommitOutboxItem item,
+        long expectedVersion,
+        CancellationToken cancellationToken)
     {
         var envelope = new OutboxEnvelope(
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
             item.Intent.WorkflowExecutionId,
             item);
         var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, envelope);
-        await store.SaveAsync(
+        return await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
-                item.OutboxItemId,
+                GroundworkPhysicalDocumentId.FromLogicalId(item.OutboxItemId),
                 schemaVersion,
-                content),
+                content,
+                expectedVersion),
             cancellationToken);
     }
 
@@ -175,5 +200,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store,
 
     // The constant collection partition lets unfiltered GetDeliverable scans use a keyword equality index
     // instead of a provider-wide scan, mirroring the other list-capable bridges.
+    private sealed record LoadedOutboxItem(RuntimePostCommitOutboxItem Item, long Version);
+
     private sealed record OutboxEnvelope(string Collection, string WorkflowExecutionId, RuntimePostCommitOutboxItem Item);
 }

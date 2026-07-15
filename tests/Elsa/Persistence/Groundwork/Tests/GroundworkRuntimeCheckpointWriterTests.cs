@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -67,6 +68,37 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
 
         var bookmark = await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
         Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task CommitId_Beyond_Portable_Document_Limit_Remains_Idempotent()
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create("sqlite");
+        var store = fixture.DocumentStore;
+        var writer = CreateWriter(store);
+        var commitId = $"commit:{new string('x', 450)}";
+        Assert.True(commitId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {commitId.Length}.");
+
+        await writer.CommitAsync(BuildCommit(commitId, bookmarkNode: "node-v1"), Decision);
+        await writer.CommitAsync(BuildCommit(commitId, bookmarkNode: "node-v2"), Decision);
+
+        var bookmark = await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
+        Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task CommitMarker_PhysicalAliasCollision_FailsClosed()
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create("sqlite");
+        var writer = CreateWriter(fixture.DocumentStore);
+        var longCommitId = new string('x', 451);
+        var collidingShortCommitId = GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(longCommitId);
+        await writer.CommitAsync(BuildCommit(longCommitId), Decision);
+
+        var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(
+            async () => await writer.CommitAsync(BuildCommit(collidingShortCommitId), Decision));
+
+        Assert.Contains("physical document identity collision", exception.InnerException!.Message, StringComparison.Ordinal);
     }
 
     [Fact]

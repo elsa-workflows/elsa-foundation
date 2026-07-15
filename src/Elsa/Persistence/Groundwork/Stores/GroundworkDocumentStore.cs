@@ -30,10 +30,14 @@ public abstract class GroundworkDocumentStore(
     protected string DocumentKind { get; } = documentKind;
 
     /// <summary>Serialises <paramref name="document"/> under this bridge's kind and upserts it under <paramref name="documentId"/>.</summary>
-    protected Task<DocumentStoreWriteResult> SaveDocumentAsync<TDocument>(string documentId, TDocument document, CancellationToken cancellationToken)
+    protected Task<DocumentStoreWriteResult> SaveDocumentAsync<TDocument>(
+        string documentId,
+        TDocument document,
+        CancellationToken cancellationToken,
+        long? expectedVersion = null)
     {
         var (schemaVersion, content) = Serializer.Serialize(DocumentKind, document);
-        return Store.SaveAsync(new SaveDocumentRequest(DocumentKind, documentId, schemaVersion, content), cancellationToken);
+        return Store.SaveAsync(new SaveDocumentRequest(DocumentKind, documentId, schemaVersion, content, expectedVersion), cancellationToken);
     }
 
     /// <summary>Deletes the document with <paramref name="documentId"/> and returns the store write result.</summary>
