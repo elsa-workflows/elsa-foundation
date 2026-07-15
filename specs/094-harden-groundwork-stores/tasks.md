@@ -43,14 +43,14 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 **Critical gate**: Complete this phase before provider evidence is accepted for any story.
 
-- [ ] T004 Define the provider driver lifecycle and independent-client contract in `tests/Elsa/Persistence/Groundwork/Testing/GroundworkProviderDriver.cs`
-- [ ] T005 [P] Define scenario observations, result digests, composition fingerprints, and native-plan evidence in `tests/Elsa/Persistence/Groundwork/Testing/GroundworkScenarioResult.cs`
-- [ ] T006 [P] Define deterministic cancellation/failure-window controls in `tests/Elsa/Persistence/Groundwork/Testing/GroundworkFailureController.cs`
-- [ ] T007 Write failing shared contract tests for deterministic reset, independent clients, dispose/reopen, process restart, topology rejection, and sanitized evidence in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderDriverContractTests.cs`
-- [ ] T008 [P] Implement the file-backed SQLite driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/SqliteGroundworkProviderDriver.cs`
-- [ ] T009 [P] Implement the SQL Server Testcontainers driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/SqlServerGroundworkProviderDriver.cs`
-- [ ] T010 [P] Refactor the existing PostgreSQL fixture into the shared driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/PostgreSqlGroundworkProviderDriver.cs` and `tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/PostgresContainerFixture.cs`
-- [ ] T011 [P] Implement a transaction-capable MongoDB replica-set driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/MongoDbGroundworkProviderDriver.cs`
+- [X] T004 Define the provider driver lifecycle and independent-client contract in `tests/Elsa/Persistence/Groundwork/Testing/GroundworkProviderDriver.cs`
+- [X] T005 [P] Define scenario observations, result digests, composition fingerprints, and native-plan evidence in `tests/Elsa/Persistence/Groundwork/Testing/GroundworkScenarioResult.cs`
+- [X] T006 [P] Define deterministic cancellation/failure-window controls in `tests/Elsa/Persistence/Groundwork/Testing/GroundworkFailureController.cs`
+- [X] T007 Write failing shared contract tests for deterministic reset, independent clients, dispose/reopen, process restart, topology rejection, and sanitized evidence in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderDriverContractTests.cs`
+- [X] T008 [P] Implement the file-backed SQLite driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/SqliteGroundworkProviderDriver.cs`
+- [X] T009 [P] Implement the SQL Server Testcontainers driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/SqlServerGroundworkProviderDriver.cs`
+- [X] T010 [P] Refactor the existing PostgreSQL fixture into the shared driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/PostgreSqlGroundworkProviderDriver.cs` and `tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/PostgresContainerFixture.cs`
+- [X] T011 [P] Implement a transaction-capable MongoDB replica-set driver against T007 in `tests/Elsa/Persistence/Groundwork/Testing/MongoDbGroundworkProviderDriver.cs`
 
 **Checkpoint**: All four drivers can run one provider-independent persistent round trip and cannot report memory-backed durability evidence.
 

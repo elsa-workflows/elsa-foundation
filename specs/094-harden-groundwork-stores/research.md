@@ -54,7 +54,13 @@ Domain contracts that already carry a tenant use that explicit value and verify 
 
 ## Decision 5: Use one real-provider black-box fixture
 
-**Decision**: Create a shared conformance fixture with provider drivers for file-backed SQLite, SQL Server and PostgreSQL containers, and a MongoDB replica set. The fixture owns production-shaped startup, schema application, independent clients, deterministic reset, disposal/reopen, process restart, failure injection, cancellation, native-plan capture, and topology validation. Domain suites supply public-contract scenarios and provider-independent outcome assertions.
+**Decision**: Create a shared conformance fixture with provider drivers for file-backed SQLite, SQL Server and PostgreSQL containers, and a transaction-capable MongoDB replica set. The fixture owns production-shaped startup, schema application, independent clients, deterministic reset, disposal/reopen, true child-process reconnect, provider-process restart where applicable, failure injection, cancellation, native-plan capture, and topology validation. Domain suites supply public-contract scenarios and provider-independent outcome assertions.
+
+Dispose/reopen and process restart are separate observations. Reconstructing an adapter, service provider, or generation counter in the test process does not satisfy process-restart evidence. A dedicated helper executable receives a closed manifest/provider probe request over redirected standard input, connects to the same durable target in a different operating-system process, and returns only sanitized identities, versions, process IDs, and payload digests. Connection values and credentials are never arguments or evidence.
+
+MongoDB uses the ratified `mongo:7.0.24` replica-set fixture with two independently constructed clients. Topology admission proves replica-set identity, writable-primary state, and an actual transactional begin/rollback. Standalone MongoDB is a rejection fixture, not an allowed evidence substrate. Same-container restart uses a bounded idempotent replica-set startup callback so an already-initialized set is accepted without weakening readiness checks.
+
+Native-plan evidence must represent the exact admitted Groundwork route. Groundwork preview.47 exposes this explain path for MongoDB but not through a public relational API; handwritten SQL may smoke-test a substrate but cannot satisfy route evidence. Before T084 can advance relational evidence, Groundwork must expose a public structured relational explain/execution-observer surface that retains route identity and a sanitized canonical plan without connection, database, server, or parameter values.
 
 **Rationale**: Current evidence is dominated by memory/SQLite plus targeted PostgreSQL coverage. Repeating test bodies per provider invites semantic drift; memory-backed reopen cannot prove durability.
 
@@ -63,6 +69,8 @@ Domain contracts that already carry a tenant use that explicit value and verify 
 - Provider-specific test suites with copied cases: rejected because expected domain outcomes could diverge unnoticed.
 - In-memory provider as restart evidence: rejected because it cannot prove persistence, process coordination, or native execution.
 - MongoDB standalone topology: rejected for scenarios that promise multi-document atomicity.
+- Adapter recreation or a generation counter as process-restart evidence: rejected because no independent process reconnects to durable storage.
+- Handwritten provider SQL as admitted-route evidence: rejected because it can diverge from the command Groundwork actually executes.
 
 ## Decision 6: Make ownership and checkpoint admission one durable fence decision
 
