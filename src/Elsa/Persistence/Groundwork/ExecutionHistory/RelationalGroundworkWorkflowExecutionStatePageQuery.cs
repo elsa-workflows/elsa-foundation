@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,16 +16,17 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
     : IGroundworkWorkflowExecutionStatePageQuery
 {
     private readonly IGroundworkRuntimeDocumentSerializer serializer;
-    private readonly SemaphoreSlim initializationLock = new(1, 1);
-    private ExecutableStorageRoute? route;
-    private bool initialized;
+    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
+    private readonly GroundworkWorkflowExecutionStatePageRouteSource routeSource;
 
     protected RelationalGroundworkWorkflowExecutionStatePageQuery(
-        GroundworkDocumentStoreHolder documentStoreHolder,
-        IGroundworkRuntimeDocumentSerializer serializer)
+        IGroundworkRuntimeDocumentSerializer serializer,
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        GroundworkWorkflowExecutionStatePageRouteSource routeSource)
     {
-        ArgumentNullException.ThrowIfNull(documentStoreHolder);
         this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+        this.accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
+        this.routeSource = routeSource ?? throw new ArgumentNullException(nameof(routeSource));
     }
 
     protected abstract DbConnection CreateConnection();
@@ -37,8 +39,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
     protected abstract string CorrelationIdExpression { get; }
     protected abstract string ArtifactIdExpression { get; }
 
-    protected ExecutableStorageRoute Route => route ?? throw new InvalidOperationException(
-        "Workflow execution history has not been bound to the admitted Groundwork physical route.");
+    protected ExecutableStorageRoute Route => routeSource.Route;
 
     protected string CanonicalJsonExpression => Column(Route.Envelope.CanonicalJson);
     protected string DocumentIdExpression => Column(Route.Envelope.Id);
@@ -71,10 +72,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
                 nameof(executableRoute));
         }
 
-        if (route is not null && !string.Equals(route.Fingerprint, executableRoute.Fingerprint, StringComparison.Ordinal))
-            throw new InvalidOperationException("Workflow execution history is already bound to a different physical route.");
-
-        route = executableRoute;
+        routeSource.Publish(executableRoute);
     }
 
     public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
@@ -83,18 +81,19 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
-        if (!initialized)
-            throw new InvalidOperationException("Workflow execution history has not been prepared. Run the Groundwork provider startup initializer before querying history.");
+
+        var storageScope = ResolveStorageScope(query.TenantId);
+        _ = Route;
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
-        var filteredWhere = BuildWhere(query, includeCursor: false);
+        var filteredWhere = BuildWhere(query, storageScope, includeCursor: false);
         var total = await CountAsync(connection, filteredWhere, cancellationToken);
         if (total == 0)
             return new([], null, null, false, false, 0);
 
-        var pageWhere = BuildWhere(query, includeCursor: true);
+        var pageWhere = BuildWhere(query, storageScope, includeCursor: true);
         var reverse = query.Cursor?.Direction == WorkflowExecutionStatePageDirection.Previous;
         var order = reverse
             ? $"{SortTicksExpression} ASC, {DocumentIdExpression} DESC"
@@ -147,25 +146,11 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
             total);
     }
 
-    public async ValueTask PrepareAsync(CancellationToken cancellationToken = default)
+    public ValueTask PrepareAsync(CancellationToken cancellationToken = default)
     {
-        if (initialized)
-            return;
-
-        await initializationLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (initialized)
-                return;
-
-            _ = Route;
-            cancellationToken.ThrowIfCancellationRequested();
-            initialized = true;
-        }
-        finally
-        {
-            initializationLock.Release();
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = Route;
+        return ValueTask.CompletedTask;
     }
 
     private async Task<long> CountAsync(
@@ -180,11 +165,19 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
         return Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private QueryWhere BuildWhere(WorkflowExecutionStatePageQuery query, bool includeCursor)
+    private QueryWhere BuildWhere(
+        WorkflowExecutionStatePageQuery query,
+        string storageScope,
+        bool includeCursor)
     {
-        var clauses = new List<string> { $"{Column(Route.Envelope.DocumentKind)} = @documentKind" };
+        var clauses = new List<string>
+        {
+            $"{Column(Route.Envelope.StorageScope)} = @storageScope",
+            $"{Column(Route.Envelope.DocumentKind)} = @documentKind"
+        };
         var parameters = new Dictionary<string, object?>
         {
+            ["storageScope"] = storageScope,
             ["documentKind"] = ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind
         };
 
@@ -224,6 +217,18 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
             clauses.Add($"{expression} = @{name}");
             parameters[name] = value;
         }
+    }
+
+    private string ResolveStorageScope(string? explicitTenantId)
+    {
+        var current = accessContextAccessor.Current;
+        var currentScope = current.Scope
+            ?? throw new InvalidOperationException("Workflow execution history requires a scoped persistence context.");
+
+        if (!string.IsNullOrWhiteSpace(explicitTenantId))
+            current.EnsureScope(new PersistenceScope(explicitTenantId));
+
+        return currentScope.Value;
     }
 
     private string Column(ExecutableColumnRoute column) => $"d.{QuoteIdentifier(column.Identifier)}";

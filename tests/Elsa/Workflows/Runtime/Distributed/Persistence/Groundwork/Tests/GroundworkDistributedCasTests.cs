@@ -37,8 +37,13 @@ public sealed class GroundworkDistributedCasTests
         _interceptedStore = new InterceptingDocumentStore(sharedStore);
         _placementA = new GroundworkExecutionPlacementStore(_interceptedStore, sharedStore);
         _placementB = new GroundworkExecutionPlacementStore(sharedStore);
-        _transportA = new GroundworkExecutionCommandTransport(_interceptedStore, sharedStore);
-        _transportB = new GroundworkExecutionCommandTransport(sharedStore);
+        _transportA = new GroundworkExecutionCommandTransport(
+            _interceptedStore,
+            GroundworkDistributedTestAccess.Scoped(),
+            sharedStore);
+        _transportB = new GroundworkExecutionCommandTransport(
+            sharedStore,
+            GroundworkDistributedTestAccess.Scoped());
     }
 
     [Fact]

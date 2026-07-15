@@ -1,11 +1,15 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Scheduling;
 
@@ -47,6 +51,7 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddPersistenceCore();
         services.Configure<DurableTimerPumpOptions>(options =>
         {
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
@@ -60,11 +65,15 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
         // registration when composed together.
         services.TryAddSingleton(TimeProvider.System);
 
-        // In-memory defaults; a durable persistence provider swaps IDurableTimerStore for a restart-surviving
-        // bridge via RemoveAll + AddSingleton.
+        // In-memory default; a durable persistence provider swaps IDurableTimerStore for a scoped,
+        // restart-surviving adapter.
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
-        services.TryAddSingleton<IDurableTimerScheduler, DurableTimerScheduler>();
+        services.TryAddScoped<IDurableTimerScheduler, DurableTimerScheduler>();
 
-        services.AddSingleton<IRecurringTask, DurableTimerPumpTask>();
+        services.AddSingleton<IRecurringTask>(sp => new DurableTimerPumpTask(
+            sp.GetRequiredService<IPersistenceScopeRunner>(),
+            sp.GetRequiredService<IOptions<DurableTimerPumpOptions>>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<DurableTimerPumpTask>>()));
     }
 }

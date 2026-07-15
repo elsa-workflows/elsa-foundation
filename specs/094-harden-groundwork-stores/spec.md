@@ -8,6 +8,10 @@
 
 **Input**: User description: "Harden every already-landed Elsa Groundwork runtime, IAM, secrets, and distributed-runtime store so Groundwork can become the only first-party persistence implementation family in elsa-foundation. Preserve provider-neutral core contracts, prove equivalent behavior across SQLite, SQL Server, PostgreSQL, and MongoDB, close composition, tenancy, concurrency, recovery, bounded-query, and performance gaps, and avoid duplicate identity authorities."
 
+The executable coverage denominator remains the 32 runtime, IAM, secrets, and distributed-runtime
+rows. Storage composition and scope adoption also own the selected Workflows Design, Activities Design,
+and Publishing manifest units; those units do not add or claim ALL32 ledger rows.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Account For Every Durable Contract (Priority: P1)
@@ -75,6 +79,7 @@ A tenant administrator can rely on the persistence boundary to prevent one tenan
 3. **Given** an operation over an explicitly global storage unit, **When** it is executed, **Then** global scope is selected for the recorded storage reason, and any operation that also requires elevated authority uses its separately declared privileged access policy and records the named purpose and outcome.
 4. **Given** cancellation, disposal, or failure inside a scoped unit of work, **When** another request reuses provider resources, **Then** tenant scope and transaction state do not leak across requests.
 5. **Given** a tenant-scoped or privileged operation that emits operational telemetry, **When** metrics are recorded, **Then** tenant identifiers are not used as metric labels and the privileged access remains diagnosable through bounded operational records.
+6. **Given** a host that selects Workflows Design, Activities Design, or Publishing persistence, **When** its public stores execute through the access-bound document store, **Then** those manifest units are tenant-scoped and independent request scopes do not share an access-bound store instance.
 
 ---
 
@@ -189,7 +194,7 @@ An Elsa performance owner receives representative #645 workloads with verified o
 - **FR-006**: Every selected in-scope feature family MUST contribute its durable requirements to one host-selected storage composition before the host serves work.
 - **FR-007**: Composition validation MUST reject missing, duplicate, incompatible, or unsupported durable requirements with a diagnostic that identifies the owning features.
 - **FR-008**: A production-shaped host MUST prove that runtime, in-scope IAM, secrets, and distributed stores can be enabled together, used through their public contracts, disposed, and reopened over the same durable database.
-- **FR-009**: Every in-scope storage unit MUST be classified as tenant-scoped, explicitly global, or externally owner-classified, with a storage reason for every explicitly global unit; operation access MUST be classified separately as ordinary, privileged, ordinary-read/privileged-write, or externally owner-classified, with an authorization reason for every policy containing privileged access.
+- **FR-009**: Every in-scope storage unit, including the selected Workflows Design, Activities Design, and Publishing manifest units outside the ALL32 coverage denominator, MUST be classified as tenant-scoped, explicitly global, or externally owner-classified, with a storage reason for every explicitly global unit; operation access MUST be classified separately as ordinary, privileged, ordinary-read/privileged-write, or externally owner-classified, with an authorization reason for every policy containing privileged access.
 - **FR-010**: Tenant scope MUST be enforced for direct loads, writes, deletes, queries, mutations, recovery, and units of work at the persistence boundary; wrong-scope operations MUST NOT disclose whether another tenant's record exists.
 - **FR-011**: Privileged access MUST reject ordinary callers and record the access scope, named purpose, and outcome without exposing tenant identifiers as unbounded telemetry labels.
 - **FR-012**: Execution ownership MUST issue unique, strictly increasing fencing tokens across independent processes, release, failure, and restart.

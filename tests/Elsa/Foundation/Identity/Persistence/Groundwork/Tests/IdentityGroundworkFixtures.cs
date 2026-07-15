@@ -1,7 +1,9 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Testing;
+using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
@@ -48,4 +50,25 @@ internal static class IdentityGroundworkFixtures
         DirectPermissions: new HashSet<string> { "secrets:read" });
 
     public static InMemoryDocumentStore NewDocumentStore() => new(IdentityStorageManifest.Create());
+
+    public static GroundworkUserStore UserStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static GroundworkRoleStore RoleStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static GroundworkExternalIdentityStore ExternalIdentityStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static GroundworkTenantMembershipStore TenantMembershipStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static IPersistenceAccessContextAccessor Accessor(string scope = "tenant-1") =>
+        new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
+
+    private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
+        : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
+    }
 }

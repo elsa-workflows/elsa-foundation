@@ -59,6 +59,35 @@ If a listed project is renamed during implementation, update this quickstart in 
 - scoped lifetimes for logic-bearing persistence services, with every non-scoped exception documented and tested;
 - no tenant/access context or mutable operation state shared across independently created request scopes.
 
+### Storage-scope gate
+
+The provider-neutral default is one scoped `PersistenceAccessContext` using the nonblank scope `default`.
+Multi-tenant hosts replace `IPersistenceAccessContextAccessor` with their own scoped selector before resolving
+any store. Ordinary scoped, ordinary global, privileged scoped, privileged global, and privileged across-scope
+access are distinct immutable values; privileged access always has a named purpose.
+
+Run the direct scope/session evidence:
+
+```bash
+dotnet test tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName~GroundworkStoreSession|FullyQualifiedName~GroundworkPrivilegedAccessRecorder'
+
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName~StorageScopeContractTests'
+```
+
+Provider startup may retain only immutable admitted resources. SQLite, SQL Server, and PostgreSQL construct a
+fresh access-bound runtime per session. MongoDB retains one validate-only admitted handle and derives fresh
+access-bound stores from it without reopening a client or repeating topology/schema admission. Explicit units
+of work retain one session until commit/rollback/disposal; all other adapter operations acquire and release one
+session. Singleton actors and recurring pumps must open a fresh DI scope per command or tick before resolving
+logic-bearing persistence consumers.
+
 ## 4. Run the shared provider matrix
 
 After the conformance project is introduced:

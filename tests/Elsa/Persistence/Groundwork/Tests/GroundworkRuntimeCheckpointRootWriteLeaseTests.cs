@@ -18,7 +18,10 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
     public async Task CheckpointDoesNotWriteExecutionRootWhileDeletionGuardOwnsArtifact()
     {
         IDocumentStore documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var workflowStateStore = new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer);
+        var workflowStateStore = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor);
         var executableStore = new InMemoryWorkflowExecutableStore();
         await executableStore.SaveAsync(Executable());
         var deletionGuard = await executableStore.TryBeginDeletionAsync("artifact-1", "gc-test", _now.AddMinutes(1), _now);
@@ -29,6 +32,7 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
         var writer = new GroundworkRuntimeCheckpointWriter(
             documentStore,
             GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
             workflowStateStore,
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),

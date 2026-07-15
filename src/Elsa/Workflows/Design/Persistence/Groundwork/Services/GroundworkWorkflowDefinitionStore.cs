@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -20,7 +21,10 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
 {
     private readonly GroundworkReadStore<WorkflowDefinition> _reads;
 
-    public GroundworkWorkflowDefinitionStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null)
+    public GroundworkWorkflowDefinitionStore(
+        IDocumentStore store,
+        IBoundedDocumentStore? boundedStore = null,
+        IGroundworkStoreSessionFactory? sessions = null)
     {
         _reads = new GroundworkReadStore<WorkflowDefinition>(
             store,
@@ -29,7 +33,8 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
             WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
             GroundworkDesignJson.Options,
-            boundedStore);
+            boundedStore,
+            sessions);
     }
 
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default)

@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Manifests;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
@@ -12,7 +13,6 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
 {
     private const string ProviderKey = "sqlite";
     private const string ProviderIdentity = "groundwork-sqlite";
-    private const string GlobalStorageKey = "__groundwork_global__";
     private const string IdentityIndex = "ux_groundwork_documents_identity_lookup";
     private const string PlanProbeId = "provider-plan-probe";
     private static readonly GroundworkCompositionFingerprint FixtureComposition =
@@ -78,11 +78,22 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         _ = await CreateStoreAsync(cancellationToken);
     }
 
+    protected override ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken) =>
+        OpenClientCoreAsync(
+            clientId,
+            ElsaRuntimeStorageManifest.Create(),
+            GroundworkTestAccess.DefaultScoped,
+            cancellationToken);
+
     protected override async ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
         Guid clientId,
+        StorageManifest manifest,
+        DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
-        var store = await CreateStoreAsync(cancellationToken);
+        var store = await CreateStoreAsync(manifest, access, cancellationToken);
         var services = new ServiceCollection()
             .AddSingleton<IDocumentStore>(store)
             .BuildServiceProvider();
@@ -143,7 +154,7 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
               AND id_lookup_key = @id;
             """;
         command.Parameters.AddWithValue("@kind", ProbeDocumentKind);
-        command.Parameters.AddWithValue("@scope", GlobalStorageKey);
+        command.Parameters.AddWithValue("@scope", GroundworkTestAccess.DefaultScopeValue);
         command.Parameters.AddWithValue("@id", PlanProbeId);
         var details = new List<string>();
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
@@ -173,11 +184,20 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     }
 
     private Task<SqliteDocumentStore> CreateStoreAsync(CancellationToken cancellationToken) =>
+        CreateStoreAsync(
+            ElsaRuntimeStorageManifest.Create(),
+            GroundworkTestAccess.DefaultScoped,
+            cancellationToken);
+
+    private Task<SqliteDocumentStore> CreateStoreAsync(
+        StorageManifest manifest,
+        DocumentStoreAccess access,
+        CancellationToken cancellationToken) =>
         SqliteDocumentStoreFactory.CreateAsync(
             RequireConnectionString().ConnectionString,
-            ElsaRuntimeStorageManifest.Create(),
+            manifest,
             new ProviderIdentity(ProviderIdentity, PackageVersion),
-            DocumentStoreAccess.Global,
+            access,
             cancellationToken: cancellationToken);
 
     private async Task EnsurePlanProbeAsync(CancellationToken cancellationToken)
@@ -225,7 +245,7 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
             ANALYZE groundwork_documents;
             """;
         command.Parameters.AddWithValue("@kind", ProbeDocumentKind);
-        command.Parameters.AddWithValue("@scope", GlobalStorageKey);
+        command.Parameters.AddWithValue("@scope", GroundworkTestAccess.DefaultScopeValue);
         command.Parameters.AddWithValue("@id", PlanProbeId);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

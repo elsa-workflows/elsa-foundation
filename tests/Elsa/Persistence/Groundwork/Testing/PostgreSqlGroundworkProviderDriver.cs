@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Manifests;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.PostgreSql.Documents;
@@ -14,7 +15,6 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     public const string PinnedImage = "postgres:17.6-alpine3.22";
     private const string ProviderKey = "postgresql";
     private const string ProviderIdentity = "groundwork-postgresql";
-    private const string GlobalStorageKey = "__groundwork_global__";
     private const string IdentityIndex = "ux_groundwork_documents_identity_lookup";
     private const string PlanProbeId = "provider-plan-probe";
     private static readonly GroundworkCompositionFingerprint FixtureComposition =
@@ -97,11 +97,22 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
         _ = await CreateStoreAsync(cancellationToken);
     }
 
+    protected override ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken) =>
+        OpenClientCoreAsync(
+            clientId,
+            ElsaRuntimeStorageManifest.Create(),
+            GroundworkTestAccess.DefaultScoped,
+            cancellationToken);
+
     protected override async ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
         Guid clientId,
+        StorageManifest manifest,
+        DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
-        var store = await CreateStoreAsync(cancellationToken);
+        var store = await CreateStoreAsync(manifest, access, cancellationToken);
         var services = new ServiceCollection()
             .AddSingleton<IDocumentStore>(store)
             .BuildServiceProvider();
@@ -164,7 +175,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
               AND id_lookup_key = @id;
             """;
         command.Parameters.AddWithValue("kind", ProbeDocumentKind);
-        command.Parameters.AddWithValue("scope", GlobalStorageKey);
+        command.Parameters.AddWithValue("scope", GroundworkTestAccess.DefaultScopeValue);
         command.Parameters.AddWithValue("id", lookupKey);
         var plan = Convert.ToString(
             await command.ExecuteScalarAsync(cancellationToken),
@@ -194,11 +205,20 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     }
 
     private Task<PostgreSqlDocumentStore> CreateStoreAsync(CancellationToken cancellationToken) =>
+        CreateStoreAsync(
+            ElsaRuntimeStorageManifest.Create(),
+            GroundworkTestAccess.DefaultScoped,
+            cancellationToken);
+
+    private Task<PostgreSqlDocumentStore> CreateStoreAsync(
+        StorageManifest manifest,
+        DocumentStoreAccess access,
+        CancellationToken cancellationToken) =>
         PostgreSqlDocumentStoreFactory.CreateAsync(
             RequireConnectionString(),
-            ElsaRuntimeStorageManifest.Create(),
+            manifest,
             new ProviderIdentity(ProviderIdentity, PackageVersion),
-            DocumentStoreAccess.Global,
+            access,
             cancellationToken: cancellationToken);
 
     private async Task EnsurePlanProbeAsync(CancellationToken cancellationToken)
@@ -229,7 +249,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
               AND id = @id;
             """;
         command.Parameters.AddWithValue("kind", ProbeDocumentKind);
-        command.Parameters.AddWithValue("scope", GlobalStorageKey);
+        command.Parameters.AddWithValue("scope", GroundworkTestAccess.DefaultScopeValue);
         command.Parameters.AddWithValue("id", PlanProbeId);
         return Convert.ToString(
                    await command.ExecuteScalarAsync(cancellationToken),
@@ -266,7 +286,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
             ANALYZE groundwork_documents;
             """;
         command.Parameters.AddWithValue("kind", ProbeDocumentKind);
-        command.Parameters.AddWithValue("scope", GlobalStorageKey);
+        command.Parameters.AddWithValue("scope", GroundworkTestAccess.DefaultScopeValue);
         command.Parameters.AddWithValue("id", lookupKey);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
@@ -80,10 +81,25 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
     }
 
     [Fact]
+    public async Task Sqlite_query_rejects_an_explicit_tenant_outside_the_current_scope()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await using var provider = await BuildProviderAsync(database.ConnectionString);
+        var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10, TenantId: "tenant-b")));
+
+        Assert.DoesNotContain("tenant-1", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Sqlite_history_query_uses_host_transformed_table_and_envelope_names()
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         services.AddSingleton(new GroundworkStorageNamingPolicyOptions(
             "history-prefix-v1",
             context => $"host_{context.FeatureDefaultLogicalName}"));
@@ -107,6 +123,7 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
     private static async Task<ServiceProvider> BuildProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
         await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
@@ -127,6 +144,14 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         null,
         "tenant-1",
         new Dictionary<string, string>());
+
+    private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor
+    {
+        public static TenantAccessContextAccessor Instance { get; } = new();
+
+        public PersistenceAccessContext Current { get; } =
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1"));
+    }
 
     private sealed class TemporarySqliteDatabase : IAsyncDisposable
     {

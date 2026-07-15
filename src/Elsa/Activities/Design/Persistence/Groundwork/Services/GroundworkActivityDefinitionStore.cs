@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
 using Groundwork.Documents.Store;
 
@@ -19,7 +20,10 @@ public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
 {
     private readonly GroundworkReadStore<ActivityDefinition> _reads;
 
-    public GroundworkActivityDefinitionStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null)
+    public GroundworkActivityDefinitionStore(
+        IDocumentStore store,
+        IBoundedDocumentStore? boundedStore = null,
+        IGroundworkStoreSessionFactory? sessions = null)
     {
         _reads = new GroundworkReadStore<ActivityDefinition>(
             store,
@@ -28,7 +32,8 @@ public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
             ActivitiesDesignStorageManifest.CollectionField,
             ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
             GroundworkActivitiesDesignJson.Options,
-            boundedStore);
+            boundedStore,
+            sessions);
     }
 
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default)

@@ -1,4 +1,6 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
@@ -25,31 +27,33 @@ public static class GroundworkPublishingStoreRegistration
     {
         ArgumentNullException.ThrowIfNull(documentStoreFactory);
         ArgumentNullException.ThrowIfNull(boundedDocumentStoreFactory);
+        services.AddPersistenceCore();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, PublishingGroundworkStorageManifestSource>());
         services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
         services.RemoveAll<IPublicationSlotStore>();
-        services.AddSingleton<IPublicationSlotStore>(sp => new GroundworkPublicationSlotStore(
+        services.AddScoped<IPublicationSlotStore>(sp => new GroundworkPublicationSlotStore(
             documentStoreFactory(sp),
             sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
             boundedDocumentStoreFactory(sp)));
         services.RemoveAll<IPublicationRecordStore>();
-        services.AddSingleton<IPublicationRecordStore>(sp => new GroundworkPublicationRecordStore(
+        services.AddScoped<IPublicationRecordStore>(sp => new GroundworkPublicationRecordStore(
             documentStoreFactory(sp),
             sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
             boundedDocumentStoreFactory(sp)));
         services.RemoveAll<IPublicationPolicyStore>();
-        services.AddSingleton<IPublicationPolicyStore>(sp => new GroundworkPublicationPolicyStore(
+        services.AddScoped<IPublicationPolicyStore>(sp => new GroundworkPublicationPolicyStore(
             documentStoreFactory(sp), sp.GetRequiredService<PublishingGroundworkDocumentSerializer>()));
         services.RemoveAll<IPublicationProjectionIntentStore>();
-        services.AddSingleton<IPublicationProjectionIntentStore>(sp => new GroundworkPublicationProjectionIntentStore(
+        services.AddScoped<IPublicationProjectionIntentStore>(sp => new GroundworkPublicationProjectionIntentStore(
             documentStoreFactory(sp),
             sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
             boundedDocumentStoreFactory(sp)));
         services.RemoveAll<IPublicationSnapshotReviewStore>();
-        services.AddSingleton<IPublicationSnapshotReviewStore>(sp => new GroundworkPublicationSnapshotReviewStore(
+        services.AddScoped<IPublicationSnapshotReviewStore>(sp => new GroundworkPublicationSnapshotReviewStore(
             documentStoreFactory(sp),
             sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
+            sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
             boundedDocumentStoreFactory(sp)));
         return services;
     }

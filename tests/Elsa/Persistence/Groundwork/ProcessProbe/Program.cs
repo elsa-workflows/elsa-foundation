@@ -114,7 +114,7 @@ internal static class Program
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
         var provider = new ProviderIdentity(command.ProviderIdentity, command.ProviderVersion);
-        var access = DocumentStoreAccess.Global;
+        var access = GroundworkTestAccess.DefaultScoped;
 
         return command.ProviderKey switch
         {

@@ -4,12 +4,18 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
+/// <summary>Application-wide state shared by scoped in-memory checkpoint-store adapters.</summary>
+public sealed class InMemoryRuntimeCheckpointStoreState
+{
+    internal object SyncRoot { get; } = new();
+    internal SemaphoreSlim WriteGate { get; } = new(1, 1);
+    internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
+}
+
 public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore
 {
-    private readonly object _syncRoot = new();
-    private readonly SemaphoreSlim _writeGate = new(1, 1);
-    private readonly Dictionary<string, RuntimeCheckpointCommitRecord> _commits = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
+    private readonly InMemoryRuntimeCheckpointStoreState _state;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IActivityExecutionInspectionWriter? _activityExecutionInspectionWriter;
@@ -35,8 +41,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IExecutionLivenessStateStore? operationalStateStore = null,
         ISchedulerStateStore? schedulerStateStore = null,
         IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
-        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null)
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
+        InMemoryRuntimeCheckpointStoreState? state = null)
     {
+        _state = state ?? new InMemoryRuntimeCheckpointStoreState();
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
         _activityExecutionInspectionWriter = activityExecutionInspectionWriter;
@@ -54,12 +62,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(decision);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _writeGate.WaitAsync(cancellationToken);
+        await _state.WriteGate.WaitAsync(cancellationToken);
         try
         {
-            lock (_syncRoot)
+            lock (_state.SyncRoot)
             {
-                if (_commits.TryGetValue(commit.CommitId, out var existing))
+                if (_state.Commits.TryGetValue(commit.CommitId, out var existing))
                     return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds);
             }
 
@@ -90,12 +98,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     // are serialized by the write gate), so an exception here is a genuine partial-persistence
                     // risk — the projections above have been applied but the commit record/outbox may not be
                     // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
-                    lock (_syncRoot)
+                    lock (_state.SyncRoot)
                     {
                         foreach (var item in pendingOutboxItems)
                             SavePendingOutboxItem(item);
 
-                        _commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
+                        _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
                     }
                 }
                 catch (Exception exception)
@@ -108,7 +116,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
         finally
         {
-            _writeGate.Release();
+            _state.WriteGate.Release();
         }
     }
 
@@ -135,9 +143,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     public IReadOnlyCollection<RuntimeCheckpointCommitRecord> ListCommits()
     {
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            return _commits.Values.ToArray();
+            return _state.Commits.Values.ToArray();
         }
     }
 
@@ -147,7 +155,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(item);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
             SavePendingOutboxItem(item);
         }
@@ -163,9 +171,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (query.OwnerId is not null)
             throw new NotSupportedException("The in-memory post-commit outbox store does not implement delivery ownership filtering.");
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            var items = _outboxItems.Values
+            var items = _state.OutboxItems.Values
                 .Where(item => IsDeliverable(item, query))
                 .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
                 .ThenBy(item => item.RecordedAt)
@@ -182,9 +190,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(result);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            if (!_outboxItems.TryGetValue(result.OutboxItemId, out var existing))
+            if (!_state.OutboxItems.TryGetValue(result.OutboxItemId, out var existing))
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found.");
 
             if (existing.IsTerminal)
@@ -196,7 +204,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 ? NextRetryAvailableAt(existing, result.RecordedAt)
                 : null;
 
-            _outboxItems[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
+            _state.OutboxItems[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
                 outboxItemId: existing.OutboxItemId,
                 intent: existing.Intent,
                 status: status,
@@ -235,7 +243,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     /// </summary>
     private void ValidatePendingOutboxItems(IReadOnlyCollection<RuntimePostCommitOutboxItem> items)
     {
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
             var seen = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
 
@@ -244,7 +252,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 if (item.Status != RuntimePostCommitOutboxStatus.Pending)
                     throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
 
-                if (_outboxItems.TryGetValue(item.OutboxItemId, out var existing) && !IsSamePendingIntent(existing, item))
+                if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing) && !IsSamePendingIntent(existing, item))
                     throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
 
                 if (seen.TryGetValue(item.OutboxItemId, out var duplicate) && !IsSamePendingIntent(duplicate, item))
@@ -260,7 +268,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
             throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
 
-        if (_outboxItems.TryGetValue(item.OutboxItemId, out var existing))
+        if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing))
         {
             if (IsSamePendingIntent(existing, item))
                 return;
@@ -268,7 +276,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
         }
 
-        _outboxItems.Add(item.OutboxItemId, item);
+        _state.OutboxItems.Add(item.OutboxItemId, item);
     }
 
     private async ValueTask ApplySchedulerStateChangeAsync(

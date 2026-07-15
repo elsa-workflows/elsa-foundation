@@ -3,6 +3,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Scoping;
+using Groundwork.Core.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Xunit;
@@ -12,6 +13,23 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
 public sealed class PublishingGroundworkStoreTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Snapshot_review_rejects_explicit_wrong_tenant_before_store_io()
+    {
+        var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
+        var reviews = new GroundworkPublicationSnapshotReviewStore(
+            documents,
+            new PublishingGroundworkDocumentSerializer(),
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            new PublishingTestBoundedDocumentStore(documents));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            reviews.TryAddAsync(Review("review-wrong-scope", Now) with { TenantId = "tenant-b" }).AsTask());
+
+        Assert.Equal(0, documents.SaveCount);
+        Assert.Empty(documents.Snapshot(PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind));
+    }
 
     [Fact]
     public async Task EqualityLookupsUseTheirDeclaredBoundedQueryIdentitiesAndPaths()
@@ -64,6 +82,7 @@ public sealed class PublishingGroundworkStoreTests
         var reviews = new GroundworkPublicationSnapshotReviewStore(
             documents,
             new PublishingGroundworkDocumentSerializer(),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
             queries);
 
         await reviews.DeleteExpiredAsync(Now, 17);
@@ -160,7 +179,11 @@ public sealed class PublishingGroundworkStoreTests
     private static GroundworkPublicationSnapshotReviewStore ReviewStore(
         IDocumentStore store,
         PublishingGroundworkDocumentSerializer serializer) =>
-        new(store, serializer, new PublishingTestBoundedDocumentStore(store));
+        new(
+            store,
+            serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            new PublishingTestBoundedDocumentStore(store));
 
     private static PublicationSnapshotReview Review(string token, DateTimeOffset expiresAt) => new(
         token, "sha256:candidate", "definition-1", PublicationAction.Replace, "default",
@@ -241,7 +264,10 @@ public sealed class PublishingGroundworkStoreTests
                 return new PublishingStoreFixture(provider, null, new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
             var path = Path.Combine(Path.GetTempPath(), $"elsa-publishing-{Guid.NewGuid():N}.db");
             var handle = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={path}", PublishingGroundworkStorageManifest.Create(), SqliteProvider, DocumentStoreAccess.Global);
+                $"Data Source={path}",
+                PublishingGroundworkStorageManifest.Create(),
+                SqliteProvider,
+                DocumentStoreAccess.Scoped(new StorageScope("default")));
             return new PublishingStoreFixture(provider, path, handle);
         }
 
@@ -250,7 +276,10 @@ public sealed class PublishingGroundworkStoreTests
             if (provider == "memory")
                 return;
             Store = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={sqlitePath}", PublishingGroundworkStorageManifest.Create(), SqliteProvider, DocumentStoreAccess.Global);
+                $"Data Source={sqlitePath}",
+                PublishingGroundworkStorageManifest.Create(),
+                SqliteProvider,
+                DocumentStoreAccess.Scoped(new StorageScope("default")));
         }
 
         public ValueTask DisposeAsync()

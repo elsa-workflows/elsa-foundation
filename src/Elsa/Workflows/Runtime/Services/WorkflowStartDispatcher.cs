@@ -12,13 +12,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IWorkflowExecutionActorProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutionPartitionAccessor? _partitionAccessor;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator)
-        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, TimeProvider.System)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, TimeProvider.System, null)
     {
     }
 
@@ -28,6 +29,17 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, null)
+    {
+    }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -40,6 +52,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _agentProvider = agentProvider;
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
+        _partitionAccessor = partitionAccessor;
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -145,6 +158,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
+        var partition = CurrentPartition();
         var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
@@ -171,7 +185,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             idempotencyKey: request.IdempotencyKey ?? CreateDefaultIdempotencyKey(workflowExecutionId, pinnedIdentity.ArtifactId),
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: now,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
 
         var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: workflowExecutionId,
@@ -179,7 +194,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             requestedAt: now,
             requestedBy: request.RequestedBy,
             requiredCapabilities: WorkflowExecutionActorCapabilities.None,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
         var dispatchResult = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
@@ -208,6 +224,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     private static string CreateDefaultIdempotencyKey(string workflowExecutionId, string artifactId) =>
         $"{workflowExecutionId}:start:{artifactId}";
+
+    private WorkflowExecutionPartition CurrentPartition()
+    {
+        if (_partitionAccessor is null)
+            return new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+
+        return _partitionAccessor.Current;
+    }
 
     private sealed record ResolvedPinnedExecutable(
         WorkflowExecutableIdentity Identity,

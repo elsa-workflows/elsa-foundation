@@ -24,9 +24,12 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeatureTests
         Assert.Contains(services, d => d.ServiceType == typeof(TimeProvider));
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IRecurringTask) &&
-            d.ImplementationType == typeof(RecurringTriggerPumpTask));
+            d.ImplementationFactory is not null &&
+            d.Lifetime == ServiceLifetime.Singleton);
         // The decorator lands as an additional IWorkflowTriggerIndexer registration (factory-built).
-        Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexer));
+        Assert.Contains(services, d =>
+            d.ServiceType == typeof(IWorkflowTriggerIndexer) &&
+            d.Lifetime == ServiceLifetime.Scoped);
     }
 
     [Fact]

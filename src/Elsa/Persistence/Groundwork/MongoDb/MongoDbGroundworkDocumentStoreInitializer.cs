@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Scoping;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -21,7 +22,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
 {
     private readonly string _connectionString;
     private readonly string _databaseName;
-    private readonly GroundworkDocumentStoreHolder _holder;
+    private readonly GroundworkStoreSessionSource _sessionSource;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMongoDbGroundworkRuntimeAdmission _admission;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
@@ -30,12 +31,12 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
     public MongoDbGroundworkDocumentStoreInitializer(
         string connectionString,
         string databaseName,
-        GroundworkDocumentStoreHolder holder,
+        GroundworkStoreSessionSource sessionSource,
         IServiceScopeFactory scopeFactory)
         : this(
             connectionString,
             databaseName,
-            holder,
+            sessionSource,
             scopeFactory,
             new MongoDbGroundworkRuntimeAdmission())
     {
@@ -44,13 +45,13 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
     internal MongoDbGroundworkDocumentStoreInitializer(
         string connectionString,
         string databaseName,
-        GroundworkDocumentStoreHolder holder,
+        GroundworkStoreSessionSource sessionSource,
         IServiceScopeFactory scopeFactory,
         IMongoDbGroundworkRuntimeAdmission admission)
     {
         _connectionString = connectionString;
         _databaseName = databaseName;
-        _holder = holder;
+        _sessionSource = sessionSource;
         _scopeFactory = scopeFactory;
         _admission = admission;
     }
@@ -92,13 +93,13 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
                     cancellationToken,
                     MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance);
 
-            if (!_holder.IsInitialized)
+            if (!_sessionSource.IsInitialized)
             {
                 await _admission.OpenAndPublishAsync(
                     _connectionString,
                     _databaseName,
                     source,
-                    _holder,
+                    _sessionSource,
                     cancellationToken);
             }
 
@@ -123,7 +124,7 @@ public interface IMongoDbGroundworkRuntimeAdmission
         string connectionString,
         string databaseName,
         GroundworkPhysicalSchemaManifestSource source,
-        GroundworkDocumentStoreHolder holder,
+        GroundworkStoreSessionSource sessionSource,
         CancellationToken cancellationToken);
 }
 
@@ -195,33 +196,15 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
         string connectionString,
         string databaseName,
         GroundworkPhysicalSchemaManifestSource source,
-        GroundworkDocumentStoreHolder holder,
+        GroundworkStoreSessionSource sessionSource,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(holder);
+        ArgumentNullException.ThrowIfNull(sessionSource);
         cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
-            using (var inspectionClient = new MongoClient(connectionString))
-            {
-                var inspector = new MongoDbPhysicalSchemaExecutor(
-                    inspectionClient.GetDatabase(databaseName));
-                var readiness = await source.InspectRuntimeAdmissionAsync(inspector, cancellationToken);
-                if (!readiness.IsReady)
-                {
-                    var codes = readiness.Diagnostics
-                        .Where(diagnostic => diagnostic.IsError)
-                        .Select(diagnostic => diagnostic.Code)
-                        .Distinct(StringComparer.Ordinal)
-                        .Order(StringComparer.Ordinal);
-                    throw new InvalidOperationException(
-                        $"MongoDB Groundwork runtime admission rejected target '{source.TargetFingerprint}' " +
-                        $"({string.Join(", ", codes)}). Apply the exact reviewed schema through Groundwork.Tool before startup.");
-                }
-            }
-
             var handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
                 connectionString,
                 databaseName,
@@ -237,7 +220,17 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
                     $"MongoDB Groundwork runtime admission opened a target that differs from the selected target '{source.TargetFingerprint}'.");
             }
 
-            await PublishOrDisposeAsync(holder, handle.Store, handle);
+            if (!sessionSource.TrySet((access, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                var store = handle.CreateStore(access);
+                return ValueTask.FromResult(new GroundworkStoreSessionResources(store, store));
+            }, handle))
+            {
+                await handle.DisposeAsync();
+                throw new InvalidOperationException(
+                    "MongoDB Groundwork runtime admission could not publish the selected provider handle because another provider already initialized the session source.");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -297,24 +290,6 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
         handle.Model.Target.ManifestVersion == source.PhysicalTarget.ManifestVersion &&
         handle.Model.Target.Provider == source.PhysicalTarget.Provider &&
         string.Equals(handle.Model.Target.Fingerprint, source.TargetFingerprint, StringComparison.Ordinal);
-
-    /// <summary>Publishes one complete store state or disposes the losing physical-store handle.</summary>
-    public static async ValueTask<bool> PublishOrDisposeAsync(
-        GroundworkDocumentStoreHolder holder,
-        IDocumentStore store,
-        IAsyncDisposable handle)
-    {
-        ArgumentNullException.ThrowIfNull(holder);
-        ArgumentNullException.ThrowIfNull(store);
-        ArgumentNullException.ThrowIfNull(handle);
-        if (store is not IBoundedDocumentStore boundedStore)
-            throw new InvalidOperationException("MongoDB Groundwork physical stores must expose their admitted bounded-query runtime.");
-        if (holder.TrySet(store, boundedStore, handle))
-            return true;
-
-        await handle.DisposeAsync();
-        return false;
-    }
 
     private const string UnsupportedTopologyMessage =
         "MongoDB Groundwork startup requires the configured and observed deployment to be the same writable replica set with working transactions; no store was opened.";

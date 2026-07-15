@@ -34,10 +34,9 @@ again, so the survivor that claims placement re-leases and re-drives it on failo
 and the ack-based hold-until-commit dequeue recorded in `docs/runtime-durable-resumption.md`. Re-driven commands are
 made safe — not merely deduplicated — by the fencing token described above.
 
-## This unit ships the in-memory harness
+## In-memory defaults and durable Groundwork stores
 
 The placement store and command transport in this unit are in-memory implementations, shared by every node container in
-a single process (that is the two-node test harness shape). The wire-safe persisted kind `executionCommandTransport` and
-its v1 golden fixture are frozen now. A durable Groundwork-backed placement store and transport is a **named follow-up**
-("Groundwork durable placement + transport stores") and is a mechanical drop-in that must reuse the frozen wire format
-unchanged.
+a single process (that is the two-node test harness shape). They are the default when the host does not select a durable
+provider. The opt-in `WorkflowsRuntimeDistributedGroundworkPersistence` feature replaces them with scoped,
+Groundwork-backed placement and transport stores that share the same frozen v1 wire format and survive process restarts.

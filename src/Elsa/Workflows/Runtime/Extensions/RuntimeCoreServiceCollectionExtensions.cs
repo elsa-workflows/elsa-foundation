@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
@@ -20,16 +21,10 @@ namespace Elsa.Workflows.Runtime.Core.Extensions;
 /// layers only its endpoint/request-handler wiring on top of this.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Lifetime story (deliberate).</b> The reference implementation registers its in-memory stores and the scheduler
-/// work handlers as <b>singletons</b>: the in-memory stores are process-global (the correct shape for the reference,
-/// non-durable impl) and the handlers are stateless. This is a considered choice, not an accident of convenience —
-/// converting the composition to a scoped drain scope is intentionally out of scope because it ripples into
-/// captive-dependency semantics across every handler and store. Every registration uses <c>TryAdd</c>, so a durable
-/// provider can override any store (and choose its own lifetime, e.g. a scoped <c>DbContext</c>-backed store) by
-/// registering its implementation before or after this call.
-/// </para>
-/// <para>See <c>docs/runtime-durable-resumption.md</c> ("Runtime composition root and lifetimes") for the rationale.</para>
+/// In-memory state and pure policies are application-wide singletons. The operation graph over persistence ports is
+/// scoped, so durable adapters can safely bind storage and access context to one execution. In-process actor mailboxes
+/// remain application-wide and cross that lifetime seam through <see cref="ScopedWorkflowExecutionCommandExecutor"/>,
+/// which opens a fresh scope for every mailbox command.
 /// </remarks>
 public static class RuntimeCoreServiceCollectionExtensions
 {
@@ -40,6 +35,8 @@ public static class RuntimeCoreServiceCollectionExtensions
     public static IServiceCollection AddWorkflowRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.AddPersistenceCore();
+        services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
 
         // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
         services.TryAddSingleton(TimeProvider.System);
@@ -57,13 +54,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<InMemoryActivityExecutionInspectionStore>();
         services.TryAddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
         services.TryAddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
-        // Stateless merge helper over runtime stores; singleton avoids captive scopes in singleton scheduler handlers.
-        services.TryAddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
+        services.TryAddScoped<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
-        services.TryAddSingleton<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
+        services.TryAddScoped<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
         services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
-        services.TryAddSingleton<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
-        services.TryAddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
+        services.TryAddScoped<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
+        services.TryAddScoped<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         // Fan-in notifier over IBookmarkLifecycleObserver contributions (spec 089 D). Singleton is safe because the
         // observers themselves register as singletons that open their own scopes (mirroring RouteTableTriggerIndexObserver).
         services.TryAddSingleton<BookmarkLifecycleNotifier>();
@@ -72,31 +68,33 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
         services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();
-        services.TryAddSingleton<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
-        services.TryAddSingleton<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
+        services.TryAddScoped<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
+        services.TryAddScoped<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
         services.TryAddSingleton<IRuntimeDomainRetryPolicy, NoopRuntimeDomainRetryPolicy>();
         services.AddOptions<RuntimeFaultCaptureOptions>();
         services.TryAddSingleton<IRuntimeFaultCapturePolicy, DefaultRuntimeFaultCapturePolicy>();
         services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
-        services.TryAddSingleton<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();
-        services.TryAddSingleton<IWorkflowSchedulerPauseGate, WorkflowSchedulerPauseGate>();
+        services.TryAddScoped<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();
+        services.TryAddScoped<IWorkflowSchedulerPauseGate, WorkflowSchedulerPauseGate>();
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
         services.TryAddSingleton<RuntimeExecutionOwnershipOptions>();
         services.TryAddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
-        services.TryAddSingleton<IRuntimeExecutionOwnershipService>(serviceProvider =>
+        services.TryAddScoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
             new RuntimeExecutionOwnershipService(
                 serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
-        services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
-        services.TryAddSingleton<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
-        services.TryAddSingleton<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
-        services.TryAddSingleton<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
+        services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
+        services.TryAddScoped<InMemoryRuntimeCheckpointCommitStore>();
+        services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddScoped<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
-        services.TryAddSingleton<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
-        services.TryAddSingleton<IWorkflowExecutionCommandExecutor, WorkflowSchedulerCommandRouter>();
+        services.TryAddScoped<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
+        services.TryAddScoped<WorkflowSchedulerCommandRouter>();
+        services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();
         services.TryAddSingleton<IRuntimeDiagnosticsSettingsStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeDiagnosticsSettingsStore>());
         services.TryAddSingleton<IRuntimeDiagnosticsSettingsAccessor>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeDiagnosticsSettingsStore>());
@@ -104,19 +102,19 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Runtime execution pipeline spine (ADR 0029). The built-in placeholder middleware are registered so the
         // executor can resolve them by type from the built plan; the pass-through slots keep dispatch behavior-preserving
         // until modules register real middleware or a Move 2 slice makes a slot real.
-        services.TryAddSingleton<RuntimeWorkflowLoadStateMiddleware>();
-        services.TryAddSingleton<RuntimeWorkflowInvokeMiddleware>();
-        services.TryAddSingleton<RuntimeWorkflowSchedulingMiddleware>();
-        services.TryAddSingleton<RuntimeWorkflowCheckpointMiddleware>();
-        services.TryAddSingleton<RuntimeWorkflowPostCommitMiddleware>();
-        services.TryAddSingleton<RuntimeActivityLoadStateMiddleware>();
-        services.TryAddSingleton<RuntimeActivityInputEvaluationMiddleware>();
-        services.TryAddSingleton<RuntimeActivityInvokeMiddleware>();
-        services.TryAddSingleton<RuntimeActivityOutputCaptureMiddleware>();
-        services.TryAddSingleton<RuntimeActivitySchedulingMiddleware>();
-        services.TryAddSingleton<RuntimeActivityCheckpointMiddleware>();
-        services.TryAddSingleton<RuntimeActivityPostCommitMiddleware>();
-        services.TryAddSingleton<IRuntimeWorkflowExecutionPipeline>(serviceProvider =>
+        services.TryAddScoped<RuntimeWorkflowLoadStateMiddleware>();
+        services.TryAddScoped<RuntimeWorkflowInvokeMiddleware>();
+        services.TryAddScoped<RuntimeWorkflowSchedulingMiddleware>();
+        services.TryAddScoped<RuntimeWorkflowCheckpointMiddleware>();
+        services.TryAddScoped<RuntimeWorkflowPostCommitMiddleware>();
+        services.TryAddScoped<RuntimeActivityLoadStateMiddleware>();
+        services.TryAddScoped<RuntimeActivityInputEvaluationMiddleware>();
+        services.TryAddScoped<RuntimeActivityInvokeMiddleware>();
+        services.TryAddScoped<RuntimeActivityOutputCaptureMiddleware>();
+        services.TryAddScoped<RuntimeActivitySchedulingMiddleware>();
+        services.TryAddScoped<RuntimeActivityCheckpointMiddleware>();
+        services.TryAddScoped<RuntimeActivityPostCommitMiddleware>();
+        services.TryAddScoped<IRuntimeWorkflowExecutionPipeline>(serviceProvider =>
             new RuntimeWorkflowExecutionPipeline(
                 ComposePlan(
                     serviceProvider,
@@ -124,7 +122,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                     serviceProvider.GetServices<WorkflowRuntimeMiddlewareContribution>()
                         .Select(contribution => (contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name))),
                 serviceProvider));
-        services.TryAddSingleton<IRuntimeActivityExecutionPipeline>(serviceProvider =>
+        services.TryAddScoped<IRuntimeActivityExecutionPipeline>(serviceProvider =>
             new RuntimeActivityExecutionPipeline(
                 ComposePlan(
                     serviceProvider,
@@ -132,10 +130,10 @@ public static class RuntimeCoreServiceCollectionExtensions
                     serviceProvider.GetServices<ActivityRuntimeMiddlewareContribution>()
                         .Select(contribution => (contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name))),
                 serviceProvider));
-        services.TryAddSingleton<IRuntimeSchedulerPipelineSelector, RuntimeSchedulerPipelineSelector>();
-        services.TryAddSingleton<IRuntimeExecutionPipelineDispatcher, RuntimeExecutionPipelineDispatcher>();
+        services.TryAddScoped<IRuntimeSchedulerPipelineSelector, RuntimeSchedulerPipelineSelector>();
+        services.TryAddScoped<IRuntimeExecutionPipelineDispatcher, RuntimeExecutionPipelineDispatcher>();
 
-        services.TryAddSingleton<IWorkflowSchedulerDrainer>(serviceProvider =>
+        services.TryAddScoped<IWorkflowSchedulerDrainer>(serviceProvider =>
             new WorkflowSchedulerDrainer(
                 serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
                 serviceProvider.GetServices<IWorkflowSchedulerWorkHandler>(),
@@ -149,33 +147,33 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowEngineTracer>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
-        services.TryAddSingleton<RuntimeCheckpointCommitter>();
+        services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
+        services.TryAddScoped<RuntimeCheckpointCommitter>();
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowStartActivitySchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCompleteActivitySchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCreateBookmarkSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCancelSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingActivityInvocationSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartActivitySchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCompleteActivitySchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCreateBookmarkSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCancelSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingActivityInvocationSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
         services.TryAddSingleton<IWorkflowExecutionActorProvider, InProcessWorkflowExecutionActorProvider>();
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
-        services.TryAddSingleton<IWorkflowStartDispatcher, WorkflowStartDispatcher>();
+        services.TryAddScoped<IWorkflowStartDispatcher, WorkflowStartDispatcher>();
 
         // Reference GC (ADR 0040): retained execution roots and creation grace are runtime safety policy. A host may
         // configure the policy and schedule the collector through the separate sweeper feature.
         services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
-        services.TryAddSingleton<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
-        services.TryAddSingleton<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
+        services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
+        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
 
         return services;
     }

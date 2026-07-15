@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Groundwork.Core.Manifests;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Testing;
@@ -336,7 +338,24 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         }
     }
 
-    public async ValueTask<GroundworkProviderClient> OpenClientAsync(CancellationToken cancellationToken = default)
+    public ValueTask<GroundworkProviderClient> OpenClientAsync(CancellationToken cancellationToken = default) =>
+        OpenTrackedClientAsync(OpenClientCoreAsync, cancellationToken);
+
+    public ValueTask<GroundworkProviderClient> OpenClientAsync(
+        StorageManifest manifest,
+        DocumentStoreAccess access,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+        ArgumentNullException.ThrowIfNull(access);
+        return OpenTrackedClientAsync(
+            (clientId, token) => OpenClientCoreAsync(clientId, manifest, access, token),
+            cancellationToken);
+    }
+
+    private async ValueTask<GroundworkProviderClient> OpenTrackedClientAsync(
+        Func<Guid, CancellationToken, ValueTask<GroundworkProviderClient>> openClientAsync,
+        CancellationToken cancellationToken)
     {
         await _lifecycleGate.WaitAsync(cancellationToken);
         try
@@ -346,7 +365,7 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
             GroundworkProviderClient? client = null;
             try
             {
-                client = await OpenClientCoreAsync(clientId, cancellationToken);
+                client = await openClientAsync(clientId, cancellationToken);
                 if (client.ClientId != clientId)
                     throw new InvalidOperationException("The provider returned a client with a different identity.");
                 if (_clients.Values.Any(existing =>
@@ -428,6 +447,11 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
     protected abstract ValueTask InitializeCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask ResetCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(Guid clientId, CancellationToken cancellationToken);
+    protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
+        Guid clientId,
+        StorageManifest manifest,
+        DocumentStoreAccess access,
+        CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProcessProbeResult> RunInNewProcessCoreAsync(
         GroundworkProcessProbeRequest request,
         CancellationToken cancellationToken);

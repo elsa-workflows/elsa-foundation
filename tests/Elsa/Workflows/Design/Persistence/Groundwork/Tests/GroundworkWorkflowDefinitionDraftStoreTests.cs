@@ -33,7 +33,10 @@ public class GroundworkWorkflowDefinitionDraftStoreTests
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, draft.Id, SchemaVersion, content));
         }
 
-        return (new GroundworkWorkflowDefinitionDraftStore(raw, Payloads), raw);
+        return (new GroundworkWorkflowDefinitionDraftStore(
+            raw,
+            Payloads,
+            GroundworkTestAccess.DefaultAccessContextAccessor), raw);
     }
 
     private static WorkflowDefinitionDraft Draft(string id, string definitionId) =>
@@ -87,7 +90,10 @@ public class GroundworkWorkflowDefinitionDraftStoreTests
         await raw.SaveAsync(new SaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "d1", SchemaVersion, content));
 
-        var store = new GroundworkWorkflowDefinitionDraftStore(raw, Payloads);
+        var store = new GroundworkWorkflowDefinitionDraftStore(
+            raw,
+            Payloads,
+            GroundworkTestAccess.DefaultAccessContextAccessor);
         var draft = await store.FindByIdAsync("d1");
         var readLayout = await store.FindLayoutByDraftIdAsync("d1");
 

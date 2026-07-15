@@ -58,7 +58,9 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         // (template, method) uniqueness gate (issue #592 item 2).
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask));
         Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexObserver));
-        Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexValidator));
+        Assert.Contains(services, d =>
+            d.ServiceType == typeof(IWorkflowTriggerIndexValidator) &&
+            d.Lifetime == ServiceLifetime.Scoped);
         // The bookmark lifecycle observer keeps the table fresh as mid-flow endpoints suspend/resume (spec 089 D).
         Assert.Contains(services, d => d.ServiceType == typeof(IBookmarkLifecycleObserver));
         Assert.Contains(services, d => d.ServiceType == typeof(IHttpEndpointRoutesResolver));

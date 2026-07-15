@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 

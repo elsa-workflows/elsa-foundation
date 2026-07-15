@@ -109,7 +109,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 await new GroundworkActivityExecutionInspectionStore(store, Serializer).SaveAsync(Projection());
                 break;
             case ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind:
-                await new GroundworkWorkflowExecutionStateStore(store, Serializer).SaveAsync(WorkflowState());
+                await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.AccessContext("tenant-1")).SaveAsync(WorkflowState());
                 break;
             case ElsaRuntimeStorageManifest.DurableValueStateDocumentKind:
                 await new GroundworkDurableValueStateStore(store, Serializer).SaveAsync(DurableValue());
@@ -168,7 +168,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind =>
             (await new GroundworkActivityExecutionInspectionStore(store, Serializer).FindAsync(Wf, "ae-1"))?.ActivityExecutionId,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind =>
-            (await new GroundworkWorkflowExecutionStateStore(store, Serializer).FindAsync(Wf))?.Status,
+            (await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(Wf))?.Status,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind =>
             (await new GroundworkDurableValueStateStore(store, Serializer).FindAsync(Wf, "dv-1"))?.ValueId,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind =>
@@ -561,7 +561,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private static GroundworkRuntimeCheckpointWriter CheckpointWriter(IDocumentStore store) => new(
         store,
         Serializer,
-        new GroundworkWorkflowExecutionStateStore(store, Serializer),
+        GroundworkTestAccess.DefaultAccessContextAccessor,
+        new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
         new GroundworkSchedulerStateStore(store, Serializer),
         new GroundworkActivityExecutionStateStore(store, Serializer),
         new GroundworkBookmarkStateStore(store, Serializer),
@@ -582,7 +583,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private sealed class CapturingDocumentStore : IDocumentStore
     {
         private readonly Dictionary<string, (string SchemaVersion, string ContentJson)> _captured = new(StringComparer.Ordinal);
-        public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
+        public DocumentStoreAccess Access { get; } = GroundworkTestAccess.DefaultScoped;
 
         public (string SchemaVersion, string ContentJson) Captured(string kind) => _captured[kind];
 

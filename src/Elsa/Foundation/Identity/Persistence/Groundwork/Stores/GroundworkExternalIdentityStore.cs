@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Persistence.Core;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
@@ -11,12 +12,16 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// <c>userKey</c> index (<c>tenantId:userId</c>) so every external identity linked to a user resolves
 /// through the declared index.
 /// </summary>
-public sealed class GroundworkExternalIdentityStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null) : IExternalIdentityStore
+public sealed class GroundworkExternalIdentityStore(
+    IDocumentStore store,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null) : IExternalIdentityStore
 {
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
 
     public async ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
         var envelope = await store.LoadAsync(
             IdentityStorageManifest.ExternalIdentityDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider, providerSubject),
@@ -27,6 +32,7 @@ public sealed class GroundworkExternalIdentityStore(IDocumentStore store, IBound
 
     public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
         var envelopes = (await BoundedStore.QueryAsync(
             new DocumentQuery(
                 IdentityStorageManifest.ExternalIdentityDocumentKind,
@@ -42,6 +48,7 @@ public sealed class GroundworkExternalIdentityStore(IDocumentStore store, IBound
     public async ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(externalIdentity);
+        accessContextAccessor.EnsureCurrentScope(externalIdentity.TenantId);
 
         var document = new ExternalIdentityDocument(UserKey(externalIdentity.TenantId, externalIdentity.UserId), externalIdentity);
         var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);

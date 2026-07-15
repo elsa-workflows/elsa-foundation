@@ -1,26 +1,50 @@
 using System.Collections.Concurrent;
+using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 
 namespace Elsa.Workflows.Runtime.Distributed.Services;
 
 /// <summary>
-/// In-memory <see cref="IExecutionPlacementStore"/> for single-process composition and the two-node test harness. A
-/// single instance shared by every node container is the cluster's placement authority; <see cref="TryClaimAsync"/> is
-/// serialized under a lock so the compare-and-swap that grants/denies placement is atomic across nodes. A durable
-/// (e.g. Groundwork) implementation is a named follow-up.
+/// In-memory <see cref="IExecutionPlacementStore"/> for single-process composition and the two-node test harness.
+/// Scoped, partition-bound adapters coordinate through singleton shared state; <see cref="TryClaimAsync"/> is serialized
+/// under a lock so the compare-and-swap that grants or denies placement is atomic across nodes. The opt-in Groundwork
+/// persistence feature replaces this adapter with its durable scoped implementation.
 /// </summary>
 public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
 {
-    private readonly object _syncRoot = new();
-    private readonly ConcurrentDictionary<string, ExecutionPlacementLease> _leasesByExecutionId = new(StringComparer.Ordinal);
+    private readonly InMemoryExecutionPlacementState _state;
+    private readonly string _partition;
+
+    public InMemoryExecutionPlacementStore()
+        : this(new InMemoryExecutionPlacementState(), new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue))
+    {
+    }
+
+    internal InMemoryExecutionPlacementStore(
+        InMemoryExecutionPlacementState state,
+        IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(state, InMemoryExecutionPartitionResolver.Resolve(accessContextAccessor))
+    {
+    }
+
+    private InMemoryExecutionPlacementStore(
+        InMemoryExecutionPlacementState state,
+        WorkflowExecutionPartition partition)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(partition);
+        _state = state;
+        _partition = partition.Value;
+    }
 
     public ValueTask<ExecutionPlacementLease?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        _leasesByExecutionId.TryGetValue(workflowExecutionId, out var lease);
+        _state.Leases.TryGetValue(Key(workflowExecutionId), out var lease);
         return new ValueTask<ExecutionPlacementLease?>(lease);
     }
 
@@ -29,9 +53,10 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
         ArgumentNullException.ThrowIfNull(claim);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            _leasesByExecutionId.TryGetValue(claim.WorkflowExecutionId, out var current);
+            var key = Key(claim.WorkflowExecutionId);
+            _state.Leases.TryGetValue(key, out var current);
 
             // A live lease held by another node blocks the claim; placement stays with the current owner.
             if (current is not null && !current.IsExpired(now) && !StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId))
@@ -49,7 +74,7 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
                 acquiredAt: claim.RequestedAt,
                 expiresAt: claim.ExpiresAt);
 
-            _leasesByExecutionId[claim.WorkflowExecutionId] = lease;
+            _state.Leases[key] = lease;
             return new ValueTask<ExecutionPlacementClaimResult>(new ExecutionPlacementClaimResult(outcome, lease));
         }
     }
@@ -59,13 +84,14 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
         ArgumentNullException.ThrowIfNull(lease);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            if (_leasesByExecutionId.TryGetValue(lease.WorkflowExecutionId, out var current) &&
+            var key = Key(lease.WorkflowExecutionId);
+            if (_state.Leases.TryGetValue(key, out var current) &&
                 StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) &&
                 current.PlacementToken == lease.PlacementToken)
             {
-                _leasesByExecutionId.TryRemove(KeyValuePair.Create(lease.WorkflowExecutionId, current));
+                _state.Leases.TryRemove(KeyValuePair.Create(key, current));
             }
         }
 
@@ -76,10 +102,33 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyCollection<ExecutionPlacementLease> leases = _leasesByExecutionId.Values
+        IReadOnlyCollection<ExecutionPlacementLease> leases = _state.Leases
+            .Where(pair => StringComparer.Ordinal.Equals(pair.Key.Partition, _partition))
+            .Select(pair => pair.Value)
             .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
             .ToArray();
 
         return new ValueTask<IReadOnlyCollection<ExecutionPlacementLease>>(leases);
+    }
+
+    private InMemoryExecutionPlacementKey Key(string workflowExecutionId) => new(_partition, workflowExecutionId);
+}
+
+internal sealed class InMemoryExecutionPlacementState
+{
+    public object SyncRoot { get; } = new();
+    public ConcurrentDictionary<InMemoryExecutionPlacementKey, ExecutionPlacementLease> Leases { get; } = new();
+}
+
+internal readonly record struct InMemoryExecutionPlacementKey(string Partition, string WorkflowExecutionId);
+
+internal static class InMemoryExecutionPartitionResolver
+{
+    public static WorkflowExecutionPartition Resolve(IPersistenceAccessContextAccessor accessContextAccessor)
+    {
+        ArgumentNullException.ThrowIfNull(accessContextAccessor);
+        var scope = accessContextAccessor.Current.Scope
+            ?? throw new InvalidOperationException("In-memory distributed stores require a scoped persistence access context.");
+        return new WorkflowExecutionPartition(scope.Value);
     }
 }

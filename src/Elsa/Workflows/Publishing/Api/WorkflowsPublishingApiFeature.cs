@@ -48,12 +48,15 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
         services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
         services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();
+        // Deterministic policies hold no request or persistence state and remain safe singletons.
         services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
-        services.TryAddSingleton<IPublicationProjectionPreparer, PublicationProjectionReconciler>();
         services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
-        services.TryAddSingleton<IPublicationActivator, PublicationActivator>();
+        // Publishing operations consume provider-overridable stores. Durable providers register those stores as
+        // scoped services, so their aggregators must share the request scope instead of capturing it globally.
+        services.TryAddScoped<IPublicationProjectionPreparer, PublicationProjectionReconciler>();
+        services.TryAddScoped<IPublicationActivator, PublicationActivator>();
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
-        services.TryAddSingleton<PublicationSnapshotReviewService>();
+        services.TryAddScoped<PublicationSnapshotReviewService>();
         services.TryAddSingleton<IPublicationSnapshotReviewStore, InMemoryPublicationSnapshotReviewStore>();
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
         // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).

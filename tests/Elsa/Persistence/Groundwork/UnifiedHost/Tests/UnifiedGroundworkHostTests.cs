@@ -7,6 +7,7 @@ using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
@@ -43,18 +44,19 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 /// </summary>
 public class UnifiedGroundworkHostTests
 {
-    // The store is materialized at startup by a hosted service / shell initializer that populates the holder;
-    // a bare provider has no host lifecycle, so drive that startup step explicitly before resolving the store.
+    // The provider publishes its admitted session factory at startup. A bare service provider has no host
+    // lifecycle, so drive that startup step explicitly before resolving scoped persistence adapters.
     private static async Task<ServiceProvider> BuildHostAsync()
     {
         var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection()
             .AddSingleton(_ => database)
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
-            .AddSingleton<ISystemClock, FakeSystemClock>();
+            .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
             .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
-            .BuildServiceProvider();
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         _ = provider.GetRequiredService<TemporarySqliteDatabase>();
         await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
@@ -65,10 +67,11 @@ public class UnifiedGroundworkHostTests
     {
         var services = new ServiceCollection()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
-            .AddSingleton<ISystemClock, FakeSystemClock>();
+            .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
             .AddGroundworkSqliteUnifiedPersistence(connectionString)
-            .BuildServiceProvider();
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
@@ -78,27 +81,30 @@ public class UnifiedGroundworkHostTests
     public async Task Host_registers_one_document_store_shared_by_every_lane()
     {
         await using var provider = await BuildHostAsync();
+        await using var scope = provider.CreateAsyncScope();
 
-        var store1 = provider.GetRequiredService<IDocumentStore>();
-        var store2 = provider.GetRequiredService<IDocumentStore>();
+        var store1 = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        var store2 = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
 
-        // One provider instance backs everything.
+        // One access-bound adapter instance backs everything within an operation scope.
         Assert.Same(store1, store2);
 
         // Runtime, IAM, secrets and distributed-runtime ports resolve.
-        Assert.NotNull(provider.GetRequiredService<IWorkflowExecutionStateStore>());
-        Assert.NotNull(provider.GetRequiredService<IUserStore>());
-        Assert.NotNull(provider.GetRequiredService<ISecretRepository>());
-        Assert.NotNull(provider.GetRequiredService<IExecutionPlacementStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISecretRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
 
         // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
-        Assert.NotNull(provider.GetRequiredService<IPublicationSlotStore>());
-        Assert.NotNull(provider.GetRequiredService<IPublicationRecordStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationSlotStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationRecordStore>());
 
         // Design lane ports resolve (scoped).
-        using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
+
+        await using var independentScope = provider.CreateAsyncScope();
+        Assert.NotSame(store1, independentScope.ServiceProvider.GetRequiredService<IDocumentStore>());
     }
 
     [Fact]
@@ -108,13 +114,15 @@ public class UnifiedGroundworkHostTests
         var services = new ServiceCollection();
         services.AddGroundworkIdentityStores();
         services.AddSqliteGroundworkDocumentStore(database.ConnectionString);
-        await using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true });
 
         await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
 
-        Assert.NotNull(provider.GetRequiredService<IUserStore>());
-        Assert.NotNull(provider.GetRequiredService<IDocumentStore>());
+        await using var scope = provider.CreateAsyncScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
     }
 
     [Fact]
@@ -200,11 +208,13 @@ public class UnifiedGroundworkHostTests
 
         await using (var firstHost = await BuildHostAsync(database.ConnectionString))
         {
-            await firstHost.GetRequiredService<IBookmarkStateStore>().SaveAsync(bookmark);
-            await firstHost.GetRequiredService<IUserStore>().SaveAsync(user);
-            Assert.True(await firstHost.GetRequiredService<ISecretRepository>().TryAddAsync(secret));
+            await using var firstScope = firstHost.CreateAsyncScope();
+            var firstServices = firstScope.ServiceProvider;
+            await firstServices.GetRequiredService<IBookmarkStateStore>().SaveAsync(bookmark);
+            await firstServices.GetRequiredService<IUserStore>().SaveAsync(user);
+            Assert.True(await firstServices.GetRequiredService<ISecretRepository>().TryAddAsync(secret));
 
-            var claim = await firstHost.GetRequiredService<IExecutionPlacementStore>().TryClaimAsync(placement, now);
+            var claim = await firstServices.GetRequiredService<IExecutionPlacementStore>().TryClaimAsync(placement, now);
             Assert.Equal(ExecutionPlacementClaimOutcome.Granted, claim.Outcome);
 
             using (var scope = firstHost.CreateScope())
@@ -215,25 +225,27 @@ public class UnifiedGroundworkHostTests
                     .Execute(activityDefinition, activityVersion, CancellationToken.None);
             }
 
-            await firstHost.GetRequiredService<IPublicationRecordStore>().SaveAsync(publication);
+            await firstServices.GetRequiredService<IPublicationRecordStore>().SaveAsync(publication);
         }
 
         await using var reopenedHost = await BuildHostAsync(database.ConnectionString);
+        await using var reopenedScope = reopenedHost.CreateAsyncScope();
+        var reopenedServices = reopenedScope.ServiceProvider;
 
         Assert.Equal(
             bookmark.StimulusHash,
-            (await reopenedHost.GetRequiredService<IBookmarkStateStore>()
+            (await reopenedServices.GetRequiredService<IBookmarkStateStore>()
                 .FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId))?.StimulusHash);
         Assert.Equal(
             user.Email,
-            (await reopenedHost.GetRequiredService<IUserStore>().FindAsync(user.TenantId, user.Id))?.Email);
+            (await reopenedServices.GetRequiredService<IUserStore>().FindAsync(user.TenantId, user.Id))?.Email);
         Assert.Equal(
             "v1",
-            (await reopenedHost.GetRequiredService<ISecretRepository>().FindAsync(secret.Name))?
+            (await reopenedServices.GetRequiredService<ISecretRepository>().FindAsync(secret.Name))?
             .LatestActiveVersion?.Payload.Value);
         Assert.Equal(
             placement.OwnerId,
-            (await reopenedHost.GetRequiredService<IExecutionPlacementStore>()
+            (await reopenedServices.GetRequiredService<IExecutionPlacementStore>()
                 .FindAsync(placement.WorkflowExecutionId))?.OwnerId);
 
         using (var scope = reopenedHost.CreateScope())
@@ -250,7 +262,7 @@ public class UnifiedGroundworkHostTests
 
         Assert.Equal(
             publication.ArtifactId,
-            (await reopenedHost.GetRequiredService<IPublicationRecordStore>()
+            (await reopenedServices.GetRequiredService<IPublicationRecordStore>()
                 .FindAsync(publication.PublicationId))?.ArtifactId);
     }
 
@@ -258,7 +270,8 @@ public class UnifiedGroundworkHostTests
     public async Task One_database_materializes_and_serves_all_four_lanes()
     {
         await using var provider = await BuildHostAsync();
-        var store = provider.GetRequiredService<IDocumentStore>();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
 
         // A document kind from each lane, written and read back through the single store. Success proves the
         // union manifest materialized every lane's schema into the one SQLite database.
@@ -285,16 +298,18 @@ public class UnifiedGroundworkHostTests
 
         await using (var firstHost = await BuildHostAsync(database.ConnectionString))
         {
-            await firstHost.GetRequiredService<IPublicationRecordStore>().SaveAsync(record);
-            var activation = await firstHost.GetRequiredService<IPublicationSlotStore>()
+            await using var firstScope = firstHost.CreateAsyncScope();
+            await firstScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>().SaveAsync(record);
+            var activation = await firstScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
                 .TryActivateAsync("definition-1", "default", record.PublicationId, 0, now);
             Assert.True(activation.Succeeded);
         }
 
         await using var restartedHost = await BuildHostAsync(database.ConnectionString);
-        var restoredSlot = await restartedHost.GetRequiredService<IPublicationSlotStore>()
+        await using var restartedScope = restartedHost.CreateAsyncScope();
+        var restoredSlot = await restartedScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
             .FindAsync("definition-1", "default");
-        var restoredRecord = await restartedHost.GetRequiredService<IPublicationRecordStore>()
+        var restoredRecord = await restartedScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>()
             .FindAsync(record.PublicationId);
 
         Assert.Equal(record.PublicationId, restoredSlot?.ActivePublicationId);
@@ -305,7 +320,8 @@ public class UnifiedGroundworkHostTests
     public async Task Publication_expiry_cleanup_uses_the_admitted_physical_range_route()
     {
         await using var provider = await BuildHostAsync();
-        var store = provider.GetRequiredService<IPublicationSnapshotReviewStore>();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IPublicationSnapshotReviewStore>();
         var cutoff = DateTimeOffset.Parse("2026-07-15T12:00:00Z");
         var oldestExpired = SnapshotReview("review-oldest", cutoff.AddMinutes(-2));
         var newestExpired = SnapshotReview("review-newest", cutoff.AddMinutes(-1));
@@ -327,7 +343,8 @@ public class UnifiedGroundworkHostTests
     public async Task Workflows_design_reads_run_off_the_unified_database()
     {
         await using var provider = await BuildHostAsync();
-        var store = provider.GetRequiredService<IDocumentStore>();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
 
         var definition = new WorkflowDefinition { Id = "wf-42", Name = "Order Processing", Description = "Handles orders" };
         var document = new GroundworkDocument<WorkflowDefinition>(
@@ -338,7 +355,6 @@ public class UnifiedGroundworkHostTests
             WorkflowsDesignStorageManifest.SchemaVersion,
             JsonSerializer.Serialize(document, GroundworkDesignJson.Options)));
 
-        using var scope = provider.CreateScope();
         var readStore = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
         var result = await readStore.FindByIdAsync("wf-42");
 
@@ -350,7 +366,8 @@ public class UnifiedGroundworkHostTests
     public async Task Activities_design_reads_run_off_the_same_unified_database()
     {
         await using var provider = await BuildHostAsync();
-        var store = provider.GetRequiredService<IDocumentStore>();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
 
         var activity = new ActivityDefinition { Id = "ad-7", ActivityTypeKey = "Acme.SendEmail", Category = "Email", DisplayName = "Send Email" };
         var document = new GroundworkDocument<ActivityDefinition>(
@@ -361,7 +378,6 @@ public class UnifiedGroundworkHostTests
             ActivitiesDesignStorageManifest.SchemaVersion,
             JsonSerializer.Serialize(document, GroundworkActivitiesDesignJson.Options)));
 
-        using var scope = provider.CreateScope();
         var readStore = scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>();
         var result = await readStore.GetAsync("ad-7");
 
@@ -374,7 +390,7 @@ public class UnifiedGroundworkHostTests
     {
         await using var provider = await BuildHostAsync();
 
-        using var scope = provider.CreateScope();
+        await using var scope = provider.CreateAsyncScope();
         var add = scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>();
 
         var definition = new WorkflowDefinition { Id = "wf-write", Name = "Invoicing" };
@@ -403,6 +419,14 @@ public class UnifiedGroundworkHostTests
 
     private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
         store.SaveAsync(new SaveDocumentRequest(kind, id, "1.0.0", $"{{\"collection\":\"{collection}\"}}"));
+
+    private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor
+    {
+        public static TenantAccessContextAccessor Instance { get; } = new();
+
+        public PersistenceAccessContext Current { get; } =
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1"));
+    }
 
     private static PublicationSnapshotReview SnapshotReview(string token, DateTimeOffset expiresAt) => new(
         token,

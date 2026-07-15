@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Stores;
@@ -37,7 +38,10 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
                 var store = fixture.DocumentStore;
-                Assert.Equal(WorkflowExecutionStatus.Running, (await new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1"))!.Status);
+                Assert.Equal(WorkflowExecutionStatus.Running, (await new GroundworkWorkflowExecutionStateStore(
+                    store,
+                    GroundworkTestSerialization.Serializer,
+                    GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync("wf-1"))!.Status);
                 Assert.Equal(7L, (await new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1"))!.Version);
                 Assert.NotNull(await new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "ae-1"));
                 Assert.NotNull(await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1"));
@@ -68,6 +72,21 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
 
         var bookmark = await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
         Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Commit_Rejects_Explicit_Tenant_Outside_The_Current_Scope_Before_Provider_IO()
+    {
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var writer = CreateWriter(store, GroundworkTestAccess.AccessContext("tenant-a"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await writer.CommitAsync(BuildCommit("commit-wrong-tenant", tenantId: "tenant-b"), Decision));
+
+        Assert.Equal(0, store.LoadCount);
+        Assert.Equal(0, store.BeginCount);
+        Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -118,23 +137,33 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));
     }
 
-    private static GroundworkRuntimeCheckpointWriter CreateWriter(IDocumentStore store) => new(
-        store,
-        GroundworkTestSerialization.Serializer,
-        new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer),
-        PassThroughRootWriteLeaseManager.Instance);
+    private static GroundworkRuntimeCheckpointWriter CreateWriter(
+        IDocumentStore store,
+        IPersistenceAccessContextAccessor? accessContextAccessor = null)
+    {
+        accessContextAccessor ??= GroundworkTestAccess.DefaultAccessContextAccessor;
+        return new(
+            store,
+            GroundworkTestSerialization.Serializer,
+            accessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer, accessContextAccessor),
+            new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
+    }
 
-    private static RuntimeCheckpointCommit BuildCommit(string commitId, string bookmarkNode = "node-bm-1")
+    private static RuntimeCheckpointCommit BuildCommit(
+        string commitId,
+        string bookmarkNode = "node-bm-1",
+        string? tenantId = null)
     {
         const string wf = "wf-1";
         var stateChanges = new RuntimeCheckpointStateChangeSet(
-            workflowExecution: Change(wf, RuntimeStateChangeOperation.Upsert, WorkflowState(wf)),
+            workflowExecution: Change(wf, RuntimeStateChangeOperation.Upsert, WorkflowState(wf, tenantId)),
             scheduler: Change(wf, RuntimeStateChangeOperation.Upsert, Scheduler(wf, 7)),
             activityExecutions: [Change("ae-1", RuntimeStateChangeOperation.Upsert, ActivityState(wf, "ae-1"))],
             bookmarks: [Change("bm-1", RuntimeStateChangeOperation.Upsert, Bookmark(wf, "bm-1", bookmarkNode))],
@@ -161,7 +190,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     private static RuntimeStateChange<T> Change<T>(string stateId, RuntimeStateChangeOperation operation, T state) =>
         new(stateId, operation, state, new Dictionary<string, string>());
 
-    private static WorkflowExecutionState WorkflowState(string workflowExecutionId) => new(
+    private static WorkflowExecutionState WorkflowState(string workflowExecutionId, string? tenantId) => new(
         workflowExecutionId,
         new WorkflowExecutableIdentity($"artifact-{workflowExecutionId}", "definition-1", "version-1", "1", $"hash-{workflowExecutionId}"),
         WorkflowExecutionStatus.Running,
@@ -172,7 +201,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         CompletedAt: null,
         CorrelationId: null,
         ParentWorkflowExecutionId: null,
-        TenantId: null,
+        TenantId: tenantId,
         SystemMetadata: new Dictionary<string, string>());
 
     private static SchedulerState Scheduler(string workflowExecutionId, long version) => new(

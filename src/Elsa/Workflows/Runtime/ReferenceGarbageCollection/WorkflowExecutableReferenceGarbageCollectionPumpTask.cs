@@ -1,6 +1,9 @@
 using Elsa.Tasks.Core;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,21 +18,42 @@ namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 /// </summary>
 public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : IRecurringTask
 {
-    private readonly IWorkflowExecutableReferenceGarbageCollector _garbageCollector;
+    private readonly IPersistenceScopeRunner? _scopeRunner;
+    private readonly IWorkflowExecutableReferenceGarbageCollector? _garbageCollector;
     private readonly IOptions<WorkflowExecutableReferenceGarbageCollectionOptions> _options;
     private readonly ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask> _logger;
     private int _consecutiveSweepFailures;
 
+    [ActivatorUtilitiesConstructor]
+    public WorkflowExecutableReferenceGarbageCollectionPumpTask(
+        IPersistenceScopeRunner scopeRunner,
+        IOptions<WorkflowExecutableReferenceGarbageCollectionOptions> options,
+        ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask> logger)
+        : this(options, logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeRunner);
+        _scopeRunner = scopeRunner;
+    }
+
+    /// <summary>Direct-construction seam retained for focused pump tests and custom hosts.</summary>
     public WorkflowExecutableReferenceGarbageCollectionPumpTask(
         IWorkflowExecutableReferenceGarbageCollector garbageCollector,
         IOptions<WorkflowExecutableReferenceGarbageCollectionOptions> options,
         ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask> logger)
+        : this(options, logger)
     {
         ArgumentNullException.ThrowIfNull(garbageCollector);
+
+        _garbageCollector = garbageCollector;
+    }
+
+    private WorkflowExecutableReferenceGarbageCollectionPumpTask(
+        IOptions<WorkflowExecutableReferenceGarbageCollectionOptions> options,
+        ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask> logger)
+    {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _garbageCollector = garbageCollector;
         _options = options;
         _logger = logger;
     }
@@ -41,7 +65,25 @@ public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : IRecu
     {
         try
         {
-            var result = await _garbageCollector.SweepAsync(cancellationToken);
+            WorkflowExecutableReferenceSweepResult result;
+            if (_scopeRunner is null)
+            {
+                result = await _garbageCollector!.SweepAsync(cancellationToken);
+            }
+            else
+            {
+                var deletedReferences = 0;
+                var deletedArtifacts = 0;
+                await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
+                {
+                    var scopeResult = await operationScope.ServiceProvider
+                        .GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>()
+                        .SweepAsync(operationCancellationToken);
+                    deletedReferences += scopeResult.DeletedReferenceCount;
+                    deletedArtifacts += scopeResult.DeletedArtifactCount;
+                }, cancellationToken);
+                result = new WorkflowExecutableReferenceSweepResult(deletedReferences, deletedArtifacts);
+            }
             _consecutiveSweepFailures = 0;
 
             if (result.DidWork && _logger.IsEnabled(LogLevel.Debug))

@@ -2,6 +2,8 @@ using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
@@ -20,25 +22,22 @@ internal static class GroundworkProviderRegistrationAssertions
     {
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IDocumentStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkDocumentStoreHolder));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStoreSessionSource));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(TInitializer));
 
-        var provider = services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true });
         try
         {
             var initializer = provider.GetRequiredService<TInitializer>();
 
             Assert.Same(initializer, Assert.Single(provider.GetServices<IHostedService>().OfType<TInitializer>()));
             Assert.Same(initializer, Assert.Single(provider.GetServices<IShellInitializer>().OfType<TInitializer>()));
-            Assert.NotNull(provider.GetRequiredService<GroundworkDocumentStoreHolder>());
+            Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
 
-            var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IDocumentStore>());
-            Assert.Contains("not been initialized", exception.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain(registrationSecret, exception.ToString(), StringComparison.Ordinal);
-            var boundedException = Assert.Throws<InvalidOperationException>(() =>
-                provider.GetRequiredService<IBoundedDocumentStore>());
-            Assert.Contains("not been initialized", boundedException.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain(registrationSecret, boundedException.ToString(), StringComparison.Ordinal);
+            using var scope = provider.CreateScope();
+            Assert.IsType<GroundworkScopedDocumentStore>(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
+            Assert.IsType<GroundworkScopedDocumentStore>(scope.ServiceProvider.GetRequiredService<IBoundedDocumentStore>());
         }
         finally
         {

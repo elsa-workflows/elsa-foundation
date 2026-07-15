@@ -22,11 +22,11 @@ public static class GroundworkDistributedStoresRegistration
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, DistributedGroundworkStorageManifestSource>());
 
         // RemoveAll guarantees the bridge wins regardless of feature composition order (the distributed feature
-        // registers its in-memory defaults with TryAddSingleton, so bridge-first ordering also composes correctly).
+        // registers its in-memory defaults with TryAddScoped, so bridge-first ordering also composes correctly).
         services.RemoveAll<IExecutionPlacementStore>();
-        services.AddSingleton<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
+        services.AddScoped<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
         services.RemoveAll<IExecutionCommandTransport>();
-        services.AddSingleton<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
+        services.AddScoped<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
 
         return services;
     }

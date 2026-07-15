@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
@@ -43,7 +44,7 @@ internal sealed class DistributedStoreHarness(
                     database.ConnectionString,
                     DistributedGroundworkStorageManifest.Create(),
                     SqliteProvider,
-                    DocumentStoreAccess.Global);
+                    GroundworkTestAccess.DefaultScoped);
                 return FromDocumentStore(store, database);
             default:
                 throw new ArgumentOutOfRangeException(nameof(provider), provider, null);
@@ -55,11 +56,18 @@ internal sealed class DistributedStoreHarness(
         var queries = documentStore as IBoundedDocumentStore ?? new DistributedTestBoundedDocumentStore(documentStore);
         return new DistributedStoreHarness(
             new GroundworkExecutionPlacementStore(documentStore, queries),
-            new GroundworkExecutionCommandTransport(documentStore, queries),
+            new GroundworkExecutionCommandTransport(
+                documentStore,
+                GroundworkDistributedTestAccess.Scoped(),
+                queries),
             owner);
     }
 
-    public static WorkflowExecutionCommandEnvelope Envelope(string executionId, string envelopeId, DateTimeOffset now)
+    public static WorkflowExecutionCommandEnvelope Envelope(
+        string executionId,
+        string envelopeId,
+        DateTimeOffset now,
+        string partition = PersistenceScope.DefaultValue)
     {
         var command = new WorkflowExecutionCommand(
             CommandId: $"cmd-{envelopeId}",
@@ -75,7 +83,8 @@ internal sealed class DistributedStoreHarness(
             command: command,
             idempotencyKey: $"idem-{envelopeId}",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: now);
+            enqueuedAt: now,
+            partition: new WorkflowExecutionPartition(partition));
     }
 
     public async ValueTask DisposeAsync()

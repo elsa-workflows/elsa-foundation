@@ -102,7 +102,8 @@ public sealed class GroundworkRuntimeCheckpointCommitStorePostCommitContractTest
         var writer = new GroundworkRuntimeCheckpointWriter(
             store,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),

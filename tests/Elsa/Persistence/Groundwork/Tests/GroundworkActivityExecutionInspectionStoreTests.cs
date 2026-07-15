@@ -111,7 +111,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         var writer = new GroundworkRuntimeCheckpointWriter(
             documentStore,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
             inspectionStore,
@@ -362,7 +363,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         new(
             documentStore,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer),
@@ -404,7 +406,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     private sealed class ThrowingDocumentStore(Exception exception) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
-        public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
+        public DocumentStoreAccess Access { get; } = GroundworkTestAccess.DefaultScoped;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             throw exception;

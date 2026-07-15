@@ -55,7 +55,7 @@ public static class PublishingGroundworkStorageManifest
 
     private static StorageUnit Unit(string kind, string label, IndexDeclaration[] indexes, PortableQueryDeclaration[] queries) => new(
         new StorageUnitIdentity(kind), label, StorageIntent.PortableDocument(), LifecyclePolicy.Mutable,
-        IdentityPolicy.StringId(), TenancyPolicy.Global, ConcurrencyPolicy.Optimistic(), SerializationPolicy.Json(),
+        IdentityPolicy.StringId(), TenancyPolicy.Scoped, ConcurrencyPolicy.Optimistic(), SerializationPolicy.Json(),
         indexes, queries, PhysicalizationPolicy.Portable);
 
     private static PortableQueryDeclaration Query(
