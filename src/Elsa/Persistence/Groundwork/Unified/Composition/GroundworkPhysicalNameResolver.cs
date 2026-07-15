@@ -35,12 +35,7 @@ public sealed class GroundworkPhysicalNameResolver
         ArgumentNullException.ThrowIfNull(featureOwners);
 
         var owners = CopyOwners(manifest, featureOwners);
-        var hostPolicy = new DelegatePhysicalNamePolicy(context => namingPolicy.Transform(
-            new GroundworkStorageNamingContext(
-                owners[ResolveOwningStorageUnit(context.StorageUnit, manifest)],
-                context.StorageUnit,
-                context.ObjectKind,
-                context.FeatureDefaultLogicalName)));
+        var hostPolicy = CreateHostNamePolicy(manifest, namingPolicy, owners);
         var resolution = PhysicalStorageResolver.Resolve(manifest, hostPolicy, providerNormalizer);
         var entries = CreateEntries(resolution.Definitions, owners);
         var collisions = CreateCollisions(entries);
@@ -51,6 +46,26 @@ public sealed class GroundworkPhysicalNameResolver
             entries.Select(entry => entry.Snapshot).ToArray(),
             collisions,
             resolution.Diagnostics);
+    }
+
+    /// <summary>
+    /// Creates the provider-neutral host name policy from the deterministic definition reconstructed
+    /// by runtime target compilation and the parameterless source loaded by Groundwork.Tool.
+    /// </summary>
+    public IPhysicalNamePolicy CreateHostNamePolicy(
+        StorageManifest manifest,
+        GroundworkStorageNamingPolicyOptions namingPolicy,
+        IReadOnlyDictionary<StorageUnitIdentity, string> featureOwners)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+        ArgumentNullException.ThrowIfNull(namingPolicy);
+        var owners = CopyOwners(manifest, featureOwners);
+        return new DelegatePhysicalNamePolicy(context => namingPolicy.Transform(
+            new GroundworkStorageNamingContext(
+                owners[ResolveOwningStorageUnit(context.StorageUnit, manifest)],
+                context.StorageUnit,
+                context.ObjectKind,
+                context.FeatureDefaultLogicalName)));
     }
 
     private static IReadOnlyDictionary<StorageUnitIdentity, string> CopyOwners(

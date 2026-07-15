@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.MongoDb;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
@@ -10,8 +13,11 @@ using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Physicalization;
 using Groundwork.Core.Queries;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.MongoDb;
+using Groundwork.Sqlite;
 using Groundwork.Sqlite.PhysicalStorage;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
@@ -57,6 +63,84 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
             x.GetProperty("kind").GetString() == "primaryStorage"));
         Assert.Equal("host_orders", primary.GetProperty("logicalName").GetString());
         Assert.Equal("host_orders", primary.GetProperty("identifier").GetString());
+    }
+
+    [Fact]
+    public async Task Shipped_all_feature_schema_is_parameterless_and_is_the_runtime_and_tool_authority()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>();
+        using var serviceProvider = services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+        var runtimeSource = await scope.ServiceProvider
+            .GetRequiredService<GroundworkStorageCompositionFactory>()
+            .CreateSourceAsync(
+                new GroundworkProviderCapabilitySnapshot(
+                    SqliteGroundworkCapabilities.Runtime(),
+                    new GroundworkProviderTopologySnapshot(
+                        SqliteGroundworkCapabilities.Provider.Name,
+                        "sqlite-file",
+                        new HashSet<string>(StringComparer.Ordinal)),
+                    []),
+                ProviderPhysicalNameNormalizer.Identity,
+                CancellationToken.None);
+        var deploymentSource = serviceProvider.GetRequiredService<IPhysicalSchemaManifestSource>();
+
+        var cli = await RunToolAsync(
+            "validate",
+            typeof(GroundworkAllFeaturesDeploymentSchema),
+            database: null,
+            CancellationToken.None,
+            "--offline");
+
+        Assert.IsType<GroundworkAllFeaturesDeploymentSchema>(deploymentSource);
+        Assert.Equal(Success, cli.ExitCode);
+        Assert.Equal(string.Empty, cli.Error);
+        Assert.Equal(
+            runtimeSource.TargetFingerprint,
+            cli.Report.GetProperty("target").GetProperty("fingerprint").GetString());
+        Assert.Equal(EffectiveNames(runtimeSource.ResolvedNames), EffectiveNames(cli.Report));
+    }
+
+    [Fact]
+    public async Task Mongo_mutation_target_and_host_naming_are_identical_at_runtime_and_in_the_tool_process()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkStorageComposition<MongoMutationDeploymentSchema>();
+        using var serviceProvider = services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+        var runtimeSource = await scope.ServiceProvider
+            .GetRequiredService<GroundworkStorageCompositionFactory>()
+            .CreateSourceAsync(
+                new GroundworkProviderCapabilitySnapshot(
+                    MongoDbGroundworkCapabilities.Runtime(),
+                    new GroundworkProviderTopologySnapshot(
+                        MongoDbGroundworkCapabilities.Provider.Name,
+                        "transaction-capable-replica-set",
+                        new HashSet<string>(StringComparer.Ordinal)),
+                    []),
+                MongoDbPhysicalNameNormalizer.Instance,
+                CancellationToken.None,
+                MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance);
+
+        var cli = await RunToolForProviderAsync(
+            "validate",
+            typeof(MongoMutationDeploymentSchema),
+            "mongodb",
+            database: null,
+            CancellationToken.None,
+            "--offline");
+
+        Assert.NotEmpty(runtimeSource.PhysicalTarget.ProviderDefinitions);
+        Assert.Equal(Success, cli.ExitCode);
+        Assert.Equal(string.Empty, cli.Error);
+        Assert.Equal(
+            runtimeSource.TargetFingerprint,
+            cli.Report.GetProperty("target").GetProperty("fingerprint").GetString());
+        Assert.Equal(EffectiveNames(runtimeSource.ResolvedNames), EffectiveNames(cli.Report));
+        Assert.Contains(cli.Report.GetProperty("resolvedNames").EnumerateArray(), name =>
+            name.GetProperty("kind").GetString() == "primaryStorage" &&
+            name.GetProperty("logicalName").GetString() == "host_mutation_documents");
     }
 
     [Fact]
@@ -218,6 +302,20 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         Type sourceType,
         string? database,
         CancellationToken cancellationToken,
+        params string[] extraArguments) => await RunToolForProviderAsync(
+        command,
+        sourceType,
+        "sqlite",
+        database,
+        cancellationToken,
+        extraArguments);
+
+    private static async Task<ToolResult> RunToolForProviderAsync(
+        string command,
+        Type sourceType,
+        string provider,
+        string? database,
+        CancellationToken cancellationToken,
         params string[] extraArguments)
     {
         var repositoryRoot = FindRepositoryRoot();
@@ -231,9 +329,9 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         foreach (var argument in new[]
                  {
                      "tool", "run", "groundwork", "--", command,
-                     "--manifest-assembly", typeof(GroundworkSchemaCliContractTests).Assembly.Location,
+                     "--manifest-assembly", sourceType.Assembly.Location,
                      "--manifest-type", sourceType.FullName!,
-                     "--provider", "sqlite",
+                     "--provider", provider,
                      "--output", "json"
                  })
             start.ArgumentList.Add(argument);
@@ -402,5 +500,92 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
             context.ObjectKind == PhysicalObjectKind.PrimaryStorage
                 ? "host_collision"
                 : context.FeatureDefaultLogicalName);
+    }
+
+    public sealed class MongoMutationDeploymentSchema : GroundworkDeploymentSchemaManifestSource
+    {
+        protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
+            [typeof(MongoMutationManifestSource)];
+
+        protected override GroundworkStorageNamingPolicyOptions CreateStorageNamingPolicy() =>
+            new("host-prefix-v1", context => $"host_{context.FeatureDefaultLogicalName}");
+    }
+
+    public sealed class MongoMutationManifestSource : IGroundworkStorageManifestSource
+    {
+        public string FeatureIdentity => "cli-mongodb-mutation-fixture";
+
+        public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var manifest = CreateManifest(
+                "elsa-cli-mongodb-mutation-fixture",
+                [("mutation-work", "mutationWorkDocument", "mutation_documents")]);
+            var unit = manifest.StorageUnits.Single();
+            var storage = unit.PhysicalStorage!;
+            var physicalDefinition = PhysicalTableDefinition.PhysicalEntityTable(
+                "mutation_documents",
+                [new ProjectedColumnDefinition(
+                    "category",
+                    "category",
+                    PortablePhysicalType.String,
+                    Length: 128,
+                    IsNullable: false)],
+                indexes:
+                [
+                    new PhysicalIndexDefinition(
+                        "mutation_documents-by-category",
+                        [
+                            new PhysicalIndexColumnDefinition("storage_scope", 0),
+                            new PhysicalIndexColumnDefinition("category", 1)
+                        ],
+                        missingValueBehavior: MissingValueBehavior.Excluded)
+                ]);
+            var index = new LogicalIndexDeclaration(
+                "mutation_documents-by-category",
+                [new IndexField("category", IndexValueKind.Keyword)],
+                IndexValueKind.Keyword,
+                isUnique: false,
+                MissingValueBehavior.Excluded);
+            var query = new BoundedQueryDeclaration(
+                "list-by-category",
+                index.Identity,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                QuerySortSupport.None,
+                QueryPagingSupport.None,
+                BoundedQueryExecutionClass.ScaleBearing,
+                supportsTotalCount: true,
+                resultOperations: new HashSet<BoundedQueryResultOperation>
+                {
+                    BoundedQueryResultOperation.Count
+                });
+            manifest = manifest with
+            {
+                StorageUnits =
+                [
+                    unit with
+                    {
+                        PhysicalStorage = new StorageUnitPhysicalStorage(
+                            storage.ProvisioningMode,
+                            PhysicalStoragePolicy.Explicit(physicalDefinition),
+                            [index],
+                            [query],
+                            storage.NameOverrides,
+                            [new BoundedMutationDeclaration(
+                                "prune-by-category",
+                                query.Identity,
+                                BoundedMutationAction.Delete())])
+                    }
+                ]
+            };
+            return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
+                FeatureIdentity,
+                manifest,
+                [],
+                [],
+                [],
+                []));
+        }
     }
 }

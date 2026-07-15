@@ -17,6 +17,10 @@ public static class PublishingGroundworkStorageManifest
     public const string BySlotIndex = "by-slot";
     public const string ByPublicationIndex = "by-publication";
     public const string ByActivePublicationIndex = "by-active-publication";
+    public const string ListByDefinitionQuery = "list-by-definition";
+    public const string FindByActivePublicationQuery = "find-by-active-publication";
+    public const string ListBySlotQuery = "list-by-slot";
+    public const string ListByPublicationQuery = "list-by-publication";
     public const string WorkflowDefinitionIdField = "workflowDefinitionId";
     public const string SlotIdField = "slotId";
     public const string PublicationIdField = "publicationId";
@@ -29,10 +33,10 @@ public static class PublishingGroundworkStorageManifest
         [
             Unit(PublicationSlotDocumentKind, "Publication slot",
                 [Keyword(ByDefinitionIndex, WorkflowDefinitionIdField), Keyword(ByActivePublicationIndex, ActivePublicationIdField)],
-                [Query("list-by-definition", ByDefinitionIndex), Query("find-by-active-publication", ByActivePublicationIndex)]),
-            Unit(PublicationRecordDocumentKind, "Publication record", [Keyword(BySlotIndex, SlotIdField)], [Query("list-by-slot", BySlotIndex)]),
+                [Query(ListByDefinitionQuery, ByDefinitionIndex), Query(FindByActivePublicationQuery, ByActivePublicationIndex)]),
+            Unit(PublicationRecordDocumentKind, "Publication record", [Keyword(BySlotIndex, SlotIdField)], [Query(ListBySlotQuery, BySlotIndex)]),
             Unit(PublicationPolicyDocumentKind, "Publication policy", [], []),
-            Unit(ProjectionIntentDocumentKind, "Publication projection intent", [Keyword(ByPublicationIndex, PublicationIdField)], [Query("list-by-publication", ByPublicationIndex)]),
+            Unit(ProjectionIntentDocumentKind, "Publication projection intent", [Keyword(ByPublicationIndex, PublicationIdField)], [Query(ListByPublicationQuery, ByPublicationIndex)]),
             Unit(SnapshotReviewDocumentKind, "Publication snapshot review", [], [])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },

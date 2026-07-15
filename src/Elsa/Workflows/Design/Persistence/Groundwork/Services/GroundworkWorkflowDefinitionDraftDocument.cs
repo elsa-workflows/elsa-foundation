@@ -16,7 +16,8 @@ internal sealed record GroundworkWorkflowDefinitionDraftDocument(
 
 internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     IDocumentStore store,
-    JsonSerializerOptions jsonOptions)
+    JsonSerializerOptions jsonOptions,
+    IBoundedDocumentStore? boundedStore = null)
 {
     public async Task<GroundworkWorkflowDefinitionDraftDocument?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
@@ -35,14 +36,18 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         CancellationToken cancellationToken = default)
     {
         var definitionIds = workflowDefinitionIds.ToHashSet(StringComparer.Ordinal);
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
+        var result = await (boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+                "Workflow-definition draft queries require an admitted bounded document-store runtime."))
+            .QueryAsync(
+            new DocumentQuery(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                WorkflowsDesignStorageManifest.ByCollectionIndex,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection),
+                WorkflowsDesignStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    WorkflowsDesignStorageManifest.CollectionField,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection))]),
             cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(Deserialize)
             .Where(document => definitionIds.Contains(document.Entity.WorkflowDefinitionId))
             .ToList();

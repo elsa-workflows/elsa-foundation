@@ -2,23 +2,33 @@ using System.Data.Common;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Querying;
 
 /// <summary>
-/// Shared relational bounded query plan. Provider projects supply only their JSON expressions, connection,
-/// and native expression-index declarations; result semantics stay identical across providers.
+/// Shared relational bounded query plan. Provider projects supply JSON expressions, identifier quoting,
+/// connection creation and any dialect-specific page-select shape. Startup preparation is read-only.
 /// </summary>
-public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
-    GroundworkDocumentStoreHolder documentStoreHolder,
-    IGroundworkRuntimeDocumentSerializer serializer) : IGroundworkWorkflowExecutionStatePageQuery
+public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery
+    : IGroundworkWorkflowExecutionStatePageQuery
 {
-    private const int MigrationBatchSize = 100;
-    private readonly SemaphoreSlim _initializationLock = new(1, 1);
-    private bool _initialized;
+    private readonly IGroundworkRuntimeDocumentSerializer serializer;
+    private readonly SemaphoreSlim initializationLock = new(1, 1);
+    private ExecutableStorageRoute? route;
+    private bool initialized;
+
+    protected RelationalGroundworkWorkflowExecutionStatePageQuery(
+        GroundworkDocumentStoreHolder documentStoreHolder,
+        IGroundworkRuntimeDocumentSerializer serializer)
+    {
+        ArgumentNullException.ThrowIfNull(documentStoreHolder);
+        this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    }
 
     protected abstract DbConnection CreateConnection();
+    protected abstract string QuoteIdentifier(string identifier);
     protected abstract string SortTicksExpression { get; }
     protected abstract string TenantIdExpression { get; }
     protected abstract string DefinitionIdExpression { get; }
@@ -26,8 +36,46 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
     protected abstract string RunKindExpression { get; }
     protected abstract string CorrelationIdExpression { get; }
     protected abstract string ArtifactIdExpression { get; }
-    protected abstract string MissingSortTicksPredicate { get; }
-    protected abstract IReadOnlyList<string> CreateIndexStatements { get; }
+
+    protected ExecutableStorageRoute Route => route ?? throw new InvalidOperationException(
+        "Workflow execution history has not been bound to the admitted Groundwork physical route.");
+
+    protected string CanonicalJsonExpression => Column(Route.Envelope.CanonicalJson);
+    protected string DocumentIdExpression => Column(Route.Envelope.Id);
+    protected string PageSelectColumns => string.Join(", ",
+        Column(Route.Envelope.Id),
+        Column(Route.Envelope.SchemaVersion),
+        Column(Route.Envelope.Version),
+        Column(Route.Envelope.CanonicalJson));
+    protected string PageTableExpression => $"{QuoteIdentifier(Route.PrimaryStorage.Name.Identifier)} d";
+
+    /// <summary>Dialect extension point; SQL Server uses TOP while SQLite/PostgreSQL use LIMIT.</summary>
+    protected virtual string BuildPageSelectSql(string whereSql, string orderBy) => $"""
+        SELECT {PageSelectColumns}
+        FROM {PageTableExpression}
+        WHERE {whereSql}
+        ORDER BY {orderBy}
+        LIMIT @pageLimit;
+        """;
+
+    public void Bind(ExecutableStorageRoute executableRoute)
+    {
+        ArgumentNullException.ThrowIfNull(executableRoute);
+        if (!string.Equals(
+                executableRoute.StorageUnit.Value,
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Expected the '{ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind}' storage route, but received '{executableRoute.StorageUnit.Value}'.",
+                nameof(executableRoute));
+        }
+
+        if (route is not null && !string.Equals(route.Fingerprint, executableRoute.Fingerprint, StringComparison.Ordinal))
+            throw new InvalidOperationException("Workflow execution history is already bound to a different physical route.");
+
+        route = executableRoute;
+    }
 
     public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
@@ -35,7 +83,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
-        if (!_initialized)
+        if (!initialized)
             throw new InvalidOperationException("Workflow execution history has not been prepared. Run the Groundwork provider startup initializer before querying history.");
 
         await using var connection = CreateConnection();
@@ -49,18 +97,11 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
         var pageWhere = BuildWhere(query, includeCursor: true);
         var reverse = query.Cursor?.Direction == WorkflowExecutionStatePageDirection.Previous;
         var order = reverse
-            ? $"{SortTicksExpression} ASC, d.id DESC"
-            : $"{SortTicksExpression} DESC, d.id ASC";
-        var sql = $"""
-                  SELECT d.id, d.schema_version, d.version, d.content_json
-                  FROM groundwork_documents d
-                  WHERE {pageWhere.Sql}
-                  ORDER BY {order}
-                  LIMIT @pageLimit;
-                  """;
+            ? $"{SortTicksExpression} ASC, {DocumentIdExpression} DESC"
+            : $"{SortTicksExpression} DESC, {DocumentIdExpression} ASC";
 
         await using var command = connection.CreateCommand();
-        command.CommandText = sql;
+        command.CommandText = BuildPageSelectSql(pageWhere.Sql, order);
         AddParameters(command, pageWhere.Parameters);
         var pageSize = WorkflowExecutionStateHistory.EffectivePageSize(query);
         AddParameter(command, "pageLimit", checked(pageSize + 1));
@@ -108,77 +149,22 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
 
     public async ValueTask PrepareAsync(CancellationToken cancellationToken = default)
     {
-        if (_initialized)
+        if (initialized)
             return;
 
-        await _initializationLock.WaitAsync(cancellationToken);
+        await initializationLock.WaitAsync(cancellationToken);
         try
         {
-            if (_initialized)
+            if (initialized)
                 return;
 
-            await BackfillStableSortKeysAsync(cancellationToken);
-            await using var connection = CreateConnection();
-            await connection.OpenAsync(cancellationToken);
-            foreach (var statement in CreateIndexStatements)
-            {
-                await using var command = connection.CreateCommand();
-                command.CommandText = statement;
-                await command.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            _initialized = true;
+            _ = Route;
+            cancellationToken.ThrowIfCancellationRequested();
+            initialized = true;
         }
         finally
         {
-            _initializationLock.Release();
-        }
-    }
-
-    private async Task BackfillStableSortKeysAsync(CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            IReadOnlyList<DocumentEnvelope> batch;
-            await using (var connection = CreateConnection())
-            {
-                await connection.OpenAsync(cancellationToken);
-                await using var command = connection.CreateCommand();
-                command.CommandText = $"""
-                                      SELECT d.id, d.schema_version, d.version, d.content_json
-                                      FROM groundwork_documents d
-                                      WHERE d.document_kind = @documentKind AND {MissingSortTicksPredicate}
-                                      ORDER BY d.id
-                                      LIMIT @batchSize;
-                                      """;
-                AddParameter(command, "documentKind", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind);
-                AddParameter(command, "batchSize", MigrationBatchSize);
-
-                var documents = new List<DocumentEnvelope>(MigrationBatchSize);
-                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-                while (await reader.ReadAsync(cancellationToken))
-                    documents.Add(ReadEnvelope(reader));
-                batch = documents;
-            }
-
-            if (batch.Count == 0)
-                return;
-
-            foreach (var envelope in batch)
-            {
-                var state = serializer.Deserialize<WorkflowExecutionStateDocument>(envelope).State;
-                var document = WorkflowExecutionStateDocument.From(state);
-                var serialized = serializer.Serialize(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, document);
-                var result = await documentStoreHolder.Store.SaveAsync(new SaveDocumentRequest(
-                    ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-                    state.WorkflowExecutionId,
-                    serialized.SchemaVersion,
-                    serialized.ContentJson,
-                    envelope.Version), cancellationToken);
-
-                if (result.Status is not (DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.ConcurrencyConflict))
-                    throw new InvalidOperationException($"Unable to backfill workflow execution history key '{state.WorkflowExecutionId}': {result.Status}.");
-            }
+            initializationLock.Release();
         }
     }
 
@@ -188,7 +174,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM groundwork_documents d WHERE {where.Sql};";
+        command.CommandText = $"SELECT COUNT(*) FROM {PageTableExpression} WHERE {where.Sql};";
         AddParameters(command, where.Parameters);
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture);
@@ -196,7 +182,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
 
     private QueryWhere BuildWhere(WorkflowExecutionStatePageQuery query, bool includeCursor)
     {
-        var clauses = new List<string> { "d.document_kind = @documentKind" };
+        var clauses = new List<string> { $"{Column(Route.Envelope.DocumentKind)} = @documentKind" };
         var parameters = new Dictionary<string, object?>
         {
             ["documentKind"] = ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind
@@ -207,7 +193,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
         AddFilter(query.Status is { } status ? (int)status : null, "status", StatusExpression);
         AddFilter(query.RunKind is { } runKind ? (int)runKind : null, "runKind", RunKindExpression);
         AddFilter(query.CorrelationId, "correlationId", CorrelationIdExpression);
-        AddFilter(query.WorkflowExecutionId, "workflowExecutionId", "d.id");
+        AddFilter(query.WorkflowExecutionId, "workflowExecutionId", DocumentIdExpression);
         AddFilter(query.ArtifactId, "artifactId", ArtifactIdExpression);
 
         if (query.From is { } from)
@@ -224,7 +210,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
         {
             var timestampOperator = cursor.Direction == WorkflowExecutionStatePageDirection.Next ? "<" : ">";
             var idOperator = cursor.Direction == WorkflowExecutionStatePageDirection.Next ? ">" : "<";
-            clauses.Add($"({SortTicksExpression} {timestampOperator} @cursorTicks OR ({SortTicksExpression} = @cursorTicks AND d.id {idOperator} @cursorId))");
+            clauses.Add($"({SortTicksExpression} {timestampOperator} @cursorTicks OR ({SortTicksExpression} = @cursorTicks AND {DocumentIdExpression} {idOperator} @cursorId))");
             parameters["cursorTicks"] = cursor.SortTimestamp.UtcTicks;
             parameters["cursorId"] = cursor.WorkflowExecutionId;
         }
@@ -240,14 +226,20 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
         }
     }
 
-    private static DocumentEnvelope ReadEnvelope(DbDataReader reader) => new(
-        ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-        reader.GetString(0),
-        reader.GetString(1),
-        reader.GetInt64(2),
-        reader.GetString(3),
-        DateTimeOffset.MinValue,
-        DateTimeOffset.MinValue);
+    private string Column(ExecutableColumnRoute column) => $"d.{QuoteIdentifier(column.Identifier)}";
+
+    private static DocumentEnvelope ReadEnvelope(DbDataReader reader)
+    {
+        var documentKind = ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind;
+        return new(
+            documentKind,
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetInt64(2),
+            reader.GetString(3),
+            DateTimeOffset.MinValue,
+            DateTimeOffset.MinValue);
+    }
 
     private static void AddParameters(DbCommand command, IReadOnlyDictionary<string, object?> parameters)
     {

@@ -84,58 +84,84 @@ Provider-specific expected domain results are a test defect.
 Run the unified-host tests for each provider leaf:
 
 ```bash
-dotnet test tests/Elsa/Persistence/Groundwork/Sqlite/Tests/Elsa.Persistence.Groundwork.Sqlite.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj \
   --configuration Release --no-build
 
-dotnet test tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/SqlServer/Tests/Elsa.Persistence.Groundwork.SqlServer.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/MongoDb/Tests/Elsa.Persistence.Groundwork.MongoDb.Tests.csproj \
   --configuration Release --no-build
 ```
 
-The implementation adds equivalent SQL Server and MongoDB projects; add their exact commands here when their project files land. The combined-host scenario selects runtime, IAM, secrets, and distributed runtime, performs one public operation per family, disposes the host, opens a new host over the same database, and re-verifies state.
+The provider matrix selects all seven shipped families: workflow runtime, identity, secrets,
+distributed runtime, workflows design, activities design, and workflows publishing. SQLite and
+PostgreSQL execute the restart-oriented unified-host scenarios; the SQL Server and MongoDB projects
+prove their complete seven-family registration and exact admission target. The MongoDB lane requires
+a writable transaction-capable replica set.
 
 Also run invalid compositions: missing source, duplicate unit, unsupported route/capability, wrong MongoDB topology, and scope-policy conflict. Each must fail before serving work with a stable owner-aware diagnostic.
 
 ## 6. Exercise schema tooling
 
-Build the concrete host schema-source assembly, then set the connection value only through an environment variable:
+Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped all-seven-feature unified leaves register
+`GroundworkAllFeaturesDeploymentSchema` as their runtime authority; its assembly is
+`Elsa.Persistence.Groundwork.ReferenceComposition.dll`:
 
 ```bash
 dotnet groundwork validate \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork plan \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork status \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork apply \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --safe \
   --output json
 ```
 
-The source passed to `--manifest-type` must implement `IPhysicalSchemaManifestSource`. Elsa's
-`GroundworkPhysicalSchemaManifestSource` returns the same manifest and host logical-name policy used
-to compile the admitted runtime target. Groundwork's physical target fingerprint remains the value
+The source passed to `--manifest-type` must be public, parameterless, and implement
+`IPhysicalSchemaManifestSource`. Custom hosts derive a concrete source from
+`GroundworkDeploymentSchemaManifestSource`, select their exact feature manifest-source types, override
+`CreateStorageNamingPolicy` when names are transformed, and register that same source through
+`AddGroundworkStorageComposition<TDeploymentSource>()`. The source type's built assembly is then passed
+to every CLI command. Its parameterless construction must be deterministic and configuration-complete:
+all manifest and host-naming inputs must be encoded by the source type so runtime and the separate CLI
+process reconstruct the same policy definition and resolved target without shared in-memory state. The
+shipped unified leaves do this with
+`GroundworkAllFeaturesDeploymentSchema`; do not point the CLI at the constructor-bound runtime snapshot
+type or at a test fixture. Groundwork's physical target fingerprint remains the value
 reported by the CLI and compared by runtime admission. Elsa's separate composition fingerprint also
 includes the selected feature sources, their manifest versions, durable requirements, topology
 evidence, and naming-policy identity; do not substitute it for the physical target fingerprint.
+
+Use provider values `sqlite`, `postgresql`, `sqlserver`, or `mongodb`. For MongoDB, pass
+`--database <database-name>` whenever the URI supplied through `--connection-env` does not contain a
+database path; for example, a replica-set URI such as `mongodb://host1,host2/?replicaSet=rs0`
+requires `--database elsa`. The runtime host's configured database name and the CLI database must be
+identical.
 
 ### Exact command outcomes
 

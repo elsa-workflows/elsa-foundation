@@ -13,6 +13,49 @@ public sealed class PublishingGroundworkStoreTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
 
+    [Fact]
+    public async Task EqualityLookupsUseTheirDeclaredBoundedQueryIdentitiesAndPaths()
+    {
+        var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var serializer = new PublishingGroundworkDocumentSerializer();
+        var slots = new GroundworkPublicationSlotStore(documents, serializer, queries);
+        var publications = new GroundworkPublicationRecordStore(documents, serializer, queries);
+        var intents = new GroundworkPublicationProjectionIntentStore(documents, serializer, queries);
+
+        await slots.ListByDefinitionAsync("definition-1");
+        await slots.TryActivateAsync("definition-1", "default", "publication-1", 0, Now);
+        await publications.ListBySlotAsync("definition-1:default");
+        await intents.ListByPublicationAsync("publication-1");
+
+        Assert.Collection(
+            queries.Observed,
+            query => AssertQuery(
+                query,
+                "publishingPublicationSlot",
+                "list-by-definition",
+                "workflowDefinitionId",
+                "definition-1"),
+            query => AssertQuery(
+                query,
+                "publishingPublicationSlot",
+                "find-by-active-publication",
+                "slot.activePublicationId",
+                "publication-1"),
+            query => AssertQuery(
+                query,
+                "publishingPublicationRecord",
+                "list-by-slot",
+                "slotId",
+                "definition-1:default"),
+            query => AssertQuery(
+                query,
+                "publishingProjectionIntent",
+                "list-by-publication",
+                "publicationId",
+                "publication-1"));
+    }
+
     [Theory]
     [InlineData("memory")]
     [InlineData("sqlite")]
@@ -119,17 +162,36 @@ public sealed class PublishingGroundworkStoreTests
         null,
         null);
 
+    private static void AssertQuery(
+        DocumentQuery query,
+        string documentKind,
+        string queryIdentity,
+        string path,
+        string value)
+    {
+        Assert.Equal(documentKind, query.DocumentKind);
+        Assert.Equal(queryIdentity, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(path, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        Assert.Equal(value, Assert.Single(comparison.Values));
+    }
+
     private sealed record Stores(
         GroundworkPublicationSlotStore Slots,
         GroundworkPublicationRecordStore Publications,
         GroundworkPublicationPolicyStore Policies,
         GroundworkPublicationProjectionIntentStore Intents)
     {
-        public static Stores Create(IDocumentStore store, PublishingGroundworkDocumentSerializer serializer) => new(
-            new GroundworkPublicationSlotStore(store, serializer),
-            new GroundworkPublicationRecordStore(store, serializer),
-            new GroundworkPublicationPolicyStore(store, serializer),
-            new GroundworkPublicationProjectionIntentStore(store, serializer));
+        public static Stores Create(IDocumentStore store, PublishingGroundworkDocumentSerializer serializer)
+        {
+            var queries = new PublishingTestBoundedDocumentStore(store);
+            return new Stores(
+                new GroundworkPublicationSlotStore(store, serializer, queries),
+                new GroundworkPublicationRecordStore(store, serializer, queries),
+                new GroundworkPublicationPolicyStore(store, serializer),
+                new GroundworkPublicationProjectionIntentStore(store, serializer, queries));
+        }
     }
 
     private sealed class PublishingStoreFixture(
@@ -164,5 +226,25 @@ public sealed class PublishingGroundworkStoreTests
                 File.Delete(sqlitePath);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(new DocumentQueryResult([], 0));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

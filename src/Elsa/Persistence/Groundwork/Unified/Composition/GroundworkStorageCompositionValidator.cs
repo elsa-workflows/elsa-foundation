@@ -88,11 +88,32 @@ public sealed class GroundworkStorageCompositionValidator
         if (diagnostics.Any(diagnostic => diagnostic.IsError))
             return Invalid(diagnostics);
 
-        var target = new PhysicalSchemaTarget(
-            manifest.Identity,
-            manifest.Version,
-            request.ProviderCapabilities.Provider,
-            routeCompilation.Routes);
+        PhysicalSchemaTarget target;
+        try
+        {
+            target = (request.TargetCompiler ?? GroundworkRoutePhysicalSchemaTargetCompiler.Instance).Compile(
+                manifest,
+                request.ProviderCapabilities.Provider,
+                nameResolution.NamePolicy,
+                routeCompilation.Routes);
+        }
+        catch (Exception)
+        {
+            diagnostics.Add(Error(
+                "ELSA-GW-COMPOSITION-TARGET-COMPILE",
+                $"Provider '{request.ProviderCapabilities.Provider.Name}' could not compile the selected canonical physical target.",
+                "composition.target"));
+            return Invalid(diagnostics);
+        }
+
+        if (!IsExactValidatedTarget(manifest, request.ProviderCapabilities.Provider, routeCompilation.Routes, target))
+        {
+            diagnostics.Add(Error(
+                "ELSA-GW-COMPOSITION-TARGET-MISMATCH",
+                $"Provider '{request.ProviderCapabilities.Provider.Name}' compiled a physical target that does not match the validated manifest and executable routes.",
+                "composition.target"));
+            return Invalid(diagnostics);
+        }
         var requiredCapabilities = request.Declarations
             .SelectMany(declaration => declaration.RequiredRoutes)
             .SelectMany(route => route.RequiredCapabilities)
@@ -115,6 +136,17 @@ public sealed class GroundworkStorageCompositionValidator
 
         return new GroundworkStorageCompositionValidationResult(snapshot, diagnostics);
     }
+
+    private static bool IsExactValidatedTarget(
+        StorageManifest manifest,
+        ProviderIdentity provider,
+        IReadOnlyList<ExecutableStorageRoute> validatedRoutes,
+        PhysicalSchemaTarget target) =>
+        target.ManifestIdentity == manifest.Identity &&
+        target.ManifestVersion == manifest.Version &&
+        target.Provider == provider &&
+        target.Routes.Select(route => route.Fingerprint)
+            .SequenceEqual(validatedRoutes.Select(route => route.Fingerprint), StringComparer.Ordinal);
 
     private static void ValidateFeatureIdentities(
         IReadOnlyCollection<GroundworkStorageManifestDeclaration> declarations,
@@ -438,7 +470,8 @@ public sealed class GroundworkStorageCompositionValidationRequest
         IReadOnlyCollection<Type> requiredStoreContracts,
         GroundworkStorageNamingPolicyOptions namingPolicy,
         GroundworkProviderCapabilitySnapshot providerCapabilities,
-        IProviderPhysicalNameNormalizer providerNameNormalizer)
+        IProviderPhysicalNameNormalizer providerNameNormalizer,
+        IGroundworkPhysicalSchemaTargetCompiler? targetCompiler = null)
     {
         CompositionIdentity = compositionIdentity ?? throw new ArgumentNullException(nameof(compositionIdentity));
         CompositionOwner = compositionOwner ?? throw new ArgumentNullException(nameof(compositionOwner));
@@ -448,6 +481,7 @@ public sealed class GroundworkStorageCompositionValidationRequest
         NamingPolicy = namingPolicy ?? throw new ArgumentNullException(nameof(namingPolicy));
         ProviderCapabilities = providerCapabilities ?? throw new ArgumentNullException(nameof(providerCapabilities));
         ProviderNameNormalizer = providerNameNormalizer ?? throw new ArgumentNullException(nameof(providerNameNormalizer));
+        TargetCompiler = targetCompiler;
     }
 
     public StorageManifestIdentity CompositionIdentity { get; }
@@ -465,6 +499,8 @@ public sealed class GroundworkStorageCompositionValidationRequest
     public GroundworkProviderCapabilitySnapshot ProviderCapabilities { get; }
 
     public IProviderPhysicalNameNormalizer ProviderNameNormalizer { get; }
+
+    public IGroundworkPhysicalSchemaTargetCompiler? TargetCompiler { get; }
 
     private static IReadOnlyList<GroundworkStorageManifestDeclaration> CopyDeclarations(
         IReadOnlyCollection<GroundworkStorageManifestDeclaration> declarations)

@@ -22,7 +22,7 @@ namespace Elsa.Persistence.Groundwork.Testing;
 /// compatibility tests, and provides a working cross-document unit of work mirroring the relational
 /// provider's <see cref="TransactionBoundary.CrossUnitAtomic"/> boundary.
 /// </remarks>
-public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentStore
+public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentStore, IBoundedDocumentStore
 {
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
     private readonly Lock _gate = new();
@@ -150,6 +150,60 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
 
     public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
+
+    public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+    {
+        var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
+        var declaration = unit.PhysicalStorage?.BoundedQueries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
+        var legacyDeclaration = unit.Queries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
+        var indexIdentity = declaration?.IndexIdentity ?? legacyDeclaration?.IndexIdentity
+            ?? throw new InvalidOperationException(
+                $"Document kind '{query.DocumentKind}' does not declare bounded query '{query.QueryIdentity}'.");
+        var predicatePaths = declaration is null || declaration.PredicateFields.Count == 0
+            ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields.Select(field => field.Path)
+            : declaration.PredicateFields.Select(field => field.Path);
+        var paths = predicatePaths
+            .Concat(declaration?.SortFields.Select(field => field.Path) ?? [])
+            .ToHashSet(StringComparer.Ordinal);
+        if (query.Clauses.SelectMany(clause => clause.Comparisons).Any(comparison => !paths.Contains(comparison.Path)))
+            throw new InvalidOperationException("The bounded query contains an undeclared stable field path.");
+
+        IEnumerable<DocumentEnvelope> matches = _docs.Values
+            .Where(document => document.DocumentKind == query.DocumentKind);
+        foreach (var clause in query.Clauses)
+        {
+            matches = matches.Where(document => clause.Comparisons.Any(comparison =>
+                comparison.Operator == QueryComparisonOperator.Equal &&
+                string.Equals(
+                    ReadField(document.ContentJson, comparison.Path),
+                    comparison.Values.Single(),
+                    StringComparison.Ordinal)));
+        }
+
+        var all = matches.OrderBy(document => document.Id, StringComparer.Ordinal).ToArray();
+        var window = all.Skip(query.Skip ?? 0);
+        if (query.Take is { } take)
+            window = window.Take(take);
+        return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
+    }
+
+    public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        (await QueryAsync(query, cancellationToken)).TotalCount;
+
+    public async Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        (await QueryAsync(new DocumentQuery(
+            query.DocumentKind,
+            query.QueryIdentity,
+            query.Clauses,
+            query.Order,
+            query.Skip,
+            1,
+            query.Continuation,
+            query.LatestPerKeyPath,
+            query.ResultOperation), cancellationToken)).Documents.FirstOrDefault();
+
+    public async Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        await FirstOrDefaultAsync(query, cancellationToken) is not null;
 
     // --- Document unit of work: an in-memory cross-document atomic batch mirroring the relational
     // provider's CrossUnitAtomic boundary (stage Save/Delete, read-your-writes, all-or-nothing commit). ---

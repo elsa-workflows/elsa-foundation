@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
@@ -37,11 +38,11 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'ix_elsa_workflow_history_%';";
-        Assert.Equal(7L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        Assert.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync()));
     }
 
     [Fact]
-    public async Task Sqlite_startup_upgrades_v2_history_before_the_first_page_query()
+    public async Task Sqlite_startup_does_not_rewrite_v2_history()
     {
         await using var database = new TemporarySqliteDatabase();
         await using (var provider = await BuildProviderAsync(database.ConnectionString))
@@ -65,8 +66,8 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
         await using var reader = await command.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync());
-        Assert.Equal("3", reader.GetString(0));
-        Assert.Contains("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
+        Assert.Equal("2", reader.GetString(0));
+        Assert.DoesNotContain("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -78,11 +79,37 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         await WorkflowExecutionHistoryProviderConformance.VerifyAllFiltersAsync(store, _timestamp);
     }
 
+    [Fact]
+    public async Task Sqlite_history_query_uses_host_transformed_table_and_envelope_names()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var services = new ServiceCollection();
+        services.AddSingleton(new GroundworkStorageNamingPolicyOptions(
+            "history-prefix-v1",
+            context => $"host_{context.FeatureDefaultLogicalName}"));
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
+        await provider.InitializeGroundworkStoreAsync();
+
+        var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+        await store.SaveAsync(State("wf-transformed", _timestamp));
+        var page = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10));
+
+        Assert.Equal("wf-transformed", Assert.Single(page.Items).WorkflowExecutionId);
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM host_groundwork_documents WHERE host_document_kind = 'workflowExecutionState' AND host_id = 'wf-transformed' AND host_content_json IS NOT NULL;";
+        Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+    }
+
     private static async Task<ServiceProvider> BuildProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
+        await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }

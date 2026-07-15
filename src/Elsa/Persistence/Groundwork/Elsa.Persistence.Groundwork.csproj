@@ -34,6 +34,9 @@
     <Compile Remove="Querying/**/*" />
     <EmbeddedResource Remove="Querying/**/*" />
     <None Remove="Querying/**/*" />
+    <Compile Remove="ReferenceComposition/**/*" />
+    <EmbeddedResource Remove="ReferenceComposition/**/*" />
+    <None Remove="ReferenceComposition/**/*" />
     <Compile Remove="Unified/**/*" />
     <EmbeddedResource Remove="Unified/**/*" />
     <None Remove="Unified/**/*" />

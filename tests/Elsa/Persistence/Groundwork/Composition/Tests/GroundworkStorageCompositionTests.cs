@@ -741,7 +741,7 @@ public class GroundworkStorageCompositionTests
                 services.AddGroundworkActivitiesDesignStores();
                 break;
             case "publishing":
-                services.AddGroundworkPublishingStores(_ => null!);
+                services.AddGroundworkPublishingStores();
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(family), family, null);

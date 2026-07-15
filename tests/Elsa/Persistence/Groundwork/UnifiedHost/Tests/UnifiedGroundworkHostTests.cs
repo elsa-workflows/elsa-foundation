@@ -1,12 +1,19 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Abstractions.Ownership;
+using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
+using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -17,18 +24,22 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Elsa.Workflows.Runtime.Distributed.Models;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+
+using static Elsa.Persistence.Groundwork.RegistrationTests.GroundworkProviderRegistrationAssertions;
 
 namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 
 /// <summary>
 /// End-to-end proof of the headline goal: <b>one host-selected database backs every Elsa module</b>. The host
-/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which materializes the unioned
-/// runtime + workflows-design + activities-design manifest into <b>one</b> SQLite document database and points
-/// every lane's neutral ports at it. Elsa's runtime and design code reference only the provider-neutral ports;
-/// nothing here is SQLite- or Groundwork-specific except the one host registration call.
+/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which materializes all seven
+/// selected feature manifests into <b>one</b> SQLite document database and points every family's neutral
+/// ports at it. Nothing here is SQLite- or Groundwork-specific except the one host registration call.
 /// </summary>
 public class UnifiedGroundworkHostTests
 {
@@ -37,24 +48,28 @@ public class UnifiedGroundworkHostTests
     private static async Task<ServiceProvider> BuildHostAsync()
     {
         var database = new TemporarySqliteDatabase();
-        var provider = new ServiceCollection()
+        var services = new ServiceCollection()
             .AddSingleton(_ => database)
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
-            .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddSingleton<ISystemClock, FakeSystemClock>();
+        var provider = services
             .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
             .BuildServiceProvider();
         _ = provider.GetRequiredService<TemporarySqliteDatabase>();
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
 
     private static async Task<ServiceProvider> BuildHostAsync(string connectionString)
     {
-        var provider = new ServiceCollection()
+        var services = new ServiceCollection()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
-            .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddSingleton<ISystemClock, FakeSystemClock>();
+        var provider = services
             .AddGroundworkSqliteUnifiedPersistence(connectionString)
             .BuildServiceProvider();
+        await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
@@ -70,8 +85,11 @@ public class UnifiedGroundworkHostTests
         // One provider instance backs everything.
         Assert.Same(store1, store2);
 
-        // Runtime lane port resolves.
+        // Runtime, IAM, secrets and distributed-runtime ports resolve.
         Assert.NotNull(provider.GetRequiredService<IWorkflowExecutionStateStore>());
+        Assert.NotNull(provider.GetRequiredService<IUserStore>());
+        Assert.NotNull(provider.GetRequiredService<ISecretRepository>());
+        Assert.NotNull(provider.GetRequiredService<IExecutionPlacementStore>());
 
         // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
         Assert.NotNull(provider.GetRequiredService<IPublicationSlotStore>());
@@ -81,6 +99,159 @@ public class UnifiedGroundworkHostTests
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
+    }
+
+    [Fact]
+    public async Task Identity_only_composition_initializes_without_runtime_history_services()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var services = new ServiceCollection();
+        services.AddGroundworkIdentityStores();
+        services.AddSqliteGroundworkDocumentStore(database.ConnectionString);
+        await using var provider = services.BuildServiceProvider();
+
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
+        await provider.InitializeGroundworkStoreAsync();
+
+        Assert.NotNull(provider.GetRequiredService<IUserStore>());
+        Assert.NotNull(provider.GetRequiredService<IDocumentStore>());
+    }
+
+    [Fact]
+    public async Task Selected_seven_family_composition_survives_dispose_and_reopen()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var now = DateTimeOffset.Parse("2026-07-15T10:00:00Z");
+        var bookmark = new BookmarkState(
+            "bookmark-1",
+            "execution-1",
+            "activity-execution-1",
+            "node-1",
+            "resume-1",
+            "stimulus",
+            "sha256:stimulus",
+            null,
+            new Dictionary<string, string>(),
+            now,
+            null);
+        var user = new UserRecord(
+            "user-1",
+            "tenant-1",
+            "alice",
+            "alice@example.com",
+            "Alice",
+            UserStatus.Active,
+            ResourceOwnership.Foundation,
+            new HashSet<string>(),
+            new HashSet<string>());
+        var secret = new Secret
+        {
+            Id = "secret-1",
+            Name = "payments.api",
+            DisplayName = "Payments API",
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            Versions =
+            [
+                new SecretVersion
+                {
+                    Version = 1,
+                    Payload = SecretPayload.FromValue("v1")
+                }
+            ]
+        };
+        var placement = new ExecutionPlacementClaim("placement-execution-1", "node-a", now, now.AddMinutes(1));
+        var workflowDefinition = new WorkflowDefinition { Id = "workflow-1", Name = "Order Processing" };
+        var workflowDraft = new WorkflowDefinitionDraft
+        {
+            Id = "workflow-draft-1",
+            WorkflowDefinitionId = workflowDefinition.Id,
+            State = new WorkflowDefinitionState([], null, [], [], null, null),
+        };
+        var activityDefinition = new ActivityDefinition
+        {
+            Id = "activity-1",
+            ActivityTypeKey = "Acme.Send",
+            Category = "General",
+            DisplayName = "Send"
+        };
+        var activityVersion = new ActivityDefinitionVersion("1.0.0", activityDefinition.Id)
+        {
+            Id = "activity-version-1",
+            DescriptorType = "Acme.SendActivity",
+            DescriptorPayload = JsonSerializer.SerializeToElement(new { kind = "send" }),
+            SourceKind = "Json",
+            SourceId = "asset-1",
+            DesignFacets = [],
+        };
+        var publication = new PublicationRecord(
+            "publication-1",
+            PublicationSlotIdentity.Create("workflow-1", "default"),
+            "workflow-1",
+            "workflow-version-1",
+            "artifact-1",
+            "reference-1",
+            0,
+            PublicationStatus.Active,
+            now,
+            now,
+            null,
+            null);
+
+        await using (var firstHost = await BuildHostAsync(database.ConnectionString))
+        {
+            await firstHost.GetRequiredService<IBookmarkStateStore>().SaveAsync(bookmark);
+            await firstHost.GetRequiredService<IUserStore>().SaveAsync(user);
+            Assert.True(await firstHost.GetRequiredService<ISecretRepository>().TryAddAsync(secret));
+
+            var claim = await firstHost.GetRequiredService<IExecutionPlacementStore>().TryClaimAsync(placement, now);
+            Assert.Equal(ExecutionPlacementClaimOutcome.Granted, claim.Outcome);
+
+            using (var scope = firstHost.CreateScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>()
+                    .Execute(workflowDefinition, workflowDraft, CancellationToken.None);
+                await scope.ServiceProvider.GetRequiredService<IAddActivityDefinitionCommand>()
+                    .Execute(activityDefinition, activityVersion, CancellationToken.None);
+            }
+
+            await firstHost.GetRequiredService<IPublicationRecordStore>().SaveAsync(publication);
+        }
+
+        await using var reopenedHost = await BuildHostAsync(database.ConnectionString);
+
+        Assert.Equal(
+            bookmark.StimulusHash,
+            (await reopenedHost.GetRequiredService<IBookmarkStateStore>()
+                .FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId))?.StimulusHash);
+        Assert.Equal(
+            user.Email,
+            (await reopenedHost.GetRequiredService<IUserStore>().FindAsync(user.TenantId, user.Id))?.Email);
+        Assert.Equal(
+            "v1",
+            (await reopenedHost.GetRequiredService<ISecretRepository>().FindAsync(secret.Name))?
+            .LatestActiveVersion?.Payload.Value);
+        Assert.Equal(
+            placement.OwnerId,
+            (await reopenedHost.GetRequiredService<IExecutionPlacementStore>()
+                .FindAsync(placement.WorkflowExecutionId))?.OwnerId);
+
+        using (var scope = reopenedHost.CreateScope())
+        {
+            Assert.Equal(
+                workflowDefinition.Name,
+                (await scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>()
+                    .FindByIdAsync(workflowDefinition.Id))?.Name);
+            Assert.Equal(
+                activityDefinition.ActivityTypeKey,
+                (await scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>()
+                    .GetAsync(activityDefinition.Id)).ActivityTypeKey);
+        }
+
+        Assert.Equal(
+            publication.ArtifactId,
+            (await reopenedHost.GetRequiredService<IPublicationRecordStore>()
+                .FindAsync(publication.PublicationId))?.ArtifactId);
     }
 
     [Fact]

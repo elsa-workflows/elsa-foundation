@@ -87,7 +87,9 @@ One immutable snapshot describes the host-selected target before the host serves
 - Storage-unit identity collisions identify both source features.
 - Every public store registration has a selected durable requirement.
 - Every required capability maps to a tested active provider route/transition.
-- The schema CLI and runtime composition consume the same snapshot/manifest source.
+- The schema CLI and runtime composition consume the same public parameterless deployment-source
+  type: runtime registration expands its selected manifest-source types and naming policy, while the
+  CLI activates it from the built host composition assembly.
 
 ## 5. Query Route Requirement
 

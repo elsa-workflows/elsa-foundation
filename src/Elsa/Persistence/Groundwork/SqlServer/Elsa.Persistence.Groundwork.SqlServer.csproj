@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
   </ItemGroup>
 
   <ItemGroup>

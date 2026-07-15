@@ -106,11 +106,23 @@ The host may provide Groundwork's provider-neutral physical name policy and prov
 3. provider renderer/normalizer for length, reserved words, quoting, and uniqueness;
 4. deterministic collision validation.
 
-Provider-specific renderers may make a transformed name legal but may not change which logical storage unit it represents. The same policy instance and resolved-name evidence are used by runtime and CLI planning.
+Provider-specific renderers may make a transformed name legal but may not change which logical
+storage unit it represents. Runtime and the separate CLI process construct the same deterministic
+policy definition and must produce identical resolved-name evidence; they do not share an in-memory
+policy instance.
 
 ## CLI/deployment contract
 
-The repository pins `Groundwork.Tool` to the exact version used by all Groundwork packages. Deployment pipelines can run:
+The repository pins `Groundwork.Tool` to the exact version used by all Groundwork packages. A host
+supplies one public parameterless `GroundworkDeploymentSchemaManifestSource` subtype and registers the
+same type through `AddGroundworkStorageComposition<TDeploymentSource>()`; that makes its selected
+feature sources and host naming policy authoritative for runtime and the separate CLI process. The
+shipped unified leaves use
+`Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema`. Deployment
+source construction must be deterministic and configuration-complete: all inputs that affect the
+manifest or host naming policy are encoded by the selected source type, not supplied through
+runtime-only mutable state. Deployment
+pipelines can run:
 
 ```bash
 dotnet groundwork validate \

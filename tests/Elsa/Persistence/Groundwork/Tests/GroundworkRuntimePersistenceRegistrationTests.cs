@@ -2,15 +2,18 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using CShells.Lifecycle;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -127,9 +130,11 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         // holder (the handle is owned by the holder, not registered in DI). Drive that startup step explicitly,
         // as a real host would, before resolving IDocumentStore.
         Assert.NotNull(provider.GetRequiredService<GroundworkDocumentStoreHolder>());
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
 
-        Assert.IsType<SqliteDocumentStore>(provider.GetRequiredService<IDocumentStore>());
+        Assert.IsType<SqlitePhysicalDocumentStore>(provider.GetRequiredService<IDocumentStore>());
+        Assert.IsType<GroundworkBoundedDocumentStoreRouter>(provider.GetRequiredService<IBoundedDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
@@ -152,6 +157,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.False(provider.GetRequiredService<GroundworkDocumentStoreHolder>().IsInitialized);
         Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IDocumentStore>());
 
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
 
         // After startup the singleton is fully initialized and the store round-trips a document.
@@ -159,6 +165,40 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         await store.SaveAsync(new SaveDocumentRequest(
             ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-init", "1.0.0", "{\"ok\":true}"));
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-init"));
+    }
+
+    [Fact]
+    public async Task Sqlite_Runtime_Admission_Fails_Pending_Without_Creating_Schema()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var services = new ServiceCollection();
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        var exception = await Assert.ThrowsAsync<GroundworkRuntimeSchemaAdmissionException>(
+            () => provider.InitializeGroundworkStoreAsync());
+
+        Assert.Contains(exception.Result.Diagnostics, diagnostic => diagnostic.Code == "ELSA-GW-SCHEMA-PENDING");
+        Assert.False(provider.GetRequiredService<GroundworkDocumentStoreHolder>().IsInitialized);
+        Assert.False(File.Exists(database.FilePath));
+    }
+
+    [Fact]
+    public async Task Sqlite_Runtime_Initialization_Suppresses_Connection_Details()
+    {
+        const string secret = "sqlite-admission-secret";
+        var connectionString = $"Data Source=:memory:;Unsupported={secret}";
+        var services = new ServiceCollection();
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => provider.InitializeGroundworkStoreAsync());
+
+        Assert.Contains("connection details were suppressed", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(connectionString, exception.ToString(), StringComparison.Ordinal);
+        Assert.False(provider.GetRequiredService<GroundworkDocumentStoreHolder>().IsInitialized);
     }
 
     [Fact] // Running the startup step twice is a no-op: the store is materialized once and the singleton is stable.
@@ -170,12 +210,29 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         await using var provider = services.BuildServiceProvider();
 
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
         var first = provider.GetRequiredService<IDocumentStore>();
         await provider.InitializeGroundworkStoreAsync();
         var second = provider.GetRequiredService<IDocumentStore>();
 
         Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void Sqlite_Provider_Registration_Is_Idempotent()
+    {
+        var services = new ServiceCollection();
+        var feature = new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=registration.db" };
+
+        feature.ConfigureServices(services);
+        feature.ConfigureServices(services);
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkDocumentStoreHolder));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(SqliteGroundworkDocumentStoreInitializer));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IShellInitializer));
     }
 
     [Fact]
@@ -211,6 +268,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         var services = new ServiceCollection();
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
+        await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
@@ -233,6 +291,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-registration-{Guid.NewGuid():N}.db");
 
         public string ConnectionString => $"Data Source={_path}";
+        public string FilePath => _path;
 
         public ValueTask DisposeAsync()
         {
