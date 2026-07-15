@@ -34,6 +34,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -72,17 +74,35 @@ jobs:
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
-  # Feature 094 activation shell. Keep this fail-closed until T018 wires the
-  # coverage-ledger, behavioral-baseline, dependency, EF-surface, and lifetime
-  # ratchets into one explicit container-free command set.
+  # Feature 094 container-free ratchets. The whole architecture project runs so a
+  # renamed or newly added gate cannot silently fall out of a brittle test filter.
   groundwork-fast:
-    name: Groundwork fast gates (scaffold)
-    if: ${{ false }}
+    name: Groundwork fast gates
     needs: build-and-test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      GROUNDWORK_LEDGER_BASE_REF: ${{ github.event.pull_request.base.sha }}
     steps:
-      - name: Activation sentinel
-        run: |
-          echo "::error::Groundwork fast gates are scaffolding only; replace this sentinel when T018 activates the lane."
-          exit 1
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore architecture ratchets
+        run: dotnet restore tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
+        run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603

@@ -64,16 +64,16 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 1
 
-- [ ] T012 [P] [US1] Write failing schema/state-transition/32-row tests in `tests/Elsa/Architecture/GroundworkCoverageLedgerTests.cs`
-- [ ] T013 [P] [US1] Write failing exact baseline test-case identity continuity tests in `tests/Elsa/Architecture/GroundworkBehavioralBaselineTests.cs`
-- [ ] T014 [P] [US1] Write failing contract-registration-manifest reconciliation and #644/#660 ownership tests in `tests/Elsa/Architecture/GroundworkPersistenceCoverageTests.cs`
+- [X] T012 [P] [US1] Write failing schema/state-transition/32-row tests in `tests/Elsa/Architecture/GroundworkCoverageLedgerTests.cs`
+- [X] T013 [P] [US1] Write failing exact baseline test-case identity continuity tests in `tests/Elsa/Architecture/GroundworkBehavioralBaselineTests.cs`
+- [X] T014 [P] [US1] Write failing contract-registration-manifest reconciliation and #644/#660 ownership tests in `tests/Elsa/Architecture/GroundworkPersistenceCoverageTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Implement typed ledger loading, JSON Schema validation, state-transition rules, and evidence completeness checks in `tests/Elsa/Architecture/GroundworkCoverageLedgerValidator.cs`
-- [ ] T016 [US1] Implement immutable-baseline test discovery and removal-approval reconciliation in `tests/Elsa/Architecture/GroundworkBehavioralBaselineScanner.cs` and `specs/094-harden-groundwork-stores/research.md`
-- [ ] T017 [US1] Extend core-dependency and EF-surface ratchets for every in-scope family in `tests/Elsa/Architecture/ArchitectureGuardTests.cs`, `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`, and `tests/Elsa/Architecture/Baselines/ef-core-surface.json`
-- [ ] T018 [US1] Wire ledger and ratchet gates into CI and record their evidence contract in `.github/workflows/ci.yml` and `specs/094-harden-groundwork-stores/contracts/coverage-ledger.md`
+- [X] T015 [US1] Implement typed ledger loading, JSON Schema validation, state-transition rules, and evidence completeness checks in `tests/Elsa/Architecture/GroundworkCoverageLedgerValidator.cs`
+- [X] T016 [US1] Implement immutable-baseline test discovery and removal-approval reconciliation in `tests/Elsa/Architecture/GroundworkBehavioralBaselineScanner.cs` and `specs/094-harden-groundwork-stores/research.md`
+- [X] T017 [US1] Extend core-dependency and EF-surface ratchets for every in-scope family in `tests/Elsa/Architecture/ArchitectureGuardTests.cs`, `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`, and `tests/Elsa/Architecture/Baselines/ef-core-surface.json`
+- [X] T018 [US1] Wire ledger and ratchet gates into CI and record their evidence contract in `.github/workflows/ci.yml` and `specs/094-harden-groundwork-stores/contracts/coverage-ledger.md`
 
 **Checkpoint**: Deleting or silently de-scoping any baseline obligation fails CI. This is the minimum independently useful increment.
 

@@ -1,5 +1,11 @@
 {
   "SchemaVersion": 1,
+  "ProtectedProviderNeutralProjects": [
+    "Elsa.Workflows.Runtime.Core",
+    "Elsa.Foundation.Identity.Abstractions",
+    "Elsa.Secrets.Core",
+    "Elsa.Workflows.Runtime.Distributed"
+  ],
   "Surface": {
     "EfProjects": [
       "src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
