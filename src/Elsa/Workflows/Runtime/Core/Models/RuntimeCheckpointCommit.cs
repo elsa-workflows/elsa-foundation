@@ -14,6 +14,13 @@ public sealed record RuntimeCheckpointCommit(
     IReadOnlyDictionary<string, string> Metadata)
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
+
+    /// <summary>
+    /// Optional single-writer fence that a durable store must validate in the same atomic decision as the checkpoint
+    /// state, post-commit outbox, and idempotency marker. It is intentionally excluded from replay identity: an
+    /// equivalent already-committed request remains a replay after ownership changes.
+    /// </summary>
+    public RuntimeExecutionFence? ExpectedFence { get; init; }
 }
 
 public sealed class RuntimeCheckpointStateChangeSet

@@ -92,6 +92,80 @@ public sealed class RuntimeExecutionLease
     public IReadOnlyDictionary<string, string> Metadata { get; }
 
     public bool IsExpired(DateTimeOffset now) => ExpiresAt <= now;
+
+    /// <summary>Captures the immutable identity that must be presented by a durable checkpoint writer.</summary>
+    public RuntimeExecutionFence ToFence() => new(LeaseId, OwnerId, FencingToken);
+}
+
+/// <summary>
+/// Immutable execution-ownership identity carried into a provider-facing checkpoint commit.
+/// </summary>
+public sealed record RuntimeExecutionFence
+{
+    public RuntimeExecutionFence(string leaseId, string ownerId, long fencingToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        if (fencingToken <= 0)
+            throw new ArgumentOutOfRangeException(nameof(fencingToken), "A durable execution fence must be positive.");
+
+        LeaseId = leaseId;
+        OwnerId = ownerId;
+        FencingToken = fencingToken;
+    }
+
+    public string LeaseId { get; }
+    public string OwnerId { get; }
+    public long FencingToken { get; }
+}
+
+/// <summary>Revision-bearing liveness state used by provider-neutral optimistic transitions.</summary>
+public sealed record VersionedExecutionLivenessState
+{
+    public VersionedExecutionLivenessState(ExecutionLivenessState state, long revision)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (revision <= 0)
+            throw new ArgumentOutOfRangeException(nameof(revision), "A persisted liveness-state revision must be positive.");
+
+        State = state;
+        Revision = revision;
+    }
+
+    public ExecutionLivenessState State { get; }
+    public long Revision { get; }
+}
+
+/// <summary>Outcome of a conditional liveness-state write.</summary>
+public sealed record ExecutionLivenessStateWriteResult(
+    ExecutionLivenessStateWriteStatus Status,
+    long? Revision = null)
+{
+    public bool Succeeded => Status == ExecutionLivenessStateWriteStatus.Saved;
+}
+
+public enum ExecutionLivenessStateWriteStatus
+{
+    Saved,
+    NotFound,
+    RevisionConflict
+}
+
+/// <summary>Outcome of a conditional heartbeat or release transition.</summary>
+public sealed record RuntimeExecutionOwnershipTransitionResult(
+    RuntimeExecutionOwnershipTransitionStatus Status,
+    long? CurrentFencingToken)
+{
+    public bool Succeeded => Status == RuntimeExecutionOwnershipTransitionStatus.Applied;
+}
+
+public enum RuntimeExecutionOwnershipTransitionStatus
+{
+    Applied,
+    AlreadyApplied,
+    NotFound,
+    Stale,
+    Expired
 }
 
 public sealed class RuntimeHeartbeat

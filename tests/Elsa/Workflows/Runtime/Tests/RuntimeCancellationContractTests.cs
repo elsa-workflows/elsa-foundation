@@ -323,9 +323,9 @@ public sealed class RuntimeCancellationContractTests
         private readonly InMemoryWorkflowExecutionStateStore _workflowStore = new();
         private readonly InMemoryActivityExecutionStateStore _activityStore = new();
         private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
+        private readonly InMemoryExecutionLivenessStateStore _livenessStore = new();
         private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
         private IRuntimeExecutionOwnershipContextAccessor? _ownershipAccessor;
-        private IRuntimeExecutionOwnershipService? _ownershipService;
 
         public Harness(DateTimeOffset now, IRuntimeCheckpointPersistencePolicy? persistencePolicy = null)
         {
@@ -335,8 +335,10 @@ public sealed class RuntimeCancellationContractTests
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
                 _workflowStore,
                 _activityStore,
+                operationalStateStore: _livenessStore,
                 activityExecutionInspectionWriter: _inspectionStore,
-                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+                timeProvider: _timeProvider);
         }
 
         public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }
@@ -348,9 +350,8 @@ public sealed class RuntimeCancellationContractTests
                 OwnerId = "owner-under-test",
                 LeaseDuration = TimeSpan.FromMinutes(1)
             };
-            var ownership = new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore(), _timeProvider, options);
+            var ownership = new RuntimeExecutionOwnershipService(_livenessStore, _timeProvider, options);
             var accessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
-            _ownershipService = ownership;
             _ownershipAccessor = accessor;
             return (ownership, accessor);
         }
@@ -359,7 +360,7 @@ public sealed class RuntimeCancellationContractTests
             new(
                 _workflowStore,
                 _activityStore,
-                new RuntimeCheckpointCommitter(_persistencePolicy, CommitStore, _ownershipAccessor, _ownershipService),
+                new RuntimeCheckpointCommitter(_persistencePolicy, CommitStore, _ownershipAccessor),
                 new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
                 _timeProvider);
 

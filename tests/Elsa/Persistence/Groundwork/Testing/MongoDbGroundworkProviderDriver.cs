@@ -1,13 +1,17 @@
 using System.Diagnostics;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.MongoDb;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Groundwork.MongoDb;
 using Groundwork.MongoDb.Documents;
+using Groundwork.MongoDb.Materialization;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -30,6 +34,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
     private readonly GroundworkProcessProbeRunner _processProbeRunner = new();
     private readonly GroundworkProcessLaunchDescriptor _processLaunchDescriptor;
     private string? _connectionString;
+    private GroundworkPhysicalSchemaManifestSource? _physicalSource;
 
     public MongoDbGroundworkProviderDriver() =>
         _processLaunchDescriptor = _processProbeRunner.CreateLaunchDescriptor(ProtocolVersion);
@@ -136,7 +141,10 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         try
         {
             await _container.StartAsync(cancellationToken);
-            _connectionString = _container.GetConnectionString();
+            _connectionString = new MongoUrlBuilder(_container.GetConnectionString())
+            {
+                ReplicaSetName = ReplicaSetName
+            }.ToString();
             await ValidateTransactionTopologyAsync(cancellationToken);
         }
         catch (OperationCanceledException)
@@ -161,6 +169,33 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
     {
         using var client = new MongoClient(RequiredConnectionString());
         await client.DropDatabaseAsync(_databaseName, cancellationToken);
+        _physicalSource = null;
+    }
+
+    protected override async ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken)
+    {
+        using var client = new MongoClient(RequiredConnectionString());
+        await client.DropDatabaseAsync(_databaseName, cancellationToken);
+        var topology = await new MongoDbGroundworkRuntimeAdmission().InspectReplicaSetAsync(
+            RequiredConnectionString(),
+            _databaseName,
+            cancellationToken);
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
+            topology,
+            MongoDbPhysicalNameNormalizer.Instance,
+            MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
+            cancellationToken);
+        var executor = new MongoDbPhysicalSchemaExecutor(client.GetDatabase(_databaseName));
+        var applied = await PhysicalSchemaApplication.ApplyAsync(
+            source.PhysicalTarget,
+            executor,
+            cancellationToken: cancellationToken);
+        EnsureSchemaApplied(applied);
+        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken);
+        if (!admission.IsReady)
+            throw new InvalidOperationException("MongoDB physical provider driver did not admit its applied runtime target.");
+        _physicalSource = source;
     }
 
     protected override ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
@@ -192,6 +227,45 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             .AddSingleton<IDocumentStore>(handle.Store)
             .BuildServiceProvider();
 
+        return new GroundworkProviderClient(
+            clientId,
+            services,
+            handle.Store,
+            async () =>
+            {
+                try
+                {
+                    await services.DisposeAsync();
+                }
+                finally
+                {
+                    await handle.DisposeAsync();
+                }
+            });
+    }
+
+    protected override async ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken)
+    {
+        var source = _physicalSource ?? throw new InvalidOperationException("The MongoDB physical target has not been applied.");
+        var handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
+            RequiredConnectionString(),
+            _databaseName,
+            source.CreateManifest(),
+            source.PhysicalTarget.Provider,
+            GroundworkTestAccess.DefaultScoped,
+            source.CreateNamePolicy(),
+            cancellationToken: cancellationToken);
+        if (!IsExactTarget(source, handle))
+        {
+            await handle.DisposeAsync();
+            throw new InvalidOperationException("The MongoDB physical provider driver opened a target different from the applied runtime target.");
+        }
+
+        var services = new ServiceCollection()
+            .AddSingleton<IDocumentStore>(handle.Store)
+            .BuildServiceProvider();
         return new GroundworkProviderClient(
             clientId,
             services,
@@ -477,5 +551,19 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
 
     private string RequiredConnectionString() => _connectionString ??
         throw new InvalidOperationException("The MongoDB provider target has not been initialized.");
+
+    private static bool IsExactTarget(
+        GroundworkPhysicalSchemaManifestSource source,
+        MongoDbPhysicalDocumentStoreOpenHandle handle) =>
+        handle.Model.Target.ManifestIdentity == source.PhysicalTarget.ManifestIdentity &&
+        handle.Model.Target.ManifestVersion == source.PhysicalTarget.ManifestVersion &&
+        handle.Model.Target.Provider == source.PhysicalTarget.Provider &&
+        StringComparer.Ordinal.Equals(handle.Model.Target.Fingerprint, source.TargetFingerprint);
+
+    private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
+    {
+        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
+            throw new InvalidOperationException($"MongoDB physical schema application was not accepted: {result.Outcome}.");
+    }
 
 }

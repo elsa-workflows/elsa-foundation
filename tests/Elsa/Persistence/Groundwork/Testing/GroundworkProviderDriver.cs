@@ -291,10 +291,17 @@ public sealed class GroundworkProviderClient : IAsyncDisposable
 
 public abstract class GroundworkProviderDriver : IAsyncDisposable
 {
+    private enum StoreMode
+    {
+        Logical,
+        Physical
+    }
+
     private readonly ConcurrentDictionary<Guid, GroundworkProviderClient> _clients = new();
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private bool _initialized;
     private bool _disposed;
+    private StoreMode _storeMode;
 
     public abstract GroundworkProviderDescriptor Descriptor { get; }
     public abstract GroundworkTopologyCapabilities RequiredTopology { get; }
@@ -313,6 +320,7 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
                 return;
             Descriptor.Topology.EnsureSupports(RequiredTopology | GroundworkTopologyCapabilities.ExternalProcessRestart);
             await InitializeCoreAsync(cancellationToken);
+            _storeMode = StoreMode.Logical;
             _initialized = true;
         }
         finally
@@ -330,6 +338,25 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
             if (!_clients.IsEmpty)
                 throw new InvalidOperationException("A provider driver cannot reset while client leases are active.");
             await ResetCoreAsync(cancellationToken);
+            _storeMode = StoreMode.Logical;
+            Failures.Reset();
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    public async ValueTask ResetPhysicalAsync(CancellationToken cancellationToken = default)
+    {
+        await _lifecycleGate.WaitAsync(cancellationToken);
+        try
+        {
+            EnsureInitialized();
+            if (!_clients.IsEmpty)
+                throw new InvalidOperationException("A provider driver cannot reset while client leases are active.");
+            await ResetPhysicalCoreAsync(cancellationToken);
+            _storeMode = StoreMode.Physical;
             Failures.Reset();
         }
         finally
@@ -339,7 +366,7 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
     }
 
     public ValueTask<GroundworkProviderClient> OpenClientAsync(CancellationToken cancellationToken = default) =>
-        OpenTrackedClientAsync(OpenClientCoreAsync, cancellationToken);
+        OpenTrackedClientAsync(StoreMode.Logical, OpenClientCoreAsync, cancellationToken);
 
     public ValueTask<GroundworkProviderClient> OpenClientAsync(
         StorageManifest manifest,
@@ -349,11 +376,16 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(access);
         return OpenTrackedClientAsync(
+            StoreMode.Logical,
             (clientId, token) => OpenClientCoreAsync(clientId, manifest, access, token),
             cancellationToken);
     }
 
+    public ValueTask<GroundworkProviderClient> OpenPhysicalClientAsync(CancellationToken cancellationToken = default) =>
+        OpenTrackedClientAsync(StoreMode.Physical, OpenPhysicalClientCoreAsync, cancellationToken);
+
     private async ValueTask<GroundworkProviderClient> OpenTrackedClientAsync(
+        StoreMode requiredMode,
         Func<Guid, CancellationToken, ValueTask<GroundworkProviderClient>> openClientAsync,
         CancellationToken cancellationToken)
     {
@@ -361,6 +393,8 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         try
         {
             EnsureInitialized();
+            if (_storeMode != requiredMode)
+                throw new InvalidOperationException($"The provider driver is prepared for {_storeMode.ToString().ToLowerInvariant()} stores, not {requiredMode.ToString().ToLowerInvariant()} stores.");
             var clientId = Guid.NewGuid();
             GroundworkProviderClient? client = null;
             try
@@ -446,7 +480,9 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
 
     protected abstract ValueTask InitializeCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask ResetCoreAsync(CancellationToken cancellationToken);
+    protected abstract ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(Guid clientId, CancellationToken cancellationToken);
+    protected abstract ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(Guid clientId, CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
         Guid clientId,
         StorageManifest manifest,

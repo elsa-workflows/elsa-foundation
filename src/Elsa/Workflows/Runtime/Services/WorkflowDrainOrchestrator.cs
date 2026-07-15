@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -14,6 +15,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
+    private readonly TimeProvider _timeProvider;
 
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
@@ -31,13 +33,23 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, TimeProvider.System)
     {
     }
 
-    // Greediest constructor: MS DI selects it only when the coalescing drain scope factory has been registered (the
-    // opt-in coalescing wiring). On the default path the factory is absent, this constructor is not selected, and the
-    // coordinator runs its existing ownership-only path byte-for-byte unchanged.
+    public WorkflowDrainOrchestrator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowDrainOrchestratorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        TimeProvider timeProvider)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, timeProvider)
+    {
+    }
+
+    // Coalescing-compatible overload retained for direct callers that do not customize the time provider.
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
@@ -46,6 +58,19 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory, TimeProvider.System)
+    {
+    }
+
+    public WorkflowDrainOrchestrator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowDrainOrchestratorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -58,6 +83,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
         _coalescingScopeFactory = coalescingScopeFactory;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -73,23 +99,101 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
         // Single-writer ownership (RT-2): claim a fencing lease for this drain and expose it as the active ownership
         // scope so every checkpoint commit made during the drain is fenced against it. Acquiring writes a lease +
-        // heartbeat to operational state, giving the recovery scanner real data; a crash mid-drain leaves that lease in
-        // place (the finally never runs) so the interrupted execution stays detectable, while a clean or handled return
-        // releases it to avoid false-positive recovery.
+        // heartbeat to operational state, giving the recovery scanner real data. Renewal keeps long-running drains from
+        // expiring their own lease; process failure leaves the lease in place so interrupted execution stays detectable,
+        // while every in-process completion path stops renewal and releases it to avoid false-positive recovery.
         if (_ownershipService is null || _ownershipContextAccessor is null)
             return await DrainCoreAsync(envelope, request, cancellationToken);
 
         var lease = await _ownershipService.AcquireAsync(request.WorkflowExecutionId, cancellationToken);
         using (_ownershipContextAccessor.Push(lease))
+        using (var renewalStop = new CancellationTokenSource())
+        using (var drainCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
+            var renewalTask = RenewOwnershipUntilStoppedAsync(lease, renewalStop.Token, drainCancellation);
+            RuntimeSchedulerDrainResult? result = null;
+            Exception? drainFailure = null;
+            Exception? renewalFailure = null;
+            Exception? releaseFailure = null;
             try
             {
-                return await DrainCoreAsync(envelope, request, cancellationToken);
+                result = await DrainCoreAsync(envelope, request, drainCancellation.Token);
+            }
+            catch (Exception exception)
+            {
+                drainFailure = exception;
             }
             finally
             {
-                await _ownershipService.ReleaseAsync(lease, cancellationToken);
+                await renewalStop.CancelAsync();
+                try
+                {
+                    await renewalTask;
+                }
+                catch (OperationCanceledException) when (renewalStop.IsCancellationRequested)
+                {
+                    // Expected when the drain completes before the next heartbeat cadence.
+                }
+                catch (Exception exception)
+                {
+                    renewalFailure = exception;
+                }
+
+                try
+                {
+                    var release = await _ownershipService.ReleaseAsync(lease, CancellationToken.None);
+                    if (!release.Succeeded && release.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
+                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", release.Status);
+                }
+                catch (Exception exception)
+                {
+                    releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
+                }
             }
+
+            if (renewalFailure is not null)
+                ExceptionDispatchInfo.Capture(renewalFailure).Throw();
+
+            if (drainFailure is not null)
+                ExceptionDispatchInfo.Capture(drainFailure).Throw();
+
+            if (releaseFailure is not null)
+                ExceptionDispatchInfo.Capture(releaseFailure).Throw();
+
+            return result ?? throw new InvalidOperationException("Workflow execution draining completed without a result.");
+        }
+    }
+
+    private async Task RenewOwnershipUntilStoppedAsync(
+        RuntimeExecutionLease lease,
+        CancellationToken stopToken,
+        CancellationTokenSource drainCancellation)
+    {
+        var duration = lease.ExpiresAt - lease.AcquiredAt;
+        var cadence = TimeSpan.FromTicks(Math.Max(1, duration.Ticks / 3));
+        while (true)
+        {
+            await Task.Delay(cadence, _timeProvider, stopToken);
+            RuntimeExecutionOwnershipTransitionResult heartbeat;
+            try
+            {
+                heartbeat = await _ownershipService!.HeartbeatAsync(lease, stopToken);
+            }
+            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await drainCancellation.CancelAsync();
+                throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", transitionStatus: null, exception);
+            }
+
+            if (heartbeat.Succeeded || heartbeat.Status == RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
+                continue;
+
+            await drainCancellation.CancelAsync();
+            throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", heartbeat.Status);
         }
     }
 

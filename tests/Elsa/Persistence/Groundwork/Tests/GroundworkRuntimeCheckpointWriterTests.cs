@@ -3,8 +3,13 @@ using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using System.Text.Json;
 using Xunit;
 
@@ -65,10 +70,24 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     {
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var writer = CreateWriter(store);
+        var commit = BuildCommit("commit-1", bookmarkNode: "node-v1");
+
+        await writer.CommitAsync(commit, Decision);
+        await writer.CommitAsync(commit, Decision);
+
+        var bookmark = await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
+        Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Redelivered_Commit_With_Same_CommitId_Rejects_Conflicting_Payload()
+    {
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var writer = CreateWriter(store);
 
         await writer.CommitAsync(BuildCommit("commit-1", bookmarkNode: "node-v1"), Decision);
-        // Same CommitId, different content. The marker must short-circuit the second write so the original wins.
-        await writer.CommitAsync(BuildCommit("commit-1", bookmarkNode: "node-v2"), Decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(async () =>
+            await writer.CommitAsync(BuildCommit("commit-1", bookmarkNode: "node-v2"), Decision));
 
         var bookmark = await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
         Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
@@ -99,7 +118,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         Assert.True(commitId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {commitId.Length}.");
 
         await writer.CommitAsync(BuildCommit(commitId, bookmarkNode: "node-v1"), Decision);
-        await writer.CommitAsync(BuildCommit(commitId, bookmarkNode: "node-v2"), Decision);
+        await writer.CommitAsync(BuildCommit(commitId, bookmarkNode: "node-v1"), Decision);
 
         var bookmark = await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
         Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
@@ -137,9 +156,47 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));
     }
 
+    [Fact]
+    public async Task UncertainCommit_ReconcilesMarker_AfterCallerTokenIsCanceled()
+    {
+        using var callerCancellation = new CancellationTokenSource();
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new UncertainAfterCommitDocumentStore(inner, callerCancellation);
+        var writer = CreateWriter(store);
+
+        var result = await writer.CommitAsync(BuildCommit("commit-uncertain"), Decision, callerCancellation.Token);
+
+        Assert.True(callerCancellation.IsCancellationRequested);
+        Assert.Empty(result.PendingPostCommitWorkIds);
+        Assert.NotNull(await inner.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            "commit-uncertain"));
+    }
+
+    [Fact]
+    public async Task UncertainCommit_ReconciliationTimeout_PreservesMayHaveCommittedFailure()
+    {
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new UncertainWithoutCommitDocumentStore(inner);
+        var timeProvider = new ManualTimerTimeProvider();
+        var writer = CreateWriter(store, timeProvider: timeProvider);
+
+        var commit = writer.CommitAsync(BuildCommit("commit-timeout"), Decision).AsTask();
+        await store.ReconciliationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        timeProvider.Fire();
+
+        var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(() => commit);
+        Assert.Contains("may have committed", exception.Message, StringComparison.Ordinal);
+        Assert.IsType<DocumentCommitAcknowledgementUncertainException>(exception.InnerException);
+        Assert.Null(await inner.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            "commit-timeout"));
+    }
+
     private static GroundworkRuntimeCheckpointWriter CreateWriter(
         IDocumentStore store,
-        IPersistenceAccessContextAccessor? accessContextAccessor = null)
+        IPersistenceAccessContextAccessor? accessContextAccessor = null,
+        TimeProvider? timeProvider = null)
     {
         accessContextAccessor ??= GroundworkTestAccess.DefaultAccessContextAccessor;
         return new(
@@ -153,7 +210,8 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer),
-            PassThroughRootWriteLeaseManager.Instance);
+            PassThroughRootWriteLeaseManager.Instance,
+            timeProvider);
     }
 
     private static RuntimeCheckpointCommit BuildCommit(
@@ -290,5 +348,202 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    private sealed class UncertainAfterCommitDocumentStore(
+        IDocumentStore inner,
+        CancellationTokenSource callerCancellation) : IDocumentStore
+    {
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+        public DocumentStoreAccess Access => inner.Access;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
+
+#pragma warning disable GW0004 // IDocumentStore compatibility surface delegated by the fault-injection wrapper.
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
+            DocumentStoreQuery query,
+            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
+#pragma warning restore GW0004
+
+        public async Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            new UncertainAfterCommitUnitOfWork(
+                await inner.BeginAsync(scope, cancellationToken),
+                callerCancellation);
+    }
+
+    private sealed class UncertainAfterCommitUnitOfWork(
+        IDocumentUnitOfWork inner,
+        CancellationTokenSource callerCancellation) : IDocumentUnitOfWork
+    {
+        public Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public async Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            await inner.CommitAsync(cancellationToken);
+            await callerCancellation.CancelAsync();
+            throw new DocumentCommitAcknowledgementUncertainException(
+                [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind]);
+        }
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
+            inner.RollbackAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
+
+    private sealed class UncertainWithoutCommitDocumentStore(IDocumentStore inner) : IDocumentStore
+    {
+        private int _markerLoads;
+
+        public TaskCompletionSource ReconciliationStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+        public DocumentStoreAccess Access => inner.Access;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
+
+        public async Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.Equals(documentKind, ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, StringComparison.Ordinal) &&
+                Interlocked.Increment(ref _markerLoads) == 2)
+            {
+                ReconciliationStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+
+            return await inner.LoadAsync(documentKind, id, cancellationToken);
+        }
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
+
+#pragma warning disable GW0004 // IDocumentStore compatibility surface delegated by the fault-injection wrapper.
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
+            DocumentStoreQuery query,
+            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
+#pragma warning restore GW0004
+
+        public async Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            new UncertainWithoutCommitUnitOfWork(await inner.BeginAsync(scope, cancellationToken));
+    }
+
+    private sealed class UncertainWithoutCommitUnitOfWork(IDocumentUnitOfWork inner) : IDocumentUnitOfWork
+    {
+        public Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task CommitAsync(CancellationToken cancellationToken = default) =>
+            throw new DocumentCommitAcknowledgementUncertainException(
+                [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind]);
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
+            inner.RollbackAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
+
+    private sealed class ManualTimerTimeProvider : TimeProvider
+    {
+        private ManualTimer? _timer;
+
+        public override ITimer CreateTimer(
+            TimerCallback callback,
+            object? state,
+            TimeSpan dueTime,
+            TimeSpan period)
+        {
+            Assert.Null(_timer);
+            return _timer = new ManualTimer(callback, state);
+        }
+
+        public void Fire() => (_timer ?? throw new InvalidOperationException("No reconciliation timer was created.")).Fire();
+
+        private sealed class ManualTimer(TimerCallback callback, object? state) : ITimer
+        {
+            private bool _disposed;
+
+            public bool Change(TimeSpan dueTime, TimeSpan period) => !_disposed;
+
+            public void Fire()
+            {
+                if (!_disposed)
+                    callback(state);
+            }
+
+            public void Dispose() => _disposed = true;
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 }

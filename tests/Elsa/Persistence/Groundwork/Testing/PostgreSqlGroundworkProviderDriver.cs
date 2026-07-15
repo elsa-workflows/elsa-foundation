@@ -1,9 +1,14 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.PostgreSql;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.PostgreSql;
 using Groundwork.PostgreSql.Documents;
+using Groundwork.PostgreSql.PhysicalStorage;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -42,12 +47,14 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     private GroundworkProcessLaunchDescriptor? _processLaunchDescriptor;
     private string? _connectionString;
     private bool _containerStarted;
+    private GroundworkPhysicalSchemaManifestSource? _physicalSource;
 
     public override GroundworkProviderDescriptor Descriptor => ProviderDescriptor;
 
     public override GroundworkTopologyCapabilities RequiredTopology =>
         GroundworkTopologyCapabilities.PersistentStorage |
         GroundworkTopologyCapabilities.IndependentClients |
+        GroundworkTopologyCapabilities.MultiDocumentTransactions |
         GroundworkTopologyCapabilities.ExternalProcessRestart;
 
     public override GroundworkCompositionFingerprint CompositionFingerprint => FixtureComposition;
@@ -80,6 +87,39 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
 
     protected override async ValueTask ResetCoreAsync(CancellationToken cancellationToken)
     {
+        await ResetSchemaAsync(cancellationToken);
+        _physicalSource = null;
+        _ = await CreateStoreAsync(cancellationToken);
+    }
+
+    protected override async ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken)
+    {
+        await ResetSchemaAsync(cancellationToken);
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            PostgreSqlGroundworkCapabilities.Runtime(),
+            new GroundworkProviderTopologySnapshot(
+                PostgreSqlGroundworkCapabilities.Provider.Name,
+                "postgresql-server",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            PostgreSqlGroundworkCapabilities.PhysicalNames,
+            cancellationToken: cancellationToken);
+        var executor = new PostgreSqlPhysicalSchemaExecutor(RequireConnectionString());
+        var applied = await PhysicalSchemaApplication.ApplyAsync(
+            source.PhysicalTarget,
+            executor,
+            cancellationToken: cancellationToken);
+        EnsureSchemaApplied(applied);
+        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken);
+        if (!admission.IsReady)
+            throw new InvalidOperationException("PostgreSQL physical provider driver did not admit its applied runtime target.");
+        _physicalSource = source;
+    }
+
+    private async Task ResetSchemaAsync(CancellationToken cancellationToken)
+    {
         var connectionString = RequireConnectionString();
         ClearPool(connectionString);
         await using (var connection = new NpgsqlConnection(connectionString))
@@ -93,8 +133,6 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
-
-        _ = await CreateStoreAsync(cancellationToken);
     }
 
     protected override ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
@@ -121,6 +159,27 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
             services,
             services.GetRequiredService<IDocumentStore>(),
             services.DisposeAsync);
+    }
+
+    protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var source = _physicalSource ?? throw new InvalidOperationException("The PostgreSQL physical target has not been applied.");
+        var store = new PostgreSqlPhysicalDocumentStore(
+            RequireConnectionString(),
+            source.CreateManifest(),
+            source.PhysicalTarget.Routes,
+            GroundworkTestAccess.DefaultScoped);
+        var services = new ServiceCollection()
+            .AddSingleton<IDocumentStore>(store)
+            .BuildServiceProvider();
+        return ValueTask.FromResult(new GroundworkProviderClient(
+            clientId,
+            services,
+            store,
+            services.DisposeAsync));
     }
 
     protected override ValueTask<GroundworkProcessProbeResult> RunInNewProcessCoreAsync(
@@ -323,5 +382,11 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     {
         using var connection = new NpgsqlConnection(connectionString);
         NpgsqlConnection.ClearPool(connection);
+    }
+
+    private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
+    {
+        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
+            throw new InvalidOperationException($"PostgreSQL physical schema application was not accepted: {result.Outcome}.");
     }
 }

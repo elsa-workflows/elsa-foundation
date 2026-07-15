@@ -45,13 +45,17 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(
-                    new GroundworkProviderCapabilitySnapshot(
+                    GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
                         SqliteGroundworkCapabilities.Runtime(),
                         new GroundworkProviderTopologySnapshot(
                             SqliteGroundworkCapabilities.Provider.Name,
                             "sqlite-file",
-                            new HashSet<string>(StringComparer.Ordinal)),
-                        []),
+                            new HashSet<string>(StringComparer.Ordinal)
+                            {
+                                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                            }),
+                        RuntimeGroundworkStorageManifestSource.FeatureName,
+                        [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
                     SqliteGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 

@@ -1,12 +1,16 @@
 using System.Data.SqlTypes;
 using System.Xml.Linq;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.SqlServer;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.SqlServer;
 using Groundwork.SqlServer.Documents;
+using Groundwork.SqlServer.PhysicalStorage;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.MsSql;
@@ -23,6 +27,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     private readonly GroundworkProcessProbeRunner _processProbeRunner = new();
     private readonly GroundworkProcessLaunchDescriptor _processLaunchDescriptor;
     private string? _connectionString;
+    private GroundworkPhysicalSchemaManifestSource? _physicalSource;
 
     public SqlServerGroundworkProviderDriver() =>
         _processLaunchDescriptor = _processProbeRunner.CreateLaunchDescriptor(ProtocolVersion);
@@ -39,11 +44,13 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             "real-sqlserver-container",
             GroundworkTopologyCapabilities.PersistentStorage |
             GroundworkTopologyCapabilities.IndependentClients |
+            GroundworkTopologyCapabilities.MultiDocumentTransactions |
             GroundworkTopologyCapabilities.ExternalProcessRestart));
 
     public override GroundworkTopologyCapabilities RequiredTopology =>
         GroundworkTopologyCapabilities.PersistentStorage |
         GroundworkTopologyCapabilities.IndependentClients |
+        GroundworkTopologyCapabilities.MultiDocumentTransactions |
         GroundworkTopologyCapabilities.ExternalProcessRestart;
 
     public override GroundworkCompositionFingerprint CompositionFingerprint { get; } =
@@ -72,6 +79,39 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     }
 
     protected override async ValueTask ResetCoreAsync(CancellationToken cancellationToken)
+    {
+        await ResetDatabaseAsync(cancellationToken);
+        _physicalSource = null;
+    }
+
+    protected override async ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken)
+    {
+        await ResetDatabaseAsync(cancellationToken);
+        var capabilityReport = SqlServerGroundworkCapabilities.Runtime();
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            capabilityReport,
+            new GroundworkProviderTopologySnapshot(
+                capabilityReport.Provider.Name,
+                "sqlserver",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            SqlServerGroundworkCapabilities.PhysicalNames,
+            cancellationToken: cancellationToken);
+        var executor = new SqlServerPhysicalSchemaExecutor(RequiredConnectionString());
+        var applied = await PhysicalSchemaApplication.ApplyAsync(
+            source.PhysicalTarget,
+            executor,
+            cancellationToken: cancellationToken);
+        EnsureSchemaApplied(applied);
+        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken);
+        if (!admission.IsReady)
+            throw new InvalidOperationException("SQL Server physical provider driver did not admit its applied runtime target.");
+        _physicalSource = source;
+    }
+
+    private async Task ResetDatabaseAsync(CancellationToken cancellationToken)
     {
         await using var connection = new SqlConnection(AdminConnectionString());
         await connection.OpenAsync(cancellationToken);
@@ -128,6 +168,35 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
                 await services.DisposeAsync();
                 ClearPool(connectionString);
             });
+    }
+
+    protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
+        Guid clientId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var source = _physicalSource ?? throw new InvalidOperationException("The SQL Server physical target has not been applied.");
+        var connectionString = new SqlConnectionStringBuilder(RequiredConnectionString())
+        {
+            ApplicationName = $"elsa-groundwork-physical-driver-{clientId:N}"
+        }.ConnectionString;
+        var store = new SqlServerPhysicalDocumentStore(
+            connectionString,
+            source.CreateManifest(),
+            source.PhysicalTarget.Routes,
+            GroundworkTestAccess.DefaultScoped);
+        var services = new ServiceCollection()
+            .AddSingleton<IDocumentStore>(store)
+            .BuildServiceProvider();
+        return ValueTask.FromResult(new GroundworkProviderClient(
+            clientId,
+            services,
+            store,
+            async () =>
+            {
+                await services.DisposeAsync();
+                ClearPool(connectionString);
+            }));
     }
 
     protected override ValueTask<GroundworkProcessProbeResult> RunInNewProcessCoreAsync(
@@ -276,5 +345,11 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     }
 
     private static string Quote(string identifier) => $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
+
+    private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
+    {
+        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
+            throw new InvalidOperationException($"SQL Server physical schema application was not accepted: {result.Outcome}.");
+    }
 
 }

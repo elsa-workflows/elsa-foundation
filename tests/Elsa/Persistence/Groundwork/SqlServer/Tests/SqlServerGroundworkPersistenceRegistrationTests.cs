@@ -146,13 +146,17 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
         var composition = await scope.ServiceProvider
             .GetRequiredService<GroundworkStorageCompositionFactory>()
             .CreateSourceAsync(
-                new GroundworkProviderCapabilitySnapshot(
+                GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
                     capabilityReport,
                     new GroundworkProviderTopologySnapshot(
                         capabilityReport.Provider.Name,
                         "sqlserver",
-                        new HashSet<string>()),
-                    []),
+                        new HashSet<string>(StringComparer.Ordinal)
+                        {
+                            RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                        }),
+                    RuntimeGroundworkStorageManifestSource.FeatureName,
+                    [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
                 SqlServerGroundworkCapabilities.PhysicalNames);
         var route = Assert.Single(composition.PhysicalTarget.Routes.Where(candidate =>
             candidate.StorageUnit.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));

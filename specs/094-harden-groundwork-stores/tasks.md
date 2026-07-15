@@ -144,7 +144,7 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 3
 
-- [ ] T044 [P] [US3] Write failing ownership allocation, heartbeat/release, stale-fence, and checkpoint atomicity tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFenceContractTests.cs`
+- [x] T044 [P] [US3] Write failing ownership allocation, heartbeat/release, stale-fence, and checkpoint atomicity tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFenceContractTests.cs`
 - [ ] T045 [P] [US3] Write failing outbox/queue claim-token, expiry, retry, stale-ack, and poison-restart contracts plus direct poison-store branch tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerPoisonStoreTests.cs`
 - [ ] T046 [P] [US3] Write failing timer/schedule/incident/hold/publication-projection race and restart tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs`
 - [ ] T047 [P] [US3] Extend core ownership/recovery baselines and write failing provider-bounded plus direct recovery-scanner branch tests before T056 in `tests/Elsa/Workflows/Runtime/Tests/RuntimeExecutionOwnershipTests.cs`, `tests/Elsa/Workflows/Runtime/Tests/RuntimeRecoveryScannerTests.cs`, `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeRecoveryBoundedRouteTests.cs`, and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeRecoveryScannerTests.cs`
@@ -152,7 +152,7 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 ### Implementation for User Story 3
 
 - [ ] T048 [US3] Express fence, claim token, visibility deadline, expected revision, stale acknowledgement, and replay outcomes in `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeExecutionOwnershipService.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxStore.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs`
-- [ ] T049 [US3] Implement provider-atomic ownership allocation/heartbeat/release through liveness state in `src/Elsa/Workflows/Runtime/Services/RuntimeExecutionOwnershipService.cs` and `src/Elsa/Persistence/Groundwork/Stores/GroundworkExecutionLivenessStateStore.cs`
+- [x] T049 [US3] Implement provider-atomic ownership allocation/heartbeat/release through liveness state in `src/Elsa/Workflows/Runtime/Services/RuntimeExecutionOwnershipService.cs` and `src/Elsa/Persistence/Groundwork/Stores/GroundworkExecutionLivenessStateStore.cs`
 - [ ] T050 [US3] Make fence validation, checkpoint state, outbox state, and the idempotency marker one unit of work, then advance the complete provider matrix for row group B5-FENCE-CHECKPOINT in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs` and `specs/094-harden-groundwork-stores/coverage-ledger.json`
 - [ ] T051 [US3] Implement bounded atomic outbox claim/retry/complete transitions in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
 - [ ] T052 [US3] Implement bounded atomic scheduler-work claim/retry/complete transitions in `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowSchedulerWorkQueue.cs`
