@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Composition;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -15,6 +16,9 @@ public static class GroundworkIdentityStoresRegistration
 {
     public static IServiceCollection AddGroundworkIdentityStores(this IServiceCollection services)
     {
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, IdentityGroundworkStorageManifestSource>());
+
         services.RemoveAll<IUserStore>();
         services.RemoveAll<IRoleStore>();
         services.RemoveAll<IExternalIdentityStore>();

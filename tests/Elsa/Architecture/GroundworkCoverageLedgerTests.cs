@@ -73,9 +73,59 @@ public sealed class GroundworkCoverageLedgerTests
 
         Assert.Equal(1, ledger.SchemaVersion);
         Assert.Equal("094-harden-groundwork-stores", ledger.Feature);
-        Assert.Equal("0.0.1-preview.47", ledger.GroundworkVersion);
+        Assert.Equal("0.0.1-preview.48", ledger.GroundworkVersion);
         Assert.Equal(ExpectedEntryIds, ledger.Entries.Select(entry => entry.Id));
         Assert.Equal(["sqlite", "sqlserver", "postgresql", "mongodb"], ledger.MandatoryProviders);
+        Assert.Equal("host-selection-all32", ledger.CompositionEvidence.EvidenceId);
+        Assert.Equal(ExpectedEntryIds, ledger.CompositionEvidence.CoveredEntryIds);
+        Assert.Equal(7, ledger.CompositionEvidence.SelectedFeatureIdentities.Count);
+    }
+
+    [Fact]
+    public void Composition_evidence_covers_ALL32_once_and_preserves_external_authority_links()
+    {
+        var ledger = ReadLedger();
+        var evidence = ledger["compositionEvidence"]!.AsObject();
+        var coveredRows = evidence["coveredEntryIds"]!.AsArray()
+            .Select(row => row!.GetValue<string>())
+            .ToArray();
+
+        Assert.Equal(32, coveredRows.Length);
+        Assert.Equal(32, coveredRows.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(ExpectedEntryIds, coveredRows);
+
+        var links = evidence["externalAuthorityLinks"]!.AsArray().OfType<JsonObject>().ToArray();
+        Assert.Equal(
+            ["iam-external-identity", "iam-role", "iam-user"],
+            Assert.Single(links, link => link["authority"]!.GetValue<string>() == "#644")["coverageRows"]!
+                .AsArray().Select(row => row!.GetValue<string>()).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["runtime-diagnostics-settings"],
+            Assert.Single(links, link => link["authority"]!.GetValue<string>() == "#660")["coverageRows"]!
+                .AsArray().Select(row => row!.GetValue<string>()));
+
+        Assert.Equal("#644", Entry(ledger, "iam-user")["authority"]!.GetValue<string>());
+        Assert.Equal("#644", Entry(ledger, "iam-role")["authority"]!.GetValue<string>());
+        Assert.Equal("#644", Entry(ledger, "iam-external-identity")["authority"]!.GetValue<string>());
+        Assert.Equal("#660", Entry(ledger, "runtime-diagnostics-settings")["authority"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Composition_evidence_rejects_missing_rows_and_artifact_digest_drift()
+    {
+        var ledger = ReadLedger();
+        var evidence = ledger["compositionEvidence"]!.AsObject();
+        evidence["coveredEntryIds"]!.AsArray().RemoveAt(0);
+        evidence["artifactSha256"] = new string('0', 64);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition evidence: coverage row 'runtime-activity-execution-inspection' is missing from ALL32 host selection.",
+            findings);
+        Assert.Contains(
+            "composition evidence: artifact 'evidence/composition/host-selection-all32.json' digest does not match its contents.",
+            findings);
     }
 
     [Fact]
@@ -134,7 +184,8 @@ public sealed class GroundworkCoverageLedgerTests
         AssertExactFindings(
             findings,
             "$.entries: baseline entry 'distributed-command-transport' is missing.",
-            "$.entries: baseline entry 'runtime-activity-execution-inspection' occurs 2 times; expected exactly once.");
+            "$.entries: baseline entry 'runtime-activity-execution-inspection' occurs 2 times; expected exactly once.",
+            "composition evidence: coverage row 'distributed-command-transport' is outside the reviewed ledger denominator.");
     }
 
     [Theory]
@@ -440,7 +491,7 @@ public sealed class GroundworkCoverageLedgerTests
             $"{EntryId}: sqlserver evidence record '{scenarioId}' requires provider identity 'groundwork-sqlserver'; found 'groundwork-sqlite'.",
             findings);
         Assert.Contains(
-            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '0.0.1-preview.47'.",
+            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '0.0.1-preview.48'.",
             findings);
         Assert.Contains(
             $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its catalog-bound provider-driver execution path.",
@@ -660,7 +711,7 @@ public sealed class GroundworkCoverageLedgerTests
             ["coverageEntryId"] = entryId,
             ["provider"] = provider,
             ["providerIdentity"] = $"groundwork-{provider}",
-            ["providerVersion"] = "0.0.1-preview.47",
+            ["providerVersion"] = "0.0.1-preview.48",
             ["topology"] = provider switch
             {
                 "sqlite" => "file-backed-distinct-connections",

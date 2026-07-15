@@ -2,7 +2,7 @@
   "$schema": "./contracts/coverage-ledger.schema.json",
   "schemaVersion": 1,
   "feature": "094-harden-groundwork-stores",
-  "groundworkVersion": "0.0.1-preview.47",
+  "groundworkVersion": "0.0.1-preview.48",
   "baselineRef": "c9aa5fd8f7cfa6c86b2f37885a2446f3f4b82103",
   "mandatoryProviders": [
     "sqlite",
@@ -10,6 +10,73 @@
     "postgresql",
     "mongodb"
   ],
+  "compositionEvidence": {
+    "evidenceId": "host-selection-all32",
+    "outcome": "pass",
+    "selectedFeatureIdentities": [
+      "elsa-activities-design",
+      "elsa-identity",
+      "elsa-secrets",
+      "elsa-workflows-design",
+      "elsa-workflows-publishing",
+      "elsa-workflows-runtime",
+      "elsa-workflows-runtime-distributed"
+    ],
+    "coveredEntryIds": [
+      "runtime-activity-execution-inspection",
+      "runtime-activity-execution-state",
+      "runtime-bookmark-state",
+      "runtime-durable-timer",
+      "runtime-durable-value-state",
+      "runtime-execution-liveness",
+      "runtime-incident-state",
+      "runtime-recurring-trigger-schedule",
+      "runtime-checkpoint-commit",
+      "runtime-diagnostics-settings",
+      "runtime-post-commit-outbox",
+      "runtime-scheduler-state",
+      "runtime-executable-source-reference",
+      "runtime-workflow-executable",
+      "runtime-workflow-execution-state",
+      "runtime-workflow-hold-state",
+      "runtime-scheduler-poison",
+      "runtime-scheduler-work-queue",
+      "runtime-trigger-binding",
+      "runtime-publication-projection-state",
+      "iam-user",
+      "iam-role",
+      "iam-application",
+      "iam-credential",
+      "iam-external-identity",
+      "iam-claim-mapping",
+      "iam-provider-configuration-tenant",
+      "iam-provider-configuration-global",
+      "iam-tenant-membership",
+      "secrets-repository",
+      "distributed-execution-placement",
+      "distributed-command-transport"
+    ],
+    "externalAuthorityLinks": [
+      {
+        "authority": "#644",
+        "relationship": "adapter-only",
+        "coverageRows": [
+          "iam-user",
+          "iam-role",
+          "iam-external-identity"
+        ]
+      },
+      {
+        "authority": "#660",
+        "relationship": "linked-source-evidence",
+        "coverageRows": [
+          "runtime-diagnostics-settings"
+        ]
+      }
+    ],
+    "artifact": "evidence/composition/host-selection-all32.json",
+    "artifactSha256": "7aed181584844633ffd66e483c1afb2eef5548ba7a5e49da4184246029c4c9c0"
+  },
   "entries": [
     {
       "id": "runtime-activity-execution-inspection",

@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
@@ -20,6 +21,8 @@ public static class GroundworkPublishingStoreRegistration
         Func<IServiceProvider, IDocumentStore> documentStoreFactory)
     {
         ArgumentNullException.ThrowIfNull(documentStoreFactory);
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, PublishingGroundworkStorageManifestSource>());
         services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
         services.RemoveAll<IPublicationSlotStore>();
         services.AddSingleton<IPublicationSlotStore>(sp => new GroundworkPublicationSlotStore(

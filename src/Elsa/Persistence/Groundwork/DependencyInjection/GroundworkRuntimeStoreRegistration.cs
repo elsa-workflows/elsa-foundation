@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Stores;
@@ -17,6 +18,9 @@ public static class GroundworkRuntimeStoreRegistration
 {
     public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services)
     {
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, RuntimeGroundworkStorageManifestSource>());
+
         // Replace the in-memory defaults registered by the runtime API feature. RemoveAll guarantees
         // the bridge wins regardless of feature composition order.
         services.RemoveAll<IBookmarkStateStore>();

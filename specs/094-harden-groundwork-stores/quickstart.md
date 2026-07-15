@@ -130,7 +130,39 @@ dotnet groundwork apply \
   --output json
 ```
 
-For plan gates, exit codes 0 and 2 are expected outcomes; deployment apply requires 0. Destructive or semantic operations require the exact retained plan fingerprint and exact operation approvals. Runtime startup validates readiness and never silently applies pending schema.
+The source passed to `--manifest-type` must implement `IPhysicalSchemaManifestSource`. Elsa's
+`GroundworkPhysicalSchemaManifestSource` returns the same manifest and host logical-name policy used
+to compile the admitted runtime target. Groundwork's physical target fingerprint remains the value
+reported by the CLI and compared by runtime admission. Elsa's separate composition fingerprint also
+includes the selected feature sources, their manifest versions, durable requirements, topology
+evidence, and naming-policy identity; do not substitute it for the physical target fingerprint.
+
+### Exact command outcomes
+
+| Command | Exit | Outcome | Meaning and mutation contract |
+|---|---:|---|---|
+| `validate --offline` | `0` | `ready` | Manifest, naming, and routes compile; no connection or provider inspection occurs. |
+| `validate` | `0` | `ready` | Live applied history and physical objects are compatible. The report can still list pending operations; validation never applies them. |
+| `validate` | `3` | `blocked` | Compilation, history, or live physical-state validation failed. |
+| `plan` / `status` | `0` | `ready` | The exact target has no pending operations. |
+| `plan` / `status` | `2` | `pending` | One or more operations are pending; retain the reported plan fingerprint for review/apply policy. |
+| `plan` / `status` | `3` | `blocked` | The diff is not applicable under the greenfield/additive policy. |
+| `apply` | `0` | `applied` or `ready` | The authorized plan was applied, or the target already matched. |
+| `apply` | `3` | `blocked` | Validation or application planning rejected the target. |
+| `apply` | `4` | `authorization-required` | The exact plan needs additional safe/destructive/semantic authorization; no target state was published. |
+| Any command | `5` | `invalid` | Invocation, source loading, provider selection, or connection input is invalid. |
+| Any command | `10` | `failed` | Execution failed; exception details are suppressed from output. |
+| Any command | `130` | `cancelled` | Cancellation was observed and unapplied target state was not recorded. |
+
+Exit `2` is an expected result for a plan/status deployment gate, not a tool failure. Deployment
+apply requires exit `0`. Destructive or semantic operations require the exact retained plan
+fingerprint and exact operation approvals.
+
+Runtime admission calls the provider's read-only `IPhysicalSchemaHistoryInspector`, computes the
+same Groundwork diff in memory, and never acquires an application lock or invokes schema apply. It
+blocks startup with `ELSA-GW-SCHEMA-PENDING` when an applicable plan remains and with
+`ELSA-GW-SCHEMA-DRIFT` when durable history or live physical state is incompatible. Operators then
+run and review the CLI workflow above; runtime never silently repairs or applies schema.
 
 ## 7. Supply and consume #646 evidence
 

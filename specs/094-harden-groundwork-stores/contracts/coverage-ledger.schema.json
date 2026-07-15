@@ -11,6 +11,7 @@
     "groundworkVersion",
     "baselineRef",
     "mandatoryProviders",
+    "compositionEvidence",
     "entries"
   ],
   "properties": {
@@ -47,6 +48,9 @@
       ],
       "items": false
     },
+    "compositionEvidence": {
+      "$ref": "#/$defs/compositionEvidence"
+    },
     "entries": {
       "type": "array",
       "minItems": 1,
@@ -54,6 +58,94 @@
     }
   },
   "$defs": {
+    "compositionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "outcome",
+        "selectedFeatureIdentities",
+        "coveredEntryIds",
+        "externalAuthorityLinks",
+        "artifact",
+        "artifactSha256"
+      ],
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "const": "host-selection-all32"
+        },
+        "outcome": {
+          "type": "string",
+          "const": "pass"
+        },
+        "selectedFeatureIdentities": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "prefixItems": [
+            { "type": "string", "const": "elsa-activities-design" },
+            { "type": "string", "const": "elsa-identity" },
+            { "type": "string", "const": "elsa-secrets" },
+            { "type": "string", "const": "elsa-workflows-design" },
+            { "type": "string", "const": "elsa-workflows-publishing" },
+            { "type": "string", "const": "elsa-workflows-runtime" },
+            { "type": "string", "const": "elsa-workflows-runtime-distributed" }
+          ],
+          "items": false
+        },
+        "coveredEntryIds": {
+          "type": "array",
+          "minItems": 32,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "externalAuthorityLinks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/externalAuthorityLink" }
+        },
+        "artifact": {
+          "type": "string",
+          "const": "evidence/composition/host-selection-all32.json"
+        },
+        "artifactSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "externalAuthorityLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "relationship", "coverageRows"],
+      "properties": {
+        "authority": {
+          "type": "string",
+          "enum": ["#644", "#660"]
+        },
+        "relationship": {
+          "type": "string",
+          "enum": ["adapter-only", "linked-source-evidence"]
+        },
+        "coverageRows": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        }
+      }
+    },
     "evidenceRecords": {
       "type": "array",
       "items": { "$ref": "#/$defs/providerEvidenceRecord" },

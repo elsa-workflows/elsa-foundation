@@ -62,6 +62,27 @@ The test matrix includes:
 
 The same selected feature set must compile on every mandatory provider without changing core contracts or domain behavior.
 
+## ALL32 host-selection evidence
+
+The checked-in coverage ledger carries one digest-verified `host-selection-all32` composition record.
+Its selected source identities cover the complete host composition, while the Runtime, IAM, Secrets,
+and Distributed Runtime declarations contribute every one of the 32 durable coverage-row identities
+exactly once. Design, Activities Design, and Publishing remain selected composition sources but do not
+claim rows from this runtime/IAM/secrets/distributed denominator.
+
+This record is composition evidence, not provider conformance evidence and not a new durability
+authority. In particular:
+
+- `iam-user`, `iam-role`, and `iam-external-identity` remain adapter-only links to authority `#644`;
+- `runtime-diagnostics-settings` remains linked source/evidence owned by authority `#660`;
+- each ledger entry retains its own delivery owner, status, and four-provider evidence obligations;
+- the composition artifact proves only that host selection cannot silently omit or duplicate an ALL32
+  durable requirement.
+
+The ledger validator compares the composition record with the exact 32-row denominator, checks the
+external-authority links against the row-level authority fields, and verifies the durable artifact at
+`evidence/composition/host-selection-all32.json` by SHA-256 and payload equality.
+
 ## Scope/session acquisition
 
 The provider materialization object owns static provider resources. A scoped session factory maps the provider-neutral Elsa persistence access context to:
