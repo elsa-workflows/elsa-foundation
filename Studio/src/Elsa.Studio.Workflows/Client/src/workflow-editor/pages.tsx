@@ -145,7 +145,15 @@ export function WorkflowInstanceDetailsPage({ context, ai, navigate }: {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
 
   return (
-    <WorkflowsPageFrame title="Run">
+    <WorkflowsPageFrame
+      title="Run"
+      context={workflowExecutionId ? (
+        <div className="wf-page-context">
+          <span>Workflow Instance ID</span>
+          <code title={workflowExecutionId}>{workflowExecutionId}</code>
+        </div>
+      ) : null}
+    >
       <WorkflowLazyBoundary label="workflow run">
         <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} navigate={navigate} />
       </WorkflowLazyBoundary>
@@ -153,7 +161,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, navigate }: {
   );
 }
 
-function WorkflowsPageFrame({ title, children }: { title: string; children: React.ReactNode }) {
+function WorkflowsPageFrame({ title, context, children }: { title: string; context?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="wf-page">
       <div className="wf-page-header">
@@ -161,6 +169,7 @@ function WorkflowsPageFrame({ title, children }: { title: string; children: Reac
           <span className="wf-kicker">Workflow management</span>
           <h2>{title}</h2>
         </div>
+        {context}
       </div>
       {children}
     </section>

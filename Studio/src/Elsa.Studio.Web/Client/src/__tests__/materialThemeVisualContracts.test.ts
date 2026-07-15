@@ -53,9 +53,10 @@ function contrastRatio(foreground: string, background: string) {
 }
 
 function ruleBody(source: string, selector: string) {
-  const start = source.indexOf(`${selector} {`);
+  const selectorStart = source.indexOf(selector);
+  const start = source.indexOf("{", selectorStart);
   const end = source.indexOf("\n}", start);
-  if (start < 0 || end < 0) {
+  if (selectorStart < 0 || start < 0 || end < 0) {
     throw new Error(`Could not find the ${selector} rule`);
   }
 
@@ -97,5 +98,15 @@ describe("material theme visual contracts", () => {
     expect(disabledRule).toContain("background: var(--studio-surface-muted)");
     expect(disabledRule).toContain("color: var(--studio-text-muted)");
     expect(disabledRule).toContain("opacity: 1");
+  });
+
+  it("keeps Walnut Workshop navigation text legible on hover", () => {
+    const hoverRule = ruleBody(
+      stylesCss,
+      'html[data-theme="walnut-workshop"] .nav-section a:hover'
+    );
+
+    expect(hoverRule).toContain("color: var(--studio-accent-text)");
+    expect(hoverRule).toContain("text-shadow:");
   });
 });

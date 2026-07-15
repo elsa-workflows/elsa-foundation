@@ -1944,6 +1944,43 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("renders activity availability rows from live camel-case enum values", async () => {
+    stubActivityAvailabilityFetch({
+      settings: { scope: "host-default", mode: "allExcept", rules: { activityTypes: [], sets: [] } },
+      items: [
+        {
+          ...availabilityDiagnosticEntry(),
+          state: "available",
+          layer: "catalog",
+          referenceKind: "activityType"
+        },
+        {
+          ...availabilityDiagnosticEntry({
+            activityDefinitionId: "send-email-v1",
+            activityTypeKey: "Elsa.Activities.Email.SendEmail",
+            displayName: "Send Email",
+            category: "Messaging",
+            reason: "Disabled by the host baseline."
+          }),
+          state: "blockedByHostBaseline",
+          layer: "hostBaseline",
+          referenceKind: "activityType"
+        }
+      ]
+    });
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+
+    await waitForText(container, "Run JavaScript");
+    await waitForText(container, "Send Email");
+    expect(container.querySelector(".availability-counts")?.textContent).toContain("1 host blocked");
+    expect(checkboxByLabel(container, "Run JavaScript available in new workflows")?.checked).toBe(true);
+    expect(checkboxByLabel(container, "Send Email available in new workflows")?.disabled).toBe(true);
+    expect(container.querySelector(".availability-mode button.active strong")?.textContent).toBe("All except");
+
+    await unmount();
+  });
+
   it("sanitizes activity availability load errors and offers a retry", async () => {
     const rawServerError = [
       "System.InvalidOperationException: Failed to bind the request.",
@@ -2388,6 +2425,11 @@ describe("workflows module", () => {
     await waitForText(container, "Pinned Runtime executable");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
+    expect(container.querySelector(".wf-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
+    const runInspector = container.querySelector(".wf-instance-inspector");
+    expect(runInspector).not.toBeNull();
+    expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
+    expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
     await click(buttonByText(container, "Designer"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");

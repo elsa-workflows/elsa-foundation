@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { getActivityExecutionInspection, getExecutable, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
@@ -480,8 +480,6 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
           ) : <div className="wf-side-resize-spacer" />}
           <WorkflowInstanceInspector
             context={context}
-            ai={ai}
-            action={instanceAction ?? undefined}
             summary={data.details.instance}
             details={data.details}
             state="ready"
@@ -663,8 +661,6 @@ function collectWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersio
 
 function WorkflowInstanceInspector({
   context,
-  ai,
-  action,
   summary,
   details,
   state,
@@ -681,8 +677,6 @@ function WorkflowInstanceInspector({
   onToggleMaximized
 }: {
   context: StudioEndpointContext;
-  ai: StudioAiContributionApi;
-  action: StudioAiPromptActionContribution | undefined;
   summary: WorkflowInstanceSummary | null;
   details: WorkflowInstanceDetails | null;
   state: "idle" | "loading" | "ready" | "failed";
@@ -746,58 +740,47 @@ function WorkflowInstanceInspector({
       </div>
       {expanded ? (
         <>
-        <header>
-        <div>
-          <span>Workflow Instance ID</span>
-          <h3>{summary.workflowExecutionId}</h3>
-        </div>
-        {action ? (
-          <button type="button" onClick={() => dispatchAiAction(ai, action, details ?? summary)}>
-            <Sparkles size={13} /> Explain
-          </button>
-        ) : null}
-      </header>
-      {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
-      {state === "ready" && details ? (
-        <div className="wf-instance-tab-content">
-          {activeTab === "timeline" ? (
-            <WorkflowExecutionTimeline
-              activities={details.activities}
-              activityCatalog={activityCatalog}
-              selectedEvidenceId={selectedEvidenceId}
-              onSelectEvidence={openActivityEvidence}
-            />
-          ) : activeTab === "activity" ? (
-            <WorkflowActivityExecutionDetails context={context} activity={selectedActivity} activityCatalog={activityCatalog} />
-          ) : activeTab === "issues" ? (
-            <>
-              <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
-              <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} />
-            </>
-          ) : (
-            <dl className="wf-instance-meta">
-              <dt>Status</dt>
-              <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
-              <dt>Run Kind</dt>
-              <dd>{formatRunKind(summary.runKind)}</dd>
-              <dt>Artifact</dt>
-              <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
-              <dt>Definition</dt>
-              <dd>{summary.definitionId} <small>{summary.definitionVersionId}</small></dd>
-              <dt>Created</dt>
-              <dd>{formatDate(summary.createdAt)}</dd>
-              <dt>Started</dt>
-              <dd>{formatDate(summary.startedAt)}</dd>
-              <dt>Completed</dt>
-              <dd>{formatDate(summary.completedAt)}</dd>
-              <dt>Correlation</dt>
-              <dd>{summary.correlationId || "None"}</dd>
-            </dl>
-          )}
-        </div>
-      ) : null}
-      </>
+          {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
+          {state === "failed" ? <WfErrorCard message={error} /> : null}
+          {state === "ready" && details ? (
+            <div className="wf-instance-tab-content">
+              {activeTab === "timeline" ? (
+                <WorkflowExecutionTimeline
+                  activities={details.activities}
+                  activityCatalog={activityCatalog}
+                  selectedEvidenceId={selectedEvidenceId}
+                  onSelectEvidence={openActivityEvidence}
+                />
+              ) : activeTab === "activity" ? (
+                <WorkflowActivityExecutionDetails context={context} activity={selectedActivity} activityCatalog={activityCatalog} />
+              ) : activeTab === "issues" ? (
+                <>
+                  <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
+                  <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} />
+                </>
+              ) : (
+                <dl className="wf-instance-meta">
+                  <dt>Status</dt>
+                  <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
+                  <dt>Run Kind</dt>
+                  <dd>{formatRunKind(summary.runKind)}</dd>
+                  <dt>Artifact</dt>
+                  <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
+                  <dt>Definition</dt>
+                  <dd>{summary.definitionId} <small>{summary.definitionVersionId}</small></dd>
+                  <dt>Created</dt>
+                  <dd>{formatDate(summary.createdAt)}</dd>
+                  <dt>Started</dt>
+                  <dd>{formatDate(summary.startedAt)}</dd>
+                  <dt>Completed</dt>
+                  <dd>{formatDate(summary.completedAt)}</dd>
+                  <dt>Correlation</dt>
+                  <dd>{summary.correlationId || "None"}</dd>
+                </dl>
+              )}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </aside>
   );
@@ -835,8 +818,10 @@ export function WorkflowActivityExecutionDetails({ context, activity, activityCa
     inspection: null,
     error: ""
   });
+  const [copyStatus, setCopyStatus] = useState("");
 
   useEffect(() => {
+    setCopyStatus("");
     if (!selectedActivityExecutionId || !selectedWorkflowExecutionId) {
       setInspectionState({ activityExecutionId: null, status: "idle", inspection: null, error: "" });
       return;
@@ -878,35 +863,77 @@ export function WorkflowActivityExecutionDetails({ context, activity, activityCa
 
   const catalogItem = activityCatalog.find(item => item.activityTypeKey === activity.activityType);
   const activityLabel = catalogItem?.displayName || shortTypeName(activity.activityType) || activity.activityType;
+  const activityTypeLabel = shortTypeName(activity.activityType) ?? activity.activityType;
+  const statusLabel = [activity.status, activity.subStatus].filter(Boolean).join(" · ");
+  const startedLabel = formatDate(activity.startedAt);
+  const completedLabel = formatDate(activity.completedAt);
+  const durationLabel = formatDuration(activity.startedAt, activity.completedAt) || "Unknown";
   const bookmarkCount = activity.bookmarkIds?.length ?? 0;
   const incidentCount = activity.incidentIds?.length ?? 0;
+  const markCopied = (label: string) => setCopyStatus(`Copied ${label}.`);
+  const markCopyFailed = (label: string) => setCopyStatus(`Could not copy ${label}.`);
 
   return (
     <>
-      <section className="wf-instance-section">
-        <h4>Activity</h4>
-        <dl className="wf-instance-meta">
-          <dt>Name</dt>
-          <dd>{activityLabel}</dd>
-          <dt>Status</dt>
-          <dd><WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} /></dd>
-          <dt>Activity Execution ID</dt>
-          <dd>{activity.activityExecutionId}</dd>
-          <dt>Authored Activity ID</dt>
-          <dd>{activity.authoredActivityId}</dd>
-          <dt>Type</dt>
-          <dd>{shortTypeName(activity.activityType) ?? activity.activityType} <small>{activity.activityTypeVersion}</small></dd>
-          <dt>Started</dt>
-          <dd>{formatDate(activity.startedAt)}</dd>
-          <dt>Completed</dt>
-          <dd>{formatDate(activity.completedAt)}</dd>
-          <dt>Duration</dt>
-          <dd>{formatDuration(activity.startedAt, activity.completedAt) || "Unknown"}</dd>
-          <dt>Bookmarks</dt>
-          <dd>{bookmarkCount}</dd>
-          <dt>Incidents</dt>
-          <dd>{incidentCount}</dd>
+      <section className="wf-instance-section wf-activity-overview">
+        <div className="wf-activity-overview-heading">
+          <span className="wf-activity-overview-icon" aria-hidden="true">
+            <ActivityIcon size={18} />
+          </span>
+          <div className="wf-activity-overview-title">
+            <span className="wf-activity-overview-eyebrow">Selected activity</span>
+            <div className="wf-activity-copy-line">
+              <h4>{activityLabel}</h4>
+              <CopyValueButton
+                value={activityLabel}
+                ariaLabel="Copy activity name"
+                copiedLabel="activity name"
+                onCopied={markCopied}
+                onCopyFailed={markCopyFailed}
+              />
+            </div>
+            <div className="wf-activity-copy-line wf-activity-overview-type">
+              <span title={activity.activityType}>{activityTypeLabel} <small>{activity.activityTypeVersion}</small></span>
+              <CopyValueButton
+                value={`${activityTypeLabel} ${activity.activityTypeVersion}`}
+                ariaLabel="Copy activity type"
+                copiedLabel="activity type"
+                onCopied={markCopied}
+                onCopyFailed={markCopyFailed}
+              />
+            </div>
+          </div>
+          <span className="wf-activity-overview-status">
+            <WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} />
+            <CopyValueButton
+              value={statusLabel}
+              ariaLabel="Copy activity status"
+              copiedLabel="activity status"
+              onCopied={markCopied}
+              onCopyFailed={markCopyFailed}
+            />
+          </span>
+        </div>
+
+        <dl className="wf-activity-summary-grid">
+          <ActivityMetadataValue label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          <ActivityMetadataValue label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          <ActivityMetadataValue label="Incidents" value={String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
         </dl>
+
+        <details className="wf-activity-execution-details">
+          <summary>
+            <span>Execution details</span>
+            <small>4 values</small>
+          </summary>
+          <dl className="wf-activity-detail-list">
+            <ActivityMetadataValue label="Activity Execution ID" value={activity.activityExecutionId} copiedLabel="activity execution ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            <ActivityMetadataValue label="Authored Activity ID" value={activity.authoredActivityId} copiedLabel="authored activity ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            <ActivityMetadataValue label="Completed" value={completedLabel} copiedLabel="completion time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            <ActivityMetadataValue label="Bookmarks" value={String(bookmarkCount)} copiedLabel="bookmark count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          </dl>
+        </details>
+        {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
       <WorkflowActivityValueEvidence
         state={inspectionState}
@@ -925,6 +952,40 @@ export function WorkflowActivityExecutionDetails({ context, activity, activityCa
         emptyText="No runtime output snapshots were recorded for this execution."
       />
     </>
+  );
+}
+
+function ActivityMetadataValue({
+  label,
+  value,
+  copiedLabel,
+  code = false,
+  onCopied,
+  onCopyFailed
+}: {
+  label: string;
+  value: string;
+  copiedLabel: string;
+  code?: boolean;
+  onCopied(label: string): void;
+  onCopyFailed(label: string): void;
+}) {
+  const content = code ? <code title={value}>{value}</code> : <span title={value}>{value}</span>;
+
+  return (
+    <div className="wf-activity-meta-item">
+      <dt>{label}</dt>
+      <dd>
+        <span className="wf-activity-meta-value">{content}</span>
+        <CopyValueButton
+          value={value}
+          ariaLabel={`Copy ${copiedLabel}`}
+          copiedLabel={copiedLabel}
+          onCopied={onCopied}
+          onCopyFailed={onCopyFailed}
+        />
+      </dd>
+    </div>
   );
 }
 

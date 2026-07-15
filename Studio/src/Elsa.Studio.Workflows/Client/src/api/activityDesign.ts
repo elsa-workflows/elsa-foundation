@@ -7,6 +7,10 @@ import type {
   ActivityCatalogResponse,
   SaveActivityAvailabilitySettingsRequest
 } from "../workflowTypes";
+import {
+  normalizeActivityAvailabilityDiagnostics,
+  normalizeActivityAvailabilitySettings
+} from "../activityAvailability";
 import { capabilityIds, resolveCapabilityLink } from "./capabilities";
 
 export const activityDesignKeys = {
@@ -99,7 +103,8 @@ function normalizeArguments(value: unknown) {
 
 export async function getActivityAvailabilitySettings(context: StudioEndpointContext) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-availability");
-  return context.http.getJson<ActivityAvailabilitySettings>(path);
+  const response = await context.http.getJson<ActivityAvailabilitySettings>(path);
+  return normalizeActivityAvailabilitySettings(response);
 }
 
 export async function saveActivityAvailabilitySettings(
@@ -107,10 +112,12 @@ export async function saveActivityAvailabilitySettings(
   request: SaveActivityAvailabilitySettingsRequest
 ) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-availability");
-  return context.http.putJson<ActivityAvailabilitySettings>(path, request);
+  const response = await context.http.putJson<ActivityAvailabilitySettings>(path, request);
+  return normalizeActivityAvailabilitySettings(response);
 }
 
 export async function listActivityAvailabilityDiagnostics(context: StudioEndpointContext) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-availability-diagnostics");
-  return context.http.getJson<ActivityAvailabilityDiagnostics>(path);
+  const response = await context.http.getJson<ActivityAvailabilityDiagnostics>(path);
+  return normalizeActivityAvailabilityDiagnostics(response);
 }

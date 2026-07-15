@@ -4807,6 +4807,7 @@ html[data-theme="walnut-workshop"] .wf-node small {
 }
 
 html[data-theme="walnut-workshop"] .nav-section a.active,
+html[data-theme="walnut-workshop"] .nav-section a:hover,
 html[data-theme="walnut-workshop"] .nav-section a.has-active-child,
 html[data-theme="walnut-workshop"] .bottom-panel-tab-list button.active,
 html[data-theme="walnut-workshop"] .wf-panel-tab-list button.active,

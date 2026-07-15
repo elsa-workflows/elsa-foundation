@@ -46,16 +46,23 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
   const errorMessage = error instanceof Error ? error.message : error ? "Runtime diagnostics settings could not be loaded." : null;
   const hostReasons = settings?.hostPolicy.limitationReasons ?? [];
   const effectiveReasons = settings?.effective.limitationReasons ?? [];
+  const hasUnsavedChanges = settings ? !draftMatchesRequestedSettings(draft, settings) : false;
+  const defaultLevelChanged = Boolean(settings && draft.defaultLevel !== settings.requested.defaultLevel);
 
   const allowedLevels = useMemo(() => levels.filter(level => isLevelSelectable(level, settings)), [settings]);
-  const updateDefaultLevel = (defaultLevel: RuntimeDiagnosticsEvidenceLevel) => setDraft(current => ({ ...current, defaultLevel }));
-  const updateSubjectLevel = (subject: RuntimeDiagnosticsSubject, value: string) =>
+  const updateDefaultLevel = (defaultLevel: RuntimeDiagnosticsEvidenceLevel) => {
+    setStatus(null);
+    setDraft(current => ({ ...current, defaultLevel }));
+  };
+  const updateSubjectLevel = (subject: RuntimeDiagnosticsSubject, value: string) => {
+    setStatus(null);
     setDraft(current => {
       const subjectOverrides = { ...current.subjectOverrides };
       if (value === "inherit") delete subjectOverrides[subject];
       else subjectOverrides[subject] = value as RuntimeDiagnosticsEvidenceLevel;
       return { ...current, subjectOverrides };
     });
+  };
 
   const save = () => {
     setStatus(null);
@@ -65,7 +72,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
         defaultLevel: draft.defaultLevel,
         subjectOverrides: draft.subjectOverrides
       },
-      { onSuccess: () => setStatus("Runtime diagnostics saved.") }
+      { onSuccess: saved => setStatus(`Saved. New capture events now use ${formatLevel(saved.effective.defaultLevel)}.`) }
     );
   };
 
@@ -75,12 +82,12 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
         <div>
           <div className="wf-kicker">Workflows</div>
           <h2><DatabaseZap size={18} /> Runtime diagnostics</h2>
-          <p className="wf-muted">Control future runtime value evidence capture. Existing workflow runs keep their captured evidence.</p>
+          <p className="wf-muted">Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</p>
         </div>
         <div className="wf-actions">
-          <button type="button" onClick={save} disabled={loading || saving || !canManage}>
+          <button type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
             <Save size={15} />
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Saving..." : "Save changes"}
           </button>
         </div>
       </div>
@@ -91,11 +98,18 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
         <section className="runtime-diagnostics-section">
           <div className="runtime-diagnostics-section-head">
-            <h3 className="wf-section-label"><ShieldCheck size={14} /> Default capture</h3>
+            <div className="runtime-diagnostics-section-title">
+              <h3 className="wf-section-label"><ShieldCheck size={14} /> Default capture</h3>
+              <p>Choose the level Studio should request. Save changes to apply it; Host Policy may lower the level used by the runtime.</p>
+            </div>
             {settings && (
-              <span className="runtime-diagnostics-effective">
-                Effective: {formatLevel(settings.effective.defaultLevel)}
-              </span>
+              <div className="runtime-diagnostics-effective">
+                <span>New capture events use</span>
+                <strong>{formatLevel(settings.effective.defaultLevel)}</strong>
+                {settings.requested.defaultLevel !== settings.effective.defaultLevel && (
+                  <small>Saved request: {formatLevel(settings.requested.defaultLevel)}. Host Policy applies a lower level.</small>
+                )}
+              </div>
             )}
           </div>
           <LevelSelect
@@ -104,10 +118,19 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
             disabled={loading || saving || !canManage}
             onChange={updateDefaultLevel}
           />
+          {defaultLevelChanged && (
+            <div className="runtime-diagnostics-pending" role="status">
+              <strong>Unsaved request: {formatLevel(draft.defaultLevel)}</strong>
+              <span>Save changes to apply this request to new capture events.</span>
+            </div>
+          )}
         </section>
 
         <section className="runtime-diagnostics-section runtime-diagnostics-section-grow">
-          <h3 className="wf-section-label"><DatabaseZap size={14} /> Subject overrides</h3>
+          <div className="runtime-diagnostics-section-title">
+            <h3 className="wf-section-label"><DatabaseZap size={14} /> Subject overrides</h3>
+            <p>Request a different level for a specific kind of evidence. The runtime-applied level is shown after Host Policy.</p>
+          </div>
           <div className="runtime-diagnostics-subjects">
             {subjects.map(subject => {
               const requested = draft.subjectOverrides[subject.id] ?? "inherit";
@@ -119,7 +142,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
                     <em>{subject.detail}</em>
                   </span>
                   <span className="runtime-diagnostics-subject-controls">
-                    {effective && <code>Effective: {formatLevel(effective)}</code>}
+                    {effective && <code>Runtime applies: {formatLevel(effective)}</code>}
                     <select
                       value={requested}
                       disabled={loading || saving || !canManage}
@@ -140,7 +163,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
             <h3 className="wf-section-label"><AlertTriangle size={14} /> Policy</h3>
             <div className="runtime-diagnostics-policy">
               {!canManage && <span>Current user can view settings but cannot change them.</span>}
-              {settings && <span>Host maximum: {formatLevel(settings.hostPolicy.maximumLevel)}</span>}
+              {settings && <span>Maximum allowed by Host Policy: {formatLevel(settings.hostPolicy.maximumLevel)}</span>}
               {effectiveReasons.map(reason => <span key={`effective-${reason}`}>{reason}</span>)}
               {hostReasons.map(reason => <span key={`host-${reason}`}>{reason}</span>)}
             </div>
@@ -158,6 +181,11 @@ function createDraft(settings: RuntimeDiagnosticsSettingsView | null): RuntimeDi
   };
 }
 
+function draftMatchesRequestedSettings(draft: RuntimeDiagnosticsDraft, settings: RuntimeDiagnosticsSettingsView): boolean {
+  if (draft.defaultLevel !== settings.requested.defaultLevel) return false;
+  return subjects.every(({ id }) => draft.subjectOverrides[id] === settings.requested.subjectOverrides?.[id]);
+}
+
 function isLevelSelectable(level: RuntimeDiagnosticsEvidenceLevel, settings: RuntimeDiagnosticsSettingsView | null): boolean {
   if (!settings) return level !== "Payload";
   if (level === "Payload" && !settings.permissions.canEnableFullPayloads) return false;
@@ -169,7 +197,16 @@ function effectiveSubjectLevel(settings: RuntimeDiagnosticsSettingsView, subject
 }
 
 function formatLevel(level: RuntimeDiagnosticsEvidenceLevel): string {
-  return level === "DiagnosticSnapshot" ? "Diagnostic snapshot" : level;
+  switch (level) {
+    case "Off":
+      return "Off";
+    case "Metadata":
+      return "Metadata only";
+    case "DiagnosticSnapshot":
+      return "Diagnostic snapshots";
+    case "Payload":
+      return "Full payloads";
+  }
 }
 
 function LevelSelect({
@@ -184,20 +221,29 @@ function LevelSelect({
   onChange: (level: RuntimeDiagnosticsEvidenceLevel) => void;
 }) {
   return (
-    <div className="runtime-diagnostics-levels" role="group" aria-label="Default runtime diagnostics level">
-      {allowedLevels.map(level => (
-        <button
-          type="button"
-          className={value === level ? "active" : ""}
-          disabled={disabled}
-          onClick={() => onChange(level)}
-          key={level}
-        >
-          <strong>{formatLevel(level)}</strong>
-          <em>{levelDescription(level)}</em>
-        </button>
-      ))}
-    </div>
+    <fieldset className="runtime-diagnostics-levels" disabled={disabled}>
+      <legend>Requested default</legend>
+      <div className="runtime-diagnostics-level-options">
+        {allowedLevels.map(level => (
+          <label
+            className={value === level ? "active" : ""}
+            key={level}
+          >
+            <span className="runtime-diagnostics-level-title">
+              <input
+                type="radio"
+                name="runtime-diagnostics-default-level"
+                value={level}
+                checked={value === level}
+                onChange={() => onChange(level)}
+              />
+              <strong>{formatLevel(level)}</strong>
+            </span>
+            <em>{levelDescription(level)}</em>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

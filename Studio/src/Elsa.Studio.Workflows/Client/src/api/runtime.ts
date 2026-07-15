@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  RuntimeDiagnosticsEvidenceLevel,
   RuntimeDiagnosticsSettingsView,
+  RuntimeDiagnosticsSubjectOverrides,
   SaveRuntimeDiagnosticsSettingsRequest,
   WorkflowExecutableDetails,
   WorkflowExecutableListScope,
@@ -235,7 +237,8 @@ export async function listWorkflowIncidents(context: StudioEndpointContext, work
 
 export async function getRuntimeDiagnosticsSettings(context: StudioEndpointContext) {
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, "runtime-diagnostics");
-  return context.http.getJson<RuntimeDiagnosticsSettingsView>(path);
+  const response = await context.http.getJson<RuntimeDiagnosticsSettingsView>(path);
+  return normalizeRuntimeDiagnosticsSettingsView(response);
 }
 
 export async function saveRuntimeDiagnosticsSettings(
@@ -243,5 +246,49 @@ export async function saveRuntimeDiagnosticsSettings(
   request: SaveRuntimeDiagnosticsSettingsRequest
 ) {
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, "runtime-diagnostics");
-  return context.http.putJson<RuntimeDiagnosticsSettingsView>(path, request);
+  const response = await context.http.putJson<RuntimeDiagnosticsSettingsView>(path, request);
+  return normalizeRuntimeDiagnosticsSettingsView(response);
+}
+
+const runtimeDiagnosticsLevels: Record<string, RuntimeDiagnosticsEvidenceLevel> = {
+  off: "Off",
+  metadata: "Metadata",
+  diagnosticsnapshot: "DiagnosticSnapshot",
+  payload: "Payload"
+};
+
+function normalizeRuntimeDiagnosticsSettingsView(settings: RuntimeDiagnosticsSettingsView): RuntimeDiagnosticsSettingsView {
+  return {
+    ...settings,
+    requested: {
+      ...settings.requested,
+      defaultLevel: normalizeRuntimeDiagnosticsLevel(settings.requested.defaultLevel),
+      subjectOverrides: normalizeRuntimeDiagnosticsOverrides(settings.requested.subjectOverrides)
+    },
+    effective: {
+      ...settings.effective,
+      defaultLevel: normalizeRuntimeDiagnosticsLevel(settings.effective.defaultLevel),
+      subjectOverrides: normalizeRuntimeDiagnosticsOverrides(settings.effective.subjectOverrides)
+    },
+    hostPolicy: {
+      ...settings.hostPolicy,
+      maximumLevel: normalizeRuntimeDiagnosticsLevel(settings.hostPolicy.maximumLevel),
+      subjectMaximums: normalizeRuntimeDiagnosticsOverrides(settings.hostPolicy.subjectMaximums)
+    }
+  };
+}
+
+function normalizeRuntimeDiagnosticsOverrides(
+  overrides: RuntimeDiagnosticsSubjectOverrides | null | undefined
+): RuntimeDiagnosticsSubjectOverrides | null | undefined {
+  if (!overrides) return overrides;
+
+  return Object.fromEntries(
+    Object.entries(overrides).map(([subject, level]) => [subject, normalizeRuntimeDiagnosticsLevel(level)])
+  ) as RuntimeDiagnosticsSubjectOverrides;
+}
+
+function normalizeRuntimeDiagnosticsLevel(level: RuntimeDiagnosticsEvidenceLevel | string | undefined): RuntimeDiagnosticsEvidenceLevel {
+  const key = String(level ?? "").replace(/[\s_-]/g, "").toLowerCase();
+  return runtimeDiagnosticsLevels[key] ?? "Off";
 }

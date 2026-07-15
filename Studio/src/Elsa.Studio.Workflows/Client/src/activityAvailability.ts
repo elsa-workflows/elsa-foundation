@@ -33,32 +33,39 @@ const policyLayerLabels = {
 } as const;
 
 const policyLayerNames = Object.keys(policyLayerLabels) as Array<keyof typeof policyLayerLabels>;
+const referenceKindNames = ["ActivityType", "ActivitySet"] as const;
+
+function normalizeEnumName<T extends string>(value: unknown, names: readonly T[], fallback: T): T {
+  if (typeof value === "number") return names[value] ?? fallback;
+  if (typeof value !== "string") return fallback;
+  const key = value.replace(/[\s_-]/g, "").toLowerCase();
+  return names.find(name => name.toLowerCase() === key) ?? fallback;
+}
 
 /** Human label for the policy layer that produced a diagnostic (number or string on the wire). */
-export function getAvailabilityLayerLabel(value: string | number | undefined | null): string {
-  const name = typeof value === "number" ? policyLayerNames[value] : value;
-  return (name && policyLayerLabels[name as keyof typeof policyLayerLabels]) || name?.toString() || "";
+export function getAvailabilityLayerLabel(value: unknown): string {
+  if (value == null) return "";
+  const name = normalizeEnumName(value, policyLayerNames, "Catalog");
+  return policyLayerLabels[name];
 }
 
 /** Normalizes a diagnostic state (number or string) into its canonical name. */
-export function getAvailabilityStateName(value: ActivityAvailabilityDiagnosticState | number | undefined | null): ActivityAvailabilityDiagnosticState {
-  if (typeof value === "string") return value;
-  if (typeof value === "number") return diagnosticStateNames[value] ?? "Available";
-  return "Available";
+export function getAvailabilityStateName(value: unknown): ActivityAvailabilityDiagnosticState {
+  return normalizeEnumName(value, diagnosticStateNames, "Available");
 }
 
-export function getAvailabilityStateLabel(value: ActivityAvailabilityDiagnosticState | number | undefined | null): string {
+export function getAvailabilityStateLabel(value: unknown): string {
   const state = getAvailabilityStateName(value);
   return stateLabels[state] ?? state;
 }
 
 /** Derives a CSS modifier class from a state, e.g. `BlockedByHostBaseline` -> `blocked-by-host-baseline`. */
-export function getAvailabilityStateClass(value: ActivityAvailabilityDiagnosticState | number | undefined | null): string {
+export function getAvailabilityStateClass(value: unknown): string {
   return getAvailabilityStateName(value).replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 /** True when a diagnostic state means the activity is not addable to new workflows. */
-export function isUnavailableState(value: ActivityAvailabilityDiagnosticState | number | undefined | null): boolean {
+export function isUnavailableState(value: unknown): boolean {
   return getAvailabilityStateName(value) !== "Available";
 }
 
@@ -67,8 +74,8 @@ export function isHostBlockedEntry(entry: ActivityAvailabilityDiagnosticEntry): 
   return getAvailabilityStateName(entry.state) === "BlockedByHostBaseline";
 }
 
-export function normalizeAvailabilityMode(value: ActivityAvailabilityMode | number | undefined | null): ActivityAvailabilityMode {
-  return value === "Only" || value === 1 ? "Only" : "AllExcept";
+export function normalizeAvailabilityMode(value: unknown): ActivityAvailabilityMode {
+  return normalizeEnumName(value, ["AllExcept", "Only"], "AllExcept");
 }
 
 /** 0 = AllExcept, 1 = Only — the numeric wire form the backend enum binds from unambiguously. */
@@ -92,7 +99,61 @@ export function createAvailabilityDraft(settings: ActivityAvailabilitySettings |
 }
 
 function isActivityTypeReference(entry: ActivityAvailabilityDiagnosticEntry): boolean {
-  return entry.referenceKind === 0 || entry.referenceKind === "ActivityType";
+  return normalizeEnumName(entry.referenceKind, referenceKindNames, "ActivityType") === "ActivityType";
+}
+
+export function normalizeActivityAvailabilitySettings(settings: unknown): ActivityAvailabilitySettings {
+  const wire = isWireRecord(settings) ? settings : {};
+  const rules = (wire.rules ?? wire.Rules ?? {}) as Record<string, unknown>;
+  return {
+    scope: String(wire.scope ?? wire.Scope ?? "host-default"),
+    mode: normalizeAvailabilityMode(wire.mode ?? wire.Mode),
+    rules: {
+      activityTypes: normalizeStringList(rules.activityTypes ?? rules.ActivityTypes),
+      sets: normalizeStringList(rules.sets ?? rules.Sets)
+    }
+  };
+}
+
+export function normalizeActivityAvailabilityDiagnostics(diagnostics: unknown): ActivityAvailabilityDiagnostics {
+  const wire = isWireRecord(diagnostics) ? diagnostics : {};
+  const items = wire.items ?? wire.Items;
+  const sets = wire.sets ?? wire.Sets;
+  return {
+    items: Array.isArray(items) ? items.filter(isWireRecord).map(normalizeDiagnosticEntry) : [],
+    sets: Array.isArray(sets) ? sets.filter(isWireRecord).map(set => ({
+      name: String(set.name ?? set.Name ?? ""),
+      activityTypeKeys: normalizeStringList(set.activityTypeKeys ?? set.ActivityTypeKeys)
+    })) : []
+  };
+}
+
+function normalizeDiagnosticEntry(entry: Record<string, unknown>): ActivityAvailabilityDiagnosticEntry {
+  const read = (name: string) => entry[name] ?? entry[`${name[0].toUpperCase()}${name.slice(1)}`];
+  return {
+    activityDefinitionId: normalizeOptionalString(read("activityDefinitionId")),
+    activityTypeKey: normalizeOptionalString(read("activityTypeKey")),
+    displayName: normalizeOptionalString(read("displayName")),
+    description: normalizeOptionalString(read("description")),
+    category: normalizeOptionalString(read("category")),
+    state: getAvailabilityStateName(read("state")),
+    layer: normalizeEnumName(read("layer"), policyLayerNames, "Catalog"),
+    referenceKind: normalizeEnumName(read("referenceKind"), referenceKindNames, "ActivityType"),
+    referenceName: normalizeOptionalString(read("referenceName")),
+    reason: String(read("reason") ?? "")
+  };
+}
+
+function isWireRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  return value == null ? null : String(value);
+}
+
+function normalizeStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
 }
 
 /** The identity an activity row contributes to the management rules list. */

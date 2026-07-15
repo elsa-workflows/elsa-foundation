@@ -28,6 +28,7 @@ vi.mock("../api/runtime", async importOriginal => ({
 }));
 
 let active: { root: Root; container: HTMLElement } | null = null;
+let restoreClipboard: (() => void) | null = null;
 
 afterEach(() => {
   if (active) {
@@ -35,6 +36,8 @@ afterEach(() => {
     active.container.remove();
     active = null;
   }
+  restoreClipboard?.();
+  restoreClipboard = null;
   vi.mocked(getActivityExecutionInspection).mockReset();
 });
 
@@ -61,6 +64,15 @@ async function waitFor(assertion: () => void) {
   }
 
   throw lastError;
+}
+
+function installClipboard(writeText: (value: string) => Promise<void>) {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  restoreClipboard = () => {
+    if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  };
 }
 
 const context = {} as StudioEndpointContext;
@@ -234,6 +246,28 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     await waitFor(() => expect(container.textContent).toContain("No runtime input snapshots were recorded for this execution."));
     expect(container.textContent).toContain("No runtime output snapshots were recorded for this execution.");
+  });
+
+  it("prioritizes an activity summary and copies every metadata value", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
+    installClipboard(writeText);
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    const overview = container.querySelector<HTMLElement>(".wf-activity-overview")!;
+
+    expect(overview.querySelector("h4")?.textContent).toBe("Write Line");
+    expect(overview.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
+    expect(overview.querySelector(".wf-activity-execution-details")?.hasAttribute("open")).toBe(false);
+    expect(overview.querySelectorAll(".wf-copy-button")).toHaveLength(10);
+
+    const executionIdCopy = overview.querySelector<HTMLButtonElement>("[aria-label='Copy activity execution ID']")!;
+    executionIdCopy.click();
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("ae-1");
+      expect(overview.querySelector("[role=status]")?.textContent).toBe("Copied activity execution ID.");
+    });
   });
 
   it("renders redaction, truncation, permission-hidden, and payload reference markers", async () => {
