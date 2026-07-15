@@ -15,8 +15,8 @@ name: Integration (nightly)
 # plus on-demand via workflow_dispatch.
 #
 # GitHub-hosted ubuntu-latest runners ship with a working Docker daemon, so
-# Testcontainers works with no extra setup. The fixture pins postgres:16-alpine for
-# determinism.
+# Testcontainers works with no extra setup. Provider fixtures pin exact image tags
+# for determinism.
 #
 # This is informational/nightly, NOT a required PR check -- it is intentionally not
 # wired into branch protection. A failed run is visible in the Actions tab and via the
