@@ -31,9 +31,9 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 **Purpose**: Pin one Groundwork tool/package generation and establish the project/CI shells required by the implementation.
 
-- [ ] T001 After Groundwork #70 and #71 land, pin one released Core/Documents/provider/Tool generation containing #32 and #43–#48/#70/#71 in `Directory.Packages.props` and `.config/dotnet-tools.json`
-- [ ] T002 Add the acyclic composition-contract, conformance, and missing base/unified provider source/test project shells to `Elsa.Server.slnx`, `src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj`, `tests/Elsa/Persistence/Groundwork/Composition/Tests/Elsa.Persistence.Groundwork.Composition.Tests.csproj`, `tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj`, `src/Elsa/Persistence/Groundwork/SqlServer/Elsa.Persistence.Groundwork.SqlServer.csproj`, `src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj`, `tests/Elsa/Persistence/Groundwork/SqlServer/Tests/Elsa.Persistence.Groundwork.SqlServer.Tests.csproj`, `src/Elsa/Persistence/Groundwork/MongoDb/Elsa.Persistence.Groundwork.MongoDb.csproj`, `src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj`, and `tests/Elsa/Persistence/Groundwork/MongoDb/Tests/Elsa.Persistence.Groundwork.MongoDb.Tests.csproj`; update `src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj` to remove Composition/SqlServer/MongoDb Compile/EmbeddedResource/None globs, and make each new SQL Server/MongoDB base provider project exclude its nested Unified tree
-- [ ] T003 Add fast, provider, failure/restart, plan, temporary-oracle, and readiness job shells to `.github/workflows/ci.yml` and `.github/workflows/integration.yml`
+- [X] T001 After Groundwork #70 and #71 land, pin one released Core/Documents/provider/Tool generation containing #32 and #43–#48/#70/#71 in `Directory.Packages.props` and `.config/dotnet-tools.json`
+- [X] T002 Add the acyclic composition-contract, conformance, and missing base/unified provider source/test project shells to `Elsa.Server.slnx`, `src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj`, `tests/Elsa/Persistence/Groundwork/Composition/Tests/Elsa.Persistence.Groundwork.Composition.Tests.csproj`, `tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj`, `src/Elsa/Persistence/Groundwork/SqlServer/Elsa.Persistence.Groundwork.SqlServer.csproj`, `src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj`, `tests/Elsa/Persistence/Groundwork/SqlServer/Tests/Elsa.Persistence.Groundwork.SqlServer.Tests.csproj`, `src/Elsa/Persistence/Groundwork/MongoDb/Elsa.Persistence.Groundwork.MongoDb.csproj`, `src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj`, and `tests/Elsa/Persistence/Groundwork/MongoDb/Tests/Elsa.Persistence.Groundwork.MongoDb.Tests.csproj`; update `src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj` to remove Composition/SqlServer/MongoDb Compile/EmbeddedResource/None globs, and make each new SQL Server/MongoDB base provider project exclude its nested Unified tree
+- [X] T003 Add fast, provider, failure/restart, plan, temporary-oracle, and readiness job shells to `.github/workflows/ci.yml` and `.github/workflows/integration.yml`
 
 ---
 
@@ -64,16 +64,16 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 1
 
-- [ ] T012 [P] [US1] Write failing schema/state-transition/32-row tests in `tests/Elsa/Architecture/GroundworkCoverageLedgerTests.cs`
-- [ ] T013 [P] [US1] Write failing exact baseline test-case identity continuity tests in `tests/Elsa/Architecture/GroundworkBehavioralBaselineTests.cs`
-- [ ] T014 [P] [US1] Write failing contract-registration-manifest reconciliation and #644/#660 ownership tests in `tests/Elsa/Architecture/GroundworkPersistenceCoverageTests.cs`
+- [X] T012 [P] [US1] Write failing schema/state-transition/32-row tests in `tests/Elsa/Architecture/GroundworkCoverageLedgerTests.cs`
+- [X] T013 [P] [US1] Write failing exact baseline test-case identity continuity tests in `tests/Elsa/Architecture/GroundworkBehavioralBaselineTests.cs`
+- [X] T014 [P] [US1] Write failing contract-registration-manifest reconciliation and #644/#660 ownership tests in `tests/Elsa/Architecture/GroundworkPersistenceCoverageTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Implement typed ledger loading, JSON Schema validation, state-transition rules, and evidence completeness checks in `tests/Elsa/Architecture/GroundworkCoverageLedgerValidator.cs`
-- [ ] T016 [US1] Implement immutable-baseline test discovery and removal-approval reconciliation in `tests/Elsa/Architecture/GroundworkBehavioralBaselineScanner.cs` and `specs/094-harden-groundwork-stores/research.md`
-- [ ] T017 [US1] Extend core-dependency and EF-surface ratchets for every in-scope family in `tests/Elsa/Architecture/ArchitectureGuardTests.cs`, `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`, and `tests/Elsa/Architecture/Baselines/ef-core-surface.json`
-- [ ] T018 [US1] Wire ledger and ratchet gates into CI and record their evidence contract in `.github/workflows/ci.yml` and `specs/094-harden-groundwork-stores/contracts/coverage-ledger.md`
+- [X] T015 [US1] Implement typed ledger loading, JSON Schema validation, state-transition rules, and evidence completeness checks in `tests/Elsa/Architecture/GroundworkCoverageLedgerValidator.cs`
+- [X] T016 [US1] Implement immutable-baseline test discovery and removal-approval reconciliation in `tests/Elsa/Architecture/GroundworkBehavioralBaselineScanner.cs` and `specs/094-harden-groundwork-stores/research.md`
+- [X] T017 [US1] Extend core-dependency and EF-surface ratchets for every in-scope family in `tests/Elsa/Architecture/ArchitectureGuardTests.cs`, `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`, and `tests/Elsa/Architecture/Baselines/ef-core-surface.json`
+- [X] T018 [US1] Wire ledger and ratchet gates into CI and record their evidence contract in `.github/workflows/ci.yml` and `specs/094-harden-groundwork-stores/contracts/coverage-ledger.md`
 
 **Checkpoint**: Deleting or silently de-scoping any baseline obligation fails CI. This is the minimum independently useful increment.
 

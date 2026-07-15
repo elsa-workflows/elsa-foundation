@@ -85,7 +85,7 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
             if (request.ExpectedVersion is { } expected && existing.Version != expected)
                 return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
             _docs.TryRemove(key, out _);
-            return Task.FromResult(DocumentStoreWriteResult.Deleted);
+            return Task.FromResult(DocumentStoreWriteResult.Deleted(existing.Id));
         }
     }
 
@@ -190,7 +190,7 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
                 return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
             _staged[key] = null;
             _pending.Add(() => store.DeleteAsync(request, cancellationToken));
-            return Task.FromResult(DocumentStoreWriteResult.Deleted);
+            return Task.FromResult(DocumentStoreWriteResult.Deleted(existing.Id));
         }
 
         public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)

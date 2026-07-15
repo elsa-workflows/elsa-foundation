@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Documents.Store;
 using System.Text.Json;
 using Xunit;
 
@@ -204,6 +205,50 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(new[] { "inc-1", "inc-2" }, blocking.Select(x => x.IncidentId).OrderBy(x => x));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task IncidentState_LongFaultIdentity_RoundTrips_And_Remains_InsertOnly(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var workItemId = $"work:{new string('x', 450)}";
+        var incidentId = $"incident:{workItemId}:activity-1:Faulted";
+        Assert.True(incidentId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {incidentId.Length}.");
+
+        Assert.True(await store.TryAddAsync(Incident("wf-1", incidentId, IncidentStatus.Open)));
+        Assert.False(await store.TryAddAsync(Incident("wf-1", incidentId, IncidentStatus.Blocking)));
+        Assert.Equal(IncidentStatus.Open, (await store.FindAsync("wf-1", incidentId))!.Status);
+
+        await store.SaveAsync(Incident("wf-1", incidentId, IncidentStatus.Blocking));
+
+        Assert.Equal(IncidentStatus.Blocking, (await store.FindAsync("wf-1", incidentId))!.Status);
+        Assert.Equal(incidentId, Assert.Single(await store.ListAsync("wf-1")).IncidentId);
+    }
+
+    [Fact]
+    public async Task IncidentState_PhysicalIdentityCollision_FailsClosed()
+    {
+        await using var fixture = CreateStore("sqlite");
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var incidentId = $"incident:work:{new string('x', 450)}:activity-1:Faulted";
+        var logicalDocumentId = DocumentId.Compose("wf-1", incidentId);
+        var physicalDocumentId = GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(logicalDocumentId);
+        var wrongState = Incident("wf-wrong", "incident-wrong", IncidentStatus.Open);
+        var (schemaVersion, content) = GroundworkTestSerialization.Serializer.Serialize(
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            wrongState);
+        await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            physicalDocumentId,
+            schemaVersion,
+            content));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.FindAsync("wf-1", incidentId));
+
+        Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
+    }
+
     private static ActivityExecutionState ActivityState(string workflowExecutionId, string activityExecutionId) => new(
         new ActivityExecution(activityExecutionId, workflowExecutionId, $"node-{activityExecutionId}", "authored", "Elsa.Log", "1.0.0"),
         ActivityExecutionStatus.Running,
@@ -261,9 +306,9 @@ public sealed class GroundworkRuntimeStateStoreTests
         ParentWorkflowExecutionId: null,
         TenantId: null,
         SystemMetadata: new Dictionary<string, string>())
-    {
-        RunKind = runKind
-    };
+        {
+            RunKind = runKind
+        };
 
     private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId) => new(
         durableValueId,

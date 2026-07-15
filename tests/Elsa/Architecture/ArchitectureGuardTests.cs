@@ -108,6 +108,21 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void In_scope_persistence_contract_projects_remain_free_of_concrete_provider_dependencies()
+    {
+        var projects = ProjectFiles().ToArray();
+        var projectsByName = projects.ToDictionary(project => project.Name, StringComparer.Ordinal);
+        var missing = PersistenceProviderNeutralityBoundary.ProjectNames
+            .Where(projectName => !projectsByName.ContainsKey(projectName))
+            .ToArray();
+        Assert.True(missing.Length == 0, "Missing provider-neutral persistence projects: " + string.Join(", ", missing));
+
+        var violations = new EfCoreSurfaceScanner(RepoRoot).FindProtectedProviderNeutralityViolations();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
     public void Elsa_primitives_has_no_external_package_references()
     {
         var primitives = ProjectFiles().Single(x => x.Name == "Elsa.Primitives");

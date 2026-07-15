@@ -144,9 +144,15 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         {
             var envelope = await _commitLedger.LoadAsync(
                 ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
-                commit.CommitId,
+                GroundworkPhysicalDocumentId.FromLogicalId(commit.CommitId),
                 cancellationToken);
-            return envelope is not null;
+            if (envelope is null)
+                return false;
+
+            var marker = _serializer.Deserialize<CheckpointCommitMarker>(envelope);
+            if (!StringComparer.Ordinal.Equals(marker.CommitId, commit.CommitId))
+                throw new InvalidOperationException($"Groundwork physical document identity collision detected for runtime checkpoint commit '{commit.CommitId}'.");
+            return true;
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -201,13 +207,16 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         {
             var marker = new CheckpointCommitMarker(commit.CommitId, commit.WorkflowExecutionId, commit.Checkpoint.OccurredAt);
             var (schemaVersion, content) = _serializer.Serialize(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, marker);
-            await store.SaveAsync(
+            var result = await store.SaveAsync(
                 new SaveDocumentRequest(
                     ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
-                    commit.CommitId,
+                    GroundworkPhysicalDocumentId.FromLogicalId(commit.CommitId),
                     schemaVersion,
-                    content),
+                    content,
+                    ExpectedVersion: 0),
                 cancellationToken);
+            if (result.Status != DocumentStoreWriteStatus.Saved)
+                throw new InvalidOperationException($"Groundwork rejected runtime checkpoint commit marker '{commit.CommitId}' with status '{result.Status}'.");
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

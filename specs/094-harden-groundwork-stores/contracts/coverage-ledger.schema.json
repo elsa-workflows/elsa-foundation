@@ -8,6 +8,7 @@
     "$schema",
     "schemaVersion",
     "feature",
+    "groundworkVersion",
     "baselineRef",
     "mandatoryProviders",
     "entries"
@@ -24,6 +25,10 @@
     "feature": {
       "type": "string",
       "const": "094-harden-groundwork-stores"
+    },
+    "groundworkVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
     },
     "baselineRef": {
       "type": "string",
@@ -49,20 +54,87 @@
     }
   },
   "$defs": {
-    "evidenceLinks": {
+    "evidenceRecords": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": { "$ref": "#/$defs/providerEvidenceRecord" },
       "uniqueItems": true
+    },
+    "providerEvidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenarioId",
+        "coverageEntryId",
+        "provider",
+        "providerIdentity",
+        "providerVersion",
+        "topology",
+        "manifestFingerprint",
+        "executionPath",
+        "clients",
+        "resultHash",
+        "outcome",
+        "evidence",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "scenarioId": { "type": "string", "minLength": 1 },
+        "coverageEntryId": { "type": "string", "minLength": 1 },
+        "provider": {
+          "type": "string",
+          "enum": ["sqlite", "sqlserver", "postgresql", "mongodb"]
+        },
+        "providerIdentity": {
+          "type": "string",
+          "enum": ["groundwork-sqlite", "groundwork-sqlserver", "groundwork-postgresql", "groundwork-mongodb"]
+        },
+        "providerVersion": { "type": "string", "minLength": 1 },
+        "topology": {
+          "type": "string",
+          "enum": [
+            "file-backed-distinct-connections",
+            "real-sqlserver-container",
+            "real-postgresql-container",
+            "transaction-capable-replica-set",
+            "transaction-capable-sharded-cluster"
+          ]
+        },
+        "manifestFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "executionPath": {
+          "type": "string",
+          "pattern": "^provider-driver/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}$"
+        },
+        "clients": { "type": "integer", "minimum": 1 },
+        "queryShape": { "type": "string", "minLength": 1 },
+        "concurrencySemantic": { "type": "string", "minLength": 1 },
+        "failureWindow": { "type": "string", "minLength": 1 },
+        "restartScenario": { "type": "string", "minLength": 1 },
+        "resultHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "nativeEvidence": {
+          "type": "string",
+          "pattern": "^evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.plan\\.txt$"
+        },
+        "nativeEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "outcome": {
+          "type": "string",
+          "enum": ["pass", "classified-readiness-failure"]
+        },
+        "evidence": {
+          "type": "string",
+          "pattern": "^evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.json$"
+        },
+        "evidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
     },
     "providerEvidence": {
       "type": "object",
       "additionalProperties": false,
       "required": ["sqlite", "sqlserver", "postgresql", "mongodb"],
       "properties": {
-        "sqlite": { "$ref": "#/$defs/evidenceLinks" },
-        "sqlserver": { "$ref": "#/$defs/evidenceLinks" },
-        "postgresql": { "$ref": "#/$defs/evidenceLinks" },
-        "mongodb": { "$ref": "#/$defs/evidenceLinks" }
+        "sqlite": { "$ref": "#/$defs/evidenceRecords" },
+        "sqlserver": { "$ref": "#/$defs/evidenceRecords" },
+        "postgresql": { "$ref": "#/$defs/evidenceRecords" },
+        "mongodb": { "$ref": "#/$defs/evidenceRecords" }
       }
     },
     "performanceVerdict": {

@@ -33,19 +33,31 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var documentId = GroundworkCompositeDocumentId.From(workItem.WorkflowExecutionId, workItem.WorkItemId);
+        var documentId = PhysicalDocumentId(workItem.WorkflowExecutionId, workItem.WorkItemId);
         var existing = await LoadDocumentAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
             documentId, envelope => envelope.Item, cancellationToken);
         if (existing is not null)
+        {
+            EnsureLogicalIdentity(existing, workItem.WorkflowExecutionId, workItem.WorkItemId);
             return existing;
+        }
 
         var document = new WorkQueueEnvelope(
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
             workItem.WorkflowExecutionId,
             workItem);
-        await SaveDocumentAsync(documentId, document, cancellationToken);
+        var result = await SaveDocumentAsync(documentId, document, cancellationToken, expectedVersion: 0);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return workItem;
+        if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+            throw new InvalidOperationException($"Groundwork rejected scheduler work item '{workItem.WorkItemId}' with status '{result.Status}'.");
 
-        return workItem;
+        existing = await LoadDocumentAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
+            documentId, envelope => envelope.Item, cancellationToken)
+            ?? throw new InvalidOperationException($"Scheduler work item '{workItem.WorkItemId}' conflicted during creation but could not be reloaded.");
+        EnsureLogicalIdentity(existing, workItem.WorkflowExecutionId, workItem.WorkItemId);
+
+        return existing;
     }
 
     public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default)
@@ -70,7 +82,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
         if (workItem is null)
             return null;
 
-        await DeleteDocumentAsync(GroundworkCompositeDocumentId.From(workItem.WorkflowExecutionId, workItem.WorkItemId), cancellationToken);
+        await DeleteDocumentAsync(PhysicalDocumentId(workItem.WorkflowExecutionId, workItem.WorkItemId), cancellationToken);
 
         return workItem;
     }
@@ -105,6 +117,19 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
             .ThenBy(item => item.Sequence ?? long.MaxValue)
             .ThenBy(item => item.WorkItemId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static string PhysicalDocumentId(string workflowExecutionId, string workItemId) =>
+        GroundworkPhysicalDocumentId.FromLogicalId(GroundworkCompositeDocumentId.From(workflowExecutionId, workItemId));
+
+    private static void EnsureLogicalIdentity(RuntimeSchedulerWorkItem item, string workflowExecutionId, string workItemId)
+    {
+        if (!StringComparer.Ordinal.Equals(item.WorkflowExecutionId, workflowExecutionId)
+            || !StringComparer.Ordinal.Equals(item.WorkItemId, workItemId))
+        {
+            throw new InvalidOperationException(
+                $"Groundwork physical document identity collision detected for scheduler work item '{workItemId}' in workflow execution '{workflowExecutionId}'.");
+        }
     }
 
     // The constant collection partition lets the system-wide pending-executions sweep use a keyword
