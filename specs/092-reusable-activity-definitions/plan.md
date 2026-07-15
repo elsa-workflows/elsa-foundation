@@ -96,6 +96,10 @@ src/Elsa/Activities/Design/Persistence/Groundwork/
 ├── Services/                  # durable stores/commands
 └── ActivitiesDesignStorageManifest.cs
 
+src/Elsa/Workflows/Publishing/Persistence/Groundwork/
+├── Services/                  # cross-domain atomic publication/upgrade commits
+└── PublishingGroundworkFeature.cs
+
 src/Elsa/Activities/Design/Api/
 ├── Commands/
 ├── Requests/
@@ -140,7 +144,8 @@ src/Elsa/Persistence/Groundwork/
 └── ElsaRuntimeStorageManifest.cs
 
 src/Elsa3/Activities/Design/Import/
-└── reusable-activity collection plan/apply contracts and implementation
+├── reusable-activity collection plan/apply contracts and implementation
+└── Persistence/Groundwork/    # cross-domain atomic selected-closure commit
 
 tests/Elsa/Activities/Design/
 tests/Elsa/Activities/Graph/
@@ -152,7 +157,9 @@ tests/Elsa3/Mapping/
 tests/Elsa/Architecture/
 ```
 
-**Structure Decision**: Replace the narrow `Elsa.Activities.Composition.Design/Runtime` workflow-backed pair with explicit `Elsa.Activities.Graph.Design/Runtime` provider/consumer projects. Their separation is a real Design/Runtime capability boundary (framework §2.16.1 exemption), not a layer-marker bucket: Graph Design owns authored graph provider behavior; Graph Runtime owns the executable composite. General draft/version/API/persistence contracts stay in existing Activity Design packages, and workflow artifact/runtime concerns stay in existing Workflows packages.
+**Structure Decision**: Replace the narrow `Elsa.Activities.Composition.Design/Runtime` workflow-backed pair with explicit `Elsa.Activities.Graph.Design/Runtime` provider/consumer projects. Their separation is a real Design/Runtime capability boundary (framework §2.16.1 exemption), not a layer-marker bucket: Graph Design owns authored graph provider behavior; Graph Runtime owns the executable composite. General draft/version/API/persistence contracts stay in existing Activity Design packages, and workflow artifact/runtime concerns stay in existing Workflows packages. Cross-domain Groundwork transactions live in Publishing-owned and Elsa3-import-owned adapter projects so neither Activity Design persistence nor Runtime persistence acquires an illegal dependency on the other domain.
+
+New authoring/publication state is represented by Groundwork-targeted sibling documents behind provider-neutral Core ports. Existing EF projects remain compile-compatible without new mapped fields, schema, or migrations and are removed from default composition where the clean-break replacement makes them obsolete; no new feature behavior depends on EF.
 
 ## Design Decisions
 
@@ -191,7 +198,7 @@ Exit: a Design-owned graph draft can be created, updated under revision, validat
 ### Slice B - Atomic graph publication
 
 - Add graph provider schema 1, contract fidelity validation, exact dependency resolution/cycle detection, deterministic compiler, template hasher/store, Source Reference hierarchical layout, and publication coordinator.
-- Persist version/template/reference/direct edges/head atomically in Groundwork.
+- Persist version/template/reference/direct edges/head atomically through the Publishing-owned Groundwork bridge.
 - Enforce expected head/revision and SemVer; expose version/dependency reads.
 
 Exit: a valid graph draft publishes one immutable exact version/template; failures at every phase expose structured diagnostics and zero partial state.
@@ -228,7 +235,7 @@ Exit: selected dependency-closed draft edits apply atomically under pinned revis
 
 ### Slice G - Elsa 3 conversion and legacy removal
 
-- Add collection-aware analysis/apply fixtures, deterministic ids, wrapper workflow generation, exact rewrites, atomic selected closure, and cycle/missing/unsupported diagnostics.
+- Add collection-aware analysis/apply fixtures, deterministic ids, wrapper workflow generation, exact rewrites, an import-owned Groundwork atomic selected-closure command, and cycle/missing/unsupported diagnostics.
 - Remove the Foundation workflow-as-activity marker/activity/reconciliation/catalog surface and rename/refine remaining terminology/docs.
 - Retain and test explicit separate-workflow execution.
 
