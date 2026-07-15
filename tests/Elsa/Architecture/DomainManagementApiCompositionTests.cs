@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Expressions;
@@ -89,12 +90,26 @@ public sealed class DomainManagementApiCompositionTests
             capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
     }
 
+    [Fact]
+    public async Task Activity_availability_diagnostics_is_retrievable_without_request_input()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false);
+
+        var diagnostics = await host.Client.GetFromJsonAsync<ActivityAvailabilityDiagnostics>(
+            "/design/activities/availability/diagnostics");
+
+        Assert.NotNull(diagnostics);
+        Assert.Empty(diagnostics.Items);
+        Assert.Empty(diagnostics.Sets);
+    }
+
     private sealed class CustomManagementHost(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         private static readonly string[] CommonEndpointTypes =
         [
             "Elsa.Api.Capabilities.Endpoints.GetCapabilities",
             "Elsa.Activities.Design.Api.Endpoints.Catalog.List",
+            "Elsa.Activities.Design.Api.Endpoints.Availability.ListDiagnostics",
             "Elsa.Workflows.Design.Api.Endpoints.Definitions.List",
             "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint",
             "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowExecutablesEndpoint"
@@ -175,6 +190,7 @@ public sealed class DomainManagementApiCompositionTests
             {
                 var type when type == typeof(WorkflowDefinitionListView) => new WorkflowDefinitionListView([]),
                 var type when type == typeof(ActivityAuthoringCatalogView) => new ActivityAuthoringCatalogView([]),
+                var type when type == typeof(ActivityAvailabilityDiagnostics) => new ActivityAvailabilityDiagnostics([], []),
                 var type when type == typeof(PublishedWorkflowView) => new PublishedWorkflowView(
                     "publication-1", "definition-1", "version-1", "version-1", "artifact-1", "default",
                     PublicationStatusView.Active, "reference-1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
