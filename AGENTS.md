@@ -77,12 +77,12 @@ bash tools/maps/generate-feature-dependency-map.sh
 If the local shell is unavailable, try the other script if that shell is installed. If neither
 PowerShell nor Bash is available, ask the user to install one of them before refreshing maps.
 
-Generated maps are committed snapshots. Before relying on any map for navigation or verification,
-check `docs/maps/manifest.json`. If the map is invoked and relevant inputs are dirty, changed, or
-freshness is uncertain, refresh the narrowest relevant map layer first, then review any generated
-findings report before continuing. If the refreshed report exposes drift that makes the current work
-unsafe, stop and tell the user before proceeding. Maps v2 scripts are split so agents can refresh
-only the layer they need.
+Generated maps are committed snapshots and are never refreshed automatically. Before relying on any
+map for navigation or verification, check `docs/maps/manifest.json`. If relevant inputs are dirty,
+changed, or freshness is uncertain, report that the snapshot is stale and ask the user to invoke or
+authorize the narrowest relevant map refresh. After an explicitly authorized refresh, review any
+generated findings report before continuing. Maps v2 scripts are split so the user can refresh only
+the layer they need.
 
 ## Personal operating preferences
 
