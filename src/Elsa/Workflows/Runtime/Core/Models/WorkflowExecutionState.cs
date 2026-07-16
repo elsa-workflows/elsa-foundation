@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -27,6 +29,14 @@ public sealed record WorkflowExecutionState(
     /// Immutable source attribution selected when this execution started. Null only for legacy state.
     /// </summary>
     public WorkflowExecutableSourceProvenance? PinnedSource { get; init; }
+
+    /// <summary>Partition selected when the execution was dispatched. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionPartition? Partition { get; init; }
+
+    /// <summary>Immutable runtime-owned authority and root-initiator attribution. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionAuthoritySnapshot? Authority { get; init; }
 }
 
 public enum WorkflowRunKind

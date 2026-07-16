@@ -299,8 +299,45 @@ public sealed class ArchitectureGuardTests
                 "Elsa.Activities.Runtime.Core",
                 "Elsa.Activities.Primitives",
                 "Elsa.Activities.Graph.Runtime",
+                "Elsa.Activities.DispatchWorkflow.Runtime",
             ],
             IsDesignReference);
+
+    [Fact]
+    public void Dispatch_workflow_modules_preserve_runtime_design_and_transport_boundaries()
+    {
+        var projects = ProjectFiles().ToDictionary(project => project.Name, StringComparer.Ordinal);
+        var runtime = projects["Elsa.Activities.DispatchWorkflow.Runtime"];
+        var design = projects["Elsa.Activities.DispatchWorkflow.Design"];
+        var runtimeReferences = ProjectReferences(runtime).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var designReferences = ProjectReferences(design).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var forbiddenReferences = new[]
+        {
+            "Elsa.Activities.Composition.Runtime",
+            "Elsa.Workflows.Design.Core",
+            "Elsa.Studio"
+        };
+
+        Assert.Contains("Elsa.Workflows.Runtime.Core", runtimeReferences);
+        Assert.DoesNotContain("Elsa.Workflows.Runtime", runtimeReferences);
+        Assert.DoesNotContain("Elsa.Workflows.Runtime.Resumption", runtimeReferences);
+        Assert.Contains(
+            "WorkflowsRuntimeResumption",
+            File.ReadAllText(Path.Combine(Path.GetDirectoryName(runtime.FullPath)!, "DispatchWorkflowRuntimeFeature.cs")),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(forbiddenReferences, runtimeReferences.Contains);
+        Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+
+        var sourceFiles = new[] { runtime, design }
+            .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories));
+        var workflowDefinitionActivityReferences = sourceFiles
+            .Where(file => StripCommentsAndStringLiterals(File.ReadAllText(file)).Contains("WorkflowDefinitionActivity", StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(RepoRoot, file))
+            .ToArray();
+        Assert.Empty(workflowDefinitionActivityReferences);
+    }
 
     [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
     public void Activity_construction_feature_projects_do_not_reference_each_other()

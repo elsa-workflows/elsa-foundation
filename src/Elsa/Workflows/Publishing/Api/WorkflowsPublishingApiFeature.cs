@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Events.Core.Extensions;
 using Elsa.Api.FastEndpoints;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Mediator.Core.Extensions;
@@ -12,7 +13,9 @@ using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Commands;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -36,7 +39,7 @@ namespace Elsa.Workflows.Publishing.Api;
     name: "WorkflowsPublishingApi",
     DisplayName = "Workflows Publishing API",
     Description = "Bridge endpoints that construct a live activity from a persisted catalog row (the construction seam).",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "ApiCapabilities" }
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "ApiCapabilities", "Events" }
 )]
 public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 {
@@ -92,6 +95,8 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityDraftDiffCandidateCompiler, ActivityDraftDiffCandidateCompiler>();
         services.TryAddScoped<IActivityUpgradePlanApplier, ApplyActivityUpgradePlanCommand>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
+        services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
+        services.AddEventHandler<OnExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddScoped<RuntimeRequirementPreflight>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();

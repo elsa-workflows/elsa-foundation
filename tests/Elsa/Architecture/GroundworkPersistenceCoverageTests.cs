@@ -30,6 +30,37 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
+    public void Workflow_dispatch_persistence_is_explicitly_deferred_to_678()
+    {
+        var findings = Reconcile(
+            ReadLedger(),
+            Inventory(durableContracts: ["IWorkflowDispatchStore"]));
+
+        Assert.Empty(findings);
+    }
+
+    [Fact]
+    public void Deferred_workflow_dispatch_persistence_cannot_be_registered_without_replacing_the_deferral()
+    {
+        var findings = Reconcile(
+            ReadLedger(),
+            Inventory(
+                durableContracts: ["IWorkflowDispatchStore"],
+                registrations:
+                [
+                    Registration(
+                        "runtime",
+                        "IWorkflowDispatchStore",
+                        "GroundworkWorkflowDispatchStore",
+                        "WorkflowDispatchDocumentKind")
+                ]));
+
+        Assert.Equal(
+            ["GroundworkWorkflowDispatchStore (IWorkflowDispatchStore): Groundwork persistence is explicitly deferred to #678; remove the deferral and add a coverage-ledger mapping before registration."],
+            findings);
+    }
+
+    [Fact]
     public void Registered_Groundwork_implementation_without_an_explicit_ledger_mapping_is_rejected()
     {
         var ledger = ReadLedger();

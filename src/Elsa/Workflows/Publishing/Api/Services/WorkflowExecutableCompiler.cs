@@ -32,9 +32,40 @@ public sealed class WorkflowExecutableCompiler(
     WorkflowExecutableHasher hasher,
     ActivityTreeProjector activityTreeProjector,
     ExecutableNodeCompiler executableNodeCompiler,
-    WorkflowExecutablePlacementSidecarContext? placementSidecars = null)
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+    IExecutableNodeMetadataEnricher? metadataEnricher = null)
     : IWorkflowExecutableCompiler
 {
+    public WorkflowExecutableCompiler(
+        IWorkflowDefinitionVersionStore workflowVersions,
+        IActivityDefinitionVersionStore activityVersions,
+        IActivityDefinitionVersionPublicationStore activityPublications,
+        IExecutableActivityTemplateReader activityTemplates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences,
+        ActivityTemplatePlacer templatePlacer,
+        RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler,
+        WorkflowExecutableHasher hasher,
+        ActivityTreeProjector activityTreeProjector,
+        ExecutableNodeCompiler executableNodeCompiler,
+        WorkflowExecutablePlacementSidecarContext? placementSidecars)
+        : this(
+            workflowVersions,
+            activityVersions,
+            activityPublications,
+            activityTemplates,
+            sourceReferences,
+            templatePlacer,
+            inputBindingCompiler,
+            outputCaptureCompiler,
+            hasher,
+            activityTreeProjector,
+            executableNodeCompiler,
+            placementSidecars,
+            metadataEnricher: null)
+    {
+    }
+
     public async ValueTask<WorkflowExecutable> CompileAsync(
         WorkflowExecutableCompileRequest request,
         CancellationToken cancellationToken = default)
@@ -112,6 +143,8 @@ public sealed class WorkflowExecutableCompiler(
             }
 
             var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities);
+            if (metadataEnricher is not null)
+                compiledRoot = await metadataEnricher.EnrichAsync(request, source, compiledRoot, cancellationToken);
             var artifactHash = hasher.ComputeHash(compiledRoot);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())

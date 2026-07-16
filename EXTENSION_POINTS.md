@@ -114,6 +114,8 @@ not automatic constitution violations.
 |---|---|
 | Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md`](src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md) |
 | Activities runtime (activity constructors + resume target declarations) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
+| DispatchWorkflow runtime (staged checkpoint dispatch and child-start contribution) | [`src/Elsa/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
+| DispatchWorkflow design (options and executable-pin contribution) | [`src/Elsa/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md`](src/Elsa/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md) |
 | Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`src/Elsa/Activities/Http/EXTENSION_POINTS.md`](src/Elsa/Activities/Http/EXTENSION_POINTS.md) |
 | Activities sequence (runtime composite activity contracts) | [`src/Elsa/Activities/Sequence/EXTENSION_POINTS.md`](src/Elsa/Activities/Sequence/EXTENSION_POINTS.md) |
 | Activities control-flow — If branch (Then/Else slots, True/False outcomes; `IActivityStructureHandler` contribution) | [`src/Elsa/Activities/ControlFlow/If/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/If/EXTENSION_POINTS.md) |

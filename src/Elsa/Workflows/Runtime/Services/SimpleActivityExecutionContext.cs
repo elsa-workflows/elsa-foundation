@@ -20,7 +20,7 @@ public sealed class SimpleActivityExecutionContext(
     ExecutableNode? executableNode = null,
     ActivityExecutionState? activityExecutionState = null,
     VariableScope? variableScope = null)
-    : IRuntimeActivityExecutionContext, IExpressionExecutionContext, IScopedVariableProvider, IExecutionExpressionState
+    : IRuntimeActivityExecutionContext, IWorkflowDispatchStagingContext, IExpressionExecutionContext, IScopedVariableProvider, IExecutionExpressionState
 {
     private static readonly IReadOnlyDictionary<string, object?> EmptyExpressionState = new Dictionary<string, object?>(StringComparer.Ordinal);
 
@@ -110,6 +110,7 @@ public sealed class SimpleActivityExecutionContext(
     public IReadOnlyCollection<string> CompositeCompletionOutcomeNames => _compositeCompletionOutcomeNames.ToArray();
     public bool FinishWorkflowRequested { get; private set; }
     public IReadOnlyCollection<string> FinishWorkflowOutcomeNames => _finishWorkflowOutcomeNames.ToArray();
+    public WorkflowDispatchCheckpointRequest? WorkflowDispatchRequest { get; private set; }
     public bool CorrelationIdAssignmentRequested { get; private set; }
     public string? RequestedCorrelationId { get; private set; }
     public bool InstanceNameAssignmentRequested { get; private set; }
@@ -223,6 +224,15 @@ public sealed class SimpleActivityExecutionContext(
         FinishWorkflowRequested = true;
         _finishWorkflowOutcomeNames.Clear();
         _finishWorkflowOutcomeNames.AddRange(outcomeSnapshot);
+    }
+
+    public void StageWorkflowDispatch(WorkflowDispatchCheckpointRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (WorkflowDispatchRequest is not null)
+            throw new InvalidOperationException("An activity execution can stage only one workflow dispatch checkpoint request.");
+
+        WorkflowDispatchRequest = request;
     }
 
     public void SetCorrelationId(string? correlationId)

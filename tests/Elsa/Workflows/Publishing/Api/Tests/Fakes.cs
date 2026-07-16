@@ -11,6 +11,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -62,7 +63,8 @@ internal static class TestCompiler
         IExecutableActivityTemplateReader? activityTemplates = null,
         IWorkflowExecutableSourceReferenceReader? sourceReferences = null,
         WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
-        IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null)
+        IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null)
     {
         var publications = activityPublications ?? new EmptyActivityPublicationStore();
         var templates = activityTemplates ?? new EmptyActivityTemplateReader();
@@ -85,7 +87,8 @@ internal static class TestCompiler
                 activityStructureService,
                 wellKnownTypeRegistry,
                 inputCompiler),
-            placementSidecars);
+            placementSidecars,
+            metadataEnricher);
     }
 
     private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore
