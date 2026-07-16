@@ -67,6 +67,18 @@ public class GroundworkWorkflowsDesignRegistrationTests
     }
 
     [Fact]
+    public void Registers_default_entity_factories()
+    {
+        using var provider = BuildProvider();
+        using var scope = provider.CreateScope();
+        var sp = scope.ServiceProvider;
+
+        Assert.IsType<WorkflowDefinitionFactory>(sp.GetRequiredService<IWorkflowDefinitionFactory>());
+        Assert.IsType<WorkflowDefinitionVersionFactory>(sp.GetRequiredService<IWorkflowDefinitionVersionFactory>());
+        Assert.IsType<WorkflowDefinitionDraftFactory>(sp.GetRequiredService<IWorkflowDefinitionDraftFactory>());
+    }
+
+    [Fact]
     public void Groundwork_registration_overrides_a_prior_store()
     {
         using var provider = BuildProvider(services =>
