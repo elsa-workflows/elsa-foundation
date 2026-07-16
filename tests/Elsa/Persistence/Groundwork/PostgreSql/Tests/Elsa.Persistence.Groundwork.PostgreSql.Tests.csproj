@@ -29,8 +29,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\Tests\Fixtures\v2\workflowExecutionState.json"
-          Link="Fixtures\v2\workflowExecutionState.json"
+    <None Include="..\..\Tests\Fixtures\v4\workflowExecutionState.json"
+          Link="Fixtures\v4\workflowExecutionState.json"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

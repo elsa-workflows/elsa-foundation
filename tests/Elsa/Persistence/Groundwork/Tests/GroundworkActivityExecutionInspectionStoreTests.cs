@@ -177,7 +177,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
                 DocumentId.Compose("wf-1", "ae-1"),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                ElsaRuntimeDocumentVersions.Stamp(ElsaRuntimeDocumentVersions.CurrentFor(
+                    ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind)),
                 "{"));
         var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
 

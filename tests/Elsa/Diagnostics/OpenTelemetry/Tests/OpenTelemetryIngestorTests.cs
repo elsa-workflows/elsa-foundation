@@ -1,0 +1,251 @@
+using System.Runtime.CompilerServices;
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Services;
+using Microsoft.Extensions.Options;
+
+namespace Elsa.Diagnostics.OpenTelemetry.Tests.Services;
+
+public sealed class OpenTelemetryIngestorTests
+{
+    [Fact]
+    public async Task ContextAwareOverloadPreservesLegacyIngestorCompatibility()
+    {
+        IOpenTelemetryIngestor legacy = new LegacyIngestor();
+        var batch = EmptyBatch();
+
+        await legacy.IngestAsync(batch, OpenTelemetryIngestionContext.Authenticated("source-1"));
+
+        Assert.Same(batch, Assert.IsType<LegacyIngestor>(legacy).LastBatch);
+    }
+
+    [Fact]
+    public async Task IngestAsync_ThreeArgumentConstructorPreservesStoreThenLiveFeedBehavior()
+    {
+        var calls = new List<string>();
+        var ingestor = new OpenTelemetryIngestor(
+            new PassthroughRedactor(),
+            new RecordingStore(_ => calls.Add("store")),
+            new RecordingLiveFeed(_ => calls.Add("live")));
+
+        await ingestor.IngestAsync(EmptyBatch());
+
+        Assert.Equal(["store", "live"], calls);
+    }
+
+    [Fact]
+    public async Task IngestAsync_ContributorsReceiveOnlyTheRedactedBatch()
+    {
+        var contributor = new RecordingContributor();
+        var ingestor = new OpenTelemetryIngestor(
+            new OpenTelemetryRedactor(Options.Create(new OpenTelemetryDiagnosticsOptions())),
+            new RecordingStore(),
+            new RecordingLiveFeed(),
+            [contributor]);
+
+        var claims = new Dictionary<string, string> { ["workspace"] = "workspace-1" };
+        var ingestionContext = OpenTelemetryIngestionContext.Authenticated(
+            "source-1",
+            claims,
+            new Dictionary<string, string> { ["credential"] = "per-source-token" });
+
+        claims["workspace"] = "tampered";
+        await ingestor.IngestAsync(BatchWithSecret(), ingestionContext);
+
+        var contributed = Assert.Single(contributor.Batches);
+        Assert.Equal("[Redacted]", Assert.Single(contributed.Logs).Attributes["password"]);
+        var observedContext = Assert.Single(contributor.Contexts);
+        Assert.True(observedContext.IsAuthenticated);
+        Assert.Equal("source-1", observedContext.SourceIdentity);
+        Assert.Equal("workspace-1", observedContext.Claims["workspace"]);
+        Assert.Equal("per-source-token", observedContext.Metadata["credential"]);
+        Assert.Throws<NotSupportedException>(() => ((IDictionary<string, string>)observedContext.Claims).Add("application", "app-1"));
+    }
+
+    [Fact]
+    public async Task IngestAsync_CompatibilityOverloadIsExplicitlyUntrusted()
+    {
+        var contributor = new RecordingContributor();
+        var ingestor = new OpenTelemetryIngestor(
+            new PassthroughRedactor(),
+            new RecordingStore(),
+            new RecordingLiveFeed(),
+            [contributor]);
+
+        await ingestor.IngestAsync(EmptyBatch());
+
+        var context = Assert.Single(contributor.Contexts);
+        Assert.False(context.IsAuthenticated);
+        Assert.Null(context.SourceIdentity);
+        Assert.Empty(context.Claims);
+        Assert.Empty(context.Metadata);
+    }
+
+    [Fact]
+    public async Task IngestAsync_AwaitsEveryContributorBeforeStoreAndLiveFeed()
+    {
+        var calls = new List<string>();
+        var first = new RecordingContributor((_, _) =>
+        {
+            calls.Add("contributor-1");
+            return ValueTask.CompletedTask;
+        });
+        var second = new RecordingContributor((_, _) =>
+        {
+            calls.Add("contributor-2");
+            return ValueTask.CompletedTask;
+        });
+        var store = new RecordingStore(_ => calls.Add("store"));
+        var liveFeed = new RecordingLiveFeed(_ => calls.Add("live"));
+        var ingestor = new OpenTelemetryIngestor(new PassthroughRedactor(), store, liveFeed, [first, second]);
+
+        await ingestor.IngestAsync(EmptyBatch());
+
+        Assert.Equal(["contributor-1", "contributor-2", "store", "live"], calls);
+        Assert.Single(first.Batches);
+        Assert.Single(second.Batches);
+        Assert.Same(first.Batches[0], second.Batches[0]);
+    }
+
+    [Fact]
+    public async Task IngestAsync_WhenAContributorFails_DoesNotStoreOrPublish()
+    {
+        var expected = new InvalidOperationException("Durable contribution failed.");
+        var failing = new RecordingContributor((_, _) => ValueTask.FromException(expected));
+        var later = new RecordingContributor();
+        var store = new RecordingStore();
+        var liveFeed = new RecordingLiveFeed();
+        var ingestor = new OpenTelemetryIngestor(new PassthroughRedactor(), store, liveFeed, [failing, later]);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => ingestor.IngestAsync(EmptyBatch()).AsTask());
+
+        Assert.Same(expected, actual);
+        Assert.Empty(later.Batches);
+        Assert.Equal(0, store.WriteCount);
+        Assert.Equal(0, liveFeed.PublishCount);
+    }
+
+    [Fact]
+    public async Task IngestAsync_WhenCancelled_PropagatesCancellationWithoutStoringOrPublishing()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        CancellationToken observedToken = default;
+        var contributor = new RecordingContributor((_, cancellationToken) =>
+        {
+            observedToken = cancellationToken;
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        });
+        var store = new RecordingStore();
+        var liveFeed = new RecordingLiveFeed();
+        var ingestor = new OpenTelemetryIngestor(new PassthroughRedactor(), store, liveFeed, [contributor]);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ingestor.IngestAsync(EmptyBatch(), cancellation.Token).AsTask());
+
+        Assert.Equal(cancellation.Token, observedToken);
+        Assert.Equal(0, store.WriteCount);
+        Assert.Equal(0, liveFeed.PublishCount);
+    }
+
+    private static OpenTelemetryBatch BatchWithSecret()
+    {
+        var log = new OtlpLogRecord(
+            "log-1",
+            "resource-1",
+            DateTimeOffset.UnixEpoch,
+            "Error",
+            17,
+            "failure",
+            "trace-1",
+            "span-1",
+            new Dictionary<string, string?> { ["password"] = Guid.NewGuid().ToString("N") });
+        return new([], [], [], [], [], [log]);
+    }
+
+    private static OpenTelemetryBatch EmptyBatch() => new([], [], [], [], [], []);
+
+    private sealed class PassthroughRedactor : IOpenTelemetryRedactor
+    {
+        public OpenTelemetryBatch Redact(OpenTelemetryBatch batch) => batch;
+    }
+
+    private sealed class RecordingContributor(
+        Func<OpenTelemetryBatch, CancellationToken, ValueTask>? contribute = null) : IOpenTelemetryIngestionContributor
+    {
+        public List<OpenTelemetryBatch> Batches { get; } = [];
+        public List<OpenTelemetryIngestionContext> Contexts { get; } = [];
+
+        public ValueTask ContributeAsync(
+            OpenTelemetryBatch redactedBatch,
+            OpenTelemetryIngestionContext ingestionContext,
+            CancellationToken cancellationToken = default)
+        {
+            Batches.Add(redactedBatch);
+            Contexts.Add(ingestionContext);
+            return contribute?.Invoke(redactedBatch, cancellationToken) ?? ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class LegacyIngestor : IOpenTelemetryIngestor
+    {
+        public OpenTelemetryBatch? LastBatch { get; private set; }
+
+        public ValueTask IngestAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
+        {
+            LastBatch = batch;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingStore(Action<OpenTelemetryBatch>? write = null) : IOpenTelemetryStore
+    {
+        public int WriteCount { get; private set; }
+
+        public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
+        {
+            WriteCount++;
+            write?.Invoke(batch);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new OpenTelemetryResourceResult([], 0));
+
+        public ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new OpenTelemetryTraceResult([], 0));
+
+        public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<OpenTelemetryTraceDetail?>(null);
+
+        public ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(OpenTelemetryMetricFilter filter, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new OpenTelemetryMetricResult([], [], 0));
+
+        public ValueTask<OpenTelemetryLogResult> QueryLogsAsync(OpenTelemetryLogFilter filter, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new OpenTelemetryLogResult([], 0));
+
+        public ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new OpenTelemetryStorageDiagnostics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+    }
+
+    private sealed class RecordingLiveFeed(Action<OpenTelemetryBatch>? publish = null) : IOpenTelemetryLiveFeed
+    {
+        public int PublishCount { get; private set; }
+
+        public ValueTask PublishAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
+        {
+            PublishCount++;
+            publish?.Invoke(batch);
+            return ValueTask.CompletedTask;
+        }
+
+        public async IAsyncEnumerable<OpenTelemetryStreamItem> SubscribeAsync(
+            OpenTelemetryTraceFilter filter,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+    }
+}

@@ -43,18 +43,18 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
     }
 
     [Fact]
-    public async Task Sqlite_startup_does_not_rewrite_v2_history()
+    public async Task Sqlite_startup_does_not_rewrite_current_history_document()
     {
         await using var database = new TemporarySqliteDatabase();
         await using (var provider = await BuildProviderAsync(database.ConnectionString))
         {
             var contentJson = await File.ReadAllTextAsync(
-                Path.Combine(AppContext.BaseDirectory, "Fixtures", "v2", "workflowExecutionState.json"));
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "v4", "workflowExecutionState.json"));
             var store = provider.GetRequiredService<IDocumentStore>();
             var result = await store.SaveAsync(new SaveDocumentRequest(
                 "workflowExecutionState",
                 "wf-1",
-                "2",
+                "4",
                 contentJson));
             Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
         }
@@ -67,8 +67,8 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
         await using var reader = await command.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync());
-        Assert.Equal("2", reader.GetString(0));
-        Assert.DoesNotContain("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
+        Assert.Equal("4", reader.GetString(0));
+        Assert.Contains("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
     }
 
     [Fact]
