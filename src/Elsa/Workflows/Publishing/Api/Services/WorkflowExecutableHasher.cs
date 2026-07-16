@@ -94,7 +94,10 @@ public sealed class WorkflowExecutableHasher
         var resultType = expression.ResultType is null
             ? string.Empty
             : $"{expression.ResultType.Kind}:{expression.ResultType.Id}:{CanonicalJson(expression.ResultType.Schema)}";
-        return $"expression:{expression.Language}:{expression.Expression}:{resultType}[{metadata}]";
+        var parameters = string.Join(',', expression.Parameters
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={CanonicalJson(JsonSerializer.SerializeToElement(item.Value, typeof(Elsa.Expressions.Core.Models.ExpressionParameterBinding)))}"));
+        return $"expression:{expression.Language}:{expression.Expression}:{resultType}:{expression.CapabilityProfile}:{CanonicalJson(expression.Options)}:({parameters})[{metadata}]";
     }
 
     private static string FormatType(Elsa.Primitives.Models.ValueTypeDescriptor type) =>

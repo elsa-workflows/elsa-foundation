@@ -194,7 +194,7 @@ parameters, and reject undeclared reads, mutation, delegates, and ambient nondet
 
 ### Tests — write and fail first
 
-- [ ] T069 [P] [US5] Add expression definition/hash/round-trip tests for language, source, alias result, parameters, options, and capability profile in `tests/Elsa/Expressions/Tests/ExpressionDefinitionContractTests.cs`
+- [X] T069 [P] [US5] Add expression definition/hash/round-trip tests for language, source, alias result, parameters, options, and capability profile in `tests/Elsa/Expressions/Tests/ExpressionDefinitionContractTests.cs`
 - [ ] T070 [P] [US5] Add JavaScript immutable `args` and forbidden ambient host-function tests in `tests/Elsa/Expressions/JavaScript/Jint/Tests/ExplicitExpressionParametersTests.cs`
 - [ ] T071 [P] [US5] Add Liquid declared-parameter-only and service/context isolation tests in `tests/Elsa/Expressions/Tests/LiquidExplicitParametersTests.cs`
 - [ ] T072 [US5] Replace expression-bound activity tests with explicit-parameter materialization/restart tests in `tests/Elsa/Activities/Runtime/Tests/WriteLineExpressionInputExecutionTests.cs`
@@ -202,7 +202,7 @@ parameters, and reject undeclared reads, mutation, delegates, and ambient nondet
 ### Implementation
 
 - [ ] T073 [US5] Replace ambient `IExpressionExecutionContext` with immutable evaluation request/parameters/capability contracts in `src/Elsa/Expressions/Core/Contracts/`
-- [ ] T074 [US5] Extend executable expression bindings and deterministic hashing with normalized parameter bindings and options in `src/Elsa/Workflows/Runtime/Core/Models/RuntimeExpressionBinding.cs`
+- [X] T074 [US5] Extend executable expression bindings and deterministic hashing with normalized parameter bindings and options in `src/Elsa/Workflows/Runtime/Core/Models/RuntimeExpressionBinding.cs`
 - [ ] T075 [US5] Restrict JavaScript binding evaluation to read-only declared `args` and constructor-injected evaluator infrastructure in `src/Elsa/Expressions/JavaScript/` and `Jint/`
 - [ ] T076 [US5] Restrict Liquid binding evaluation to declared parameters in `src/Elsa/Expressions/Liquid/`
 - [ ] T077 [US5] Remove delegate expressions, captured-closure converters, ambient variable/output/workflow accessors, mutation/write-back, service location, time/random/configuration backdoors from canonical binding evaluation in `src/Elsa/Expressions/` and `src/Elsa/Workflows/Runtime/JavaScript/`

@@ -113,6 +113,40 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
+    public void ExecutableHash_NormalizesExpressionParametersAndCoversOptionsAndCapabilities()
+    {
+        var first = ExpressionBinding(
+            new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["tax"] = new VariableExpressionParameterBinding("workflow", "tax"),
+                ["subtotal"] = new WorkflowRequestExpressionParameterBinding("subtotal")
+            },
+            JsonSerializer.SerializeToElement(new { strict = true }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        var reordered = ExpressionBinding(
+            new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["subtotal"] = new WorkflowRequestExpressionParameterBinding("subtotal"),
+                ["tax"] = new VariableExpressionParameterBinding("workflow", "tax")
+            },
+            JsonSerializer.SerializeToElement(new { strict = true }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        var changedOptions = ExpressionBinding(
+            first.Expression!.Parameters,
+            JsonSerializer.SerializeToElement(new { strict = false }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        var changedCapability = ExpressionBinding(
+            first.Expression.Parameters,
+            first.Expression.Options,
+            ExpressionCapabilityProfiles.LegacyAmbientV1);
+        var hasher = new WorkflowExecutableHasher();
+
+        Assert.Equal(hasher.ComputeHash(Node(first)), hasher.ComputeHash(Node(reordered)));
+        Assert.NotEqual(hasher.ComputeHash(Node(first)), hasher.ComputeHash(Node(changedOptions)));
+        Assert.NotEqual(hasher.ComputeHash(Node(first)), hasher.ComputeHash(Node(changedCapability)));
+    }
+
+    [Fact]
     public void Compiler_EmitsAliasTypedCanonicalLiteralWithoutClrTypeMetadata()
     {
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
@@ -143,6 +177,23 @@ public sealed class RoleOwnedInputBindingContractTests
             source: RuntimeInputBindingSource.ActivityResult,
             activityResult: new RuntimeActivityResultReference("node-fetch", projectionKey, "scope-root"),
             metadata: metadata);
+
+    private static RuntimeInputBinding ExpressionBinding(
+        IReadOnlyDictionary<string, ExpressionParameterBinding> parameters,
+        JsonElement options,
+        string capabilityProfile) =>
+        new(
+            inputKey: "total",
+            targetType: new ValueTypeDescriptor("Decimal"),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                "args.subtotal + args.tax",
+                new RuntimeValueTypeDescriptor("alias", "Decimal", null),
+                parameters: parameters,
+                options: options,
+                capabilityProfile: capabilityProfile));
 
     private static ExecutableNode Node(RuntimeInputBinding binding) =>
         new(

@@ -1,5 +1,7 @@
+using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -272,7 +274,10 @@ public sealed class RuntimeExpressionBinding
         string language,
         string expression,
         RuntimeValueTypeDescriptor? resultType = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        IReadOnlyDictionary<string, ExpressionParameterBinding>? parameters = null,
+        JsonElement? options = null,
+        string? capabilityProfile = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentException.ThrowIfNullOrWhiteSpace(expression);
@@ -281,12 +286,25 @@ public sealed class RuntimeExpressionBinding
         Expression = expression;
         ResultType = resultType;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        Parameters = new ReadOnlyDictionary<string, ExpressionParameterBinding>(
+            (parameters ?? new Dictionary<string, ExpressionParameterBinding>())
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        Options = options?.Clone() ?? JsonSerializer.SerializeToElement(new { });
+        if (Options.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException("Runtime expression evaluator options must be a JSON object.", nameof(options));
+        CapabilityProfile = string.IsNullOrWhiteSpace(capabilityProfile)
+            ? ExpressionCapabilityProfiles.LegacyAmbientV1
+            : capabilityProfile;
     }
 
     public string Language { get; }
     public string Expression { get; }
     public RuntimeValueTypeDescriptor? ResultType { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public IReadOnlyDictionary<string, ExpressionParameterBinding> Parameters { get; }
+    public JsonElement Options { get; }
+    public string CapabilityProfile { get; }
 }
 
 public sealed class RuntimeActivityOutputReference
