@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/benchmarks/" />
+  <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
+    <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
   </Folder>
@@ -203,6 +207,7 @@
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/">
     <Project Path="src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
+    <Project Path="src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
   </Folder>
@@ -391,6 +396,9 @@
   <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Design/CodeGeneration/">
+    <Project Path="tests/Elsa/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/Api/">
     <Project Path="tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj" />

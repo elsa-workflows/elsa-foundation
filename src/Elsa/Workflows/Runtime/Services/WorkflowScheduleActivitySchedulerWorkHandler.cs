@@ -159,7 +159,18 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 [RuntimeMetadataKeys.ScheduleReason] = schedulePayload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId
-            });
+            },
+            DocumentVersion: ActivityExecutionValueFlowDocumentVersions.Current,
+            ContractIdentity: new ActivityInvocationContractIdentity(
+                executableNode.ActivityType,
+                executableNode.ActivityTypeVersion,
+                schedulePayload.PinnedExecutable.ArtifactHash),
+            Attempts: [],
+            TriggerRegistrations: [],
+            TriggerDeliveries: [],
+            ValueFlowCompatibility: ActivityExecutionValueFlowDocumentVersionGuard.Compatible(
+                ActivityExecutionValueFlowDocumentVersions.Current,
+                ActivityExecutionValueFlowDocumentVersions.Current));
     }
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(

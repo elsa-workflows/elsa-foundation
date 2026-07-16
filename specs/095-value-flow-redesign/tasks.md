@@ -24,10 +24,10 @@ durable invocation center before code-first conveniences, even though US1, US2, 
 **Purpose**: Establish reproducible build evidence and the two isolated dependency envelopes.
 
 - [X] T001 Restore and build `Elsa.Server.slnx` with .NET 10, recording the green baseline and existing warnings in the implementation session
-- [ ] T002 Add centrally pinned `Microsoft.CodeAnalysis.CSharp` and `BenchmarkDotNet` versions in `Directory.Packages.props`
-- [ ] T003 [P] Create the authoring generator project skeleton in `src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj` and its test project in `tests/Elsa/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj`
-- [ ] T004 [P] Create the isolated benchmark project in `benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj`
-- [ ] T005 Add the new projects to `Elsa.Server.slnx` and prove Runtime/activity projects do not gain Roslyn or BenchmarkDotNet references
+- [X] T002 Add centrally pinned `Microsoft.CodeAnalysis.CSharp` and `BenchmarkDotNet` versions in `Directory.Packages.props`
+- [X] T003 [P] Create the authoring generator project skeleton in `src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj` and its test project in `tests/Elsa/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj`
+- [X] T004 [P] Create the isolated benchmark project in `benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj`
+- [X] T005 Add the new projects to `Elsa.Server.slnx` and prove Runtime/activity projects do not gain Roslyn or BenchmarkDotNet references
 
 ---
 
@@ -40,22 +40,22 @@ guards shared by all stories.
 
 ### Tests
 
-- [ ] T006 [P] Add alias/schema and absent/null/present envelope contract tests in `tests/Elsa/Workflows/Runtime/Tests/RuntimeValueEnvelopeContractTests.cs`
-- [ ] T007 [P] Add closed input-binding union serialization/hash tests in `tests/Elsa/Workflows/Publishing/Api/Tests/RoleOwnedInputBindingContractTests.cs`
-- [ ] T008 [P] Add activity contract stable-key/fingerprint compatibility tests in `tests/Elsa/Activities/Design/Tests/ActivityContractCompatibilityTests.cs`
-- [ ] T009 [P] Add activity-execution role-record round-trip/version rejection tests in `tests/Elsa/Persistence/Groundwork/Tests/ActivityExecutionValueFlowDocumentTests.cs`
-- [ ] T010 Add architecture guards for Runtime→Design, assembly-qualified metadata, generated-carrier isolation, and future zero-memory references in `tests/Elsa/Architecture/ValueFlowArchitectureTests.cs`
+- [X] T006 [P] Add alias/schema and absent/null/present envelope contract tests in `tests/Elsa/Workflows/Runtime/Tests/RuntimeValueEnvelopeContractTests.cs`
+- [X] T007 [P] Add closed input-binding union serialization/hash tests in `tests/Elsa/Workflows/Publishing/Api/Tests/RoleOwnedInputBindingContractTests.cs`
+- [X] T008 [P] Add activity contract stable-key/fingerprint compatibility tests in `tests/Elsa/Activities/Design/Tests/ActivityContractCompatibilityTests.cs`
+- [X] T009 [P] Add activity-execution role-record round-trip/version rejection tests in `tests/Elsa/Persistence/Groundwork/Tests/ActivityExecutionValueFlowDocumentTests.cs`
+- [X] T010 Add architecture guards for Runtime→Design, assembly-qualified metadata, generated-carrier isolation, and future zero-memory references in `tests/Elsa/Architecture/ValueFlowArchitectureTests.cs`
 
 ### Implementation
 
-- [ ] T011 Implement portable value type/schema and persisted value-envelope primitives in `src/Elsa/Workflows/Runtime/Core/Models/ValueTypeDescriptor.cs` and `ValueEnvelope.cs`
-- [ ] T012 Implement stable activity contract pins, plain input definitions, atomic result definitions/projections, outcomes, and fingerprints in `src/Elsa/Activities/Runtime/Core/Models/ActivityContract.cs`
-- [ ] T013 Replace the generic/reference alternatives with the closed literal/request/variable/result/expression union in `src/Elsa/Workflows/Runtime/Core/Models/RuntimeInputBinding.cs`
-- [ ] T014 Update deterministic executable hashing and serialization for role-owned bindings and alias-only type metadata in `src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableHasher.cs` and `RuntimeInputBindingCompiler.cs`
-- [ ] T015 Add input snapshot, attempt, private state, completion, normalized fault, and typed trigger records in `src/Elsa/Workflows/Runtime/Core/Models/`
-- [ ] T016 Extend `src/Elsa/Workflows/Runtime/Core/Models/ActivityExecutionState.cs` with the versioned logical-invocation aggregate and update all construction sites without changing legacy invocation behavior yet
-- [ ] T017 Version and upcast Groundwork activity-execution documents in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs` and the associated serialization mapping
-- [ ] T018 Add mixed-version fixtures and explicit incompatibility gates for unreconstructable started/completed legacy states in `tests/Elsa/Persistence/Groundwork/Tests/ActivityExecutionValueFlowDocumentTests.cs`
+- [X] T011 Implement portable value type/schema and persisted value-envelope primitives in `src/Elsa/Primitives/Primitives/Models/ValueTypeDescriptor.cs` and `src/Elsa/Workflows/Runtime/Core/Models/ValueEnvelope.cs`
+- [X] T012 Implement stable activity contract pins, plain input definitions, atomic result definitions/projections, outcomes, and fingerprints in `src/Elsa/Activities/Runtime/Core/Models/ActivityContract.cs`
+- [X] T013 Replace the generic/reference alternatives with the closed literal/request/variable/result/expression union in `src/Elsa/Workflows/Runtime/Core/Models/RuntimeInputBinding.cs`
+- [X] T014 Update deterministic executable hashing and serialization for role-owned bindings and alias-only type metadata in `src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableHasher.cs` and `RuntimeInputBindingCompiler.cs`
+- [X] T015 Add input snapshot, attempt, private state, completion, normalized fault, and typed trigger records in `src/Elsa/Workflows/Runtime/Core/Models/`
+- [X] T016 Extend `src/Elsa/Workflows/Runtime/Core/Models/ActivityExecutionState.cs` with the versioned logical-invocation aggregate and update all construction sites without changing legacy invocation behavior yet
+- [X] T017 Version and upcast Groundwork activity-execution documents in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs` and the associated serialization mapping
+- [X] T018 Add mixed-version fixtures and explicit incompatibility gates for unreconstructable started/completed legacy states in `tests/Elsa/Persistence/Groundwork/Tests/ActivityExecutionValueFlowDocumentTests.cs`
 
 **Checkpoint**: Canonical records compile, serialize, hash, and recover while the legacy invocation
 adapter still supplies existing behavior.

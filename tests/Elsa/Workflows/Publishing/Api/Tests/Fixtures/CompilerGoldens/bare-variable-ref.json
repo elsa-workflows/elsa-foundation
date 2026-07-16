@@ -2,8 +2,8 @@
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "identity": {
-    "artifactHash": "sha256:2098d852c7f6194efed07cd51ac2a08b961d4ee285e78d54555a191c4f6808ba",
-    "artifactId": "artifact-2098d852c7f6",
+    "artifactHash": "sha256:6f2f48568edc5ec6463dd4f72f3cb3eb81f17769a1eb297453464cdca550082e",
+    "artifactId": "artifact-6f2f48568edc",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -24,7 +24,7 @@
         "expression": {
           "expression": "{\u0022referenceKey\u0022:\u0022var-counter\u0022,\u0022declaringScopeId\u0022:null}",
           "language": "Variable",
-          "resultTypeId": "System.String, System.Private.CoreLib"
+          "resultTypeId": "String"
         },
         "inputName": "Text",
         "key": "Text",
@@ -33,10 +33,6 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
         "source": "Expression"

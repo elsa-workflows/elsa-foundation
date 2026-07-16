@@ -360,6 +360,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 throw new InvalidOperationException("Activity execution state change StateId must match ActivityExecution.ActivityExecutionId.");
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.Execution.WorkflowExecutionId))
                 throw new InvalidOperationException("Activity execution state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            stateChange.State.EnsureValueFlowCompatible();
         }
     }
 

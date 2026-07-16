@@ -20,6 +20,7 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -124,8 +125,9 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotNull(expression);
         Assert.Equal("JavaScript", expression!.Language);
         Assert.Equal("\"Hello \" + \"World\"", expression.Expression);
-        Assert.StartsWith("System.String", expression.ResultType?.Id, StringComparison.Ordinal);
-        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+        Assert.Equal("alias", expression.ResultType?.Kind);
+        Assert.Equal("String", expression.ResultType?.Id);
+        Assert.DoesNotContain("typeName", binding.Metadata);
         Assert.Equal("Text", binding.Metadata["referenceKey"]);
     }
 
@@ -250,10 +252,12 @@ public sealed class WorkflowExecutableCompilerTests
 
         var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
-        Assert.Equal("Text", binding.InputName);
+        Assert.Equal("Text", binding.InputKey);
         Assert.Equal("Hello World!", binding.LiteralValue?.GetString());
+        Assert.Equal("String", binding.TargetType.Alias);
+        Assert.Equal(ValueProtectionPolicy.InstanceInline, binding.EffectivePolicy);
         Assert.Equal("Text", binding.Metadata["referenceKey"]);
-        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+        Assert.DoesNotContain("typeName", binding.Metadata);
     }
 
     [Fact]
@@ -273,7 +277,9 @@ public sealed class WorkflowExecutableCompilerTests
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-"));
 
-        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+        var materialized = await new RuntimeActivityInputMaterializer(
+            new RuntimeInputBindingResolver(),
+            TestWellKnownTypeRegistry.Create()).MaterializeInputsAsync(executable.RootActivity);
 
         var textInput = Assert.Single(materialized);
         Assert.Equal("Text", textInput.Name);
@@ -298,7 +304,9 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(JsonValueKind.Array, binding.LiteralValue?.ValueKind);
 
-        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+        var materialized = await new RuntimeActivityInputMaterializer(
+            new RuntimeInputBindingResolver(),
+            TestWellKnownTypeRegistry.Create()).MaterializeInputsAsync(executable.RootActivity);
 
         var linesInput = Assert.Single(materialized);
         var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value);

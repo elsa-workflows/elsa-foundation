@@ -1,0 +1,100 @@
+{
+  "state": {
+    "aggregateFaultCount": 0,
+    "attempts": [
+      {
+        "attemptId": "attempt-1",
+        "endedAt": null,
+        "incidentId": null,
+        "invocationId": "ae-1",
+        "ordinal": 1,
+        "reason": 0,
+        "startedAt": "1970-01-01T00:00:00+00:00",
+        "transitionKind": null,
+        "triggerDeliveryId": null
+      }
+    ],
+    "bookmarkIds": [],
+    "branchId": null,
+    "callStackDepth": 0,
+    "completedAt": null,
+    "completion": null,
+    "contractIdentity": {
+      "activityTypeKey": "Elsa.Log",
+      "contractVersion": "1.0.0",
+      "schemaFingerprint": "sha256:activity-contract"
+    },
+    "documentVersion": 2,
+    "execution": {
+      "activityExecutionId": "ae-1",
+      "activityType": "Elsa.Log",
+      "activityTypeVersion": "1.0.0",
+      "authoredActivityId": "authored",
+      "executableNodeId": "node-ae-1",
+      "workflowExecutionId": "wf-1"
+    },
+    "executionSequence": 1,
+    "fault": null,
+    "faultCount": 0,
+    "incidentIds": [],
+    "inputSnapshot": {
+      "bindingFingerprint": "sha256:bindings",
+      "contractFingerprint": "sha256:activity-contract",
+      "invocationId": "ae-1",
+      "materializedAt": "1970-01-01T00:00:00+00:00",
+      "values": {
+        "message": {
+          "externalReference": null,
+          "inlineValue": "hello",
+          "policy": {
+            "isSensitive": false,
+            "lifecycle": 1,
+            "metadata": {},
+            "redactionMode": null,
+            "requiresEncryption": false,
+            "retentionPolicy": null,
+            "storage": 1
+          },
+          "presence": 2,
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single",
+            "schema": null,
+            "schemaVersion": null
+          }
+        }
+      }
+    },
+    "invocationId": "ae-1",
+    "iterationId": null,
+    "metadata": { "tag": "v1" },
+    "parentActivityExecutionId": null,
+    "privateState": null,
+    "provenance": {
+      "branchId": null,
+      "executionPathId": null,
+      "executionScopeId": null,
+      "iterationId": null,
+      "metadata": {},
+      "parentActivityExecutionId": null,
+      "schedulingActivityExecutionId": null,
+      "schedulingCause": "test",
+      "schedulingWorkflowExecutionId": "wf-1"
+    },
+    "scheduledAt": "1970-01-01T00:00:00+00:00",
+    "schedulingActivityExecutionId": null,
+    "startedAt": "1970-01-01T00:00:00+00:00",
+    "status": 1,
+    "subStatus": null,
+    "triggerDeliveries": [],
+    "triggerRegistrations": [],
+    "valueFlowCompatibility": {
+      "incompatibilityCode": null,
+      "isCompatible": true,
+      "reason": null,
+      "sourceVersion": 2,
+      "targetVersion": 2
+    }
+  },
+  "workflowExecutionId": "wf-1"
+}

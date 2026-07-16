@@ -19,6 +19,7 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.ActivityExecutionId);
+        state.EnsureValueFlowCompatible();
 
         var document = new ActivityExecutionStateDocument(state.Execution.WorkflowExecutionId, state);
         await SaveDocumentAsync(

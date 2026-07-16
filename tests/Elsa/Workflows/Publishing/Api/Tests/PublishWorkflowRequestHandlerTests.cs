@@ -107,7 +107,9 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(1, view.NodeCount);
         Assert.Equal("write-one", executable.RootActivity.ExecutableNodeId);
         Assert.Equal("one", executable.NodesById["write-one"].InputBindings["Text"].LiteralValue!.Value.GetString());
-        Assert.Equal($"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}", executable.NodesById["write-one"].InputBindings["Text"].Metadata["typeName"]);
+        var binding = executable.NodesById["write-one"].InputBindings["Text"];
+        Assert.Equal("String", binding.TargetType.Alias);
+        Assert.DoesNotContain("typeName", binding.Metadata);
     }
 
     [Fact]

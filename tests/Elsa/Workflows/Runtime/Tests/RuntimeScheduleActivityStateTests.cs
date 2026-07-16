@@ -39,6 +39,14 @@ public sealed class RuntimeScheduleActivityStateTests
         Assert.Equal(RuntimeScheduleActivityCommandPayload.WorkflowStartReason, state.Metadata["runtime.scheduleReason"]);
         Assert.Equal("schedule-work", state.Metadata["runtime.schedulerWorkItemId"]);
         Assert.Equal("artifact-1", state.Metadata["runtime.pinnedArtifactId"]);
+        Assert.Equal("actexec-1", state.InvocationId);
+        Assert.Equal(ActivityExecutionValueFlowDocumentVersions.Current, state.DocumentVersion);
+        Assert.Equal("test/activity", state.ContractIdentity!.ActivityTypeKey);
+        Assert.Equal("1.0.0", state.ContractIdentity.ContractVersion);
+        Assert.Equal(executable.Identity.ArtifactHash, state.ContractIdentity.SchemaFingerprint);
+        Assert.Empty(state.Attempts!);
+        Assert.Null(state.InputSnapshot);
+        Assert.True(state.ValueFlowCompatibility!.IsCompatible);
 
         var startWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.StartActivity, startWork.CommandKind);

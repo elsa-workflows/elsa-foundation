@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
@@ -375,7 +376,35 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         IncidentIds: [],
         FaultCount: 0,
         AggregateFaultCount: 0,
-        Metadata: new Dictionary<string, string> { ["tag"] = "v1" });
+        Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
+        DocumentVersion: ActivityExecutionValueFlowDocumentVersions.Current,
+        ContractIdentity: new ActivityInvocationContractIdentity("Elsa.Log", "1.0.0", "sha256:activity-contract"),
+        InputSnapshot: new ActivityInputSnapshot(
+            "ae-1",
+            "sha256:activity-contract",
+            "sha256:bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["message"] = ValueEnvelope.Inline(
+                    new ValueTypeDescriptor("String"),
+                    JsonSerializer.SerializeToElement("hello"),
+                    ValueProtectionPolicy.InstanceInline)
+            },
+            DateTimeOffset.UnixEpoch),
+        Attempts:
+        [
+            new ActivityAttempt(
+                "attempt-1",
+                "ae-1",
+                1,
+                ActivityAttemptReason.Initial,
+                DateTimeOffset.UnixEpoch)
+        ],
+        TriggerRegistrations: [],
+        TriggerDeliveries: [],
+        ValueFlowCompatibility: ActivityExecutionValueFlowDocumentVersionGuard.Compatible(
+            ActivityExecutionValueFlowDocumentVersions.Current,
+            ActivityExecutionValueFlowDocumentVersions.Current));
 
     private static ActivityExecutionInspectionProjection Projection() => new(
         ActivityExecutionId: "ae-1",

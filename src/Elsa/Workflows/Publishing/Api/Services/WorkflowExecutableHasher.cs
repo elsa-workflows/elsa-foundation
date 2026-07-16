@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
@@ -51,11 +53,59 @@ public sealed class WorkflowExecutableHasher
 
         var payload = input.Value.Source switch
         {
-            RuntimeInputBindingSource.Expression => $"{input.Value.Source}:{input.Value.Expression?.Language}:{input.Value.Expression?.Expression}",
-            _ => input.Value.LiteralValue?.GetRawText()
+            RuntimeInputBindingSource.Literal when input.Value.Literal is not null => FormatEnvelope(input.Value.Literal),
+            RuntimeInputBindingSource.WorkflowRequest =>
+                $"request:{input.Value.WorkflowRequest?.MemberKey}:{input.Value.WorkflowRequest?.Path}",
+            RuntimeInputBindingSource.VariableRead =>
+                $"variable:{input.Value.Variable?.DeclaringScopeId}:{input.Value.Variable?.VariableKey}",
+            RuntimeInputBindingSource.ActivityResult =>
+                $"result:{input.Value.ActivityResult?.ProducerScopeId}:{input.Value.ActivityResult?.ProducerExecutableNodeId}:{input.Value.ActivityResult?.ProjectionKey}:{input.Value.ActivityResult?.IsOptional}",
+            RuntimeInputBindingSource.Expression => FormatExpression(input.Value.Expression),
+            _ => CanonicalJson(input.Value.LiteralValue)
         };
 
-        return $"{input.Key}={payload}[{metadata}]";
+        return $"{input.Key}:{FormatType(input.Value.TargetType)}:{FormatPolicy(input.Value.EffectivePolicy)}={payload}[{metadata}]";
+    }
+
+    private static string FormatEnvelope(ValueEnvelope envelope)
+    {
+        var externalMetadata = envelope.ExternalReference is null
+            ? string.Empty
+            : string.Join(',', envelope.ExternalReference.Metadata
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Select(item => $"{item.Key}={item.Value}"));
+        var payload = envelope.InlineValue.HasValue
+            ? CanonicalJson(envelope.InlineValue)
+            : envelope.ExternalReference is null
+                ? string.Empty
+                : $"{envelope.ExternalReference.StorageProfile}:{envelope.ExternalReference.Locator}[{externalMetadata}]";
+
+        return $"{envelope.Presence}:{FormatType(envelope.Type)}:{FormatPolicy(envelope.Policy)}:{payload}";
+    }
+
+    private static string FormatExpression(RuntimeExpressionBinding? expression)
+    {
+        if (expression is null)
+            return string.Empty;
+
+        var metadata = string.Join(',', expression.Metadata
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
+        var resultType = expression.ResultType is null
+            ? string.Empty
+            : $"{expression.ResultType.Kind}:{expression.ResultType.Id}:{CanonicalJson(expression.ResultType.Schema)}";
+        return $"expression:{expression.Language}:{expression.Expression}:{resultType}[{metadata}]";
+    }
+
+    private static string FormatType(Elsa.Primitives.Models.ValueTypeDescriptor type) =>
+        $"{type.Alias}:{type.CollectionKind}:{type.SchemaVersion}:{CanonicalJson(type.Schema)}";
+
+    private static string FormatPolicy(ValueProtectionPolicy policy)
+    {
+        var metadata = string.Join(',', policy.Metadata
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
+        return $"{policy.Lifecycle}:{policy.Storage}:{policy.IsSensitive}:{policy.RequiresEncryption}:{policy.RedactionMode}:{policy.RetentionPolicy}[{metadata}]";
     }
 
     private static string FormatNode(ExecutableNode node)
@@ -69,9 +119,27 @@ public sealed class WorkflowExecutableHasher
             }));
         var structure = node.Structure is null
             ? string.Empty
-            : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{node.Structure.Payload.GetRawText()}";
-        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
+            : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{CanonicalJson(node.Structure.Payload)}";
+        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{CanonicalJson(node.DescriptorPayload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
     }
+
+    private static string CanonicalJson(JsonElement? element)
+    {
+        if (!element.HasValue)
+            return string.Empty;
+
+        var node = JsonNode.Parse(element.Value.GetRawText());
+        return node is null ? "null" : SortNode(node).ToJsonString();
+    }
+
+    private static JsonNode SortNode(JsonNode node) => node switch
+    {
+        JsonObject obj => new JsonObject(obj
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => KeyValuePair.Create(item.Key, item.Value is null ? null : SortNode(item.Value)))),
+        JsonArray array => new JsonArray(array.Select(item => item is null ? null : SortNode(item)).ToArray()),
+        _ => node.DeepClone()
+    };
 
     private static IEnumerable<ExecutableNode> FlattenExecutableActivities(ExecutableNode rootActivity)
     {

@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -14,6 +15,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 {
     public const string InputTypeMetadataKey = "typeName";
     private readonly IRuntimeInputBindingResolver _inputBindingResolver;
+    private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry;
 
     public RuntimeActivityInputMaterializer()
         : this(new RuntimeInputBindingResolver())
@@ -25,6 +27,17 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
 
         _inputBindingResolver = inputBindingResolver;
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IWellKnownTypeRegistry wellKnownTypeRegistry)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+        ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
+
+        _inputBindingResolver = inputBindingResolver;
+        _wellKnownTypeRegistry = wellKnownTypeRegistry;
     }
 
     public ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
@@ -166,8 +179,24 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         return new RuntimeMaterializedActivityInput(inputName, argument, value);
     }
 
-    private static Type ResolveInputType(RuntimeInputBinding binding, string nodeId, string inputName)
+    private Type ResolveInputType(RuntimeInputBinding binding, string nodeId, string inputName)
     {
+        if (binding.TargetType.Alias != "Elsa.Any")
+        {
+            if (_wellKnownTypeRegistry is null)
+                throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{binding.TargetType.Alias}', but no well-known type registry was supplied.");
+
+            var typeReference = binding.TargetType.ToTypeReference();
+            var resolvedType = TypeReferenceFactory.Resolve(
+                typeReference,
+                alias => _wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
+
+            if (resolvedType == typeof(object) && !string.Equals(binding.TargetType.Alias, "Object", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{binding.TargetType.Alias}'.");
+
+            return resolvedType;
+        }
+
         if (!binding.Metadata.TryGetValue(InputTypeMetadataKey, out var typeName))
             throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' is missing '{InputTypeMetadataKey}' metadata.");
 

@@ -2,8 +2,8 @@
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "identity": {
-    "artifactHash": "sha256:947fe99c3c6e0132cc86cffa05af4f3d543f42224322a4703393ee7aefe8fd18",
-    "artifactId": "artifact-947fe99c3c6e",
+    "artifactHash": "sha256:6065c14b7d75a52ee83caee13ee794caa0bb9ba37b77d90cc9f66e248afa7024",
+    "artifactId": "artifact-6065c14b7d75",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -29,10 +29,6 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
         "source": "Literal"

@@ -2,8 +2,8 @@
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "identity": {
-    "artifactHash": "sha256:0997049f3a8090d7612db82ec729dab645d3e5f944b3812a89f4f3a03ce2f7df",
-    "artifactId": "artifact-0997049f3a80",
+    "artifactHash": "sha256:17e14a798343cb248baa3b2853d2639149f7d9230e52ef78260a32cff0cd79a5",
+    "artifactId": "artifact-17e14a798343",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -24,7 +24,7 @@
         "expression": {
           "expression": "\u0022Hello \u0022 \u002B \u0022World\u0022",
           "language": "JavaScript",
-          "resultTypeId": "System.String, System.Private.CoreLib"
+          "resultTypeId": "String"
         },
         "inputName": "Text",
         "key": "Text",
@@ -33,10 +33,6 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
         "source": "Expression"

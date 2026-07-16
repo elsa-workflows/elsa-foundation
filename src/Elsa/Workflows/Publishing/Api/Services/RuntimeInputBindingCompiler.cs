@@ -22,7 +22,6 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     private const string LiteralExpressionType = "Literal";
     private const string ObjectExpressionType = "Object";
     private const string VariableExpressionType = "Variable";
-    private const string InputTypeMetadataKey = "typeName";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
@@ -56,13 +55,13 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         var referenceText = JsonSerializer.Serialize(new VariableReferencePayload(reference.ReferenceKey, reference.DeclaringScopeId));
 
         var inputType = ResolveInputType(inputDefinition);
-        var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
+        var resultType = new RuntimeValueTypeDescriptor("alias", inputDefinition.Type.Alias, null);
 
         return new RuntimeInputBinding(
             inputName: inputDefinition.Name,
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(VariableExpressionType, referenceText, resultType),
-            metadata: BuildInputMetadata(inputType, inputDefinition));
+            metadata: BuildInputMetadata(inputDefinition));
     }
 
     private static VariableReference ParseVariableReference(string nodeId, InputDefinition inputDefinition, object? value)
@@ -86,16 +85,22 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         }
         catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidCastException or OverflowException)
         {
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{value.Value}' cannot be converted to '{GetRuntimeTypeName(inputType)}'.", exception);
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{value.Value}' cannot be converted to alias '{inputDefinition.Type.Alias}'.", exception);
         }
 
         var literal = JsonSerializer.SerializeToElement(converted, inputType);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        var policy = ValueProtectionPolicy.InstanceInline;
 
         return new RuntimeInputBinding(
-            inputName: inputDefinition.Name,
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: targetType,
+            effectivePolicy: policy,
             source: RuntimeInputBindingSource.Literal,
-            literalValue: literal,
-            metadata: BuildInputMetadata(inputType, inputDefinition));
+            literal: converted is null
+                ? ValueEnvelope.Null(targetType, policy)
+                : ValueEnvelope.Inline(targetType, literal, policy),
+            metadata: BuildInputMetadata(inputDefinition));
     }
 
     private RuntimeInputBinding CompileObjectInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
@@ -111,17 +116,23 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
                 : authored;
             var converted = structured.Deserialize(inputType);
             var literal = JsonSerializer.SerializeToElement(converted, inputType);
+            var targetType = ToValueTypeDescriptor(inputDefinition);
+            var policy = ValueProtectionPolicy.InstanceInline;
 
             return new RuntimeInputBinding(
-                inputName: inputDefinition.Name,
+                inputKey: inputDefinition.ReferenceKey,
+                targetType: targetType,
+                effectivePolicy: policy,
                 source: RuntimeInputBindingSource.Literal,
-                literalValue: literal,
-                metadata: BuildInputMetadata(inputType, inputDefinition));
+                literal: converted is null
+                    ? ValueEnvelope.Null(targetType, policy)
+                    : ValueEnvelope.Inline(targetType, literal, policy),
+                metadata: BuildInputMetadata(inputDefinition));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
             throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to '{GetRuntimeTypeName(inputType)}'.",
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.Alias}'.",
                 exception);
         }
     }
@@ -136,13 +147,15 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{value.ExpressionType}' but carries no expression text.");
 
         var inputType = ResolveInputType(inputDefinition);
-        var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
+        var resultType = new RuntimeValueTypeDescriptor("alias", inputDefinition.Type.Alias, null);
 
         return new RuntimeInputBinding(
-            inputName: inputDefinition.Name,
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
-            metadata: BuildInputMetadata(inputType, inputDefinition));
+            metadata: BuildInputMetadata(inputDefinition));
     }
 
     // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the
@@ -165,20 +178,14 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         return value.ToString();
     }
 
-    private static Dictionary<string, string> BuildInputMetadata(Type inputType, InputDefinition inputDefinition) =>
+    private static Dictionary<string, string> BuildInputMetadata(InputDefinition inputDefinition) =>
         new()
         {
-            [InputTypeMetadataKey] = GetRuntimeTypeName(inputType),
             [ReferenceKeyMetadataKey] = inputDefinition.ReferenceKey
         };
 
-    private static string GetRuntimeTypeName(Type type)
-    {
-        var fullName = type.FullName
-            ?? throw new ArgumentException($"Input type '{type}' does not have a stable full name.", nameof(type));
-
-        return $"{fullName}, {type.Assembly.GetName().Name}";
-    }
+    private static ValueTypeDescriptor ToValueTypeDescriptor(InputDefinition inputDefinition) =>
+        new(inputDefinition.Type.Alias, inputDefinition.Type.CollectionKind);
 
     private static object? ConvertLiteral(object? value, Type targetType)
     {

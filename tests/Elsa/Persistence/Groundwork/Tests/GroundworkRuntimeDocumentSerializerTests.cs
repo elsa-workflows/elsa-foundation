@@ -254,6 +254,8 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         new(
         [
             new WorkflowExecutableDocumentV1ToV2Upcaster(),
+            new WorkflowExecutableDocumentV2ToV3Upcaster(),
+            new ActivityExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),

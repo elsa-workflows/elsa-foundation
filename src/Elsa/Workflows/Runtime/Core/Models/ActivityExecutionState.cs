@@ -35,8 +35,28 @@ public sealed record ActivityExecutionState(
     IReadOnlyCollection<string> IncidentIds,
     int FaultCount,
     int AggregateFaultCount,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    int DocumentVersion = ActivityExecutionValueFlowDocumentVersions.Current,
+    ActivityInvocationContractIdentity? ContractIdentity = null,
+    ActivityInputSnapshot? InputSnapshot = null,
+    IReadOnlyCollection<ActivityAttempt>? Attempts = null,
+    ActivityPrivateState? PrivateState = null,
+    ActivityCompletion? Completion = null,
+    NormalizedActivityFault? Fault = null,
+    IReadOnlyCollection<ActivityTriggerRegistration>? TriggerRegistrations = null,
+    IReadOnlyCollection<ActivityTriggerDelivery>? TriggerDeliveries = null,
+    ActivityExecutionValueFlowDocumentVersionGuard? ValueFlowCompatibility = null)
 {
+    public string InvocationId => Execution.ActivityExecutionId;
+
+    public void EnsureValueFlowCompatible()
+    {
+        if (DocumentVersion != ActivityExecutionValueFlowDocumentVersions.Current)
+            throw new InvalidOperationException($"Activity invocation '{InvocationId}' carries value-flow document version {DocumentVersion}; this runtime requires version {ActivityExecutionValueFlowDocumentVersions.Current}.");
+
+        ValueFlowCompatibility?.EnsureCompatible();
+    }
+
     public ActivityExecutionState(
         ActivityExecution Execution,
         ActivityExecutionStatus Status,
