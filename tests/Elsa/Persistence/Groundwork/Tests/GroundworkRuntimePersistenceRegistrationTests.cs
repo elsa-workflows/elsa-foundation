@@ -27,11 +27,15 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         typeof(IGroundworkStorageManifestSource),
         typeof(IBookmarkStateStore),
         typeof(IWorkflowExecutableStore),
+        typeof(IExecutableActivityTemplateStore),
         typeof(IWorkflowExecutableSourceReferenceStore),
         typeof(IActivityExecutionStateStore),
         typeof(GroundworkActivityExecutionInspectionStore),
         typeof(IActivityExecutionInspectionStore),
         typeof(IActivityExecutionInspectionWriter),
+        typeof(IActivityExecutionHierarchyStore),
+        typeof(IActivityExecutionHierarchyReader),
+        typeof(IActivityExecutionHierarchyWriter),
         typeof(IWorkflowExecutionStateStore),
         typeof(IDurableValueStateStore),
         typeof(ISchedulerStateStore),
@@ -88,11 +92,13 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
 
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<InMemoryWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<InMemoryExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
     }
 
     [Fact]
@@ -121,6 +127,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<GroundworkExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
         Assert.IsType<GroundworkActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<GroundworkWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<GroundworkDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
@@ -160,16 +167,17 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
         Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
 
-        var upcasterTypes = provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>()
+        var upcasters = provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>().ToArray();
+        Assert.Equal(9, upcasters.Length);
+        var upcasterTypes = upcasters
             .Select(x => x.GetType())
             .ToHashSet();
         Assert.True(upcasterTypes.SetEquals(
             [
-                typeof(WorkflowExecutableDocumentV1ToV2Upcaster),
+                typeof(ExecutionScopeAttemptDocumentUpcaster),
                 typeof(WorkflowExecutableDocumentV2ToV3Upcaster),
                 typeof(WorkflowExecutionStateDocumentV1ToV2Upcaster),
                 typeof(WorkflowExecutionStateDocumentV2ToV3Upcaster),
-                typeof(WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster),
                 typeof(WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster),
                 typeof(WorkflowTriggerBindingDocumentV1ToV2Upcaster),
                 typeof(RecurringTriggerScheduleDocumentV1ToV2Upcaster)

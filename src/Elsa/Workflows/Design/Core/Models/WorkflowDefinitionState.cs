@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// <b>Scope (Elsa constitution §E2.9).</b> State carries <b>authored content only</b>:
 /// the structured representation of what the author drew, declared, and configured.
 /// Today's members — <c>Variables</c>, <c>RootActivity</c>, <c>Inputs</c>,
-/// <c>Outputs</c>, <c>WorkflowActivityOptions</c>, <c>StrategyOptions</c> — are clean
+/// <c>Outputs</c>, and <c>StrategyOptions</c> — are clean
 /// against the policy. The root activity owns any composition details such as Flowchart
 /// connections or Sequence children.
 /// </para>
@@ -45,7 +45,6 @@ public sealed record WorkflowDefinitionState(
     ActivityNode? RootActivity,
     IEnumerable<InputDefinition> Inputs,
     IEnumerable<OutputDefinition> Outputs,
-    WorkflowActivityOptions? WorkflowActivityOptions,
     WorkflowStrategyOptions? StrategyOptions
 )
 {
@@ -53,5 +52,5 @@ public sealed record WorkflowDefinitionState(
     /// The fallback used when a persisted state source is blank or fails to deserialize, so
     /// callers always get a valid (if empty) state rather than a null reference.
     /// </summary>
-    public static WorkflowDefinitionState Empty { get; } = new([], null, [], [], null, null);
+    public static WorkflowDefinitionState Empty { get; } = new([], null, [], [], null);
 }

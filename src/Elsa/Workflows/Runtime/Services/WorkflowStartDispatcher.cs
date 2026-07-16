@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -219,6 +220,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         metadata["runtime.artifactId"] = identity.ArtifactId;
         metadata["runtime.artifactVersion"] = source?.ArtifactVersion ?? identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
+        if (source?.SourceReferenceId is { } sourceReferenceId)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 

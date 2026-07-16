@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Persistence.Core;
@@ -199,8 +200,12 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         authoredActivityId = node.AuthoredActivityId,
         activityType = node.ActivityType,
         activityTypeVersion = node.ActivityTypeVersion,
-        descriptorType = node.DescriptorType,
-        descriptorPayload = node.DescriptorPayload,
+        descriptor = new
+        {
+            consumerKey = node.Descriptor.ConsumerKey,
+            payload = node.Descriptor.Payload,
+            schemaVersion = node.Descriptor.SchemaVersion
+        },
         metadata = Ordered(node.Metadata),
         structure = node.Structure is null
             ? null
@@ -364,7 +369,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
@@ -406,7 +411,10 @@ public sealed class WorkflowExecutableCompilerGoldenTests
                 ActivityTypeKey = activityTypeKey,
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = inputs ?? []
         };

@@ -9,12 +9,24 @@ using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Publishing.Api.Contracts;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
+
+internal sealed class TestActivityPublishingAuthorizationContext(string? tenantId = null)
+    : IActivityPublishingAuthorizationContext
+{
+    public string? TenantId { get; } = tenantId;
+
+    public bool CanAccessTenant(string? candidateTenantId) =>
+        candidateTenantId is null || StringComparer.Ordinal.Equals(candidateTenantId, TenantId);
+}
 
 /// <summary>Builds an <see cref="IWellKnownTypeRegistry"/> seeded with the primitives these tests rely on.</summary>
 internal static class TestWellKnownTypeRegistry
@@ -45,16 +57,56 @@ internal static class TestCompiler
         Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore workflowVersions,
         Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore activityVersions,
         Elsa.Workflows.Design.Core.Contracts.IActivityStructureService activityStructureService,
-        IWellKnownTypeRegistry wellKnownTypeRegistry) =>
-        new(
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IActivityDefinitionVersionPublicationStore? activityPublications = null,
+        IExecutableActivityTemplateReader? activityTemplates = null,
+        IWorkflowExecutableSourceReferenceReader? sourceReferences = null,
+        WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+        IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null)
+    {
+        var publications = activityPublications ?? new EmptyActivityPublicationStore();
+        var templates = activityTemplates ?? new EmptyActivityTemplateReader();
+        var references = sourceReferences ?? new EmptySourceReferenceReader();
+        var inputCompiler = new RuntimeInputBindingCompiler(wellKnownTypeRegistry);
+        var outputCompiler = new RuntimeOutputCaptureCompiler(storageDrivers ?? new RuntimeDurableValueStorageDriverRegistry(
+            [new JsonRuntimeDurableValueStorageDriver()]));
+        return new(
             workflowVersions,
             activityVersions,
-            new Elsa.Workflows.Publishing.Api.Services.WorkflowExecutableHasher(),
-            new Elsa.Workflows.Publishing.Api.Services.ActivityTreeProjector(activityStructureService),
-            new Elsa.Workflows.Publishing.Api.Services.ExecutableNodeCompiler(
+            publications,
+            templates,
+            references,
+            new ActivityTemplatePlacer(publications, templates, references, new Sha256ActivityPlacementHasher()),
+            inputCompiler,
+            outputCompiler,
+            new WorkflowExecutableHasher(),
+            new ActivityTreeProjector(activityStructureService),
+            new ExecutableNodeCompiler(
                 activityStructureService,
                 wellKnownTypeRegistry,
-                new Elsa.Workflows.Publishing.Api.Services.RuntimeInputBindingCompiler(wellKnownTypeRegistry)));
+                inputCompiler),
+            placementSidecars);
+    }
+
+    private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore
+    {
+        public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) => Task.FromResult<ActivityDefinitionVersionPublication?>(null);
+        public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>([]);
+    }
+
+    private sealed class EmptyActivityTemplateReader : IExecutableActivityTemplateReader
+    {
+        public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+        public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+    }
+
+    private sealed class EmptySourceReferenceReader : IWorkflowExecutableSourceReferenceReader
+    {
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => ValueTask.FromResult<WorkflowExecutableSourceReference?>(null);
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+    }
 }
 
 internal static class TestRootWriteLeases
@@ -89,20 +141,19 @@ internal sealed class StubActivity : IActivity
 /// <summary>Captures what the bridge passed across the seam and returns a preset activity.</summary>
 internal sealed class FakeActivityFactory(IActivity result) : IActivityFactory
 {
-    public string? LastDescriptorType { get; private set; }
+    public RuntimeActivityDescriptor? LastDescriptor { get; private set; }
     public JsonElement LastPayload { get; private set; }
-    public IDictionary<string, InputArgument>? LastInputs { get; private set; }
-    public IDictionary<string, OutputArgument>? LastOutputs { get; private set; }
+    public IReadOnlyDictionary<string, InputArgument>? LastInputs { get; private set; }
+    public IReadOnlyDictionary<string, OutputArgument>? LastOutputs { get; private set; }
 
     public ValueTask<IActivity> Create(
-        string descriptorType,
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument>? inputs,
+        IReadOnlyDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken = default)
     {
-        LastDescriptorType = descriptorType;
-        LastPayload = payload;
+        LastDescriptor = descriptor;
+        LastPayload = descriptor.Payload;
         LastInputs = inputs;
         LastOutputs = outputs;
         return ValueTask.FromResult(result);

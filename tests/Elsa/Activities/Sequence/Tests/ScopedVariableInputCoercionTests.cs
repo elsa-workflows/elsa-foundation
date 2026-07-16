@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Models;
@@ -62,8 +63,7 @@ public sealed class ScopedVariableInputCoercionTests
             authoredActivityId: "authored-node-read",
             activityType: "test/read",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Value"] = new(

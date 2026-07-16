@@ -6,7 +6,10 @@ namespace Elsa.Activities.Design.Api.Models;
 public sealed record ActivityDefinitionVersionDetailsView(
     string Id,
     string Version,
-    string DescriptorType,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ConsumerKey,
+    string ConsumerSchemaVersion,
     JsonElement DescriptorPayload,
     ActivityDefinitionView Definition,
     IEnumerable<InputDefinition>? Inputs,

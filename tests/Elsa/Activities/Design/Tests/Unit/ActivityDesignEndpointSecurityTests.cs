@@ -29,11 +29,25 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Availability.SaveSettings")]
     [InlineData("Catalog.List")]
     [InlineData("Definitions.Add")]
+    [InlineData("Definitions.AddDraft")]
+    [InlineData("Definitions.Fork")]
     [InlineData("Definitions.Get")]
     [InlineData("Definitions.List")]
+    [InlineData("Definitions.ListDrafts")]
     [InlineData("Definitions.ListVersions")]
-    [InlineData("Versions.Add")]
+    [InlineData("Definitions.Update")]
+    [InlineData("Drafts.Diff")]
+    [InlineData("Drafts.Discard")]
+    [InlineData("Drafts.Get")]
+    [InlineData("Drafts.MigrateProvider")]
+    [InlineData("Drafts.Replace")]
+    [InlineData("Drafts.Validate")]
+    [InlineData("Versions.Diff")]
+    [InlineData("Versions.Dependencies")]
     [InlineData("Versions.Get")]
+    [InlineData("Versions.Restore")]
+    [InlineData("Versions.Retire")]
+    [InlineData("Versions.Revoke")]
     public void Endpoint_requires_a_permission_and_is_not_anonymous(string relativeTypeName)
     {
         var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
@@ -62,11 +76,28 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Availability.SaveSettings",
             "Catalog.List",
             "Definitions.Add",
+            "Definitions.AddDraft",
+            "Definitions.Fork",
             "Definitions.Get",
             "Definitions.List",
+            "Definitions.ListDrafts",
             "Definitions.ListVersions",
-            "Versions.Add",
-            "Versions.Get"
+            "Definitions.Update",
+            "Drafts.Diff",
+            "Drafts.Discard",
+            "Drafts.Get",
+            "Drafts.MigrateProvider",
+            "Drafts.Replace",
+            "Drafts.Validate",
+            "UpgradePlans.Apply",
+            "UpgradePlans.Create",
+            "UpgradePlans.Get",
+            "Versions.Diff",
+            "Versions.Dependencies",
+            "Versions.Get",
+            "Versions.Restore",
+            "Versions.Retire",
+            "Versions.Revoke"
         ];
 
         Assert.Equal(covered.OrderBy(n => n, StringComparer.Ordinal), endpointTypes);

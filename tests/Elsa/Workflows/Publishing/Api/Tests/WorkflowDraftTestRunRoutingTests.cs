@@ -17,6 +17,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// over the parameterized <c>workflows/{versionId}/test-runs</c> route. Both endpoints are hosted
 /// through FastEndpoints (exactly as in production) so the test exercises the real route matcher.
 /// </summary>
+[Collection(nameof(WorkflowDraftTestRunRoutingTests))]
 public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
 {
     private const string DraftPath = "/publishing/workflows/drafts/test-runs";
@@ -140,4 +141,8 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
             return Task.FromResult((T)(object)view);
         }
     }
+
 }
+
+[CollectionDefinition(nameof(WorkflowDraftTestRunRoutingTests), DisableParallelization = true)]
+public sealed class WorkflowDraftTestRunRoutingTestCollection;

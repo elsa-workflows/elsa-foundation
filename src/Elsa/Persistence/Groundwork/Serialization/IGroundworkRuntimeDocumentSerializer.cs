@@ -5,8 +5,8 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// <summary>
 /// Serializes and deserializes runtime documents persisted through the Groundwork bridge, owning
 /// both the frozen bridge serializer options and the per-document-kind schema-version contract:
-/// writes stamp the kind's current version, reads enforce the stamp and upcast older documents
-/// through the registered <see cref="IGroundworkRuntimeDocumentUpcaster"/> chain.
+/// writes stamp the kind's current version, reads reject versions below a clean-break floor and
+/// upcast supported older documents through the registered <see cref="IGroundworkRuntimeDocumentUpcaster"/> chain.
 /// </summary>
 /// <remarks>
 /// Replacement contract: exactly one implementation is active per runtime host. The default is
@@ -47,12 +47,12 @@ public interface IGroundworkRuntimeDocumentSerializer
 
     /// <summary>
     /// Deserializes a persisted envelope, enforcing its schema-version stamp: the current version
-    /// deserializes directly, older versions are upcasted step-by-step to the current version first,
-    /// and unrecognized or future versions fail loudly.
+    /// deserializes directly, supported older versions are upcasted step-by-step to the current
+    /// version first, and clean-break, unrecognized, or future versions fail loudly.
     /// </summary>
     /// <exception cref="Exceptions.GroundworkRuntimeDocumentVersionException">
-    /// The envelope's version stamp is unrecognized, newer than this build supports, or older with
-    /// an incomplete upcaster chain.
+    /// The envelope's version stamp is unrecognized, newer than this build supports, below the
+    /// minimum readable version, or older with an incomplete upcaster chain.
     /// </exception>
     T Deserialize<T>(DocumentEnvelope envelope);
 }

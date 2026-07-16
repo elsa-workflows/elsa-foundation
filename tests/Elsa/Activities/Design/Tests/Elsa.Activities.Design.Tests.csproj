@@ -40,6 +40,8 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\EFCore\Elsa.Workflows.Design.Persistence.EFCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
   </ItemGroup>
 
 

@@ -36,4 +36,3 @@ public sealed record PublicationProjectionIntent(
 public sealed record PublicationProjectionIntentTransitionResult(
     bool Succeeded,
     PublicationProjectionIntent Intent);
-

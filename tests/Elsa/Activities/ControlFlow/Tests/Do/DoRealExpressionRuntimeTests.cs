@@ -182,8 +182,7 @@ public sealed class DoRealExpressionRuntimeTests
             authoredActivityId: "authored-body",
             activityType: CounterBody.ActivityTypeName,
             activityTypeVersion: "1.0.0",
-            descriptorType: CounterBodyConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new CounterBodyDescriptor(BreakAt: breakAt)),
+            descriptor: new RuntimeActivityDescriptor(CounterBodyConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new CounterBodyDescriptor(BreakAt: breakAt))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Next"] = JavaScriptInt("(output.count == null ? 0 : output.count) + 1")
@@ -216,8 +215,7 @@ public sealed class DoRealExpressionRuntimeTests
             authoredActivityId: "authored-body",
             activityType: CounterBody.ActivityTypeName,
             activityTypeVersion: "1.0.0",
-            descriptorType: CounterBodyConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new CounterBodyDescriptor("counter")),
+            descriptor: new RuntimeActivityDescriptor(CounterBodyConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new CounterBodyDescriptor("counter"))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Next"] = JavaScriptInt("(variables.counter == null ? 0 : variables.counter) + 1")
@@ -249,8 +247,7 @@ public sealed class DoRealExpressionRuntimeTests
             authoredActivityId: "authored-do",
             activityType: typeof(DoActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: DoActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new DoDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(DoActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new DoDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding> { ["Condition"] = conditionBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -302,8 +299,8 @@ public sealed class DoRealExpressionRuntimeTests
 
     private sealed class CounterBodyConstructor : IActivityConstructor<CounterBodyDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(CounterBodyDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(CounterBodyDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,
@@ -331,8 +328,8 @@ public sealed class DoRealExpressionRuntimeTests
 
     private sealed class DoActivityConstructor : IActivityConstructor<DoDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(DoDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(DoDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

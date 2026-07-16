@@ -24,7 +24,9 @@ public sealed record ActivityExecutionInspectionProjection(
     IReadOnlyCollection<ActivityExecutionBookmarkSummary> Bookmarks,
     IReadOnlyCollection<ActivityExecutionIncidentSummary> Incidents,
     IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null)
 {
     public static ActivityExecutionInspectionProjection FromState(
         ActivityExecutionState state,
@@ -60,6 +62,8 @@ public sealed record ActivityExecutionInspectionProjection(
             LastCheckpointId: checkpointId,
             LastCommittedAt: committedAt,
             Provenance: state.Provenance,
+            ExecutionScopeId: state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
+            Attempt: state.Attempt ?? state.Provenance.Attempt,
             OutcomeNames: outcomeNames ?? [],
             Bookmarks: bookmarks ?? [],
             Incidents: incidents ?? [],
@@ -94,6 +98,8 @@ public sealed record ActivityExecutionInspectionProjection(
             LastCheckpointId = checkpointId,
             LastCommittedAt = committedAt,
             Provenance = state.Provenance,
+            ExecutionScopeId = state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
+            Attempt = state.Attempt ?? state.Provenance.Attempt,
             OutcomeNames = outcomeNames ?? OutcomeNames,
             Bookmarks = MergeBy(Bookmarks, bookmarks, item => item.BookmarkId),
             Incidents = MergeBy(Incidents, incidents, item => item.IncidentId),
@@ -184,7 +190,9 @@ public sealed record ActivityExecutionInspectionSummaryProjection(
     int BookmarkCount,
     int IncidentCount,
     int ValueSnapshotCount,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null)
 {
     public static ActivityExecutionInspectionSummaryProjection FromProjection(ActivityExecutionInspectionProjection projection)
     {
@@ -211,6 +219,8 @@ public sealed record ActivityExecutionInspectionSummaryProjection(
             projection.Bookmarks.Count,
             projection.Incidents.Count,
             projection.ValueSnapshots.Count,
-            projection.Metadata);
+            projection.Metadata,
+            projection.ExecutionScopeId,
+            projection.Attempt);
     }
 }

@@ -4,8 +4,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 namespace Elsa.Workflows.Publishing.Api.Requests;
 
 /// <summary>
-/// Lists the catalog rows the publishing surface could construct, with their descriptor kind.
-/// Optionally filter by <paramref name="DescriptorType"/> (e.g. to show only the Workflow rows).
+/// Lists catalog rows the publishing surface can construct, optionally filtered by stable Runtime consumer key.
 /// </summary>
-public sealed record ListConstructableActivities(string? DescriptorType = null)
+public sealed record ListConstructableActivities(string? ConsumerKey = null)
     : IRequest<IEnumerable<ConstructableActivityView>>;

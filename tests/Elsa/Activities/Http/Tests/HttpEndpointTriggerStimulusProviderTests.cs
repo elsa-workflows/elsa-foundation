@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Http.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -438,8 +439,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             authoredActivityId: "authored-node-http-endpoint",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: effectiveBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

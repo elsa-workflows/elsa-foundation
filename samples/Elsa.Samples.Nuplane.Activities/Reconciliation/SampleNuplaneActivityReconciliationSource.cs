@@ -16,7 +16,10 @@ public sealed class SampleNuplaneActivityReconciliationSource : IActivityReconci
         DisplayName: "Say Hello From Nuplane",
         Category: "Samples",
         Description: "Writes a greeting from an activity provided by a Nuplane-loaded package.",
-        DescriptorType: typeof(SampleNuplaneActivityDescriptor).FullName!,
+        ProviderKey: "elsa.sample.nuplane-activity",
+        ProviderSchemaVersion: "1",
+        ConsumerKey: "elsa.sample.nuplane-activity",
+        ConsumerSchemaVersion: "1",
         Descriptor: SampleNuplaneActivityDescriptor.Default,
         Inputs:
         [

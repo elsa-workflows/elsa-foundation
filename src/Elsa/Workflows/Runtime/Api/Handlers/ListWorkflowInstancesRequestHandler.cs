@@ -1,17 +1,20 @@
 using System.Globalization;
 using System.Text;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 public sealed class ListWorkflowInstancesRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
-    IIncidentStateStore incidentStateStore)
+    IIncidentStateStore incidentStateStore,
+    IActivityExecutionInspectionAuthorizationContext authorization)
     : IRequestHandler<ListWorkflowInstances, WorkflowInstanceListView>
 {
     private const int PagedDefaultTake = 25;
@@ -52,12 +55,18 @@ public sealed class ListWorkflowInstancesRequestHandler(
         if (!string.IsNullOrWhiteSpace(request.Cursor))
             query = query with { Cursor = DecodeCursor(request.Cursor, maxTake, query.Scope()) };
 
-        var page = await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken);
+        var page = authorization.TenantScope == "all-tenants"
+            ? await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken)
+            : await QueryAuthorizedPageAsync(query, cancellationToken);
         var summaryTasks = page.Items.Select(async state =>
         {
             var activityCount = (await activityExecutionStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
             var incidentCount = (await incidentStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
-            return WorkflowInstanceSummaryView.From(state, activityCount, incidentCount);
+            return WorkflowInstanceSummaryView.From(
+                state,
+                activityCount,
+                incidentCount,
+                authorization.CanInspectSensitiveValues(state));
         });
         var items = await Task.WhenAll(summaryTasks);
 
@@ -72,6 +81,28 @@ public sealed class ListWorkflowInstancesRequestHandler(
     }
 
     private static WorkflowInstanceListView Empty() => new([], null, null, false, false, 0, 0);
+
+    private async ValueTask<WorkflowExecutionStatePage> QueryAuthorizedPageAsync(
+        WorkflowExecutionStatePageQuery query,
+        CancellationToken cancellationToken)
+    {
+        // The provider-neutral page query can express one concrete tenant but not the authorization rule used by
+        // inspection (a caller's tenant plus tenant-less executions). Materialize only for that constrained case,
+        // filter before counting/cursoring, and then reuse the canonical in-memory keyset implementation. This keeps
+        // unauthorized rows out of items, cursors, and TotalCount instead of trading disclosure safety for paging.
+        var authorizedStore = new InMemoryWorkflowExecutionStateStore();
+        var requiresSensitiveValues = query.CorrelationId is not null;
+        foreach (var state in await workflowExecutionStateStore.ListAsync(cancellationToken))
+        {
+            if (!authorization.CanInspectStructure(state) ||
+                (requiresSensitiveValues && !authorization.CanInspectSensitiveValues(state)))
+                continue;
+
+            await authorizedStore.SaveAsync(state, cancellationToken);
+        }
+
+        return await authorizedStore.QueryPageAsync(query, cancellationToken);
+    }
 
     private static bool TryParseStatus(string? value, out WorkflowExecutionStatus? status)
     {

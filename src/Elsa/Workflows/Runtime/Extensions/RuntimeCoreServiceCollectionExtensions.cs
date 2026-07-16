@@ -49,7 +49,13 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
+        services.TryAddSingleton<IActivityExecutionHierarchyCursorCodec, HmacActivityExecutionHierarchyCursorCodec>();
+        services.TryAddSingleton<IActivityExecutionHierarchyStore, RuntimeInMemoryActivityExecutionHierarchyStore>();
+        services.TryAddSingleton<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
+        services.TryAddSingleton<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
         services.TryAddSingleton<InMemoryActivityExecutionInspectionStore>();
@@ -65,6 +71,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // observers themselves register as singletons that open their own scopes (mirroring RouteTableTriggerIndexObserver).
         services.TryAddSingleton<BookmarkLifecycleNotifier>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>());
+        services.TryAddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
         services.TryAddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
@@ -72,6 +80,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
         services.TryAddScoped<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
         services.TryAddSingleton<IRuntimeDomainRetryPolicy, NoopRuntimeDomainRetryPolicy>();
+        services.TryAddScoped<ActivityActivationFailureHandler>();
         services.AddOptions<RuntimeFaultCaptureOptions>();
         services.TryAddSingleton<IRuntimeFaultCapturePolicy, DefaultRuntimeFaultCapturePolicy>();
         services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
@@ -92,6 +101,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
+        services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
+        services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddScoped<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
@@ -163,6 +174,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCreateBookmarkSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCancelSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCancelActivityScopeSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowRetryActivityBoundarySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingActivityInvocationSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());

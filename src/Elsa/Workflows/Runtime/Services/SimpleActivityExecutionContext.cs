@@ -166,6 +166,12 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RecordedActivityOutput> GetRecordedOutputs() => _recordedOutputs.ToArray();
 
+    public void RecordActivityOutput(string outputName, object? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputName);
+        RecordOutput(outputName, value);
+    }
+
     public void ScheduleChildActivity(
         string executableNodeId,
         string? schedulingActivityExecutionId = null,

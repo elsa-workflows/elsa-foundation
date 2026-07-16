@@ -55,5 +55,5 @@ public sealed class WorkflowDefinitionListProjectionStoreTests
     private static WorkflowDefinitionVersion Version(string id, string definitionId, string version) =>
         new(definitionId, version) { Id = id, State = EmptyState() };
 
-    private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null, null);
+    private static WorkflowDefinitionState EmptyState() => WorkflowDefinitionState.Empty;
 }

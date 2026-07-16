@@ -3,6 +3,7 @@ using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -241,8 +242,7 @@ public sealed class BreakPropagationExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, activityType)),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -255,8 +255,7 @@ public sealed class BreakPropagationExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, activityType)),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

@@ -143,8 +143,7 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForEachActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(ForEachActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForEachDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Collection"] = new RuntimeInputBinding(
@@ -171,8 +170,7 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForEachActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(ForEachActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForEachDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Collection"] = new RuntimeInputBinding(
@@ -198,8 +196,7 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(WriteLine).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: typeof(ClrActivityDescriptor).FullName!,
-            descriptorPayload: Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine)))),
+            descriptor: new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, RuntimeActivityDescriptor.InitialSchemaVersion, Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine))))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Text"] = new RuntimeInputBinding(
@@ -234,8 +231,8 @@ public sealed class ForEachRuntimeTests
 
     private sealed class ForEachActivityConstructor : IActivityConstructor<ForEachDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ForEachDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ForEachDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

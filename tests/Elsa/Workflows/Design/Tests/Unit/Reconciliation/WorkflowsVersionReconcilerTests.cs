@@ -249,8 +249,8 @@ public sealed class WorkflowsVersionReconcilerTests
     {
         // R13/FR-006: same (id, version) with different canonical state is a broken source — surfaced as
         // a warning now (a throw arrives once FR-016a persists a hash). Under Skip, no throw, no add.
-        var incomingState = new WorkflowDefinitionState([], null, [], [], null, null);
-        var storedState = new WorkflowDefinitionState([], null, [], [], null, null);
+        var incomingState = new WorkflowDefinitionState([], null, [], [], null);
+        var storedState = new WorkflowDefinitionState([], null, [], [], null);
         var incoming = BuildIncomingVersion(definitionId: "wf-diff", version: "1.0.0", name: "Same", state: incomingState);
         var existingDef = new WorkflowDefinition { Id = "wf-diff", Name = "Same" };
         var existingVersion = new WorkflowDefinitionVersion("wf-diff", "1.0.0") { State = storedState };
@@ -320,7 +320,7 @@ public sealed class WorkflowsVersionReconcilerTests
         Version = version,
         DefinitionId = definitionId,
         DefinitionFacade = new StubIncomingDefinition { Id = definitionId, Name = name, Description = description, DeletedAt = deleted ? DateTimeOffset.UtcNow : null },
-        State = state ?? new WorkflowDefinitionState([], null, [], [], null, null),
+        State = state ?? new WorkflowDefinitionState([], null, [], [], null),
     };
 
     private sealed class StubIncomingDefinition : IWorkflowDefinition

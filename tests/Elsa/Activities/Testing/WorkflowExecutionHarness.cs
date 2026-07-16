@@ -38,6 +38,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private static readonly DateTimeOffset Now = new(2026, 6, 12, 12, 0, 0, TimeSpan.Zero);
 
     private readonly ServiceProvider _provider;
+    private bool _activityConstructorsRegistered;
     private bool _activityTypesRegistered;
 
     private WorkflowExecutionHarness(ServiceProvider provider) => _provider = provider;
@@ -96,6 +97,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null)
     {
+        if (!_activityConstructorsRegistered)
+        {
+            await ActivityConstructorTestHost.InitializeAsync(_provider);
+            _activityConstructorsRegistered = true;
+        }
+
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
         // registry, and RegisterActivityTypesStartupTask discovers types by scanning the loaded assemblies. A
@@ -225,8 +232,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: ProbeActivity.ProbeActivityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ProbeDescriptor(outcomes ?? [ActivityOutcomes.Done])),
+            descriptor: new RuntimeActivityDescriptor(ProbeActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ProbeDescriptor(outcomes ?? [ActivityOutcomes.Done]))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -238,8 +244,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: FaultingActivity.FaultingActivityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: FaultingActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new FaultingDescriptor(message ?? $"Branch '{nodeId}' faulted.")),
+            descriptor: new RuntimeActivityDescriptor(FaultingActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new FaultingDescriptor(message ?? $"Branch '{nodeId}' faulted."))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

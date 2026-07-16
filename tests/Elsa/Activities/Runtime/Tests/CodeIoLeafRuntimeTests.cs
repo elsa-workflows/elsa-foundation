@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Constructors;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Primitives.Models;
@@ -138,8 +139,7 @@ public sealed class CodeIoLeafRuntimeTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, activityType)),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

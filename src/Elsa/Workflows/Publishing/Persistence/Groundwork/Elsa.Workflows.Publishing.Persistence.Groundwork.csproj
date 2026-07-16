@@ -5,15 +5,29 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Groundwork.Core" />
     <PackageReference Include="Groundwork.Documents" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
+
   <ItemGroup>
-    <ProjectReference Include="..\..\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Querying\Elsa.Persistence.Groundwork.Querying.csproj" />
+    <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
+
   <ItemGroup>
     <Compile Remove="Sqlite\**\*.cs" />
     <EmbeddedResource Remove="Sqlite\**\*" />

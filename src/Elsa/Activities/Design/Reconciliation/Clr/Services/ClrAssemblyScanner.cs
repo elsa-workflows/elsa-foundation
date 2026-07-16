@@ -31,6 +31,8 @@ public sealed class ClrAssemblyScanner(
     IActivityTypeCategoryResolver categoryResolver,
     ILogger<ClrAssemblyScanner> logger) : IClrAssemblyScanner
 {
+    public const string ProviderKey = "elsa.clr-activity";
+    public const string SchemaVersion = "1";
     private const long MaxJavaScriptSafeInteger = 9007199254740991L;
     private static readonly string ActivityInterfaceFullName = typeof(IActivity).FullName!;
     private static readonly string InputArgumentFullName = typeof(InputArgument).FullName!;
@@ -163,7 +165,10 @@ public sealed class ClrAssemblyScanner(
             DisplayName: null,
             Category: category,
             Description: null,
-            DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey: ProviderKey,
+            ProviderSchemaVersion: SchemaVersion,
+            ConsumerKey: WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion: RuntimeActivityDescriptor.InitialSchemaVersion,
             Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type)),
             Inputs: inputs,
             Outputs: outputs,

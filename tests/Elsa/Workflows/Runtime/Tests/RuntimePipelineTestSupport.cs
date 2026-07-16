@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -43,8 +44,10 @@ public abstract class RuntimePipelineTestSupport
                 authoredActivityId: "activity-root",
                 activityType: "Elsa.Test",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "Test",
-                descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                descriptor: new RuntimeActivityDescriptor(
+                    "Test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),

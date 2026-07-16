@@ -18,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// <remarks>
 /// These options are deliberately independent of <c>IPayloadSerializer</c>: this is the durability
 /// format of suspended workflow state, frozen by the golden-fixture suite and only changed through
-/// explicit version bumps with upcasters. See the sanctioned-exception entry in
+/// explicit version bumps with upcasters or an explicit minimum-readable clean break. See the sanctioned-exception entry in
 /// <c>docs/serialization.md</c>.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentSerializer(IGroundworkRuntimeDocumentUpcasterRegistry upcasterRegistry) : IGroundworkRuntimeDocumentSerializer
@@ -59,12 +59,20 @@ public sealed class GroundworkRuntimeDocumentSerializer(IGroundworkRuntimeDocume
         var documentKind = envelope.DocumentKind;
         var foundVersion = ElsaRuntimeDocumentVersions.Parse(documentKind, envelope.SchemaVersion);
         var currentVersion = ElsaRuntimeDocumentVersions.CurrentFor(documentKind);
+        var minimumReadableVersion = ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind);
 
         if (foundVersion > currentVersion)
         {
             throw new GroundworkRuntimeDocumentVersionException(
                 $"Document '{envelope.Id}' of kind '{documentKind}' carries schema version {foundVersion}, but this build only supports " +
                 $"versions up to {currentVersion}. It was written by a newer version of Elsa; refusing to deserialize.");
+        }
+
+        if (foundVersion < minimumReadableVersion)
+        {
+            throw new GroundworkRuntimeDocumentVersionException(
+                $"Document '{envelope.Id}' of kind '{documentKind}' carries schema version {foundVersion}, but this build's clean-break minimum " +
+                $"readable version is {minimumReadableVersion}. No compatibility upcaster is permitted for this retired wire format; refusing to deserialize.");
         }
 
         if (foundVersion == currentVersion)
@@ -91,18 +99,27 @@ public sealed class GroundworkRuntimeDocumentSerializer(IGroundworkRuntimeDocume
                    $"Document '{id}' of kind '{documentKind}' does not contain a JSON object; it cannot be upcasted.");
     }
 
-    // WorkflowExecutable recomputes Nodes and NodesById from RootActivity in its constructor, so both
-    // are derived projections of the same tree. Persisting them would store the executable graph three
-    // times; dropping them keeps the stored document compact and the constructor rebuilds them on load.
+    // WorkflowExecutable and ExecutableActivityTemplate recompute their node indexes from the root in
+    // their constructors. Persisting those projections would duplicate the graph; the constructors
+    // rebuild them on load.
     private static void DropDerivedExecutableProjections(JsonTypeInfo typeInfo)
     {
-        if (typeInfo.Type != typeof(WorkflowExecutable))
+        if (typeInfo.Type == typeof(ExecutableActivityTemplate))
+        {
+            RemoveProperties(typeInfo, nameof(ExecutableActivityTemplate.NodesById));
             return;
+        }
 
+        if (typeInfo.Type == typeof(WorkflowExecutable))
+            RemoveProperties(typeInfo, nameof(WorkflowExecutable.Nodes), nameof(WorkflowExecutable.NodesById));
+    }
+
+    private static void RemoveProperties(JsonTypeInfo typeInfo, params string[] propertyNames)
+    {
         for (var i = typeInfo.Properties.Count - 1; i >= 0; i--)
         {
             var memberName = (typeInfo.Properties[i].AttributeProvider as MemberInfo)?.Name;
-            if (memberName is nameof(WorkflowExecutable.Nodes) or nameof(WorkflowExecutable.NodesById))
+            if (memberName is not null && propertyNames.Contains(memberName, StringComparer.Ordinal))
                 typeInfo.Properties.RemoveAt(i);
         }
     }

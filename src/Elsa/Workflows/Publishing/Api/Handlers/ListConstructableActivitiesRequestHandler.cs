@@ -17,8 +17,15 @@ public sealed class ListConstructableActivitiesRequestHandler(IActivityDefinitio
         var rows = await versions.ListAsync(cancellationToken);
 
         return rows
-            .Where(v => request.DescriptorType is null || v.DescriptorType == request.DescriptorType)
-            .Select(v => new ConstructableActivityView(v.Id, v.DefinitionId, v.Version, v.DescriptorType))
+            .Where(v => request.ConsumerKey is null || v.ConsumerKey == request.ConsumerKey)
+            .Select(v => new ConstructableActivityView(
+                v.Id,
+                v.DefinitionId,
+                v.Version,
+                v.ProviderKey,
+                v.ProviderSchemaVersion,
+                v.ConsumerKey,
+                v.ConsumerSchemaVersion))
             .ToArray();
     }
 }

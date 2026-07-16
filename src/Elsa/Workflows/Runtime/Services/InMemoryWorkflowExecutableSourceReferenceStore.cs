@@ -65,6 +65,14 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         }
     }
 
+    public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
+
+        lock (_gate)
+            return ValueTask.FromResult(_references.Remove(sourceReferenceId));
+    }
+
     public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         lock (_gate)

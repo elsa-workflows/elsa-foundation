@@ -31,6 +31,15 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Throws<ArgumentException>(() => Serializer.Serialize("not-a-real-kind", Bookmark()));
     }
 
+    [Theory]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
+    public void StableDescriptorAndLayoutKinds_Keep_The_CleanBreak_Floor_While_Advancing_To_Version_3(string kind)
+    {
+        Assert.Equal(3, ElsaRuntimeDocumentVersions.CurrentFor(kind));
+        Assert.Equal(2, ElsaRuntimeDocumentVersions.MinimumReadableFor(kind));
+    }
+
     // --- Read path: current version round-trips ---
 
     [Fact]
@@ -55,6 +64,26 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         var deserialized = Serializer.Deserialize<BookmarkState>(Envelope(ElsaRuntimeDocumentVersions.LegacySchemaVersion, contentJson));
 
         Assert.Equal("bm-1", deserialized.BookmarkId);
+    }
+
+    [Fact]
+    public void Deserialize_Rejects_A_PreConsumerKey_WorkflowExecutable_At_The_CleanBreak_Floor()
+    {
+        var envelope = new DocumentEnvelope(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-legacy",
+            ElsaRuntimeDocumentVersions.LegacySchemaVersion,
+            1,
+            "{}",
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch);
+
+        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(
+            () => Serializer.Deserialize<WorkflowExecutable>(envelope));
+
+        Assert.Contains("clean-break", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("minimum readable version is 2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("No compatibility upcaster is permitted", exception.Message, StringComparison.Ordinal);
     }
 
     // --- Read path: version enforcement fails loudly ---
@@ -158,13 +187,26 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Construction_Throws_On_A_Step_At_Or_Beyond_A_Known_Kinds_Current_Version()
     {
-        // Every real kind is at version 1 today, so any upcaster for one is a signal the current
+        // Bookmark state remains at version 1, so any upcaster for it is a signal the current
         // version was not bumped alongside the step.
         Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
             new GroundworkRuntimeDocumentUpcasterRegistry(
             [
                 new RenameFieldUpcaster(Kind, fromVersion: 1, "a", "b")
             ]));
+    }
+
+    [Fact]
+    public void Registry_Construction_Rejects_An_Upcaster_Below_A_CleanBreak_Floor()
+    {
+        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
+            new GroundworkRuntimeDocumentUpcasterRegistry(
+            [
+                new RenameFieldUpcaster(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, fromVersion: 1, "descriptorType", "descriptor")
+            ]));
+
+        Assert.Contains("clean-break minimum readable version 2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not permitted", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -192,11 +234,6 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     public void PublicationProjectionUpcasters_AreNeutralAndPreserveLegacyTriggerSemantics()
     {
         var registry = Registry();
-        var sourceReference = registry.Upcast(
-            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
-            1,
-            2,
-            new JsonObject { ["reference"] = new JsonObject() });
         var eventBinding = registry.Upcast(
             ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
             1,
@@ -213,10 +250,6 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             2,
             new JsonObject { ["schedule"] = new JsonObject() });
 
-        var reference = Assert.IsType<JsonObject>(sourceReference["reference"]);
-        Assert.True(reference.ContainsKey("publicationId"));
-        Assert.Null(reference["publicationId"]);
-        Assert.Null(reference["slotId"]);
         Assert.Equal((int)TriggerCardinality.FanOut, eventBinding["cardinality"]!.GetValue<int>());
         Assert.Equal((int)TriggerCardinality.Exclusive, httpBinding["cardinality"]!.GetValue<int>());
         Assert.False(eventBinding["isActive"]!.GetValue<bool>());
@@ -304,11 +337,12 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         params IGroundworkRuntimeDocumentUpcaster[] additional) =>
         new(
         [
-            new WorkflowExecutableDocumentV1ToV2Upcaster(),
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind),
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind),
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind),
             new WorkflowExecutableDocumentV2ToV3Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
-            new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster(),
             new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
             new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),

@@ -163,8 +163,7 @@ public sealed class SeededVariableEndToEndExecutionTests
             authoredActivityId: "authored-node-start",
             activityType: "test/seeded-probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: SeededInputProbeConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SeededInputProbeDescriptor("Message")),
+            descriptor: new RuntimeActivityDescriptor(SeededInputProbeConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SeededInputProbeDescriptor("Message"))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Message"] = new(
@@ -198,8 +197,7 @@ public sealed class SeededVariableEndToEndExecutionTests
             authoredActivityId: "authored-node-start",
             activityType: "test/seeded-probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: SeededInputProbeConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SeededInputProbeDescriptor("Message")),
+            descriptor: new RuntimeActivityDescriptor(SeededInputProbeConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SeededInputProbeDescriptor("Message"))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Message"] = new(
@@ -233,8 +231,8 @@ public sealed class SeededVariableEndToEndExecutionTests
 
     private sealed class SeededInputProbeConstructor(SeededInputProbe probe) : IActivityConstructor<SeededInputProbeDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(SeededInputProbeDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(SeededInputProbeDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
         {

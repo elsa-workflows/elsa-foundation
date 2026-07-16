@@ -1,5 +1,6 @@
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -20,9 +21,13 @@ public sealed class WorkflowInstancesRequestHandlerTests
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryIncidentStateStore _incidentStore = new();
     private readonly InMemoryDurableValueStateStore _durableValueStore = new();
+    private static readonly IActivityExecutionInspectionAuthorizationContext AllowAll = new AllowAllActivityExecutionInspectionAuthorizationContext();
+
+    private ListWorkflowInstancesRequestHandler NewListInstanceHandler(IWorkflowExecutionStateStore? workflowStore = null) =>
+        new(workflowStore ?? _workflowStore, _activityStore, _incidentStore, AllowAll);
 
     private GetWorkflowInstanceRequestHandler NewGetInstanceHandler() =>
-        new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy());
+        new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy(), AllowAll);
 
     private async Task SeedWorkflowInstancesAsync(int count)
     {
@@ -39,7 +44,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _activityStore.SaveAsync(Activity("wf-new", "activity-1", ActivityExecutionStatus.Running));
         await _activityStore.SaveAsync(Activity("wf-new", "activity-2", ActivityExecutionStatus.Completed));
         await _incidentStore.TryAddAsync(Incident("wf-new", "incident-1"));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(new ListWorkflowInstances("Running", "definition-1", "correlation-1", 10), CancellationToken.None);
 
@@ -59,7 +64,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     {
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
         var store = new BoundedQueryOnlyWorkflowExecutionStateStore(_workflowStore);
-        var handler = new ListWorkflowInstancesRequestHandler(store, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler(store);
 
         var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
 
@@ -74,7 +79,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("wf-published", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.PublishedRun));
         await _workflowStore.SaveAsync(Workflow("wf-weaver", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.BackgroundWeaverRun));
         await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRun"), CancellationToken.None);
         var publishedResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "PublishedRun"), CancellationToken.None);
@@ -96,7 +101,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         var timestamp = Now(-1);
         foreach (var id in new[] { "wf-d", "wf-b", "wf-a", "wf-c" })
             await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Completed, "definition-1", updatedAt: timestamp));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
         var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
@@ -116,7 +121,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task ListWorkflowInstances_preserves_omitted_and_changed_take_cursor_semantics()
     {
         await SeedWorkflowInstancesAsync(40);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
         var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
@@ -131,7 +136,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task ListWorkflowInstances_accepts_legacy_five_part_cursors()
     {
         await SeedWorkflowInstancesAsync(30);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
         var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
         var legacyCursor = RemoveCursorScope(first.NextCursor!);
 
@@ -145,7 +150,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task ListWorkflowInstances_rejects_a_cursor_reused_with_different_filters()
     {
         await SeedWorkflowInstancesAsync(3);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
         var first = await handler.Handle(new ListWorkflowInstances(null, "definition-1", null, 1), CancellationToken.None);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
@@ -159,7 +164,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task ListWorkflowInstances_ClampsPageSizeAtBothBounds()
     {
         await SeedWorkflowInstancesAsync(105);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var maximum = await handler.Handle(new ListWorkflowInstances(null, null, null, 500), CancellationToken.None);
         var minimum = await handler.Handle(new ListWorkflowInstances(null, null, null, 0), CancellationToken.None);
@@ -178,7 +183,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task Paged_route_preserves_its_25_default_and_100_maximum(int? take, int expected)
     {
         await SeedWorkflowInstancesAsync(501);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(
             new ListWorkflowInstances(null, null, null, take),
@@ -196,7 +201,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task Legacy_array_route_preserves_its_100_default_and_500_maximum(int? take, int expected)
     {
         await SeedWorkflowInstancesAsync(501);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(
             new ListWorkflowInstances(null, null, null, take).ForLegacyArray(),
@@ -211,7 +216,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("match", WorkflowExecutionStatus.Running, "definition-1", "correlation-1", Now(-5)));
         await _workflowStore.SaveAsync(Workflow("wrong-execution", WorkflowExecutionStatus.Running, "definition-1", "correlation-1", Now(-5)));
         await _workflowStore.SaveAsync(Workflow("wrong-definition", WorkflowExecutionStatus.Running, "definition-2", "correlation-1", Now(-5)));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(new ListWorkflowInstances(
             "Running",
@@ -234,7 +239,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             WorkflowExecutionStatus.Running,
             "content-origin-definition",
             sourceDefinitionId: "published-definition"));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(
             new ListWorkflowInstances(null, "published-definition", null, 10),
@@ -246,7 +251,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_RejectsMalformedCursor()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
             handler.Handle(new ListWorkflowInstances(null, null, null, 10, "not-a-cursor"), CancellationToken.None));
@@ -257,7 +262,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_RejectsUnknownRunKind()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
             handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRnu"), CancellationToken.None));
@@ -269,7 +274,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_MapsMalformedCursorToBadRequestAtHttpBoundary()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
         var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
         var endpoint = Factory.Create<TestListInstancesEndpoint>(
             context => context.Response.Body = new MemoryStream(),
@@ -286,7 +291,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_MapsUnknownRunKindToBadRequestAtHttpBoundary()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
         var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
         var endpoint = Factory.Create<TestListInstancesEndpoint>(
             context => context.Response.Body = new MemoryStream(),
@@ -325,7 +330,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     {
         await _workflowStore.SaveAsync(Workflow("wf-published", WorkflowExecutionStatus.Running, "definition-1", runKind: WorkflowRunKind.PublishedRun));
         await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
-        var listHandler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var listHandler = NewListInstanceHandler();
 
         var list = await listHandler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
         var detail = await NewGetInstanceHandler().Handle(new GetWorkflowInstance("wf-published"), CancellationToken.None);

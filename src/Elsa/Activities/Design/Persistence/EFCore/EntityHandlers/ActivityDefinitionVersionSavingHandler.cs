@@ -10,8 +10,8 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers;
 /// Entity-saving handler for <see cref="ActivityDefinitionVersion"/>. Serialises the rich
 /// projections into their <c>*Source</c> columns and writes the opaque descriptor payload string
 /// from the <c>DescriptorPayload</c> <see cref="JsonElement"/>. The design domain serialises on
-/// write and never deserialises to a concrete descriptor type — <c>DescriptorType</c> is set by
-/// the producer (reconciler / design API), not derived here.
+/// write and never deserialises to a concrete descriptor type. Stable provider/consumer identity is
+/// set by the producer and is not derived here; the legacy EF-only descriptor-type column is ignored.
 /// </summary>
 public sealed class ActivityDefinitionVersionSavingHandler(IPayloadSerializer payloadSerializer)
     : IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>

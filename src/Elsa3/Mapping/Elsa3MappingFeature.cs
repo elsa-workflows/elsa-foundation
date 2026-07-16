@@ -3,6 +3,7 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa3.Mapping.Contracts;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
+using Elsa3.Activities.Design.Import.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa3.Mapping;
@@ -23,6 +24,7 @@ public class Elsa3MappingFeature : IShellFeature
         services.AddScoped<Elsa3ActivityToState>();
         services.AddScoped<Elsa3WorkflowDefinitionToState>();
         services.AddScoped<Elsa3WorkflowDefinitionToWorkflowDefinitionVersion>();
+        services.AddScoped<IReusableActivityImportMaterializer, Elsa3ReusableActivityImportMaterializer>();
         services.AddScoped<IElsa3WorkflowDefinitionImporter, Elsa3WorkflowDefinitionImporter>();
     }
 }

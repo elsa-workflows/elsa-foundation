@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -9,12 +10,14 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     private readonly IWorkflowSchedulerDrainPolicy _schedulerDrainPolicy;
     private readonly IWorkflowDrainOrchestrator _drainCoordinator;
     private readonly TimeProvider _timeProvider;
+    private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
 
     public WorkflowSchedulerCommandRouter(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
         IWorkflowDrainOrchestrator drainCoordinator,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IActivityExecutionStateStore? activityExecutionStateStore = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
@@ -24,6 +27,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         _schedulerDrainPolicy = schedulerDrainPolicy;
         _drainCoordinator = drainCoordinator;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _activityExecutionStateStore = activityExecutionStateStore;
     }
 
     public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
@@ -39,6 +43,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(options);
 
+        var executionScopeId = await ResolveExecutionScopeIdAsync(envelope, cancellationToken);
         var workItem = new RuntimeSchedulerWorkItem(
             workItemId: envelope.EnvelopeId,
             workflowExecutionId: envelope.WorkflowExecutionId,
@@ -51,7 +56,8 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
             sequence: envelope.Sequence,
             payload: envelope.Command.Payload,
             commandMetadata: envelope.Command.Metadata,
-            envelopeMetadata: envelope.Metadata);
+            envelopeMetadata: envelope.Metadata,
+            executionScopeId: executionScopeId);
 
         workItem = await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
 
@@ -67,5 +73,21 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
 
         var drainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
         return WorkflowExecutionCommandProcessResult.FromDrain(drainResult);
+    }
+
+    private async ValueTask<string?> ResolveExecutionScopeIdAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        if (_activityExecutionStateStore is null || envelope.Command.Kind != WorkflowExecutionCommandKind.ResumeBookmark)
+            return null;
+        if (!envelope.Command.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityExecutionId, out var activityExecutionId) ||
+            string.IsNullOrWhiteSpace(activityExecutionId))
+        {
+            return null;
+        }
+
+        var state = await _activityExecutionStateStore.FindAsync(envelope.WorkflowExecutionId, activityExecutionId, cancellationToken);
+        return state?.ExecutionScopeId ?? state?.Provenance.ExecutionScopeId;
     }
 }

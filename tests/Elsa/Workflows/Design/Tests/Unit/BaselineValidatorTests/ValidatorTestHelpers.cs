@@ -41,7 +41,6 @@ internal static class ValidatorTestHelpers
         RootActivity: RootActivity(activities),
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null
     );
 
@@ -55,7 +54,6 @@ internal static class ValidatorTestHelpers
         RootActivity: rootActivity,
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null
     );
 

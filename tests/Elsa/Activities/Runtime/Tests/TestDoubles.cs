@@ -9,27 +9,29 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>A constructor test-double returning a fixed activity. Used to assert registry + factory dispatch.</summary>
-internal sealed class FakeConstructorA(string descriptorType) : IActivityConstructor
+internal sealed class FakeConstructorA(string consumerKey, params string[] schemaVersions) : IActivityConstructor
 {
     public IActivity Returned { get; } = new WriteLine();
-    public string DescriptorType { get; } = descriptorType;
+    public string ConsumerKey { get; } = consumerKey;
+    public IReadOnlySet<string> SupportedSchemaVersions { get; } = new HashSet<string>(schemaVersions.Length == 0 ? [RuntimeActivityDescriptor.InitialSchemaVersion] : schemaVersions, StringComparer.Ordinal);
 
-    public ValueTask<IActivity> Construct(
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+    public ValueTask<IActivity> ConstructAsync(
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument> inputs,
+        IReadOnlyDictionary<string, OutputArgument> outputs,
         CancellationToken cancellationToken) => new(Returned);
 }
 
 /// <summary>A second, distinct constructor type with the same descriptor type — to trip the dup-guard.</summary>
-internal sealed class FakeConstructorB(string descriptorType) : IActivityConstructor
+internal sealed class FakeConstructorB(string consumerKey, params string[] schemaVersions) : IActivityConstructor
 {
-    public string DescriptorType { get; } = descriptorType;
+    public string ConsumerKey { get; } = consumerKey;
+    public IReadOnlySet<string> SupportedSchemaVersions { get; } = new HashSet<string>(schemaVersions.Length == 0 ? [RuntimeActivityDescriptor.InitialSchemaVersion] : schemaVersions, StringComparer.Ordinal);
 
-    public ValueTask<IActivity> Construct(
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+    public ValueTask<IActivity> ConstructAsync(
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument> inputs,
+        IReadOnlyDictionary<string, OutputArgument> outputs,
         CancellationToken cancellationToken) => new((IActivity)new WriteLine());
 }
 

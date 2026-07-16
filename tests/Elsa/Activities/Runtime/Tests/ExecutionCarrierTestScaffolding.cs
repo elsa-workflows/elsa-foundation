@@ -86,10 +86,9 @@ internal static class ExecutionCarrierTestData
 internal sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
 {
     public ValueTask<IActivity> Create(
-        string descriptorType,
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument>? inputs,
+        IReadOnlyDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(activity);
 }

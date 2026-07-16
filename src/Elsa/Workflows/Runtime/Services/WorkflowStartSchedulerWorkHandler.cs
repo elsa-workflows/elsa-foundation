@@ -98,11 +98,24 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         DateTimeOffset now,
         IReadOnlyDictionary<string, string> commandMetadata)
     {
+        var activityExecutionId = _idGenerator.NewActivityExecutionId();
+        var attempt = new ActivityExecutionAttemptLineage(1, activityExecutionId, null);
+        var provenance = ActivitySchedulingProvenance.From(
+            startWorkItem.WorkflowExecutionId,
+            parentActivityExecutionId: null,
+            schedulingActivityExecutionId: null,
+            branchId: null,
+            iterationId: null,
+            executionPathId: null,
+            executionScopeId: null,
+            schedulingCause: RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
+            attempt: attempt);
         var payload = new RuntimeScheduleActivityCommandPayload(
             pinnedExecutable,
             rootActivityId,
-            _idGenerator.NewActivityExecutionId(),
-            RuntimeScheduleActivityCommandPayload.WorkflowStartReason);
+            activityExecutionId,
+            RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
+            schedulingProvenance: provenance);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:schedule:{rootActivityId}",
@@ -116,7 +129,9 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 2 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: commandMetadata,
-            envelopeMetadata: startWorkItem.EnvelopeMetadata);
+            envelopeMetadata: startWorkItem.EnvelopeMetadata,
+            executionScopeId: null,
+            attempt: attempt);
     }
 
     private RuntimePostCommitIntent NewRootActivityPostCommitIntent(

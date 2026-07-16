@@ -1,6 +1,7 @@
 using System.Reflection;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
@@ -11,9 +12,9 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 /// THE BRIDGE. Three moves, each touching exactly one seam:
 /// <list type="number">
 ///   <item><b>Read</b> the persisted definition version — the Design seam hands over an opaque
-///   <c>(DescriptorType, DescriptorPayload)</c> plus the argument definitions.</item>
-///   <item><b>Invoke</b> <see cref="IActivityFactory"/> — the Runtime seam dispatches on the descriptor
-///   type to the owning constructor and returns a whole <c>IActivity</c>.</item>
+///   stable provider/consumer identities, schema versions, and an opaque descriptor payload.</item>
+///   <item><b>Invoke</b> <see cref="IActivityFactory"/> — the Runtime seam dispatches on the stable
+///   consumer/schema pair and returns a whole <c>IActivity</c>.</item>
 ///   <item><b>Project</b> both sides into one view so the crossing is visible.</item>
 /// </list>
 /// Unit 006 is construct-only, so no author values are bound here — the inputs/outputs bags are left
@@ -33,8 +34,10 @@ public sealed class ConstructActivityRequestHandler(
 
         // 2. Invoke — the Runtime seam. Construct-only: no author values to bind yet.
         var activity = await factory.Create(
-            version.DescriptorType,
-            version.DescriptorPayload,
+            new RuntimeActivityDescriptor(
+                version.ConsumerKey,
+                version.ConsumerSchemaVersion,
+                version.DescriptorPayload),
             inputs: null,
             outputs: null,
             cancellationToken);
@@ -42,7 +45,10 @@ public sealed class ConstructActivityRequestHandler(
         // 3. Project — both sides in one payload.
         return new ConstructedActivityView(
             ActivityVersionId: version.Id,
-            DescriptorType: version.DescriptorType,
+            ProviderKey: version.ProviderKey,
+            ProviderSchemaVersion: version.ProviderSchemaVersion,
+            ConsumerKey: version.ConsumerKey,
+            ConsumerSchemaVersion: version.ConsumerSchemaVersion,
             RuntimeType: activity.GetType().FullName ?? activity.GetType().Name,
             Properties: ReadConcreteProperties(activity),
             SyntheticProperties: activity.SyntheticProperties,
@@ -52,8 +58,8 @@ public sealed class ConstructActivityRequestHandler(
     }
 
     /// <summary>
-    /// The activity's own (concrete-type-declared) properties — e.g. <c>WorkflowIdentity</c> on the
-    /// workflow-backed activity, or a primitive's typed <c>InputArgument</c> properties. Base
+    /// The activity's own (concrete-type-declared) properties, such as a primitive's typed
+    /// <c>InputArgument</c> properties. Base
     /// <c>IActivity</c> bookkeeping (Id, Name, the bags) is excluded via <c>DeclaredOnly</c>.
     /// </summary>
     private static IReadOnlyDictionary<string, string?> ReadConcreteProperties(IActivity activity)

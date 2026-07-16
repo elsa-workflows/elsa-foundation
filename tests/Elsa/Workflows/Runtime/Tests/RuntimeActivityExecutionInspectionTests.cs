@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Endpoints;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -227,7 +228,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
         await workflowExecutionStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
         await inspectionStore.SaveAsync(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
-        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(workflowExecutionStateStore, inspectionStore);
+        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(workflowExecutionStateStore, inspectionStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
 
         var response = await handler.Handle(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None);
 
@@ -240,7 +241,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
     {
         var workflowExecutionStateStore = new InMemoryWorkflowExecutionStateStore();
         await workflowExecutionStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
-        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(workflowExecutionStateStore, new InMemoryActivityExecutionInspectionStore());
+        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(workflowExecutionStateStore, new InMemoryActivityExecutionInspectionStore(), new AllowAllActivityExecutionInspectionAuthorizationContext());
 
         var response = await handler.Handle(new GetActivityExecution("wf-1", "ae-missing"), CancellationToken.None);
 
@@ -252,7 +253,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
     {
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
         await inspectionStore.SaveAsync(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
-        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(new InMemoryWorkflowExecutionStateStore(), inspectionStore);
+        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(new InMemoryWorkflowExecutionStateStore(), inspectionStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
 
         var response = await handler.Handle(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None);
 
@@ -322,28 +323,34 @@ public sealed class RuntimeActivityExecutionInspectionTests
         await endpoint.HandleAsync(new GetActivityExecution("wf-1", "ae-missing"), CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status404NotFound, endpoint.HttpContext.Response.StatusCode);
+        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
+        Assert.Contains("\"errorCode\":\"activity.execution.not-found\"", await ResponseBodyAsync(endpoint), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task GetActivityExecutionEndpoint_Throws_BadRequest_For_Invalid_Request()
+    public async Task GetActivityExecutionEndpoint_Returns_Rfc7807_BadRequest_For_Invalid_Request()
     {
         var endpoint = CreateEndpoint(new StubRequestSender((_, _) => throw new ArgumentException("Invalid activity execution lookup.")));
 
-        var exception = await Assert.ThrowsAsync<ValidationFailureException>(
-            () => endpoint.HandleAsync(new GetActivityExecution("", "ae-1"), CancellationToken.None));
+        await endpoint.HandleAsync(new GetActivityExecution("", "ae-1"), CancellationToken.None);
 
-        Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
+        Assert.Equal(StatusCodes.Status400BadRequest, endpoint.HttpContext.Response.StatusCode);
+        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
+        Assert.Contains("\"errorCode\":\"activity.request.invalid\"", await ResponseBodyAsync(endpoint), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task GetActivityExecutionEndpoint_Throws_InternalServerError_For_Unexpected_Failure()
+    public async Task GetActivityExecutionEndpoint_Returns_Rfc7807_InternalServerError_For_Unexpected_Failure()
     {
         var endpoint = CreateEndpoint(new StubRequestSender((_, _) => throw new InvalidOperationException("Storage failure.")));
 
-        var exception = await Assert.ThrowsAsync<ValidationFailureException>(
-            () => endpoint.HandleAsync(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None));
+        await endpoint.HandleAsync(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None);
 
-        Assert.Equal(StatusCodes.Status500InternalServerError, exception.StatusCode);
+        Assert.Equal(StatusCodes.Status500InternalServerError, endpoint.HttpContext.Response.StatusCode);
+        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
+        var body = await ResponseBodyAsync(endpoint);
+        Assert.Contains("\"errorCode\":\"activity.operation.failed\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Storage failure", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -356,9 +363,21 @@ public sealed class RuntimeActivityExecutionInspectionTests
 
     private static GetActivityExecutionEndpoint CreateEndpoint(IRequestSender requestSender) =>
         Factory.Create<GetActivityExecutionEndpoint>(
-            context => context.Response.Body = new MemoryStream(),
+            context =>
+            {
+                context.Response.Body = new MemoryStream();
+                context.Request.Path = "/runtime/workflows/instances/wf-1/activity-executions/ae-1";
+                context.TraceIdentifier = "trace-runtime-inspection";
+            },
             requestSender,
             NullLogger<GetActivityExecutionEndpoint>.Instance);
+
+    private static async Task<string> ResponseBodyAsync(BaseEndpoint endpoint)
+    {
+        endpoint.HttpContext.Response.Body.Position = 0;
+        using var reader = new StreamReader(endpoint.HttpContext.Response.Body, leaveOpen: true);
+        return await reader.ReadToEndAsync();
+    }
 
     private sealed class StubRequestSender(Func<GetActivityExecution, CancellationToken, Task<GetActivityExecutionResponse>> send) : IRequestSender
     {

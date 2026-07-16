@@ -15,31 +15,24 @@ public sealed class Elsa3WorkflowDefinitionToState(
     Elsa3ArgumentDefinitionToInputOutput argumentMapper
 )
 {
-    public async ValueTask<WorkflowDefinitionState> Map(Elsa3WorkflowDefinition definition, CancellationToken cancellationToken)
+    public ValueTask<WorkflowDefinitionState> Map(Elsa3WorkflowDefinition definition, CancellationToken cancellationToken) =>
+        Map(definition, new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal), cancellationToken);
+
+    public async ValueTask<WorkflowDefinitionState> Map(
+        Elsa3WorkflowDefinition definition,
+        IReadOnlyDictionary<string, Elsa3ActivityExactReplacement> replacements,
+        CancellationToken cancellationToken)
     {
         var variables = definition.Variables.Select(MapVariable);
-        var rootActivity = await activityMapper.Map(definition.Root, cancellationToken);
+        var rootActivity = await activityMapper.Map(definition.Root, replacements, cancellationToken);
         var inputs = (definition.Inputs ?? []).Select(argumentMapper.MapInput).ToList();
         var outputs = (definition.Outputs ?? []).Select(argumentMapper.MapOutput).ToList();
-        var activityOptions = MapActivityOptions(definition);
-
         return new(
             variables,
             rootActivity,
             inputs,
             outputs,
-            activityOptions,
             StrategyOptions: null
-        );
-    }
-
-    private static WorkflowActivityOptions? MapActivityOptions(Elsa3WorkflowDefinition definition)
-    {
-        return new WorkflowActivityOptions(
-            definition.Options.UsableAsActivity,
-            definition.Options.AutoUpdateConsumingWorkflows,
-            null,
-            definition.Outcomes
         );
     }
 

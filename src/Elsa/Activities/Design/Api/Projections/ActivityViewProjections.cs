@@ -17,7 +17,10 @@ public static class ActivityViewProjections
         new(
             version.Id,
             version.Version,
-            version.DescriptorType,
+            version.ProviderKey,
+            version.ProviderSchemaVersion,
+            version.ConsumerKey,
+            version.ConsumerSchemaVersion,
             version.DescriptorPayload,
             version.Definition.ToView(),
             version.Inputs,

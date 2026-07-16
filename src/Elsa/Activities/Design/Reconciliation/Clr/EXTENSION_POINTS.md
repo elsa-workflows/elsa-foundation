@@ -15,6 +15,12 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
   (done by `ClrActivityReconciliationFeature`).
 - **Consumed by:** `CollectActivityVersions` in `Elsa.Activities.Design.Reconciliation`,
   which injects every `IActivityReconciliationSource` and reconciles the returned versions.
+- **Stable identity:** emits provider key `elsa.clr-activity`, provider schema `1`, consumer key
+  `elsa.clr-activity`, and consumer schema `1`; the CLR descriptor type is only a consumer-owned payload
+  implementation detail.
+- **Publication bridge:** when the Publishing API feature is present, its single
+  `IActivitySourceVersionPublisher` commits the source-owned catalog and immutable runtime artifacts as
+  one persistence operation. Reconciliation remains usable without Publishing for isolated catalog tests.
 - **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 
 ---

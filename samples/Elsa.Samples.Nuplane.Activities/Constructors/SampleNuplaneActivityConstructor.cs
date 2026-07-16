@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Samples.Nuplane.Activities.Activities;
@@ -8,19 +7,8 @@ namespace Elsa.Samples.Nuplane.Activities.Constructors;
 
 public sealed class SampleNuplaneActivityConstructor(string messageTemplate, bool includeTimestamp) : IActivityConstructor<SampleNuplaneActivityDescriptor>
 {
-    public string DescriptorType => typeof(SampleNuplaneActivityDescriptor).FullName!;
-
-    public ValueTask<IActivity> Construct(
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
-        CancellationToken cancellationToken)
-    {
-        var descriptor = payload.Deserialize<SampleNuplaneActivityDescriptor>()
-                         ?? SampleNuplaneActivityDescriptor.Default;
-
-        return Construct(descriptor, inputs, outputs, cancellationToken);
-    }
+    public const string ConsumerKeyValue = "elsa.sample.nuplane-activity";
+    public string ConsumerKey => ConsumerKeyValue;
 
     public ValueTask<IActivity> Construct(
         SampleNuplaneActivityDescriptor descriptor,

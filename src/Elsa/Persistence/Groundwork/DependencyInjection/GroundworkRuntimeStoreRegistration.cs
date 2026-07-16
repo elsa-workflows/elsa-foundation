@@ -30,6 +30,8 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<IBookmarkStateStore, GroundworkBookmarkStateStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddScoped<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>();
+        services.RemoveAll<IExecutableActivityTemplateStore>();
+        services.AddScoped<IExecutableActivityTemplateStore, GroundworkExecutableActivityTemplateStore>();
         services.RemoveAll<IWorkflowExecutableSourceReferenceStore>();
         services.AddScoped<IWorkflowExecutableSourceReferenceStore, GroundworkWorkflowExecutableSourceReferenceStore>();
         services.RemoveAll<IActivityExecutionStateStore>();
@@ -40,6 +42,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<GroundworkActivityExecutionInspectionStore>();
         services.AddScoped<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
         services.AddScoped<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
+        services.RemoveAll<IActivityExecutionHierarchyStore>();
+        services.RemoveAll<IActivityExecutionHierarchyReader>();
+        services.RemoveAll<IActivityExecutionHierarchyWriter>();
+        services.AddScoped<IActivityExecutionHierarchyStore, GroundworkActivityExecutionHierarchyStore>();
+        services.AddScoped<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
+        services.AddScoped<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.RemoveAll<IWorkflowExecutionStateStore>();
         services.AddScoped<IWorkflowExecutionStateStore>(serviceProvider => new GroundworkWorkflowExecutionStateStore(
             serviceProvider.GetRequiredService<IDocumentStore>(),
@@ -72,11 +80,15 @@ public static class GroundworkRuntimeStoreRegistration
         // serializer, which stamps per-kind schema versions on write and enforces them (with upcasting)
         // on read. TryAdd keeps host-supplied replacements and contributed upcasters intact.
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV1ToV2Upcaster>());
+        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind));
+        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind));
+        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV2ToV3Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateDocumentV1ToV2Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateDocumentV2ToV3Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowTriggerBindingDocumentV1ToV2Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, RecurringTriggerScheduleDocumentV1ToV2Upcaster>());

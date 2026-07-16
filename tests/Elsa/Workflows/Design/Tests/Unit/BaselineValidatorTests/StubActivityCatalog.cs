@@ -47,8 +47,10 @@ internal sealed class StubActivityCatalog : IActivityDefinitionLookup
         public string Id { get; } = id;
         public string Version => "1.0.0";
         public string DefinitionId => "def-1";
-        public string ActivityTypeKey => "TestActivity";
-        public string DescriptorType => "Test";
+        public string ProviderKey => "test.provider";
+        public string ProviderSchemaVersion => "1";
+        public string ConsumerKey => "test.consumer";
+        public string ConsumerSchemaVersion => "1";
         public System.Text.Json.JsonElement DescriptorPayload => default;
         public string SourceKind => "Test";
         public string SourceId => "Test";

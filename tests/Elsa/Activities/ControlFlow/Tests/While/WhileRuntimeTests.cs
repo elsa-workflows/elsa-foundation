@@ -119,8 +119,7 @@ public sealed class WhileRuntimeTests
             authoredActivityId: "authored-while",
             activityType: typeof(WhileActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: WhileActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new WhileDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(WhileActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new WhileDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Condition"] = new RuntimeInputBinding(
@@ -168,8 +167,8 @@ public sealed class WhileRuntimeTests
 
     private sealed class WhileActivityConstructor : IActivityConstructor<WhileDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(WhileDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(WhileDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

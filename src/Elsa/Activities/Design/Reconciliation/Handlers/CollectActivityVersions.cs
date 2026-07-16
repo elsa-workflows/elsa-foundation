@@ -17,10 +17,8 @@ namespace Elsa.Activities.Design.Reconciliation.Handlers;
 /// Handles <see cref="OnActivityVersionsReconciling"/> by pulling every registered
 /// <see cref="IActivityReconciliationSource"/> from DI and contributing one
 /// <c>IActivityDefinitionVersion</c> per entry. The handler is source-agnostic and
-/// descriptor-type-agnostic: it validates that each entry carries a <c>DescriptorType</c> and a
-/// descriptor payload, serialises the descriptor to opaque JSON, and stores
-/// <c>(DescriptorType, DescriptorPayload)</c> on the version. It never resolves the descriptor type to
-/// a CLR type (that happens only in the runtime feature that owns the type). No per-kind branch.
+/// provider- and consumer-agnostic: it validates stable provider/consumer keys and schemas, serialises
+/// the Runtime descriptor to opaque JSON, and never resolves a CLR type. No per-kind branch.
 /// </summary>
 public sealed class CollectActivityVersions(
     IActivityDefinitionStore definitionStore,
@@ -56,7 +54,10 @@ public sealed class CollectActivityVersions(
                 var version = versionFactory.Create(
                     definition,
                     entry.Version,
-                    entry.DescriptorType,
+                    entry.ProviderKey,
+                    entry.ProviderSchemaVersion,
+                    entry.ConsumerKey,
+                    entry.ConsumerSchemaVersion,
                     descriptorPayload,
                     source.SourceKind,
                     source.SourceId,
@@ -116,16 +117,27 @@ public sealed class CollectActivityVersions(
     /// </summary>
     private JsonElement NormalizeDescriptor(ActivityVersionReconciliationModel entry, int entryIndex)
     {
-        if (string.IsNullOrWhiteSpace(entry.DescriptorType))
-            throw new InvalidActivityVersionReconciliationEntryException(entryIndex, entry.ActivityTypeKey, entry.DescriptorType, $"'{nameof(entry.DescriptorType)}' is required.");
+        if (string.IsNullOrWhiteSpace(entry.ProviderKey))
+            throw Invalid(entry, entryIndex, $"'{nameof(entry.ProviderKey)}' is required.");
+        if (string.IsNullOrWhiteSpace(entry.ProviderSchemaVersion))
+            throw Invalid(entry, entryIndex, $"'{nameof(entry.ProviderSchemaVersion)}' is required.");
+        if (string.IsNullOrWhiteSpace(entry.ConsumerKey))
+            throw Invalid(entry, entryIndex, $"'{nameof(entry.ConsumerKey)}' is required.");
+        if (string.IsNullOrWhiteSpace(entry.ConsumerSchemaVersion))
+            throw Invalid(entry, entryIndex, $"'{nameof(entry.ConsumerSchemaVersion)}' is required.");
 
         var element = entry.Descriptor is JsonElement jsonElement
             ? jsonElement
             : payloadSerializer.SerializeToElement(entry.Descriptor);
 
         if (element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-            throw new InvalidActivityVersionReconciliationEntryException(entryIndex, entry.ActivityTypeKey, entry.DescriptorType, $"'{nameof(entry.Descriptor)}' is required.");
+            throw Invalid(entry, entryIndex, $"'{nameof(entry.Descriptor)}' is required.");
 
         return element.Clone();
     }
+
+    private static InvalidActivityVersionReconciliationEntryException Invalid(
+        ActivityVersionReconciliationModel entry,
+        int entryIndex,
+        string message) => new(entryIndex, entry.ActivityTypeKey, entry.ConsumerKey, message);
 }

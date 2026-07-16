@@ -6,14 +6,13 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// <summary>
 /// The per-document-kind schema versions of the runtime persistence bridge. Every document saved
 /// through the bridge is stamped with the current version of its kind, and every load enforces the
-/// stamp: older versions are upcasted through <see cref="IGroundworkRuntimeDocumentUpcaster"/> steps,
-/// unknown or future versions fail loudly instead of silently deserializing with default values.
+/// stamp: supported older versions are upcasted through <see cref="IGroundworkRuntimeDocumentUpcaster"/>
+/// steps, while versions below an explicit clean-break floor and unknown/future versions fail loudly.
 /// </summary>
 /// <remarks>
-/// Changing the serialized shape of any runtime state record requires, in the same change:
-/// bumping that kind's version here, registering an upcaster for the previous version, adding a new
-/// golden fixture for the new version, and keeping the historical fixtures. The fixture drift test
-/// in <c>Elsa.Persistence.Groundwork.Tests</c> fails when a shape changes without a version bump.
+/// Changing a serialized shape requires a version bump and a current golden fixture. Ordinarily it
+/// also requires an upcaster. A deliberate clean break instead advances the kind's minimum-readable
+/// version and retains the old fixture as rejection evidence; no compatibility upcaster is registered.
 /// See <c>docs/serialization.md</c> for the full evolution contract.
 /// </remarks>
 public static class ElsaRuntimeDocumentVersions
@@ -29,9 +28,11 @@ public static class ElsaRuntimeDocumentVersions
     {
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 3,
-        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.DurableValueStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerStateDocumentKind] = 1,
@@ -40,11 +41,19 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.IncidentStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1
+    };
+
+    private static readonly IReadOnlyDictionary<string, int> MinimumReadable = new Dictionary<string, int>(StringComparer.Ordinal)
+    {
+        // Elsa 4 deliberately does not translate CLR descriptor-type executable artifacts. Version 2
+        // is the first stable consumer/schema wire format and the first hierarchical Source Reference.
+        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2
     };
 
     /// <summary>The current versions of every runtime document kind, keyed by document kind.</summary>
@@ -58,6 +67,16 @@ public static class ElsaRuntimeDocumentVersions
         return Current.TryGetValue(documentKind, out var version)
             ? version
             : throw new ArgumentException($"'{documentKind}' is not a runtime document kind declared in {nameof(ElsaRuntimeDocumentVersions)}.", nameof(documentKind));
+    }
+
+    /// <summary>
+    /// Returns the oldest readable version for a kind. Versions below this floor are intentional
+    /// clean-break artifacts and are rejected without consulting the upcaster registry.
+    /// </summary>
+    public static int MinimumReadableFor(string documentKind)
+    {
+        _ = CurrentFor(documentKind);
+        return MinimumReadable.GetValueOrDefault(documentKind, 1);
     }
 
     /// <summary>

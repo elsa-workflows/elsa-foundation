@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Services;
@@ -552,8 +553,11 @@ public sealed class WorkflowExecutableInspectorTests
         new(
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             new ExecutableNode(
-                "root", "root", "Test.Root", "1.0.0", "Test",
-                descriptor ?? JsonSerializer.SerializeToElement(new { }),
+                "root", "root", "Test.Root", "1.0.0",
+                new RuntimeActivityDescriptor(
+                    "Test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    descriptor ?? JsonSerializer.SerializeToElement(new { })),
                 inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
                 new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(),

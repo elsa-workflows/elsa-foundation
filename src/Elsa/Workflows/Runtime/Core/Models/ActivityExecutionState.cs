@@ -35,7 +35,9 @@ public sealed record ActivityExecutionState(
     IReadOnlyCollection<string> IncidentIds,
     int FaultCount,
     int AggregateFaultCount,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null)
 {
     public ActivityExecutionState(
         ActivityExecution Execution,
@@ -80,7 +82,9 @@ public sealed record ActivityExecutionState(
             IncidentIds,
             FaultCount,
             AggregateFaultCount,
-            Metadata)
+            Metadata,
+            ExecutionScopeId: null,
+            Attempt: null)
     {
     }
 }
