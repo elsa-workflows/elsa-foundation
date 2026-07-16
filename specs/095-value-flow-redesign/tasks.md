@@ -229,8 +229,8 @@ fresh resume attempt and one committed completion.
 
 - [X] T083 [US6] Implement typed `StatefulActivity<TResult,TState,TTrigger>` and resume context contracts in `src/Elsa/Activities/Runtime/Core/Models/`
 - [X] T084 [US6] Persist immutable private state and typed trigger registrations atomically in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
-- [ ] T085 [US6] Validate/deduplicate typed trigger delivery before fresh activation in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`
-- [ ] T086 [US6] Preserve existing start-authority/provider-recognition ordering while adding typed resume metadata in `src/Elsa/Workflows/Runtime/Resumption/`
+- [x] T085 [US6] Validate/deduplicate typed trigger delivery before fresh activation in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`
+- [x] T086 [US6] Preserve existing start-authority/provider-recognition ordering while adding typed resume metadata in `src/Elsa/Workflows/Runtime/Resumption/`
 - [ ] T087 [US6] Migrate scheduling, HTTP, event, timer, and bookmark-producing activities to typed state/trigger transitions in `src/Elsa/Activities/`
 - [ ] T088 [US6] Run resumption, scheduling, HTTP, runtime, Groundwork, and disposal tests and mark US6 ledger rows implemented/passing
 

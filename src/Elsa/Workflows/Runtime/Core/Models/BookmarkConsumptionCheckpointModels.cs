@@ -9,32 +9,41 @@ public sealed class BookmarkConsumptionCheckpointRequest
         RuntimeSchedulerWorkItem resumeWorkItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         BookmarkState bookmark,
-        ActivityExecutionState completedActivityExecutionState,
+        ActivityExecutionState activityExecutionState,
         RuntimeSchedulerWorkItem? completionWorkItem = null,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null)
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem>? continuationWorkItems = null)
     {
         ArgumentNullException.ThrowIfNull(resumeWorkItem);
         ArgumentNullException.ThrowIfNull(resumePayload);
         ArgumentNullException.ThrowIfNull(bookmark);
-        ArgumentNullException.ThrowIfNull(completedActivityExecutionState);
+        ArgumentNullException.ThrowIfNull(activityExecutionState);
 
         if (resumeWorkItem.CommandKind != WorkflowExecutionCommandKind.ResumeBookmark)
             throw new ArgumentException("Bookmark consumption checkpoints require ResumeBookmark scheduler work.", nameof(resumeWorkItem));
 
-        if (completedActivityExecutionState.Status != ActivityExecutionStatus.Completed)
-            throw new ArgumentException("Bookmark consumption checkpoints require completed activity execution state.", nameof(completedActivityExecutionState));
+        if (activityExecutionState.Status is not ActivityExecutionStatus.Completed and not ActivityExecutionStatus.Suspended)
+            throw new ArgumentException("Bookmark consumption checkpoints require completed or replacement-suspended activity execution state.", nameof(activityExecutionState));
 
         ValidateBookmarkMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, bookmark, nameof(bookmark));
-        ValidateActivityStateMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, completedActivityExecutionState, nameof(completedActivityExecutionState));
+        ValidateActivityStateMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, activityExecutionState, nameof(activityExecutionState));
         if (completionWorkItem is not null)
-            ValidateCompletionWorkItem(resumeWorkItem.WorkflowExecutionId, completedActivityExecutionState.Execution.ActivityExecutionId, completionWorkItem, nameof(completionWorkItem));
+            ValidateCompletionWorkItem(resumeWorkItem.WorkflowExecutionId, activityExecutionState.Execution.ActivityExecutionId, completionWorkItem, nameof(completionWorkItem));
+
+        var continuations = continuationWorkItems?.ToArray() ?? (completionWorkItem is null ? [] : [completionWorkItem]);
+        if (completionWorkItem is not null && continuationWorkItems is not null)
+            throw new ArgumentException("Specify either the completion work item or the continuation work item collection, not both.", nameof(continuationWorkItems));
+        if (activityExecutionState.Status == ActivityExecutionStatus.Completed && continuations.Any(item => item.CommandKind != WorkflowExecutionCommandKind.CompleteActivity))
+            throw new ArgumentException("Completed bookmark consumption can only schedule completion continuation work.", nameof(continuationWorkItems));
+        if (activityExecutionState.Status == ActivityExecutionStatus.Suspended && continuations.Any(item => item.CommandKind != WorkflowExecutionCommandKind.CreateBookmark))
+            throw new ArgumentException("Replacement suspension can only schedule bookmark-creation continuation work.", nameof(continuationWorkItems));
 
         ResumeWorkItem = resumeWorkItem;
         ResumePayload = resumePayload;
         Bookmark = bookmark;
-        CompletedActivityExecutionState = completedActivityExecutionState;
-        CompletionWorkItem = completionWorkItem;
+        ActivityExecutionState = activityExecutionState;
+        ContinuationWorkItems = continuations;
         ValueSnapshots = valueSnapshots ?? [];
         DurableValueChanges = durableValueChanges ?? [];
     }
@@ -42,8 +51,8 @@ public sealed class BookmarkConsumptionCheckpointRequest
     public RuntimeSchedulerWorkItem ResumeWorkItem { get; }
     public RuntimeResumeBookmarkCommandPayload ResumePayload { get; }
     public BookmarkState Bookmark { get; }
-    public ActivityExecutionState CompletedActivityExecutionState { get; }
-    public RuntimeSchedulerWorkItem? CompletionWorkItem { get; }
+    public ActivityExecutionState ActivityExecutionState { get; }
+    public IReadOnlyCollection<RuntimeSchedulerWorkItem> ContinuationWorkItems { get; }
     public IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots { get; }
 
     /// <summary>

@@ -63,7 +63,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
             [RuntimeMetadataKeys.CheckpointReason] = request.ResumePayload.Reason,
             [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
             [RuntimeMetadataKeys.BookmarkId] = request.Bookmark.BookmarkId,
-            [RuntimeMetadataKeys.ActivityExecutionId] = request.CompletedActivityExecutionState.Execution.ActivityExecutionId,
+            [RuntimeMetadataKeys.ActivityExecutionId] = request.ActivityExecutionState.Execution.ActivityExecutionId,
             [RuntimeMetadataKeys.ExecutableNodeId] = request.ResumePayload.ExecutableNodeId,
             [RuntimeMetadataKeys.ResumeTargetId] = request.ResumePayload.ResumeTargetId,
             [RuntimeMetadataKeys.StimulusType] = request.ResumePayload.StimulusType,
@@ -75,10 +75,10 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
         var inspection = _inspectionAccumulator is null
             ? null
             : await _inspectionAccumulator.BuildProjectionAsync(
-                request.CompletedActivityExecutionState,
+                request.ActivityExecutionState,
                 checkpointId,
                 occurredAt,
-                outcomeNames: ReadCompletionOutcomeNames(request.CompletedActivityExecutionState),
+                outcomeNames: ReadOutcomeNames(request.ActivityExecutionState),
                 valueSnapshots: request.ValueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
@@ -89,7 +89,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 Name: RuntimeCheckpointNames.BookmarkConsumed,
                 WorkflowExecutionId: request.ResumeWorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [request.CompletedActivityExecutionState.Execution.ActivityExecutionId],
+                ActivityExecutionIds: [request.ActivityExecutionState.Execution.ActivityExecutionId],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
@@ -97,9 +97,9 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 activityExecutions:
                 [
                     new RuntimeStateChange<ActivityExecutionState>(
-                        StateId: request.CompletedActivityExecutionState.Execution.ActivityExecutionId,
+                        StateId: request.ActivityExecutionState.Execution.ActivityExecutionId,
                         Operation: RuntimeStateChangeOperation.Upsert,
-                        State: request.CompletedActivityExecutionState,
+                        State: request.ActivityExecutionState,
                         Metadata: metadata)
                 ],
                 bookmarks:
@@ -121,14 +121,18 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                     :
                     [
                         new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                            StateId: request.CompletedActivityExecutionState.Execution.ActivityExecutionId,
+                            StateId: request.ActivityExecutionState.Execution.ActivityExecutionId,
                             Operation: RuntimeStateChangeOperation.Upsert,
                             State: inspection,
                             Metadata: metadata)
                     ]),
-            PostCommitIntents: request.CompletionWorkItem is null
-                ? []
-                : [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(request.ResumeWorkItem, request.CompletedActivityExecutionState.Execution.ActivityExecutionId, request.CompletionWorkItem, occurredAt)],
+            PostCommitIntents: request.ContinuationWorkItems
+                .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+                    request.ResumeWorkItem,
+                    request.ActivityExecutionState.Execution.ActivityExecutionId,
+                    workItem,
+                    occurredAt))
+                .ToArray(),
             Metadata: metadata);
 
         var result = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
@@ -141,9 +145,12 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
         return new BookmarkConsumptionCheckpointResult(commitId, checkpointId, result);
     }
 
-    private static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState)
+    private static IReadOnlyCollection<string> ReadOutcomeNames(ActivityExecutionState state)
     {
-        if (completedState.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
+        if (state.Status != ActivityExecutionStatus.Completed)
+            return [];
+
+        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
         {
             var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
                 ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");

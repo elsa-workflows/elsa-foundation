@@ -71,6 +71,35 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
         return ValidateTransition(await ResumeAsync(context));
     }
 
+    async ValueTask<ActivityTransition> IStatefulActivity.ResumeAsync(ActivityResumeRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidatePortableType(request.StateType, typeof(TState), "private state");
+        ValidatePortableType(request.TriggerType, typeof(TTrigger), "trigger");
+
+        TState state;
+        TTrigger trigger;
+        try
+        {
+            state = request.StatePayload.Deserialize<TState>()
+                ?? throw new InvalidOperationException("The committed activity private state resolved to null.");
+            trigger = request.TriggerPayload.Deserialize<TTrigger>()
+                ?? throw new InvalidOperationException("The validated activity trigger resolved to null.");
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new InvalidOperationException("The committed activity state or validated trigger payload does not match the declared stateful activity contract.", exception);
+        }
+
+        return await ((IStatefulActivity<TResult, TState, TTrigger>)this).ResumeAsync(
+            new ActivityResumeContext<TState, TTrigger>(
+                request.Attempt,
+                state,
+                trigger,
+                request.RegistrationId,
+                request.DeliveryId));
+    }
+
     private void BeginAttempt()
     {
         if (Interlocked.Exchange(ref _attemptStarted, 1) != 0)
@@ -99,6 +128,61 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
         PersistableActivityValue.ValidateType(typeof(TState), "private state");
         PersistableActivityValue.ValidateType(typeof(TTrigger), "trigger");
     }
+
+    private static void ValidatePortableType(ValueTypeDescriptor actual, Type expectedClrType, string role)
+    {
+        var expected = PersistableActivityValue.Descriptor(expectedClrType, actual.SchemaVersion ?? 1);
+        if (!StringComparer.Ordinal.Equals(actual.Alias, expected.Alias) ||
+            actual.CollectionKind != expected.CollectionKind)
+        {
+            throw new InvalidOperationException(
+                $"The committed activity {role} type '{actual.Alias}' does not match the declared type '{expected.Alias}'.");
+        }
+    }
+}
+
+/// <summary>
+/// Frozen, engine-owned input to one stateful resume attempt. It contains no services, mutable
+/// workflow values, or runtime persistence records.
+/// </summary>
+public sealed class ActivityResumeRequest
+{
+    public ActivityResumeRequest(
+        ActivityExecutionContext attempt,
+        ValueTypeDescriptor stateType,
+        JsonElement statePayload,
+        ValueTypeDescriptor triggerType,
+        JsonElement triggerPayload,
+        string registrationId,
+        string deliveryId)
+    {
+        ArgumentNullException.ThrowIfNull(attempt);
+        ArgumentNullException.ThrowIfNull(stateType);
+        ArgumentNullException.ThrowIfNull(triggerType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deliveryId);
+
+        if (statePayload.ValueKind is JsonValueKind.Undefined)
+            throw new ArgumentException("Activity private state payload cannot be undefined.", nameof(statePayload));
+        if (triggerPayload.ValueKind is JsonValueKind.Undefined)
+            throw new ArgumentException("Activity trigger payload cannot be undefined.", nameof(triggerPayload));
+
+        Attempt = attempt;
+        StateType = stateType;
+        StatePayload = statePayload.Clone();
+        TriggerType = triggerType;
+        TriggerPayload = triggerPayload.Clone();
+        RegistrationId = registrationId;
+        DeliveryId = deliveryId;
+    }
+
+    public ActivityExecutionContext Attempt { get; }
+    public ValueTypeDescriptor StateType { get; }
+    public JsonElement StatePayload { get; }
+    public ValueTypeDescriptor TriggerType { get; }
+    public JsonElement TriggerPayload { get; }
+    public string RegistrationId { get; }
+    public string DeliveryId { get; }
 }
 
 /// <summary>

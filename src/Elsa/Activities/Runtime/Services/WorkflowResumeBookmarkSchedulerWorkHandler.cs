@@ -108,7 +108,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executable, executableNode, state, cancellationToken);
+        ActivityTriggerDelivery? triggerDelivery = null;
+        var usesTypedTrigger = state.TriggerRegistrations is { Count: > 0 } || resumePayload.TriggerDelivery is not null;
+        if (executableNode.ActivityContract is not null && usesTypedTrigger &&
+            !TryCreateTypedTriggerDelivery(state, bookmark, resumePayload, out triggerDelivery))
+            return;
+
+        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executable, executableNode, state, triggerDelivery, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -127,6 +133,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
+        ActivityTriggerDelivery? triggerDelivery,
         CancellationToken cancellationToken)
     {
         // The resumed activity's carrier identity (ADR 0030) is projected from the durable values below (spec 083
@@ -175,11 +182,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             {
                 state.EnsureValueFlowCompatible();
                 var snapshot = RequireCommittedSnapshot(state, executableNode.ActivityContract);
-                resumeAttempt = NewAttempt(state, ActivityAttemptReason.Resume, workItem.WorkItemId, _timeProvider.GetUtcNow());
+                resumeAttempt = NewAttempt(state, ActivityAttemptReason.Resume, triggerDelivery?.DeliveryId ?? workItem.WorkItemId, _timeProvider.GetUtcNow());
                 executionState = state with
                 {
                     InputSnapshot = snapshot,
-                    Attempts = (state.Attempts ?? []).Append(resumeAttempt).ToArray()
+                    Attempts = (state.Attempts ?? []).Append(resumeAttempt).ToArray(),
+                    TriggerDeliveries = triggerDelivery is null
+                        ? state.TriggerDeliveries
+                        : (state.TriggerDeliveries ?? []).Append(triggerDelivery).ToArray()
                 };
                 inputs = [];
             }
@@ -220,7 +230,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             if (executableNode.ActivityContract is { } contract)
             {
                 activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                    new ActivityActivationRequest(contract, executionState.InputSnapshot!, resumeAttempt!, state.PrivateState),
+                    new ActivityActivationRequest(contract, executionState.InputSnapshot!, resumeAttempt!, state.PrivateState, triggerDelivery),
                     cancellationToken);
                 activity = activationLease.Activity;
             }
@@ -274,10 +284,55 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
+        ActivityCompletionProjection? typedCompletion = null;
+        ActivityExecutionState? replacementSuspendedState = null;
         try
         {
-            var resumeMethod = ResolveResumeMethod(activity.GetType(), resumePayload.ResumeTargetId);
-            await InvokeResumeMethodAsync(resumeMethod, activity, context, resumePayload.Input, cancellationToken);
+            if (triggerDelivery is not null && executableNode.ActivityContract is { } contract)
+            {
+                if (activity is not IStatefulActivity statefulActivity)
+                    throw new InvalidOperationException($"Typed activity '{activity.GetType().FullName}' does not implement the stateful resume contract.");
+
+                var transition = await statefulActivity.ResumeAsync(NewTypedResumeRequest(
+                    workItem,
+                    resumePayload,
+                    executionState,
+                    resumeAttempt!,
+                    triggerDelivery!,
+                    cancellationToken));
+                if (transition is IStatefulActivitySuspensionTransition suspension)
+                {
+                    ValidateStatefulSuspensionRegistrations(executable, executableNode, suspension);
+                    replacementSuspendedState = StatefulActivitySuspensionProjector.Project(
+                        executionState,
+                        resumeAttempt!,
+                        suspension,
+                        _timeProvider.GetUtcNow()) with
+                    {
+                        TriggerDeliveries = MarkTriggerConsumed(executionState.TriggerDeliveries!, triggerDelivery.DeliveryId),
+                        BookmarkIds = RemoveBookmark(executionState.BookmarkIds, bookmark.BookmarkId)
+                    };
+                }
+                else if (transition is IActivityCompletionTransition)
+                {
+                    typedCompletion = serviceProvider.GetRequiredService<ActivityCompletionProjector>().Project(
+                        state.InvocationId,
+                        resumeAttempt!,
+                        contract,
+                        transition,
+                        _timeProvider.GetUtcNow());
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        $"Stateful resume transition '{transition.Kind}' is not yet supported by the resume checkpoint path.");
+                }
+            }
+            else
+            {
+                var resumeMethod = ResolveResumeMethod(activity.GetType(), resumePayload.ResumeTargetId);
+                await InvokeResumeMethodAsync(resumeMethod, activity, context, resumePayload.Input, cancellationToken);
+            }
 
             // Write back the resume callback's variable mutations, mirroring the invoke path's post-execution
             // write-back: container-scope assignments persist to their owning execution snapshots so sibling
@@ -304,7 +359,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 await activationLease.DisposeAsync();
         }
 
-        var recordedOutputs = context.GetRecordedOutputs();
+        var recordedOutputs = typedCompletion is null
+            ? context.GetRecordedOutputs()
+            : typedCompletion.Projections
+                .Where(item => item.Value.Presence != ValuePresence.Absent)
+                .Select(item => new RecordedActivityOutput(
+                    item.Key,
+                    item.Value.Presence == ValuePresence.ExplicitNull ? null : item.Value.InlineValue))
+                .ToArray();
         valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, recordedOutputs, _timeProvider.GetUtcNow()));
 
         // Durably persist the resume target's CaptureOnSuccessfulCompletion outputs, mirroring the invoke path: a
@@ -315,9 +377,215 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             workItem, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId, executableNode, recordedOutputs, _timeProvider.GetUtcNow());
         var durableValueChanges = workflowVariableWriteBackChanges.Concat(durableOutputChanges).ToArray();
 
-        var completedState = CompleteActivity(workItem, resumePayload, executionState, SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
+        if (replacementSuspendedState is not null)
+        {
+            var replacementWorkItems = NewReplacementBookmarkWorkItems(workItem, resumePayload, replacementSuspendedState).ToArray();
+            await bookmarkConsumptionCheckpointService.CommitAsync(
+                new BookmarkConsumptionCheckpointRequest(
+                    workItem,
+                    resumePayload,
+                    bookmark,
+                    replacementSuspendedState,
+                    valueSnapshots: valueSnapshots,
+                    durableValueChanges: durableValueChanges,
+                    continuationWorkItems: replacementWorkItems),
+                cancellationToken);
+            return;
+        }
+
+        var outcomeNames = typedCompletion is null
+            ? SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true)
+            : [typedCompletion.Completion.OutcomeKey];
+        var completedState = CompleteActivity(workItem, resumePayload, executionState, outcomeNames);
+        if (typedCompletion is not null)
+        {
+            completedState = completedState with
+            {
+                Completion = typedCompletion.Completion,
+                PrivateState = null,
+                TriggerRegistrations = [],
+                TriggerDeliveries = MarkTriggerConsumed(completedState.TriggerDeliveries!, triggerDelivery!.DeliveryId),
+                BookmarkIds = RemoveBookmark(completedState.BookmarkIds, bookmark.BookmarkId)
+            };
+        }
         await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, durableValueChanges), cancellationToken);
     }
+
+    private static bool TryCreateTypedTriggerDelivery(
+        ActivityExecutionState state,
+        BookmarkState bookmark,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        out ActivityTriggerDelivery? delivery)
+    {
+        delivery = null;
+        if (state.Status != ActivityExecutionStatus.Suspended ||
+            state.PrivateState is null ||
+            resumePayload.TriggerDelivery is not { } metadata)
+            return false;
+
+        var registrations = state.TriggerRegistrations?
+            .Where(candidate => StringComparer.Ordinal.Equals(candidate.RegistrationId, bookmark.BookmarkId))
+            .ToArray() ?? [];
+        if (registrations.Length != 1)
+            return false;
+
+        var registration = registrations[0];
+        if (!StringComparer.Ordinal.Equals(registration.InvocationId, state.InvocationId) ||
+            !StringComparer.Ordinal.Equals(registration.ResumeTargetKey, bookmark.ResumeTargetId) ||
+            !StringComparer.Ordinal.Equals(registration.StimulusType, bookmark.StimulusType) ||
+            !StringComparer.Ordinal.Equals(registration.StimulusHash, bookmark.StimulusHash) ||
+            !SameType(registration.PayloadType, metadata.PayloadType))
+            return false;
+
+        var priorDeliveries = state.TriggerDeliveries ?? [];
+        var isDuplicate = priorDeliveries.Any(candidate =>
+            StringComparer.Ordinal.Equals(candidate.RegistrationId, registration.RegistrationId) &&
+            candidate.Status is ActivityTriggerDeliveryStatus.Received or ActivityTriggerDeliveryStatus.Consumed &&
+            (StringComparer.Ordinal.Equals(candidate.DeliveryId, metadata.DeliveryId) ||
+             registration.DeduplicationPolicy == ActivityTriggerDeduplicationPolicy.Once ||
+             StringComparer.Ordinal.Equals(candidate.DeduplicationKey, metadata.DeduplicationKey)));
+        if (isDuplicate)
+            return false;
+
+        var payload = resumePayload.Input is { } input && input.ValueKind is not JsonValueKind.Null
+            ? ValueEnvelope.Inline(registration.PayloadType, input, ValueProtectionPolicy.InstanceInline)
+            : ValueEnvelope.Null(registration.PayloadType, ValueProtectionPolicy.InstanceInline);
+        delivery = new ActivityTriggerDelivery(
+            metadata.DeliveryId,
+            registration.RegistrationId,
+            metadata.PayloadType,
+            payload,
+            metadata.ProviderId,
+            metadata.ReceivedAt,
+            metadata.DeduplicationKey,
+            ActivityTriggerDeliveryStatus.Received);
+        return true;
+    }
+
+    private static void ValidateStatefulSuspensionRegistrations(
+        WorkflowExecutable executable,
+        ExecutableNode executableNode,
+        IStatefulActivitySuspensionTransition suspension)
+    {
+        foreach (var registration in suspension.Registrations)
+        {
+            if (!executable.ResumeTargets.TryGetValue(registration.ResumeTargetKey, out var resumeTarget))
+            {
+                throw new InvalidOperationException(
+                    $"Stateful activity '{executableNode.ExecutableNodeId}' registered missing resume target '{registration.ResumeTargetKey}'.");
+            }
+
+            if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, executableNode.ExecutableNodeId))
+            {
+                throw new InvalidOperationException(
+                    $"Resume target '{registration.ResumeTargetKey}' belongs to executable node '{resumeTarget.ExecutableNodeId}', not '{executableNode.ExecutableNodeId}'.");
+            }
+        }
+    }
+
+    private IEnumerable<RuntimeSchedulerWorkItem> NewReplacementBookmarkWorkItems(
+        RuntimeSchedulerWorkItem resumeWorkItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState suspendedState)
+    {
+        var registrations = suspendedState.TriggerRegistrations?.ToArray() ?? [];
+        for (var index = 0; index < registrations.Length; index++)
+        {
+            var registration = registrations[index];
+            var now = _timeProvider.GetUtcNow();
+            var payload = new RuntimeCreateBookmarkCommandPayload(
+                pinnedExecutable: resumePayload.PinnedExecutable,
+                bookmarkId: registration.RegistrationId,
+                activityExecutionId: resumePayload.ActivityExecutionId,
+                executableNodeId: resumePayload.ExecutableNodeId,
+                resumeTargetId: registration.ResumeTargetKey,
+                stimulusType: registration.StimulusType,
+                stimulusHash: registration.StimulusHash,
+                payload: null,
+                expiresAt: null,
+                reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
+                metadata: null,
+                valueSnapshots: [],
+                durableValueChanges: []);
+
+            yield return new RuntimeSchedulerWorkItem(
+                workItemId: $"{resumeWorkItem.WorkItemId}:create-bookmark:{registration.RegistrationId}",
+                workflowExecutionId: resumeWorkItem.WorkflowExecutionId,
+                commandId: $"{resumeWorkItem.CommandId}:create-bookmark:{registration.RegistrationId}",
+                commandKind: WorkflowExecutionCommandKind.CreateBookmark,
+                envelopeId: resumeWorkItem.EnvelopeId,
+                idempotencyKey: $"{resumeWorkItem.IdempotencyKey}:create-bookmark:{registration.RegistrationId}",
+                enqueuedAt: now,
+                recordedAt: now,
+                sequence: resumeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
+                payload: JsonSerializer.SerializeToElement(payload),
+                commandMetadata: resumeWorkItem.CommandMetadata,
+                envelopeMetadata: resumeWorkItem.EnvelopeMetadata);
+        }
+    }
+
+    private static ActivityResumeRequest NewTypedResumeRequest(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState state,
+        ActivityAttempt attempt,
+        ActivityTriggerDelivery trigger,
+        CancellationToken cancellationToken)
+    {
+        var privateState = state.PrivateState
+            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' has no committed private state.");
+        if (!StringComparer.Ordinal.Equals(privateState.InvocationId, state.InvocationId))
+            throw new InvalidOperationException($"Committed private state does not belong to activity invocation '{state.InvocationId}'.");
+
+        return new ActivityResumeRequest(
+            new ActivityExecutionContext(
+                workItem.WorkflowExecutionId,
+                state.InvocationId,
+                attempt.AttemptId,
+                resumePayload.ExecutableNodeId,
+                cancellationToken),
+            privateState.Value.Type,
+            RequireInlinePayload(privateState.Value, "private state"),
+            trigger.PayloadType,
+            RequireInlinePayload(trigger.Payload, "trigger"),
+            trigger.RegistrationId,
+            trigger.DeliveryId);
+    }
+
+    private static JsonElement RequireInlinePayload(ValueEnvelope envelope, string role) => envelope.Presence switch
+    {
+        ValuePresence.Present when envelope.InlineValue is { } inline => inline,
+        ValuePresence.ExplicitNull => JsonSerializer.SerializeToElement<object?>(null),
+        _ => throw new InvalidOperationException($"Typed activity {role} must carry an inline persistable payload.")
+    };
+
+    private static IReadOnlyCollection<ActivityTriggerDelivery> MarkTriggerConsumed(
+        IReadOnlyCollection<ActivityTriggerDelivery> deliveries,
+        string deliveryId) =>
+        deliveries
+            .Select(delivery => !StringComparer.Ordinal.Equals(delivery.DeliveryId, deliveryId)
+                ? delivery
+                : new ActivityTriggerDelivery(
+                    delivery.DeliveryId,
+                    delivery.RegistrationId,
+                    delivery.PayloadType,
+                    delivery.Payload,
+                    delivery.ProviderId,
+                    delivery.ReceivedAt,
+                    delivery.DeduplicationKey,
+                    ActivityTriggerDeliveryStatus.Consumed))
+            .ToArray();
+
+    private static IReadOnlyCollection<string> RemoveBookmark(
+        IReadOnlyCollection<string> bookmarkIds,
+        string bookmarkId) =>
+        bookmarkIds.Where(candidate => !StringComparer.Ordinal.Equals(candidate, bookmarkId)).ToArray();
+
+    private static bool SameType(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
+        StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
+        left.CollectionKind == right.CollectionKind &&
+        left.SchemaVersion == right.SchemaVersion &&
+        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
 
     private RuntimeSchedulerWorkItem NewCompletionWorkItem(
         RuntimeSchedulerWorkItem resumeWorkItem,

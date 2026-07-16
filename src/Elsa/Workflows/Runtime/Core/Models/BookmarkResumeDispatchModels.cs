@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -11,7 +12,9 @@ public sealed class BookmarkResumeDispatchRequest
         JsonElement? input = null,
         string? idempotencyKey = null,
         string requestedBy = "runtime.bookmark",
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        ValueTypeDescriptor? payloadType = null,
+        string? providerId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
@@ -20,6 +23,10 @@ public sealed class BookmarkResumeDispatchRequest
 
         if (idempotencyKey is not null && string.IsNullOrWhiteSpace(idempotencyKey))
             throw new ArgumentException("Bookmark resume idempotency key cannot be blank when provided.", nameof(idempotencyKey));
+        if ((payloadType is null) != (providerId is null))
+            throw new ArgumentException("Typed trigger delivery metadata requires both a payload type and provider ID.");
+        if (providerId is not null && string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Typed trigger provider ID cannot be blank.", nameof(providerId));
 
         WorkflowExecutionId = workflowExecutionId;
         StimulusType = stimulusType;
@@ -28,6 +35,8 @@ public sealed class BookmarkResumeDispatchRequest
         IdempotencyKey = idempotencyKey;
         RequestedBy = requestedBy;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        PayloadType = payloadType;
+        ProviderId = providerId;
     }
 
     public string WorkflowExecutionId { get; }
@@ -37,6 +46,8 @@ public sealed class BookmarkResumeDispatchRequest
     public string? IdempotencyKey { get; }
     public string RequestedBy { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public ValueTypeDescriptor? PayloadType { get; }
+    public string? ProviderId { get; }
 }
 
 public sealed class BookmarkResumeDispatchResult
@@ -104,7 +115,8 @@ public sealed class RuntimeResumeBookmarkCommandPayload
         string stimulusType,
         string stimulusHash,
         JsonElement? input,
-        string reason)
+        string reason,
+        RuntimeTypedTriggerDeliveryMetadata? triggerDelivery = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
@@ -124,6 +136,7 @@ public sealed class RuntimeResumeBookmarkCommandPayload
         StimulusHash = stimulusHash;
         Input = input?.Clone();
         Reason = reason;
+        TriggerDelivery = triggerDelivery;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -135,6 +148,39 @@ public sealed class RuntimeResumeBookmarkCommandPayload
     public string StimulusHash { get; }
     public JsonElement? Input { get; }
     public string Reason { get; }
+    public RuntimeTypedTriggerDeliveryMetadata? TriggerDelivery { get; }
+}
+
+/// <summary>
+/// Provider-authored delivery identity carried with a typed bookmark resume. It augments an already
+/// resolved bookmark and never grants start authority or bypasses stimulus-provider recognition.
+/// </summary>
+public sealed record RuntimeTypedTriggerDeliveryMetadata
+{
+    public RuntimeTypedTriggerDeliveryMetadata(
+        string deliveryId,
+        ValueTypeDescriptor payloadType,
+        string providerId,
+        DateTimeOffset receivedAt,
+        string deduplicationKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deliveryId);
+        ArgumentNullException.ThrowIfNull(payloadType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deduplicationKey);
+
+        DeliveryId = deliveryId;
+        PayloadType = payloadType;
+        ProviderId = providerId;
+        ReceivedAt = receivedAt;
+        DeduplicationKey = deduplicationKey;
+    }
+
+    public string DeliveryId { get; }
+    public ValueTypeDescriptor PayloadType { get; }
+    public string ProviderId { get; }
+    public DateTimeOffset ReceivedAt { get; }
+    public string DeduplicationKey { get; }
 }
 
 public enum BookmarkResumeDispatchStatus

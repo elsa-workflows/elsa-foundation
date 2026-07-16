@@ -475,6 +475,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
         services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
+        services.AddSingleton<ActivityCompletionProjector>();
         if (activityActivator is not null)
             services.AddSingleton(activityActivator);
         return services.BuildServiceProvider();
@@ -553,7 +554,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 
     private RuntimeSchedulerWorkItem NewResumeWorkItem(
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.ResumeBookmark,
-        string resumeTargetId = "resume-target:delivery")
+        string resumeTargetId = "resume-target:delivery",
+        JsonElement? input = null,
+        RuntimeTypedTriggerDeliveryMetadata? triggerDelivery = null)
     {
         var payload = JsonSerializer.SerializeToElement(new RuntimeResumeBookmarkCommandPayload(
             pinnedExecutable: NewIdentity(),
@@ -563,8 +566,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             resumeTargetId: resumeTargetId,
             stimulusType: "delivery-status",
             stimulusHash: "sha256:delivery-status:order-123",
-            input: Json("""{"orderId":"order-123"}"""),
-            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason));
+            input: input ?? Json("""{"orderId":"order-123"}"""),
+            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason,
+            triggerDelivery: triggerDelivery));
 
         return new RuntimeSchedulerWorkItem(
             workItemId: "resume-work",
