@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa3.Mapping.Mappings;
+using Elsa3.Mapping.Services;
 using Elsa3.Models;
 using Xunit;
 
@@ -85,10 +86,117 @@ public sealed class Elsa3ActivityToStateTests
         Assert.Empty(node.Inputs);
     }
 
+    [Fact]
+    public async Task Collect_OutputOnlyMemoryReference_PreservesProducerOccurrence()
+    {
+        var source = new Elsa3Activity
+        {
+            Id = "a1",
+            NodeId = "node-1",
+            Name = "Producer",
+            Type = ActivityType,
+            Version = 1,
+            AdditionalProperties = new Dictionary<string, JsonElement>
+            {
+                ["Result"] = MemoryReference("result-1"),
+            },
+        };
+
+        var lookup = new FakeActivityDefinitionLookup(
+            inputNames: [],
+            outputNames: ["Result"]);
+
+        var inventory = await new Elsa3MemoryReferenceGraph(lookup).CollectAsync(source, CancellationToken.None);
+
+        var occurrence = Assert.Single(inventory.Occurrences);
+        Assert.Equal("result-1", occurrence.MemoryReferenceId);
+        Assert.Equal("$.root.Result.memoryReference", occurrence.JsonPath);
+        Assert.Equal("node-1", occurrence.ActivityNodeId);
+        Assert.Equal("/node-1", occurrence.ActivityPath);
+        Assert.Equal("key:result", occurrence.StablePropertyKey);
+        Assert.Equal(Elsa3PropertyDirection.Output, occurrence.Direction);
+        Assert.Equal("node-1", occurrence.StructuralFrameId);
+        Assert.Null(occurrence.Expression);
+    }
+
+    [Fact]
+    public async Task Collect_ExpressionAndMemoryReference_PreservesBothDeclaredDirectionsAndStructuralFrame()
+    {
+        var leaf = new Elsa3Activity
+        {
+            Id = "leaf",
+            NodeId = "node-leaf",
+            Name = "Transform",
+            Type = ActivityType,
+            Version = 1,
+            AdditionalProperties = new Dictionary<string, JsonElement>
+            {
+                ["Value"] = ArgumentWithMemoryReference("JavaScript", "input + 1", "value-1"),
+            },
+        };
+        var nestedContainer = new Elsa3Activity
+        {
+            Id = "nested",
+            NodeId = "node-nested",
+            Name = "Nested",
+            Type = ActivityType,
+            Version = 1,
+            Activities = [leaf],
+        };
+        var root = new Elsa3Activity
+        {
+            Id = "root",
+            NodeId = "node-root",
+            Name = "Root",
+            Type = ActivityType,
+            Version = 1,
+            Activities = [nestedContainer],
+        };
+
+        var lookup = new FakeActivityDefinitionLookup(
+            inputNames: ["Value"],
+            outputNames: ["Value"]);
+
+        var inventory = await new Elsa3MemoryReferenceGraph(lookup).CollectAsync(root, CancellationToken.None);
+
+        Assert.Collection(
+            inventory.Occurrences,
+            input => Assert.Equal(Elsa3PropertyDirection.Input, input.Direction),
+            output => Assert.Equal(Elsa3PropertyDirection.Output, output.Direction));
+
+        foreach (var occurrence in inventory.Occurrences)
+        {
+            Assert.Equal("value-1", occurrence.MemoryReferenceId);
+            Assert.Equal("$.root.activities[0].activities[0].Value.memoryReference", occurrence.JsonPath);
+            Assert.Equal("node-leaf", occurrence.ActivityNodeId);
+            Assert.Equal("/node-root/node-nested/node-leaf", occurrence.ActivityPath);
+            Assert.Equal("key:value", occurrence.StablePropertyKey);
+            Assert.Equal("node-nested", occurrence.StructuralFrameId);
+            Assert.Equal("JavaScript", occurrence.Expression?.Type);
+            Assert.Equal("input + 1", occurrence.Expression?.Value);
+        }
+
+        Assert.Equal(["node-root", "node-nested"], inventory.StructuralFrames.Select(x => x.Id));
+        Assert.Equal("node-nested", Assert.Single(inventory.Nodes, x => x.ActivityNodeId == "node-leaf").StructuralFrameId);
+    }
+
     private static JsonElement Argument(string expressionType, string expressionValue) =>
         JsonSerializer.SerializeToElement(new
         {
             expression = new { type = expressionType, value = expressionValue },
+        });
+
+    private static JsonElement MemoryReference(string id) =>
+        JsonSerializer.SerializeToElement(new
+        {
+            memoryReference = new { id },
+        });
+
+    private static JsonElement ArgumentWithMemoryReference(string expressionType, string expressionValue, string id) =>
+        JsonSerializer.SerializeToElement(new
+        {
+            expression = new { type = expressionType, value = expressionValue },
+            memoryReference = new { id },
         });
 
     /// <summary>
@@ -144,11 +252,11 @@ public sealed class Elsa3ActivityToStateTests
         public IActivityDefinition Definition => new FakeActivityDefinition();
 
         public IEnumerable<InputDefinition> Inputs { get; } = inputNames
-            .Select(name => new InputDefinition(name, name, new TypeReference("String"), null, name, null))
+            .Select(name => new InputDefinition($"key:{name.ToLowerInvariant()}", name, new TypeReference("String"), null, name, null))
             .ToArray();
 
         public IEnumerable<OutputDefinition> Outputs { get; } = outputNames
-            .Select(name => new OutputDefinition(name, name, new TypeReference("String"), null, name, null))
+            .Select(name => new OutputDefinition($"key:{name.ToLowerInvariant()}", name, new TypeReference("String"), null, name, null))
             .ToArray();
 
         public IEnumerable<ActivityDesignFacet> DesignFacets => [];
