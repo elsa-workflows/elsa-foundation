@@ -119,7 +119,7 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
     {
         // Current documents all have the pinned identity at this stable JSON path. Reading only that
         // element avoids materializing the much larger workflow execution state during every GC sweep.
-        // Historical versions still use the normal serializer so their upcaster chain remains authoritative.
+        // A non-current envelope falls through to the serializer so version policy rejects it consistently.
         if (Serializer.IsCurrentVersion(envelope))
         {
             using var content = JsonDocument.Parse(envelope.ContentJson);

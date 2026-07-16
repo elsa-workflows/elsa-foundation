@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Persistence.Groundwork.Tests;
 
 /// <summary>
-/// Canonical instances and store drivers shared by the golden-fixture drift and compatibility tests.
+/// Canonical instances and store drivers shared by the golden-fixture drift and supported-compatibility tests.
 /// Every builder uses deterministic ids and <see cref="DateTimeOffset.UnixEpoch"/> timestamps so the
 /// serialized JSON is byte-stable across runs and machines, which is what makes a committed golden
 /// fixture meaningful.
@@ -77,11 +77,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         return capturing.Captured(kind);
     }
 
-    // Seeds an in-memory store with the committed fixture content under the LEGACY schema stamp, at the
-    // exact composite id the bridge assigns. Tests then prove the historical document either loads through
-    // the real read path or is rejected by an explicit clean-break floor. Driving the real save first lets
-    // us discover the id without re-implementing id composition.
-    public static async Task<InMemoryDocumentStore> SeedLegacyFixtureAsync(string kind, string fixtureContent)
+    // Seeds an in-memory store with committed fixture content under its exact schema-version stamp, at
+    // the composite id the bridge assigns. Driving a real save first discovers the id without duplicating
+    // the store's identity composition.
+    public static async Task<InMemoryDocumentStore> SeedFixtureAsync(string kind, int version, string fixtureContent)
     {
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         await DriveSaveAsync(kind, store);
@@ -91,7 +90,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             await store.SaveAsync(new SaveDocumentRequest(
                 kind,
                 envelope.Id,
-                ElsaRuntimeDocumentVersions.LegacySchemaVersion,
+                ElsaRuntimeDocumentVersions.Stamp(version),
                 fixtureContent));
         }
 
@@ -168,8 +167,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         }
     }
 
-    // Constructs the real store for a kind and asserts the seeded legacy fixture reads back with a
-    // spot-checked field, proving the historical document loads through the bridge. Returns the spot value.
+    // Constructs the real store and returns a spot-checked field from a seeded supported fixture.
     public static async Task<object?> ReadSpotCheckAsync(string kind, IDocumentStore store) => kind switch
     {
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind =>

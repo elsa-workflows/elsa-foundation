@@ -77,25 +77,9 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<IRuntimePostCommitOutboxStore, GroundworkRuntimePostCommitOutboxStore>();
 
         // Versioned document serialization: every bridge store routes its content JSON through the
-        // serializer, which stamps per-kind schema versions on write and enforces them (with upcasting)
-        // on read. TryAdd keeps host-supplied replacements and contributed upcasters intact.
+        // serializer, which stamps per-kind schema versions on write and enforces each current-only pre-GA
+        // boundary on read. TryAdd keeps host-supplied serializer replacements intact.
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
-        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
-            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind));
-        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
-            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind));
-        services.AddSingleton<IGroundworkRuntimeDocumentUpcaster>(
-            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV2ToV3Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV3ToV4Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateDocumentV1ToV2Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateDocumentV2ToV3Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateDocumentV3ToV4Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableSourceReferenceDocumentV3ToV4Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowTriggerBindingDocumentV1ToV2Upcaster>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, RecurringTriggerScheduleDocumentV1ToV2Upcaster>());
-        services.TryAddSingleton<IGroundworkRuntimeDocumentUpcasterRegistry, GroundworkRuntimeDocumentUpcasterRegistry>();
 
         // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the
         // process-local in-memory queue, and a crash after checkpoint commit loses the continuation

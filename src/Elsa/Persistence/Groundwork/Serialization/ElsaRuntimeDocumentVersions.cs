@@ -1,18 +1,18 @@
 using System.Globalization;
-using Elsa.Persistence.Groundwork.Exceptions;
 
 namespace Elsa.Persistence.Groundwork.Serialization;
 
 /// <summary>
 /// The per-document-kind schema versions of the runtime persistence bridge. Every document saved
 /// through the bridge is stamped with the current version of its kind, and every load enforces the
-/// stamp: supported older versions are upcasted through <see cref="IGroundworkRuntimeDocumentUpcaster"/>
-/// steps, while versions below an explicit clean-break floor and unknown/future versions fail loudly.
+/// stamp: before GA only the current version of each kind is readable, while older, unknown, or future
+/// versions fail loudly instead of silently deserializing with default values.
 /// </summary>
 /// <remarks>
-/// Changing a serialized shape requires a version bump and a current golden fixture. Ordinarily it
-/// also requires an upcaster. A deliberate clean break instead advances the kind's minimum-readable
-/// version and retains the old fixture as rejection evidence; no compatibility upcaster is registered.
+/// The pre-GA policy deliberately resets every changed kind to its current fixture and retains no Elsa
+/// upcasters. After release, compatible shape evolution may require a version bump, Groundwork upcasters,
+/// a new golden fixture, and retention of supported historical fixtures. The
+/// fixture drift test in <c>Elsa.Persistence.Groundwork.Tests</c> fails on unversioned shape changes.
 /// See <c>docs/serialization.md</c> for the full evolution contract.
 /// </remarks>
 public static class ElsaRuntimeDocumentVersions
@@ -48,14 +48,6 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1
     };
 
-    private static readonly IReadOnlyDictionary<string, int> MinimumReadable = new Dictionary<string, int>(StringComparer.Ordinal)
-    {
-        // Elsa 4 deliberately does not translate CLR descriptor-type executable artifacts. Version 2
-        // is the first stable consumer/schema wire format and the first hierarchical Source Reference.
-        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 2,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2
-    };
-
     /// <summary>The current versions of every runtime document kind, keyed by document kind.</summary>
     public static IReadOnlyDictionary<string, int> All => Current;
 
@@ -70,13 +62,13 @@ public static class ElsaRuntimeDocumentVersions
     }
 
     /// <summary>
-    /// Returns the oldest readable version for a kind. Versions below this floor are intentional
-    /// clean-break artifacts and are rejected without consulting the upcaster registry.
+    /// Returns the oldest schema version this build may deserialize for the given document kind.
+    /// Versions below this boundary belong to an unsupported clean-break generation.
     /// </summary>
+    /// <exception cref="ArgumentException">The document kind is not a runtime document kind.</exception>
     public static int MinimumReadableFor(string documentKind)
     {
-        _ = CurrentFor(documentKind);
-        return MinimumReadable.GetValueOrDefault(documentKind, 1);
+        return CurrentFor(documentKind);
     }
 
     /// <summary>
@@ -84,7 +76,7 @@ public static class ElsaRuntimeDocumentVersions
     /// (<see cref="LegacySchemaVersion"/>) parses as version 1; anything that is not a positive
     /// integer fails loudly rather than being treated as compatible.
     /// </summary>
-    /// <exception cref="GroundworkRuntimeDocumentVersionException">The stamp is not a recognized version.</exception>
+    /// <exception cref="FormatException">The stamp is not a recognized version.</exception>
     public static int Parse(string documentKind, string schemaVersion)
     {
         if (string.Equals(schemaVersion, LegacySchemaVersion, StringComparison.Ordinal))
@@ -93,7 +85,7 @@ public static class ElsaRuntimeDocumentVersions
         if (int.TryParse(schemaVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed >= 1)
             return parsed;
 
-        throw new GroundworkRuntimeDocumentVersionException(
+        throw new FormatException(
             $"Document kind '{documentKind}' carries unrecognized schema version stamp '{schemaVersion}'. " +
             $"Expected a positive integer or the legacy stamp '{LegacySchemaVersion}'. Refusing to deserialize.");
     }

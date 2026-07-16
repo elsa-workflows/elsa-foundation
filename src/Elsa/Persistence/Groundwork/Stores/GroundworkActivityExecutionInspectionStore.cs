@@ -90,7 +90,8 @@ public sealed class GroundworkActivityExecutionInspectionStore(
     private ActivityExecutionInspectionSummaryProjection MapSummary(DocumentEnvelope envelope)
     {
         // The summary fast path reads a fragment of ContentJson directly, so it is only valid for
-        // current-version documents; older versions go through the full projection so the upcaster chain applies.
+        // current-version documents; a non-current envelope goes through the serializer so version policy
+        // rejects it consistently.
         if (Serializer.IsCurrentVersion(envelope))
         {
             using var document = JsonDocument.Parse(envelope.ContentJson);

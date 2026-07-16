@@ -23,7 +23,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Committed per-kind version fixtures, including historical clean-break rejection evidence. -->
+    <!-- Committed current-version golden fixtures. Historical pre-GA shapes are intentionally unsupported.
+         Copied next to the test assembly so drift and read-path tests can load them at runtime. -->
     <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

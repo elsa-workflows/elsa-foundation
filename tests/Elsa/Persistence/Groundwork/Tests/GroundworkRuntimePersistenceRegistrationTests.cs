@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Serialization;
@@ -11,6 +12,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using CShells.Lifecycle;
+using Groundwork.Documents.Serialization;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
@@ -140,10 +142,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
     }
 
-    // Constitution §2.23.1: the versioned-document serialization services must be registered as their
-    // sealed defaults, and the complete production upcaster chain must be contributed.
+    // Constitution §2.23.1: the versioned-document serializer must be registered as the sealed default.
     [Fact]
-    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_And_Upcaster_Registry()
+    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_Without_Consuming_Foreign_Upcasters()
     {
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
@@ -159,33 +160,22 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        services.AddSingleton<IDocumentJsonUpcaster>(new ForeignDocumentJsonUpcaster());
 
         services.AddGroundworkRuntimeStores();
 
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
-        Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
+        Assert.IsType<ForeignDocumentJsonUpcaster>(Assert.Single(provider.GetServices<IDocumentJsonUpcaster>()));
 
-        var upcasters = provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>().ToArray();
-        Assert.Equal(12, upcasters.Length);
-        var upcasterTypes = upcasters
-            .Select(x => x.GetType())
-            .ToHashSet();
-        Assert.True(upcasterTypes.SetEquals(
-            [
-                typeof(ExecutionScopeAttemptDocumentUpcaster),
-                typeof(WorkflowExecutableDocumentV2ToV3Upcaster),
-                typeof(WorkflowExecutableDocumentV3ToV4Upcaster),
-                typeof(WorkflowExecutionStateDocumentV1ToV2Upcaster),
-                typeof(WorkflowExecutionStateDocumentV2ToV3Upcaster),
-                typeof(WorkflowExecutionStateDocumentV3ToV4Upcaster),
-                typeof(WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster),
-                typeof(WorkflowExecutableSourceReferenceDocumentV3ToV4Upcaster),
-                typeof(WorkflowTriggerBindingDocumentV1ToV2Upcaster),
-                typeof(RecurringTriggerScheduleDocumentV1ToV2Upcaster)
-            ]));
-        Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
+    }
+
+    private sealed class ForeignDocumentJsonUpcaster : IDocumentJsonUpcaster
+    {
+        public string DocumentKind => "foreign-document";
+        public int FromVersion => 1;
+        public JsonObject Upcast(JsonObject content) => content;
     }
 
     [Fact]
