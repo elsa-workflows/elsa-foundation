@@ -290,9 +290,9 @@ isolation, transitive-dependency, retry/resume, and disposal gates before compar
 - [X] T105 [P] [US8] Implement deterministic semantic assertions/counters for activation, scope, identity, and disposal in `benchmarks/Elsa/Activities/Runtime/Benchmarks/ActivationScopeSemanticTests.cs`
 - [X] T106 [P] [US8] Implement no-op, transient, scoped-disposable/transitive, intrinsic-heavy, mixed, I/O, retry, resume, and concurrent-drain workloads in `benchmarks/Elsa/Activities/Runtime/Benchmarks/ActivationScopeBenchmarks.cs`
 - [X] T107 [US8] Implement burst-only, per-attempt, and provably eligible conditional activation strategies behind `IActivityActivator` in `benchmarks/Elsa/Activities/Runtime/Benchmarks/ActivationStrategies.cs`
-- [ ] T108 [US8] Run BenchmarkDotNet with retained environment/config/raw results under `benchmarks/Elsa/Activities/Runtime/Benchmarks/results/`
-- [ ] T109 [US8] Reject any semantically invalid candidate, compare throughput/p50/p95/allocations, and record the selected observable lifetime in `docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md` or a focused successor
-- [ ] T110 [US8] Apply the selected lifetime behind `IActivityActivator` and run runtime isolation/disposal/retry/resume tests
+- [X] T108 [US8] Run BenchmarkDotNet with retained environment/config/raw results under `benchmarks/Elsa/Activities/Runtime/Benchmarks/results/`
+- [X] T109 [US8] Reject any semantically invalid candidate, compare throughput/p50/p95/allocations, and record the selected observable lifetime in `docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md` or a focused successor
+- [X] T110 [US8] Apply the selected lifetime behind `IActivityActivator` and run runtime isolation/disposal/retry/resume tests
 
 ---
 

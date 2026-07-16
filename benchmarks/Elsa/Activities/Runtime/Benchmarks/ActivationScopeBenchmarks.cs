@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Engines;
+using BenchmarkDotNet.Jobs;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
@@ -12,6 +15,8 @@ namespace Elsa.Activities.Runtime.Benchmarks;
 
 [MemoryDiagnoser]
 [AllStatisticsColumn]
+[Config(typeof(ActivationBenchmarkConfig))]
+[SimpleJob(RunStrategy.Throughput, launchCount: 1, warmupCount: 3, iterationCount: 12)]
 public class ActivationScopeBenchmarks
 {
     private ActivationBenchmarkHarness _harness = null!;
@@ -51,6 +56,15 @@ public class ActivationScopeBenchmarks
 
     [Benchmark]
     public async Task<long> ConcurrentDrain() => (await _harness.RunConcurrentDrainAsync(Strategy, 16)).Score;
+}
+
+public sealed class ActivationBenchmarkConfig : ManualConfig
+{
+    public ActivationBenchmarkConfig()
+    {
+        WithBuildTimeout(TimeSpan.FromMinutes(10));
+        AddColumn(StatisticColumn.P95);
+    }
 }
 
 internal sealed class ActivationBenchmarkHarness : IDisposable

@@ -8,9 +8,10 @@ Workflow requests, activity inputs, activity results, variables, private activit
 triggers remain distinct value roles. Immutable executable bindings connect those roles, while
 role-owned runtime records store their materialized values.
 
-The only unresolved part of this decision is the DI scope used to activate transient CLR
-activities. Burst scope, per-attempt child scope, and a safe conditional strategy must be compared
-by a prototype benchmark before one becomes the public lifetime contract.
+CLR activities use a fresh child DI scope for every execution attempt. The scope and its transitive
+dependencies are disposed when that attempt ends. Retries and resumptions create a new activity and
+scope; engine intrinsics create neither. This lifetime was selected from the semantic and benchmark
+evidence recorded below.
 
 ## Context
 
@@ -285,23 +286,45 @@ input, state, completion, and variable-frame changes fold into the existing chec
 this decision does not create a second persistence route or a special code-first executor. Typed
 resume triggers do not redefine start authority or provider recognition.
 
-## DI activation-scope decision gate
+## DI activation-scope decision (resolved 2026-07-16)
 
-The new transient activation model makes constructor injection possible but does not yet choose its
-service scope. The following strategies must be prototyped against the real burst execution path:
+Every CLR activity execution attempt owns one fresh child `AsyncServiceScope`. Constructor-injected
+scoped and transitive dependencies are unique to that attempt, and both the activity lease and child
+scope are disposed when the attempt ends or activation fails. A retry or resume retains its logical
+invocation and pinned inputs but receives a new activity object, attempt identity, scope, and service
+graph. Engine intrinsics execute without CLR activation or an activity scope.
 
-1. one ambient scope for the whole execution burst;
-2. an ambient burst scope plus a child scope for every CLR activity attempt; and
-3. a provably safe conditional fast path.
+The prototype compared burst-only, per-attempt, and an explicit-allowlist conditional strategy over
+nine workloads. All strategies created fresh activity objects and transient dependencies. Burst-only
+was rejected by the semantic gate because attempts in one burst shared scoped and transitively scoped
+dependencies. The conditional candidate was semantically safe only for explicitly audited,
+parameterless, non-disposable activities; every service-bearing activity fell back to per-attempt.
+That candidate was rejected because it creates a second observable lifetime/audit mechanism and did
+not demonstrate a stable fast-path advantage.
 
-The evidence must cover throughput, latency, allocations, async disposal, scoped/transient dependency
-graphs, isolation between activities, retries, and suspension/resumption. Engine-intrinsic control and
-data operations never create an activity activation scope. A conditional strategy is invalid if a
-transitive dependency or service-location escape hatch can change observable lifetime semantics.
+Representative measurements from the retained run are shown below. Each benchmark operation contains
+the workload's full attempt set, so these are comparative workload figures rather than single-scope
+construction timings.
 
-Performance alone does not choose the strategy; the selected contract must also make isolation and
-disposal deterministic. This ADR will be amended, or a focused follow-up ADR will supersede this
-section, after the benchmark is reviewed.
+| Workload | Burst-only p50 / p95 / allocated | Per-attempt p50 / p95 / allocated | Conditional p50 / p95 / allocated |
+| --- | ---: | ---: | ---: |
+| No-op (32 attempts) | 131.348 / 153.623 μs / 74,768 B | 177.855 / 375.708 μs / 80,144 B | 590.307 / 1,084.492 μs / 75,800 B |
+| Scoped + transitive disposable (32 attempts) | 219.800 / 342.444 μs / 88,296 B | 167.975 / 426.352 μs / 104,584 B | 891.163 / 1,233.845 μs / 104,592 B |
+| Mixed intrinsic/activity (128 operations) | 10.283 / 11.074 μs / 21,624 B | 47.118 / 94.594 μs / 24,312 B | 55.923 / 116.168 μs / 22,144 B |
+| Retry (2 attempts) | 3.360 / 3.844 μs / 5,448 B | 51.792 / 99.024 μs / 5,784 B | 5.639 / 8.212 μs / 5,792 B |
+| Concurrent drain (32 attempts) | 415.681 / 1,133.462 μs / 89,256 B | 711.186 / 1,232.076 μs / 105,192 B | 268.739 / 489.205 μs / 105,208 B |
+
+The full table, environment, raw iteration log, throughput, and all nine workloads are retained in
+[the 2026-07-16 Apple M2/.NET 10 benchmark results](../../benchmarks/Elsa/Activities/Runtime/Benchmarks/results/2026-07-16-m2-net10/README.md).
+The run used BenchmarkDotNet 0.15.8, .NET SDK 10.0.300, .NET 10.0.8 Arm64, one launch, three warmups,
+and twelve measured iterations. macOS denied the optional high-priority request; the complete run was
+otherwise isolated from repository builds. Variance makes the microtimings directional, not a claim
+of nanosecond precision. The semantic isolation/disposal gates therefore decide first, with the
+measurements showing that their allocation cost remains bounded and intrinsics pay no scope cost.
+
+Request-affine transports follow the same boundary: for example, synchronous HTTP delivery consumes
+the committed typed `HttpResponseInstruction` after the inline drain instead of injecting an
+`HttpContext` or request-scoped sink into the activity attempt.
 
 ## Alternatives considered
 
