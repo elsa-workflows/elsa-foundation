@@ -28,7 +28,8 @@ public sealed class PortableExpressionEvaluator : IPortableExpressionEvaluator
     {
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
-        if (!StringComparer.Ordinal.Equals(request.Definition.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
+        if (!request.Capabilities.IsBindingPure ||
+            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingPureV1))
         {
             throw new InvalidOperationException(
                 $"Portable expression evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'. " +

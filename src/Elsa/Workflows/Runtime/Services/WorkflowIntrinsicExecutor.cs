@@ -596,7 +596,23 @@ public sealed class WorkflowIntrinsicExecutor(
             variableEnvelopes: frameEnvelopes);
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
-            throw new NotSupportedException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot evaluate portable expressions until the explicit-parameter expression executor is available.");
+        {
+            var expression = resolved.Expression
+                ?? throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' resolved an expression without its portable definition.");
+            if (binding.EffectivePolicy.Lifecycle == DurableValueLifecycle.None)
+                throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist transient expression input '{binding.InputName}'.");
+
+            var evaluated = await RuntimeActivityInputMaterializer.EvaluatePortableExpressionAsync(
+                expression,
+                binding.TargetType,
+                intrinsicState.Execution.ExecutableNodeId,
+                binding.InputName,
+                context,
+                cancellationToken);
+            return evaluated.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy)
+                : ValueEnvelope.Inline(binding.TargetType, evaluated, binding.EffectivePolicy);
+        }
         var source = resolved.Envelope
             ?? throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' resolved '{binding.InputName}' without its source value envelope.");
         if (source.Presence == ValuePresence.Absent)

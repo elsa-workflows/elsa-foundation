@@ -364,44 +364,49 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no service provider was supplied to evaluate it.");
 
         if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.LegacyAmbientV1))
-        {
-            var portableEvaluator = serviceProvider.GetService(typeof(IPortableExpressionEvaluator)) as IPortableExpressionEvaluator
-                ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no '{nameof(IPortableExpressionEvaluator)}' is registered.");
-            var definition = new ExpressionDefinition(
-                expression.Language,
-                expression.Expression,
-                targetType.ToTypeReference(),
-                expression.Parameters,
-                expression.Options,
-                expression.CapabilityProfile,
-                expression.Metadata);
-            var request = new ExpressionEvaluationRequest(
-                definition,
-                MaterializePortableParameters(expression, resolutionContext, nodeId, inputName),
-                cancellationToken);
+            return await EvaluatePortableExpressionAsync(expression, targetType, nodeId, inputName, resolutionContext, cancellationToken);
 
-            try
-            {
-                return await portableEvaluator.EvaluateAsync(request);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its portable '{expression.Language}' expression.", exception);
-            }
-        }
+        return await LegacyAmbientExpressionMaterializer.EvaluateAsync(
+            expression, type, nodeId, inputName, resolutionContext, cancellationToken);
+    }
 
-        var evaluator = serviceProvider.GetService(typeof(IExpressionEvaluator)) as IExpressionEvaluator
-            ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no '{nameof(IExpressionEvaluator)}' is registered.");
-        var executionContext = new MaterializationExpressionExecutionContext(resolutionContext, serviceProvider, cancellationToken);
-        var expressionValue = BuildExpressionValue(expression);
+    /// <summary>
+    /// Evaluates one canonical expression binding from its closed parameter snapshot. This is shared
+    /// by activity input materialization and engine intrinsics; it never constructs or accepts an
+    /// <see cref="IExpressionExecutionContext"/>.
+    /// </summary>
+    internal static async ValueTask<JsonElement> EvaluatePortableExpressionAsync(
+        RuntimeExpressionBinding expression,
+        ValueTypeDescriptor targetType,
+        string nodeId,
+        string inputName,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        if (StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.LegacyAmbientV1))
+            throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' cannot use the legacy ambient capability profile.");
+
+        var serviceProvider = resolutionContext.ServiceProvider
+            ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no service provider was supplied to evaluate it.");
+        var portableEvaluator = serviceProvider.GetService(typeof(IPortableExpressionEvaluator)) as IPortableExpressionEvaluator
+            ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no '{nameof(IPortableExpressionEvaluator)}' is registered.");
+        var definition = new ExpressionDefinition(
+            expression.Language,
+            expression.Expression,
+            targetType.ToTypeReference(),
+            expression.Parameters,
+            expression.Options,
+            expression.CapabilityProfile,
+            expression.Metadata);
+        var request = new ExpressionEvaluationRequest(
+            definition,
+            MaterializePortableParameters(expression, resolutionContext, nodeId, inputName),
+            cancellationToken);
 
         try
         {
-            return await evaluator.EvaluateAsync(new RuntimeExpression(expression.Language, expressionValue), type, executionContext);
+            return await portableEvaluator.EvaluateAsync(request);
         }
         catch (OperationCanceledException)
         {
@@ -409,7 +414,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         }
         catch (Exception exception)
         {
-            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its '{expression.Language}' expression.", exception);
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its portable '{expression.Language}' expression.", exception);
         }
     }
 
@@ -574,28 +579,6 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     }
 
     /// <summary>
-    /// Produces the value handed to the registered expression handler. A <c>Variable</c> expression's
-    /// text is a JSON-encoded structured <see cref="VariableReference"/> (reference key plus optional
-    /// declaring scope); it is parsed back into a <see cref="JsonElement"/> so the variable handler's
-    /// <see cref="VariableReference.TryParse"/> recovers the declaring scope rather than treating the
-    /// whole JSON blob as a bare reference key. Other languages pass their raw source text.
-    /// </summary>
-    private static object? BuildExpressionValue(RuntimeExpressionBinding expression)
-    {
-        if (!string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Variable, StringComparison.Ordinal))
-            return expression.Expression;
-
-        try
-        {
-            return JsonSerializer.Deserialize<JsonElement>(expression.Expression);
-        }
-        catch (JsonException)
-        {
-            return expression.Expression;
-        }
-    }
-
-    /// <summary>
     /// Coerces an evaluated expression result to the input's declared <paramref name="type"/> when it
     /// is a <see cref="JsonElement"/>. Scoped variable values round-trip through the container
     /// execution's persisted snapshot as JSON, so a non-string variable (e.g. an <c>int</c>) assigned
@@ -668,14 +651,6 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares type '{typeName}', but that type could not be loaded.");
     }
 
-    private sealed class RuntimeExpression(string type, object? value) : IExpression
-    {
-        public string Type { get; set; } = type;
-        public object? Value { get; set; } = value;
-
-        public TValue GetValue<TValue>() => (TValue)Value!;
-    }
-
     private sealed class LiteralMemoryBlockReference(string id) : IMemoryBlockReference
     {
         public string Id { get; set; } = id;
@@ -722,104 +697,127 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     }
 
     /// <summary>
-    /// <see cref="IExpressionExecutionContext"/> used to evaluate input expressions before the activity
-    /// (and therefore its real execution context) exists. It exposes the request-scoped service provider the
-    /// expression handlers need, plus the workflow variables, workflow inputs, and prior activity outputs
-    /// carried by the <see cref="RuntimeInputBindingResolutionContext"/>, so that references such as
-    /// <c>variables.foo</c>, <c>input.bar</c>, and prior-output accessors resolve. It also implements
-    /// <see cref="IMaterializationExpressionState"/> so language-specific pre-processors can surface those
-    /// values without a live workflow execution context.
+    /// Compatibility-only evaluator for executable artifacts that still carry the explicit
+    /// <c>legacy-ambient-v1</c> profile. Canonical portable expressions never enter this adapter.
     /// </summary>
-    private sealed class MaterializationExpressionExecutionContext(
-        RuntimeInputBindingResolutionContext resolutionContext,
-        IServiceProvider serviceProvider,
-        CancellationToken cancellationToken)
-        : IExpressionExecutionContext, IMaterializationExpressionState, IScopedVariableProvider
+    private static class LegacyAmbientExpressionMaterializer
     {
-        public IReadOnlyDictionary<string, object?> WorkflowVariables => resolutionContext.WorkflowVariables;
-        public IReadOnlyDictionary<string, object?> WorkflowInputs => resolutionContext.WorkflowInputs;
-        public IReadOnlyDictionary<string, object?> ActivityOutputValues => resolutionContext.ActivityOutputValues;
-
-        public IMemoryRegister Memory => null!;
-        public IExpressionExecutionContext? ParentContext { get => null; set { } }
-        public CancellationToken CancellationToken { get; } = cancellationToken;
-
-        public object? GetRequiredService(Type type) => serviceProvider.GetService(type)
-            ?? throw new InvalidOperationException($"Required service '{type.FullName}' is not registered.");
-
-        public bool IsContainedWithinCompositeActivity() => false;
-        // Activity inputs are composite-activity scoped and do not exist at materialization time; only workflow inputs are available.
-        public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }
-        public bool TryGetWorkflowInput(string key, out object? value) => WorkflowInputs.TryGetValue(key, out value);
-        public object? GetVariableValueOrDefault(string variableName) => WorkflowVariables.GetValueOrDefault(variableName);
-        public string GetCorrelationId() => string.Empty;
-        public string GetWorkflowDefinitionId() => string.Empty;
-        public string GetWorkflowDefinitionVersionId() => string.Empty;
-        public int GetWorkflowDefinitionVersion() => 0;
-        public string GetWorkflowInstanceId() => resolutionContext.WorkflowExecutionId;
-
-        public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => blockReference.Declare();
-        public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) { block = null!; return false; }
-        public T? Get<T>(IMemoryBlockReference blockReference) => (T?)blockReference.Declare().Value;
-        public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null) { }
-
-        public IVariable? GetVariable(string name, bool localScopeOnly = false) =>
-            WorkflowVariables.TryGetValue(name, out var value) ? new MaterializationVariable(name, value) : null;
-
-        public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null) => new MaterializationVariable(name, value);
-
-        public IEnumerable<IVariable> EnumerateVariablesInScope() =>
-            WorkflowVariables.Select(entry => new MaterializationVariable(entry.Key, entry.Value)).ToArray();
-
-        // IScopedVariableProvider — resolves structured/name-based variable access through the visible
-        // scope chain threaded from the runtime (workflow + ancestor container scopes, ADR 0027). When
-        // no scope chain is present these return false/empty so the variable handler falls back to its
-        // workflow-scoped behaviour.
-        public bool TryGetScopedVariableValue(VariableReference reference, out object? value)
+        public static async ValueTask<object?> EvaluateAsync(
+            RuntimeExpressionBinding expression,
+            Type returnType,
+            string nodeId,
+            string inputName,
+            RuntimeInputBindingResolutionContext resolutionContext,
+            CancellationToken cancellationToken)
         {
-            if (resolutionContext.VariableScope is { } scope && scope.TryGetValue(reference, out value))
-                return true;
+            if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.LegacyAmbientV1))
+                throw new InvalidOperationException("The ambient compatibility evaluator only accepts legacy-ambient-v1 expressions.");
+            var serviceProvider = resolutionContext.ServiceProvider
+                ?? throw new InvalidOperationException($"Legacy expression input '{inputName}' on executable node '{nodeId}' has no evaluation service scope.");
+            var evaluator = serviceProvider.GetService(typeof(IExpressionEvaluator)) as IExpressionEvaluator
+                ?? throw new InvalidOperationException($"Legacy expression input '{inputName}' on executable node '{nodeId}' requires an '{nameof(IExpressionEvaluator)}'.");
+            var context = new LegacyMaterializationContext(resolutionContext, serviceProvider, cancellationToken);
 
-            value = null;
-            return false;
+            try
+            {
+                return await evaluator.EvaluateAsync(
+                    new LegacyRuntimeExpression(expression.Language, BuildValue(expression)),
+                    returnType,
+                    context);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException($"Legacy expression input '{inputName}' on executable node '{nodeId}' failed to evaluate.", exception);
+            }
         }
 
-        public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
-            resolutionContext.VariableScope?.TrySetValue(reference, value) ?? false;
-
-        public IReadOnlyCollection<IVariable> GetVisibleVariables() =>
-            resolutionContext.VariableScope?.EnumerateVisibleVariables() ?? [];
-
-        public bool TryGetVariableValueByName(string name, out object? value)
+        private static object? BuildValue(RuntimeExpressionBinding expression)
         {
-            if (resolutionContext.VariableScope is { } scope && scope.TryGetValueByName(name, out value))
-                return true;
+            if (!StringComparer.Ordinal.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Variable))
+                return expression.Expression;
 
-            value = null;
-            return false;
+            try
+            {
+                return JsonSerializer.Deserialize<JsonElement>(expression.Expression);
+            }
+            catch (JsonException)
+            {
+                return expression.Expression;
+            }
         }
 
-        public bool TrySetVariableValueByName(string name, object? value) =>
-            resolutionContext.VariableScope?.TrySetValueByName(name, value) ?? false;
+        private sealed class LegacyRuntimeExpression(string type, object? value) : IExpression
+        {
+            public string Type { get; set; } = type;
+            public object? Value { get; set; } = value;
+            public TValue GetValue<TValue>() => (TValue)Value!;
+        }
+
+        private sealed class LegacyMaterializationContext(
+            RuntimeInputBindingResolutionContext resolutionContext,
+            IServiceProvider serviceProvider,
+            CancellationToken cancellationToken)
+            : IExpressionExecutionContext, IMaterializationExpressionState, IScopedVariableProvider
+        {
+            public IReadOnlyDictionary<string, object?> WorkflowVariables => resolutionContext.WorkflowVariables;
+            public IReadOnlyDictionary<string, object?> WorkflowInputs => resolutionContext.WorkflowInputs;
+            public IReadOnlyDictionary<string, object?> ActivityOutputValues => resolutionContext.ActivityOutputValues;
+            public IMemoryRegister Memory => null!;
+            public IExpressionExecutionContext? ParentContext { get => null; set { } }
+            public CancellationToken CancellationToken { get; } = cancellationToken;
+            public object? GetRequiredService(Type type) => serviceProvider.GetService(type)
+                ?? throw new InvalidOperationException($"Required legacy expression service '{type.FullName}' is not registered.");
+            public bool IsContainedWithinCompositeActivity() => false;
+            public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }
+            public bool TryGetWorkflowInput(string key, out object? value) => WorkflowInputs.TryGetValue(key, out value);
+            public object? GetVariableValueOrDefault(string variableName) => WorkflowVariables.GetValueOrDefault(variableName);
+            public string GetCorrelationId() => string.Empty;
+            public string GetWorkflowDefinitionId() => string.Empty;
+            public string GetWorkflowDefinitionVersionId() => string.Empty;
+            public int GetWorkflowDefinitionVersion() => 0;
+            public string GetWorkflowInstanceId() => resolutionContext.WorkflowExecutionId;
+            public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => blockReference.Declare();
+            public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) { block = null!; return false; }
+            public T? Get<T>(IMemoryBlockReference blockReference) => (T?)blockReference.Declare().Value;
+            public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null) { }
+            public IVariable? GetVariable(string name, bool localScopeOnly = false) =>
+                WorkflowVariables.TryGetValue(name, out var value) ? new LegacyVariable(name, value) : null;
+            public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null) => new LegacyVariable(name, value);
+            public IEnumerable<IVariable> EnumerateVariablesInScope() =>
+                WorkflowVariables.Select(entry => new LegacyVariable(entry.Key, entry.Value)).ToArray();
+            public bool TryGetScopedVariableValue(VariableReference reference, out object? value) =>
+                resolutionContext.VariableScope?.TryGetValue(reference, out value) ?? ReturnFalse(out value);
+            public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
+                resolutionContext.VariableScope?.TrySetValue(reference, value) ?? false;
+            public IReadOnlyCollection<IVariable> GetVisibleVariables() =>
+                resolutionContext.VariableScope?.EnumerateVisibleVariables() ?? [];
+            public bool TryGetVariableValueByName(string name, out object? value) =>
+                resolutionContext.VariableScope?.TryGetValueByName(name, out value) ?? ReturnFalse(out value);
+            public bool TrySetVariableValueByName(string name, object? value) =>
+                resolutionContext.VariableScope?.TrySetValueByName(name, value) ?? false;
+
+            private static bool ReturnFalse(out object? value)
+            {
+                value = null;
+                return false;
+            }
+        }
+
+        private sealed class LegacyVariable(string name, object? value) : IVariable
+        {
+            public string Id { get; set; } = $"legacy-variable:{name}";
+            public string Name { get; set; } = name;
+            public object? DefaultValue { get; set; } = value;
+            public Type? StorageDriverType { get; set; }
+            public IMemoryBlock Declare() => new LiteralMemoryBlock { Value = DefaultValue };
+            public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
+            public object? Get(IExpressionExecutionContext context) => DefaultValue;
+            public T? Get<T>(IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
+        }
     }
 
-    /// <summary>
-    /// Read-only <see cref="IVariable"/> backed by a fixed materialization-time value. Exposes the value
-    /// to the standard variable accessors (e.g. <see cref="IExpressionExecutionContext.GetVariableInScope"/>).
-    /// </summary>
-    private sealed class MaterializationVariable(string name, object? value) : IVariable
-    {
-        public string Id { get; set; } = $"variable:{name}";
-        public string Name { get; set; } = name;
-        public object? DefaultValue { get; set; } = value;
-        public Type? StorageDriverType { get; set; }
-
-        public IMemoryBlock Declare() => new LiteralMemoryBlock { Value = DefaultValue };
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
-
-        public object? Get(IExpressionExecutionContext context) => DefaultValue;
-
-        public T? Get<T>(IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
-    }
 }

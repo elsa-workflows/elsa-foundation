@@ -92,6 +92,23 @@ public sealed class ExpressionDefinitionContractTests
     }
 
     [Fact]
+    public void Evaluation_request_resolves_an_explicit_immutable_capability_contract()
+    {
+        var request = new ExpressionEvaluationRequest(
+            Definition(new Dictionary<string, ExpressionParameterBinding>()),
+            new Dictionary<string, JsonElement>(),
+            CancellationToken.None);
+
+        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, request.Capabilities.Profile);
+        Assert.True(request.Capabilities.IsBindingPure);
+        Assert.True(request.Capabilities.AllowsDeterministicTransforms);
+        Assert.False(request.Capabilities.AllowsAmbientWorkflowState);
+        Assert.False(request.Capabilities.AllowsMutation);
+        Assert.False(request.Capabilities.AllowsServiceLocation);
+        Assert.False(request.Capabilities.AllowsNondeterminism);
+    }
+
+    [Fact]
     public void Portable_contract_surface_cannot_carry_delegates_execution_contexts_or_service_locators()
     {
         var contractTypes = new[]
@@ -103,6 +120,7 @@ public sealed class ExpressionDefinitionContractTests
             typeof(VariableExpressionParameterBinding),
             typeof(ActivityResultExpressionParameterBinding),
             typeof(ExpressionEvaluationRequest),
+            typeof(ExpressionEvaluationCapabilities),
             typeof(IPortableExpressionEvaluator),
             typeof(IPortableExpressionHandler)
         };

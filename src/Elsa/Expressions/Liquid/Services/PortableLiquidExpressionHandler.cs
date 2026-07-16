@@ -32,7 +32,8 @@ public sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPorta
         var definition = request.Definition;
         if (!StringComparer.Ordinal.Equals(definition.Language, Language))
             throw new ArgumentException($"Expected a {Language} expression, but received '{definition.Language}'.", nameof(request));
-        if (!StringComparer.Ordinal.Equals(definition.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
+        if (!request.Capabilities.IsBindingPure ||
+            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingPureV1))
             throw new InvalidOperationException($"Liquid binding evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
         if (!parser.TryParse(definition.Source, out var template, out var error))
             throw new InvalidOperationException($"Failed to parse Liquid binding expression: {error}");

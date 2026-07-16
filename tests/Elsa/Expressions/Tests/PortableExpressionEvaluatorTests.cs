@@ -54,6 +54,10 @@ public sealed class PortableExpressionEvaluatorTests
 
         Assert.Contains(ExpressionCapabilityProfiles.BindingPureV1, exception.Message, StringComparison.Ordinal);
         Assert.Contains(ExpressionCapabilityProfiles.LegacyAmbientV1, exception.Message, StringComparison.Ordinal);
+        Assert.False(Request(
+            "JavaScript",
+            new Dictionary<string, JsonElement>(),
+            ExpressionCapabilityProfiles.LegacyAmbientV1).Capabilities.IsBindingPure);
         Assert.Null(handler.Request);
     }
 

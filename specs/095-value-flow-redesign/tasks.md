@@ -201,7 +201,7 @@ parameters, and reject undeclared reads, mutation, delegates, and ambient nondet
 
 ### Implementation
 
-- [ ] T073 [US5] Replace ambient `IExpressionExecutionContext` with immutable evaluation request/parameters/capability contracts in `src/Elsa/Expressions/Core/Contracts/`
+- [X] T073 [US5] Replace ambient `IExpressionExecutionContext` with immutable evaluation request/parameters/capability contracts in `src/Elsa/Expressions/Core/Contracts/`
 - [X] T074 [US5] Extend executable expression bindings and deterministic hashing with normalized parameter bindings and options in `src/Elsa/Workflows/Runtime/Core/Models/RuntimeExpressionBinding.cs`
 - [X] T075 [US5] Restrict JavaScript binding evaluation to read-only declared `args` and constructor-injected evaluator infrastructure in `src/Elsa/Expressions/JavaScript/` and `Jint/`
 - [X] T076 [US5] Restrict Liquid binding evaluation to declared parameters in `src/Elsa/Expressions/Liquid/`

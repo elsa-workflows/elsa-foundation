@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Expressions.Core.Models;
@@ -198,6 +199,7 @@ public sealed class ExpressionEvaluationRequest
         }
 
         Definition = definition;
+        Capabilities = ExpressionEvaluationCapabilities.Resolve(definition.CapabilityProfile);
         ParameterValues = new ReadOnlyDictionary<string, JsonElement>(
             parameterValues.OrderBy(item => item.Key, StringComparer.Ordinal)
                 .ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal));
@@ -205,6 +207,7 @@ public sealed class ExpressionEvaluationRequest
     }
 
     public ExpressionDefinition Definition { get; }
+    public ExpressionEvaluationCapabilities Capabilities { get; }
     public IReadOnlyDictionary<string, JsonElement> ParameterValues { get; }
     public CancellationToken CancellationToken { get; }
 }

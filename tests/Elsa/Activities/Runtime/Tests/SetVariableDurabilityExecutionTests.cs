@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -6,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -47,6 +49,26 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Single(harness.CommitStore.ListCommits());
         persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
         Assert.Equal(1, persistedWorkflow!.RootVariableFrame!.Revision);
+    }
+
+    [Fact]
+    public async Task Set_intrinsic_evaluates_only_declared_portable_expression_parameters()
+    {
+        var evaluator = new RecordingPortableEvaluator();
+        var services = new ServiceCollection().AddSingleton<IPortableExpressionEvaluator>(evaluator);
+        await using var provider = services.BuildServiceProvider();
+        var harness = await CreateHarnessAsync(
+            NewPortableExpressionVariableWriteNode(),
+            provider.GetRequiredService<IServiceScopeFactory>());
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal("initial:updated", persistedWorkflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
+        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, evaluator.Request!.Capabilities.Profile);
+        Assert.Equal(["current", "suffix"], evaluator.Request.ParameterValues.Keys);
+        Assert.Equal("initial", evaluator.Request.ParameterValues["current"].GetString());
+        Assert.Equal("updated", evaluator.Request.ParameterValues["suffix"].GetString());
     }
 
     [Theory]
@@ -163,6 +185,42 @@ public sealed class SetVariableDurabilityExecutionTests
             intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
     }
 
+    private static ExecutableNode NewPortableExpressionVariableWriteNode()
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var expression = new RuntimeExpressionBinding(
+            "TestPortable",
+            "args.current + ':' + args.suffix",
+            new RuntimeValueTypeDescriptor("alias", "String", null),
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["current"] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, "greeting"),
+                ["suffix"] = new LiteralExpressionParameterBinding(JsonSerializer.SerializeToElement("updated"))
+            },
+            options: JsonSerializer.SerializeToElement(new { }),
+            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
+        return new ExecutableNode(
+            "node-set-expression",
+            "authored-set-expression",
+            "elsa.intrinsic.set",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Value] = new(
+                    WorkflowIntrinsicInputKeys.Value,
+                    StringType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Expression,
+                    expression: expression)
+            },
+            new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
+    }
+
     private static ExecutableNode NewTerminalNode(WorkflowIntrinsicKind intrinsicKind)
     {
         using var descriptor = JsonDocument.Parse("{}");
@@ -223,7 +281,9 @@ public sealed class SetVariableDurabilityExecutionTests
         RuntimeInputBindingSource.Literal,
         literal: Envelope(value));
 
-    private static async Task<Harness> CreateHarnessAsync(ExecutableNode node)
+    private static async Task<Harness> CreateHarnessAsync(
+        ExecutableNode node,
+        IServiceScopeFactory? serviceScopeFactory = null)
     {
         var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
         var executable = new WorkflowExecutable(identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>());
@@ -257,6 +317,7 @@ public sealed class SetVariableDurabilityExecutionTests
             committer,
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             new FixedTimeProvider(Now),
+            serviceScopeFactory: serviceScopeFactory,
             intrinsicExecutor: executor);
         return new Harness(
             handler,
@@ -333,6 +394,18 @@ public sealed class SetVariableDurabilityExecutionTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class RecordingPortableEvaluator : IPortableExpressionEvaluator
+    {
+        public ExpressionEvaluationRequest? Request { get; private set; }
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
+        {
+            Request = request;
+            var value = $"{request.ParameterValues["current"].GetString()}:{request.ParameterValues["suffix"].GetString()}";
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(value));
+        }
     }
 
     private sealed record Harness(

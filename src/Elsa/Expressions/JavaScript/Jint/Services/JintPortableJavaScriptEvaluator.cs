@@ -20,7 +20,8 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         request.CancellationToken.ThrowIfCancellationRequested();
 
         var definition = request.Definition;
-        if (!StringComparer.Ordinal.Equals(definition.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
+        if (!request.Capabilities.IsBindingPure ||
+            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingPureV1))
             throw new InvalidOperationException($"JavaScript binding evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
         if (definition.Options.EnumerateObject().Any())
             throw new InvalidOperationException("The JavaScript binding-pure-v1 evaluator does not support evaluator options.");
