@@ -58,6 +58,22 @@ public sealed class ExecutableNode
         {
             throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires an '{WorkflowIntrinsicInputKeys.Outcome}' input binding.", nameof(inputBindings));
         }
+        else if (intrinsicKind is WorkflowIntrinsicKind.SetCorrelationId or WorkflowIntrinsicKind.SetInstanceName &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a '{WorkflowIntrinsicInputKeys.Value}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.SetOutput &&
+                 (!inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Name) ||
+                  !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value)))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires '{WorkflowIntrinsicInputKeys.Name}' and '{WorkflowIntrinsicInputKeys.Value}' input bindings.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.Finish &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Outcome))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires an '{WorkflowIntrinsicInputKeys.Outcome}' input binding.", nameof(inputBindings));
+        }
         else if (intrinsicVariable is not null)
         {
             throw new ArgumentException("Only variable-writing intrinsics can carry a variable target.", nameof(intrinsicVariable));
@@ -113,11 +129,16 @@ public enum WorkflowIntrinsicKind
     Merge,
     Reduce,
     Return,
-    Control
+    Control,
+    SetCorrelationId,
+    SetInstanceName,
+    SetOutput,
+    Finish
 }
 
 public static class WorkflowIntrinsicInputKeys
 {
     public const string Value = "value";
     public const string Outcome = "outcome";
+    public const string Name = "name";
 }

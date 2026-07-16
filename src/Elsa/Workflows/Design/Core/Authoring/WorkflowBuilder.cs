@@ -22,6 +22,10 @@ public interface ISequenceBuilder
     void Set<T>(Variable<T> variable, WorkflowValue<T> value);
     void Merge<T>(Variable<T> variable, WorkflowValue<T> mergedValue);
     void Reduce<T>(Variable<T> variable, WorkflowValue<T> reducedValue);
+    void SetCorrelationId(WorkflowValue<string> correlationId);
+    void SetInstanceName(WorkflowValue<string> instanceName);
+    void SetOutput<T>(string outputKey, WorkflowValue<T> value);
+    void Finish(string outcomeKey = "Done");
     void Return<T>(WorkflowValue<T> result);
     void Control(string outcomeKey);
     ActivityCall<TResult> Add<TActivity, TResult>(
@@ -131,6 +135,18 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
 
     public void Reduce<T>(Variable<T> variable, WorkflowValue<T> reducedValue)
         => _root.Reduce(variable, reducedValue);
+
+    public void SetCorrelationId(WorkflowValue<string> correlationId)
+        => _root.SetCorrelationId(correlationId);
+
+    public void SetInstanceName(WorkflowValue<string> instanceName)
+        => _root.SetInstanceName(instanceName);
+
+    public void SetOutput<T>(string outputKey, WorkflowValue<T> value)
+        => _root.SetOutput(outputKey, value);
+
+    public void Finish(string outcomeKey = "Done")
+        => _root.Finish(outcomeKey);
 
     public void Control(string outcomeKey)
         => _root.Control(outcomeKey);
@@ -246,6 +262,37 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
         public void Reduce<T>(Variable<T> variable, WorkflowValue<T> reducedValue)
             => AddVariableWriteIntrinsic(AuthoredWorkflowIntrinsicKind.Reduce, variable, reducedValue);
 
+        public void SetCorrelationId(WorkflowValue<string> correlationId)
+            => AddValueEffectIntrinsic(AuthoredWorkflowIntrinsicKind.SetCorrelationId, correlationId);
+
+        public void SetInstanceName(WorkflowValue<string> instanceName)
+            => AddValueEffectIntrinsic(AuthoredWorkflowIntrinsicKind.SetInstanceName, instanceName);
+
+        public void SetOutput<T>(string outputKey, WorkflowValue<T> value)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(outputKey);
+            ArgumentNullException.ThrowIfNull(value);
+            EnsureVisible(value.Scope);
+            AddIntrinsic(
+                WorkflowIntrinsicAuthoringIds.SetOutput,
+                new AuthoredWorkflowIntrinsic(
+                    AuthoredWorkflowIntrinsicKind.SetOutput,
+                    TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias)),
+                [
+                    new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Name, new ArgumentValue(outputKey, AuthoringExpressionTypes.Literal), null, null, null, null),
+                    new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Value, value.Lower(), null, null, null, null)
+                ]);
+        }
+
+        public void Finish(string outcomeKey = "Done")
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(outcomeKey);
+            AddIntrinsic(
+                WorkflowIntrinsicAuthoringIds.Finish,
+                new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Finish),
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, new ArgumentValue(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
+        }
+
         public void Return<T>(WorkflowValue<T> result)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -348,6 +395,24 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                 [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Value, value.Lower(), null, null, null, null)]);
         }
 
+        private void AddValueEffectIntrinsic<T>(AuthoredWorkflowIntrinsicKind kind, WorkflowValue<T> value)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            EnsureVisible(value.Scope);
+            var id = kind switch
+            {
+                AuthoredWorkflowIntrinsicKind.SetCorrelationId => WorkflowIntrinsicAuthoringIds.SetCorrelationId,
+                AuthoredWorkflowIntrinsicKind.SetInstanceName => WorkflowIntrinsicAuthoringIds.SetInstanceName,
+                _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Intrinsic is not a single-value workflow effect.")
+            };
+            AddIntrinsic(
+                id,
+                new AuthoredWorkflowIntrinsic(
+                    kind,
+                    TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias)),
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Value, value.Lower(), null, null, null, null)]);
+        }
+
         private void AddIntrinsic(
             string activityVersionId,
             AuthoredWorkflowIntrinsic intrinsic,
@@ -422,10 +487,15 @@ internal static class WorkflowIntrinsicAuthoringIds
     public const string Reduce = "elsa.intrinsic.reduce@1";
     public const string Return = "elsa.intrinsic.return@1";
     public const string Control = "elsa.intrinsic.control@1";
+    public const string SetCorrelationId = "elsa.intrinsic.set-correlation-id@1";
+    public const string SetInstanceName = "elsa.intrinsic.set-instance-name@1";
+    public const string SetOutput = "elsa.intrinsic.set-output@1";
+    public const string Finish = "elsa.intrinsic.finish@1";
 }
 
 internal static class WorkflowIntrinsicAuthoringInputKeys
 {
     public const string Value = "value";
     public const string Outcome = "outcome";
+    public const string Name = "name";
 }

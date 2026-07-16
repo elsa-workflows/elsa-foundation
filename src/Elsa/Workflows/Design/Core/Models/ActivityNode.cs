@@ -58,10 +58,12 @@ public sealed record AuthoredWorkflowIntrinsic
             throw new ArgumentException($"Authored workflow intrinsic '{kind}' requires a variable target.", nameof(variable));
         if (!writesVariable && variable is not null)
             throw new ArgumentException($"Authored workflow intrinsic '{kind}' cannot carry a variable target.", nameof(variable));
-        if (kind is not AuthoredWorkflowIntrinsicKind.Control && valueType is null)
+        var carriesValue = kind is not AuthoredWorkflowIntrinsicKind.Control and
+            not AuthoredWorkflowIntrinsicKind.Finish;
+        if (carriesValue && valueType is null)
             throw new ArgumentException($"Authored workflow intrinsic '{kind}' requires a portable value type.", nameof(valueType));
-        if (kind is AuthoredWorkflowIntrinsicKind.Control && valueType is not null)
-            throw new ArgumentException("A control intrinsic carries an outcome key rather than a workflow value type.", nameof(valueType));
+        if (!carriesValue && valueType is not null)
+            throw new ArgumentException($"A {kind} intrinsic carries an outcome key rather than a workflow value type.", nameof(valueType));
 
         Kind = kind;
         ValueType = valueType;
@@ -79,7 +81,11 @@ public enum AuthoredWorkflowIntrinsicKind
     Merge,
     Reduce,
     Return,
-    Control
+    Control,
+    SetCorrelationId,
+    SetInstanceName,
+    SetOutput,
+    Finish
 }
 
 /// <summary>

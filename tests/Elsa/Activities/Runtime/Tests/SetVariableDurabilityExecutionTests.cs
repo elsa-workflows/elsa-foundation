@@ -78,6 +78,66 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal([expectedOutcome], payload!.OutcomeNames);
     }
 
+    [Theory]
+    [InlineData(WorkflowIntrinsicKind.SetCorrelationId, "order-42")]
+    [InlineData(WorkflowIntrinsicKind.SetInstanceName, "Order 42")]
+    public async Task Identity_intrinsic_commits_authoritative_state_and_cross_branch_projection_before_continuation(
+        WorkflowIntrinsicKind intrinsicKind,
+        string assignedValue)
+    {
+        var harness = await CreateHarnessAsync(NewEffectNode(intrinsicKind, assignedValue));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.IntrinsicCompleted, commit.Checkpoint.Name);
+        Assert.Single(commit.PostCommitIntents);
+        var workflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        if (intrinsicKind == WorkflowIntrinsicKind.SetCorrelationId)
+            Assert.Equal(assignedValue, workflow!.CorrelationId);
+        else
+            Assert.Equal(assignedValue, workflow!.SystemMetadata[RuntimeMetadataKeys.InstanceName]);
+        var identity = Assert.Single(commit.StateChanges.DurableValues).State;
+        Assert.Equal(assignedValue, identity.InlineValue!.Value.GetString());
+        Assert.Equal(
+            intrinsicKind == WorkflowIntrinsicKind.SetCorrelationId
+                ? RuntimeWorkflowStateSeed.IdentityCorrelationIdName
+                : RuntimeWorkflowStateSeed.IdentityInstanceNameName,
+            identity.Metadata[RuntimeMetadataKeys.IdentityName]);
+    }
+
+    [Fact]
+    public async Task Set_output_intrinsic_commits_typed_named_value_before_continuation()
+    {
+        var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.SetOutput, "accepted"));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        var output = Assert.Single(commit.StateChanges.DurableValues).State;
+        Assert.Equal("output:result", output.ValueId);
+        Assert.Equal("result", output.Metadata[RuntimeMetadataKeys.OutputName]);
+        Assert.Equal("accepted", output.InlineValue!.Value.GetString());
+        Assert.Equal("String", output.Type.Id);
+        Assert.Single(commit.PostCommitIntents);
+    }
+
+    [Fact]
+    public async Task Finish_intrinsic_commits_terminal_workflow_checkpoint_and_schedules_no_continuation()
+    {
+        var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.Finish, "Aborted"));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, commit.Checkpoint.Name);
+        Assert.Empty(commit.PostCommitIntents);
+        Assert.Equal(WorkflowExecutionStatus.Completed, commit.StateChanges.WorkflowExecution!.State.Status);
+        Assert.Equal(Now, commit.StateChanges.WorkflowExecution.State.CompletedAt);
+        var completed = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal("Aborted", completed.Completion!.OutcomeKey);
+    }
+
     private static ExecutableNode NewVariableWriteNode(WorkflowIntrinsicKind intrinsicKind)
     {
         using var descriptor = JsonDocument.Parse("{}" );
@@ -129,6 +189,39 @@ public sealed class SetVariableDurabilityExecutionTests
             new Dictionary<string, string>(),
             intrinsicKind: intrinsicKind);
     }
+
+    private static ExecutableNode NewEffectNode(WorkflowIntrinsicKind intrinsicKind, string value)
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        if (intrinsicKind == WorkflowIntrinsicKind.Finish)
+            bindings[WorkflowIntrinsicInputKeys.Outcome] = LiteralBinding(WorkflowIntrinsicInputKeys.Outcome, value);
+        else
+        {
+            if (intrinsicKind == WorkflowIntrinsicKind.SetOutput)
+                bindings[WorkflowIntrinsicInputKeys.Name] = LiteralBinding(WorkflowIntrinsicInputKeys.Name, "result");
+            bindings[WorkflowIntrinsicInputKeys.Value] = LiteralBinding(WorkflowIntrinsicInputKeys.Value, value);
+        }
+
+        return new ExecutableNode(
+            $"node-{intrinsicKind.ToString().ToLowerInvariant()}",
+            $"authored-{intrinsicKind.ToString().ToLowerInvariant()}",
+            $"elsa.intrinsic.{intrinsicKind.ToString().ToLowerInvariant()}",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            bindings,
+            new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(),
+            intrinsicKind: intrinsicKind);
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string inputName, string value) => new(
+        inputName,
+        StringType,
+        ValueProtectionPolicy.InstanceInline,
+        RuntimeInputBindingSource.Literal,
+        literal: Envelope(value));
 
     private static async Task<Harness> CreateHarnessAsync(ExecutableNode node)
     {

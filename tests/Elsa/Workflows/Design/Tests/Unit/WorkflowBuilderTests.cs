@@ -163,6 +163,28 @@ public sealed class WorkflowBuilderTests
             Children(roundTripped).Select(node => node.Intrinsic!.Kind));
     }
 
+    [Fact]
+    public void Workflow_effects_lower_to_graph_visible_intrinsics_with_static_targets()
+    {
+        var children = Children(new WorkflowEffectsWorkflow().Compile()).ToArray();
+
+        Assert.Equal(
+            [
+                AuthoredWorkflowIntrinsicKind.SetCorrelationId,
+                AuthoredWorkflowIntrinsicKind.SetInstanceName,
+                AuthoredWorkflowIntrinsicKind.SetOutput,
+                AuthoredWorkflowIntrinsicKind.Finish
+            ],
+            children.Select(node => node.Intrinsic!.Kind));
+        Assert.Equal("value", Assert.Single(children[0].Inputs).ReferenceKey);
+        Assert.Equal(["name", "value"], children[2].Inputs.Select(input => input.ReferenceKey).Order(StringComparer.Ordinal));
+        var outputName = Assert.IsType<JsonElement>(children[2].Inputs.Single(input => input.ReferenceKey == "name").Value.Value);
+        Assert.Equal("result", outputName.GetString());
+        var outcome = Assert.IsType<JsonElement>(Assert.Single(children[3].Inputs).Value.Value);
+        Assert.Equal("Aborted", outcome.GetString());
+        Assert.All(children, child => Assert.StartsWith("elsa.intrinsic.", child.ActivityVersionId, StringComparison.Ordinal));
+    }
+
     private static IReadOnlyCollection<ActivityNode> Children(WorkflowDefinitionState state) =>
         state.RootActivity!.Structure!.Payload.GetProperty("activities").Deserialize<ActivityNode[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
 
@@ -313,6 +335,17 @@ public sealed class WorkflowBuilderTests
             workflow.Reduce(items, workflow.Value<IReadOnlyList<string>>(["reduced"]));
             workflow.Control("Approved");
             workflow.Return(workflow.Value("done"));
+        }
+    }
+
+    private sealed class WorkflowEffectsWorkflow : WorkflowDefinition<Request, string>
+    {
+        protected override void Build(IWorkflowBuilder<Request, string> workflow)
+        {
+            workflow.SetCorrelationId(workflow.Value("correlation"));
+            workflow.SetInstanceName(workflow.Value("instance"));
+            workflow.SetOutput("result", workflow.Value("accepted"));
+            workflow.Finish("Aborted");
         }
     }
 }

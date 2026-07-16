@@ -110,34 +110,55 @@ public sealed class ExecutableNodeCompiler(
             AuthoredWorkflowIntrinsicKind.Reduce => WorkflowIntrinsicKind.Reduce,
             AuthoredWorkflowIntrinsicKind.Return => WorkflowIntrinsicKind.Return,
             AuthoredWorkflowIntrinsicKind.Control => WorkflowIntrinsicKind.Control,
+            AuthoredWorkflowIntrinsicKind.SetCorrelationId => WorkflowIntrinsicKind.SetCorrelationId,
+            AuthoredWorkflowIntrinsicKind.SetInstanceName => WorkflowIntrinsicKind.SetInstanceName,
+            AuthoredWorkflowIntrinsicKind.SetOutput => WorkflowIntrinsicKind.SetOutput,
+            AuthoredWorkflowIntrinsicKind.Finish => WorkflowIntrinsicKind.Finish,
             _ => throw new ArgumentOutOfRangeException(nameof(intrinsic.Kind), intrinsic.Kind, "Authored workflow intrinsic kind is not defined.")
         };
-        var inputKey = runtimeKind == WorkflowIntrinsicKind.Control
-            ? WorkflowIntrinsicInputKeys.Outcome
-            : WorkflowIntrinsicInputKeys.Value;
-        var authoredInput = activity.Inputs.SingleOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, inputKey))
-            ?? throw new ArgumentException($"Workflow intrinsic node '{activity.NodeId}' requires one '{inputKey}' input.");
-        if (activity.Inputs.Count() != 1)
-            throw new ArgumentException($"Workflow intrinsic node '{activity.NodeId}' must carry exactly one '{inputKey}' input.");
-
-        var valueType = runtimeKind == WorkflowIntrinsicKind.Control
-            ? new TypeReference("String")
-            : intrinsic.ValueType!;
-        var inputDefinition = new InputDefinition(
-            inputKey,
-            inputKey,
-            valueType,
-            StorageDriverType: null,
-            DisplayName: inputKey,
-            Category: null,
-            IsRequired: true);
-        var binding = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, authoredInput.Value);
-        if (runtimeKind == WorkflowIntrinsicKind.Control &&
-            (binding.Source != RuntimeInputBindingSource.Literal ||
-             binding.Literal is not { Presence: ValuePresence.Present, InlineValue.ValueKind: JsonValueKind.String } outcome ||
-             string.IsNullOrWhiteSpace(outcome.InlineValue.Value.GetString())))
+        var stringType = new TypeReference("String");
+        var inputTypes = runtimeKind switch
         {
-            throw new ArgumentException($"Workflow control intrinsic node '{activity.NodeId}' requires a non-blank literal outcome key.");
+            WorkflowIntrinsicKind.Control or WorkflowIntrinsicKind.Finish =>
+                new Dictionary<string, TypeReference>(StringComparer.Ordinal) { [WorkflowIntrinsicInputKeys.Outcome] = stringType },
+            WorkflowIntrinsicKind.SetOutput =>
+                new Dictionary<string, TypeReference>(StringComparer.Ordinal)
+                {
+                    [WorkflowIntrinsicInputKeys.Name] = stringType,
+                    [WorkflowIntrinsicInputKeys.Value] = intrinsic.ValueType!
+                },
+            _ => new Dictionary<string, TypeReference>(StringComparer.Ordinal) { [WorkflowIntrinsicInputKeys.Value] = intrinsic.ValueType! }
+        };
+        var authoredInputs = activity.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        if (authoredInputs.Count != inputTypes.Count || inputTypes.Keys.Any(key => !authoredInputs.ContainsKey(key)))
+        {
+            throw new ArgumentException(
+                $"Workflow intrinsic node '{activity.NodeId}' requires exactly these inputs: {string.Join(", ", inputTypes.Keys.Order(StringComparer.Ordinal))}.");
+        }
+
+        var bindings = inputTypes.ToDictionary(
+            input => input.Key,
+            input => inputBindingCompiler.Compile(
+                activity.NodeId,
+                new InputDefinition(
+                    input.Key,
+                    input.Key,
+                    input.Value,
+                    StorageDriverType: null,
+                    DisplayName: input.Key,
+                    Category: null,
+                    IsRequired: true),
+                authoredInputs[input.Key].Value),
+            StringComparer.Ordinal);
+        foreach (var literalKey in LiteralIntrinsicKeys(runtimeKind))
+        {
+            var binding = bindings[literalKey];
+            if (binding.Source != RuntimeInputBindingSource.Literal ||
+                binding.Literal is not { Presence: ValuePresence.Present, InlineValue.ValueKind: JsonValueKind.String } literal ||
+                string.IsNullOrWhiteSpace(literal.InlineValue.Value.GetString()))
+            {
+                throw new ArgumentException($"Workflow {runtimeKind} intrinsic node '{activity.NodeId}' requires a non-blank literal '{literalKey}'.");
+            }
         }
         var variable = intrinsic.Variable is null
             ? null
@@ -158,7 +179,7 @@ public sealed class ExecutableNodeCompiler(
             activityTypeVersion: "1.0.0",
             descriptorType: "intrinsic",
             descriptorPayload: descriptorPayload,
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal) { [inputKey] = binding },
+            inputBindings: bindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
             metadata: new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -171,6 +192,13 @@ public sealed class ExecutableNodeCompiler(
             intrinsicKind: runtimeKind,
             intrinsicVariable: variable);
     }
+
+    private static IReadOnlyCollection<string> LiteralIntrinsicKeys(WorkflowIntrinsicKind kind) => kind switch
+    {
+        WorkflowIntrinsicKind.Control or WorkflowIntrinsicKind.Finish => [WorkflowIntrinsicInputKeys.Outcome],
+        WorkflowIntrinsicKind.SetOutput => [WorkflowIntrinsicInputKeys.Name],
+        _ => []
+    };
 
     private static ActivityContract? BuildActivityContract(ActivityDefinitionVersion activityVersion, Type activityType, string activityTypeKey)
     {

@@ -417,7 +417,11 @@ public sealed class WorkflowExecutableCompilerTests
             IntrinsicNode("merge", AuthoredWorkflowIntrinsicKind.Merge, stringList, variable, JsonSerializer.SerializeToElement(new[] { "merge" })),
             IntrinsicNode("reduce", AuthoredWorkflowIntrinsicKind.Reduce, stringList, variable, JsonSerializer.SerializeToElement(new[] { "reduce" })),
             IntrinsicNode("return", AuthoredWorkflowIntrinsicKind.Return, new TypeReference("String"), null, "done"),
-            IntrinsicNode("control", AuthoredWorkflowIntrinsicKind.Control, null, null, "Approved")
+            IntrinsicNode("control", AuthoredWorkflowIntrinsicKind.Control, null, null, "Approved"),
+            IntrinsicNode("correlate", AuthoredWorkflowIntrinsicKind.SetCorrelationId, new TypeReference("String"), null, "order-42"),
+            IntrinsicNode("set-name", AuthoredWorkflowIntrinsicKind.SetInstanceName, new TypeReference("String"), null, "Order 42"),
+            IntrinsicNode("set-output", AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("String"), null, "accepted", "result"),
+            IntrinsicNode("finish", AuthoredWorkflowIntrinsicKind.Finish, null, null, "Aborted")
         };
         var compiler = Compiler(WorkflowVersion(SequenceNode("sequence", nodes)));
 
@@ -429,10 +433,17 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(WorkflowIntrinsicKind.Reduce, compiled["reduce"].IntrinsicKind);
         Assert.Equal(WorkflowIntrinsicKind.Return, compiled["return"].IntrinsicKind);
         Assert.Equal(WorkflowIntrinsicKind.Control, compiled["control"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.SetCorrelationId, compiled["correlate"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.SetInstanceName, compiled["set-name"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.SetOutput, compiled["set-output"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.Finish, compiled["finish"].IntrinsicKind);
         Assert.All(nodes, authored => Assert.Null(compiled[authored.NodeId].ActivityContract));
         Assert.Equal(CollectionKind.List, compiled["merge"].InputBindings[WorkflowIntrinsicInputKeys.Value].TargetType.CollectionKind);
         Assert.Equal("items", compiled["reduce"].IntrinsicVariable!.VariableKey);
         Assert.Equal("Approved", compiled["control"].InputBindings[WorkflowIntrinsicInputKeys.Outcome].LiteralValue!.Value.GetString());
+        Assert.Equal("result", compiled["set-output"].InputBindings[WorkflowIntrinsicInputKeys.Name].LiteralValue!.Value.GetString());
+        Assert.Equal("accepted", compiled["set-output"].InputBindings[WorkflowIntrinsicInputKeys.Value].LiteralValue!.Value.GetString());
+        Assert.Equal("Aborted", compiled["finish"].InputBindings[WorkflowIntrinsicInputKeys.Outcome].LiteralValue!.Value.GetString());
     }
 
     [Fact]
@@ -537,15 +548,20 @@ public sealed class WorkflowExecutableCompilerTests
         AuthoredWorkflowIntrinsicKind kind,
         TypeReference? valueType,
         VariableReference? variable,
-        object value)
+        object value,
+        string? targetName = null)
     {
-        var inputKey = kind == AuthoredWorkflowIntrinsicKind.Control
+        var inputKey = kind is AuthoredWorkflowIntrinsicKind.Control or AuthoredWorkflowIntrinsicKind.Finish
             ? WorkflowIntrinsicInputKeys.Outcome
             : WorkflowIntrinsicInputKeys.Value;
+        var inputs = new List<WorkflowArgumentState>();
+        if (kind == AuthoredWorkflowIntrinsicKind.SetOutput)
+            inputs.Add(new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Name, new ArgumentValue(targetName, "Literal"), null, null, null, null));
+        inputs.Add(new WorkflowArgumentState(inputKey, new ArgumentValue(value, "Literal"), null, null, null, null));
         return new ActivityNode(
             nodeId,
             $"elsa.intrinsic.{kind.ToString().ToLowerInvariant()}@1",
-            [new WorkflowArgumentState(inputKey, new ArgumentValue(value, "Literal"), null, null, null, null)],
+            inputs,
             Outputs: [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(kind, valueType, variable)

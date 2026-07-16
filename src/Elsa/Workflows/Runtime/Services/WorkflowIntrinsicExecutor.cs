@@ -64,6 +64,30 @@ public sealed class WorkflowIntrinsicExecutor(
                 intrinsicKind,
                 serviceProvider,
                 cancellationToken),
+            WorkflowIntrinsicKind.SetCorrelationId or WorkflowIntrinsicKind.SetInstanceName => await ExecuteIdentityEffectAsync(
+                startWorkItem,
+                startPayload,
+                executable,
+                node,
+                intrinsicState,
+                intrinsicKind,
+                serviceProvider,
+                cancellationToken),
+            WorkflowIntrinsicKind.SetOutput => await ExecuteSetOutputAsync(
+                startWorkItem,
+                startPayload,
+                executable,
+                node,
+                intrinsicState,
+                serviceProvider,
+                cancellationToken),
+            WorkflowIntrinsicKind.Finish => await ExecuteFinishAsync(
+                startWorkItem,
+                startPayload,
+                executable,
+                node,
+                intrinsicState,
+                cancellationToken),
             _ => throw new NotSupportedException($"Workflow intrinsic '{intrinsicKind}' is not implemented by the value-flow executor.")
         };
     }
@@ -192,6 +216,142 @@ public sealed class WorkflowIntrinsicExecutor(
             cancellationToken);
     }
 
+    private async ValueTask<RuntimeCheckpointCommit> ExecuteIdentityEffectAsync(
+        RuntimeSchedulerWorkItem startWorkItem,
+        RuntimeStartActivityCommandPayload startPayload,
+        WorkflowExecutable executable,
+        ExecutableNode node,
+        ActivityExecutionState intrinsicState,
+        WorkflowIntrinsicKind intrinsicKind,
+        IServiceProvider? serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        var value = await MaterializeRequiredInputAsync(
+            WorkflowIntrinsicInputKeys.Value,
+            startWorkItem,
+            executable,
+            node,
+            intrinsicState,
+            serviceProvider,
+            cancellationToken);
+        var assigned = ReadOptionalString(value, intrinsicKind, node.ExecutableNodeId);
+        var occurredAt = timeProvider.GetUtcNow();
+        var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException($"{intrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
+        var setsCorrelation = intrinsicKind == WorkflowIntrinsicKind.SetCorrelationId;
+        var changedWorkflow = workflowState with
+        {
+            CorrelationId = setsCorrelation ? assigned : workflowState.CorrelationId,
+            SystemMetadata = setsCorrelation ? workflowState.SystemMetadata : ApplyInstanceName(workflowState.SystemMetadata, assigned)
+        };
+        var durableChanges = RuntimeWorkflowStateSeed.BuildIdentityChanges(
+            startWorkItem.WorkflowExecutionId,
+            setsCorrelation,
+            setsCorrelation ? assigned : null,
+            !setsCorrelation,
+            setsCorrelation ? null : assigned,
+            occurredAt);
+
+        return await CompleteIntrinsicAsync(
+            startWorkItem,
+            startPayload,
+            executable,
+            node,
+            intrinsicState,
+            intrinsicKind,
+            UnitResult(),
+            ["Done"],
+            changedWorkflow,
+            changedActivityOwner: null,
+            metadataAdditions: null,
+            cancellationToken,
+            durableChanges);
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit> ExecuteSetOutputAsync(
+        RuntimeSchedulerWorkItem startWorkItem,
+        RuntimeStartActivityCommandPayload startPayload,
+        WorkflowExecutable executable,
+        ExecutableNode node,
+        ActivityExecutionState intrinsicState,
+        IServiceProvider? serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        var nameBinding = node.InputBindings[WorkflowIntrinsicInputKeys.Name];
+        if (nameBinding.Source != RuntimeInputBindingSource.Literal || nameBinding.Literal is not { } nameLiteral)
+            throw new InvalidOperationException($"SetOutput intrinsic '{node.ExecutableNodeId}' requires a literal output name.");
+        var outputName = ReadRequiredString(nameLiteral, WorkflowIntrinsicKind.SetOutput, node.ExecutableNodeId);
+        var value = await MaterializeRequiredInputAsync(
+            WorkflowIntrinsicInputKeys.Value,
+            startWorkItem,
+            executable,
+            node,
+            intrinsicState,
+            serviceProvider,
+            cancellationToken);
+        var durableChange = NewWorkflowOutputChange(
+            startWorkItem.WorkflowExecutionId,
+            intrinsicState.InvocationId,
+            outputName,
+            value,
+            timeProvider.GetUtcNow());
+
+        return await CompleteIntrinsicAsync(
+            startWorkItem,
+            startPayload,
+            executable,
+            node,
+            intrinsicState,
+            WorkflowIntrinsicKind.SetOutput,
+            UnitResult(),
+            ["Done"],
+            changedWorkflow: null,
+            changedActivityOwner: null,
+            metadataAdditions: null,
+            cancellationToken,
+            [durableChange]);
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit> ExecuteFinishAsync(
+        RuntimeSchedulerWorkItem startWorkItem,
+        RuntimeStartActivityCommandPayload startPayload,
+        WorkflowExecutable executable,
+        ExecutableNode node,
+        ActivityExecutionState intrinsicState,
+        CancellationToken cancellationToken)
+    {
+        var outcomeBinding = node.InputBindings[WorkflowIntrinsicInputKeys.Outcome];
+        if (outcomeBinding.Source != RuntimeInputBindingSource.Literal ||
+            outcomeBinding.Literal is not { } literal)
+            throw new InvalidOperationException($"Finish intrinsic '{node.ExecutableNodeId}' requires a literal outcome key.");
+        var outcome = ReadRequiredString(literal, WorkflowIntrinsicKind.Finish, node.ExecutableNodeId);
+        var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException($"Finish intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
+        var occurredAt = timeProvider.GetUtcNow();
+        var changedWorkflow = workflowState with
+        {
+            Status = WorkflowExecutionStatus.Completed,
+            SubStatus = null,
+            CompletedAt = occurredAt
+        };
+
+        return await CompleteIntrinsicAsync(
+            startWorkItem,
+            startPayload,
+            executable,
+            node,
+            intrinsicState,
+            WorkflowIntrinsicKind.Finish,
+            UnitResult(),
+            [outcome],
+            changedWorkflow,
+            changedActivityOwner: null,
+            metadataAdditions: null,
+            cancellationToken,
+            durableValueChanges: null,
+            terminatesWorkflow: true);
+    }
+
     private async ValueTask<RuntimeCheckpointCommit> CompleteIntrinsicAsync(
         RuntimeSchedulerWorkItem startWorkItem,
         RuntimeStartActivityCommandPayload startPayload,
@@ -204,7 +364,9 @@ public sealed class WorkflowIntrinsicExecutor(
         WorkflowExecutionState? changedWorkflow,
         ActivityExecutionState? changedActivityOwner,
         IReadOnlyDictionary<string, string>? metadataAdditions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null,
+        bool terminatesWorkflow = false)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var completedMetadata = intrinsicState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -243,7 +405,8 @@ public sealed class WorkflowIntrinsicExecutor(
         foreach (var addition in metadataAdditions ?? new Dictionary<string, string>())
             metadataValues[addition.Key] = addition.Value;
         var metadata = RuntimeModelMetadata.Snapshot(metadataValues);
-        var checkpointId = $"checkpoint:{startWorkItem.WorkItemId}:intrinsic:{intrinsicState.InvocationId}";
+        var checkpointName = terminatesWorkflow ? RuntimeCheckpointNames.WorkflowCompleted : RuntimeCheckpointNames.IntrinsicCompleted;
+        var checkpointId = $"checkpoint:{startWorkItem.WorkItemId}:{(terminatesWorkflow ? "workflow-completed" : "intrinsic")}:{intrinsicState.InvocationId}";
         var inspection = await inspectionAccumulator.BuildProjectionAsync(
             completedState,
             checkpointId,
@@ -251,7 +414,9 @@ public sealed class WorkflowIntrinsicExecutor(
             outcomeNames,
             metadata: metadata,
             cancellationToken: cancellationToken);
-        var completionWorkItem = NewCompletionWorkItem(startWorkItem, startPayload, completedState, outcomeNames, occurredAt);
+        var completionWorkItem = terminatesWorkflow
+            ? null
+            : NewCompletionWorkItem(startWorkItem, startPayload, completedState, outcomeNames, occurredAt);
         var activityChanges = new List<RuntimeStateChange<ActivityExecutionState>>
         {
             new(intrinsicState.InvocationId, RuntimeStateChangeOperation.Upsert, completedState, metadata)
@@ -276,7 +441,7 @@ public sealed class WorkflowIntrinsicExecutor(
             CommitId: $"commit:{startWorkItem.WorkItemId}:intrinsic:{intrinsicState.InvocationId}",
             Checkpoint: new RuntimeCheckpoint(
                 checkpointId,
-                RuntimeCheckpointNames.IntrinsicCompleted,
+                checkpointName,
                 startWorkItem.WorkflowExecutionId,
                 occurredAt,
                 [intrinsicState.InvocationId],
@@ -286,7 +451,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 scheduler: null,
                 activityChanges,
                 bookmarks: [],
-                durableValues: [],
+                durableValues: durableValueChanges ?? [],
                 incidents: [],
                 operational: [],
                 activityExecutionInspections:
@@ -297,15 +462,107 @@ public sealed class WorkflowIntrinsicExecutor(
                         inspection,
                         metadata)
                 ]),
-            PostCommitIntents:
-            [
-                SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
-                    startWorkItem,
-                    intrinsicState.InvocationId,
-                    completionWorkItem,
-                    occurredAt)
-            ],
+            PostCommitIntents: completionWorkItem is null
+                ? []
+                : [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(startWorkItem, intrinsicState.InvocationId, completionWorkItem, occurredAt)],
             Metadata: metadata);
+    }
+
+    private async ValueTask<ValueEnvelope> MaterializeRequiredInputAsync(
+        string inputKey,
+        RuntimeSchedulerWorkItem startWorkItem,
+        WorkflowExecutable executable,
+        ExecutableNode node,
+        ActivityExecutionState intrinsicState,
+        IServiceProvider? serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        if (!node.InputBindings.TryGetValue(inputKey, out var binding))
+            throw new InvalidOperationException($"{node.IntrinsicKind} intrinsic '{node.ExecutableNodeId}' has no '{inputKey}' binding.");
+        var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException($"{node.IntrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
+        var runtimeView = await activityExecutionStateStore.ListAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
+        return await MaterializeValueAsync(binding, workflowState, intrinsicState, executable, runtimeView, serviceProvider, cancellationToken);
+    }
+
+    private static ValueEnvelope UnitResult() => ValueEnvelope.Inline(
+        new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit"),
+        JsonSerializer.SerializeToElement(ActivityUnit.Value),
+        ValueProtectionPolicy.InstanceInline);
+
+    private static string ReadRequiredString(ValueEnvelope value, WorkflowIntrinsicKind kind, string nodeId) =>
+        ReadOptionalString(value, kind, nodeId) is { } text && !string.IsNullOrWhiteSpace(text)
+            ? text
+            : throw new InvalidOperationException($"{kind} intrinsic '{nodeId}' requires a non-blank string value.");
+
+    private static string? ReadOptionalString(ValueEnvelope value, WorkflowIntrinsicKind kind, string nodeId)
+    {
+        if (value.Presence == ValuePresence.ExplicitNull)
+            return null;
+        if (value.Presence != ValuePresence.Present || value.InlineValue is not { ValueKind: JsonValueKind.String } json)
+            throw new InvalidOperationException($"{kind} intrinsic '{nodeId}' requires a string or explicit null value.");
+        var text = json.GetString();
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
+    private static IReadOnlyDictionary<string, string> ApplyInstanceName(
+        IReadOnlyDictionary<string, string> source,
+        string? instanceName)
+    {
+        var metadata = source.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        if (instanceName is null)
+            metadata.Remove(RuntimeMetadataKeys.InstanceName);
+        else
+            metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
+        return RuntimeModelMetadata.Snapshot(metadata);
+    }
+
+    private static RuntimeStateChange<DurableValueState> NewWorkflowOutputChange(
+        string workflowExecutionId,
+        string activityExecutionId,
+        string outputName,
+        ValueEnvelope value,
+        DateTimeOffset capturedAt)
+    {
+        var metadata = new Dictionary<string, string>(value.Policy.Metadata, StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.OutputName] = outputName
+        };
+        if (value.Policy.IsSensitive)
+            metadata[RuntimeMetadataKeys.IsSensitive] = bool.TrueString;
+        if (value.Policy.RequiresEncryption)
+            metadata[RuntimeMetadataKeys.RequiresEncryption] = bool.TrueString;
+        if (value.Policy.RedactionMode is not null)
+            metadata[RuntimeMetadataKeys.RedactionMode] = value.Policy.RedactionMode;
+        if (value.Policy.RetentionPolicy is not null)
+            metadata[RuntimeMetadataKeys.RetentionPolicy] = value.Policy.RetentionPolicy;
+
+        var valueId = $"{RuntimeWorkflowStateSeed.OutputValueIdPrefix}{outputName}";
+        var durableValueId = $"durable-{valueId}";
+        JsonElement? inline = value.Presence switch
+        {
+            ValuePresence.Present => value.InlineValue,
+            ValuePresence.ExplicitNull when value.Policy.Storage is DurableValueStorage.Inline or DurableValueStorage.Custom =>
+                JsonSerializer.SerializeToElement<object?>(null),
+            _ => null
+        };
+        var state = new DurableValueState(
+            durableValueId,
+            workflowExecutionId,
+            valueId,
+            new RuntimeValueTypeDescriptor("alias", value.Type.Alias, JsonSerializer.SerializeToElement(value.Type)),
+            value.Policy.Lifecycle,
+            value.Policy.Storage,
+            inline,
+            value.ExternalReference,
+            activityExecutionId,
+            capturedAt,
+            RuntimeModelMetadata.Snapshot(metadata));
+        return new RuntimeStateChange<DurableValueState>(
+            durableValueId,
+            RuntimeStateChangeOperation.Upsert,
+            state,
+            RuntimeModelMetadata.Snapshot(metadata));
     }
 
     private async ValueTask<ValueEnvelope> MaterializeValueAsync(
