@@ -205,8 +205,8 @@ parameters, and reject undeclared reads, mutation, delegates, and ambient nondet
 - [X] T074 [US5] Extend executable expression bindings and deterministic hashing with normalized parameter bindings and options in `src/Elsa/Workflows/Runtime/Core/Models/RuntimeExpressionBinding.cs`
 - [X] T075 [US5] Restrict JavaScript binding evaluation to read-only declared `args` and constructor-injected evaluator infrastructure in `src/Elsa/Expressions/JavaScript/` and `Jint/`
 - [X] T076 [US5] Restrict Liquid binding evaluation to declared parameters in `src/Elsa/Expressions/Liquid/`
-- [ ] T077 [US5] Remove delegate expressions, captured-closure converters, ambient variable/output/workflow accessors, mutation/write-back, service location, time/random/configuration backdoors from canonical binding evaluation in `src/Elsa/Expressions/` and `src/Elsa/Workflows/Runtime/JavaScript/`
-- [ ] T078 [US5] Keep stateful scripting as transient activities returning typed results and requiring separate intrinsic Set operations in `src/Elsa/Activities/Scripting/`
+- [X] T077 [US5] Remove delegate expressions, captured-closure converters, ambient variable/output/workflow accessors, mutation/write-back, service location, time/random/configuration backdoors from canonical binding evaluation in `src/Elsa/Expressions/` and `src/Elsa/Workflows/Runtime/JavaScript/`
+- [X] T078 [US5] Keep stateful scripting as transient activities returning typed results and requiring separate intrinsic Set operations in `src/Elsa/Activities/Scripting/`
 - [ ] T079 [US5] Run expressions, JavaScript, Liquid, activity materialization, hashing, and architecture tests and mark US5 ledger rows implemented/passing
 
 ---
@@ -228,7 +228,7 @@ fresh resume attempt and one committed completion.
 ### Implementation
 
 - [X] T083 [US6] Implement typed `StatefulActivity<TResult,TState,TTrigger>` and resume context contracts in `src/Elsa/Activities/Runtime/Core/Models/`
-- [ ] T084 [US6] Persist immutable private state and typed trigger registrations atomically in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
+- [X] T084 [US6] Persist immutable private state and typed trigger registrations atomically in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
 - [ ] T085 [US6] Validate/deduplicate typed trigger delivery before fresh activation in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`
 - [ ] T086 [US6] Preserve existing start-authority/provider-recognition ordering while adding typed resume metadata in `src/Elsa/Workflows/Runtime/Resumption/`
 - [ ] T087 [US6] Migrate scheduling, HTTP, event, timer, and bookmark-producing activities to typed state/trigger transitions in `src/Elsa/Activities/`
