@@ -26,4 +26,26 @@ public sealed class WorkflowDispatchIdentityTests
         Assert.Equal($"commit-child-completed:{first.ParentResumeIntentId}", first.ParentResumeOutboxItemId("commit-child-completed"));
         Assert.Throws<ArgumentException>(() => first.ParentResumeOutboxItemId(" "));
     }
+
+    [Fact]
+    public void ChildCancelIdentities_AreDeterministicAndNamespaceDistinct()
+    {
+        var first = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var replay = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var other = new WorkflowDispatchIdentity("parent-1", "activity-2");
+
+        Assert.Equal(first.ChildCancelIntentId, replay.ChildCancelIntentId);
+        Assert.Equal(first.ChildCancelIdempotencyKey, replay.ChildCancelIdempotencyKey);
+        Assert.Equal(first.ChildCancelCommandId, replay.ChildCancelCommandId);
+        Assert.Equal(first.ChildCancelEnvelopeId, replay.ChildCancelEnvelopeId);
+        Assert.DoesNotContain(first.ChildCancelIntentId, new[] { first.StartIntentId, first.ParentResumeIntentId });
+        Assert.DoesNotContain(first.ChildCancelIdempotencyKey, new[] { first.StartIdempotencyKey, first.ParentResumeIdempotencyKey });
+        Assert.NotEqual(first.ChildCancelIntentId, other.ChildCancelIntentId);
+        Assert.StartsWith("intent:dispatch-cancel-child:v1:", first.ChildCancelIntentId);
+        Assert.StartsWith("dispatch-cancel-child:v1:", first.ChildCancelIdempotencyKey);
+        Assert.StartsWith("command:dispatch-cancel-child:v1:", first.ChildCancelCommandId);
+        Assert.StartsWith("envelope:dispatch-cancel-child:v1:", first.ChildCancelEnvelopeId);
+        Assert.Equal($"commit-parent-cancelled:{first.ChildCancelIntentId}", first.ChildCancelOutboxItemId("commit-parent-cancelled"));
+        Assert.Throws<ArgumentException>(() => first.ChildCancelOutboxItemId(" "));
+    }
 }

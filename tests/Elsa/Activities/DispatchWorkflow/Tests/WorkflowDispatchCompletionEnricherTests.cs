@@ -62,6 +62,106 @@ public sealed class WorkflowDispatchCompletionEnricherTests
         Assert.Equal(0, throwingSource.ReadCount);
     }
 
+    [Theory]
+    [InlineData(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted)]
+    [InlineData(WorkflowExecutionStatus.Cancelled, WorkflowDispatchStatus.Cancelled)]
+    public async Task NonSuccessWait_AppendsSafeDeterministicResumeIntentWithoutReadingOutputs(
+        WorkflowExecutionStatus childStatus,
+        WorkflowDispatchStatus dispatchStatus)
+    {
+        var incidents = new StubIncidentStore([
+            NewIncident("incident-z", "secret failure type z", "secret message z"),
+            NewIncident("incident-a", "secret failure type a", "secret message a")
+        ]);
+        var outputSource = new ThrowingOutputSource();
+
+        var enriched = await NewEnricher(outputSource, new NullLookupStore(), incidents)
+            .EnrichAsync(NewTerminalCommit(childStatus, dispatchStatus));
+
+        var intent = Assert.Single(enriched.PostCommitIntents);
+        var payload = intent.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(JsonOptions())!;
+        Assert.Equal(dispatchStatus, payload.Result.Status);
+        Assert.Empty(payload.Result.Outputs);
+        Assert.Equal(0, outputSource.ReadCount);
+        Assert.Equal(dispatchStatus == WorkflowDispatchStatus.Faulted ? 1 : 0, incidents.ListBlockingCount);
+        Assert.Equal(DispatchWorkflowDiagnostics.Category, payload.Result.DiagnosticMetadata[DispatchWorkflowDiagnostics.CategoryKey]);
+        Assert.Equal(
+            dispatchStatus == WorkflowDispatchStatus.Faulted ? DispatchWorkflowDiagnostics.FaultedCode : DispatchWorkflowDiagnostics.CancelledCode,
+            payload.Result.DiagnosticMetadata[DispatchWorkflowDiagnostics.CodeKey]);
+        Assert.Equal(
+            dispatchStatus == WorkflowDispatchStatus.Faulted
+                ? DispatchWorkflowDiagnostics.FaultedSummary
+                : DispatchWorkflowDiagnostics.CancelledSummary,
+            payload.Result.DiagnosticMetadata[DispatchWorkflowDiagnostics.SummaryKey]);
+
+        if (dispatchStatus == WorkflowDispatchStatus.Faulted)
+        {
+            Assert.Equal("2", payload.Result.DiagnosticMetadata[DispatchWorkflowDiagnostics.IncidentCountKey]);
+            Assert.Equal("false", payload.Result.DiagnosticMetadata[DispatchWorkflowDiagnostics.IncidentIdsTruncatedKey]);
+            Assert.Equal("incident-a", payload.Result.DiagnosticMetadata["incidentId.000"]);
+            Assert.Equal("incident-z", payload.Result.DiagnosticMetadata["incidentId.001"]);
+        }
+        else
+            Assert.Equal(3, payload.Result.DiagnosticMetadata.Count);
+
+        var rawPayload = intent.Payload.Value.GetRawText();
+        Assert.DoesNotContain("secret", rawPayload, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("failure type", rawPayload, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stack", rawPayload, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FaultResult_DeduplicatesSortsAndTruncatesIncidentIdsWithInvariantMetadata()
+    {
+        var incidents = Enumerable.Range(0, DispatchWorkflowDiagnostics.MaximumIncidentIds + 3)
+            .Reverse()
+            .Select(index => NewIncident($"incident-{index:D3}", "secret-type", "secret-message"))
+            .Append(NewIncident("incident-001", "duplicate-secret-type", "duplicate-secret-message"))
+            .ToArray();
+
+        var enriched = await NewEnricher(
+                new ThrowingOutputSource(),
+                new NullLookupStore(),
+                new StubIncidentStore(incidents))
+            .EnrichAsync(NewTerminalCommit(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted));
+
+        var payload = Assert.Single(enriched.PostCommitIntents).Payload!.Value;
+        var result = payload.Deserialize<WorkflowDispatchParentResumePayload>(JsonOptions())!.Result;
+        Assert.Equal("35", result.DiagnosticMetadata[DispatchWorkflowDiagnostics.IncidentCountKey]);
+        Assert.Equal("true", result.DiagnosticMetadata[DispatchWorkflowDiagnostics.IncidentIdsTruncatedKey]);
+        Assert.Equal("incident-000", result.DiagnosticMetadata["incidentId.000"]);
+        Assert.Equal("incident-031", result.DiagnosticMetadata["incidentId.031"]);
+        Assert.DoesNotContain("incidentId.032", result.DiagnosticMetadata.Keys);
+        Assert.DoesNotContain("secret", payload.GetRawText(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FaultReplay_ReusesExactCommittedIntentWithoutRecapturingIncidentsOrOutputs()
+    {
+        var first = await NewEnricher(
+                new ThrowingOutputSource(),
+                new NullLookupStore(),
+                new StubIncidentStore([NewIncident("incident-a", "secret-type", "secret-message")]))
+            .EnrichAsync(NewTerminalCommit(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted));
+        var committedIntent = Assert.Single(first.PostCommitIntents);
+        var committedItem = new RuntimePostCommitOutboxItem(
+            Identity().ParentResumeOutboxItemId(first.CommitId),
+            committedIntent,
+            RuntimePostCommitOutboxStatus.Delivered,
+            committedIntent.RecordedAt,
+            availableAt: null,
+            deliveredAt: Now.AddSeconds(1));
+        var outputSource = new ThrowingOutputSource();
+        var incidentStore = new ThrowingIncidentStore();
+
+        var replay = await NewEnricher(outputSource, new FixedLookupStore(committedItem), incidentStore)
+            .EnrichAsync(NewTerminalCommit(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted));
+
+        Assert.Same(committedIntent, Assert.Single(replay.PostCommitIntents));
+        Assert.Equal(0, outputSource.ReadCount);
+        Assert.Equal(0, incidentStore.ListBlockingCount);
+    }
+
     [Fact]
     public async Task UncommittedSameIdIntentWithForeignOutput_IsRejectedBeforePersistence()
     {
@@ -101,24 +201,24 @@ public sealed class WorkflowDispatchCompletionEnricherTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => enricher.EnrichAsync(commit).AsTask());
 
-        Assert.Contains("policy-safe completed result", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("policy-safe terminal result", exception.Message, StringComparison.Ordinal);
         Assert.Contains("raw-secret", foreignIntent.Payload!.Value.GetRawText(), StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted)]
-    [InlineData(WorkflowExecutionStatus.Cancelled, WorkflowDispatchStatus.Cancelled)]
-    public async Task NonCompletedChild_DoesNotAppendParentResumeIntent(
-        WorkflowExecutionStatus childStatus,
-        WorkflowDispatchStatus dispatchStatus)
+    [Fact]
+    public async Task MismatchedTerminalProjection_DoesNotAppendParentResumeIntent()
     {
         var outputSource = new ThrowingOutputSource();
-        var enricher = NewEnricher(outputSource, new NullLookupStore());
+        var incidents = new ThrowingIncidentStore();
+        var enricher = NewEnricher(outputSource, new NullLookupStore(), incidents);
 
-        var enriched = await enricher.EnrichAsync(NewTerminalCommit(childStatus, dispatchStatus));
+        var enriched = await enricher.EnrichAsync(NewTerminalCommit(
+            WorkflowExecutionStatus.Faulted,
+            WorkflowDispatchStatus.Cancelled));
 
         Assert.Empty(enriched.PostCommitIntents);
         Assert.Equal(0, outputSource.ReadCount);
+        Assert.Equal(0, incidents.ListBlockingCount);
     }
 
     [Fact]
@@ -205,6 +305,50 @@ public sealed class WorkflowDispatchCompletionEnricherTests
         Assert.Contains("conflicts with dispatch", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task CommittedIntentWithMismatchedTerminalStatus_IsRejected()
+    {
+        var canonical = Assert.Single((await NewEnricher(new StubOutputSource([]), new NullLookupStore())
+            .EnrichAsync(NewCompletedCommit())).PostCommitIntents);
+        var identity = Identity();
+        var faultedResult = new DispatchWorkflowResult(
+            identity.ChildWorkflowExecutionId,
+            WorkflowDispatchStatus.Faulted,
+            diagnosticMetadata: new Dictionary<string, string>
+            {
+                [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.FaultedCode,
+                [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.Category,
+                [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.FaultedSummary,
+                [DispatchWorkflowDiagnostics.IncidentCountKey] = "0",
+                [DispatchWorkflowDiagnostics.IncidentIdsTruncatedKey] = "false"
+            });
+        var mismatchedPayload = new WorkflowDispatchParentResumePayload(
+            identity.DispatchId,
+            "parent-resume",
+            "activity-resume",
+            identity.ChildWorkflowExecutionId,
+            identity.WaitBookmarkId,
+            DispatchWorkflowConstants.WaitStimulusType,
+            identity.WaitStimulusHash,
+            faultedResult);
+        var mismatched = CopyIntent(
+            canonical,
+            payload: JsonSerializer.SerializeToElement(mismatchedPayload, JsonOptions()));
+        var committedItem = new RuntimePostCommitOutboxItem(
+            identity.ParentResumeOutboxItemId(NewCompletedCommit().CommitId),
+            mismatched,
+            RuntimePostCommitOutboxStatus.Delivered,
+            mismatched.RecordedAt,
+            availableAt: null,
+            deliveredAt: mismatched.RecordedAt);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewEnricher(new ThrowingOutputSource(), new FixedLookupStore(committedItem))
+                .EnrichAsync(NewCompletedCommit()).AsTask());
+
+        Assert.Contains("payload conflicts with dispatch", exception.Message, StringComparison.Ordinal);
+    }
+
     private static RuntimeCheckpointCommit NewCompletedCommit() =>
         NewTerminalCommit(WorkflowExecutionStatus.Completed, WorkflowDispatchStatus.Completed);
 
@@ -265,13 +409,30 @@ public sealed class WorkflowDispatchCompletionEnricherTests
 
     private static WorkflowDispatchCompletionEnricher NewEnricher(
         IWorkflowOutputSource outputSource,
-        IPostCommitOutboxLookupStore lookupStore) =>
-        new(outputSource, lookupStore);
+        IPostCommitOutboxLookupStore lookupStore,
+        IIncidentStateStore? incidentStore = null) =>
+        new(outputSource, lookupStore, incidentStore ?? new StubIncidentStore([]));
+
+    private static IncidentState NewIncident(string incidentId, string failureType, string message) =>
+        new(
+            incidentId,
+            Identity().ChildWorkflowExecutionId,
+            "activity-child",
+            "node-child",
+            IncidentSeverity.Error,
+            IncidentStatus.Blocking,
+            IncidentResolutionAction.FaultWorkflow,
+            failureType,
+            message,
+            Now,
+            null,
+            new Dictionary<string, string> { ["unsafe"] = "secret metadata" });
 
     private static RuntimePostCommitIntent CopyIntent(
         RuntimePostCommitIntent source,
         DateTimeOffset? recordedAt = null,
-        IReadOnlyDictionary<string, string>? metadata = null) =>
+        IReadOnlyDictionary<string, string>? metadata = null,
+        JsonElement? payload = null) =>
         new(
             source.IntentId,
             source.WorkflowExecutionId,
@@ -279,15 +440,23 @@ public sealed class WorkflowDispatchCompletionEnricherTests
             recordedAt ?? source.RecordedAt,
             source.ActivityExecutionId,
             source.IdempotencyKey,
-            source.Payload,
+            payload ?? source.Payload,
             metadata ?? source.Metadata,
             source.DependsOnWaitRegistrationId,
             source.WaitFailurePolicy);
 
     private sealed class StubOutputSource(IReadOnlyCollection<RuntimeWorkflowOutput> outputs) : IWorkflowOutputSource
     {
+        public int ReadCount { get; private set; }
+
         public ValueTask<IReadOnlyCollection<RuntimeWorkflowOutput>> ReadAsync(string workflowExecutionId, IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(outputs);
+            ValueTask.FromResult(Read());
+
+        private IReadOnlyCollection<RuntimeWorkflowOutput> Read()
+        {
+            ReadCount++;
+            return outputs;
+        }
     }
 
     private sealed class ThrowingOutputSource : IWorkflowOutputSource
@@ -309,6 +478,52 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     {
         public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<RuntimePostCommitOutboxItem?>(StringComparer.Ordinal.Equals(outboxItemId, item.OutboxItemId) ? item : null);
+    }
+
+    private sealed class StubIncidentStore(IReadOnlyCollection<IncidentState> incidents) : IIncidentStateStore
+    {
+        public int ListBlockingCount { get; private set; }
+
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            ListBlockingCount++;
+            return ValueTask.FromResult(incidents);
+        }
+    }
+
+    private sealed class ThrowingIncidentStore : IIncidentStateStore
+    {
+        public int ListBlockingCount { get; private set; }
+
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            ListBlockingCount++;
+            throw new InvalidOperationException("must not recapture incidents");
+        }
     }
 
     private sealed class BasePhaseEnricher : IRuntimeCheckpointCommitEnricher

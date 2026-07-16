@@ -67,6 +67,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IWorkflowDispatchQueryStore"] = ["WorkflowDispatchDocumentKind"],
             ["IWorkflowDispatchDeleteStore"] = ["WorkflowDispatchDocumentKind"],
             ["IWorkflowDispatchRetentionRootStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchAdmissionStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchCancellationStore"] = ["WorkflowDispatchDocumentKind"],
             ["IWorkflowSchedulerPoisonStore"] = ["SchedulerPoisonDocumentKind"],
             ["IWorkflowSchedulerWorkQueue"] = ["SchedulerWorkItemDocumentKind"],
             ["IDurableTimerStore"] = ["DurableTimerDocumentKind"],

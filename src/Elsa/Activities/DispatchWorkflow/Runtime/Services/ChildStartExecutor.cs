@@ -78,11 +78,51 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             throw new InvalidOperationException($"DispatchWorkflow child-start intent '{intent.IntentId}' does not match its deterministic dispatch identity.");
         }
 
+        var admittedBeforeDispatch = false;
+        WorkflowDispatchRecord? durableDispatch = null;
+        if (_workflowDispatchStore is not null)
+        {
+            if (_workflowDispatchStore is not IWorkflowDispatchAdmissionStore admissionStore)
+            {
+                throw new InvalidOperationException(
+                    $"DispatchWorkflow child start requires '{nameof(IWorkflowDispatchAdmissionStore)}' on the configured dispatch store.");
+            }
+
+            durableDispatch = await _workflowDispatchStore.FindAsync(payload.DispatchId, cancellationToken)
+                ?? throw new InvalidOperationException($"Committed workflow dispatch '{payload.DispatchId}' was not found before child admission.");
+            if (WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(durableDispatch) || IsTerminal(durableDispatch.Status))
+                return;
+            ValidatePayloadAgainstDispatch(intent.IntentId, payload, durableDispatch);
+
+            var admission = await admissionStore.TryAdmitAsync(
+                payload.DispatchId,
+                _timeProvider.GetUtcNow(),
+                cancellationToken);
+            if (admission.Disposition is
+                WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission or
+                WorkflowDispatchAdmissionDisposition.Terminal)
+            {
+                return;
+            }
+
+            durableDispatch = admission.Record;
+            ValidatePayloadAgainstDispatch(intent.IntentId, payload, durableDispatch);
+            admittedBeforeDispatch = true;
+        }
+
+        var childExecutable = durableDispatch?.ChildExecutable ?? payload.ChildExecutable;
+        var childSource = durableDispatch?.ChildSource ?? payload.ChildSource;
+        var authority = durableDispatch?.Authority ?? payload.Authority;
+        var parentWorkflowExecutionId = durableDispatch?.ParentWorkflowExecutionId ?? payload.ParentWorkflowExecutionId;
+        var correlationId = durableDispatch?.CorrelationId ?? payload.CorrelationId;
+        var tenantId = durableDispatch?.TenantId ?? payload.TenantId;
+        var partition = durableDispatch?.Partition ?? payload.Partition;
+        var runKind = durableDispatch?.RunKind ?? payload.RunKind;
         var retainedStart = payload.ParentExecutable is not null;
         var result = await _workflowStartDispatcher.DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(
-                artifactId: payload.ChildExecutable.ArtifactId,
-                requestedBy: payload.Authority.SystemIdentity,
+                artifactId: childExecutable.ArtifactId,
+                requestedBy: authority.SystemIdentity,
                 workflowExecutionId: payload.ChildWorkflowExecutionId,
                 idempotencyKey: identity.StartIdempotencyKey,
                 metadata: null,
@@ -90,18 +130,18 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 inputs: payload.Inputs.ToDictionary(item => item.Key, item => (object?)item.Value.Clone(), StringComparer.Ordinal),
                 stimulusInput: null,
                 triggerNodeId: null,
-                runKind: payload.RunKind,
+                runKind: runKind,
                 sourceSelection: retainedStart
                     ? null
-                    : new WorkflowExecutableSourceSelection(sourceReferenceId: payload.ChildSource!.SourceReferenceId),
+                    : new WorkflowExecutableSourceSelection(sourceReferenceId: childSource!.SourceReferenceId),
                 provenanceRequirement: retainedStart
                     ? WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy
                     : WorkflowExecutableProvenanceRequirement.RequireLiveReference,
-                parentWorkflowExecutionId: payload.ParentWorkflowExecutionId,
-                correlationId: payload.CorrelationId,
-                tenantId: payload.TenantId,
-                partition: payload.Partition,
-                authority: payload.Authority,
+                parentWorkflowExecutionId: parentWorkflowExecutionId,
+                correlationId: correlationId,
+                tenantId: tenantId,
+                partition: partition,
+                authority: authority,
                 startAuthority: retainedStart
                     ? WorkflowExecutableStartAuthority.FromRetainedDependency(
                         payload.ParentExecutable!.ArtifactId,
@@ -125,7 +165,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 $"DispatchWorkflow child-start intent '{intent.IntentId}' was deferred without durable distributed-forwarding evidence: {result.CommandDispatch.Reason ?? "no reason supplied"}.");
         }
 
-        if (result.CommandDispatch.Status is
+        if (!admittedBeforeDispatch && result.CommandDispatch.Status is
             WorkflowExecutionCommandDispatchStatus.Accepted or
             WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted or
             WorkflowExecutionCommandDispatchStatus.Duplicate)
@@ -183,4 +223,39 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         !string.IsNullOrWhiteSpace(owningNode) &&
         metadata.TryGetValue(DistributedTransportItemIdMetadataKey, out var transportItemId) &&
         !string.IsNullOrWhiteSpace(transportItemId);
+
+    private static void ValidatePayloadAgainstDispatch(
+        string intentId,
+        WorkflowDispatchStartPayload payload,
+        WorkflowDispatchRecord dispatch)
+    {
+        var payloadInputNames = payload.Inputs.Keys.Order(StringComparer.Ordinal);
+        var durableInputNames = dispatch.InputDescriptors.Select(item => item.Name).Order(StringComparer.Ordinal);
+        if (!StringComparer.Ordinal.Equals(payload.DispatchId, dispatch.DispatchId) ||
+            !StringComparer.Ordinal.Equals(payload.ParentWorkflowExecutionId, dispatch.ParentWorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(payload.ParentActivityExecutionId, dispatch.ParentActivityExecutionId) ||
+            !StringComparer.Ordinal.Equals(payload.ChildWorkflowExecutionId, dispatch.ChildWorkflowExecutionId) ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(payload.ChildExecutable, dispatch.ChildExecutable) ||
+            (payload.ParentExecutable is null && payload.ChildSource != dispatch.ChildSource) ||
+            !StringComparer.Ordinal.Equals(payload.CorrelationId, dispatch.CorrelationId) ||
+            !StringComparer.Ordinal.Equals(payload.TenantId, dispatch.TenantId) ||
+            payload.Partition != dispatch.Partition ||
+            payload.RunKind != dispatch.RunKind ||
+            payload.DispatchNestingDepth != dispatch.DispatchNestingDepth ||
+            !AuthorityEquals(payload.Authority, dispatch.Authority) ||
+            !payloadInputNames.SequenceEqual(durableInputNames, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"DispatchWorkflow child-start intent '{intentId}' does not match the committed dispatch context.");
+        }
+    }
+
+    private static bool AuthorityEquals(
+        WorkflowExecutionAuthoritySnapshot left,
+        WorkflowExecutionAuthoritySnapshot right) =>
+        StringComparer.Ordinal.Equals(left.SystemIdentity, right.SystemIdentity) &&
+        StringComparer.Ordinal.Equals(left.RootInitiator, right.RootInitiator) &&
+        left.Metadata.Count == right.Metadata.Count &&
+        left.Metadata.All(item =>
+            right.Metadata.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
 }

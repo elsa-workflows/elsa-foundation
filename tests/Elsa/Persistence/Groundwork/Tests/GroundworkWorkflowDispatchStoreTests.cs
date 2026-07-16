@@ -164,9 +164,14 @@ public sealed class GroundworkWorkflowDispatchStoreTests
     internal static WorkflowDispatchRecord Pending(
         string parentWorkflowExecutionId,
         string parentActivityExecutionId,
-        string? tenantId = null)
+        string? tenantId = null,
+        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget,
+        bool? cancellationPropagation = null)
     {
         var identity = new WorkflowDispatchIdentity(parentWorkflowExecutionId, parentActivityExecutionId);
+        var metadata = new Dictionary<string, string> { ["safe-code"] = "dispatch" };
+        if (cancellationPropagation is { } enabled)
+            WorkflowDispatchLifecycle.SetEffectiveCancellationPolicy(metadata, mode, enabled);
         return new WorkflowDispatchRecord(
             identity.DispatchId,
             parentWorkflowExecutionId,
@@ -188,7 +193,7 @@ public sealed class GroundworkWorkflowDispatchStoreTests
                 "1",
                 "publication-child",
                 "slot-child"),
-            WorkflowDispatchMode.FireAndForget,
+            mode,
             WorkflowDispatchStatus.Pending,
             correlationId: null,
             tenantId,
@@ -198,6 +203,6 @@ public sealed class GroundworkWorkflowDispatchStoreTests
             [new WorkflowDispatchInputDescriptor("orderId", "string")],
             Now,
             Now,
-            new Dictionary<string, string> { ["safe-code"] = "dispatch" });
+            metadata);
     }
 }

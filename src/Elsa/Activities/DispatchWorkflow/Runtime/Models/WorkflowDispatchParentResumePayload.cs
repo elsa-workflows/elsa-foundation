@@ -32,9 +32,9 @@ public sealed class WorkflowDispatchParentResumePayload
             !StringComparer.Ordinal.Equals(stimulusType, DispatchWorkflowConstants.WaitStimulusType) ||
             !StringComparer.Ordinal.Equals(stimulusHash, identity.WaitStimulusHash) ||
             !StringComparer.Ordinal.Equals(result.ChildWorkflowExecutionId, childWorkflowExecutionId) ||
-            result.Status != WorkflowDispatchStatus.Completed)
+            !DispatchWorkflowResult.SupportsParentResume(result.Status))
         {
-            throw new ArgumentException("DispatchWorkflow parent-resume payload does not match its deterministic completed dispatch identity.");
+            throw new ArgumentException("DispatchWorkflow parent-resume payload does not match its deterministic terminal dispatch identity.");
         }
 
         DispatchId = dispatchId;

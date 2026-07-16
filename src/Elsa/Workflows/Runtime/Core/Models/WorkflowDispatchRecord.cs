@@ -449,6 +449,62 @@ public static class WorkflowDispatchLifecycle
     public const string DiagnosticCategoryMetadataKey = "runtime.diagnostic.category";
     public const string ChildStartDeliveryFailedCode = "child-start-delivery-failed";
     public const string DeliveryCategory = "delivery";
+    public const string CancellationPolicyMetadataKey = "runtime.dispatch.cancelChildOnParentCancellation";
+    public const string CancellationStateMetadataKey = "runtime.dispatch.cancellationState";
+    public const string CancelledBeforeAdmissionState = "parent-before-admission";
+    public const string CancellationRequestedState = "parent-cancellation-requested";
+
+    public static void SetEffectiveCancellationPolicy(
+        IDictionary<string, string> metadata,
+        WorkflowDispatchMode mode,
+        bool cancelChildOnParentCancellation)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        metadata[CancellationPolicyMetadataKey] =
+            (mode == WorkflowDispatchMode.WaitForCompletion && cancelChildOnParentCancellation).ToString().ToLowerInvariant();
+    }
+
+    /// <summary>Reads the persisted policy; legacy waited records default to enabled and detached records to disabled.</summary>
+    public static bool IsCancellationPropagationEnabled(WorkflowDispatchRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        if (record.Mode != WorkflowDispatchMode.WaitForCompletion)
+            return false;
+        if (!record.Metadata.TryGetValue(CancellationPolicyMetadataKey, out var value))
+            return true;
+        return value switch
+        {
+            "true" => true,
+            "false" => false,
+            _ => throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' carries an invalid cancellation policy.")
+        };
+    }
+
+    public static bool WasCancelledBeforeAdmission(WorkflowDispatchRecord record) =>
+        HasCancellationState(record, CancelledBeforeAdmissionState);
+
+    public static bool IsCancellationRequested(WorkflowDispatchRecord record) =>
+        HasCancellationState(record, CancellationRequestedState);
+
+    public static WorkflowDispatchRecord CancelBeforeAdmission(
+        WorkflowDispatchRecord record,
+        DateTimeOffset requestedAt)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        if (record.Status != WorkflowDispatchStatus.Pending)
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' must be Pending before admission can be cancelled.");
+        return WithCancellationState(record, WorkflowDispatchStatus.Cancelled, CancelledBeforeAdmissionState, requestedAt);
+    }
+
+    public static WorkflowDispatchRecord MarkCancellationRequested(
+        WorkflowDispatchRecord record,
+        DateTimeOffset requestedAt)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        if (record.Status != WorkflowDispatchStatus.Started)
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' must be Started before child cancellation can be requested.");
+        return WithCancellationState(record, WorkflowDispatchStatus.Started, CancellationRequestedState, requestedAt);
+    }
 
     public static WorkflowDispatchRecord Transition(
         WorkflowDispatchRecord record,
@@ -516,7 +572,7 @@ public static class WorkflowDispatchLifecycle
         ArgumentNullException.ThrowIfNull(record);
         if (record.Status != WorkflowDispatchStatus.Pending)
             throw new InvalidOperationException($"New workflow dispatch '{record.DispatchId}' must start in Pending status.");
-        ValidateDiagnostics(record);
+        ValidateMetadata(record);
     }
 
     public static void ValidateTransition(WorkflowDispatchRecord existing, WorkflowDispatchRecord candidate)
@@ -528,11 +584,23 @@ public static class WorkflowDispatchLifecycle
             return;
         if (!ImmutableFieldsEqual(existing, candidate))
             throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' already exists with conflicting immutable identity or context.");
+        if (existing.Metadata.TryGetValue(CancellationStateMetadataKey, out var existingCancellationState) &&
+            (!candidate.Metadata.TryGetValue(CancellationStateMetadataKey, out var candidateCancellationState) ||
+             !StringComparer.Ordinal.Equals(existingCancellationState, candidateCancellationState)))
+        {
+            throw new InvalidOperationException(
+                $"Workflow dispatch '{candidate.DispatchId}' cannot remove or replace its durable cancellation state.");
+        }
         if (candidate.UpdatedAt < existing.UpdatedAt)
             throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' cannot move its update timestamp backwards.");
-        ValidateDiagnostics(candidate);
+        ValidateMetadata(candidate);
 
-        var validTransition = existing.Status switch
+        var addsCancellationRequest =
+            existing.Status == WorkflowDispatchStatus.Started &&
+            candidate.Status == WorkflowDispatchStatus.Started &&
+            !existing.Metadata.ContainsKey(CancellationStateMetadataKey) &&
+            IsCancellationRequested(candidate);
+        var validTransition = addsCancellationRequest || existing.Status switch
         {
             WorkflowDispatchStatus.Pending => candidate.Status is
                 WorkflowDispatchStatus.Started or
@@ -617,15 +685,80 @@ public static class WorkflowDispatchLifecycle
         IReadOnlyDictionary<string, string> left,
         IReadOnlyDictionary<string, string> right)
     {
-        var leftImmutable = left.Where(item => !IsDiagnosticKey(item.Key)).ToArray();
-        var rightImmutable = right.Where(item => !IsDiagnosticKey(item.Key)).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var leftImmutable = left.Where(item => !IsMutableMetadataKey(item.Key)).ToArray();
+        var rightImmutable = right.Where(item => !IsMutableMetadataKey(item.Key)).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         return leftImmutable.Length == rightImmutable.Count &&
                leftImmutable.All(item => rightImmutable.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
     }
 
-    private static bool IsDiagnosticKey(string key) =>
+    private static bool IsMutableMetadataKey(string key) =>
         StringComparer.Ordinal.Equals(key, DiagnosticCodeMetadataKey) ||
-        StringComparer.Ordinal.Equals(key, DiagnosticCategoryMetadataKey);
+        StringComparer.Ordinal.Equals(key, DiagnosticCategoryMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, CancellationStateMetadataKey);
+
+    private static bool HasCancellationState(WorkflowDispatchRecord record, string expected) =>
+        record.Metadata.TryGetValue(CancellationStateMetadataKey, out var value) &&
+        StringComparer.Ordinal.Equals(value, expected);
+
+    private static WorkflowDispatchRecord WithCancellationState(
+        WorkflowDispatchRecord record,
+        WorkflowDispatchStatus status,
+        string state,
+        DateTimeOffset requestedAt)
+    {
+        if (requestedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(requestedAt), "A dispatch cancellation transition requires a recorded timestamp.");
+        var metadata = record.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[CancellationStateMetadataKey] = state;
+        var updatedAt = requestedAt > record.UpdatedAt ? requestedAt : record.UpdatedAt;
+        var candidate = new WorkflowDispatchRecord(
+            record.DispatchId,
+            record.ParentWorkflowExecutionId,
+            record.ParentActivityExecutionId,
+            record.ChildWorkflowExecutionId,
+            record.ChildExecutable,
+            record.ChildSource,
+            record.Mode,
+            status,
+            record.CorrelationId,
+            record.TenantId,
+            record.Partition,
+            record.RunKind,
+            record.Authority,
+            record.InputDescriptors,
+            record.CreatedAt,
+            updatedAt,
+            metadata,
+            record.DispatchNestingDepth);
+        ValidateTransition(record, candidate);
+        return candidate;
+    }
+
+    private static void ValidateMetadata(WorkflowDispatchRecord record)
+    {
+        ValidateCancellationMetadata(record);
+        ValidateDiagnostics(record);
+    }
+
+    private static void ValidateCancellationMetadata(WorkflowDispatchRecord record)
+    {
+        if (record.Metadata.TryGetValue(CancellationPolicyMetadataKey, out var policy) &&
+            policy is not ("true" or "false"))
+        {
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' carries an invalid cancellation policy.");
+        }
+        if (record.Mode == WorkflowDispatchMode.FireAndForget && StringComparer.Ordinal.Equals(policy, "true"))
+            throw new InvalidOperationException($"Fire-and-forget workflow dispatch '{record.DispatchId}' cannot enable cancellation propagation.");
+
+        var state = record.Metadata.GetValueOrDefault(CancellationStateMetadataKey);
+        if (state is null)
+            return;
+        if (StringComparer.Ordinal.Equals(state, CancelledBeforeAdmissionState) && record.Status == WorkflowDispatchStatus.Cancelled)
+            return;
+        if (StringComparer.Ordinal.Equals(state, CancellationRequestedState) && record.Status != WorkflowDispatchStatus.Pending)
+            return;
+        throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' carries an invalid cancellation state.");
+    }
 
     private static void ValidateDiagnostics(WorkflowDispatchRecord record)
     {

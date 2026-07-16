@@ -125,6 +125,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ValidateOperationalStateChanges(commit);
         ValidateActivityScopeCleanups(commit);
         ValidateWorkflowDispatchChanges(commit);
+        ValidateWorkflowDispatchCancellations(commit);
 
         return await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
             commit,
@@ -205,6 +206,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 await ApplyOperationalStateChangesAsync(stores.ExecutionLivenessStateStore, commit.StateChanges.Operational, cancellationToken);
                 await ApplyActivityScopeCleanupsAsync(stores, commit.StateChanges.ActivityScopeCleanups, cancellationToken);
                 await ApplyWorkflowDispatchChangesAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatches, cancellationToken);
+                await ApplyWorkflowDispatchCancellationsAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatchCancellations, cancellationToken);
                 await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
                 await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
                 await unitOfWork.CommitAsync(cancellationToken);
@@ -444,6 +446,15 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     {
         foreach (var stateChange in stateChanges)
             await store.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private static async ValueTask ApplyWorkflowDispatchCancellationsAsync(
+        IWorkflowDispatchCancellationStore store,
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        foreach (var request in requests)
+            await store.ApplyCancellationAsync(request, cancellationToken);
     }
 
     private static async ValueTask ApplySchedulerStateChangeAsync(
@@ -720,6 +731,18 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         }
     }
 
+    private static void ValidateWorkflowDispatchCancellations(RuntimeCheckpointCommit commit)
+    {
+        foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
+        {
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, request.ParentWorkflowExecutionId))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow dispatch cancellation '{request.DispatchId}' must be committed by its parent workflow execution.");
+            }
+        }
+    }
+
     private sealed record CheckpointCommitMarker(
         string CommitId,
         string WorkflowExecutionId,
@@ -746,7 +769,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IDurableValueStateStore DurableValueStateStore,
         IIncidentStateStore IncidentStateStore,
         IExecutionLivenessStateStore ExecutionLivenessStateStore,
-        IWorkflowDispatchStore WorkflowDispatchStore,
+        GroundworkWorkflowDispatchStore WorkflowDispatchStore,
         GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore,
         IDurableTimerStore DurableTimerStore,
         IWorkflowSchedulerWorkQueue SchedulerWorkQueue)

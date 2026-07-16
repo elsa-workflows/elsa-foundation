@@ -217,11 +217,33 @@ public sealed class ChildStartExecutorTests
         Assert.Single(startDispatcher.Requests);
     }
 
+    [Fact]
+    public async Task TamperedStartContext_IsRejectedBeforeAdmissionOrExternalDispatch()
+    {
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+        var dispatchStore = new InMemoryWorkflowDispatchStore();
+        var pending = NewDispatchRecord();
+        await dispatchStore.SaveAsync(pending);
+        var executor = new ChildStartExecutor(
+            startDispatcher,
+            dispatchStore,
+            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+        var item = NewOutboxItem(tenantId: "tenant-tampered");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.HandleAsync(item.Intent).AsTask());
+
+        Assert.Contains("does not match the committed dispatch context", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(startDispatcher.Requests);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatchStore.FindAsync(pending.DispatchId))?.Status);
+    }
+
     private static RuntimePostCommitOutboxItem NewOutboxItem(
         WorkflowExecutableSourceProvenance? childSource = null,
         WorkflowExecutableIdentity? parentExecutable = null,
         string? dispatchNodeId = null,
-        int dispatchNestingDepth = 0)
+        int dispatchNestingDepth = 0,
+        string tenantId = "tenant-42")
     {
         var identity = NewIdentity();
         var source = childSource ?? (parentExecutable is null
@@ -236,7 +258,7 @@ public sealed class ChildStartExecutorTests
             source,
             new Dictionary<string, JsonElement> { ["message"] = JsonSerializer.SerializeToElement("hello") },
             "correlation-handler",
-            "tenant-42",
+            tenantId,
             new WorkflowExecutionPartition("partition-eu"),
             WorkflowRunKind.PublishedRun,
             new WorkflowExecutionAuthoritySnapshot("parent-handler", "root-initiator"),

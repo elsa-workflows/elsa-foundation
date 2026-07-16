@@ -23,6 +23,10 @@ public sealed class WorkflowDispatchIdentity
         WaitStimulusHash = $"stimulus:dispatch-wait:{Version}:{digest}";
         ParentResumeIntentId = $"intent:dispatch-resume:{Version}:{digest}";
         ParentResumeIdempotencyKey = $"dispatch-resume:{Version}:{digest}";
+        ChildCancelIntentId = $"intent:dispatch-cancel-child:{Version}:{digest}";
+        ChildCancelIdempotencyKey = $"dispatch-cancel-child:{Version}:{digest}";
+        ChildCancelCommandId = $"command:dispatch-cancel-child:{Version}:{digest}";
+        ChildCancelEnvelopeId = $"envelope:dispatch-cancel-child:{Version}:{digest}";
     }
 
     public string DispatchId { get; }
@@ -33,11 +37,21 @@ public sealed class WorkflowDispatchIdentity
     public string WaitStimulusHash { get; }
     public string ParentResumeIntentId { get; }
     public string ParentResumeIdempotencyKey { get; }
+    public string ChildCancelIntentId { get; }
+    public string ChildCancelIdempotencyKey { get; }
+    public string ChildCancelCommandId { get; }
+    public string ChildCancelEnvelopeId { get; }
 
     public string ParentResumeOutboxItemId(string commitId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
         return $"{commitId}:{ParentResumeIntentId}";
+    }
+
+    public string ChildCancelOutboxItemId(string commitId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        return $"{commitId}:{ChildCancelIntentId}";
     }
 
     private static string ComputeDigest(string parentWorkflowExecutionId, string parentActivityExecutionId)

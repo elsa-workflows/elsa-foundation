@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>Application-wide in-memory workflow-dispatch projection.</summary>
-public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWorkflowDispatchQueryStore, IWorkflowDispatchDeleteStore, IWorkflowDispatchRetentionRootStore
+public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWorkflowDispatchQueryStore, IWorkflowDispatchDeleteStore, IWorkflowDispatchRetentionRootStore, IWorkflowDispatchAdmissionStore, IWorkflowDispatchCancellationStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
 
@@ -36,6 +36,97 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         {
             _state.WorkflowDispatches.TryGetValue(dispatchId, out var record);
             return new ValueTask<WorkflowDispatchRecord?>(record);
+        }
+    }
+
+    public ValueTask<WorkflowDispatchAdmissionResult> TryAdmitAsync(
+        string dispatchId,
+        DateTimeOffset admittedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
+        if (admittedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(admittedAt), "Child admission requires a recorded timestamp.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.WorkflowDispatches.TryGetValue(dispatchId, out var record))
+                throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found for child admission.");
+
+            if (record.Status == WorkflowDispatchStatus.Pending)
+            {
+                var admitted = record.TransitionTo(
+                    WorkflowDispatchStatus.Started,
+                    admittedAt > record.UpdatedAt ? admittedAt : record.UpdatedAt);
+                _state.WorkflowDispatches[dispatchId] = admitted;
+                return ValueTask.FromResult(new WorkflowDispatchAdmissionResult(
+                    WorkflowDispatchAdmissionDisposition.Admitted,
+                    admitted));
+            }
+
+            var disposition = record.Status switch
+            {
+                WorkflowDispatchStatus.Started => WorkflowDispatchAdmissionDisposition.AlreadyAdmitted,
+                WorkflowDispatchStatus.Cancelled when WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(record) =>
+                    WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission,
+                _ => WorkflowDispatchAdmissionDisposition.Terminal
+            };
+            return ValueTask.FromResult(new WorkflowDispatchAdmissionResult(disposition, record));
+        }
+    }
+
+    public ValueTask<WorkflowDispatchCancellationResult> ApplyCancellationAsync(
+        WorkflowDispatchCancellationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.WorkflowDispatches.TryGetValue(request.DispatchId, out var record))
+                throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
+            ValidateCancellationRequest(record, request);
+            if (!WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(record))
+                throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' does not permit parent cancellation propagation.");
+
+            WorkflowDispatchRecord resolved;
+            WorkflowDispatchCancellationDisposition disposition;
+            switch (record.Status)
+            {
+                case WorkflowDispatchStatus.Pending:
+                    resolved = WorkflowDispatchLifecycle.CancelBeforeAdmission(record, request.RequestedAt);
+                    disposition = WorkflowDispatchCancellationDisposition.AppliedBeforeAdmission;
+                    _state.WorkflowDispatches[record.DispatchId] = resolved;
+                    break;
+                case WorkflowDispatchStatus.Started:
+                    resolved = WorkflowDispatchLifecycle.IsCancellationRequested(record)
+                        ? record
+                        : WorkflowDispatchLifecycle.MarkCancellationRequested(record, request.RequestedAt);
+                    disposition = WorkflowDispatchCancellationDisposition.CancellationRequestedAfterAdmission;
+                    _state.WorkflowDispatches[record.DispatchId] = resolved;
+                    break;
+                default:
+                    resolved = record;
+                    disposition = WorkflowDispatchCancellationDisposition.TerminalUnchanged;
+                    break;
+            }
+
+            return ValueTask.FromResult(new WorkflowDispatchCancellationResult(disposition, resolved));
+        }
+    }
+
+    private static void ValidateCancellationRequest(
+        WorkflowDispatchRecord record,
+        WorkflowDispatchCancellationRequest request)
+    {
+        if (!StringComparer.Ordinal.Equals(record.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(record.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
+            !StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
+        {
+            throw new InvalidOperationException(
+                $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
         }
     }
 

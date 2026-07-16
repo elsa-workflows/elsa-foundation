@@ -523,7 +523,7 @@
     {
       "id": "runtime-post-commit-outbox",
       "family": "runtime",
-      "contract": "IRuntimePostCommitOutboxStore; IPostCommitOutboxLookupStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore",
+      "contract": "IRuntimePostCommitOutboxStore; IPostCommitOutboxLookupStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore; IWorkflowDispatchAdmissionStore; IWorkflowDispatchCancellationStore",
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#678",
@@ -569,7 +569,9 @@
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxContinuityTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchCancellationTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDispatchCancellationCheckpointTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
       ]
     },

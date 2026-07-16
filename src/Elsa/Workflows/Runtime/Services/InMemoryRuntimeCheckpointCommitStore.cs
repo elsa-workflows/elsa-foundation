@@ -220,6 +220,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ValidateIncidentStateChanges(commit);
         ValidateOperationalStateChanges(commit);
         await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
+        await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
@@ -233,6 +234,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
             await ApplyActivityScopeCleanupsAsync(commit.StateChanges.ActivityScopeCleanups, ct);
             await ApplyWorkflowDispatchChangesAsync(commit.StateChanges.WorkflowDispatches, ct);
+            await ApplyWorkflowDispatchCancellationsAsync(commit.StateChanges.WorkflowDispatchCancellations, ct);
 
             try
             {
@@ -747,6 +749,22 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await _workflowDispatchStore.SaveAsync(stateChange.State, cancellationToken);
     }
 
+    private async ValueTask ApplyWorkflowDispatchCancellationsAsync(
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        if (requests.Count == 0)
+            return;
+        if (_workflowDispatchStore is not IWorkflowDispatchCancellationStore cancellationStore)
+        {
+            throw new InvalidOperationException(
+                "Workflow dispatch cancellation requests require an IWorkflowDispatchCancellationStore.");
+        }
+
+        foreach (var request in requests)
+            await cancellationStore.ApplyCancellationAsync(request, cancellationToken);
+    }
+
     private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
     {
         if (_workflowExecutionStateStore is null || stateChange is null)
@@ -919,6 +937,43 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 WorkflowDispatchLifecycle.ValidateTransition(existing, stateChange.State);
             else
                 WorkflowDispatchLifecycle.ValidateNew(stateChange.State);
+        }
+    }
+
+    private async ValueTask ValidateWorkflowDispatchCancellationsAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.WorkflowDispatchCancellations.Count == 0)
+            return;
+        if (_workflowDispatchStore is not IWorkflowDispatchCancellationStore)
+        {
+            throw new InvalidOperationException(
+                "Workflow dispatch cancellation requests require an IWorkflowDispatchCancellationStore.");
+        }
+
+        foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
+        {
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, request.ParentWorkflowExecutionId))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow dispatch cancellation request '{request.DispatchId}' must be committed by its parent workflow execution.");
+            }
+
+            var existing = await _workflowDispatchStore.FindAsync(request.DispatchId, cancellationToken);
+            if (existing is null)
+                throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
+            if (!StringComparer.Ordinal.Equals(existing.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
+                !StringComparer.Ordinal.Equals(existing.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
+            }
+            if (!WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(existing))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow dispatch '{request.DispatchId}' does not permit parent cancellation propagation.");
+            }
         }
     }
 

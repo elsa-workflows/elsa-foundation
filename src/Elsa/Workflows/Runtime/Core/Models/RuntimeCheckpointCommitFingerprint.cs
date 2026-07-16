@@ -14,7 +14,28 @@ public static class RuntimeCheckpointCommitFingerprint
 
         // Preserve the exact pre-#676 JSON shape for commits without dispatch state so durable replay markers
         // written by older binaries keep the same fingerprint after upgrade.
-        object stateChanges = commit.StateChanges.WorkflowDispatches.Count == 0
+        object stateChanges = commit.StateChanges.WorkflowDispatchCancellations.Count > 0
+            ? new
+            {
+                commit.StateChanges.WorkflowExecution,
+                commit.StateChanges.Scheduler,
+                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
+                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
+                Bookmarks = Order(commit.StateChanges.Bookmarks),
+                DurableValues = Order(commit.StateChanges.DurableValues),
+                Incidents = Order(commit.StateChanges.Incidents),
+                Operational = Order(commit.StateChanges.Operational),
+                WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
+                WorkflowDispatchCancellations = commit.StateChanges.WorkflowDispatchCancellations
+                    .OrderBy(request => request.DispatchId, StringComparer.Ordinal)
+                    .ToArray(),
+                ActivityScopeCleanups = commit.StateChanges.ActivityScopeCleanups
+                    .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+                    .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal)
+                    .ToArray(),
+                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
+            }
+            : commit.StateChanges.WorkflowDispatches.Count == 0
             ? new
             {
                 commit.StateChanges.WorkflowExecution,

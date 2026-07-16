@@ -22,7 +22,7 @@ namespace Elsa.Persistence.Groundwork.Tests;
 // stores and a durable per-CommitId marker. These tests prove the three properties that make it a faithful
 // (and restart-safe) replacement for the in-memory writer: full multi-seam persistence, durability across a
 // simulated process restart, and idempotency under at-least-once redelivery.
-public sealed class GroundworkRuntimeCheckpointWriterTests
+public sealed partial class GroundworkRuntimeCheckpointWriterTests
 {
     private static readonly RuntimeCheckpointPersistenceDecision Decision =
         new(RuntimeCheckpointPersistenceMode.Immediate);

@@ -46,6 +46,8 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IWorkflowDispatchQueryStore),
                 typeof(IWorkflowDispatchDeleteStore),
                 typeof(IWorkflowDispatchRetentionRootStore),
+                typeof(IWorkflowDispatchAdmissionStore),
+                typeof(IWorkflowDispatchCancellationStore),
                 typeof(IWorkflowSchedulerWorkQueue),
                 typeof(IDurableTimerStore),
                 typeof(IWorkflowTriggerBindingStore),

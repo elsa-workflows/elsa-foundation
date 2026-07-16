@@ -34,9 +34,14 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         DispatchWorkflowOptions.ValidateMaxNestingDepth(MaxNestingDepth, nameof(MaxNestingDepth));
         services.Configure<DispatchWorkflowOptions>(options => options.MaxNestingDepth = MaxNestingDepth);
         services.AddRuntimePostCommitIntentHandler<ChildStartExecutor>(DispatchWorkflowConstants.StartChildIntentKind);
+        services.AddRuntimePostCommitIntentHandler<ChildCancelExecutor>(
+            DispatchWorkflowConstants.CancelChildIntentKind,
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
         services.AddRuntimePostCommitIntentHandler<ParentResumeExecutor>(
             DispatchWorkflowConstants.ResumeParentIntentKind,
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCancellationEnricher>());
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCompletionEnricher>());
         services.AddSingleton<IShellInitializer, WorkflowDispatchReadinessInitializer>();

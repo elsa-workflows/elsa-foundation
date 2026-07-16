@@ -15,7 +15,9 @@ public sealed class GroundworkWorkflowDispatchStore :
     IWorkflowDispatchStore,
     IWorkflowDispatchQueryStore,
     IWorkflowDispatchDeleteStore,
-    IWorkflowDispatchRetentionRootStore
+    IWorkflowDispatchRetentionRootStore,
+    IWorkflowDispatchAdmissionStore,
+    IWorkflowDispatchCancellationStore
 {
     private const int CandidatePageSize = WorkflowDispatchQuery.MaximumTake;
     private readonly IDocumentStore _store;
@@ -78,6 +80,84 @@ public sealed class GroundworkWorkflowDispatchStore :
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         return (await LoadAsync(dispatchId, cancellationToken))?.Record;
+    }
+
+    public async ValueTask<WorkflowDispatchAdmissionResult> TryAdmitAsync(
+        string dispatchId,
+        DateTimeOffset admittedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
+        if (admittedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(admittedAt), "Child admission requires a recorded timestamp.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        while (true)
+        {
+            var loaded = await LoadAsync(dispatchId, cancellationToken)
+                ?? throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found for child admission.");
+            _accessContextAccessor.Current.EnsureTenantScope(loaded.Record.TenantId);
+            if (loaded.Record.Status == WorkflowDispatchStatus.Started)
+                return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.AlreadyAdmitted, loaded.Record);
+            if (WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(loaded.Record))
+                return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission, loaded.Record);
+            if (loaded.Record.Status != WorkflowDispatchStatus.Pending)
+                return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.Terminal, loaded.Record);
+
+            var effectiveAdmittedAt = admittedAt > loaded.Record.UpdatedAt
+                ? admittedAt
+                : loaded.Record.UpdatedAt;
+            var admitted = loaded.Record.TransitionTo(WorkflowDispatchStatus.Started, effectiveAdmittedAt);
+            var result = await SaveAsync(admitted, loaded.Version, cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.Saved)
+                return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.Admitted, admitted);
+            if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+                throw new InvalidOperationException($"Groundwork rejected workflow dispatch admission '{dispatchId}' with status '{result.Status}'.");
+        }
+    }
+
+    public async ValueTask<WorkflowDispatchCancellationResult> ApplyCancellationAsync(
+        WorkflowDispatchCancellationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        while (true)
+        {
+            var loaded = await LoadAsync(request.DispatchId, cancellationToken)
+                ?? throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
+            _accessContextAccessor.Current.EnsureTenantScope(loaded.Record.TenantId);
+            ValidateCancellationIdentity(loaded.Record, request);
+
+            WorkflowDispatchRecord candidate;
+            WorkflowDispatchCancellationDisposition disposition;
+            if (loaded.Record.Status == WorkflowDispatchStatus.Pending)
+            {
+                candidate = WorkflowDispatchLifecycle.CancelBeforeAdmission(loaded.Record, request.RequestedAt);
+                disposition = WorkflowDispatchCancellationDisposition.AppliedBeforeAdmission;
+            }
+            else if (loaded.Record.Status == WorkflowDispatchStatus.Started)
+            {
+                candidate = WorkflowDispatchLifecycle.MarkCancellationRequested(loaded.Record, request.RequestedAt);
+                disposition = WorkflowDispatchCancellationDisposition.CancellationRequestedAfterAdmission;
+            }
+            else
+            {
+                return new WorkflowDispatchCancellationResult(
+                    WorkflowDispatchCancellationDisposition.TerminalUnchanged,
+                    loaded.Record);
+            }
+
+            if (WorkflowDispatchLifecycle.RecordsEqual(loaded.Record, candidate))
+                return new WorkflowDispatchCancellationResult(disposition, loaded.Record);
+
+            var result = await SaveAsync(candidate, loaded.Version, cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.Saved)
+                return new WorkflowDispatchCancellationResult(disposition, candidate);
+            if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+                throw new InvalidOperationException($"Groundwork rejected workflow dispatch cancellation '{request.DispatchId}' with status '{result.Status}'.");
+        }
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListAsync(
@@ -219,6 +299,21 @@ public sealed class GroundworkWorkflowDispatchStore :
                 content,
                 expectedVersion),
             cancellationToken);
+    }
+
+    private static void ValidateCancellationIdentity(
+        WorkflowDispatchRecord record,
+        WorkflowDispatchCancellationRequest request)
+    {
+        if (!StringComparer.Ordinal.Equals(record.DispatchId, request.DispatchId) ||
+            !StringComparer.Ordinal.Equals(record.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(record.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
+            !StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId) ||
+            record.Mode != WorkflowDispatchMode.WaitForCompletion ||
+            !WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(record))
+        {
+            throw new InvalidOperationException($"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with its durable dispatch record.");
+        }
     }
 
     private async ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> QueryAsync(

@@ -41,8 +41,15 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IWorkflowDispatchStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns first-class workflow-dispatch lifecycle records).
 - **Signature:** save/find plus list by parent workflow execution ID.
-- **Usage:** `RuntimeCheckpointStateChangeSet.WorkflowDispatches` is applied atomically with activity state and post-commit outbox work. The default in-memory checkpoint provider projects it through `InMemoryWorkflowDispatchStore`; Groundwork rejects non-empty dispatch changes until #678 supplies durable persistence.
+- **Usage:** `RuntimeCheckpointStateChangeSet.WorkflowDispatches` is applied atomically with activity state and post-commit outbox work. Built-in in-memory and Groundwork providers project it through their workflow-dispatch stores.
 - **Safety:** operational records contain safe input descriptors, never raw child input values. Raw values exist only in the protected child-start intent payload required for delivery.
+
+### `IWorkflowDispatchAdmissionStore` / `IWorkflowDispatchCancellationStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Additive provider capabilities over the configured `IWorkflowDispatchStore`.
+- **Signature:** `TryAdmitAsync(dispatchId, admittedAt, ...)` conditionally advances Pending to Started; `ApplyCancellationAsync(request, ...)` resolves a replay-stable parent cancellation request against current admission state.
+- **Usage:** DispatchWorkflow linearizes external child start against parent cancellation. Cancellation requests are carried in `RuntimeCheckpointStateChangeSet.WorkflowDispatchCancellations` and resolved in the same provider transaction as the parent Cancelled state and child-cancel outbox item.
+- **Safety:** cancellation wins by producing a Cancelled-before-admission marker that suppresses later start; admission wins by preserving Started and adding cancellation-requested responsibility. Terminal state never regresses. DispatchWorkflow readiness fails when either capability is absent.
+- **Default implementations:** `InMemoryWorkflowDispatchStore` and Groundwork's scoped `GroundworkWorkflowDispatchStore`.
 
 ### `IWorkflowExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns retained workflow-execution state and its executable-retention projection).
@@ -95,7 +102,7 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 - **Kind:** Contributor (zero or more deterministic enrichment phases run before checkpoint fingerprinting and persistence).
 - **Signature:** `Order` plus `EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)`.
 - **Registration and ordering:** register contributors as `IEnumerable<IRuntimeCheckpointCommitEnricher>`. Lower `Order` values run first; equal values retain registration order. Existing contributors that do not override `Order` remain in the default phase (`0`). Later phases may depend only on state established by documented earlier phases.
-- **Default implementations and dependents:** `WorkflowDispatchCheckpointEnricher` projects generic child terminal lifecycle in phase `0`; DispatchWorkflow's successful-result enricher runs later to consume that projection. Replacements must be replay-deterministic and must fail closed on conflicting state.
+- **Default implementations and dependents:** `WorkflowDispatchCheckpointEnricher` projects generic child terminal lifecycle in phase `0`; DispatchWorkflow parent cancellation runs in phase `50`; terminal result/resume enrichment runs in phase `100`. Replacements must be replay-deterministic and must fail closed on conflicting state.
 
 ### `IRuntimePostCommitIntentDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one dispatcher owns delivery of committed outbound runtime intents for a composition).

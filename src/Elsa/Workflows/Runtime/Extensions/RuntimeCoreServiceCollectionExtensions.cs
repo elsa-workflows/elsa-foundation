@@ -106,6 +106,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowDispatchRetentionRootStore>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchRetentionRootStore ??
             throw new InvalidOperationException("The configured workflow dispatch store does not provide executable retention-root projection."));
+        services.TryAddSingleton<IWorkflowDispatchAdmissionStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchAdmissionStore ??
+            throw new InvalidOperationException("The configured workflow dispatch store does not provide atomic child admission."));
+        services.TryAddSingleton<IWorkflowDispatchCancellationStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchCancellationStore ??
+            throw new InvalidOperationException("The configured workflow dispatch store does not provide atomic parent cancellation resolution."));
         services.TryAddScoped<InMemoryRuntimeCheckpointCommitStore>();
         services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());

@@ -74,12 +74,16 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IWorkflowDispatchQueryStore>();
         services.RemoveAll<IWorkflowDispatchDeleteStore>();
         services.RemoveAll<IWorkflowDispatchRetentionRootStore>();
+        services.RemoveAll<IWorkflowDispatchAdmissionStore>();
+        services.RemoveAll<IWorkflowDispatchCancellationStore>();
         services.RemoveAll<GroundworkWorkflowDispatchStore>();
         services.AddScoped<GroundworkWorkflowDispatchStore>();
         services.AddScoped<IWorkflowDispatchStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
         services.AddScoped<IWorkflowDispatchQueryStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
         services.AddScoped<IWorkflowDispatchDeleteStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
         services.AddScoped<IWorkflowDispatchRetentionRootStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
+        services.AddScoped<IWorkflowDispatchAdmissionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
+        services.AddScoped<IWorkflowDispatchCancellationStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
 
         // Durable checkpoint writer. It orchestrates the Groundwork-backed seam stores above and records a
         // restart-safe per-CommitId marker, replacing the in-memory writer registered by the runtime feature.

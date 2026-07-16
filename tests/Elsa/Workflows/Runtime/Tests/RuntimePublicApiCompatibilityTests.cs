@@ -48,6 +48,18 @@ public sealed class RuntimePublicApiCompatibilityTests
             typeof(IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>),
             typeof(IReadOnlyCollection<ActivityScopeCleanupRequest>));
         AssertConstructor(
+            typeof(RuntimeCheckpointStateChangeSet),
+            typeof(RuntimeStateChange<WorkflowExecutionState>), typeof(RuntimeStateChange<SchedulerState>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<BookmarkState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<DurableValueState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<IncidentState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>),
+            typeof(IReadOnlyCollection<ActivityScopeCleanupRequest>));
+        AssertConstructor(
             typeof(InMemoryRuntimeCheckpointCommitStore),
             typeof(IWorkflowExecutionStateStore), typeof(IActivityExecutionStateStore), typeof(IBookmarkStateStore),
             typeof(IDurableValueStateStore), typeof(IIncidentStateStore), typeof(IExecutionLivenessStateStore),

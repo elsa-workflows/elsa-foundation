@@ -98,14 +98,16 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         int dispatchNestingDepth = 0,
         string? parentDefinitionId = null,
         Func<ValueTask>? beforeStart = null,
-        bool waitForCompletion = false)
+        bool waitForCompletion = false,
+        bool? cancelChildOnParentCancellation = null)
     {
         var parentExecutable = NewParentExecutable(
             caseId,
             correlationOverride,
             dispatchInputs,
             parentDefinitionId,
-            waitForCompletion);
+            waitForCompletion,
+            cancelChildOnParentCancellation);
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
@@ -168,7 +170,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             correlationOverride: null,
             dispatchInputs: null,
             parentDefinitionId: null,
-            waitForCompletion);
+            waitForCompletion,
+            cancelChildOnParentCancellation: null);
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
@@ -297,7 +300,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         string? correlationOverride,
         IReadOnlyDictionary<string, object?>? dispatchInputs,
         string? parentDefinitionId,
-        bool waitForCompletion)
+        bool waitForCompletion,
+        bool? cancelChildOnParentCancellation)
     {
         dispatchInputs ??= new Dictionary<string, object?>
         {
@@ -328,6 +332,13 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             inputs[nameof(DispatchWorkflowActivity.WaitForCompletion)] = LiteralBinding(
                 nameof(DispatchWorkflowActivity.WaitForCompletion),
                 true,
+                typeof(bool));
+        }
+        if (cancelChildOnParentCancellation is not null)
+        {
+            inputs[nameof(DispatchWorkflowActivity.CancelChildOnParentCancellation)] = LiteralBinding(
+                nameof(DispatchWorkflowActivity.CancelChildOnParentCancellation),
+                cancelChildOnParentCancellation.Value,
                 typeof(bool));
         }
 
@@ -468,6 +479,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     activity.CorrelationId = (InputArgument<string>)correlationId;
                 if (inputs.TryGetValue(nameof(activity.WaitForCompletion), out var waitForCompletion))
                     activity.WaitForCompletion = (InputArgument<bool>)waitForCompletion;
+                if (inputs.TryGetValue(nameof(activity.CancelChildOnParentCancellation), out var cancelChild))
+                    activity.CancelChildOnParentCancellation = (InputArgument<bool>)cancelChild;
             }
 
             if (outputs is not null && outputs.TryGetValue(nameof(activity.ChildWorkflowExecutionId), out var childId))

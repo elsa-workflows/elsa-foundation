@@ -14,7 +14,17 @@ public sealed class WorkflowDispatchReadinessInitializer(
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         await using var scope = services.CreateAsyncScope();
-        var report = await scope.ServiceProvider
+        var scopedServices = scope.ServiceProvider;
+        var dispatchStore = scopedServices.GetRequiredService<IWorkflowDispatchStore>();
+        if (dispatchStore is not IWorkflowDispatchAdmissionStore ||
+            dispatchStore is not IWorkflowDispatchCancellationStore)
+        {
+            throw new InvalidOperationException(
+                $"DispatchWorkflow requires '{nameof(IWorkflowDispatchAdmissionStore)}' and " +
+                $"'{nameof(IWorkflowDispatchCancellationStore)}' on the configured workflow-dispatch store.");
+        }
+
+        var report = await scopedServices
             .GetRequiredService<IWorkflowDispatchReadinessAssessor>()
             .AssessAsync(cancellationToken);
         if (report.Guarantee == WorkflowDispatchReadinessGuarantee.DurableReady)

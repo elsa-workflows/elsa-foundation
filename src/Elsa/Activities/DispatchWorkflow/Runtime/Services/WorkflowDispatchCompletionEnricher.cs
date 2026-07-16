@@ -7,12 +7,33 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
-/// <summary>Records replay-stable parent resume responsibility in a waited child's Completed checkpoint.</summary>
-public sealed class WorkflowDispatchCompletionEnricher(
-    IWorkflowOutputSource workflowOutputSource,
-    IPostCommitOutboxLookupStore outboxLookupStore) : IRuntimeCheckpointCommitEnricher
+/// <summary>Records replay-stable parent resume responsibility in a waited child's terminal checkpoint.</summary>
+public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommitEnricher
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IWorkflowOutputSource _workflowOutputSource;
+    private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
+    private readonly IIncidentStateStore? _incidentStateStore;
+
+    public WorkflowDispatchCompletionEnricher(
+        IWorkflowOutputSource workflowOutputSource,
+        IPostCommitOutboxLookupStore outboxLookupStore)
+        : this(workflowOutputSource, outboxLookupStore, incidentStateStore: null)
+    {
+    }
+
+    public WorkflowDispatchCompletionEnricher(
+        IWorkflowOutputSource workflowOutputSource,
+        IPostCommitOutboxLookupStore outboxLookupStore,
+        IIncidentStateStore? incidentStateStore)
+    {
+        ArgumentNullException.ThrowIfNull(workflowOutputSource);
+        ArgumentNullException.ThrowIfNull(outboxLookupStore);
+        _workflowOutputSource = workflowOutputSource;
+        _outboxLookupStore = outboxLookupStore;
+        _incidentStateStore = incidentStateStore;
+    }
+
     public int Order => 100;
 
     public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(
@@ -22,14 +43,15 @@ public sealed class WorkflowDispatchCompletionEnricher(
         ArgumentNullException.ThrowIfNull(commit);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (commit.StateChanges.WorkflowExecution?.State is not { Status: WorkflowExecutionStatus.Completed } child)
+        if (commit.StateChanges.WorkflowExecution?.State is not { } child ||
+            !TryGetDispatchStatus(child.Status, out var terminalStatus))
             return commit;
 
         var dispatches = commit.StateChanges.WorkflowDispatches
             .Where(change => change.Operation != RuntimeStateChangeOperation.Delete)
             .Select(change => change.State)
             .Where(record => record.Mode == WorkflowDispatchMode.WaitForCompletion &&
-                             record.Status == WorkflowDispatchStatus.Completed &&
+                             record.Status == terminalStatus &&
                              StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, child.WorkflowExecutionId))
             .OrderBy(record => record.DispatchId, StringComparer.Ordinal)
             .ToArray();
@@ -38,13 +60,14 @@ public sealed class WorkflowDispatchCompletionEnricher(
 
         var intents = commit.PostCommitIntents.ToList();
         IReadOnlyCollection<RuntimeWorkflowOutput>? safeOutputs = null;
+        IReadOnlyCollection<string>? incidentIds = null;
         foreach (var dispatch in dispatches)
         {
             var identity = new WorkflowDispatchIdentity(
                 dispatch.ParentWorkflowExecutionId,
                 dispatch.ParentActivityExecutionId);
             var outboxItemId = identity.ParentResumeOutboxItemId(commit.CommitId);
-            var committed = await outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
+            var committed = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
             var existing = intents.SingleOrDefault(intent => StringComparer.Ordinal.Equals(intent.IntentId, identity.ParentResumeIntentId));
             if (committed is not null && existing is not null && !IntentsEquivalent(committed.Intent, existing))
                 throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with its committed outbox item.");
@@ -58,13 +81,29 @@ public sealed class WorkflowDispatchCompletionEnricher(
             }
             else
             {
-                safeOutputs ??= await workflowOutputSource.ReadAsync(
-                    child.WorkflowExecutionId,
-                    commit.StateChanges.DurableValues,
-                    cancellationToken);
-                var canonical = CreateIntent(dispatch, identity, safeOutputs, commit.Checkpoint.OccurredAt);
+                if (terminalStatus == WorkflowDispatchStatus.Completed)
+                {
+                    safeOutputs ??= await _workflowOutputSource.ReadAsync(
+                        child.WorkflowExecutionId,
+                        commit.StateChanges.DurableValues,
+                        cancellationToken);
+                }
+                else if (terminalStatus == WorkflowDispatchStatus.Faulted)
+                {
+                    incidentIds ??= await ReadIncidentIdsAsync(
+                        child.WorkflowExecutionId,
+                        commit.StateChanges.Incidents,
+                        cancellationToken);
+                }
+
+                var canonical = CreateIntent(
+                    dispatch,
+                    identity,
+                    safeOutputs ?? [],
+                    incidentIds ?? [],
+                    commit.Checkpoint.OccurredAt);
                 if (existing is not null && !IntentsEquivalent(canonical, existing))
-                    throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe completed result.");
+                    throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe terminal result.");
 
                 intent = existing ?? canonical;
                 if (existing is null)
@@ -81,20 +120,30 @@ public sealed class WorkflowDispatchCompletionEnricher(
         WorkflowDispatchRecord dispatch,
         WorkflowDispatchIdentity identity,
         IReadOnlyCollection<RuntimeWorkflowOutput> outputs,
+        IReadOnlyCollection<string> incidentIds,
         DateTimeOffset recordedAt)
     {
-        var resultOutputs = outputs
-            .OrderBy(output => output.Name, StringComparer.Ordinal)
-            .Select(output => new DispatchWorkflowOutput(
-                output.Name,
-                output.Value,
-                output.Type.Id ?? output.Type.Kind,
-                output.IsRedacted))
-            .ToArray();
+        var resultOutputs = dispatch.Status == WorkflowDispatchStatus.Completed
+            ? outputs
+                .OrderBy(output => output.Name, StringComparer.Ordinal)
+                .Select(output => new DispatchWorkflowOutput(
+                    output.Name,
+                    output.Value,
+                    output.Type.Id ?? output.Type.Kind,
+                    output.IsRedacted))
+                .ToArray()
+            : [];
+        var diagnostics = dispatch.Status switch
+        {
+            WorkflowDispatchStatus.Faulted => DispatchWorkflowDiagnostics.Faulted(incidentIds),
+            WorkflowDispatchStatus.Cancelled => DispatchWorkflowDiagnostics.Cancelled(),
+            _ => new Dictionary<string, string>()
+        };
         var result = new DispatchWorkflowResult(
             dispatch.ChildWorkflowExecutionId,
-            WorkflowDispatchStatus.Completed,
-            resultOutputs);
+            dispatch.Status,
+            resultOutputs,
+            diagnostics);
         var payload = new WorkflowDispatchParentResumePayload(
             dispatch.DispatchId,
             dispatch.ParentWorkflowExecutionId,
@@ -145,12 +194,58 @@ public sealed class WorkflowDispatchCompletionEnricher(
         var payload = intent.Payload.Value.Deserialize<WorkflowDispatchParentResumePayload>(SerializerOptions)
             ?? throw new InvalidOperationException($"Parent-resume intent '{intent.IntentId}' has no valid payload.");
         if (!StringComparer.Ordinal.Equals(payload.DispatchId, dispatch.DispatchId) ||
-            !StringComparer.Ordinal.Equals(payload.ChildWorkflowExecutionId, dispatch.ChildWorkflowExecutionId))
+            !StringComparer.Ordinal.Equals(payload.ChildWorkflowExecutionId, dispatch.ChildWorkflowExecutionId) ||
+            payload.Result.Status != dispatch.Status)
         {
             throw new InvalidOperationException($"Parent-resume intent '{intent.IntentId}' payload conflicts with dispatch '{dispatch.DispatchId}'.");
         }
 
         return payload;
+    }
+
+    private async ValueTask<IReadOnlyCollection<string>> ReadIncidentIdsAsync(
+        string childWorkflowExecutionId,
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>> pendingChanges,
+        CancellationToken cancellationToken)
+    {
+        if (_incidentStateStore is null)
+            throw new InvalidOperationException("Faulted DispatchWorkflow completion requires an incident state store.");
+
+        var incidents = new Dictionary<string, IncidentState>(StringComparer.Ordinal);
+        foreach (var incident in await _incidentStateStore.ListBlockingAsync(childWorkflowExecutionId, cancellationToken))
+        {
+            if (incident.IsBlocking &&
+                StringComparer.Ordinal.Equals(incident.WorkflowExecutionId, childWorkflowExecutionId))
+            {
+                incidents[incident.IncidentId] = incident;
+            }
+        }
+        foreach (var change in pendingChanges.Where(change =>
+                     StringComparer.Ordinal.Equals(change.State.WorkflowExecutionId, childWorkflowExecutionId)))
+        {
+            if (change.Operation == RuntimeStateChangeOperation.Delete || !change.State.IsBlocking)
+                incidents.Remove(change.State.IncidentId);
+            else
+                incidents[change.State.IncidentId] = change.State;
+        }
+
+        return incidents.Keys
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool TryGetDispatchStatus(
+        WorkflowExecutionStatus workflowStatus,
+        out WorkflowDispatchStatus dispatchStatus)
+    {
+        dispatchStatus = workflowStatus switch
+        {
+            WorkflowExecutionStatus.Completed => WorkflowDispatchStatus.Completed,
+            WorkflowExecutionStatus.Faulted => WorkflowDispatchStatus.Faulted,
+            WorkflowExecutionStatus.Cancelled => WorkflowDispatchStatus.Cancelled,
+            _ => default
+        };
+        return workflowStatus is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Faulted or WorkflowExecutionStatus.Cancelled;
     }
 
     private static bool IntentsEquivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>

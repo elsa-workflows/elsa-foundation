@@ -367,6 +367,8 @@ internal sealed class GroundworkPersistenceReconciler
         Map("runtime", "IWorkflowDispatchQueryStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
         Map("runtime", "IWorkflowDispatchDeleteStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
         Map("runtime", "IWorkflowDispatchRetentionRootStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchAdmissionStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchCancellationStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
         Map("runtime", "ISchedulerStateStore", "runtime-scheduler-state", "SchedulerStateDocumentKind"),
         Map("runtime", "IWorkflowExecutableSourceReferenceStore", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),
         Map("runtime", "IWorkflowExecutableSourceReferenceWriter", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),

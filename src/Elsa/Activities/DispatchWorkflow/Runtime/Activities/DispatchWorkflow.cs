@@ -134,6 +134,19 @@ public sealed class DispatchWorkflow : CodeActivity
                 StringComparer.Ordinal.Equals(dependency.ArtifactId, pin.Executable.ArtifactId) &&
                 StringComparer.Ordinal.Equals(dependency.ArtifactHash, pin.Executable.ArtifactHash) &&
                 dependency.DispatchNodeIds.Contains(dispatchNodeId, StringComparer.Ordinal));
+        var dispatchMode = waitForCompletion
+            ? WorkflowDispatchMode.WaitForCompletion
+            : WorkflowDispatchMode.FireAndForget;
+        var dispatchMetadata = new Dictionary<string, string>
+        {
+            ["runtime.sourceReferenceId"] = provenance.SourceReferenceId
+        };
+        var cancelChildOnParentCancellation = CancelChildOnParentCancellation is null ||
+                                              context.Get(CancelChildOnParentCancellation);
+        WorkflowDispatchLifecycle.SetEffectiveCancellationPolicy(
+            dispatchMetadata,
+            dispatchMode,
+            cancelChildOnParentCancellation);
         var record = new WorkflowDispatchRecord(
             dispatchId: identity.DispatchId,
             parentWorkflowExecutionId: runtimeContext.WorkflowExecutionId,
@@ -141,7 +154,7 @@ public sealed class DispatchWorkflow : CodeActivity
             childWorkflowExecutionId: identity.ChildWorkflowExecutionId,
             childExecutable: pin.Executable,
             childSource: provenance,
-            mode: waitForCompletion ? WorkflowDispatchMode.WaitForCompletion : WorkflowDispatchMode.FireAndForget,
+            mode: dispatchMode,
             status: WorkflowDispatchStatus.Pending,
             correlationId: correlationId,
             tenantId: parent.TenantId,
@@ -151,10 +164,7 @@ public sealed class DispatchWorkflow : CodeActivity
             inputDescriptors: jsonInputs.Select(item => new WorkflowDispatchInputDescriptor(item.Key, DescribeType(item.Value))).ToArray(),
             createdAt: now,
             updatedAt: now,
-            metadata: new Dictionary<string, string>
-            {
-                ["runtime.sourceReferenceId"] = provenance.SourceReferenceId
-            },
+            metadata: dispatchMetadata,
             dispatchNestingDepth: childNestingDepth);
         var startPayload = new WorkflowDispatchStartPayload(
             identity.DispatchId,
@@ -225,14 +235,20 @@ public sealed class DispatchWorkflow : CodeActivity
             !StringComparer.Ordinal.Equals(payload.BookmarkId, identity.WaitBookmarkId) ||
             !StringComparer.Ordinal.Equals(payload.StimulusType, DispatchWorkflowConstants.WaitStimulusType) ||
             !StringComparer.Ordinal.Equals(payload.StimulusHash, identity.WaitStimulusHash) ||
-            payload.Result.Status != WorkflowDispatchStatus.Completed)
+            !DispatchWorkflowResult.SupportsParentResume(payload.Result.Status))
         {
             throw new InvalidOperationException("DispatchWorkflow completion resume payload does not match the current activity execution.");
         }
 
         context.Set(ChildWorkflowExecutionId, payload.ChildWorkflowExecutionId, nameof(ChildWorkflowExecutionId));
         context.Set(Result, payload.Result, nameof(Result));
-        context.SetOutcomes([DispatchWorkflowOutcomes.Completed]);
+        context.SetOutcomes([payload.Result.Status switch
+        {
+            WorkflowDispatchStatus.Completed => DispatchWorkflowOutcomes.Completed,
+            WorkflowDispatchStatus.Faulted => DispatchWorkflowOutcomes.Faulted,
+            WorkflowDispatchStatus.Cancelled => DispatchWorkflowOutcomes.Cancelled,
+            _ => throw new InvalidOperationException("DispatchWorkflow completion resume payload has an unsupported child terminal status.")
+        }]);
     }
 
     private static void ValidatePin(DispatchWorkflowPin pin, string definitionId)

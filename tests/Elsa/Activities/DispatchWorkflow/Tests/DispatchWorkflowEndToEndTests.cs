@@ -2,9 +2,11 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -13,6 +15,97 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 public sealed class DispatchWorkflowEndToEndTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    [Theory]
+    [InlineData(true, null, true)]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, null, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, false)]
+    public async Task Dispatch_PersistsEffectiveCancelPolicy(
+        bool waitForCompletion,
+        bool? authoredPolicy,
+        bool expectedPolicy)
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var run = await fixture.StartParentAsync(
+            caseId: $"cancel-policy-{waitForCompletion}-{authoredPolicy}",
+            parentWorkflowExecutionId: $"parent-cancel-policy-{waitForCompletion}-{authoredPolicy}",
+            parentCorrelationId: "correlation-parent",
+            waitForCompletion: waitForCompletion,
+            cancelChildOnParentCancellation: authoredPolicy);
+
+        Assert.Equal(expectedPolicy, WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(run.Dispatch));
+        Assert.Equal(
+            expectedPolicy.ToString().ToLowerInvariant(),
+            run.Dispatch.Metadata[WorkflowDispatchLifecycle.CancellationPolicyMetadataKey]);
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted, DispatchWorkflowOutcomes.Faulted)]
+    [InlineData(WorkflowExecutionStatus.Cancelled, WorkflowDispatchStatus.Cancelled, DispatchWorkflowOutcomes.Cancelled)]
+    public async Task NonSuccessChild_CompletesParentActivityWithOrdinarySafeOutcome(
+        WorkflowExecutionStatus childStatus,
+        WorkflowDispatchStatus dispatchStatus,
+        string expectedOutcome)
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var run = await fixture.StartParentAsync(
+            caseId: $"terminal-{expectedOutcome.ToLowerInvariant()}",
+            parentWorkflowExecutionId: $"parent-terminal-{expectedOutcome.ToLowerInvariant()}",
+            parentCorrelationId: "correlation-parent",
+            waitForCompletion: true);
+        if (childStatus == WorkflowExecutionStatus.Faulted)
+        {
+            await fixture.Services.GetRequiredService<IIncidentStateStore>().TryAddAsync(new IncidentState(
+                "incident-child",
+                run.Identity.ChildWorkflowExecutionId,
+                "activity-child",
+                "node-child",
+                IncidentSeverity.Error,
+                IncidentStatus.Blocking,
+                IncidentResolutionAction.FaultWorkflow,
+                "SecretException",
+                "secret child message",
+                DispatchWorkflowRuntimeTestFixture.Now,
+                null,
+                new Dictionary<string, string> { ["unsafe"] = "secret diagnostic payload" }));
+        }
+
+        await using (var scope = fixture.Services.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>()
+                .CommitAsync(NewTerminalCommit(run, childStatus));
+            Assert.True(result.Succeeded);
+        }
+
+        var resumeIntent = Assert.Single(
+            fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind).PostCommitIntents,
+            intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
+        await using (var scope = fixture.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>().HandleAsync(resumeIntent);
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
+        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
+        var outcomes = JsonSerializer.Deserialize<string[]>(activity.Metadata[RuntimeMetadataKeys.CompletionOutcomeNames]);
+        Assert.Equal(new[] { expectedOutcome }, outcomes);
+        Assert.Empty(await fixture.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run.Start.WorkflowExecutionId));
+
+        var values = await fixture.ListDurableValuesAsync(run.Start.WorkflowExecutionId);
+        var resultValue = Assert.Single(values, value => value.DurableValueId.Contains("dispatch-result-terminal", StringComparison.Ordinal));
+        var dispatchResult = resultValue.InlineValue!.Value.Deserialize<DispatchWorkflowResult>(SerializerOptions);
+        Assert.NotNull(dispatchResult);
+        Assert.Equal(dispatchStatus, dispatchResult.Status);
+        Assert.Empty(dispatchResult.Outputs);
+        Assert.Equal(
+            childStatus == WorkflowExecutionStatus.Faulted
+                ? DispatchWorkflowDiagnostics.FaultedCode
+                : DispatchWorkflowDiagnostics.CancelledCode,
+            dispatchResult.DiagnosticMetadata[DispatchWorkflowDiagnostics.CodeKey]);
+        Assert.DoesNotContain("secret", resultValue.InlineValue.Value.GetRawText(), StringComparison.OrdinalIgnoreCase);
+    }
 
     [Fact]
     public async Task Wait_mode_starts_child_then_resumes_parent_once_with_completed_result()
@@ -83,6 +176,55 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Null(await recreated.FindWorkflowAsync(parentWorkflowExecutionId));
         Assert.Null(await recreated.FindBookmarkAsync(parentWorkflowExecutionId, bookmarkId));
         Assert.Empty(await recreated.ListDispatchesAsync(parentWorkflowExecutionId));
+    }
+
+    private static RuntimeCheckpointCommit NewTerminalCommit(
+        ParentDispatchRun run,
+        WorkflowExecutionStatus status)
+    {
+        var terminalAt = DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1);
+        var child = new WorkflowExecutionState(
+            run.Identity.ChildWorkflowExecutionId,
+            run.Dispatch.ChildExecutable,
+            status,
+            null,
+            DispatchWorkflowRuntimeTestFixture.Now,
+            DispatchWorkflowRuntimeTestFixture.Now,
+            terminalAt,
+            terminalAt,
+            run.Dispatch.CorrelationId,
+            run.Start.WorkflowExecutionId,
+            run.Dispatch.TenantId,
+            new Dictionary<string, string>())
+        {
+            RunKind = run.Dispatch.RunKind,
+            PinnedSource = run.Dispatch.ChildSource,
+            Partition = run.Dispatch.Partition,
+            Authority = run.Dispatch.Authority,
+            DispatchNestingDepth = 1
+        };
+        var checkpointName = status == WorkflowExecutionStatus.Faulted
+            ? RuntimeCheckpointNames.WorkflowFaulted
+            : RuntimeCheckpointNames.WorkflowCancelled;
+        return new RuntimeCheckpointCommit(
+            $"commit:{child.WorkflowExecutionId}:{checkpointName}",
+            new RuntimeCheckpoint(
+                $"checkpoint:{child.WorkflowExecutionId}:{checkpointName}",
+                checkpointName,
+                child.WorkflowExecutionId,
+                terminalAt,
+                [],
+                new Dictionary<string, string>()),
+            new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    child.WorkflowExecutionId,
+                    RuntimeStateChangeOperation.Upsert,
+                    child,
+                    new Dictionary<string, string>()),
+                null,
+                [], [], [], [], []),
+            [],
+            new Dictionary<string, string>());
     }
 
     [Fact]
