@@ -52,7 +52,6 @@ public sealed class RuntimeContainerScopeServiceTests
             "test/descriptor",
             JsonSerializer.SerializeToElement(new { }),
             new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot("children", [node])]);
         var executable = new WorkflowExecutable(
@@ -205,7 +204,6 @@ public sealed class RuntimeContainerScopeServiceTests
             "test/descriptor",
             JsonSerializer.SerializeToElement(new { }),
             new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot("body", [body])]);
         var executable = new WorkflowExecutable(

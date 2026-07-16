@@ -27,7 +27,7 @@ namespace Elsa.Activities.Flowchart.Activities;
 [ActivityChildSlot("Flowchart.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
 [ActivityOutcome(ActivityOutcomes.Break)]
-public sealed class Flowchart : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler, IActivityChildFaultHandler
+public sealed class Flowchart(FlowchartExecutionEngine executionEngine) : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string ActivitiesSlotName = "Flowchart.Activities";
     public const string StructureKind = "elsa.flowchart.structure";
@@ -36,7 +36,7 @@ public sealed class Flowchart : ActivityBase, IActivityResult<ActivityUnit>, IAc
     protected override async ValueTask ExecuteAsync(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
-        await runtimeContext.GetRequiredService<FlowchartExecutionEngine>().StartAsync(runtimeContext);
+        await executionEngine.StartAsync(runtimeContext);
     }
 
     public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
@@ -44,7 +44,7 @@ public sealed class Flowchart : ActivityBase, IActivityResult<ActivityUnit>, IAc
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return runtimeContext.GetRequiredService<FlowchartExecutionEngine>().OnChildCompletedAsync(runtimeContext, context);
+        return executionEngine.OnChildCompletedAsync(runtimeContext, context);
     }
 
     public ValueTask OnChildFaultedAsync(ActivityChildFaultedContext context)
@@ -52,7 +52,7 @@ public sealed class Flowchart : ActivityBase, IActivityResult<ActivityUnit>, IAc
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return runtimeContext.GetRequiredService<FlowchartExecutionEngine>().OnChildFaultedAsync(runtimeContext, context);
+        return executionEngine.OnChildFaultedAsync(runtimeContext, context);
     }
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)

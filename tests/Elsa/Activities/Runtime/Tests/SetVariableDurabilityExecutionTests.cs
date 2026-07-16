@@ -179,7 +179,6 @@ public sealed class SetVariableDurabilityExecutionTests
                     RuntimeInputBindingSource.Literal,
                     literal: Envelope("updated"))
             },
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             intrinsicKind: intrinsicKind,
             intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
@@ -215,7 +214,6 @@ public sealed class SetVariableDurabilityExecutionTests
                     RuntimeInputBindingSource.Expression,
                     expression: expression)
             },
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.Set,
             intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
@@ -243,7 +241,6 @@ public sealed class SetVariableDurabilityExecutionTests
                     RuntimeInputBindingSource.Literal,
                     literal: Envelope(value))
             },
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             intrinsicKind: intrinsicKind);
     }
@@ -269,7 +266,6 @@ public sealed class SetVariableDurabilityExecutionTests
             "intrinsic",
             descriptor.RootElement,
             bindings,
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             intrinsicKind: intrinsicKind);
     }

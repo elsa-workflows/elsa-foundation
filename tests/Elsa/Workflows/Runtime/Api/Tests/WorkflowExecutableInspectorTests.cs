@@ -465,7 +465,6 @@ public sealed class WorkflowExecutableInspectorTests
                 "root", "root", "Test.Root", "1.0.0", "Test",
                 descriptor ?? JsonSerializer.SerializeToElement(new { }),
                 new Dictionary<string, RuntimeInputBinding>(),
-                new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(),
                 structure: structure),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),

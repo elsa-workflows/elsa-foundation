@@ -75,7 +75,6 @@ public sealed class ForIndexResolutionEndToEndTests
                 ["End"] = IntLiteral("End", end),
                 ["Step"] = IntLiteral("Step", step)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(
@@ -104,7 +103,6 @@ public sealed class ForIndexResolutionEndToEndTests
                     source: RuntimeInputBindingSource.VariableRead,
                     variable: new RuntimeVariableReference(ForActivity.IndexVariableName, "node-for"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static RuntimeInputBinding IntLiteral(string name, int value) =>

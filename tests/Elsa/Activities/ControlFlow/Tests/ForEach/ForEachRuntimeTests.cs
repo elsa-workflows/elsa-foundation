@@ -145,7 +145,6 @@ public sealed class ForEachRuntimeTests
             {
                 ["Collection"] = CollectionBinding(collection)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode(BodyNodeId, bodyOutcomes)])],
             structure: new ExecutableActivityStructure(
@@ -169,7 +168,6 @@ public sealed class ForEachRuntimeTests
             {
                 ["Collection"] = CollectionBinding(collection)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [NewWriteLineNode(BodyNodeId, text)])],
             structure: new ExecutableActivityStructure(
@@ -226,7 +224,6 @@ public sealed class ForEachRuntimeTests
                         JsonSerializer.SerializeToElement(text),
                         ValueProtectionPolicy.InstanceInline))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
     }

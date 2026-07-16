@@ -143,7 +143,6 @@ public sealed class CodeIoLeafRuntimeTests
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: BuildTypedContract(activityType));
 

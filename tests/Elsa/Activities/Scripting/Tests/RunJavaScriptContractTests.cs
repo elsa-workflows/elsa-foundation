@@ -40,7 +40,7 @@ public sealed class RunJavaScriptContractTests
             Arguments = JsonSerializer.SerializeToElement(new { amount = 21 })
         };
         using var services = new ServiceCollection().BuildServiceProvider();
-        var context = new SimpleActivityExecutionContext(services, activity, CancellationToken.None);
+        var context = new SimpleActivityExecutionContext(activity, CancellationToken.None);
 
         var transition = await ((IActivity)activity).ExecuteAsync(context);
 

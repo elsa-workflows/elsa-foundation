@@ -3,7 +3,8 @@ using System.Text.Json;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Declared durable runtime value state. Raw activity outputs become durable only by capture into this model.
+/// Declared durable runtime value state for variables, workflow inputs, and workflow outputs.
+/// Activity results use their own atomic completion envelope and are not copied into this model.
 /// </summary>
 public sealed record DurableValueState
 {

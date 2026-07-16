@@ -79,7 +79,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             ?? throw new InvalidOperationException($"Activity result input '{binding.InputName}' requires the pinned producer executable contract.");
         var projection = producerNode.ActivityContract?.Result.Projections.GetValueOrDefault(reference.ProjectionKey)
             ?? throw new InvalidOperationException($"Producer node '{reference.ProducerExecutableNodeId}' has no result projection '{reference.ProjectionKey}'.");
-        var projectedPolicy = Combine(result.Policy, projection.Policy, reference.ProducerExecutableNodeId, projection.Key);
+        var projectedPolicy = ValuePolicyCombiner.RequireMinimum(
+            result.Policy,
+            projection.Policy,
+            $"Result projection '{projection.Key}' on producer node '{reference.ProducerExecutableNodeId}'");
 
         if (result.Presence == ValuePresence.ExplicitNull)
         {
@@ -178,29 +181,5 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
 
     private static ValueEnvelope Retype(ValueEnvelope source, ValueTypeDescriptor targetType) =>
         new(targetType, source.Presence, source.InlineValue, source.ExternalReference, source.Policy);
-
-    private static ValueProtectionPolicy Combine(
-        ValueProtectionPolicy source,
-        ActivityValuePolicy projection,
-        string producerNodeId,
-        string projectionKey)
-    {
-        if (source.RedactionMode is not null && projection.RedactionMode is not null &&
-            !StringComparer.Ordinal.Equals(source.RedactionMode, projection.RedactionMode))
-        {
-            throw new InvalidOperationException(
-                $"Result projection '{projectionKey}' on producer node '{producerNodeId}' declares redaction mode " +
-                $"'{projection.RedactionMode}', which is incompatible with source mode '{source.RedactionMode}'.");
-        }
-
-        return new ValueProtectionPolicy(
-            source.Lifecycle,
-            source.Storage,
-            source.IsSensitive || projection.IsSensitive,
-            source.RequiresEncryption || projection.RequiresEncryption,
-            projection.RedactionMode ?? source.RedactionMode,
-            source.RetentionPolicy,
-            source.Metadata);
-    }
 
 }

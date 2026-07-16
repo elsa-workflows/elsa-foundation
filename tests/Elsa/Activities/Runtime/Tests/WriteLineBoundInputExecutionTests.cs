@@ -17,7 +17,6 @@ public sealed class WriteLineBoundInputExecutionTests
             new Dictionary<string, object?> { ["text"] = "Hello World!" });
         var writeLine = Assert.IsType<WriteLine>(activation.Activity);
         var context = new Elsa.Workflows.Runtime.Core.Services.SimpleActivityExecutionContext(
-            serviceProvider,
             writeLine,
             CancellationToken.None);
 

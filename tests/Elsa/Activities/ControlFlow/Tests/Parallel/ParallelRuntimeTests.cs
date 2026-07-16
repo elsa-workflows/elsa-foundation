@@ -229,7 +229,6 @@ public sealed class ParallelRuntimeTests
                         JsonSerializer.SerializeToElement(ActivityOutcomes.Done),
                         ValueProtectionPolicy.InstanceInline))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.Finish);
 
@@ -256,7 +255,6 @@ public sealed class ParallelRuntimeTests
             descriptorType: typeof(ParallelDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new ParallelDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(

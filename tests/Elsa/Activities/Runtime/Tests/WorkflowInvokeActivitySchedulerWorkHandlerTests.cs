@@ -54,6 +54,10 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal("Done", state.Completion?.OutcomeKey);
         Assert.Equal(5, state.Completion?.Result.InlineValue!.Value.GetProperty("length").GetInt32());
         Assert.NotNull(Assert.Single(state.Attempts!).EndedAt);
+        var inspection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        var outputSnapshot = Assert.Single(inspection!.ValueSnapshots, snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput);
+        Assert.Equal("length", outputSnapshot.Name);
+        Assert.Equal("Int32", outputSnapshot.Type!.Id);
         await AssertCompletionWorkAsync();
     }
 
@@ -236,10 +240,6 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             "typed",
             descriptor,
             new Dictionary<string, RuntimeInputBinding> { ["text"] = input },
-            new Dictionary<string, RuntimeOutputCapture>
-            {
-                ["length"] = new("length", "node-start:result:length", new RuntimeValueTypeDescriptor("alias", "Int32", null), DurableValueLifecycle.Instance, DurableValueStorage.Inline, true)
-            },
             new Dictionary<string, string>(),
             activityContract: contract);
         return new WorkflowExecutable(NewIdentity(), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>());

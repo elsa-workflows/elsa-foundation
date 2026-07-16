@@ -67,7 +67,6 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
             descriptorType: typeof(FlowchartDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots:
             [

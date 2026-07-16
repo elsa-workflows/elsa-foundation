@@ -120,25 +120,6 @@ public sealed record ValueProtectionPolicy
     public bool Satisfies(ValueProtectionPolicy minimum)
     {
         ArgumentNullException.ThrowIfNull(minimum);
-
-        if (minimum.Lifecycle != DurableValueLifecycle.None && Lifecycle == DurableValueLifecycle.None)
-            return false;
-
-        if (minimum.Storage == DurableValueStorage.External && Storage != DurableValueStorage.External)
-            return false;
-
-        if (minimum.Storage == DurableValueStorage.Custom && Storage != DurableValueStorage.Custom)
-            return false;
-
-        if (minimum.IsSensitive && !IsSensitive)
-            return false;
-
-        if (minimum.RequiresEncryption && !RequiresEncryption)
-            return false;
-
-        if (minimum.RedactionMode is not null && !string.Equals(RedactionMode, minimum.RedactionMode, StringComparison.Ordinal))
-            return false;
-
-        return minimum.RetentionPolicy is null || string.Equals(RetentionPolicy, minimum.RetentionPolicy, StringComparison.Ordinal);
+        return ValuePolicyCombiner.Satisfies(this, minimum);
     }
 }

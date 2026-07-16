@@ -71,7 +71,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public const int SentinelStatusCode = StatusCodes.Status418ImATeapot;
 
     /// <summary>The durable value id the published workflow captures the <see cref="HttpEndpointResult.ParsedContent"/> projection under.</summary>
-    public const string ParsedContentOutputName = "EndpointParsedContent";
+    public const string ParsedContentProjectionKey = "ParsedContent";
+    private const string ResultFixtureKeyMetadata = "fixture.result-key";
 
     private readonly IHost _host;
     private readonly string? _databaseDirectory;
@@ -339,8 +340,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <paramref name="path"/>/<paramref name="method"/> with <see cref="HttpEndpoint.CanStartWorkflow"/> = false
     /// (spec 089 D). Because the node can never start a workflow it is NOT a trigger node and is not indexed — the
     /// run is started directly via <see cref="StartWorkflowDirectlyAsync"/>, the endpoint suspends on a bookmark,
-    /// and a matching request resumes it. The node captures <c>Result</c> into the durable value store under
-    /// <paramref name="resultValueId"/> so the resumed run's observed request can be read back.
+    /// and a matching request resumes it. The fixture gives the node a stable test-only result key so its immutable
+    /// committed result can be selected without introducing a second output store.
     /// </summary>
     public async Task PublishResumableHttpEndpointWorkflowAsync(string artifactId, string path, string method, string resultValueId)
     {
@@ -364,8 +365,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// endpoint on <paramref name="startPath"/> (indexed, starts the run) followed by a mid-flow endpoint on
     /// <paramref name="callbackPath"/> (<see cref="HttpEndpoint.CanStartWorkflow"/> = false, suspends). An HTTP
     /// request to the start template runs the first endpoint and suspends on the second; a request to the callback
-    /// template resumes it. Both endpoints capture their <c>Result</c> under distinct durable value ids so both
-    /// observed requests can be read back.
+    /// template resumes it. Both endpoints receive distinct test-only result keys so both immutable committed
+    /// results can be selected without reintroducing output-capture state.
     /// </summary>
     public async Task PublishSequencedHttpEndpointsWorkflowAsync(
         string artifactId,
@@ -400,7 +401,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: sequenceDescriptorPayload,
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, [startNode, callbackNode])],
             structure: new ExecutableActivityStructure(
@@ -581,7 +581,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: descriptorPayload,
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
             structure: new ExecutableActivityStructure(
@@ -641,7 +640,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
     }
@@ -675,7 +673,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             {
                 [durationKey] = TypedLiteralBinding(durationKey, duration, typeof(TimeSpan))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: UnitActivityContract(typeof(StallingActivity), descriptorPayload, inputs, [ActivityOutcomes.Done]));
     }
@@ -779,25 +776,26 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);
 
     /// <summary>
-    /// Reads a named projection from the activity's immutable committed result. The fixture's authored
-    /// output-capture declaration supplies only the stable projection-to-test identifier mapping; the runtime
-    /// stores no second mutable output slot or independent durable value.
+    /// Reads a named projection from the latest activity completion whose pinned contract declares it.
+    /// The projection is selected directly from the immutable committed result; there is no second output store.
     /// </summary>
-    public async Task<JsonElement> ReadResultProjectionAsync(string workflowExecutionId, string valueId)
+    public async Task<JsonElement> ReadResultProjectionAsync(
+        string workflowExecutionId,
+        string projectionKey,
+        string? resultFixtureKey = null)
     {
         var workflowState = await WorkflowExecutionAsync(workflowExecutionId);
         var executable = await Services.GetRequiredService<IWorkflowExecutableStore>()
             .FindAsync(workflowState.PinnedExecutable.ArtifactId)
             ?? throw new InvalidOperationException($"Executable '{workflowState.PinnedExecutable.ArtifactId}' was not found.");
-        var projectionOwner = Assert.Single(
-            executable.Nodes.SelectMany(node => node.OutputCaptures.Select(capture => (Node: node, Capture: capture.Value)))
-                .Where(candidate => StringComparer.Ordinal.Equals(candidate.Capture.ValueId, valueId)));
-        var contract = projectionOwner.Node.ActivityContract
-            ?? throw new InvalidOperationException($"Node '{projectionOwner.Node.ExecutableNodeId}' has no pinned activity contract.");
-        var projection = contract.Result.Projections[projectionOwner.Capture.OutputName];
-        var activityState = Assert.Single(
-            await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId),
-            state => state.Execution.ExecutableNodeId == projectionOwner.Node.ExecutableNodeId && state.Completion is not null);
+        var nodesById = executable.Nodes.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
+        var activityState = (await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId))
+            .Where(state => state.Completion is not null)
+            .Where(state => resultFixtureKey is null ||
+                            nodesById[state.Execution.ExecutableNodeId].Metadata.GetValueOrDefault(ResultFixtureKeyMetadata) == resultFixtureKey)
+            .OrderByDescending(state => state.Completion!.CompletedAt)
+            .First(state => nodesById[state.Execution.ExecutableNodeId].ActivityContract?.Result.Projections.ContainsKey(projectionKey) == true);
+        var projection = nodesById[activityState.Execution.ExecutableNodeId].ActivityContract!.Result.Projections[projectionKey];
         var current = activityState.Completion!.Result.InlineValue
             ?? throw new InvalidOperationException($"Activity '{activityState.InvocationId}' has no inline committed result.");
 
@@ -881,6 +879,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var metadata = isTriggerNode
             ? new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType }
             : new Dictionary<string, string>();
+        metadata[ResultFixtureKeyMetadata] = resultOutputName;
 
         var descriptorPayload = ClrConstruction.Payload(serializer, typeof(HttpEndpoint));
         var contract = HttpEndpointContract(descriptorPayload);
@@ -892,28 +891,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
-            {
-                // Promote the endpoint's Result output (the live HttpRequestModel) into a durable, readable value.
-                // The capture dictionary is keyed by the activity's output name; the durable value id carries the
-                // caller-chosen id used to read the capture back.
-                ["Request"] = new RuntimeOutputCapture(
-                    outputName: "Request",
-                    valueId: resultOutputName,
-                    type: RuntimeCaptureType(typeof(HttpRequestModel)),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true),
-                // Also promote the ParsedContent output — since spec 089 efficiency #9 the parsed body is derived at
-                // the activity from Body (not persisted on the wire model), so tests read it from this output.
-                ["ParsedContent"] = new RuntimeOutputCapture(
-                    outputName: "ParsedContent",
-                    valueId: ParsedContentOutputName,
-                    type: RuntimeCaptureType(typeof(JsonElement)),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true)
-            },
             metadata: metadata,
             activityContract: contract);
     }
@@ -989,9 +966,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             outcomes,
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityTypeAlias));
     }
-
-    private static RuntimeValueTypeDescriptor RuntimeCaptureType(Type type) =>
-        new("clr", RuntimeValueType(type).Alias, null);
 
     private static RuntimeInputBinding TypedLiteralBinding(string inputKey, object? value, Type type)
     {

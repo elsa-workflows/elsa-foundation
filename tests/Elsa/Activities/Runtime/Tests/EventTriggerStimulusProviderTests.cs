@@ -96,7 +96,7 @@ public sealed class EventTriggerStimulusProviderTests
                 [nameof(Event.CorrelationId)] = "order-7"
             });
         var activity = Assert.IsType<Event>(activation.Activity);
-        var context = new SimpleActivityExecutionContext(services, activity, CancellationToken.None);
+        var context = new SimpleActivityExecutionContext(activity, CancellationToken.None);
 
         var transition = await ((IActivity)activity).ExecuteAsync(context);
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
@@ -128,7 +128,6 @@ public sealed class EventTriggerStimulusProviderTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

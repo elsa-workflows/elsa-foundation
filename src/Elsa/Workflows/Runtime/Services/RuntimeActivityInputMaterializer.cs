@@ -112,12 +112,13 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             var materialized = CoerceToType(
                 await EvaluateExpressionAsync(resolved, type, binding.TargetType, node.ExecutableNodeId, input.Key, resolutionContext, cancellationToken),
                 type);
-            return materialized is null
+            var envelope = materialized is null
                 ? ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy)
                 : ValueEnvelope.Inline(
                     binding.TargetType,
                     JsonSerializer.SerializeToElement(materialized, materialized.GetType()),
                     binding.EffectivePolicy);
+            return await ApplyDestinationStorageAsync(invocationId, input, binding, envelope, resolutionContext, cancellationToken);
         }
 
         var source = resolved.Envelope;
@@ -138,12 +139,45 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (source.ExternalReference is not null && HasExternalProjection(binding))
             return await MaterializeExternalProjectionAsync(node, invocationId, input, binding, source, resolutionContext, cancellationToken);
 
-        return new ValueEnvelope(
+        var retyped = new ValueEnvelope(
             binding.TargetType,
             source.Presence,
             source.InlineValue,
             source.ExternalReference,
             binding.EffectivePolicy);
+        return await ApplyDestinationStorageAsync(invocationId, input, binding, retyped, resolutionContext, cancellationToken);
+    }
+
+    private async ValueTask<ValueEnvelope> ApplyDestinationStorageAsync(
+        string invocationId,
+        ActivityInputContract input,
+        RuntimeInputBinding binding,
+        ValueEnvelope value,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
+    {
+        if (value.Presence != ValuePresence.Present || binding.EffectivePolicy.Storage == DurableValueStorage.Inline)
+            return value;
+        if (binding.EffectivePolicy.Storage == DurableValueStorage.Custom)
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' requires custom storage, but no canonical custom value-storage seam is configured.");
+
+        var storageProfile = RequireStorageProfile(binding.EffectivePolicy, input.Key, value.ExternalReference?.StorageProfile);
+        if (value.ExternalReference is { } existing && StringComparer.Ordinal.Equals(existing.StorageProfile, storageProfile))
+            return value;
+        if (_externalPayloadStore is null)
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' requires an IExternalPayloadStore.");
+
+        var payload = value.InlineValue ?? await _externalPayloadStore.ReadAsync(value.ExternalReference!, cancellationToken);
+        var reference = await _externalPayloadStore.WriteAsync(
+            new ExternalPayloadWriteRequest(
+                resolutionContext.WorkflowExecutionId,
+                $"activity:{invocationId}:input:{input.Key}",
+                storageProfile,
+                binding.TargetType,
+                payload.Clone(),
+                binding.EffectivePolicy),
+            cancellationToken);
+        return ValueEnvelope.External(binding.TargetType, reference, binding.EffectivePolicy);
     }
 
     private async ValueTask<ValueEnvelope> MaterializeExternalProjectionAsync(
@@ -173,13 +207,20 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             new ExternalPayloadWriteRequest(
                 resolutionContext.WorkflowExecutionId,
                 $"activity:{invocationId}:input:{input.Key}",
-                source.ExternalReference!.StorageProfile,
+                RequireStorageProfile(binding.EffectivePolicy, input.Key, source.ExternalReference!.StorageProfile),
                 binding.TargetType,
                 payload.Clone(),
                 binding.EffectivePolicy),
             cancellationToken);
         return ValueEnvelope.External(binding.TargetType, reference, binding.EffectivePolicy);
     }
+
+    private static string RequireStorageProfile(ValueProtectionPolicy policy, string inputKey, string? fallback = null) =>
+        policy.Metadata.TryGetValue(ValuePolicyCombiner.StorageProfileMetadataKey, out var profile) && !string.IsNullOrWhiteSpace(profile)
+            ? profile
+            : !string.IsNullOrWhiteSpace(fallback)
+                ? fallback
+                : throw new InvalidOperationException($"VF-ACT-005: External input '{inputKey}' has no storage profile.");
 
     private static bool HasExternalProjection(RuntimeInputBinding binding) =>
         binding.Source == RuntimeInputBindingSource.ActivityResult &&
@@ -235,33 +276,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (!input.Policy.IsPersistable || policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' is not persistable at the durable ActivityStarted boundary.");
 
-        var contractMinimum = new ValueProtectionPolicy(
-            ToLifecycle(input.Policy.Lifecycle),
-            ToStorage(input.Policy.Storage),
-            input.Policy.IsSensitive,
-            input.Policy.RequiresEncryption,
-            input.Policy.RedactionMode,
-            input.Policy.RetentionPolicy);
-        if (!policy.Satisfies(contractMinimum))
+        if (!policy.Satisfies(ValuePolicyCombiner.ToProtectionPolicy(input.Policy)))
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' would downgrade its contract protection policy.");
     }
-
-    private static DurableValueLifecycle ToLifecycle(ActivityValueLifecycle lifecycle) => lifecycle switch
-    {
-        ActivityValueLifecycle.Instance => DurableValueLifecycle.Instance,
-        ActivityValueLifecycle.Result => DurableValueLifecycle.Result,
-        ActivityValueLifecycle.Audit => DurableValueLifecycle.Audit,
-        ActivityValueLifecycle.Custom => DurableValueLifecycle.Custom,
-        _ => throw new ArgumentOutOfRangeException(nameof(lifecycle), lifecycle, null)
-    };
-
-    private static DurableValueStorage ToStorage(ActivityValueStorage storage) => storage switch
-    {
-        ActivityValueStorage.Inline => DurableValueStorage.Inline,
-        ActivityValueStorage.External => DurableValueStorage.External,
-        ActivityValueStorage.Custom => DurableValueStorage.Custom,
-        _ => throw new ArgumentOutOfRangeException(nameof(storage), storage, null)
-    };
 
     private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&

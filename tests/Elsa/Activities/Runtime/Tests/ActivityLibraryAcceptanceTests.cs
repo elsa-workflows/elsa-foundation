@@ -210,7 +210,6 @@ public sealed class ActivityLibraryAcceptanceTests
             {
                 ["Collection"] = CollectionBinding(collection)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [incrementNode])],
             structure: new ExecutableActivityStructure(
@@ -237,7 +236,6 @@ public sealed class ActivityLibraryAcceptanceTests
             {
                 ["Condition"] = PortableVariableExpression("args.count === 3", "Boolean", "count", "var-count")
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots:
             [
@@ -268,7 +266,6 @@ public sealed class ActivityLibraryAcceptanceTests
             descriptorType: typeof(SequenceDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
             structure: new ExecutableActivityStructure(
@@ -294,7 +291,6 @@ public sealed class ActivityLibraryAcceptanceTests
             {
                 [WorkflowIntrinsicInputKeys.Value] = valueBinding
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.Set,
             intrinsicVariable: new RuntimeVariableReference(variableKey, VariableReference.WorkflowScopeId));

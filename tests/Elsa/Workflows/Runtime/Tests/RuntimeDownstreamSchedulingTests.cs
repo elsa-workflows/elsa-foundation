@@ -531,7 +531,6 @@ public sealed class RuntimeDownstreamSchedulingTests
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { type = "root" }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots:
             [
@@ -550,7 +549,6 @@ public sealed class RuntimeDownstreamSchedulingTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

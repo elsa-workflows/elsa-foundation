@@ -122,7 +122,10 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             IsSensitive: true,
             RequiresEncryption: true,
             RedactionMode: "Full");
-        var producer = CompletedProducer();
+        var producer = CompletedProducer(ValueEnvelope.Inline(
+            new ValueTypeDescriptor("test/result"),
+            JsonSerializer.SerializeToElement(new { customerId = "customer-7" }),
+            ValuePolicyCombiner.ToProtectionPolicy(projectionPolicy)));
         var consumer = RunningConsumer(producer.InvocationId);
         var executable = NewProducerExecutable(projectionPolicy);
         var binding = new RuntimeInputBinding(
@@ -148,6 +151,53 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         Assert.Contains("VF-ACT-005", exception.Message, StringComparison.Ordinal);
         Assert.Contains("downgrade", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Resolve_result_projection_preserves_stricter_lifecycle_storage_and_retention()
+    {
+        var projectionPolicy = new ActivityValuePolicy(
+            IsPersistable: true,
+            IsSensitive: true,
+            RequiresEncryption: true,
+            RedactionMode: "Full",
+            Lifecycle: ActivityValueLifecycle.Audit,
+            Storage: ActivityValueStorage.External,
+            StorageProfile: "audit-payloads",
+            RetentionPolicy: "P30D");
+        var sourceReference = new DurableValueExternalReference(
+            "audit-payloads",
+            "results/producer-1",
+            new Dictionary<string, string>());
+        var producer = CompletedProducer(ValueEnvelope.External(
+            new ValueTypeDescriptor("test/result"),
+            sourceReference,
+            ValuePolicyCombiner.ToProtectionPolicy(projectionPolicy)));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            StringType,
+            new ValueProtectionPolicy(
+                DurableValueLifecycle.Audit,
+                DurableValueStorage.External,
+                isSensitive: true,
+                requiresEncryption: true,
+                redactionMode: "Full",
+                retentionPolicy: "P30D"),
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"));
+
+        var resolved = _resolver.Resolve(binding, NewContext(
+            consumer: consumer,
+            runtimeView: [producer, consumer],
+            executable: NewProducerExecutable(projectionPolicy)));
+
+        Assert.Equal(DurableValueLifecycle.Audit, resolved.Envelope!.Policy.Lifecycle);
+        Assert.Equal(DurableValueStorage.External, resolved.Envelope.Policy.Storage);
+        Assert.Equal("P30D", resolved.Envelope.Policy.RetentionPolicy);
+        Assert.Equal("results/producer-1", resolved.Envelope.ExternalReference!.Locator);
+        Assert.True(resolved.Envelope.Policy.IsSensitive);
+        Assert.True(resolved.Envelope.Policy.RequiresEncryption);
     }
 
     private static RuntimeInputBindingResolutionContext NewContext(
@@ -193,7 +243,6 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             "test",
             descriptor,
             new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             activityContract: contract);
         return new WorkflowExecutable(
@@ -224,7 +273,6 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             "test",
             descriptor,
             new Dictionary<string, RuntimeInputBinding> { ["customer-id"] = binding },
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             activityContract: contract);
     }

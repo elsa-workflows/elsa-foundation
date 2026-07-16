@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Core.Authoring;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.CodeGeneration.Generated;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -22,11 +23,13 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class CodeFirstDynamicConformanceTests
 {
+    private const string ProducerVersionId = "actver_L_fnSHOvU1fBt1DIPoBkEOI3idvorapeGRYQMbhDXkE";
+    private const string ConsumerVersionId = "actver_Y5CcEH_PHxAHMVlKY8akaR3uJhPUUhRg30v4Rtppyk0";
     private static readonly DateTimeOffset CompiledAt = new(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public async Task EquivalentCodeFirstAndDynamicDefinitionsCompileToTheSameCanonicalBindingsAndHash()
+    public async Task EquivalentGeneratedCodeFirstAndDynamicDefinitionsCompileToTheSameCanonicalBindingsAndHash()
     {
         var codeFirstState = new ConformanceWorkflow().Compile("version-1");
         var dynamicState = DynamicState();
@@ -105,10 +108,10 @@ public sealed class CodeFirstDynamicConformanceTests
     private static WorkflowDefinitionState DynamicState()
     {
         var retry = RetryVariable();
-        var producer = Node("producer", "producer@1");
+        var producer = Node("producer", ProducerVersionId);
         var consumer = Node(
             "consumer",
-            "consumer@1",
+            ConsumerVersionId,
             Input("request", new
             {
                 memberKey = "customer-id",
@@ -133,7 +136,7 @@ public sealed class CodeFirstDynamicConformanceTests
     }
 
     private static WorkflowDefinitionState InvalidLiteralDynamicState() =>
-        State([Node("consumer", "consumer@1", Input("retry", "not-an-integer", "Literal"))], []);
+        State([Node("consumer", ConsumerVersionId, Input("retry", "not-an-integer", "Literal"))], []);
 
     private static WorkflowDefinitionState State(
         IReadOnlyCollection<ActivityNode> activities,
@@ -168,8 +171,8 @@ public sealed class CodeFirstDynamicConformanceTests
     private static IReadOnlyCollection<ActivityDefinitionVersion> ActivityVersions() =>
     [
         ActivityVersion("elsa.sequence@1", "Elsa.Sequence", []),
-        ActivityVersion("producer@1", "Tests.Producer", []),
-        ActivityVersion("consumer@1", "Tests.Consumer",
+        ActivityVersion(ProducerVersionId, typeof(GeneratedProducerActivity).FullName!, []),
+        ActivityVersion(ConsumerVersionId, typeof(GeneratedConsumerActivity).FullName!,
         [
             InputDefinition("request", "String"),
             InputDefinition("retry", "Int32"),
@@ -225,33 +228,29 @@ public sealed class CodeFirstDynamicConformanceTests
         protected override void Build(IWorkflowBuilder<ConformanceRequest, string> workflow)
         {
             var retry = workflow.Variable<int>("RetryCount", 3);
-            var producer = workflow.Sequence.Add<ProducerActivity, string>("producer@1", nodeId: "producer");
+            var producer = workflow.Sequence.GeneratedProducerActivity(nodeId: "producer");
 
-            workflow.Sequence.Add<ConsumerActivity, string>("consumer@1", inputs =>
-            {
-                inputs.From("request", workflow.From(request => request.CustomerId));
-                inputs.From("retry", retry.Value);
-                inputs.From("prior-result", producer.Result);
-                inputs.From("formatted", workflow.Expression<string>("JavaScript", "request.customerId"));
-                inputs.Value("literal", "fixed");
-                inputs.Set("fallback", ActivityArgument.Default<string>());
-            }, "consumer");
+            workflow.Sequence.GeneratedConsumerActivity(
+                request: workflow.From(request => request.CustomerId),
+                retry: retry.Value,
+                priorResult: producer.Result,
+                formatted: workflow.Expression<string>("JavaScript", "request.customerId"),
+                literal: "fixed",
+                fallback: ActivityArgument.Default<string>(),
+                nodeId: "consumer");
         }
     }
 
     private sealed class InvalidLiteralWorkflow : WorkflowDefinition<ConformanceRequest, string>
     {
         protected override void Build(IWorkflowBuilder<ConformanceRequest, string> workflow) =>
-            workflow.Sequence.Add<ConsumerActivity, string>(
-                "consumer@1",
+            workflow.Sequence.Add<GeneratedConsumerActivity, string>(
+                ConsumerVersionId,
                 inputs => inputs.Value("retry", "not-an-integer"),
                 "consumer");
     }
 
     private sealed record ConformanceRequest(string CustomerId);
-    private sealed class ProducerActivity;
-    private sealed class ConsumerActivity;
-
     private sealed class UnusedWorkflowVersionStore : Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore
     {
         public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();

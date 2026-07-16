@@ -496,7 +496,6 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: new ActivityContract(
                 "test/activity",

@@ -118,7 +118,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         // endpoint's captured result survived the aborted wait — the instance continues per normal runtime
         // semantics rather than merely still being counted.
         var execution = await _fixture.SingleWorkflowExecutionAsync();
-        var capturedResult = await _fixture.ReadResultProjectionAsync(execution.WorkflowExecutionId, "sync-slow-result");
+        var capturedResult = await _fixture.ReadResultProjectionAsync(execution.WorkflowExecutionId, "Request");
         Assert.Equal(JsonValueKind.Object, capturedResult.ValueKind);
     }
 

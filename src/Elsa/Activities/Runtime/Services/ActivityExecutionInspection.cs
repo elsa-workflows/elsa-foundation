@@ -93,22 +93,44 @@ internal static class ActivityExecutionInspection
         ExecutableNode executableNode,
         IReadOnlyCollection<RecordedActivityOutput> outputs,
         DateTimeOffset capturedAt) =>
+        BuildOutputValueSnapshots(
+            payloadCapturePolicy,
+            workItem,
+            invokePayload.ActivityExecutionId,
+            invokePayload.ExecutableNodeId,
+            executableNode.ActivityContract,
+            outputs,
+            RuntimeMetadataKeys.InvokeSchedulerWorkItemId,
+            capturedAt);
+
+    public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
+        RuntimeSchedulerWorkItem workItem,
+        string activityExecutionId,
+        string executableNodeId,
+        ActivityContract? contract,
+        IReadOnlyCollection<RecordedActivityOutput> outputs,
+        string schedulerWorkItemMetadataKey,
+        DateTimeOffset capturedAt) =>
         outputs
             .Select(output =>
             {
-                executableNode.OutputCaptures.TryGetValue(output.OutputName, out var capture);
-                var type = capture?.Type ?? TypeDescriptorFor(output.Value);
+                ActivityResultProjectionContract? projection = null;
+                contract?.Result.Projections.TryGetValue(output.OutputName, out projection);
+                var type = projection is null
+                    ? TypeDescriptorFor(output.Value)
+                    : new RuntimeValueTypeDescriptor("alias", projection.Type.Alias, projection.Type.Schema);
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityOutput,
                     workItem.WorkflowExecutionId,
                     capturedAt,
-                    activityExecutionId: invokePayload.ActivityExecutionId,
+                    activityExecutionId: activityExecutionId,
                     valueName: output.OutputName,
                     type: type,
                     metadata: new Dictionary<string, string>
                     {
-                        [RuntimeMetadataKeys.ExecutableNodeId] = invokePayload.ExecutableNodeId,
-                        [RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId
+                        [RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId,
+                        [schedulerWorkItemMetadataKey] = workItem.WorkItemId
                     }));
                 return ActivityExecutionInspectionValueSnapshot.FromDecision(
                     output.OutputName,
@@ -117,7 +139,7 @@ internal static class ActivityExecutionInspection
                     type,
                     capturedAt,
                     SerializeCapturedValue(decision, output.Value, output.OutputName, type),
-                    isSensitive: false,
+                    isSensitive: projection?.Policy.IsSensitive ?? false,
                     metadata: decision.Metadata);
             })
             .ToArray();

@@ -171,7 +171,6 @@ public sealed class TypedActivityStateRecoveryTests
             contract.DescriptorKind,
             descriptor,
             new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             activityContract: contract);
 

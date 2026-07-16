@@ -63,7 +63,6 @@ internal static class DelayTestExecutable
                         JsonSerializer.SerializeToElement(duration),
                         ValueProtectionPolicy.InstanceInline))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
 

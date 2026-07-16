@@ -259,7 +259,6 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             descriptorType: descriptor.Kind,
             descriptorPayload: descriptor.Payload,
             inputBindings: new Dictionary<string, RuntimeInputBinding> { [binding.InputKey] = binding },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
     }
@@ -285,7 +284,6 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             descriptorType: descriptor.Kind,
             descriptorPayload: descriptor.Payload,
             inputBindings: new Dictionary<string, RuntimeInputBinding> { [binding.InputKey] = binding },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
     }
@@ -350,7 +348,6 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             descriptorType,
             descriptorPayload,
             inputBindings,
-            node.OutputCaptures,
             node.Metadata,
             childSlots,
             node.Structure,

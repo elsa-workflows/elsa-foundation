@@ -198,7 +198,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             parentActivity.Id = payload.ActivityExecutionId;
 
             context = SimpleActivityExecutionContext.ForExecution(
-                serviceProvider,
                 parentActivity,
                 cancellationToken,
                 workItem.WorkflowExecutionId,

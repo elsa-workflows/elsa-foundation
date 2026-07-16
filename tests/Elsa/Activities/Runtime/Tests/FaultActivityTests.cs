@@ -45,6 +45,6 @@ public sealed class FaultActivityTests : IDisposable
     {
         activity.Id = "invocation-1";
         activity.NodeId = "node-1";
-        return new SimpleActivityExecutionContext(_serviceProvider, activity, CancellationToken.None);
+        return new SimpleActivityExecutionContext(activity, CancellationToken.None);
     }
 }

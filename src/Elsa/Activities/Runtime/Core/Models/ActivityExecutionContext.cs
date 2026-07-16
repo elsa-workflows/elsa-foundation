@@ -51,7 +51,7 @@ public sealed record ActivityExecutionContext
     internal JsonElement? TriggerPayload { get; }
     internal string? TriggerNodeId { get; }
 
-    internal static ActivityExecutionContext FromLegacy(IActivityExecutionContext context)
+    internal static ActivityExecutionContext FromRuntime(IActivityExecutionContext context)
     {
         var identity = context as IActivityInvocationIdentity;
         return new(
@@ -82,5 +82,5 @@ public abstract class Activity<TResult> : ActivityBase, IActivityResult<TResult>
     protected abstract ValueTask<ActivityTransition<TResult>> ExecuteAsync(ActivityExecutionContext context);
 
     protected sealed override async ValueTask<ActivityTransition> ExecuteTransitionAsync(IActivityExecutionContext context) =>
-        await ExecuteAsync(ActivityExecutionContext.FromLegacy(context));
+        await ExecuteAsync(ActivityExecutionContext.FromRuntime(context));
 }

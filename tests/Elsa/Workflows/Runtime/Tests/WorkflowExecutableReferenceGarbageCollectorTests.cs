@@ -173,7 +173,6 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
                 descriptorType: "test",
                 descriptorPayload: JsonSerializer.SerializeToElement(new { type = "test" }),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,

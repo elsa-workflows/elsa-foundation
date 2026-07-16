@@ -252,7 +252,6 @@ public sealed class BreakPropagationExecutionTests
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: structure);
@@ -266,7 +265,6 @@ public sealed class BreakPropagationExecutionTests
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: activityType == typeof(Break) ? BreakContract() : null);
 

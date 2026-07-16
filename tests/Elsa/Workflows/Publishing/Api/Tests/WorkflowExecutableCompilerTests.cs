@@ -424,6 +424,51 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task CompilesVariableStoragePolicyIntoExecutableStructure()
+    {
+        var secret = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-secret",
+            Name: "Secret",
+            Type: new TypeReference("String"),
+            StorageDriverType: "encrypted-variables",
+            Default: null);
+        var compiler = Compiler(WorkflowVersion(SequenceNode(
+            "sequence",
+            [Node("write-one", Text("one"))],
+            [secret])));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var projection = executable.RootActivity.Structure!.Payload.Deserialize<RuntimeVariableStructureProjection>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var declaration = Assert.Single(projection!.Variables);
+        Assert.Equal(DurableValueStorage.External, declaration.Policy.Storage);
+        Assert.Equal("encrypted-variables", declaration.Policy.Metadata[ValuePolicyCombiner.StorageProfileMetadataKey]);
+        Assert.Null(declaration.InitialBinding);
+    }
+
+    [Fact]
+    public async Task RejectsExternalVariableLiteralThatCannotBeMaterializedBeforeFrameActivation()
+    {
+        var secret = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-secret",
+            Name: "Secret",
+            Type: new TypeReference("String"),
+            StorageDriverType: "encrypted-variables",
+            Default: new ArgumentValue("super-private-value", "Literal"));
+        var compiler = Compiler(WorkflowVersion(SequenceNode(
+            "sequence",
+            [Node("write-one", Text("one"))],
+            [secret])));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("External variable materialization must be explicit", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("super-private-value", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Compiles_typed_intrinsics_without_activity_catalog_rows()
     {
         var variable = new VariableReference("items", VariableReference.WorkflowScopeId);
@@ -646,7 +691,6 @@ public sealed class WorkflowExecutableCompilerTests
             node.DescriptorType,
             node.DescriptorPayload,
             node.InputBindings,
-            node.OutputCaptures,
             node.Metadata,
             node.ChildSlots,
             node.Structure,

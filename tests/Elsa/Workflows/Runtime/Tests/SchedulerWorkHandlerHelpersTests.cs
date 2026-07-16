@@ -266,7 +266,6 @@ public sealed class SchedulerWorkHandlerHelpersTests
                 descriptorType: "test",
                 descriptorPayload: document.RootElement.Clone(),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,

@@ -74,7 +74,6 @@ public sealed class FinishCorrelateExecutionTests
             typeof(SequenceDescriptor).FullName!,
             JsonSerializer.SerializeToElement(new SequenceDescriptor()),
             new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             [new ExecutableChildSlot(Elsa.Activities.Sequence.Activities.Sequence.ActivitiesSlotName, children)],
             new ExecutableActivityStructure(
@@ -110,7 +109,6 @@ public sealed class FinishCorrelateExecutionTests
                     RuntimeInputBindingSource.Literal,
                     literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline))
             },
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             intrinsicKind: kind);
 

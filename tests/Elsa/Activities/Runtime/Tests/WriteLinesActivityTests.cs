@@ -73,6 +73,6 @@ public sealed class WriteLinesActivityTests : IDisposable
     {
         activity.Id = "invocation-write-lines";
         activity.NodeId = "node-write-lines";
-        return new(_serviceProvider, activity, CancellationToken.None);
+        return new(activity, CancellationToken.None);
     }
 }

@@ -161,7 +161,6 @@ public sealed class SendHttpRequestExecutionTests
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
     }

@@ -11,22 +11,31 @@ public sealed class ActivityCallGeneratorTests
     public void Generator_emits_deterministic_named_facade_and_typed_call_handle()
     {
         const string source = $$"""
-            using Elsa.Workflows.Design.CodeGeneration;
+            using Elsa.Activities.Runtime.Core.Attributes;
+            using Elsa.Activities.Runtime.Core.Contracts;
 
+            {{RuntimeStubs}}
             {{AuthoringStubs}}
 
             namespace GeneratorConsumer
             {
-                public sealed record ChargeCardResult(bool Approved, string ReceiptId);
+                public sealed record ChargeCardResult(
+                    [property: Output(Key = "approved")] bool Approved,
+                    [property: Output(Key = "receipt-id")] string ReceiptId);
 
-                [ActivityCall("ChargeCard", "payments.charge-card@2", typeof(ChargeCardResult))]
-                [ActivityInput("customerId", "customer-id", typeof(string), 0)]
-                [ActivityInput("amount", "amount", typeof(decimal), 1)]
-                [ActivityOutput("Approved", "approved", typeof(bool))]
-                [ActivityOutput("ReceiptId", "receipt-id", typeof(string))]
-                [ActivityOutcome("Completed", "completed")]
-                [ActivityOutcome("Declined", "declined")]
-                public sealed class ChargeCard;
+                [Version("2.0.0")]
+                [ActivityOutcome("completed")]
+                [ActivityOutcome("declined")]
+                public sealed class ChargeCard : IActivity, IActivityResult<ChargeCardResult>
+                {
+                    [ActivityInput(Key = "customer-id", Order = 0)]
+                    [Required]
+                    public string CustomerId { get; set; } = "";
+
+                    [ActivityInput(Key = "amount", Order = 1)]
+                    [Required]
+                    public decimal Amount { get; set; }
+                }
             }
             """;
 
@@ -48,18 +57,20 @@ public sealed class ActivityCallGeneratorTests
                 public static ChargeCardCall ChargeCard(
                     this global::Elsa.Workflows.Design.Core.Authoring.ISequenceBuilder sequence,
                     global::Elsa.Workflows.Design.Core.Authoring.ActivityArgument<string> customerId,
-                    global::Elsa.Workflows.Design.Core.Authoring.ActivityArgument<decimal> amount)
+                    global::Elsa.Workflows.Design.Core.Authoring.ActivityArgument<decimal> amount,
+                    string? nodeId = null)
                 {
                     if (sequence is null)
                         throw new global::System.ArgumentNullException(nameof(sequence));
 
                     var call = sequence.Add<global::GeneratorConsumer.ChargeCard, global::GeneratorConsumer.ChargeCardResult>(
-                        "payments.charge-card@2",
+                        "actver_sYzJcF1AJpo1k9MGPw5pohSuNQsg6bLoZ2c_QnzmthU",
                         inputs =>
                         {
                             inputs.Set("customer-id", customerId);
                             inputs.Set("amount", amount);
-                        });
+                        },
+                        nodeId);
                     return new ChargeCardCall(call);
                 }
             }
@@ -110,16 +121,22 @@ public sealed class ActivityCallGeneratorTests
     [Fact]
     public void Generator_reports_duplicate_method_names_with_stable_diagnostic()
     {
-        const string source = """
-            using Elsa.Workflows.Design.CodeGeneration;
+        const string source = $$"""
+            using Elsa.Activities.Runtime.Core.Attributes;
+            using Elsa.Activities.Runtime.Core.Contracts;
 
-            namespace GeneratorConsumer;
+            {{RuntimeStubs}}
+            namespace GeneratorConsumer
+            {
+                [Version("1.0.0")]
+                public sealed class Send : IActivity, IActivityResult<string>;
 
-            [ActivityCall("Send", "mail.send@1", typeof(string))]
-            public sealed class SendMail;
-
-            [ActivityCall("Send", "sms.send@1", typeof(string))]
-            public sealed class SendSms;
+                namespace Other
+                {
+                    [Version("1.0.0")]
+                    public sealed class Send : IActivity, IActivityResult<string>;
+                }
+            }
             """;
 
         var result = RunGenerator(source);
@@ -127,7 +144,7 @@ public sealed class ActivityCallGeneratorTests
 
         Assert.Equal(ActivityCallGenerator.DuplicateFacadeDiagnosticId, diagnostic.Id);
         Assert.Equal(
-            "Activity-call method 'Send' is declared by both 'GeneratorConsumer.SendMail' and 'GeneratorConsumer.SendSms'. Method names must be unique.",
+            "Activity-call method 'Send' is declared by both 'GeneratorConsumer.Other.Send' and 'GeneratorConsumer.Send'. Method names must be unique.",
             diagnostic.GetMessage());
         Assert.DoesNotContain(result.RunResult.Results.SelectMany(x => x.GeneratedSources), source => source.HintName == ActivityCallGenerator.GeneratedHintName);
     }
@@ -135,13 +152,15 @@ public sealed class ActivityCallGeneratorTests
     [Fact]
     public void Generator_reports_unsupported_generic_activity_shape_with_stable_diagnostic()
     {
-        const string source = """
-            using Elsa.Workflows.Design.CodeGeneration;
+        const string source = $$"""
+            using Elsa.Activities.Runtime.Core.Attributes;
+            using Elsa.Activities.Runtime.Core.Contracts;
 
+            {{RuntimeStubs}}
             namespace GeneratorConsumer;
 
-            [ActivityCall("Map", "collections.map@1", typeof(string))]
-            public sealed class Map<T>;
+            [Version("1.0.0")]
+            public sealed class Map<T> : IActivity, IActivityResult<string>;
             """;
 
         var result = RunGenerator(source);
@@ -157,32 +176,50 @@ public sealed class ActivityCallGeneratorTests
     public void Generator_discovers_activity_metadata_from_referenced_assemblies()
     {
         const string activityPackage = """
-            namespace Elsa.Workflows.Design.CodeGeneration
+            namespace Elsa.Activities.Runtime.Core.Contracts
             {
+                public interface IActivity;
+                public interface IActivityResult<TResult>;
+            }
+
+            namespace Elsa.Activities.Runtime.Core.Attributes
+            {
+                [System.AttributeUsage(System.AttributeTargets.Property, Inherited = true)]
+                public sealed class ActivityInputAttribute : System.Attribute
+                {
+                    public string? Key { get; init; }
+                    public float Order { get; init; }
+                }
+
+                [System.AttributeUsage(System.AttributeTargets.Property, Inherited = true)]
+                public sealed class OutputAttribute : System.Attribute
+                {
+                    public string? Key { get; init; }
+                }
+
+                [System.AttributeUsage(System.AttributeTargets.Property, Inherited = true)]
+                public sealed class RequiredAttribute : System.Attribute;
+                [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
+                public sealed class ActivityOutcomeAttribute(string key) : System.Attribute;
                 [System.AttributeUsage(System.AttributeTargets.Class)]
-                public sealed class ActivityCallAttribute(string methodName, string activityVersionId, System.Type resultType) : System.Attribute;
-
-                [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true)]
-                public sealed class ActivityInputAttribute(string name, string key, System.Type type, int order, bool isRequired = true) : System.Attribute;
-
-                [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true)]
-                public sealed class ActivityOutputAttribute(string name, string key, System.Type type) : System.Attribute;
-
-                [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true)]
-                public sealed class ActivityOutcomeAttribute(string name, string key) : System.Attribute;
+                public sealed class VersionAttribute(string version) : System.Attribute;
             }
 
             namespace ReferencedActivities
             {
-                using Elsa.Workflows.Design.CodeGeneration;
+                using Elsa.Activities.Runtime.Core.Attributes;
+                using Elsa.Activities.Runtime.Core.Contracts;
 
-                public sealed record SendEmailResult(string MessageId);
+                public sealed record SendEmailResult([property: Output(Key = "message-id")] string MessageId);
 
-                [ActivityCall("SendEmail", "messaging.send-email@1", typeof(SendEmailResult))]
-                [ActivityInput("to", "to", typeof(string), 0)]
-                [ActivityOutput("MessageId", "message-id", typeof(string))]
-                [ActivityOutcome("Sent", "sent")]
-                public sealed class SendEmail;
+                [Version("1.0.0")]
+                [ActivityOutcome("sent")]
+                public sealed class SendEmail : IActivity, IActivityResult<SendEmailResult>
+                {
+                    [ActivityInput(Key = "to")]
+                    [Required]
+                    public string To { get; set; } = "";
+                }
             }
             """;
         var activityReference = CompileReference("ReferencedActivityPackage", activityPackage);
@@ -248,6 +285,39 @@ public sealed class ActivityCallGeneratorTests
     }
 
     private sealed record GeneratorResult(GeneratorDriverRunResult RunResult, Compilation OutputCompilation);
+
+    private const string RuntimeStubs = """
+        namespace Elsa.Activities.Runtime.Core.Contracts
+        {
+            public interface IActivity;
+            public interface IActivityResult<TResult>;
+        }
+
+        namespace Elsa.Activities.Runtime.Core.Attributes
+        {
+            [System.AttributeUsage(System.AttributeTargets.Property, Inherited = true)]
+            public sealed class ActivityInputAttribute : System.Attribute
+            {
+                public string? Key { get; init; }
+                public float Order { get; init; }
+            }
+
+            [System.AttributeUsage(System.AttributeTargets.Property, Inherited = true)]
+            public sealed class OutputAttribute : System.Attribute
+            {
+                public string? Key { get; init; }
+            }
+
+            [System.AttributeUsage(System.AttributeTargets.Property, Inherited = true)]
+            public sealed class RequiredAttribute : System.Attribute;
+
+            [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
+            public sealed class ActivityOutcomeAttribute(string key) : System.Attribute;
+
+            [System.AttributeUsage(System.AttributeTargets.Class, Inherited = false)]
+            public sealed class VersionAttribute(string version) : System.Attribute;
+        }
+        """;
 
     private const string AuthoringStubs = """
         namespace Elsa.Workflows.Design.Core.Authoring

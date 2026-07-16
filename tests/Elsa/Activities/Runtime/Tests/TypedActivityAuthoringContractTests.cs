@@ -14,9 +14,9 @@ public sealed class TypedActivityAuthoringContractTests
         await using var services = new ServiceCollection().BuildServiceProvider();
         using var cancellation = new CancellationTokenSource();
         var activity = new GreetingActivity { Id = "invocation-1", NodeId = "node-1", Recipient = "Ada" };
-        var legacyContext = new SimpleActivityExecutionContext(services, activity, cancellation.Token);
+        var runtimeContext = new SimpleActivityExecutionContext(activity, cancellation.Token);
 
-        var transition = await ((IActivity)activity).ExecuteAsync(legacyContext);
+        var transition = await ((IActivity)activity).ExecuteAsync(runtimeContext);
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<Greeting>>(transition);
 
         Assert.Equal(new Greeting("Hello Ada"), completion.Result);

@@ -40,7 +40,6 @@ public sealed class RuntimeVariableScopeFactoryTests
             descriptorType: "test/descriptor",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             structure: new ExecutableActivityStructure(
                 "test.structure",

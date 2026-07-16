@@ -240,7 +240,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         .ToArray()
                 };
             context = SimpleActivityExecutionContext.ForExecution(
-                serviceProvider,
                 activity,
                 cancellationToken,
                 workItem.WorkflowExecutionId,
@@ -303,16 +302,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     ? RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges(workItem.WorkflowExecutionId, context.RequestedWorkflowOutputs, _timeProvider.GetUtcNow())
                     : [];
 
-                var bookmarkRequests = context.GetBookmarkRequests();
                 var childScheduleRequests = context.GetChildActivityScheduleRequests();
                 if (context.CompositeCompletionRequested && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request composite completion and schedule child activities in the same execution.");
 
                 if (finishWorkflowRequested && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request workflow completion and schedule child activities in the same execution.");
-
-                if (bookmarkRequests.Count > 0 && childScheduleRequests.Count > 0)
-                    throw new InvalidOperationException("Activity cannot both request durable bookmarks and schedule child activities in the same execution.");
 
                 // SetOutput values produced before suspension/hand-off are folded into the continuation checkpoint.
                 var suspendDurableValueChanges = workflowOutputChanges;
@@ -322,8 +317,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     if (valueFlowAttempt is null)
                         throw new InvalidOperationException("A stateful suspension requires a pinned typed activity contract and active attempt.");
 
-                    if (bookmarkRequests.Count > 0 || childScheduleRequests.Count > 0 || context.CompositeCompletionRequested || finishWorkflowRequested)
-                        throw new InvalidOperationException("A stateful suspension transition cannot also request legacy bookmarks, child scheduling, composite completion, or workflow completion.");
+                    if (childScheduleRequests.Count > 0 || context.CompositeCompletionRequested || finishWorkflowRequested)
+                        throw new InvalidOperationException("A stateful suspension transition cannot also request child scheduling, composite completion, or workflow completion.");
 
                     ValidateStatefulSuspensionRegistrations(executable, executableNode, statefulSuspension);
                     typedSuspendedState = StatefulActivitySuspensionProjector.Project(
@@ -371,14 +366,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         cancellationToken: cancellationToken);
                     return;
                 }
-                else if (bookmarkRequests.Count > 0)
-                {
-                    // A suspending activity does not reach the completion checkpoint; carry any write-back on the
-                    // bookmark work item so the downstream WorkflowCreateBookmarkSchedulerWorkHandler commits it
-                    // atomically in the bookmark-created checkpoint (#310).
-                    await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, valueSnapshots, suspendDurableValueChanges, cancellationToken);
-                    return;
-                }
                 else if (childScheduleRequests.Count > 0)
                 {
                     var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
@@ -411,7 +398,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                             ? SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.CompositeCompletionOutcomeNames, defaultToDone: true)
                             : finishWorkflowRequested
                                 ? SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(finishWorkflowOutcomeNames, defaultToDone: true)
-                                : SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true);
+                                : [ActivityOutcomes.Done];
                     completedState = CompleteActivity(workItem, invokePayload, state, outcomeNames, skipped: false);
                     if (valueFlowCompletion is not null)
                     {
@@ -795,19 +782,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             Metadata: metadata);
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
-    }
-
-    private async ValueTask EnqueueBookmarkCreationWorkAsync(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        RuntimeSchedulerWorkItem invokeWorkItem,
-        RuntimeInvokeActivityCommandPayload invokePayload,
-        IReadOnlyCollection<ActivityBookmarkRequest> bookmarkRequests,
-        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
-        CancellationToken cancellationToken)
-    {
-        foreach (var workItem in NewBookmarkCreationWorkItems(invokeWorkItem, invokePayload, bookmarkRequests, valueSnapshots, durableValueChanges))
-            await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
     private IEnumerable<RuntimeSchedulerWorkItem> NewBookmarkCreationWorkItems(

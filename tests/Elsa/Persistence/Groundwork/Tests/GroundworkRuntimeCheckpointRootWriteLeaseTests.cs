@@ -99,7 +99,6 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
                 descriptorType: "Test",
                 descriptorPayload: JsonSerializer.SerializeToElement(new { }),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             _now,

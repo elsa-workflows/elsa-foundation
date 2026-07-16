@@ -124,7 +124,6 @@ public sealed class FaultIncidentExecutionTests
             descriptorType: "test/fault",
             descriptorPayload: descriptor.RootElement,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
 

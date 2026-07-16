@@ -68,7 +68,7 @@ namespace Elsa.Activities.Parallel.Activities;
     ChildProperty = "activity",
     LabelProperty = "name",
     SlotNameTemplate = "Parallel.Branch[{name}]")]
-public sealed class Parallel : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler, IActivityChildFaultHandler
+public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
     public const string BranchSlotSuffix = "]";
@@ -136,7 +136,7 @@ public sealed class Parallel : ActivityBase, IActivityResult<ActivityUnit>, IAct
     /// (#308), or defer while branches are still running. Both the completion and fault callbacks funnel
     /// through here so the decision is identical regardless of which branch event triggered it.
     /// </summary>
-    private static async ValueTask ApplyJoinDecisionAsync(IRuntimeActivityExecutionContext runtimeContext, ParallelNavigator navigator)
+    private async ValueTask ApplyJoinDecisionAsync(IRuntimeActivityExecutionContext runtimeContext, ParallelNavigator navigator)
     {
         var compositeExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
         var (completed, terminalNonSuccess) = await CountBranchesAsync(runtimeContext, navigator, compositeExecutionId);
@@ -194,18 +194,16 @@ public sealed class Parallel : ActivityBase, IActivityResult<ActivityUnit>, IAct
     /// non-success state (<c>Faulted</c>/<c>Cancelled</c>). Grouping by node guards against any branch
     /// contributing more than once; a branch that has any <c>Completed</c> state counts as a success.
     /// </summary>
-    private static async ValueTask<(int Completed, int TerminalNonSuccess)> CountBranchesAsync(
+    private async ValueTask<(int Completed, int TerminalNonSuccess)> CountBranchesAsync(
         IRuntimeActivityExecutionContext runtimeContext,
         ParallelNavigator navigator,
         string compositeExecutionId)
     {
-        var store = runtimeContext.GetRequiredService<IActivityExecutionStateStore>();
-
         // Read only this composite's direct children rather than every activity-execution state in the workflow: the join
         // fires once per branch-completion/fault event, so a whole-workflow list here made the join O(branches × workflow
         // states) — effectively quadratic on wide/large workflows (#514/#413 item 3). The parent-scoped read returns exactly
         // the ParentActivityExecutionId == compositeExecutionId subset; the branch/grouping filters stay here.
-        var states = await store.ListByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
+        var states = await activityExecutionStateStore.ListByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
 
         var branchGroups = states
             .Where(state => navigator.IsBranch(state.Execution.ExecutableNodeId))

@@ -157,7 +157,6 @@ public sealed class ForRuntimeTests
                 ["Step"] = IntBinding("Step", step),
                 ["EndInclusive"] = BoolBinding("EndInclusive", endInclusive)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(

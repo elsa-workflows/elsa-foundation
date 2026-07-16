@@ -70,7 +70,6 @@ public sealed class WhileRuntimeTests
             {
                 ["Condition"] = BoolLiteral("Condition", condition)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(WhileActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode("node-body", bodyOutcomes)])],
             structure: new ExecutableActivityStructure(

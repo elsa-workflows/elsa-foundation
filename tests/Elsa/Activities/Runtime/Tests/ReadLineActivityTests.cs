@@ -59,6 +59,6 @@ public sealed class ReadLineActivityTests : IDisposable
     {
         activity.Id = "invocation-read-line";
         activity.NodeId = "node-read-line";
-        return new(_serviceProvider, activity, CancellationToken.None);
+        return new(activity, CancellationToken.None);
     }
 }

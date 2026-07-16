@@ -53,7 +53,7 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
     {
         BeginAttempt();
         EnsureDeclaredValueTypes();
-        return ValidateTransition(await ExecuteAsync(ActivityExecutionContext.FromLegacy(context)));
+        return ValidateTransition(await ExecuteAsync(ActivityExecutionContext.FromRuntime(context)));
     }
 
     async ValueTask<ActivityTransition<TResult, TState>> IStatefulActivity<TResult, TState, TTrigger>.ExecuteAsync(

@@ -353,7 +353,6 @@ public sealed class RecurringTriggerScheduleIndexerTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: metadata,
             childSlots: children.Length == 0 ? [] : [new ExecutableChildSlot("Body", children)]);
     }

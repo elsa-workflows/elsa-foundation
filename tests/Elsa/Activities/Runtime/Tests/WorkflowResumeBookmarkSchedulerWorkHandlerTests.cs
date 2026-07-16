@@ -137,7 +137,6 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         var node = new ExecutableNode(
             "node-wait", "authored-node-wait", "test/typed-resume", "1.0.0", "typed-resume", descriptor,
             new Dictionary<string, RuntimeInputBinding> { ["text"] = binding },
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             activityContract: contract);
         return new WorkflowExecutable(

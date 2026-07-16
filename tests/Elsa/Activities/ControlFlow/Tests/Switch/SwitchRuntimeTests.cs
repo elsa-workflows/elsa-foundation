@@ -120,7 +120,6 @@ public sealed class SwitchRuntimeTests
                         JsonSerializer.SerializeToElement(value),
                         ValueProtectionPolicy.InstanceInline))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(

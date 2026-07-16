@@ -180,7 +180,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             activity.Id = resumePayload.ActivityExecutionId;
 
             context = SimpleActivityExecutionContext.ForExecution(
-                serviceProvider,
                 activity,
                 cancellationToken,
                 workItem.WorkflowExecutionId,
@@ -314,13 +313,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     item.Key,
                     item.Value.Presence == ValuePresence.ExplicitNull ? null : item.Value.InlineValue))
                 .ToArray();
-        valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, recordedOutputs, _timeProvider.GetUtcNow()));
-
-        // Durably persist the resume target's CaptureOnSuccessfulCompletion outputs, mirroring the invoke path: a
-        // resume callback that sets outputs (e.g. the mid-flow HttpEndpoint's Result/RouteData/ParsedContent, spec
-        // 089 D) captures them to durable values, not just inspection snapshots. Folded into the consumption
-        // checkpoint so it commits atomically with the consumption.
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
+        valueSnapshots.AddRange(ActivityExecutionInspection.BuildOutputValueSnapshots(
+            payloadCapturePolicy,
+            workItem,
+            resumePayload.ActivityExecutionId,
+            resumePayload.ExecutableNodeId,
+            executableNode.ActivityContract,
+            recordedOutputs,
+            RuntimeMetadataKeys.ResumeSchedulerWorkItemId,
+            _timeProvider.GetUtcNow()));
 
         if (replacementSuspendedState is not null)
         {
@@ -332,7 +333,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     bookmark,
                     replacementSuspendedState,
                     valueSnapshots: valueSnapshots,
-                    durableValueChanges: durableValueChanges,
+                    durableValueChanges: [],
                     continuationWorkItems: replacementWorkItems),
                 cancellationToken);
             return;
@@ -353,7 +354,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 BookmarkIds = RemoveBookmark(completedState.BookmarkIds, bookmark.BookmarkId)
             };
         }
-        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, durableValueChanges), cancellationToken);
+        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, []), cancellationToken);
     }
 
     private static bool TryCreateTypedTriggerDelivery(
@@ -780,41 +781,5 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             IncidentMetadata: incidentMetadata,
             ValueSnapshots: valueSnapshots ?? []);
     }
-
-    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
-        IRuntimePayloadCapturePolicy payloadCapturePolicy,
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeResumeBookmarkCommandPayload resumePayload,
-        ExecutableNode executableNode,
-        IReadOnlyCollection<RecordedActivityOutput> outputs,
-        DateTimeOffset capturedAt) =>
-        outputs
-            .Select(output =>
-            {
-                executableNode.OutputCaptures.TryGetValue(output.OutputName, out var capture);
-                var type = capture?.Type ?? ActivityExecutionInspection.TypeDescriptorFor(output.Value);
-                var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
-                    RuntimePayloadCaptureSubject.ActivityOutput,
-                    workItem.WorkflowExecutionId,
-                    capturedAt,
-                    activityExecutionId: resumePayload.ActivityExecutionId,
-                    valueName: output.OutputName,
-                    type: type,
-                    metadata: new Dictionary<string, string>
-                    {
-                        [RuntimeMetadataKeys.ExecutableNodeId] = resumePayload.ExecutableNodeId,
-                        [RuntimeMetadataKeys.ResumeSchedulerWorkItemId] = workItem.WorkItemId
-                    }));
-                return ActivityExecutionInspectionValueSnapshot.FromDecision(
-                    output.OutputName,
-                    ActivityExecutionInspectionValueSubject.ActivityOutput,
-                    decision,
-                    type,
-                    capturedAt,
-                    ActivityExecutionInspection.SerializeCapturedValue(decision, output.Value, output.OutputName, type),
-                    isSensitive: false,
-                    metadata: decision.Metadata);
-            })
-            .ToArray();
 
 }

@@ -51,6 +51,6 @@ public sealed class InlineActivityTests : IDisposable
     {
         activity.Id = "invocation-1";
         activity.NodeId = "node-inline";
-        return new SimpleActivityExecutionContext(_serviceProvider, activity, CancellationToken.None);
+        return new SimpleActivityExecutionContext(activity, CancellationToken.None);
     }
 }

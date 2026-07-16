@@ -83,7 +83,6 @@ public sealed class FlowchartFaultJoinTests
             descriptorType: typeof(FlowchartDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, children)],
             structure: new ExecutableActivityStructure(

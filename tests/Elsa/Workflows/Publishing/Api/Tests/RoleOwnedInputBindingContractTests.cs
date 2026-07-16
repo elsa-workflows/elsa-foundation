@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -187,6 +188,33 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
+    public void Compiler_PreservesAuthoredInputStorageAndSensitivityPolicy()
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition(
+            ReferenceKey: "message",
+            Name: "Text",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            DisplayName: "Text",
+            Category: null);
+        var state = new ArgumentState(
+            "message",
+            new ArgumentValue("secret", "Literal"),
+            AutoEvaluate: null,
+            EvaluatorType: null,
+            StorageDriverType: "encrypted-payloads",
+            IsSensitive: true);
+
+        var binding = compiler.Compile("node-write", input, state);
+
+        Assert.Equal(DurableValueStorage.External, binding.EffectivePolicy.Storage);
+        Assert.True(binding.EffectivePolicy.IsSensitive);
+        Assert.Equal("encrypted-payloads", binding.EffectivePolicy.Metadata["storageProfile"]);
+        Assert.Equal(binding.EffectivePolicy, binding.Literal!.Policy);
+    }
+
+    [Fact]
     public void Compiler_PreservesPortableExpressionDefinitionWithoutAmbientCompatibility()
     {
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
@@ -259,7 +287,6 @@ public sealed class RoleOwnedInputBindingContractTests
             descriptorType: "clr",
             descriptorPayload: JsonSerializer.SerializeToElement(new { typeAlias = "Tests.Consumer" }),
             inputBindings: new Dictionary<string, RuntimeInputBinding> { [binding.InputKey] = binding },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static ExecutableNode IntrinsicNode(RuntimeInputBinding binding, string scopeId, string variableKey) =>
@@ -271,7 +298,6 @@ public sealed class RoleOwnedInputBindingContractTests
             descriptorType: "intrinsic",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding> { [binding.InputKey] = binding },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.Set,
             intrinsicVariable: new RuntimeVariableReference(variableKey, scopeId));

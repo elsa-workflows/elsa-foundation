@@ -87,7 +87,6 @@ public sealed class RuntimeContractTests
                     source: RuntimeInputBindingSource.WorkflowRequest,
                     workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
         Assert.Equal("node-runtime-1", node.ExecutableNodeId);

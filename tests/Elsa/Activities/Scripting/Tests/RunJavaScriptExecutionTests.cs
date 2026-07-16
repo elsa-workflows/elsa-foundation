@@ -92,7 +92,7 @@ public sealed class RunJavaScriptExecutionTests
 
     private static async ValueTask<ActivityTransition> ExecuteAsync(RunJavaScript activity, IServiceProvider services)
     {
-        var context = new SimpleActivityExecutionContext(services, activity, CancellationToken.None);
+        var context = new SimpleActivityExecutionContext(activity, CancellationToken.None);
         return await ((IActivity)activity).ExecuteAsync(context);
     }
 

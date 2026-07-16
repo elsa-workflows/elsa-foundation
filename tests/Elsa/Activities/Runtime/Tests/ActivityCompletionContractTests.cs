@@ -113,6 +113,37 @@ public sealed class ActivityCompletionContractTests
         Assert.Empty(store.Writes);
     }
 
+    [Fact]
+    public async Task StrongerProjectionPolicyIsFoldedIntoAtomicResultBeforePersistence()
+    {
+        var store = new RecordingExternalPayloadStore();
+        var projectionPolicy = new ActivityValuePolicy(
+            IsPersistable: true,
+            IsSensitive: true,
+            RequiresEncryption: true,
+            RedactionMode: "Full",
+            Lifecycle: ActivityValueLifecycle.Audit,
+            Storage: ActivityValueStorage.External,
+            StorageProfile: "audit-payloads",
+            RetentionPolicy: "P30D");
+
+        var projected = await new ActivityCompletionProjector(store).ProjectAsync(
+            "workflow-1",
+            "invocation-1",
+            Attempt(),
+            Contract(projectionPolicy: projectionPolicy),
+            ActivityTransition.Complete(new ChargeResult("receipt-1", true), "Charged"),
+            DateTimeOffset.UtcNow);
+
+        Assert.Equal(DurableValueLifecycle.Audit, projected.Completion.Result.Policy.Lifecycle);
+        Assert.Equal(DurableValueStorage.External, projected.Completion.Result.Policy.Storage);
+        Assert.True(projected.Completion.Result.Policy.IsSensitive);
+        Assert.True(projected.Completion.Result.Policy.RequiresEncryption);
+        Assert.Equal("Full", projected.Completion.Result.Policy.RedactionMode);
+        Assert.Equal("P30D", projected.Completion.Result.Policy.RetentionPolicy);
+        Assert.Equal("audit-payloads", Assert.Single(store.Writes).StorageProfile);
+    }
+
     private static ActivityContract Contract(
         string requiredProjectionPath = "receiptId",
         ActivityValuePolicy? resultPolicy = null,

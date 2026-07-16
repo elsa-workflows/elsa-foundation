@@ -443,7 +443,6 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: effectiveBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

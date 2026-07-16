@@ -468,7 +468,6 @@ public sealed class HttpEndpointExecutionTests
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
 
@@ -511,7 +510,6 @@ public sealed class HttpEndpointExecutionTests
             descriptorType: node.DescriptorType,
             descriptorPayload: node.DescriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: node.OutputCaptures,
             metadata: node.Metadata,
             activityContract: node.ActivityContract);
 
@@ -542,7 +540,6 @@ public sealed class HttpEndpointExecutionTests
             descriptorType: node.DescriptorType,
             descriptorPayload: node.DescriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: node.OutputCaptures,
             metadata: node.Metadata,
             activityContract: node.ActivityContract);
 

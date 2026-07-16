@@ -302,7 +302,6 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                     source: RuntimeInputBindingSource.WorkflowRequest,
                     workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { ["role"] = "leaf" });
 
         var root = new ExecutableNode(
@@ -313,7 +312,6 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             descriptorType: "Elsa.Activities.SequenceDescriptor",
             descriptorPayload: Json("""{ "kind": "Send" }"""),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot("Body", [child])]);
 

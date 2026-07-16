@@ -417,7 +417,6 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             descriptorType: "test",
             descriptorPayload: descriptorPayload.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static WorkflowExecutableIdentity NewIdentity() =>

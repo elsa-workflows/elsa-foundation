@@ -156,7 +156,6 @@ public sealed class TimerCronProviderTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

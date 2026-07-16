@@ -129,7 +129,7 @@ public abstract class ActivityBase : IActivity, ISignalHandler
     }
 
     /// <summary>
-    /// Produces the immutable transition returned to the engine. Legacy activities continue through
+    /// Produces the immutable transition returned to the engine. Structural activities continue through
     /// <see cref="ExecuteAsync(IActivityExecutionContext)"/> until they are migrated to <see cref="Activity{TResult}"/>.
     /// </summary>
     protected virtual async ValueTask<ActivityTransition> ExecuteTransitionAsync(IActivityExecutionContext context)
@@ -137,7 +137,7 @@ public abstract class ActivityBase : IActivity, ISignalHandler
         await ExecuteAsync(context);
         return ActivityTransition.Complete(
             ActivityUnit.Value,
-            context.GetOutcomes().FirstOrDefault() ?? "Done");
+            (context as IActivityTransitionContext)?.RequestedOutcomeName ?? "Done");
     }
 
     /// <summary>
@@ -183,15 +183,6 @@ public abstract class ActivityBase : IActivity, ISignalHandler
             handler(signal, context);
             return ValueTask.CompletedTask;
         });
-    }
-
-    /// <summary>
-    /// Notify the workflow that this activity completed.
-    /// </summary>
-    protected static ValueTask CompleteAsync(IActivityExecutionContext context)
-    {
-        var completionHandler = context.GetRequiredService<IActivityCompletionHandler>();
-        return completionHandler.CompleteActivityAsync(context);
     }
 
     async ValueTask<bool> IActivity.CanExecuteAsync(IActivityExecutionContext context)

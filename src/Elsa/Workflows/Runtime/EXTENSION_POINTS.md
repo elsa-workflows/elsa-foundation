@@ -491,15 +491,6 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 **Known implementations (shipped):**
 - Activity classes that override `ReceiveSignalAsync` in the codebase.
 
-### `IActivityCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Overridable single-impl (one handler expected at a time, injected by DI).
-- **Signature:** `CompleteActivityAsync(IActivityExecutionContext context)`, `CompleteActivityAsync(IActivityExecutionContext context, object result)`, `CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes)`, `CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes, object result)`.
-- **Register:** `services.Replace(ServiceDescriptor.Scoped<IActivityCompletionHandler, MyHandler>())` — single-impl; a replacement steps aside the previous one.
-- **Consumed by:** `ActivityBase.CompleteAsync` — resolves `IActivityCompletionHandler` from the execution context's service provider.
-
-**Known implementations (shipped):**
-- `Elsa.Workflows.Runtime.JavaScript` — `ActivityCompletionHandler` *(cross-domain — test implementation for JS-context activity completion)*
-
 ### `IActivityTriggerStimulusProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Strategy set (context-selected, exact-one owner per executable trigger node; not a contributor fan-in).
 - **Signature:** additive stable nonblank `ProviderId`; additive `Cardinality` (`FanOut` compatibility default); `ActivityTriggerStimulusResult Describe(ExecutableNode node)`.

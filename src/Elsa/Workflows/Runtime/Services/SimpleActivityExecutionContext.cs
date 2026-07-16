@@ -8,8 +8,12 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
+/// <summary>
+/// Runtime-owned orchestration context used by the engine and structural activities. It exposes no
+/// service resolution or mutable result/output/bookmark channel; ordinary activity authors receive
+/// <see cref="ActivityExecutionContext"/> instead.
+/// </summary>
 public sealed class SimpleActivityExecutionContext(
-    IServiceProvider serviceProvider,
     IActivity activity,
     CancellationToken cancellationToken,
     string? workflowExecutionId = null,
@@ -20,11 +24,10 @@ public sealed class SimpleActivityExecutionContext(
     VariableScope? variableScope = null,
     JsonElement? triggerPayload = null,
     string? triggerNodeId = null)
-    : IRuntimeActivityExecutionContext, IActivityInvocationIdentity
+    : IRuntimeActivityExecutionContext, IActivityInvocationIdentity, IActivityTransitionContext
 {
     // The single construction path for a runtime activity context.
     public static SimpleActivityExecutionContext ForExecution(
-        IServiceProvider serviceProvider,
         IActivity activity,
         CancellationToken cancellationToken,
         string workflowExecutionId,
@@ -36,13 +39,11 @@ public sealed class SimpleActivityExecutionContext(
         JsonElement? triggerPayload = null,
         string? triggerNodeId = null)
     {
-        ArgumentNullException.ThrowIfNull(serviceProvider);
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
 
         return new SimpleActivityExecutionContext(
-            serviceProvider,
             activity,
             cancellationToken,
             workflowExecutionId,
@@ -55,14 +56,11 @@ public sealed class SimpleActivityExecutionContext(
             triggerNodeId);
     }
 
-    private readonly List<string> _outcomes = [];
-    private readonly List<ActivityBookmarkRequest> _bookmarkRequests = [];
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
     private readonly List<string> _compositeCompletionOutcomeNames = [];
     private readonly List<string> _finishWorkflowOutcomeNames = [];
 
     public IActivity Activity { get; } = activity;
-    public IActivityExecutionContext ParentActivityExecutionContext => null!;
     public CancellationToken CancellationToken { get; } = cancellationToken;
     public string WorkflowExecutionId { get; } = workflowExecutionId ?? string.Empty;
     public string InvocationId => activityExecutionState?.InvocationId ?? Activity.Id;
@@ -79,6 +77,7 @@ public sealed class SimpleActivityExecutionContext(
     public bool CompositeCompletionRequested { get; private set; }
     public bool CompositeCompletionDeferred { get; private set; }
     public IReadOnlyCollection<string> CompositeCompletionOutcomeNames => _compositeCompletionOutcomeNames.ToArray();
+    public string? RequestedOutcomeName => _compositeCompletionOutcomeNames.FirstOrDefault();
     public bool FinishWorkflowRequested { get; private set; }
     public IReadOnlyCollection<string> FinishWorkflowOutcomeNames => _finishWorkflowOutcomeNames.ToArray();
     public bool CorrelationIdAssignmentRequested { get; private set; }
@@ -88,32 +87,6 @@ public sealed class SimpleActivityExecutionContext(
     private readonly Dictionary<string, object?> _requestedWorkflowOutputs = new(StringComparer.Ordinal);
     public bool WorkflowOutputAssignmentRequested { get; private set; }
     public IReadOnlyDictionary<string, object?> RequestedWorkflowOutputs => new Dictionary<string, object?>(_requestedWorkflowOutputs, StringComparer.Ordinal);
-
-    public TService GetRequiredService<TService>() where TService : notnull =>
-        (TService)(serviceProvider.GetService(typeof(TService))
-            ?? throw new InvalidOperationException($"Required service '{typeof(TService).FullName}' is not registered."));
-
-    public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => AsyncEnumerable.Empty<ActivityOutputs>();
-
-    public void SetOutcomes(string[] outcomes)
-    {
-        _outcomes.Clear();
-        _outcomes.AddRange(outcomes);
-    }
-
-    public IEnumerable<string> GetOutcomes() => _outcomes;
-
-    public void CreateBookmark(ActivityBookmarkRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (_bookmarkRequests.Any(existing => StringComparer.Ordinal.Equals(existing.BookmarkId, request.BookmarkId)))
-            throw new InvalidOperationException($"Bookmark request '{request.BookmarkId}' is already registered for this activity execution.");
-
-        _bookmarkRequests.Add(request);
-    }
-
-    public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => _bookmarkRequests.ToArray();
 
     public void ScheduleChildActivity(
         string executableNodeId,
@@ -146,8 +119,6 @@ public sealed class SimpleActivityExecutionContext(
         CompositeCompletionDeferred = false;
         _compositeCompletionOutcomeNames.Clear();
         _compositeCompletionOutcomeNames.AddRange(outcomeSnapshot);
-        _outcomes.Clear();
-        _outcomes.AddRange(outcomeSnapshot);
     }
 
     public void DeferCompositeCompletion()

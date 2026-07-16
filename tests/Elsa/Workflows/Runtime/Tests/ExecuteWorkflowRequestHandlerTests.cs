@@ -172,7 +172,6 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
             descriptorType: "test",
             descriptorPayload: System.Text.Json.JsonSerializer.SerializeToElement(new { type = "test" }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private sealed class RecordingAgentProvider : IWorkflowExecutionActorProvider

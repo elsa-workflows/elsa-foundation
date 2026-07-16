@@ -54,7 +54,7 @@ public sealed class ExecutableNodeCompiler(
             if (!inputDefinitionsByReferenceKey.TryGetValue(inputState.ReferenceKey, out var inputDefinition))
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
 
-            var binding = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState.Value);
+            var binding = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState);
             inputBindings[binding.InputName] = binding;
         }
 
@@ -68,17 +68,7 @@ public sealed class ExecutableNodeCompiler(
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
         var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
-        var activityContract = clrActivityType is null ? null : BuildActivityContract(activityVersion, clrActivityType, activityType, structure);
-        var outputCaptures = activityContract?.Result.Projections.Values.ToDictionary(
-            projection => projection.Key,
-            projection => new RuntimeOutputCapture(
-                projection.Key,
-                $"{activity.NodeId}:result:{projection.Key}",
-                new RuntimeValueTypeDescriptor("alias", projection.Type.Alias, projection.Type.Schema),
-                DurableValueLifecycle.Instance,
-                DurableValueStorage.Inline,
-                captureOnSuccessfulCompletion: true),
-            StringComparer.Ordinal) ?? new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
+        var activityContract = clrActivityType is null ? null : BuildActivityContract(activity, activityVersion, clrActivityType, activityType, structure);
 
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
@@ -88,7 +78,6 @@ public sealed class ExecutableNodeCompiler(
             descriptorType: activityVersion.DescriptorType,
             descriptorPayload: activityVersion.DescriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: outputCaptures,
             metadata: new Dictionary<string, string>
             {
                 ["authoredNodeId"] = activity.NodeId,
@@ -182,7 +171,6 @@ public sealed class ExecutableNodeCompiler(
             descriptorType: "intrinsic",
             descriptorPayload: descriptorPayload,
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
             metadata: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["authoredNodeId"] = activity.NodeId,
@@ -203,6 +191,7 @@ public sealed class ExecutableNodeCompiler(
     };
 
     private static ActivityContract? BuildActivityContract(
+        ActivityNode activity,
         ActivityDefinitionVersion activityVersion,
         Type activityType,
         string activityTypeKey,
@@ -212,14 +201,21 @@ public sealed class ExecutableNodeCompiler(
         if (resultType is null)
             return null;
 
-        var inputs = activityVersion.Inputs.Select(input => new ActivityInputContract(
-            input.ReferenceKey,
-            input.Name,
-            new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind),
-            input.IsRequired,
-            input.DefaultValue.HasValue,
-            input.DefaultValue,
-            ActivityValuePolicy.Default));
+        var inputStates = activity.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        var inputs = activityVersion.Inputs.Select(input =>
+        {
+            inputStates.TryGetValue(input.ReferenceKey, out var state);
+            return new ActivityInputContract(
+                input.ReferenceKey,
+                input.Name,
+                new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind),
+                input.IsRequired,
+                input.DefaultValue.HasValue,
+                input.DefaultValue,
+                CompileActivityPolicy(input.StorageDriverType, state, $"Input '{input.ReferenceKey}' on activity node '{activity.NodeId}'"));
+        });
+        var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
+        var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var projections = resultType
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(property => (Property: property, Attribute: property.GetCustomAttribute<OutputAttribute>(inherit: true)))
@@ -228,15 +224,25 @@ public sealed class ExecutableNodeCompiler(
             {
                 var attribute = candidate.Attribute!;
                 var type = TypeReferenceFactory.FromClrType(candidate.Property.PropertyType, TypeAliasConvention.CanonicalAlias);
+                var key = attribute.Key ?? candidate.Property.Name;
+                outputDefinitions.TryGetValue(key, out var outputDefinition);
+                outputStates.TryGetValue(key, out var outputState);
                 return new ActivityResultProjectionContract(
-                    attribute.Key ?? candidate.Property.Name,
+                    key,
                     attribute.Path ?? JsonNamingPolicy.CamelCase.ConvertName(candidate.Property.Name),
                     new ValueTypeDescriptor(type.Alias, type.CollectionKind),
                     attribute.IsRequired,
-                    ActivityValuePolicy.Default);
-            });
+                    CompileActivityPolicy(outputDefinition?.StorageDriverType, outputState, $"Result projection '{key}' on activity node '{activity.NodeId}'"));
+            })
+            .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
         var outcomes = ResolveOutcomes(activityType, structure);
+        var resultPolicy = projections.Aggregate(
+            ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+            (policy, projection) => ValuePolicyCombiner.Combine(
+                policy,
+                projection.Policy,
+                $"Atomic result on activity node '{activity.NodeId}'"));
 
         return new ActivityContract(
             activityTypeKey,
@@ -247,10 +253,23 @@ public sealed class ExecutableNodeCompiler(
             new ActivityResultContract(
                 new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind),
                 isRequired: true,
-                ActivityValuePolicy.Default,
+                resultPolicy,
                 projections),
             outcomes,
             new ActivityActivationRequirement(activityVersion.DescriptorType, TypeAliasConvention.CanonicalAlias(activityType)));
+    }
+
+    private static ActivityValuePolicy CompileActivityPolicy(
+        string? ownerStorageProfile,
+        ArgumentState? authored,
+        string valueRole)
+    {
+        var owner = ValuePolicyCombiner.FromAuthoredStorage(ownerStorageProfile);
+        if (authored is null)
+            return owner;
+
+        var authoredMinimum = ValuePolicyCombiner.FromAuthoredStorage(authored.StorageDriverType, authored.IsSensitive == true);
+        return ValuePolicyCombiner.Combine(owner, authoredMinimum, valueRole);
     }
 
     private static IReadOnlyCollection<string> ResolveOutcomes(Type activityType, ExecutableActivityStructure? structure)
@@ -326,10 +345,16 @@ public sealed class ExecutableNodeCompiler(
     private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
     {
         var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
-        var policy = ValueProtectionPolicy.InstanceInline;
+        var policy = ValuePolicyCombiner.ToProtectionPolicy(
+            ValuePolicyCombiner.FromAuthoredStorage(variable.StorageDriverType));
         RuntimeInputBinding? initialBinding = null;
         if (variable.Default is not null)
         {
+            if (policy.Storage != DurableValueStorage.Inline)
+            {
+                throw new ArgumentException(
+                    $"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' cannot use a literal initial value with storage profile '{variable.StorageDriverType}'. External variable materialization must be explicit before frame activation.");
+            }
             initialBinding = inputBindingCompiler.Compile(
                 nodeId,
                 new InputDefinition(

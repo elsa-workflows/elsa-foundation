@@ -80,7 +80,7 @@ public sealed class FlowchartActivityTests : IDisposable
             [NewNode("node-a"), NewNode("node-b")],
             connections: [NewConnection("node-a", "node-b", sourcePort: null)]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
         await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", []));
 
@@ -101,7 +101,7 @@ public sealed class FlowchartActivityTests : IDisposable
                 NewConnection("node-a", "node-c", "Rejected")
             ]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
         await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", ["Rejected"]));
 
@@ -116,7 +116,7 @@ public sealed class FlowchartActivityTests : IDisposable
             [NewNode("node-a")],
             connections: [NewConnection("node-a", "node-a")]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
         await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]));
 
@@ -133,7 +133,7 @@ public sealed class FlowchartActivityTests : IDisposable
             [NewNode("node-a"), NewNode("node-b")],
             connections: [NewConnection("node-a", "node-b", "Approved")]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
         await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", ["Rejected"]));
 
@@ -164,7 +164,7 @@ public sealed class FlowchartActivityTests : IDisposable
                 NewConnection("node-a", "node-b")
             ]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
         await Assert.ThrowsAsync<FlowchartExecutionException>(() => flowchart
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]))
@@ -182,13 +182,17 @@ public sealed class FlowchartActivityTests : IDisposable
     }
 
     private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        await ((IActivity)new FlowchartActivity()).ExecuteAsync(context);
+        await ((IActivity)NewActivity()).ExecuteAsync(context);
+
+    private FlowchartActivity NewActivity() =>
+        ActivatorUtilities.CreateInstance<FlowchartActivity>(_serviceProvider);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode)
     {
-        var activity = new FlowchartActivity { Id = "actexec-flowchart", NodeId = "node-flowchart" };
+        var activity = NewActivity();
+        activity.Id = "actexec-flowchart";
+        activity.NodeId = "node-flowchart";
         return new SimpleActivityExecutionContext(
-            _serviceProvider,
             activity,
             CancellationToken.None,
             "wfexec-1",
@@ -267,7 +271,6 @@ public sealed class FlowchartActivityTests : IDisposable
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: structure);

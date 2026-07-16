@@ -135,7 +135,6 @@ public sealed class RecurringTriggerSampleWorkflowTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType });
     }
 

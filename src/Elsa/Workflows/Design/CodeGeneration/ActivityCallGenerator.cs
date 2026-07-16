@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Elsa.Workflows.Design.CodeGeneration;
@@ -17,14 +18,17 @@ namespace Elsa.Workflows.Design.CodeGeneration;
 public sealed class ActivityCallGenerator : IIncrementalGenerator
 {
     public const string GeneratedHintName = "ElsaActivityCalls.g.cs";
-    public const string MetadataHintName = "ElsaActivityCallMetadata.g.cs";
     public const string DuplicateFacadeDiagnosticId = "VFAUTHGEN001";
     public const string UnsupportedShapeDiagnosticId = "VFAUTHGEN002";
 
-    private const string ActivityCallAttributeName = "Elsa.Workflows.Design.CodeGeneration.ActivityCallAttribute";
-    private const string ActivityInputAttributeName = "Elsa.Workflows.Design.CodeGeneration.ActivityInputAttribute";
-    private const string ActivityOutputAttributeName = "Elsa.Workflows.Design.CodeGeneration.ActivityOutputAttribute";
-    private const string ActivityOutcomeAttributeName = "Elsa.Workflows.Design.CodeGeneration.ActivityOutcomeAttribute";
+    private const string ActivityContractName = "Elsa.Activities.Runtime.Core.Contracts.IActivity";
+    private const string ActivityResultContractName = "Elsa.Activities.Runtime.Core.Contracts.IActivityResult<TResult>";
+    private const string ActivityInputAttributeName = "Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute";
+    private const string ActivityOutputAttributeName = "Elsa.Activities.Runtime.Core.Attributes.OutputAttribute";
+    private const string ActivityOutcomeAttributeName = "Elsa.Activities.Runtime.Core.Attributes.ActivityOutcomeAttribute";
+    private const string RequiredAttributeName = "Elsa.Activities.Runtime.Core.Attributes.RequiredAttribute";
+    private const string VersionAttributeName = "Elsa.Activities.Runtime.Core.Attributes.VersionAttribute";
+    private const string InformationalVersionAttributeName = "System.Reflection.AssemblyInformationalVersionAttribute";
 
     private static readonly DiagnosticDescriptor DuplicateFacade = new(
         DuplicateFacadeDiagnosticId,
@@ -44,74 +48,24 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        context.RegisterPostInitializationOutput(static output => output.AddSource(
-            MetadataHintName,
-            SourceText.From(MetadataSource, Encoding.UTF8)));
-
-        var activities = context.SyntaxProvider.ForAttributeWithMetadataName(
-                ActivityCallAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax,
-                static (attributeContext, _) => ReadActivity(attributeContext))
-            .Collect();
-
-        var referencedActivities = context.CompilationProvider.Select(
-            static (compilation, cancellationToken) => ReadReferencedActivities(compilation, cancellationToken));
-
-        context.RegisterSourceOutput(
-            activities.Combine(referencedActivities),
-            static (output, candidates) => Emit(output, candidates.Left.AddRange(candidates.Right)));
+        var activities = context.CompilationProvider.Select(
+            static (compilation, cancellationToken) => ReadActivities(compilation, cancellationToken));
+        context.RegisterSourceOutput(activities, static (output, candidates) => Emit(output, candidates));
     }
 
-    private static ActivityMetadata ReadActivity(GeneratorAttributeSyntaxContext context)
-    {
-        var activityType = (INamedTypeSymbol)context.TargetSymbol;
-        var activityAttribute = context.Attributes[0];
-        return ReadActivity(activityType, activityAttribute, context.TargetNode.GetLocation());
-    }
-
-    private static ActivityMetadata ReadActivity(
-        INamedTypeSymbol activityType,
-        AttributeData activityAttribute,
-        Location location)
-    {
-        var arguments = activityAttribute.ConstructorArguments;
-        var methodName = ReadString(arguments, 0);
-        var versionId = ReadString(arguments, 1);
-        var resultType = ReadType(arguments, 2);
-        var inputs = activityType.GetAttributes()
-            .Where(attribute => IsAttribute(attribute, ActivityInputAttributeName))
-            .Select(ReadInput)
-            .ToImmutableArray();
-        var outputs = activityType.GetAttributes()
-            .Where(attribute => IsAttribute(attribute, ActivityOutputAttributeName))
-            .Select(ReadOutput)
-            .ToImmutableArray();
-        var outcomes = activityType.GetAttributes()
-            .Where(attribute => IsAttribute(attribute, ActivityOutcomeAttributeName))
-            .Select(ReadOutcome)
-            .ToImmutableArray();
-
-        return new ActivityMetadata(
-            activityType,
-            methodName,
-            versionId,
-            resultType,
-            inputs,
-            outputs,
-            outcomes,
-            location);
-    }
-
-    private static ImmutableArray<ActivityMetadata> ReadReferencedActivities(
+    private static ImmutableArray<ActivityMetadata> ReadActivities(
         Compilation compilation,
         System.Threading.CancellationToken cancellationToken)
     {
         var activities = ImmutableArray.CreateBuilder<ActivityMetadata>();
+        var activityContract = compilation.GetTypeByMetadataName(ActivityContractName);
+        if (activityContract is null)
+            return activities.ToImmutable();
+
+        CollectActivities(compilation.Assembly.GlobalNamespace, activities, cancellationToken);
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (assembly.GetTypeByMetadataName(ActivityCallAttributeName) is null)
-                continue;
             CollectActivities(assembly.GlobalNamespace, activities, cancellationToken);
         }
 
@@ -141,9 +95,8 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         ImmutableArray<ActivityMetadata>.Builder activities,
         System.Threading.CancellationToken cancellationToken)
     {
-        var attribute = type.GetAttributes().FirstOrDefault(candidate => IsAttribute(candidate, ActivityCallAttributeName));
-        if (attribute is not null)
-            activities.Add(ReadActivity(type, attribute, Location.None));
+        if (IsPublicActivity(type))
+            activities.Add(ReadActivity(type));
 
         foreach (var nestedType in type.GetTypeMembers())
         {
@@ -152,27 +105,102 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         }
     }
 
-    private static InputMetadata ReadInput(AttributeData attribute)
+    private static bool IsPublicActivity(INamedTypeSymbol type) =>
+        type is { TypeKind: TypeKind.Class, IsAbstract: false, DeclaredAccessibility: Accessibility.Public, ContainingType: null } &&
+        type.AllInterfaces.Any(candidate => MetadataName(candidate) == ActivityContractName);
+
+    private static ActivityMetadata ReadActivity(INamedTypeSymbol activityType)
     {
-        var arguments = attribute.ConstructorArguments;
-        return new InputMetadata(
-            ReadString(arguments, 0),
-            ReadString(arguments, 1),
-            ReadType(arguments, 2),
-            ReadInt32(arguments, 3),
-            ReadBoolean(arguments, 4, defaultValue: true));
+        var resultContracts = activityType.AllInterfaces
+            .Where(candidate => candidate.IsGenericType &&
+                                candidate.OriginalDefinition.ToDisplayString() == ActivityResultContractName)
+            .ToArray();
+        var resultType = resultContracts.Length == 1 ? resultContracts[0].TypeArguments[0] : null;
+        var inputs = EnumeratePublicProperties(activityType)
+            .Select(property => new { Property = property, Attribute = FindPropertyAttribute(property, ActivityInputAttributeName) })
+            .Where(candidate => candidate.Attribute is not null)
+            .Select(candidate => ReadInput(candidate.Property, candidate.Attribute!))
+            .ToImmutableArray();
+        var outputs = resultType is INamedTypeSymbol namedResult
+            ? EnumeratePublicProperties(namedResult)
+                .Select(property => new { Property = property, Attribute = FindPropertyAttribute(property, ActivityOutputAttributeName) })
+                .Where(candidate => candidate.Attribute is not null)
+                .Select(candidate => ReadOutput(candidate.Property, candidate.Attribute!))
+                .ToImmutableArray()
+            : ImmutableArray<OutputMetadata>.Empty;
+        var outcomes = EnumerateTypeAttributes(activityType, ActivityOutcomeAttributeName)
+            .Select(ReadOutcome)
+            .ToImmutableArray();
+        var location = activityType.Locations.FirstOrDefault(candidate => candidate.IsInSource) ?? Location.None;
+
+        return new ActivityMetadata(
+            activityType,
+            activityType.Name,
+            ResolveActivityVersionId(activityType),
+            resultType,
+            inputs,
+            outputs,
+            outcomes,
+            location);
     }
 
-    private static OutputMetadata ReadOutput(AttributeData attribute)
+    private static IEnumerable<IPropertySymbol> EnumeratePublicProperties(INamedTypeSymbol type)
     {
-        var arguments = attribute.ConstructorArguments;
-        return new OutputMetadata(ReadString(arguments, 0), ReadString(arguments, 1), ReadType(arguments, 2));
+        var properties = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (!property.IsStatic && property.DeclaredAccessibility == Accessibility.Public)
+                {
+                    if (!properties.ContainsKey(property.Name))
+                        properties.Add(property.Name, property);
+                }
+            }
+        }
+
+        return properties.Values;
+    }
+
+    private static AttributeData? FindPropertyAttribute(IPropertySymbol property, string metadataName)
+    {
+        for (var current = property; current is not null; current = current.OverriddenProperty)
+        {
+            var attribute = current.GetAttributes().FirstOrDefault(candidate => IsAttribute(candidate, metadataName));
+            if (attribute is not null)
+                return attribute;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<AttributeData> EnumerateTypeAttributes(INamedTypeSymbol type, string metadataName)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var attribute in current.GetAttributes().Where(candidate => IsAttribute(candidate, metadataName)))
+                yield return attribute;
+        }
+    }
+
+    private static InputMetadata ReadInput(IPropertySymbol property, AttributeData attribute)
+    {
+        var key = ReadNamedString(attribute, "Key") ?? property.Name;
+        var order = ReadNamedSingle(attribute, "Order");
+        var required = FindPropertyAttribute(property, RequiredAttributeName) is not null;
+        return new InputMetadata(ToParameterName(property.Name), key, property.Type, order, required);
+    }
+
+    private static OutputMetadata ReadOutput(IPropertySymbol property, AttributeData attribute)
+    {
+        var key = ReadNamedString(attribute, "Key") ?? property.Name;
+        return new OutputMetadata(property.Name, key, property.Type);
     }
 
     private static OutcomeMetadata ReadOutcome(AttributeData attribute)
     {
-        var arguments = attribute.ConstructorArguments;
-        return new OutcomeMetadata(ReadString(arguments, 0), ReadString(arguments, 1));
+        var key = ReadString(attribute.ConstructorArguments, 0);
+        return new OutcomeMetadata(ToMemberName(key), key);
     }
 
     private static void Emit(SourceProductionContext context, ImmutableArray<ActivityMetadata> candidates)
@@ -235,13 +263,11 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         if (!IsSupportedType(activity.ResultType))
             return "result type must be a closed, non-pointer CLR type";
 
-        var orderedInputs = activity.Inputs.OrderBy(input => input.Order).ToArray();
-        if (orderedInputs.Select(input => input.Order).Distinct().Count() != orderedInputs.Length)
-            return "input order values must be unique";
+        var orderedInputs = OrderInputs(activity.Inputs).ToArray();
         if (orderedInputs.Any(input => input.Order < 0))
             return "input order values must be non-negative";
-        if (orderedInputs.SkipWhile(input => input.IsRequired).Any(input => input.IsRequired))
-            return "required inputs cannot follow optional inputs";
+        if (orderedInputs.Any(input => input.Name == "nodeId"))
+            return "input parameter name 'nodeId' is reserved by the generated call facade";
 
         var inputError = ValidateMembers(
             orderedInputs.Select(input => new MemberShape(input.Name, input.Key, input.Type)),
@@ -336,19 +362,19 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
 
     private static void RenderMethod(StringBuilder source, ActivityMetadata activity)
     {
-        var inputs = activity.Inputs.OrderBy(input => input.Order).ToArray();
+        var inputs = OrderInputs(activity.Inputs).ToArray();
         source.Append("    public static ").Append(activity.CallTypeName).Append(' ').Append(activity.MethodName).AppendLine("(");
         source.Append("        this global::Elsa.Workflows.Design.Core.Authoring.ISequenceBuilder sequence")
-            .AppendLine(inputs.Length == 0 ? ")" : ",");
-        for (var index = 0; index < inputs.Length; index++)
+            .AppendLine(",");
+        foreach (var input in inputs)
         {
-            var input = inputs[index];
             source.Append("        global::Elsa.Workflows.Design.Core.Authoring.ActivityArgument<")
                 .Append(DisplayType(input.Type)).Append("> ").Append(input.Name);
             if (!input.IsRequired)
                 source.Append(" = default");
-            source.AppendLine(index == inputs.Length - 1 ? ")" : ",");
+            source.AppendLine(",");
         }
+        source.AppendLine("        string? nodeId = null)");
         source.AppendLine("    {");
         source.AppendLine("        if (sequence is null)");
         source.AppendLine("            throw new global::System.ArgumentNullException(nameof(sequence));");
@@ -358,7 +384,7 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         source.Append("            ").Append(SymbolDisplay.FormatLiteral(activity.VersionId, quote: true));
         if (inputs.Length == 0)
         {
-            source.AppendLine(");");
+            source.AppendLine(", nodeId: nodeId);");
         }
         else
         {
@@ -370,7 +396,8 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
                 source.Append("                inputs.Set(")
                     .Append(SymbolDisplay.FormatLiteral(input.Key, quote: true)).Append(", ").Append(input.Name).AppendLine(");");
             }
-            source.AppendLine("            });");
+            source.AppendLine("            },");
+            source.AppendLine("            nodeId);");
         }
         source.Append("        return new ").Append(activity.CallTypeName).AppendLine("(call);");
         source.AppendLine("    }");
@@ -448,20 +475,145 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
 
     private static string DisplayType(ITypeSymbol? type) => type!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
+    private static IOrderedEnumerable<InputMetadata> OrderInputs(IEnumerable<InputMetadata> inputs) => inputs
+        .OrderByDescending(input => input.IsRequired)
+        .ThenBy(input => input.Order)
+        .ThenBy(input => input.Name, StringComparer.Ordinal);
+
+    private static string MetadataName(INamedTypeSymbol type) =>
+        type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+
     private static bool IsAttribute(AttributeData attribute, string metadataName) =>
         string.Equals(attribute.AttributeClass?.ToDisplayString(), metadataName, StringComparison.Ordinal);
 
     private static string ReadString(ImmutableArray<TypedConstant> arguments, int index) =>
         index < arguments.Length ? arguments[index].Value as string ?? string.Empty : string.Empty;
 
-    private static ITypeSymbol? ReadType(ImmutableArray<TypedConstant> arguments, int index) =>
-        index < arguments.Length ? arguments[index].Value as ITypeSymbol : null;
+    private static string? ReadNamedString(AttributeData attribute, string name) =>
+        attribute.NamedArguments.FirstOrDefault(candidate => candidate.Key == name).Value.Value as string;
 
-    private static int ReadInt32(ImmutableArray<TypedConstant> arguments, int index) =>
-        index < arguments.Length && arguments[index].Value is int value ? value : -1;
+    private static float ReadNamedSingle(AttributeData attribute, string name)
+    {
+        var value = attribute.NamedArguments.FirstOrDefault(candidate => candidate.Key == name).Value.Value;
+        return value is float number ? number : 0;
+    }
 
-    private static bool ReadBoolean(ImmutableArray<TypedConstant> arguments, int index, bool defaultValue) =>
-        index < arguments.Length && arguments[index].Value is bool value ? value : defaultValue;
+    private static string ToParameterName(string propertyName) => propertyName.Length == 0
+        ? propertyName
+        : char.ToLowerInvariant(propertyName[0]) + propertyName.Substring(1);
+
+    private static string ToMemberName(string key)
+    {
+        var result = new StringBuilder(key.Length);
+        var capitalize = true;
+        foreach (var character in key)
+        {
+            if (!char.IsLetterOrDigit(character) && character != '_')
+            {
+                capitalize = true;
+                continue;
+            }
+
+            result.Append(capitalize ? char.ToUpperInvariant(character) : character);
+            capitalize = false;
+        }
+
+        if (result.Length == 0 || !SyntaxFacts.IsIdentifierStartCharacter(result[0]))
+            result.Insert(0, '_');
+        return result.ToString();
+    }
+
+    private static string ResolveActivityVersionId(INamedTypeSymbol activityType)
+    {
+        var version = ResolveActivityVersion(activityType);
+        var sortKey = ToSemVerSortKey(version);
+        if (sortKey is null)
+            return string.Empty;
+
+        var activityTypeKey = activityType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+        var bytes = Encoding.UTF8.GetBytes(activityTypeKey + '\u001f' + sortKey);
+        byte[] hash;
+        using (var algorithm = SHA256.Create())
+            hash = algorithm.ComputeHash(bytes);
+        var encoded = Convert.ToBase64String(hash).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return "actver_" + encoded;
+    }
+
+    private static string ResolveActivityVersion(INamedTypeSymbol activityType)
+    {
+        for (var current = activityType; current is not null; current = current.BaseType)
+        {
+            var attribute = current.GetAttributes().FirstOrDefault(candidate => IsAttribute(candidate, VersionAttributeName));
+            if (attribute is not null)
+                return ReadString(attribute.ConstructorArguments, 0);
+        }
+
+        var informational = activityType.ContainingAssembly.GetAttributes()
+            .FirstOrDefault(candidate => IsAttribute(candidate, InformationalVersionAttributeName));
+        if (informational is not null)
+        {
+            var value = ReadString(informational.ConstructorArguments, 0);
+            if (ToSemVerSortKey(value) is not null)
+                return value;
+        }
+
+        var identityVersion = activityType.ContainingAssembly.Identity.Version;
+        return $"{identityVersion.Major}.{identityVersion.Minor}.{Math.Max(identityVersion.Build, 0)}";
+    }
+
+    private static string? ToSemVerSortKey(string version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+            return null;
+
+        var buildSeparator = version.IndexOf('+');
+        var withoutBuild = buildSeparator < 0 ? version : version.Substring(0, buildSeparator);
+        if (buildSeparator >= 0)
+        {
+            var build = version.Substring(buildSeparator + 1);
+            if (build.IndexOf('+') >= 0 || !AreValidIdentifiers(build, allowNumericLeadingZero: true))
+                return null;
+        }
+
+        var dashIndex = withoutBuild.IndexOf('-');
+        var core = dashIndex < 0 ? withoutBuild : withoutBuild.Substring(0, dashIndex);
+        var prerelease = dashIndex < 0 ? null : withoutBuild.Substring(dashIndex + 1);
+        var parts = core.Split('.');
+        if (parts.Length != 3 || !parts.All(IsValidNumericIdentifier))
+            return null;
+        if (!int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var major) ||
+            !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minor) ||
+            !int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var patch))
+            return null;
+
+        var normalizedCore = Pad(major) + "." + Pad(minor) + "." + Pad(patch);
+        if (prerelease is null)
+            return normalizedCore + ".1";
+
+        if (!AreValidIdentifiers(prerelease, allowNumericLeadingZero: false))
+            return null;
+        var identifiers = prerelease.Split('.');
+        var normalizedPrerelease = string.Join(".", identifiers.Select(identifier => identifier.All(IsAsciiDigit)
+            ? "0" + identifier.PadLeft(11, '0')
+            : "1" + identifier));
+        return normalizedCore + ".0." + normalizedPrerelease;
+    }
+
+    private static bool IsValidNumericIdentifier(string value) =>
+        value.Length > 0 && value.All(IsAsciiDigit) && (value.Length == 1 || value[0] != '0');
+
+    private static bool AreValidIdentifiers(string value, bool allowNumericLeadingZero) => value
+        .Split('.')
+        .All(identifier => identifier.Length > 0 &&
+                           identifier.All(IsAsciiIdentifierCharacter) &&
+                           (allowNumericLeadingZero || !identifier.All(IsAsciiDigit) || IsValidNumericIdentifier(identifier)));
+
+    private static bool IsAsciiDigit(char character) => character is >= '0' and <= '9';
+
+    private static bool IsAsciiIdentifierCharacter(char character) =>
+        character is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-';
+
+    private static string Pad(int value) => value.ToString(CultureInfo.InvariantCulture).PadLeft(11, '0');
 
     private sealed class ActivityMetadata
     {
@@ -501,7 +653,7 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
 
     private sealed class InputMetadata
     {
-        public InputMetadata(string name, string key, ITypeSymbol? type, int order, bool isRequired)
+        public InputMetadata(string name, string key, ITypeSymbol? type, float order, bool isRequired)
         {
             Name = name;
             Key = key;
@@ -513,7 +665,7 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         public string Name { get; }
         public string Key { get; }
         public ITypeSymbol? Type { get; }
-        public int Order { get; }
+        public float Order { get; }
         public bool IsRequired { get; }
     }
 
@@ -569,71 +721,4 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         public string Key { get; }
     }
 
-    private const string MetadataSource = @"// <auto-generated/>
-#nullable enable
-
-namespace Elsa.Workflows.Design.CodeGeneration;
-
-[global::System.AttributeUsage(global::System.AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class ActivityCallAttribute : global::System.Attribute
-{
-    public ActivityCallAttribute(string methodName, string activityVersionId, global::System.Type resultType)
-    {
-        MethodName = methodName;
-        ActivityVersionId = activityVersionId;
-        ResultType = resultType;
-    }
-
-    public string MethodName { get; }
-    public string ActivityVersionId { get; }
-    public global::System.Type ResultType { get; }
-}
-
-[global::System.AttributeUsage(global::System.AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-public sealed class ActivityInputAttribute : global::System.Attribute
-{
-    public ActivityInputAttribute(string name, string key, global::System.Type type, int order, bool isRequired = true)
-    {
-        Name = name;
-        Key = key;
-        Type = type;
-        Order = order;
-        IsRequired = isRequired;
-    }
-
-    public string Name { get; }
-    public string Key { get; }
-    public global::System.Type Type { get; }
-    public int Order { get; }
-    public bool IsRequired { get; }
-}
-
-[global::System.AttributeUsage(global::System.AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-public sealed class ActivityOutputAttribute : global::System.Attribute
-{
-    public ActivityOutputAttribute(string name, string key, global::System.Type type)
-    {
-        Name = name;
-        Key = key;
-        Type = type;
-    }
-
-    public string Name { get; }
-    public string Key { get; }
-    public global::System.Type Type { get; }
-}
-
-[global::System.AttributeUsage(global::System.AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-public sealed class ActivityOutcomeAttribute : global::System.Attribute
-{
-    public ActivityOutcomeAttribute(string name, string key)
-    {
-        Name = name;
-        Key = key;
-    }
-
-    public string Name { get; }
-    public string Key { get; }
-}
-";
 }

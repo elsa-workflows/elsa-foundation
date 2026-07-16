@@ -1005,7 +1005,6 @@ public sealed class RuntimeSchedulerDrainTests
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { type = "root" }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots:
             [
@@ -1024,7 +1023,6 @@ public sealed class RuntimeSchedulerDrainTests
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

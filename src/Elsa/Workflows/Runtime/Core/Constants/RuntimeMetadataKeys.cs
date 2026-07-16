@@ -69,7 +69,7 @@ public static class RuntimeMetadataKeys
 
     /// <summary>
     /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
-    /// value as a persisted workflow variable (rather than an activity output capture) and its value is the
+    /// value as a persisted workflow variable and its value is the
     /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by
     /// <c>RuntimeInputBindingStateProjection.ProjectWorkflowVariables</c> (engine package)
     /// to rebuild the <c>variables.*</c> snapshot for input materialization.

@@ -276,7 +276,6 @@ public sealed class RuntimeBookmarkResumeContractTests
             descriptorType: root.DescriptorType,
             descriptorPayload: root.DescriptorPayload,
             inputBindings: root.InputBindings,
-            outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
             childSlots:
             [
@@ -293,7 +292,6 @@ public sealed class RuntimeBookmarkResumeContractTests
             descriptorType: "test",
             descriptorPayload: Json("{}"),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private ExecutableNode NewOtherNode() =>
@@ -305,7 +303,6 @@ public sealed class RuntimeBookmarkResumeContractTests
             descriptorType: "test",
             descriptorPayload: Json("{}"),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static JsonElement Json(string json)

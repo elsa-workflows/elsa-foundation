@@ -78,7 +78,6 @@ public sealed class SequenceRuntimeTests
             descriptorType: typeof(SequenceDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
             structure: new ExecutableActivityStructure(

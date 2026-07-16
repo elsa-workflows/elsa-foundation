@@ -138,7 +138,7 @@ public sealed class ForActivityTests : IDisposable
     [Fact]
     public async Task Execute_Throws_WhenRuntimeContextIsMissing()
     {
-        var context = new NonRuntimeActivityExecutionContext(_serviceProvider, new ForActivity());
+        var context = new NonRuntimeActivityExecutionContext(new ForActivity());
 
         await Assert.ThrowsAsync<ForExecutionException>(() => ((IActivity)new ForActivity()).ExecuteAsync(context).AsTask());
     }
@@ -158,7 +158,6 @@ public sealed class ForActivityTests : IDisposable
         };
 
         var context = new SimpleActivityExecutionContext(
-            _serviceProvider,
             activity,
             CancellationToken.None,
             "wfexec-1",
@@ -198,7 +197,6 @@ public sealed class ForActivityTests : IDisposable
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: structure);
@@ -240,27 +238,9 @@ public sealed class ForActivityTests : IDisposable
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class NonRuntimeActivityExecutionContext(IServiceProvider serviceProvider, IActivity activity) : IActivityExecutionContext
+    private sealed class NonRuntimeActivityExecutionContext(IActivity activity) : IActivityExecutionContext
     {
         public IActivity Activity { get; } = activity;
-        public IActivityExecutionContext ParentActivityExecutionContext => null!;
         public CancellationToken CancellationToken => CancellationToken.None;
-
-        public TService GetRequiredService<TService>() where TService : notnull =>
-            serviceProvider.GetRequiredService<TService>();
-
-        public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => AsyncEnumerable.Empty<ActivityOutputs>();
-
-        public void SetOutcomes(string[] outcomes)
-        {
-        }
-
-        public IEnumerable<string> GetOutcomes() => [];
-
-        public void CreateBookmark(ActivityBookmarkRequest request)
-        {
-        }
-
-        public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => [];
     }
 }

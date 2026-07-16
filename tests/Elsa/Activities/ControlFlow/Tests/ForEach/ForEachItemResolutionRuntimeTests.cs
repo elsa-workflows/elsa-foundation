@@ -78,7 +78,6 @@ public sealed class ForEachItemResolutionRuntimeTests
                     source: RuntimeInputBindingSource.VariableRead,
                     variable: new RuntimeVariableReference(bodyReferenceKey, ForEachNodeId))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
         var root = new ExecutableNode(
@@ -92,7 +91,6 @@ public sealed class ForEachItemResolutionRuntimeTests
             {
                 ["Collection"] = CollectionBinding(collection)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [body])],
             structure: new ExecutableActivityStructure(

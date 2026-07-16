@@ -350,7 +350,6 @@ public sealed class RuntimeStartActivityStateTests
             descriptorType: root.DescriptorType,
             descriptorPayload: root.DescriptorPayload,
             inputBindings: root.InputBindings,
-            outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
             activityContract: root.ActivityContract,
             childSlots:
@@ -367,7 +366,6 @@ public sealed class RuntimeStartActivityStateTests
             descriptorType: "test",
             descriptorPayload: descriptorPayload.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: EmptyContract(descriptorPayload));
 

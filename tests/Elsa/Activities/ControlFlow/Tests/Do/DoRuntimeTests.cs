@@ -71,7 +71,6 @@ public sealed class DoRuntimeTests
             {
                 ["Condition"] = BoolLiteral("Condition", condition)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(DoActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode("node-body", bodyOutcomes)])],
             structure: new ExecutableActivityStructure(

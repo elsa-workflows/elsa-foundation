@@ -140,7 +140,6 @@ public sealed class ActivityInputSnapshotCheckpointTests
             "test",
             descriptor.RootElement,
             inputs.ToDictionary(input => input.Key, input => input.Binding, StringComparer.Ordinal),
-            new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
             activityContract: contract);
 

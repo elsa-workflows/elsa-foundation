@@ -183,7 +183,6 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
                 [WorkflowIntrinsicInputKeys.Name] = Literal(WorkflowIntrinsicInputKeys.Name, OutputName),
                 [WorkflowIntrinsicInputKeys.Value] = Literal(WorkflowIntrinsicInputKeys.Value, OutputValue)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.SetOutput);
 
