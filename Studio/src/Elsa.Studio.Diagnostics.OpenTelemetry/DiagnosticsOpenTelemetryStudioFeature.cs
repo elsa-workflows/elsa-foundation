@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Studio.Core.Attributes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.Diagnostics.OpenTelemetry;
@@ -8,6 +9,7 @@ namespace Elsa.Studio.Diagnostics.OpenTelemetry;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Diagnostics")]
 [ManifestFeatureCategory("OpenTelemetry")]
+[StudioModule("open-telemetry", "OpenTelemetry", "1.0.1", "navigation", "routes", "http", "diagnostics", "otel", "traces", "metrics", "logs")]
 [ShellFeature(
     name: "OpenTelemetryStudio",
     DisplayName = "OpenTelemetry module",
@@ -17,6 +19,5 @@ public sealed class DiagnosticsOpenTelemetryStudioFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddDiagnosticsOpenTelemetryStudio();
     }
 }

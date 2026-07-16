@@ -1,3 +1,5 @@
+using System.Reflection;
+using CShells.Features;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
@@ -60,6 +62,7 @@ public sealed class StudioApiVersionBindingTests
             services.AddSingleton(configuration);
 
         services.AddElsaStudioApi();
+        services.AddSingleton<IRuntimeFeatureCatalog>(new EmptyRuntimeFeatureCatalog());
         services.AddSingleton<IStudioEventHandler<OnStudioModuleManifestsCollecting>>(new StubManifestContributor(RequiresHostV2));
         return services.BuildServiceProvider();
     }
@@ -72,5 +75,21 @@ public sealed class StudioApiVersionBindingTests
             @event.Manifests.Add(manifest);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class EmptyRuntimeFeatureCatalog : IRuntimeFeatureCatalog
+    {
+        private static readonly RuntimeFeatureCatalogSnapshot s_empty = new(
+            0,
+            Array.Empty<Assembly>(),
+            Array.Empty<ShellFeatureDescriptor>(),
+            new Dictionary<string, ShellFeatureDescriptor>(),
+            DateTimeOffset.UtcNow);
+
+        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(s_empty);
+
+        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(s_empty);
     }
 }

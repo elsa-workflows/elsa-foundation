@@ -2,9 +2,6 @@ using ConsoleLogStreaming.AspNetCore.DependencyInjection;
 using ConsoleLogStreaming.Core;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using ConsoleLogStreaming.Core.Providers;
-using Elsa.Studio.ConsoleStream.Handlers;
-using Elsa.Studio.Core.Events;
-using Elsa.Studio.Core.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,16 +26,6 @@ public static class ConsoleStreamStudioServiceCollectionExtensions
     /// even when a host logs per-request at Information — see <see cref="PacedConsoleLogProvider"/>.
     /// </summary>
     internal static readonly TimeSpan StreamReleaseInterval = TimeSpan.FromMilliseconds(100);
-
-    /// <summary>
-    /// Registers the per-shell Studio integration for the console stream: the UI module manifest
-    /// contribution. The console-log-streaming <em>host</em> (capture, SignalR hub, HTTP endpoints) is
-    /// hosted at the application root instead — see <see cref="AddConsoleStreamStudioHost"/> — so that
-    /// long-lived hub connections never capture a shell service provider that is disposed when the shell
-    /// is recycled at runtime.
-    /// </summary>
-    public static IServiceCollection AddConsoleStreamStudio(this IServiceCollection services) =>
-        services.AddStudioEventHandler<OnStudioModuleManifestsCollecting, ContributeConsoleStreamStudioModule>();
 
     /// <summary>
     /// Registers the console-log-streaming host (capture host + SignalR hub + HTTP endpoints) on the

@@ -1,5 +1,4 @@
 using Elsa.Studio.ConsoleStream;
-using Elsa.Studio.ConsoleStream.Handlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,16 +27,15 @@ public sealed class ConsoleStreamStudioHostingTests
     }
 
     [Fact]
-    public void ShellFeatureContributesManifestButDoesNotHostTheHub()
+    public void ShellFeatureDoesNotHostTheHub()
     {
         var services = new ServiceCollection();
 
         new ConsoleStreamStudioFeature().ConfigureServices(services);
 
-        // The UI module manifest contribution stays shell-scoped...
-        Assert.Contains(services, descriptor => descriptor.ImplementationType == typeof(ContributeConsoleStreamStudioModule));
-        // ...but the console-log-streaming host (capture, SignalR hub, HTTP endpoints) must not be hosted
+        // The console-log-streaming host (capture, SignalR hub, HTTP endpoints) must not be hosted
         // in the shell container, or its connections would capture a service provider disposed on reload.
+        // Module manifest contribution is now handled declaratively via [StudioModule] on the feature class.
         Assert.False(HasConsoleLogStreamingHost(services));
     }
 

@@ -1,4 +1,6 @@
+using System.Reflection;
 using CShells;
+using CShells.Features;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
@@ -289,16 +291,20 @@ public sealed class StudioModuleManifestProviderTests
     {
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
-        services.AddConsoleStreamStudio();
-        services.AddDiagnosticsOpenTelemetryStudio();
-        services.AddDiagnosticsStructuredLogsStudio();
-        services.AddJavaScriptExpressionEditorStudio();
-        services.AddLiquidExpressionEditorStudio();
-        services.AddFeatureManagementStudio();
-        services.AddWeaverWorkflowsStudio();
-        services.AddWorkflowsStudio();
-        services.AddDashboardStudioSample();
-        services.AddWeatherForecastStudioSample();
+
+        // Register a fake runtime feature catalog that surfaces all feature types so the
+        // StudioModuleManifestProvider discovers [StudioModule] attributes via reflection.
+        services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog(
+            typeof(ConsoleStreamStudioFeature),
+            typeof(DiagnosticsOpenTelemetryStudioFeature),
+            typeof(DiagnosticsStructuredLogsStudioFeature),
+            typeof(JavaScriptExpressionEditorStudioFeature),
+            typeof(LiquidExpressionEditorStudioFeature),
+            typeof(FeatureManagementStudioFeature),
+            typeof(WeaverWorkflowsStudioFeature),
+            typeof(WorkflowsStudioFeature),
+            typeof(DashboardStudioFeature),
+            typeof(WeatherForecastStudioFeature)));
 
         // Pin the host/SDK version so these tests are independent of the ambient build version.
         // StudioApiOptions defaults HostVersion/SdkVersion to the Studio API assembly's informational
@@ -317,5 +323,44 @@ public sealed class StudioModuleManifestProviderTests
             services.AddSingleton(new ShellSettings(new("Default"), shellFeatures));
 
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Returns a snapshot whose feature descriptors carry the <see cref="ShellFeatureDescriptor.StartupType"/>
+    /// of each supplied type so that <see cref="Elsa.Studio.Api.Services.StudioModuleManifestProvider"/>
+    /// can reflect <c>[StudioModule]</c> attributes from them.
+    /// </summary>
+    private sealed class FakeRuntimeFeatureCatalog : IRuntimeFeatureCatalog
+    {
+        private readonly RuntimeFeatureCatalogSnapshot _snapshot;
+
+        public FakeRuntimeFeatureCatalog(params Type[] featureTypes)
+        {
+            var descriptors = featureTypes
+                .Select(type =>
+                {
+                    // Extract the feature name from the [ShellFeature] attribute if present, otherwise use the type name.
+                    var shellFeatureAttr = type.GetCustomAttributesData()
+                        .FirstOrDefault(a => a.AttributeType.Name == "ShellFeatureAttribute");
+
+                    var featureName = shellFeatureAttr?.ConstructorArguments.FirstOrDefault().Value as string ?? type.Name;
+
+                    return new ShellFeatureDescriptor { Id = featureName, StartupType = type };
+                })
+                .ToArray();
+
+            _snapshot = new RuntimeFeatureCatalogSnapshot(
+                1,
+                Array.Empty<Assembly>(),
+                descriptors,
+                new Dictionary<string, ShellFeatureDescriptor>(),
+                DateTimeOffset.UtcNow);
+        }
+
+        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
     }
 }

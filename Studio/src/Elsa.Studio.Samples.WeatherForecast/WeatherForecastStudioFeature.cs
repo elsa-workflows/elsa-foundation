@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Studio.Core.Attributes;
 using Elsa.Studio.Samples.WeatherForecast.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,7 @@ namespace Elsa.Studio.Samples.WeatherForecast;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Samples")]
 [ManifestFeatureCategory("Weather")]
+[StudioModule("weather", "Weather forecast sample", "1.0.1", "navigation", "routes", "http")]
 [ShellFeature(
     name: "WeatherForecastSample",
     DisplayName = "Weather forecast sample module",
@@ -21,7 +23,6 @@ public sealed class WeatherForecastStudioFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddWeatherForecastStudioSample();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)

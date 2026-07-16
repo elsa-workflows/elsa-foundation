@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Studio.Core.Attributes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.Weaver.Workflows;
@@ -8,6 +9,7 @@ namespace Elsa.Studio.Weaver.Workflows;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("AI")]
 [ManifestFeatureCategory("Workflows")]
+[StudioModule("weaver-workflows", "Weaver workflows", "1.0.0", "ai-context-providers", "ai-prompt-actions", "ai-proposal-renderers", "ai-tools", "weaver-workflows", HasStyles = false)]
 [ShellFeature(
     name: "WeaverWorkflowsStudio",
     DisplayName = "Weaver workflows Studio module",
@@ -17,6 +19,5 @@ public sealed class WeaverWorkflowsStudioFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddWeaverWorkflowsStudio();
     }
 }

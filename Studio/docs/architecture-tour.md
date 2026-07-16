@@ -47,7 +47,7 @@ A Studio module crosses two related boundaries:
 
 In the browser, [`loader.ts`](../src/Elsa.Studio.Web/Client/src/app/loader.ts) checks host and SDK version compatibility, loads versioned styles, imports each ESM entry, and invokes `register(api)`. [`registry.ts`](../src/Elsa.Studio.Web/Client/src/app/registry.ts) creates the host and backend endpoint contexts plus the Slot registries defined by the [`ElsaStudioModuleApi`](../src/Elsa.Studio.Web/Client/src/sdk/index.ts).
 
-Slots define accepted Contribution shapes, ownership, ordering, and local admission rules. Module Policy and Host Policy can further restrict availability. A representative full-stack path is the [Weather Forecast feature](../src/Elsa.Studio.Samples.WeatherForecast/WeatherForecastStudioFeature.cs), its [manifest contributor](../src/Elsa.Studio.Samples.WeatherForecast/Handlers/ContributeWeatherForecastStudioModule.cs), and its frontend [`register` function](../src/Elsa.Studio.Samples.WeatherForecast/Client/src/module.tsx).
+Slots define accepted Contribution shapes, ownership, ordering, and local admission rules. Module Policy and Host Policy can further restrict availability. A representative full-stack path is the [Weather Forecast feature](../src/Elsa.Studio.Samples.WeatherForecast/WeatherForecastStudioFeature.cs) (whose `[StudioModule]` attribute declares the module manifest declaratively) and its frontend [`register` function](../src/Elsa.Studio.Samples.WeatherForecast/Client/src/module.tsx).
 
 The domain vocabulary and governance model are maintained in [`CONTEXT.md`](../CONTEXT.md) and [ADR 0001](adr/0001-use-slots-and-contributions-for-studio-extensibility.md).
 

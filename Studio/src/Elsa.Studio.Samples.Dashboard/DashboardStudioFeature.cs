@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Studio.Core.Attributes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.Samples.Dashboard;
@@ -8,6 +9,7 @@ namespace Elsa.Studio.Samples.Dashboard;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Dashboard")]
 [ManifestFeatureCategory("Samples")]
+[StudioModule("dashboard", "Dashboard sample", "1.0.0", "navigation", "routes", "dashboard-widgets")]
 [ShellFeature(
     name: "DashboardSample",
     DisplayName = "Dashboard sample module",
@@ -17,6 +19,5 @@ public sealed class DashboardStudioFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddDashboardStudioSample();
     }
 }
