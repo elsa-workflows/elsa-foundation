@@ -2,6 +2,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry.Extensions;
+using Elsa.Diagnostics.OpenTelemetry.Ingestion;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -25,6 +26,10 @@ public sealed class OpenTelemetryFeatureTests
         Assert.NotNull(provider.GetRequiredService<ICollectorConfigurationProvider>());
         Assert.NotNull(provider.GetRequiredService<IOpenTelemetrySourceRegistry>());
         Assert.NotNull(provider.GetRequiredService<IOpenTelemetryRedactor>());
+        Assert.IsType<DefaultOtlpRequestAuthenticator>(provider.GetRequiredService<IOtlpRequestAuthenticator>());
+        Assert.Equal(
+            ServiceLifetime.Scoped,
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IOtlpRequestAuthenticator)).Lifetime);
         Assert.NotNull(provider.GetRequiredService<OpenTelemetryStreamItemSerializer>());
         Assert.NotNull(provider.GetRequiredService<OpenTelemetrySseFormatter>());
         Assert.NotNull(provider.GetRequiredService<OpenTelemetrySseStreamWriter>());
@@ -72,13 +77,39 @@ public sealed class OpenTelemetryFeatureTests
             contributor => Assert.IsType<SecondContributor>(contributor));
     }
 
+    [Fact]
+    public void HostCanReplaceDefaultRequestAuthenticator()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IOtlpRequestAuthenticator, HostRequestAuthenticator>();
+
+        new OpenTelemetryFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<HostRequestAuthenticator>(provider.GetRequiredService<IOtlpRequestAuthenticator>());
+    }
+
     private sealed class FirstContributor : IOpenTelemetryIngestionContributor
     {
-        public ValueTask ContributeAsync(Core.Models.OpenTelemetryBatch redactedBatch, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask ContributeAsync(
+            Core.Models.OpenTelemetryBatch redactedBatch,
+            Core.Models.OpenTelemetryIngestionContext ingestionContext,
+            CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     private sealed class SecondContributor : IOpenTelemetryIngestionContributor
     {
-        public ValueTask ContributeAsync(Core.Models.OpenTelemetryBatch redactedBatch, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask ContributeAsync(
+            Core.Models.OpenTelemetryBatch redactedBatch,
+            Core.Models.OpenTelemetryIngestionContext ingestionContext,
+            CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
+    private sealed class HostRequestAuthenticator : IOtlpRequestAuthenticator
+    {
+        public ValueTask<OtlpRequestAuthenticationResult> AuthenticateAsync(
+            Microsoft.AspNetCore.Http.HttpContext httpContext,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(OtlpRequestAuthenticationResult.Rejected);
     }
 }

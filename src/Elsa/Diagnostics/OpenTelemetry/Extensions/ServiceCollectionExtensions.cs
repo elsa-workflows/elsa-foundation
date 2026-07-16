@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Ingestion;
 using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 using Elsa.Diagnostics.OpenTelemetry.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<InMemoryOpenTelemetryLiveFeed>();
         services.TryAddSingleton<IOpenTelemetryLiveFeed>(sp => sp.GetRequiredService<InMemoryOpenTelemetryLiveFeed>());
         services.TryAddSingleton<IOpenTelemetryIngestor, OpenTelemetryIngestor>();
+        services.TryAddScoped<IOtlpRequestAuthenticator, DefaultOtlpRequestAuthenticator>();
         services.TryAddSingleton<IOpenTelemetryProvider, DefaultOpenTelemetryProvider>();
         services.TryAddSingleton<ICollectorConfigurationProvider, CollectorConfigurationProvider>();
 

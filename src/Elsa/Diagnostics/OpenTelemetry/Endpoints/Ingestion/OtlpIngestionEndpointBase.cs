@@ -13,13 +13,14 @@ namespace Elsa.Diagnostics.OpenTelemetry.Endpoints.Ingestion;
 /// <summary>
 /// Base for the OTLP/HTTP protobuf collector endpoints (<c>traces</c>, <c>metrics</c>, <c>logs</c>). Reads
 /// the raw protobuf body (bounded by <see cref="OpenTelemetryDiagnosticsOptions.MaxHttpRequestBodySize"/>),
-/// authenticates the request with <see cref="OtlpIngestionSecurity"/> (API-key header or loopback), parses
+/// authenticates the request with <see cref="IOtlpRequestAuthenticator"/>, parses
 /// it with the signal-specific parser, then hands the batch to <see cref="IOpenTelemetryIngestor"/>.
 /// These endpoints are intentionally anonymous to the FastEndpoints permission model; ingestion auth is the
-/// API key, not a studio principal.
+/// request authentication, not a studio principal.
 /// </summary>
 internal abstract class OtlpIngestionEndpointBase(
     IOpenTelemetryIngestor ingestor,
+    IOtlpRequestAuthenticator authenticator,
     IOptions<OpenTelemetryDiagnosticsOptions> options) : ElsaEndpointWithoutRequest
 {
     /// <summary>The route suffix appended to <see cref="OpenTelemetryDiagnosticsOptions.HttpEndpointPath"/>.</summary>
@@ -39,7 +40,8 @@ internal abstract class OtlpIngestionEndpointBase(
     {
         var settings = options.Value;
 
-        if (!OtlpIngestionSecurity.IsAuthorized(HttpContext, settings))
+        var authentication = await authenticator.AuthenticateAsync(HttpContext, ct);
+        if (!authentication.Accepted)
         {
             await Send.StringAsync(string.Empty, StatusCodes.Status401Unauthorized, cancellation: ct);
             return;
@@ -73,7 +75,7 @@ internal abstract class OtlpIngestionEndpointBase(
             return;
         }
 
-        await ingestor.IngestAsync(batch, ct);
+        await ingestor.IngestAsync(batch, authentication.Context, ct);
         await Send.StringAsync(string.Empty, StatusCodes.Status200OK, cancellation: ct);
     }
 

@@ -33,10 +33,42 @@ public sealed class OpenTelemetryIngestorTests
             new RecordingLiveFeed(),
             [contributor]);
 
-        await ingestor.IngestAsync(BatchWithSecret());
+        var claims = new Dictionary<string, string> { ["workspace"] = "workspace-1" };
+        var ingestionContext = OpenTelemetryIngestionContext.Authenticated(
+            "source-1",
+            claims,
+            new Dictionary<string, string> { ["credential"] = "per-source-token" });
+
+        claims["workspace"] = "tampered";
+        await ingestor.IngestAsync(BatchWithSecret(), ingestionContext);
 
         var contributed = Assert.Single(contributor.Batches);
         Assert.Equal("[Redacted]", Assert.Single(contributed.Logs).Attributes["password"]);
+        var observedContext = Assert.Single(contributor.Contexts);
+        Assert.True(observedContext.IsAuthenticated);
+        Assert.Equal("source-1", observedContext.SourceIdentity);
+        Assert.Equal("workspace-1", observedContext.Claims["workspace"]);
+        Assert.Equal("per-source-token", observedContext.Metadata["credential"]);
+        Assert.Throws<NotSupportedException>(() => ((IDictionary<string, string>)observedContext.Claims).Add("application", "app-1"));
+    }
+
+    [Fact]
+    public async Task IngestAsync_CompatibilityOverloadIsExplicitlyUntrusted()
+    {
+        var contributor = new RecordingContributor();
+        var ingestor = new OpenTelemetryIngestor(
+            new PassthroughRedactor(),
+            new RecordingStore(),
+            new RecordingLiveFeed(),
+            [contributor]);
+
+        await ingestor.IngestAsync(EmptyBatch());
+
+        var context = Assert.Single(contributor.Contexts);
+        Assert.False(context.IsAuthenticated);
+        Assert.Null(context.SourceIdentity);
+        Assert.Empty(context.Claims);
+        Assert.Empty(context.Metadata);
     }
 
     [Fact]
@@ -132,10 +164,15 @@ public sealed class OpenTelemetryIngestorTests
         Func<OpenTelemetryBatch, CancellationToken, ValueTask>? contribute = null) : IOpenTelemetryIngestionContributor
     {
         public List<OpenTelemetryBatch> Batches { get; } = [];
+        public List<OpenTelemetryIngestionContext> Contexts { get; } = [];
 
-        public ValueTask ContributeAsync(OpenTelemetryBatch redactedBatch, CancellationToken cancellationToken = default)
+        public ValueTask ContributeAsync(
+            OpenTelemetryBatch redactedBatch,
+            OpenTelemetryIngestionContext ingestionContext,
+            CancellationToken cancellationToken = default)
         {
             Batches.Add(redactedBatch);
+            Contexts.Add(ingestionContext);
             return contribute?.Invoke(redactedBatch, cancellationToken) ?? ValueTask.CompletedTask;
         }
     }

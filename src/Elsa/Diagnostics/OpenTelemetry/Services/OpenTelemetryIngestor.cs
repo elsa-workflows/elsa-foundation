@@ -19,10 +19,19 @@ public class OpenTelemetryIngestor(
 
     public async ValueTask IngestAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
     {
+        await IngestAsync(batch, OpenTelemetryIngestionContext.Untrusted, cancellationToken);
+    }
+
+    public async ValueTask IngestAsync(
+        OpenTelemetryBatch batch,
+        OpenTelemetryIngestionContext ingestionContext,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ingestionContext);
         var redactedBatch = redactor.Redact(batch);
 
         foreach (var contributor in contributors)
-            await contributor.ContributeAsync(redactedBatch, cancellationToken);
+            await contributor.ContributeAsync(redactedBatch, ingestionContext, cancellationToken);
 
         await store.WriteAsync(redactedBatch, cancellationToken);
         await liveFeed.PublishAsync(redactedBatch, cancellationToken);
