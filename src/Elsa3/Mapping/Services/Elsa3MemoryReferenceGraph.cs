@@ -21,6 +21,7 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
         var occurrences = new List<Elsa3MemoryOccurrence>();
         var nodes = new List<Elsa3MemoryReferenceNode>();
         var frames = new List<Elsa3StructuralFrame>();
+        var propertyContracts = new List<Elsa3PropertyContract>();
         var rootNodeId = GetNodeId(root, "$.root");
         var rootActivityPath = $"/{rootNodeId}";
 
@@ -33,9 +34,14 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
             occurrences,
             nodes,
             frames,
+            propertyContracts,
             cancellationToken);
 
-        return new Elsa3MemoryReferenceInventory(occurrences.ToArray(), nodes.ToArray(), frames.ToArray());
+        return new Elsa3MemoryReferenceInventory(
+            occurrences.ToArray(),
+            nodes.ToArray(),
+            frames.ToArray(),
+            propertyContracts.ToArray());
     }
 
     private async ValueTask CollectActivityAsync(
@@ -46,12 +52,14 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
         List<Elsa3MemoryOccurrence> occurrences,
         List<Elsa3MemoryReferenceNode> nodes,
         List<Elsa3StructuralFrame> frames,
+        List<Elsa3PropertyContract> propertyContracts,
         CancellationToken cancellationToken)
     {
         var nodeId = GetNodeId(activity, jsonActivityPath);
         nodes.Add(new Elsa3MemoryReferenceNode(nodeId, activityPath, structuralFrameId));
 
         var version = await GetVersionAsync(activity, cancellationToken);
+        CollectPropertyContracts(activity, version, nodeId, activityPath, structuralFrameId, propertyContracts);
         CollectOccurrences(activity, version, nodeId, jsonActivityPath, activityPath, structuralFrameId, occurrences);
 
         var children = activity.Activities ?? [];
@@ -75,7 +83,43 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
                 occurrences,
                 nodes,
                 frames,
+                propertyContracts,
                 cancellationToken);
+        }
+    }
+
+    private static void CollectPropertyContracts(
+        Elsa3Activity activity,
+        IActivityDefinitionVersion version,
+        string nodeId,
+        string activityPath,
+        string structuralFrameId,
+        ICollection<Elsa3PropertyContract> contracts)
+    {
+        foreach (var propertyName in activity.AdditionalProperties.Keys)
+        {
+            foreach (var input in version.Inputs.Where(value => value.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase)))
+            {
+                contracts.Add(new Elsa3PropertyContract(
+                    nodeId,
+                    activityPath,
+                    structuralFrameId,
+                    propertyName,
+                    input.ReferenceKey,
+                    Elsa3PropertyDirection.Input,
+                    input.Type));
+            }
+            foreach (var output in version.Outputs.Where(value => value.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase)))
+            {
+                contracts.Add(new Elsa3PropertyContract(
+                    nodeId,
+                    activityPath,
+                    structuralFrameId,
+                    propertyName,
+                    output.ReferenceKey,
+                    Elsa3PropertyDirection.Output,
+                    output.Type));
+            }
         }
     }
 
@@ -193,7 +237,8 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
 public sealed record Elsa3MemoryReferenceInventory(
     IReadOnlyList<Elsa3MemoryOccurrence> Occurrences,
     IReadOnlyList<Elsa3MemoryReferenceNode> Nodes,
-    IReadOnlyList<Elsa3StructuralFrame> StructuralFrames);
+    IReadOnlyList<Elsa3StructuralFrame> StructuralFrames,
+    IReadOnlyList<Elsa3PropertyContract> PropertyContracts);
 
 public sealed record Elsa3MemoryOccurrence(
     string MemoryReferenceId,
@@ -209,6 +254,15 @@ public sealed record Elsa3MemoryReferenceNode(
     string ActivityNodeId,
     string ActivityPath,
     string StructuralFrameId);
+
+public sealed record Elsa3PropertyContract(
+    string ActivityNodeId,
+    string ActivityPath,
+    string StructuralFrameId,
+    string PropertyName,
+    string StablePropertyKey,
+    Elsa3PropertyDirection Direction,
+    Elsa.Primitives.Models.TypeReference Type);
 
 public sealed record Elsa3StructuralFrame(
     string Id,

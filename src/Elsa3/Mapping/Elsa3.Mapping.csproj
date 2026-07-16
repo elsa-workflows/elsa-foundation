@@ -8,7 +8,9 @@
 
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+		<PackageReference Include="Acornima" />
+		<PackageReference Include="Fluid.Core" />
+		<PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -247,17 +247,17 @@ combined values, and assert successful authored state contains no legacy/runtime
 ### Tests — write and fail first
 
 - [x] T089 [P] [US7] Add output-only and expression-plus-memory-reference fixtures in `tests/Elsa3/Mapping/Tests/Elsa3ActivityToStateTests.cs`
-- [ ] T090 [P] [US7] Add literal/request/variable/result/loop/JavaScript/Liquid import matrix in `tests/Elsa3/Mapping/Tests/Elsa3MemoryReferenceImportTests.cs`
-- [ ] T091 [P] [US7] Add dangling/multiple-producer/cross-subtree/ambiguous/cyclic/custom/dynamic-script diagnostic tests in `tests/Elsa3/Mapping/Tests/Elsa3MemoryReferenceDiagnosticsTests.cs`
-- [ ] T092 [US7] Expand importer-boundary architecture tests in `tests/Elsa/Architecture/Elsa3MigrationBoundaryTests.cs`
+- [X] T090 [P] [US7] Add literal/request/variable/result/loop/JavaScript/Liquid import matrix in `tests/Elsa3/Mapping/Tests/Elsa3MemoryReferenceImportTests.cs`
+- [X] T091 [P] [US7] Add dangling/multiple-producer/cross-subtree/ambiguous/cyclic/custom/dynamic-script diagnostic tests in `tests/Elsa3/Mapping/Tests/Elsa3MemoryReferenceDiagnosticsTests.cs`
+- [X] T092 [US7] Expand importer-boundary architecture tests in `tests/Elsa/Architecture/Elsa3MigrationBoundaryTests.cs`
 
 ### Implementation
 
 - [x] T093 [US7] Collect importer-local reference occurrences with paths, directions, stable keys, nodes, and structural frames in `src/Elsa3/Mapping/Services/Elsa3MemoryReferenceGraph.cs`
-- [ ] T094 [US7] Lower unique producer/consumer and variable relationships to canonical authored bindings in `src/Elsa3/Mapping/Mappings/Elsa3ActivityToState.cs`
-- [ ] T095 [US7] Rewrite only statically provable JavaScript/Liquid ambient reads into declared parameters and reject dynamic access in `src/Elsa3/Mapping/Services/Elsa3ExpressionRewriter.cs`
-- [ ] T096 [US7] Emit stable path-specific importer diagnostics and preserve output-only/combined reference meaning in `src/Elsa3/Mapping/Services/Elsa3WorkflowDefinitionImporter.cs`
-- [ ] T097 [US7] Run the full importer matrix and architecture boundary tests and mark US7 ledger rows implemented/passing
+- [X] T094 [US7] Lower unique producer/consumer and variable relationships to canonical authored bindings in `src/Elsa3/Mapping/Mappings/Elsa3ActivityToState.cs`
+- [X] T095 [US7] Rewrite only statically provable JavaScript/Liquid ambient reads into declared parameters and reject dynamic access in `src/Elsa3/Mapping/Services/Elsa3ExpressionRewriter.cs`
+- [X] T096 [US7] Emit stable path-specific importer diagnostics and preserve output-only/combined reference meaning in `src/Elsa3/Mapping/Services/Elsa3WorkflowDefinitionImporter.cs`
+- [X] T097 [US7] Run the full importer matrix and architecture boundary tests and mark US7 ledger rows implemented/passing
 
 ---
 
