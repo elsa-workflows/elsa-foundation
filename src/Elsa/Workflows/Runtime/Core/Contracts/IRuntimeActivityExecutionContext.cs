@@ -86,3 +86,19 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     /// <summary>Records an ordinary activity output by its stable runtime name.</summary>
     void RecordActivityOutput(string outputName, object? value);
 }
+
+/// <summary>
+/// Additive capability implemented by runtime activity contexts that can stage a cross-execution workflow dispatch.
+/// Keeping this separate from <see cref="IRuntimeActivityExecutionContext"/> preserves compatibility for existing
+/// third-party context implementations while allowing dispatch-aware activities and handlers to require the seam.
+/// </summary>
+public interface IWorkflowDispatchStagingContext
+{
+    /// <summary>
+    /// Stages one cross-execution workflow dispatch for the activity-completed checkpoint. The runtime commits the
+    /// lifecycle record and start intent atomically with the activity result; activities must never deliver it inline.
+    /// </summary>
+    void StageWorkflowDispatch(WorkflowDispatchCheckpointRequest request);
+
+    WorkflowDispatchCheckpointRequest? WorkflowDispatchRequest { get; }
+}

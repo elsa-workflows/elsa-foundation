@@ -12,11 +12,10 @@ public static class RuntimeCheckpointCommitFingerprint
     {
         ArgumentNullException.ThrowIfNull(commit);
 
-        var payload = new
-        {
-            commit.CommitId,
-            commit.Checkpoint,
-            StateChanges = new
+        // Preserve the exact pre-#676 JSON shape for commits without dispatch state so durable replay markers
+        // written by older binaries keep the same fingerprint after upgrade.
+        object stateChanges = commit.StateChanges.WorkflowDispatches.Count == 0
+            ? new
             {
                 commit.StateChanges.WorkflowExecution,
                 commit.StateChanges.Scheduler,
@@ -27,7 +26,26 @@ public static class RuntimeCheckpointCommitFingerprint
                 Incidents = Order(commit.StateChanges.Incidents),
                 Operational = Order(commit.StateChanges.Operational),
                 PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
-            },
+            }
+            : new
+            {
+                commit.StateChanges.WorkflowExecution,
+                commit.StateChanges.Scheduler,
+                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
+                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
+                Bookmarks = Order(commit.StateChanges.Bookmarks),
+                DurableValues = Order(commit.StateChanges.DurableValues),
+                Incidents = Order(commit.StateChanges.Incidents),
+                Operational = Order(commit.StateChanges.Operational),
+                WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
+                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
+            };
+
+        var payload = new
+        {
+            commit.CommitId,
+            commit.Checkpoint,
+            StateChanges = stateChanges,
             PostCommitIntents = commit.PostCommitIntents.OrderBy(x => x.IntentId, StringComparer.Ordinal).ToArray(),
             commit.Metadata
         };

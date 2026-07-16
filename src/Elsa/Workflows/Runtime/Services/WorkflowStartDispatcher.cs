@@ -159,7 +159,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
-        var partition = CurrentPartition();
+        var partition = request.Partition ?? CurrentPartition();
         var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
@@ -169,7 +169,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             stimulusInput: request.StimulusInput,
             triggerNodeId: request.TriggerNodeId,
             runKind: request.RunKind,
-            pinnedSource: pinnedSource));
+            pinnedSource: pinnedSource,
+            parentWorkflowExecutionId: request.ParentWorkflowExecutionId,
+            correlationId: request.CorrelationId,
+            tenantId: request.TenantId,
+            partition: partition,
+            authority: request.Authority));
 
         var command = new WorkflowExecutionCommand(
             CommandId: _idGenerator.NewWorkflowExecutionCommandId(),

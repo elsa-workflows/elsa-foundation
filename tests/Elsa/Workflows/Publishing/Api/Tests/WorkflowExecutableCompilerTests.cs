@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
@@ -21,7 +22,10 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -40,6 +44,28 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class WorkflowExecutableCompilerTests
 {
+    [Fact]
+    public void Compiler_preserves_the_current_main_pre_metadata_enricher_constructor()
+    {
+        var constructor = typeof(WorkflowExecutableCompiler).GetConstructor(
+        [
+            typeof(IWorkflowDefinitionVersionStore),
+            typeof(IActivityDefinitionVersionStore),
+            typeof(IActivityDefinitionVersionPublicationStore),
+            typeof(IExecutableActivityTemplateReader),
+            typeof(IWorkflowExecutableSourceReferenceReader),
+            typeof(ActivityTemplatePlacer),
+            typeof(RuntimeInputBindingCompiler),
+            typeof(RuntimeOutputCaptureCompiler),
+            typeof(WorkflowExecutableHasher),
+            typeof(ActivityTreeProjector),
+            typeof(ExecutableNodeCompiler),
+            typeof(WorkflowExecutablePlacementSidecarContext)
+        ]);
+
+        Assert.NotNull(constructor);
+    }
+
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly ActivityDefinitionVersion _writeLinesActivity = ActivityVersion("activity-write-lines", "Lines", new TypeReference("String", CollectionKind.List));
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
@@ -233,6 +259,22 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(DurableValueStorage.External, captured.Storage);
         Assert.Equal(driver.DriverKey, captured.Type.Id);
         Assert.Same(opaque, projections.WorkflowVariables["CallerResult"]);
+    }
+
+    [Fact]
+    public async Task Compiler_applies_event_collected_node_metadata_before_executable_assembly()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("hello")));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: MetadataEnricher(new FixedMetadataSource("write-one", "runtime.pin", "pinned-value")));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("pinned-value", executable.RootActivity.Metadata["runtime.pin"]);
     }
 
     [Fact]
@@ -1024,5 +1066,25 @@ public sealed class WorkflowExecutableCompilerTests
         public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(artifactId == reference.ArtifactId ? [reference] : []);
         public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([reference]);
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+    }
+
+    private static ExecutableNodeMetadataEnricher MetadataEnricher(params IExecutableNodeMetadataSource[] sources) =>
+        new(new CollectingInlineEventPublisher(sources));
+
+    private sealed class FixedMetadataSource(string nodeId, string key, string value) : IExecutableNodeMetadataSource
+    {
+        public ValueTask<IReadOnlyCollection<ExecutableNodeMetadataContribution>> GetMetadataAsync(
+            ExecutableNodeMetadataContext context,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<ExecutableNodeMetadataContribution>>(
+                [new ExecutableNodeMetadataContribution(nodeId, key, value)]);
+    }
+
+    private sealed class CollectingInlineEventPublisher(IEnumerable<IExecutableNodeMetadataSource> sources) : IInlineEventPublisher
+    {
+        private readonly CollectExecutableNodeMetadata _handler = new(sources);
+
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
+            _handler.Handle(Assert.IsType<OnExecutableNodeMetadataCollecting>(@event), cancellationToken);
     }
 }

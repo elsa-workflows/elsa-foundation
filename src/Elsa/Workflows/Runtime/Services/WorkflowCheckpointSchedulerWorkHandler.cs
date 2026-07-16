@@ -220,9 +220,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: null,
-            CorrelationId: priorWorkflowState?.CorrelationId,
-            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
-            TenantId: priorWorkflowState?.TenantId,
+            CorrelationId: priorWorkflowState?.CorrelationId ?? payload.CorrelationId,
+            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId ?? payload.ParentWorkflowExecutionId,
+            TenantId: priorWorkflowState?.TenantId ?? payload.TenantId,
             SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
@@ -230,7 +230,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             }, priorWorkflowState, workItem)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
-            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            Partition = priorWorkflowState?.Partition ?? payload.Partition,
+            Authority = priorWorkflowState?.Authority ?? payload.Authority
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -281,7 +283,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             }, priorWorkflowState)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
-            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            Partition = priorWorkflowState?.Partition ?? payload.Partition,
+            Authority = priorWorkflowState?.Authority ?? payload.Authority
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);

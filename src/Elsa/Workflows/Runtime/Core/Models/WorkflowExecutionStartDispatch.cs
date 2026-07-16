@@ -18,6 +18,45 @@ public sealed class WorkflowExecutionStartDispatchRequest
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
         WorkflowExecutableSourceSelection? sourceSelection = null,
         WorkflowExecutableProvenanceRequirement provenanceRequirement = WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
+        : this(
+            artifactId,
+            requestedBy,
+            workflowExecutionId,
+            idempotencyKey,
+            metadata,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            sourceSelection,
+            provenanceRequirement,
+            null,
+            null,
+            null,
+            null,
+            null)
+    {
+    }
+
+    public WorkflowExecutionStartDispatchRequest(
+        string artifactId,
+        string requestedBy,
+        string? workflowExecutionId,
+        string? idempotencyKey,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyDictionary<string, object?>? variables,
+        IReadOnlyDictionary<string, object?>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceSelection? sourceSelection,
+        WorkflowExecutableProvenanceRequirement provenanceRequirement,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -30,6 +69,13 @@ public sealed class WorkflowExecutionStartDispatchRequest
 
         if (triggerNodeId is not null && string.IsNullOrWhiteSpace(triggerNodeId))
             throw new ArgumentException("Trigger node ID cannot be blank when provided.", nameof(triggerNodeId));
+        ValidateOptional(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
+        ValidateOptional(correlationId, nameof(correlationId));
+        ValidateOptional(tenantId, nameof(tenantId));
+
+        authority ??= WorkflowExecutionAuthoritySnapshot.CreateRoot(requestedBy);
+        if (!StringComparer.Ordinal.Equals(requestedBy, authority.SystemIdentity))
+            throw new ArgumentException("RequestedBy must match the execution authority system identity.", nameof(authority));
 
         ArtifactId = artifactId;
         WorkflowExecutionId = workflowExecutionId;
@@ -43,6 +89,11 @@ public sealed class WorkflowExecutionStartDispatchRequest
         RunKind = runKind;
         SourceSelection = sourceSelection;
         ProvenanceRequirement = provenanceRequirement;
+        ParentWorkflowExecutionId = parentWorkflowExecutionId;
+        CorrelationId = correlationId;
+        TenantId = tenantId;
+        Partition = partition;
+        Authority = authority;
     }
 
     public string ArtifactId { get; }
@@ -100,9 +151,24 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// seed content-addressed artifacts directly retain the legacy null-provenance behavior explicitly.
     /// </summary>
     public WorkflowExecutableProvenanceRequirement ProvenanceRequirement { get; }
+    public string? ParentWorkflowExecutionId { get; }
+    public string? CorrelationId { get; }
+    public string? TenantId { get; }
+
+    /// <summary>Explicit partition for deferred/global delivery; null retains ambient-root compatibility.</summary>
+    public WorkflowExecutionPartition? Partition { get; }
+
+    /// <summary>Typed runtime-owned authority and root-initiator attribution.</summary>
+    public WorkflowExecutionAuthoritySnapshot Authority { get; }
 
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+
+    private static void ValidateOptional(string? value, string parameterName)
+    {
+        if (value is not null && string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Optional workflow start context values cannot be blank.", parameterName);
+    }
 }
 
 public enum WorkflowExecutableProvenanceRequirement
@@ -146,7 +212,6 @@ public sealed record WorkflowExecutableSourceSelection
 
 public sealed class WorkflowExecutionStartCommandPayload
 {
-    [JsonConstructor]
     public WorkflowExecutionStartCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string requestedArtifactId,
@@ -156,9 +221,44 @@ public sealed class WorkflowExecutionStartCommandPayload
         string? triggerNodeId = null,
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
         WorkflowExecutableSourceProvenance? pinnedSource = null)
+        : this(
+            pinnedExecutable,
+            requestedArtifactId,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            pinnedSource,
+            null,
+            null,
+            null,
+            null,
+            null)
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowExecutionStartCommandPayload(
+        WorkflowExecutableIdentity pinnedExecutable,
+        string requestedArtifactId,
+        IReadOnlyDictionary<string, JsonElement>? variables,
+        IReadOnlyDictionary<string, JsonElement>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceProvenance? pinnedSource,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
+        ValidateOptional(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
+        ValidateOptional(correlationId, nameof(correlationId));
+        ValidateOptional(tenantId, nameof(tenantId));
 
         PinnedExecutable = pinnedExecutable;
         RequestedArtifactId = requestedArtifactId;
@@ -168,6 +268,11 @@ public sealed class WorkflowExecutionStartCommandPayload
         TriggerNodeId = triggerNodeId;
         RunKind = runKind;
         PinnedSource = pinnedSource;
+        ParentWorkflowExecutionId = parentWorkflowExecutionId;
+        CorrelationId = correlationId;
+        TenantId = tenantId;
+        Partition = partition;
+        Authority = authority;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -209,6 +314,11 @@ public sealed class WorkflowExecutionStartCommandPayload
     /// of seeded artifacts that have no source references.
     /// </summary>
     public WorkflowExecutableSourceProvenance? PinnedSource { get; }
+    public string? ParentWorkflowExecutionId { get; }
+    public string? CorrelationId { get; }
+    public string? TenantId { get; }
+    public WorkflowExecutionPartition? Partition { get; }
+    public WorkflowExecutionAuthoritySnapshot? Authority { get; }
 
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(
@@ -218,6 +328,12 @@ public sealed class WorkflowExecutionStartCommandPayload
 
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);
+
+    private static void ValidateOptional(string? value, string parameterName)
+    {
+        if (value is not null && string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Optional workflow start context values cannot be blank.", parameterName);
+    }
 }
 
 public sealed class WorkflowExecutionStartDispatchResult

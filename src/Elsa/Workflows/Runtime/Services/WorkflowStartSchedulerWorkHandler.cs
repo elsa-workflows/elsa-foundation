@@ -89,7 +89,10 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     public static bool IsStartPayloadValidationException(ArgumentException exception) =>
         exception.ParamName is
             "pinnedExecutable" or
-            "requestedArtifactId";
+            "requestedArtifactId" or
+            "parentWorkflowExecutionId" or
+            "correlationId" or
+            "tenantId";
 
     private RuntimeSchedulerWorkItem NewRootActivityWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
@@ -174,7 +177,12 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             seedStimulusInput: startPayload.StimulusInput,
             seedTriggerNodeId: startPayload.TriggerNodeId,
             runKind: startPayload.RunKind,
-            pinnedSource: startPayload.PinnedSource);
+            pinnedSource: startPayload.PinnedSource,
+            parentWorkflowExecutionId: startPayload.ParentWorkflowExecutionId,
+            correlationId: startPayload.CorrelationId,
+            tenantId: startPayload.TenantId,
+            partition: startPayload.Partition,
+            authority: startPayload.Authority);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",

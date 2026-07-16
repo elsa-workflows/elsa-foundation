@@ -38,6 +38,12 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 
 ## Overridable replacement contracts
 
+### `IWorkflowDispatchStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns first-class workflow-dispatch lifecycle records).
+- **Signature:** save/find plus list by parent workflow execution ID.
+- **Usage:** `RuntimeCheckpointStateChangeSet.WorkflowDispatches` is applied atomically with activity state and post-commit outbox work. The default in-memory checkpoint provider projects it through `InMemoryWorkflowDispatchStore`; Groundwork rejects non-empty dispatch changes until #678 supplies durable persistence.
+- **Safety:** operational records contain safe input descriptors, never raw child input values. Raw values exist only in the protected child-start intent payload required for delivery.
+
 ### `IWorkflowExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns retained workflow-execution state and its executable-retention projection).
 - **Signature:** in addition to save/find/list, `ListPinnedExecutableArtifactIdsAsync(...)` returns the distinct artifact IDs pinned by every retained execution status, and `DeleteAsync(workflowExecutionId, ...)` removes an execution under the host's retention policy.

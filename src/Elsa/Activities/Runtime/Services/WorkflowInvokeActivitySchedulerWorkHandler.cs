@@ -293,6 +293,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowOutputChanges = [];
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> boundaryEntryChanges = [];
         ActivityExecutionState? boundaryEntryState = null;
+        WorkflowDispatchCheckpointRequest? workflowDispatchRequest = null;
         try
         {
             if (!await activity.CanExecuteAsync(context))
@@ -302,6 +303,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             else
             {
                 await activity.ExecuteAsync(context);
+                workflowDispatchRequest = ((IWorkflowDispatchStagingContext)context).WorkflowDispatchRequest;
+                if (workflowDispatchRequest is not null && inspectionAccumulator is null)
+                {
+                    throw new InvalidOperationException(
+                        "A staged workflow dispatch requires the mandatory activity-completed checkpoint path; configure runtime activity execution inspection/checkpoint services.");
+                }
 
                 if (activity is IRuntimeActivityCheckpointParticipant checkpointParticipant)
                 {
@@ -347,6 +354,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
                 if (finishWorkflowRequested && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request workflow completion and schedule child activities in the same execution.");
+
+                if (workflowDispatchRequest is not null &&
+                    (finishWorkflowRequested || context.CompositeCompletionRequested || bookmarkRequests.Count > 0 || childScheduleRequests.Count > 0))
+                {
+                    throw new InvalidOperationException("Activity cannot stage a workflow dispatch together with workflow or composite completion, bookmarks, or child-activity scheduling.");
+                }
 
                 if (bookmarkRequests.Count > 0 && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request durable bookmarks and schedule child activities in the same execution.");
@@ -491,6 +504,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         if (inspectionAccumulator is null)
         {
+            if (workflowDispatchRequest is not null)
+            {
+                throw new InvalidOperationException(
+                    "A staged workflow dispatch requires the mandatory activity-completed checkpoint path; configure runtime activity execution inspection/checkpoint services.");
+            }
+
             foreach (var change in durableValueChanges)
             {
                 if (change.Operation != RuntimeStateChangeOperation.Upsert || change.State is null)
@@ -511,7 +530,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
-        await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, finishWorkflowRequested, occurredAt, cancellationToken);
+        await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, workflowDispatchRequest, finishWorkflowRequested, occurredAt, cancellationToken);
     }
 
     // Concatenates the workflow-scope variable write-back and the SetOutput durable-value changes into the single
@@ -888,6 +907,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowExecutionStateChange,
+        WorkflowDispatchCheckpointRequest? workflowDispatchRequest,
         bool finishWorkflowRequested,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
@@ -948,10 +968,26 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: inspection,
                         Metadata: metadata)
-                ]),
+                ],
+                workflowDispatches: workflowDispatchRequest is null
+                    ? []
+                    :
+                    [
+                        new RuntimeStateChange<WorkflowDispatchRecord>(
+                            StateId: workflowDispatchRequest.Record.DispatchId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: workflowDispatchRequest.Record,
+                            Metadata: metadata)
+                    ]),
             PostCommitIntents: finishWorkflowRequested
                 ? []
-                : [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)],
+                : workflowDispatchRequest is null
+                    ? [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)]
+                    :
+                    [
+                        SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt),
+                        workflowDispatchRequest.StartIntent
+                    ],
             Metadata: metadata);
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);

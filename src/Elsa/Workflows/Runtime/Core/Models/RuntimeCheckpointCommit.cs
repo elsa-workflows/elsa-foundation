@@ -36,9 +36,37 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null,
         IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups = null)
+        : this(
+            workflowExecution,
+            scheduler,
+            activityExecutions,
+            bookmarks,
+            durableValues,
+            incidents,
+            operational,
+            null,
+            activityExecutionInspections,
+            postCommitOutbox,
+            activityScopeCleanups)
+    {
+    }
+
+    public RuntimeCheckpointStateChangeSet(
+        RuntimeStateChange<WorkflowExecutionState>? workflowExecution,
+        RuntimeStateChange<SchedulerState>? scheduler,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions,
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> operational,
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>>? workflowDispatches,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null,
+        IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups = null)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
+        workflowDispatches ??= [];
         activityScopeCleanups ??= [];
         ValidateStateIdMatches(activityExecutions, state => state.Execution.ActivityExecutionId, "Activity execution state change StateId must match ActivityExecutionState.Execution.ActivityExecutionId.", nameof(activityExecutions));
         ValidateStateIdMatches(bookmarks, state => state.BookmarkId, "Bookmark state change StateId must match BookmarkState.BookmarkId.", nameof(bookmarks));
@@ -47,6 +75,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         ValidateStateIdMatches(incidents, state => state.IncidentId, "Incident state change StateId must match IncidentState.IncidentId.", nameof(incidents));
         ValidateStateIdMatches(operational, state => state.OperationalStateId, "Operational state change StateId must match ExecutionLivenessState.OperationalStateId.", nameof(operational));
         ValidateStateIdMatches(postCommitOutbox, state => state.OutboxItemId, "Post-commit outbox state change StateId must match RuntimePostCommitOutboxItem.OutboxItemId.", nameof(postCommitOutbox));
+        ValidateStateIdMatches(workflowDispatches, state => state.DispatchId, "Workflow dispatch state change StateId must match WorkflowDispatchRecord.DispatchId.", nameof(workflowDispatches));
 
         WorkflowExecution = workflowExecution;
         Scheduler = scheduler;
@@ -58,6 +87,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         Operational = operational;
         PostCommitOutbox = postCommitOutbox;
         ActivityScopeCleanups = activityScopeCleanups;
+        WorkflowDispatches = workflowDispatches;
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -69,6 +99,9 @@ public sealed class RuntimeCheckpointStateChangeSet
     public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents { get; }
     public IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> Operational { get; }
     public IReadOnlyCollection<ActivityScopeCleanupRequest> ActivityScopeCleanups { get; }
+
+    /// <summary>Workflow-dispatch lifecycle records applied atomically with their checkpoint and outbox intent.</summary>
+    public IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> WorkflowDispatches { get; }
 
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
@@ -89,6 +122,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             DurableValues,
             Incidents,
             Operational,
+            WorkflowDispatches,
             ActivityExecutionInspections,
             postCommitOutbox,
             ActivityScopeCleanups);
@@ -181,7 +215,8 @@ public enum RuntimeStateCategory
     Bookmark,
     DurableValue,
     Incident,
-    Operational
+    Operational,
+    WorkflowDispatch
 }
 
 public enum RuntimeStateChangeOperation

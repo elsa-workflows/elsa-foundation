@@ -6,8 +6,8 @@ invariants are owned by [ADR 0043](../../../../../docs/adr/0043-publication-slot
 shared terms remain in the [Elsa glossary](../../../../../docs/glossary/elsa.md) and
 [root glossary](../../../../../docs/glossary/root.md).
 
-Every contract below is on the **override** axis: one implementation owns the responsibility. Publishing does
-not currently publish a contributor interface or domain event. Runtime's trigger validators and observers are
+Most contracts below are on the **override** axis: one implementation owns the responsibility. Executable-node
+metadata enrichment is the documented contributor exception. Runtime's trigger validators and observers are
 separate add-don't-replace seams; see the Runtime catalog linked below.
 
 ## Overridable contracts
@@ -76,6 +76,15 @@ A new Publishing persistence package should:
 5. Prove restart behavior, stale-revision rejection, idempotent intent replay, and compensation with provider tests.
 6. Keep Runtime executable/reference/trigger/schedule stores in their owning Runtime persistence module; do not
    move those contracts into Publishing merely because the publish flow consumes them.
+
+## Executable-node metadata fan-in
+
+### `IExecutableNodeMetadataSource`
+
+- **Kind:** Source. Each implementation asynchronously returns runtime-owned metadata claims for compiled executable nodes through `GetMetadataAsync(ExecutableNodeMetadataContext, CancellationToken)`.
+- **Composition:** `ExecutableNodeMetadataEnricher` publishes the named `OnExecutableNodeMetadataCollecting` inline event. Publishing owns the single `CollectExecutableNodeMetadata` handler, which resolves every registered source in stable type-identity order, stamps source ownership, and appends its claims to the event.
+- **Conflict rule:** Publishing sorts collected claims by source/node/key. Equal duplicate values are idempotent; unequal owners fail deterministically. Unknown nodes, blank claims, and unstamped claims are rejected.
+- **Boundary:** Enrichment occurs after node compilation and before executable assembly. DispatchWorkflow registers `DispatchPinSource` to pin publication provenance without introducing activity-specific logic into the compiler. Behavioral dependency hashing remains owned by #677.
 
 ## Cross-domain seams consumed by Publishing
 
