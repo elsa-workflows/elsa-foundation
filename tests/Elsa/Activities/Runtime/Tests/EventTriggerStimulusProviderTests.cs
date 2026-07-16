@@ -1,7 +1,11 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -76,6 +80,27 @@ public sealed class EventTriggerStimulusProviderTests
         Assert.Equal(EventStimulus.Hash("order-shipped"), EventStimulus.Hash("order-shipped"));
         Assert.NotEqual(EventStimulus.Hash("order-shipped"), EventStimulus.Hash("order-cancelled"));
         Assert.StartsWith("sha256:", EventStimulus.Hash("order-shipped"));
+    }
+
+    [Fact]
+    public async Task Execute_returns_event_name_as_one_atomic_result()
+    {
+        await using var services = new ServiceCollection().BuildServiceProvider();
+        await using var activation = await TypedActivityTestActivation.ActivateAsync<Event>(
+            services,
+            new Dictionary<string, object?>
+            {
+                [nameof(Event.EventName)] = "order-shipped",
+                [nameof(Event.CorrelationId)] = "order-7"
+            });
+        var activity = Assert.IsType<Event>(activation.Activity);
+        var context = new SimpleActivityExecutionContext(services, activity, CancellationToken.None);
+
+        var transition = await ((IActivity)activity).ExecuteAsync(context);
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
+
+        Assert.Equal("order-shipped", completion.Result.EventName);
+        Assert.Equal("Done", completion.Outcome);
     }
 
     private static ExecutableNode EventNode(

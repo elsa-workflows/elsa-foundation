@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Constructors;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Primitives.Models;
@@ -18,16 +19,17 @@ namespace Elsa.Activities.Runtime.Tests;
 /// <summary>
 /// In-process execution coverage for the code &amp; I/O leaf activities (<c>WriteLines</c>, <c>ReadLine</c>,
 /// <c>Inline</c>) running through the real workflow agent via the shared <see cref="WorkflowExecutionHarness"/>
-/// (#258). Each activity is constructed by the production <see cref="ClrActivityConstructor"/> from its
-/// <see cref="ClrActivityDescriptor"/> (stable-alias) descriptor, exercising the full descriptor → construct → bind → execute
-/// path. Asserts the leaf runs to completion, emits the default <c>Done</c> outcome, and that the run
-/// completes.
+/// (#258). Migrated typed leaves carry a pinned activity contract and run through snapshot hydration plus
+/// the transient CLR activator; legacy leaves retain the constructor adapter until their own migration slice.
+/// Asserts each leaf runs to completion, emits the expected outcome, and that the run completes.
 /// </summary>
 // WriteLines writes to Console.Out during the run; share the capture collection so output does not
 // interleave with the other Console.Out-capturing tests.
 [Collection("ConsoleCapture")]
 public sealed class CodeIoLeafRuntimeTests
 {
+    private static readonly ValueTypeDescriptor LinesType = new("String", CollectionKind.List);
+
     [Fact]
     public async Task WriteLines_RunsToCompletion_AndEmitsDoneOutcome()
     {
@@ -38,12 +40,13 @@ public sealed class CodeIoLeafRuntimeTests
             typeof(WriteLines),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Lines"] = LiteralBinding("Lines", new[] { "a", "b" }, "System.Collections.Generic.ICollection`1[[System.String]]")
+                ["Lines"] = LiteralBinding("Lines", new List<string> { "a", "b" }, LinesType)
             });
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(node));
 
-        run.AssertOutcomes("node-writelines", ActivityOutcomes.Done);
+        var state = run.AssertOutcomes("node-writelines", ActivityOutcomes.Done);
+        Assert.Equal(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit)), state.Completion?.Result.Type.Alias);
         run.AssertWorkflowCompleted();
     }
 
@@ -57,7 +60,7 @@ public sealed class CodeIoLeafRuntimeTests
             typeof(WriteLines),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Lines"] = ObjectExpressionBinding("Lines", new[] { "a", "b" }, "System.Collections.Generic.ICollection`1[[System.String]]")
+                ["Lines"] = ObjectExpressionBinding("Lines", new List<string> { "a", "b" }, LinesType)
             });
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(node));
@@ -85,7 +88,8 @@ public sealed class CodeIoLeafRuntimeTests
             Console.SetIn(original);
         }
 
-        run.AssertOutcomes("node-readline", ActivityOutcomes.Done);
+        var state = run.AssertOutcomes("node-readline", ActivityOutcomes.Done);
+        Assert.Equal("server-side line", state.Completion?.Result.InlineValue?.GetProperty("line").GetString());
         run.AssertWorkflowCompleted();
     }
 
@@ -99,7 +103,7 @@ public sealed class CodeIoLeafRuntimeTests
             typeof(Inline),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Expression"] = LiteralBinding("Expression", "inline-value", "System.Object")
+                ["Expression"] = LiteralBinding("Expression", "inline-value", new ValueTypeDescriptor("Object"))
             });
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(node));
@@ -126,8 +130,7 @@ public sealed class CodeIoLeafRuntimeTests
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            // ClrActivityConstructor (registered by ActivitiesPrimitivesFeature) depends on IPayloadSerializer,
-            // which the SerializationFeature provides; without it the activity factory cannot construct the leaf.
+            // Both the legacy constructor adapter and the typed CLR activator use the canonical payload serializer.
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .Build(activityExecutionIds);
@@ -142,21 +145,67 @@ public sealed class CodeIoLeafRuntimeTests
             descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: BuildTypedContract(activityType));
 
-    private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
+    private static ActivityContract? BuildTypedContract(Type activityType)
+    {
+        if (activityType == typeof(WriteLines))
+        {
+            return NewContract(
+                activityType,
+                [new ActivityInputContract("Lines", nameof(WriteLines.Lines), LinesType, false, false, null, ActivityValuePolicy.Default)],
+                new ActivityResultContract(
+                    new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))),
+                    true,
+                    ActivityValuePolicy.Default,
+                    []));
+        }
+
+        if (activityType == typeof(ReadLine))
+        {
+            return NewContract(
+                activityType,
+                [],
+                new ActivityResultContract(
+                    new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ReadLineResult))),
+                    true,
+                    ActivityValuePolicy.Default,
+                    [new ActivityResultProjectionContract("Result", "line", new ValueTypeDescriptor("String"), false, ActivityValuePolicy.Default)]));
+        }
+
+        return null;
+    }
+
+    private static ActivityContract NewContract(
+        Type activityType,
+        IReadOnlyCollection<ActivityInputContract> inputs,
+        ActivityResultContract result) =>
         new(
-            inputName: inputName,
+            activityType.FullName!,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            ClrConstruction.Payload(Serializer, activityType),
+            inputs,
+            result,
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(activityType)));
+
+    private static RuntimeInputBinding LiteralBinding(string inputName, object value, ValueTypeDescriptor type) =>
+        new(
+            inputKey: inputName,
+            targetType: type,
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
 
-    private static RuntimeInputBinding ObjectExpressionBinding(string inputName, object value, string typeName) =>
+    private static RuntimeInputBinding ObjectExpressionBinding(string inputName, object value, ValueTypeDescriptor type) =>
         new(
-            inputName: inputName,
+            inputKey: inputName,
+            targetType: type,
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding(WellKnownExpressionDescriptorTypes.Object, JsonSerializer.Serialize(value)),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
+            expression: new RuntimeExpressionBinding(WellKnownExpressionDescriptorTypes.Object, JsonSerializer.Serialize(value)));
 
     private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 }

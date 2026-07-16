@@ -1,6 +1,4 @@
-using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Primitives.Activities;
@@ -15,7 +13,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// <para>
 /// Deliberately minimal per the W7 ruling: the trigger is keyed by event name plus an optional passive
 /// correlation value, with no payload schema or filters. When a workflow is started by the event, the activity
-/// surfaces the event name as its result so the run is observable.
+/// returns the event name in one atomic result so the run is observable.
 /// </para>
 /// <para>
 /// Scope note: this ships the START half of an event trigger (E3-1's acceptance: "an event-driven workflow
@@ -26,24 +24,32 @@ namespace Elsa.Activities.Primitives.Activities;
 /// </para>
 /// </remarks>
 [TriggerActivity]
-public sealed class Event : CodeActivity<string>
+public sealed class Event : Activity<EventResult>
 {
     /// <summary>The stable activity type key the trigger extractor's provider matches on.</summary>
     public const string ActivityType = "Elsa.Event";
 
-    public Event() : base(ActivityType)
-    {
-    }
+    public Event() => Type = ActivityType;
 
     /// <summary>The name of the event that starts (or targets) the workflow. Drives the stimulus hash.</summary>
-    public InputArgument<string> EventName { get; set; } = null!;
+    [ActivityInput(Key = nameof(EventName))]
+    [Required]
+    public string EventName { get; set; } = null!;
 
     /// <summary>An optional passive correlation value threaded through routing; it does not own a correlation subsystem.</summary>
-    public InputArgument<string>? CorrelationId { get; set; }
+    [ActivityInput(Key = nameof(CorrelationId))]
+    public string? CorrelationId { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
-    {
-        var eventName = context.Get(EventName);
-        context.Set(Result, eventName);
-    }
+    protected override ValueTask<ActivityTransition<EventResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new EventResult(EventName)));
+}
+
+/// <summary>The atomic result produced when a named event starts a workflow.</summary>
+public sealed record EventResult
+{
+    public EventResult(string eventName) => EventName = eventName;
+
+    /// <summary>The routed event name.</summary>
+    [Output(Key = "Result", Path = "eventName")]
+    public string EventName { get; }
 }

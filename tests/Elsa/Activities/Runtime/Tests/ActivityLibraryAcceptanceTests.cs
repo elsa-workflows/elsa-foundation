@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime;
 using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Events;
@@ -53,6 +54,45 @@ public sealed class ActivityLibraryAcceptanceTests
     private const string BooleanTypeName = "System.Boolean";
     private const string StringTypeName = "System.String";
     private const string ObjectTypeName = "System.Object";
+
+    public static TheoryData<Type, Type, string[]> MigratedPrimitiveLeafContracts =>
+        new()
+        {
+            { typeof(ReadLine), typeof(ReadLineResult), [] },
+            { typeof(WriteLines), typeof(ActivityUnit), [nameof(WriteLines.Lines)] },
+            { typeof(Event), typeof(EventResult), [nameof(Event.EventName), nameof(Event.CorrelationId)] }
+        };
+
+    [Theory]
+    [MemberData(nameof(MigratedPrimitiveLeafContracts))]
+    public void MigratedPrimitiveLeaf_UsesPlainInputsAndOneAtomicResult(
+        Type activityType,
+        Type expectedResultType,
+        string[] expectedInputKeys)
+    {
+        var properties = activityType.GetProperties();
+        var actualInputKeys = properties
+            .Select(property => (Property: property, Attribute: property.GetCustomAttributes(typeof(ActivityInputAttribute), inherit: true).Cast<ActivityInputAttribute>().SingleOrDefault()))
+            .Where(candidate => candidate.Attribute is not null)
+            .Select(candidate => candidate.Attribute!.Key ?? candidate.Property.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(expectedInputKeys.Order(StringComparer.Ordinal), actualInputKeys);
+        Assert.DoesNotContain(properties, property => typeof(Argument).IsAssignableFrom(property.PropertyType));
+        Assert.Equal(expectedResultType, FindActivityResultType(activityType));
+    }
+
+    private static Type? FindActivityResultType(Type activityType)
+    {
+        for (var current = activityType; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Activity<>))
+                return current.GetGenericArguments()[0];
+        }
+
+        return null;
+    }
 
     [Fact]
     public async Task IfForEachSetVariable_ComposeAndRunToCompletion_ThroughTheRealHarness()
