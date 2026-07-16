@@ -45,6 +45,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// <summary>The configured service provider (escape hatch for advanced assertions).</summary>
     public IServiceProvider Services => _provider;
 
+    /// <summary>
+    /// Runs the harness's CLR activity-type registration pass without starting a workflow. Restart tests use
+    /// this to model normal host startup before a durable timer or resume backlog activates an existing run.
+    /// </summary>
+    public void InitializeActivityTypes() => EnsureActivityTypesRegistered();
+
     public ValueTask DisposeAsync() => _provider.DisposeAsync();
 
     /// <summary>Starts configuring a harness. Register the activity feature(s) and constructor(s), then call <see cref="Builder.Build"/>.</summary>

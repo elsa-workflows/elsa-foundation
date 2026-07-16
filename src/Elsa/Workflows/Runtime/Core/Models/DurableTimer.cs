@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -26,4 +27,6 @@ public sealed record DurableTimer(
     DateTimeOffset DueTime,
     DateTimeOffset CreatedAt,
     JsonElement? Input = null,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    ValueTypeDescriptor? PayloadType = null,
+    string? ProviderId = null);

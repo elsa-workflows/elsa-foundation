@@ -135,7 +135,9 @@ public sealed class DurableTimerPumpTask : IRecurringTask
                 timer.StimulusHash,
                 timer.Input,
                 idempotencyKey: $"timer:{timer.TimerId}",
-                requestedBy: DurableTimerConstants.PumpRequestedBy);
+                requestedBy: DurableTimerConstants.PumpRequestedBy,
+                payloadType: timer.PayloadType,
+                providerId: timer.ProviderId);
 
             result = await _dispatcher.DispatchAsync(request, cancellationToken: cancellationToken);
         }

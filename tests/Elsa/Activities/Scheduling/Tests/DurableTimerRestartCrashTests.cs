@@ -1,10 +1,12 @@
 using System.Text.Json;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Primitives;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -31,8 +33,7 @@ namespace Elsa.Activities.Scheduling.Tests;
 // and grace windows are deterministic rather than wall-clock dependent.
 public sealed class DurableTimerRestartCrashTests
 {
-    private const string ActivityExecutionId = "actexec-delay";
-    private const string TimerId = "timer:" + ActivityExecutionId;
+    private const string TimerId = DelayTestExecutable.TimerId;
     private static readonly DateTimeOffset T0 = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Delay5s = TimeSpan.FromSeconds(5);
 
@@ -47,7 +48,7 @@ public sealed class DurableTimerRestartCrashTests
         // and a matching bookmark are persisted to the shared store.
         await using (var gen1 = BuildHarness(store, clock))
         {
-            var run = await gen1.RunAsync(NewDelayExecutable(Delay5s));
+            var run = await gen1.RunAsync(DelayTestExecutable.Create(Delay5s, T0));
 
             Assert.NotEqual(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
             var timer = await TimerStore(gen1).FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, TimerId);
@@ -69,7 +70,7 @@ public sealed class DurableTimerRestartCrashTests
 
             var workflow = await gen2.Services.GetRequiredService<IWorkflowExecutionStateStore>()
                 .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId);
-            Assert.Equal(WorkflowExecutionStatus.Completed, workflow?.Status);
+            Assert.True(workflow?.Status == WorkflowExecutionStatus.Completed, await DescribeActivityAsync(gen2));
             Assert.Equal(1, await CompletedDelayCountAsync(gen2));
 
             var deleted = await TimerStore(gen2).FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, TimerId);
@@ -85,7 +86,7 @@ public sealed class DurableTimerRestartCrashTests
         var clock = new MutableTimeProvider(T0);
 
         await using (var gen1 = BuildHarness(store, clock))
-            await gen1.RunAsync(NewDelayExecutable(Delay5s));
+            await gen1.RunAsync(DelayTestExecutable.Create(Delay5s, T0));
 
         await using (var gen2 = BuildHarness(store, clock))
         {
@@ -96,7 +97,7 @@ public sealed class DurableTimerRestartCrashTests
             // First delivery resumes the workflow and consumes the (single-use) bookmark.
             var first = await dispatcher.DispatchAsync(request);
             Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, first.Status);
-            Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(gen2));
+            Assert.True(await StatusAsync(gen2) == WorkflowExecutionStatus.Completed, await DescribeActivityAsync(gen2));
             Assert.Equal(1, await CompletedDelayCountAsync(gen2));
 
             // A duplicate at-least-once delivery of the same fire finds no bookmark and cannot resume again.
@@ -119,7 +120,7 @@ public sealed class DurableTimerRestartCrashTests
         var clock = new MutableTimeProvider(T0);
 
         await using (var gen1 = BuildHarness(store, clock))
-            await gen1.RunAsync(NewDelayExecutable(Delay5s));
+            await gen1.RunAsync(DelayTestExecutable.Create(Delay5s, T0));
 
         // Generation 2: the drain policy refuses to drain, so ProcessAsync durably enqueues the resume work
         // item but never drives it. The pump still observes Dispatched and deletes the timer.
@@ -146,7 +147,7 @@ public sealed class DurableTimerRestartCrashTests
         {
             await ResolveResumptionService(gen3).SweepAsync(new RuntimeResumptionSweepRequest());
 
-            Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(gen3));
+            Assert.True(await StatusAsync(gen3) == WorkflowExecutionStatus.Completed, await DescribeActivityAsync(gen3));
             Assert.Equal(1, await CompletedDelayCountAsync(gen3));
         }
     }
@@ -154,10 +155,12 @@ public sealed class DurableTimerRestartCrashTests
     private static WorkflowExecutionHarness BuildHarness(
         IDocumentStore store,
         TimeProvider clock,
-        Action<IServiceCollection>? customize = null) =>
-        WorkflowExecutionHarness.Create()
+        Action<IServiceCollection>? customize = null)
+    {
+        var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new SerializationFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .WithFeature(services => new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services))
-            .WithConstructor<DelayConstructor>()
             .ConfigureServices(services =>
             {
                 // Swap the in-memory runtime stores for the Groundwork-backed bridges over the shared
@@ -170,7 +173,10 @@ public sealed class DurableTimerRestartCrashTests
                 services.AddSingleton(clock);
                 customize?.Invoke(services);
             })
-            .Build(ActivityExecutionId);
+            .Build(DelayTestExecutable.ActivityExecutionId);
+        harness.InitializeActivityTypes();
+        return harness;
+    }
 
     private static DurableTimerPumpTask NewPump(WorkflowExecutionHarness harness, TimeProvider clock) =>
         new(
@@ -197,8 +203,11 @@ public sealed class DurableTimerRestartCrashTests
             WorkflowExecutionHarness.WorkflowExecutionId,
             DurableTimerConstants.TimerStimulusType,
             timerId,
+            input: JsonSerializer.SerializeToElement(new DurableTimerElapsed(timerId)),
             idempotencyKey: $"timer:{timerId}",
-            requestedBy: DurableTimerConstants.PumpRequestedBy);
+            requestedBy: DurableTimerConstants.PumpRequestedBy,
+            payloadType: new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(DurableTimerElapsed)), schemaVersion: 1),
+            providerId: Delay.TimerTriggerProviderId);
 
     private static async Task<WorkflowExecutionStatus?> StatusAsync(WorkflowExecutionHarness harness) =>
         (await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>()
@@ -212,66 +221,12 @@ public sealed class DurableTimerRestartCrashTests
             s.Execution.ExecutableNodeId == "node-delay" && s.Status == ActivityExecutionStatus.Completed);
     }
 
-    private static WorkflowExecutable NewDelayExecutable(TimeSpan duration)
+    private static async Task<string> DescribeActivityAsync(WorkflowExecutionHarness harness)
     {
-        var inputBindings = new Dictionary<string, RuntimeInputBinding>
-        {
-            ["Duration"] = new RuntimeInputBinding(
-                inputName: "Duration",
-                source: RuntimeInputBindingSource.Literal,
-                literalValue: JsonSerializer.SerializeToElement(duration),
-                metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.TimeSpan" })
-        };
-
-        var root = new ExecutableNode(
-            executableNodeId: "node-delay",
-            authoredActivityId: "authored-delay",
-            activityType: typeof(Delay).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: DelayDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new DelayDescriptor()),
-            inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
-
-        // The real WorkflowExecutableCompiler indexes the [ResumeTarget] handler into this map; the harness
-        // builds executables directly, so declare the same entry the compiler would emit for the Delay node.
-        var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal)
-        {
-            ["resume-target:durable-timer"] = new WorkflowExecutableResumeTarget(
-                ResumeTargetId: "resume-target:durable-timer",
-                ExecutableNodeId: "node-delay",
-                HandlerKey: "OnTimerElapsedAsync",
-                Metadata: new Dictionary<string, string>())
-        };
-
-        return new WorkflowExecutable(
-            identity: WorkflowExecutionHarness.Identity,
-            rootActivity: root,
-            resumeTargets: resumeTargets,
-            createdAt: T0,
-            compatibilityMetadata: new Dictionary<string, string>());
-    }
-
-    private sealed record DelayDescriptor
-    {
-        public static string DescriptorTypeKey => typeof(DelayDescriptor).FullName!;
-    }
-
-    private sealed class DelayConstructor : IActivityConstructor<DelayDescriptor>
-    {
-        public string DescriptorType => DelayDescriptor.DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            Construct(new DelayDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(DelayDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
-        {
-            var activity = new Delay();
-            if (inputs is not null && inputs.TryGetValue("Duration", out var durationInput))
-                activity.Duration = (InputArgument<TimeSpan>)durationInput;
-            return new(activity);
-        }
+        var states = await harness.Services.GetRequiredService<IActivityExecutionStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        return string.Join(Environment.NewLine, states.Select(state =>
+            $"{state.Execution.ExecutableNodeId}: {state.Status}/{state.SubStatus}; fault={state.Metadata.GetValueOrDefault("runtime.faultMessage")}"));
     }
 
     // Suppresses the scheduler drain so recorded work stays durably queued without being driven.
