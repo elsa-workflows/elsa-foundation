@@ -20,9 +20,20 @@ public sealed class WorkflowExecutableCompiler(
     IActivityDefinitionVersionStore activityVersions,
     WorkflowExecutableHasher hasher,
     ActivityTreeProjector activityTreeProjector,
-    ExecutableNodeCompiler executableNodeCompiler)
+    ExecutableNodeCompiler executableNodeCompiler,
+    IExecutableNodeMetadataEnricher? metadataEnricher)
     : IWorkflowExecutableCompiler
 {
+    public WorkflowExecutableCompiler(
+        IWorkflowDefinitionVersionStore workflowVersions,
+        IActivityDefinitionVersionStore activityVersions,
+        WorkflowExecutableHasher hasher,
+        ActivityTreeProjector activityTreeProjector,
+        ExecutableNodeCompiler executableNodeCompiler)
+        : this(workflowVersions, activityVersions, hasher, activityTreeProjector, executableNodeCompiler, null)
+    {
+    }
+
     public async ValueTask<WorkflowExecutable> CompileAsync(
         WorkflowExecutableCompileRequest request,
         CancellationToken cancellationToken = default)
@@ -49,6 +60,8 @@ public sealed class WorkflowExecutableCompiler(
                 activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
             var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows);
+            if (metadataEnricher is not null)
+                compiledRoot = await metadataEnricher.EnrichAsync(request, source, compiledRoot, cancellationToken);
             var artifactHash = hasher.ComputeHash(compiledRoot);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())

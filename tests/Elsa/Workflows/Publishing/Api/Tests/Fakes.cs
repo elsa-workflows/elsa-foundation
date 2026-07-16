@@ -9,6 +9,7 @@ using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -45,7 +46,8 @@ internal static class TestCompiler
         Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore workflowVersions,
         Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore activityVersions,
         Elsa.Workflows.Design.Core.Contracts.IActivityStructureService activityStructureService,
-        IWellKnownTypeRegistry wellKnownTypeRegistry) =>
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null) =>
         new(
             workflowVersions,
             activityVersions,
@@ -54,7 +56,8 @@ internal static class TestCompiler
             new Elsa.Workflows.Publishing.Api.Services.ExecutableNodeCompiler(
                 activityStructureService,
                 wellKnownTypeRegistry,
-                new Elsa.Workflows.Publishing.Api.Services.RuntimeInputBindingCompiler(wellKnownTypeRegistry)));
+                new Elsa.Workflows.Publishing.Api.Services.RuntimeInputBindingCompiler(wellKnownTypeRegistry)),
+            metadataEnricher);
 }
 
 internal static class TestRootWriteLeases

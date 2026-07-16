@@ -106,6 +106,11 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ArgumentNullException.ThrowIfNull(decision);
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
         cancellationToken.ThrowIfCancellationRequested();
+        if (commit.StateChanges.WorkflowDispatches.Count > 0)
+        {
+            throw new NotSupportedException(
+                "Groundwork does not yet support workflow-dispatch checkpoint state. Configure the in-memory runtime checkpoint provider for #676 or add the Groundwork workflow-dispatch persistence capability owned by #678.");
+        }
         if (commit.StateChanges.WorkflowExecution is { } workflowExecutionChange)
             _accessContextAccessor.Current.EnsureTenantScope(workflowExecutionChange.State.TenantId);
 

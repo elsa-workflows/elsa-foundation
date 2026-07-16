@@ -109,6 +109,21 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     }
 
     [Fact]
+    public async Task Commit_Rejects_WorkflowDispatch_State_Until_Provider_Capability_Lands()
+    {
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var writer = CreateWriter(store);
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await writer.CommitAsync(BuildCommit("commit-dispatch", includeDispatch: true), Decision));
+
+        Assert.Contains("workflow-dispatch checkpoint state", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#678", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, store.LoadCount);
+        Assert.Equal(0, store.BeginCount);
+    }
+
+    [Fact]
     public async Task CommitId_Beyond_Portable_Document_Limit_Remains_Idempotent()
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create("sqlite");
@@ -217,7 +232,8 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     private static RuntimeCheckpointCommit BuildCommit(
         string commitId,
         string bookmarkNode = "node-bm-1",
-        string? tenantId = null)
+        string? tenantId = null,
+        bool includeDispatch = false)
     {
         const string wf = "wf-1";
         var stateChanges = new RuntimeCheckpointStateChangeSet(
@@ -227,7 +243,10 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             bookmarks: [Change("bm-1", RuntimeStateChangeOperation.Upsert, Bookmark(wf, "bm-1", bookmarkNode))],
             durableValues: [Change("dv-1", RuntimeStateChangeOperation.Upsert, DurableValue(wf, "dv-1"))],
             incidents: [Change("inc-1", RuntimeStateChangeOperation.Append, Incident(wf, "inc-1"))],
-            operational: [Change("op-1", RuntimeStateChangeOperation.Upsert, Operational(wf, "op-1"))]);
+            operational: [Change("op-1", RuntimeStateChangeOperation.Upsert, Operational(wf, "op-1"))],
+            workflowDispatches: includeDispatch
+                ? [Change(DispatchIdentity(wf).DispatchId, RuntimeStateChangeOperation.Upsert, Dispatch(wf))]
+                : []);
 
         var checkpoint = new RuntimeCheckpoint(
             CheckpointId: $"cp-{commitId}",
@@ -247,6 +266,28 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
 
     private static RuntimeStateChange<T> Change<T>(string stateId, RuntimeStateChangeOperation operation, T state) =>
         new(stateId, operation, state, new Dictionary<string, string>());
+
+    private static WorkflowDispatchIdentity DispatchIdentity(string workflowExecutionId) => new(workflowExecutionId, "ae-1");
+
+    private static WorkflowDispatchRecord Dispatch(string workflowExecutionId) => new(
+        dispatchId: DispatchIdentity(workflowExecutionId).DispatchId,
+        parentWorkflowExecutionId: workflowExecutionId,
+        parentActivityExecutionId: "ae-1",
+        childWorkflowExecutionId: DispatchIdentity(workflowExecutionId).ChildWorkflowExecutionId,
+        childExecutable: new WorkflowExecutableIdentity("artifact-child", "definition-child", "version-child", "1", "hash-child"),
+        childSource: new WorkflowExecutableSourceProvenance(
+            "source-child", "WorkflowDefinitionVersion", "version-child", "1",
+            "definition-child", "version-child", "1", "publication-child", "slot-child"),
+        mode: WorkflowDispatchMode.FireAndForget,
+        status: WorkflowDispatchStatus.Pending,
+        correlationId: null,
+        tenantId: null,
+        partition: new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
+        runKind: WorkflowRunKind.PublishedRun,
+        authority: new WorkflowExecutionAuthoritySnapshot(workflowExecutionId, "initiator-1"),
+        inputDescriptors: [],
+        createdAt: DateTimeOffset.UnixEpoch,
+        updatedAt: DateTimeOffset.UnixEpoch);
 
     private static WorkflowExecutionState WorkflowState(string workflowExecutionId, string? tenantId) => new(
         workflowExecutionId,

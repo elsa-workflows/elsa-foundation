@@ -6,7 +6,9 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -14,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Workflows.Publishing.Api.Capabilities;
+using Elsa.Events.Core.Extensions;
 
 namespace Elsa.Workflows.Publishing.Api;
 
@@ -32,7 +35,7 @@ namespace Elsa.Workflows.Publishing.Api;
     name: "WorkflowsPublishingApi",
     DisplayName = "Workflows Publishing API",
     Description = "Bridge endpoints that construct a live activity from a persisted catalog row (the construction seam).",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "ApiCapabilities" }
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "ApiCapabilities", "Events" }
 )]
 public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 {
@@ -69,6 +72,8 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<ActivityTreeProjector>();
         services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
         services.TryAddScoped<ExecutableNodeCompiler>();
+        services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
+        services.AddEventHandler<OnExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
         services.TryAddSingleton(TimeProvider.System);

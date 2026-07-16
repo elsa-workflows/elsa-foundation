@@ -360,6 +360,12 @@ public sealed class RuntimeStartCommandSchedulingTests
             new ArgumentException("boom", "pinnedExecutable")));
         Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
             new ArgumentException("boom", "requestedArtifactId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "parentWorkflowExecutionId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "correlationId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "tenantId")));
     }
 
     [Fact]

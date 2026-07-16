@@ -27,6 +27,10 @@
     <Project Path="src/Elsa/Activities/Composition/Design/Elsa.Activities.Composition.Design.csproj" />
     <Project Path="src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Activities/DispatchWorkflow/">
+    <Project Path="src/Elsa/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj" />
+    <Project Path="src/Elsa/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Activities/Design/">
     <Project Path="src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <Project Path="src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
@@ -276,6 +280,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/ControlFlow/">
     <Project Path="tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/DispatchWorkflow/">
+    <Project Path="tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Flowchart/">
     <Project Path="tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj" />

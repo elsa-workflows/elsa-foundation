@@ -14,11 +14,17 @@ internal sealed class GroundworkPersistenceReconciler
         };
 
     private readonly IReadOnlyList<GroundworkPersistenceRowMapping> _mappings;
+    private readonly IReadOnlyDictionary<string, GroundworkDeferredPersistenceContract> _deferredContracts;
 
-    private GroundworkPersistenceReconciler(IReadOnlyList<GroundworkPersistenceRowMapping> mappings) =>
+    private GroundworkPersistenceReconciler(
+        IReadOnlyList<GroundworkPersistenceRowMapping> mappings,
+        IReadOnlyCollection<GroundworkDeferredPersistenceContract> deferredContracts)
+    {
         _mappings = mappings;
+        _deferredContracts = deferredContracts.ToDictionary(item => item.Contract, StringComparer.Ordinal);
+    }
 
-    public static GroundworkPersistenceReconciler CreateDefault() => new(DefaultMappings);
+    public static GroundworkPersistenceReconciler CreateDefault() => new(DefaultMappings, DeferredContracts);
 
     public IReadOnlyList<string> Reconcile(
         JsonObject ledger,
@@ -48,6 +54,9 @@ internal sealed class GroundworkPersistenceReconciler
             var mappings = MappingsForContract(contract);
             if (mappings.Count == 0)
             {
+                if (_deferredContracts.ContainsKey(contract))
+                    continue;
+
                 findings.Add($"{contract}: discovered durable contract has no explicit coverage-ledger mapping.");
                 continue;
             }
@@ -110,6 +119,13 @@ internal sealed class GroundworkPersistenceReconciler
             var mappings = MappingsForContract(registration.Contract);
             if (mappings.Count == 0)
             {
+                if (_deferredContracts.TryGetValue(registration.Contract, out var deferred))
+                {
+                    findings.Add(
+                        $"{identity}: Groundwork persistence is explicitly deferred to {deferred.Authority}; remove the deferral and add a coverage-ledger mapping before registration.");
+                    continue;
+                }
+
                 findings.Add($"{identity}: registered Groundwork implementation has no explicit coverage-ledger mapping.");
                 continue;
             }
@@ -364,6 +380,13 @@ internal sealed class GroundworkPersistenceReconciler
         Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind")
     ];
 
+    private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts =
+    [
+        // #676 introduces the in-memory projection and rejects non-empty Groundwork checkpoint changes.
+        // #678 owns the provider-backed storage unit, restart convergence, and permanent ledger row.
+        new("IWorkflowDispatchStore", "#678")
+    ];
+
     private static GroundworkPersistenceRowMapping Map(
         string owner,
         string? contract,
@@ -396,3 +419,5 @@ internal sealed record GroundworkPersistenceRowMapping(
     string? Contract,
     string LedgerRow,
     string? StorageUnit);
+
+internal sealed record GroundworkDeferredPersistenceContract(string Contract, string Authority);

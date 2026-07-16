@@ -13,6 +13,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
 }
 
 public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore
@@ -26,6 +27,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IIncidentStateStore? _incidentStateStore;
     private readonly IExecutionLivenessStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
+    private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
     private readonly TimeProvider _timeProvider;
 
@@ -36,6 +38,35 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     /// shape — W9's coalescing decorators keep wrapping this registration without modification.
     /// </summary>
     public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IActivityExecutionStateStore? activityExecutionStateStore = null,
+        IBookmarkStateStore? bookmarkStateStore = null,
+        IDurableValueStateStore? durableValueStateStore = null,
+        IIncidentStateStore? incidentStateStore = null,
+        IExecutionLivenessStateStore? operationalStateStore = null,
+        ISchedulerStateStore? schedulerStateStore = null,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
+        InMemoryRuntimeCheckpointStoreState? state = null,
+        TimeProvider? timeProvider = null)
+        : this(
+            null,
+            workflowExecutionStateStore,
+            activityExecutionStateStore,
+            bookmarkStateStore,
+            durableValueStateStore,
+            incidentStateStore,
+            operationalStateStore,
+            schedulerStateStore,
+            activityExecutionInspectionWriter,
+            rootWriteLeaseManager,
+            state,
+            timeProvider)
+    {
+    }
+
+    public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowDispatchStore? workflowDispatchStore,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
         IBookmarkStateStore? bookmarkStateStore = null,
@@ -58,6 +89,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _operationalStateStore = operationalStateStore;
         _schedulerStateStore = schedulerStateStore;
         _rootWriteLeaseManager = rootWriteLeaseManager;
+        _workflowDispatchStore = workflowDispatchStore;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -121,6 +153,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ValidateDurableValueStateChanges(commit);
         ValidateIncidentStateChanges(commit);
         ValidateOperationalStateChanges(commit);
+        await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
@@ -131,6 +164,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
             await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
             await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+            await ApplyWorkflowDispatchChangesAsync(commit.StateChanges.WorkflowDispatches, ct);
 
             try
             {
@@ -507,6 +541,19 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    private async ValueTask ApplyWorkflowDispatchChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (stateChanges.Count == 0)
+            return;
+        if (_workflowDispatchStore is null)
+            throw new InvalidOperationException("Workflow dispatch checkpoint changes require an IWorkflowDispatchStore.");
+
+        foreach (var stateChange in stateChanges)
+            await _workflowDispatchStore.SaveAsync(stateChange.State, cancellationToken);
+    }
+
     private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
     {
         if (_workflowExecutionStateStore is null || stateChange is null)
@@ -653,6 +700,86 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             }
         }
     }
+
+    private async ValueTask ValidateWorkflowDispatchChangesAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.WorkflowDispatches.Count == 0)
+            return;
+        if (_workflowDispatchStore is null)
+            throw new InvalidOperationException("Workflow dispatch checkpoint changes require an IWorkflowDispatchStore.");
+
+        var seen = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
+        foreach (var stateChange in commit.StateChanges.WorkflowDispatches)
+        {
+            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
+                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project workflow dispatch '{RuntimeStateChangeOperation.Upsert}' changes.");
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.ParentWorkflowExecutionId))
+                throw new InvalidOperationException("Workflow dispatch parent execution ID must match the checkpoint workflow execution ID.");
+
+            if (seen.TryGetValue(stateChange.StateId, out var duplicate) && !DispatchRecordsEqual(duplicate, stateChange.State))
+                throw new InvalidOperationException($"Workflow dispatch '{stateChange.StateId}' occurs more than once with conflicting state in the same checkpoint.");
+            seen[stateChange.StateId] = stateChange.State;
+
+            var existing = await _workflowDispatchStore.FindAsync(stateChange.StateId, cancellationToken);
+            if (existing is not null)
+                ValidateDispatchTransition(existing, stateChange.State);
+        }
+    }
+
+    private static void ValidateDispatchTransition(WorkflowDispatchRecord existing, WorkflowDispatchRecord candidate)
+    {
+        if (DispatchRecordsEqual(existing, candidate))
+            return;
+        if (!DispatchIdentityEquals(existing, candidate))
+            throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' already exists with conflicting immutable identity or context.");
+        if (candidate.UpdatedAt < existing.UpdatedAt)
+            throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' cannot move its update timestamp backwards.");
+
+        var validTransition = existing.Status switch
+        {
+            WorkflowDispatchStatus.Pending => candidate.Status is
+                WorkflowDispatchStatus.Started or
+                WorkflowDispatchStatus.Cancelled or
+                WorkflowDispatchStatus.DispatchFailed,
+            WorkflowDispatchStatus.Started => candidate.Status is
+                WorkflowDispatchStatus.Completed or
+                WorkflowDispatchStatus.Faulted or
+                WorkflowDispatchStatus.Cancelled or
+                WorkflowDispatchStatus.DispatchFailed,
+            _ => false
+        };
+        if (!validTransition)
+            throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' cannot transition from '{existing.Status}' to '{candidate.Status}'.");
+    }
+
+    private static bool DispatchIdentityEquals(WorkflowDispatchRecord left, WorkflowDispatchRecord right) =>
+        StringComparer.Ordinal.Equals(left.DispatchId, right.DispatchId) &&
+        StringComparer.Ordinal.Equals(left.ParentWorkflowExecutionId, right.ParentWorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(left.ParentActivityExecutionId, right.ParentActivityExecutionId) &&
+        StringComparer.Ordinal.Equals(left.ChildWorkflowExecutionId, right.ChildWorkflowExecutionId) &&
+        Equals(left.ChildExecutable, right.ChildExecutable) &&
+        Equals(left.ChildSource, right.ChildSource) &&
+        left.Mode == right.Mode &&
+        StringComparer.Ordinal.Equals(left.CorrelationId, right.CorrelationId) &&
+        StringComparer.Ordinal.Equals(left.TenantId, right.TenantId) &&
+        Equals(left.Partition, right.Partition) &&
+        left.RunKind == right.RunKind &&
+        AuthorityEquals(left.Authority, right.Authority) &&
+        left.InputDescriptors.SequenceEqual(right.InputDescriptors) &&
+        left.CreatedAt == right.CreatedAt &&
+        MetadataEquals(left.Metadata, right.Metadata);
+
+    private static bool DispatchRecordsEqual(WorkflowDispatchRecord left, WorkflowDispatchRecord right) =>
+        DispatchIdentityEquals(left, right) &&
+        left.Status == right.Status &&
+        left.UpdatedAt == right.UpdatedAt;
+
+    private static bool AuthorityEquals(WorkflowExecutionAuthoritySnapshot left, WorkflowExecutionAuthoritySnapshot right) =>
+        StringComparer.Ordinal.Equals(left.SystemIdentity, right.SystemIdentity) &&
+        StringComparer.Ordinal.Equals(left.RootInitiator, right.RootInitiator) &&
+        MetadataEquals(left.Metadata, right.Metadata);
 
     private static bool IsSamePendingIntent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
         existing.Status == RuntimePostCommitOutboxStatus.Pending
