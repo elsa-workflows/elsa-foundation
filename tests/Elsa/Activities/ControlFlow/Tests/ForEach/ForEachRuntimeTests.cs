@@ -196,7 +196,7 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(WriteLine).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(typeof(ClrActivityDescriptor).FullName!, RuntimeActivityDescriptor.InitialSchemaVersion, Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine))))),
+            descriptor: new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, RuntimeActivityDescriptor.InitialSchemaVersion, Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine))))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Text"] = new RuntimeInputBinding(

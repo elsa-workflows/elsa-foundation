@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -106,7 +107,9 @@ public sealed class FlowchartRuntimeTests
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
 
-        return services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider();
+        await ActivityConstructorTestHost.InitializeAsync(provider);
+        return provider;
     }
 
     private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)

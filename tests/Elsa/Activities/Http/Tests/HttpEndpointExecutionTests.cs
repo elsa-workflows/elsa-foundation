@@ -52,10 +52,10 @@ public sealed class HttpEndpointExecutionTests
         run.AssertWorkflowCompleted();
 
         var result = await ResultAsync(harness);
-        Assert.Equal("POST", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
-        Assert.Equal("""{"id":7}""", result.GetProperty(nameof(HttpRequestModel.Body)).GetString());
-        Assert.Equal("abc", result.GetProperty(nameof(HttpRequestModel.Headers)).GetProperty("x-test")[0].GetString());
-        Assert.Equal("1", result.GetProperty(nameof(HttpRequestModel.Query)).GetProperty("q")[0].GetString());
+        Assert.Equal("POST", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
+        Assert.Equal("""{"id":7}""", RequestProperty(result, nameof(HttpRequestModel.Body)).GetString());
+        Assert.Equal("abc", RequestProperty(result, nameof(HttpRequestModel.Headers)).GetProperty("x-test")[0].GetString());
+        Assert.Equal("1", RequestProperty(result, nameof(HttpRequestModel.Query)).GetProperty("q")[0].GetString());
     }
 
     [Fact]
@@ -133,8 +133,8 @@ public sealed class HttpEndpointExecutionTests
         run.AssertWorkflowCompleted();
 
         var result = await ResultAsync(harness);
-        Assert.Equal("orders/webhook", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
-        Assert.Equal(JsonValueKind.Null, result.GetProperty(nameof(HttpRequestModel.Body)).ValueKind);
+        Assert.Equal("orders/webhook", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal(JsonValueKind.Null, RequestProperty(result, nameof(HttpRequestModel.Body)).ValueKind);
     }
 
     [Theory]
@@ -153,8 +153,8 @@ public sealed class HttpEndpointExecutionTests
         run.AssertWorkflowCompleted();
 
         var result = await ResultAsync(harness);
-        Assert.Equal("orders/webhook", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
-        Assert.Equal("*", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
+        Assert.Equal("orders/webhook", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("*", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
     }
 
     [Fact]
@@ -175,8 +175,8 @@ public sealed class HttpEndpointExecutionTests
         run.AssertWorkflowCompleted();
 
         var result = await ResultAsync(harness);
-        Assert.Equal("orders/webhook", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
-        Assert.Equal("*", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
+        Assert.Equal("orders/webhook", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("*", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
     }
 
     [Fact]
@@ -194,8 +194,8 @@ public sealed class HttpEndpointExecutionTests
         Assert.Empty(await BookmarksAsync(harness));
 
         var result = await ResultAsync(harness);
-        Assert.Equal("POST", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
-        Assert.Equal("""{"id":9}""", result.GetProperty(nameof(HttpRequestModel.Body)).GetString());
+        Assert.Equal("POST", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
+        Assert.Equal("""{"id":9}""", RequestProperty(result, nameof(HttpRequestModel.Body)).GetString());
     }
 
     [Fact]
@@ -288,7 +288,7 @@ public sealed class HttpEndpointExecutionTests
         run.AssertWorkflowCompleted();
         Assert.Empty(await BookmarksAsync(harness));
         var result = await ResultAsync(harness);
-        Assert.Equal("orders/webhook", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("orders/webhook", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
     }
 
     [Fact]
@@ -345,9 +345,9 @@ public sealed class HttpEndpointExecutionTests
         Assert.Empty(await BookmarksAsync(harness));
 
         var result = await ResultAsync(harness);
-        Assert.Equal("callbacks/42", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
-        Assert.Equal("GET", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
-        Assert.Equal("42", result.GetProperty(nameof(HttpRequestModel.RouteData)).GetProperty("id").GetString());
+        Assert.Equal("callbacks/42", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("GET", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
+        Assert.Equal("42", RequestProperty(result, nameof(HttpRequestModel.RouteData)).GetProperty("id").GetString());
 
         var parsed = await ParsedContentAsync(harness);
         Assert.True(parsed.GetProperty("ok").GetBoolean());
@@ -367,10 +367,10 @@ public sealed class HttpEndpointExecutionTests
 
         run.AssertCompleted(NodeId);
         var result = await ResultAsync(harness);
-        Assert.Equal("callbacks/{id}", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("callbacks/{id}", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
         // The authored-route fallback emits the stable non-routing "*" placeholder for Method (#592 item 20) — no
         // inbound request drove this resume, so there is no real request method to project.
-        Assert.Equal("*", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
+        Assert.Equal("*", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
     }
 
     private static async Task<WorkflowExecutionRun> ResumeAsync(WorkflowExecutionHarness harness, JsonElement resumeInput)
@@ -391,6 +391,9 @@ public sealed class HttpEndpointExecutionTests
     private static Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ResultValueId);
 
     private static Task<JsonElement> ParsedContentAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ParsedContentValueId);
+
+    private static JsonElement RequestProperty(JsonElement request, string clrPropertyName) =>
+        request.GetProperty(JsonNamingPolicy.CamelCase.ConvertName(clrPropertyName));
 
     private static async Task<JsonElement> CapturedAsync(WorkflowExecutionHarness harness, string valueId)
     {

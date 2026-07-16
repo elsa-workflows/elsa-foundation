@@ -11,8 +11,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
     IActivityExecutionStateStore activityExecutionStateStore,
     IDurableValueStateStore durableValueStateStore,
     IWorkflowExecutableStore workflowExecutableStore,
-    RuntimeCheckpointCommitter checkpointCommitter,
-    TimeProvider timeProvider) : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
+    RuntimeCheckpointCommitter checkpointCommitter) : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowRetryActivityBoundarySchedulerWorkHandler);
     public string Name => HandlerName;
@@ -77,7 +76,9 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             .OrderBy(value => value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryReferenceKey), StringComparer.Ordinal)
             .ToArray();
         var clonedInputs = originalInputs.Select(value => CloneInput(value, newActivityExecutionId, prior.Execution.ActivityExecutionId)).ToArray();
-        var occurredAt = timeProvider.GetUtcNow();
+        // A scheduler work item may be delivered more than once. Anchor the derived checkpoint and
+        // post-commit work to its immutable recorded time so the same commit ID has the same fingerprint.
+        var occurredAt = workItem.RecordedAt;
         var provenanceMetadata = prior.Provenance.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         provenanceMetadata[RuntimeMetadataKeys.RetrySourceActivityExecutionId] = prior.Execution.ActivityExecutionId;
         provenanceMetadata[RuntimeMetadataKeys.RetryReason] = command.Reason;

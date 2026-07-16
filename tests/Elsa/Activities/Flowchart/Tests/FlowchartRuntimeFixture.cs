@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -27,7 +28,7 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
 
     public ServiceProvider Provider { get; }
 
-    public static ValueTask<FlowchartRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null)
+    public static async ValueTask<FlowchartRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityConstructor, FlowchartActivityConstructor>();
@@ -38,7 +39,9 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
         new ActivitiesFlowchartFeature().ConfigureServices(services);
         configureServices?.Invoke(services);
 
-        return new ValueTask<FlowchartRuntimeFixture>(new FlowchartRuntimeFixture(services.BuildServiceProvider()));
+        var provider = services.BuildServiceProvider();
+        await ActivityConstructorTestHost.InitializeAsync(provider);
+        return new FlowchartRuntimeFixture(provider);
     }
 
     public async ValueTask DisposeAsync() => await Provider.DisposeAsync();

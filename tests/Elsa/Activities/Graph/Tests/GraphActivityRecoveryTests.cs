@@ -187,6 +187,7 @@ public sealed class GraphActivityRecoveryTests
         Assert.Equal("outer", cloned.Metadata[RuntimeMetadataKeys.RetrySourceActivityExecutionId]);
 
         var retryCommit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        Assert.Equal(Now, retryCommit.Commit.Checkpoint.OccurredAt);
         var intent = Assert.Single(retryCommit.Commit.PostCommitIntents);
         var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal("outer-retry", scheduled.ExecutionScopeId);

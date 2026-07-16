@@ -61,6 +61,7 @@ public sealed class DurableTimerRestartCrashTests
         // single pump tick past its due time fires it through the real dispatcher, resuming the workflow.
         await using (var gen2 = BuildHarness(store, clock))
         {
+            await ActivityConstructorTestHost.InitializeAsync(gen2.Services);
             var survived = await TimerStore(gen2).FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, TimerId);
             Assert.NotNull(survived); // durable across the restart
 
@@ -89,6 +90,7 @@ public sealed class DurableTimerRestartCrashTests
 
         await using (var gen2 = BuildHarness(store, clock))
         {
+            await ActivityConstructorTestHost.InitializeAsync(gen2.Services);
             clock.Advance(Delay5s + TimeSpan.FromSeconds(1));
             var dispatcher = gen2.Services.GetRequiredService<IBookmarkResumeDispatcher>();
             var request = ResumeRequestFor(TimerId);
@@ -129,6 +131,7 @@ public sealed class DurableTimerRestartCrashTests
             services.AddSingleton<IWorkflowSchedulerDrainPolicy>(new NoDrainPolicy());
         }))
         {
+            await ActivityConstructorTestHost.InitializeAsync(gen2.Services);
             clock.Advance(Delay5s + TimeSpan.FromSeconds(1));
             await NewPump(gen2, clock).ExecuteAsync(CancellationToken.None);
 
@@ -144,6 +147,7 @@ public sealed class DurableTimerRestartCrashTests
         // the workflow to completion — even though the timer is already gone.
         await using (var gen3 = BuildHarness(store, clock))
         {
+            await ActivityConstructorTestHost.InitializeAsync(gen3.Services);
             await ResolveResumptionService(gen3).SweepAsync(new RuntimeResumptionSweepRequest());
 
             Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(gen3));
