@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Ingestion;
 using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 using Elsa.Diagnostics.OpenTelemetry.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,9 +29,22 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<InMemoryOpenTelemetryLiveFeed>();
         services.TryAddSingleton<IOpenTelemetryLiveFeed>(sp => sp.GetRequiredService<InMemoryOpenTelemetryLiveFeed>());
         services.TryAddSingleton<IOpenTelemetryIngestor, OpenTelemetryIngestor>();
+        services.TryAddScoped<IOtlpRequestAuthenticator, DefaultOtlpRequestAuthenticator>();
+        services.TryAddScoped<OtlpHttpIngestionHandler>();
         services.TryAddSingleton<IOpenTelemetryProvider, DefaultOpenTelemetryProvider>();
         services.TryAddSingleton<ICollectorConfigurationProvider, CollectorConfigurationProvider>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Adds a singleton contributor to the post-redaction ingestion pipeline without replacing contributors
+    /// registered by other features. Re-registering the same implementation type is idempotent.
+    /// </summary>
+    public static IServiceCollection AddOpenTelemetryIngestionContributor<TContributor>(this IServiceCollection services)
+        where TContributor : class, IOpenTelemetryIngestionContributor
+    {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IOpenTelemetryIngestionContributor, TContributor>());
         return services;
     }
 }
