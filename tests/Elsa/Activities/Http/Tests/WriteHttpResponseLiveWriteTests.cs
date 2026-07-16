@@ -1,180 +1,135 @@
 using System.Text;
-using Elsa.Activities.Http.Activities;
+using System.Text.Json;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Services;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Models;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Focused unit coverage for the <see cref="WriteHttpResponse"/> live-write branch (spec 089 sub-unit E, E-D2/E-D3).
-/// The activity always records the durable <see cref="HttpResponseInstruction"/> (proven end-to-end by
-/// <see cref="WriteHttpResponseExecutionTests"/>); here it additionally writes the live response when — and only
-/// when — the request-scoped <see cref="SyncHttpResponseSink"/> is populated with a live <see cref="HttpContext"/>.
-/// These tests drive the activity through the real <see cref="SimpleActivityExecutionContext"/> with a controlled
-/// service provider so the sink/content-factory seams are exercised exactly as in production.
+/// Verifies request-owned delivery of the typed response result after an inline workflow drain. The live
+/// <see cref="HttpContext"/> never enters the transient activity activation.
 /// </summary>
 public sealed class WriteHttpResponseLiveWriteTests
 {
     [Fact]
-    public async Task ArtifactOnly_WhenNoSinkRegistered()
+    public async Task NoCommittedInstruction_LeavesResponseUntouched()
     {
-        // Absent sink registration ⇒ artifact-only, NO fault (the resolve is null-safe).
-        var (activity, context) = Build(services => { }, status: 201, body: "created", contentType: "application/json");
-
-        await ((IActivity)activity).ExecuteAsync(context);
-
-        AssertArtifactRecorded(context, status: 201, body: "created", contentType: "application/json");
-    }
-
-    [Fact]
-    public async Task ArtifactOnly_WhenSinkPresentButUnpopulated_AsyncModeSafety()
-    {
-        // The async-mode-safety pin: a fresh scope's sink exists but is unpopulated (the middleware populates it
-        // only for sync-mode dispatches). Even though an HttpContext technically exists on the flow, the
-        // unpopulated sink keeps the run artifact-only — the discriminator is the sink, never IHttpContextAccessor.
-        var (activity, context) = Build(
-            services => services.AddScoped<SyncHttpResponseSink>(),
-            status: 200, body: "ok", contentType: "text/plain");
-
-        await ((IActivity)activity).ExecuteAsync(context);
-
-        AssertArtifactRecorded(context, status: 200, body: "ok", contentType: "text/plain");
-    }
-
-    [Fact]
-    public async Task LiveWrite_WritesStatusHeadersAndBody_ViaMatchingFactory()
-    {
+        var store = new InMemoryActivityExecutionStateStore();
+        var delivery = new HttpResponseInstructionDelivery(store, []);
         var httpContext = NewHttpContext();
-        var sink = PopulatedSink(httpContext);
-        var (activity, context) = Build(
-            services =>
-            {
-                services.AddSingleton(sink);
-                services.AddSingleton<IHttpContentFactory>(new StubJsonContentFactory());
-            },
-            status: 201, body: """{"id":42}""", contentType: "application/json",
-            headers: new Dictionary<string, string[]> { ["X-Custom"] = ["v1"] });
 
-        await ((IActivity)activity).ExecuteAsync(context);
+        var delivered = await delivery.TryDeliverAsync(httpContext.Response, ["wf-1"]);
 
+        Assert.False(delivered);
+        Assert.Equal(StatusCodes.Status200OK, httpContext.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CommittedInstruction_WritesStatusHeadersAndBody_ViaMatchingFactory()
+    {
+        var store = await StoreWith(new HttpResponseInstruction(
+            201,
+            new Dictionary<string, string[]> { ["X-Custom"] = ["v1"] },
+            """{"id":42}""",
+            "application/json"));
+        var delivery = new HttpResponseInstructionDelivery(store, [new StubJsonContentFactory()]);
+        var httpContext = NewHttpContext();
+
+        var delivered = await delivery.TryDeliverAsync(httpContext.Response, ["wf-1"]);
+
+        Assert.True(delivered);
         Assert.Equal(201, httpContext.Response.StatusCode);
         Assert.Equal("v1", httpContext.Response.Headers["X-Custom"]);
         Assert.StartsWith("application/json", httpContext.Response.ContentType);
         Assert.Equal("""{"id":42}""", await ReadBody(httpContext));
-        Assert.True(sink.ResponseWritten);
-        // The durable artifact is still recorded alongside the live write.
-        AssertArtifactRecorded(context, status: 201, body: """{"id":42}""", contentType: "application/json");
     }
 
     [Fact]
-    public async Task LiveWrite_UnknownContentType_FallsBackToRawWrite()
+    public async Task UnknownContentType_FallsBackToRawWrite()
     {
-        // No factory matches the authored content type ⇒ the body is written verbatim with the authored type.
+        var store = await StoreWith(new HttpResponseInstruction(
+            200,
+            new Dictionary<string, string[]>(),
+            "<x/>",
+            "application/vnd.custom+xml"));
+        var delivery = new HttpResponseInstructionDelivery(store, [new StubJsonContentFactory()]);
         var httpContext = NewHttpContext();
-        var sink = PopulatedSink(httpContext);
-        var (activity, context) = Build(
-            services =>
-            {
-                services.AddSingleton(sink);
-                services.AddSingleton<IHttpContentFactory>(new StubJsonContentFactory()); // only matches application/json
-            },
-            status: 200, body: "<x/>", contentType: "application/vnd.custom+xml");
 
-        await ((IActivity)activity).ExecuteAsync(context);
-
+        Assert.True(await delivery.TryDeliverAsync(httpContext.Response, ["wf-1"]));
         Assert.Equal("application/vnd.custom+xml", httpContext.Response.ContentType);
         Assert.Equal("<x/>", await ReadBody(httpContext));
-        Assert.True(sink.ResponseWritten);
     }
 
     [Fact]
-    public async Task LiveWrite_AbsentContentType_FallsBackToTextPlain()
+    public async Task AbsentContentType_FallsBackToTextPlain()
     {
+        var store = await StoreWith(new HttpResponseInstruction(
+            200,
+            new Dictionary<string, string[]>(),
+            "hello",
+            null));
+        var delivery = new HttpResponseInstructionDelivery(store, []);
         var httpContext = NewHttpContext();
-        var sink = PopulatedSink(httpContext);
-        var (activity, context) = Build(
-            services => services.AddSingleton(sink),
-            status: 200, body: "hello", contentType: null);
 
-        await ((IActivity)activity).ExecuteAsync(context);
-
+        Assert.True(await delivery.TryDeliverAsync(httpContext.Response, ["wf-1"]));
         Assert.StartsWith("text/plain", httpContext.Response.ContentType);
         Assert.Equal("hello", await ReadBody(httpContext));
-        Assert.True(sink.ResponseWritten);
     }
 
     [Fact]
-    public async Task LiveWrite_SkippedWhenResponseHasStarted()
+    public async Task StartedResponse_IsPreservedWithoutReadingState()
     {
-        // A second WriteHttpResponse in one run finds Response.HasStarted == true and skips the live write; the
-        // artifact is still recorded and the sink is NOT (re-)marked by this activity.
+        var delivery = new HttpResponseInstructionDelivery(new ThrowingActivityStateStore(), []);
         var httpContext = StartedHttpContext();
-        var sink = PopulatedSink(httpContext);
-        var (activity, context) = Build(
-            services => services.AddSingleton(sink),
-            status: 200, body: "second", contentType: "text/plain");
 
-        await ((IActivity)activity).ExecuteAsync(context);
+        var delivered = await delivery.TryDeliverAsync(httpContext.Response, ["wf-1"]);
 
-        Assert.True(httpContext.Response.HasStarted); // guard: the precondition really held
-        Assert.False(sink.ResponseWritten);
-        Assert.Equal(200, httpContext.Response.StatusCode); // untouched (default), no live write attempted
-        AssertArtifactRecorded(context, status: 200, body: "second", contentType: "text/plain");
+        Assert.True(delivered);
+        Assert.Equal(StatusCodes.Status200OK, httpContext.Response.StatusCode);
     }
 
-    // ---- helpers ----
-
-    /// <summary>
-    /// Builds the activity with its authored inputs and a <see cref="SimpleActivityExecutionContext"/> whose memory
-    /// register is seeded with those input values, over a provider configured by <paramref name="configure"/>.
-    /// </summary>
-    private static (WriteHttpResponse Activity, SimpleActivityExecutionContext Context) Build(
-        Action<IServiceCollection> configure, int? status, string? body, string? contentType, IDictionary<string, string[]>? headers = null)
+    private static async Task<InMemoryActivityExecutionStateStore> StoreWith(HttpResponseInstruction instruction)
     {
-        var activity = new WriteHttpResponse();
-        var presets = new List<(IMemoryBlockReference Reference, object? Value)>();
-
-        if (status is { } s)
+        var now = new DateTimeOffset(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
+        var invocationId = "activity-write-response";
+        var valueType = new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(HttpResponseInstruction)));
+        var result = ValueEnvelope.Inline(
+            valueType,
+            JsonSerializer.SerializeToElement(instruction, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            ValueProtectionPolicy.InstanceInline);
+        var completion = new ActivityCompletion(invocationId, "attempt-1", result, "Done", now, "sha256:test");
+        var execution = new ActivityExecution(invocationId, "wf-1", "node-write-response", "authored-write-response", "Elsa.WriteHttpResponse", "1.0.0");
+        var state = new ActivityExecutionState(
+            execution,
+            ActivityExecutionStatus.Completed,
+            SubStatus: null,
+            ScheduledAt: now,
+            StartedAt: now,
+            CompletedAt: now,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: null,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>())
         {
-            activity.StatusCode = new(new MemoryBlockReference("StatusCode"));
-            presets.Add((activity.StatusCode.MemoryBlockReference(), s));
-        }
+            Completion = completion
+        };
 
-        if (body is not null)
-        {
-            activity.Body = new(new MemoryBlockReference("Body"));
-            presets.Add((activity.Body.MemoryBlockReference(), body));
-        }
-
-        if (contentType is not null)
-        {
-            activity.ContentType = new(new MemoryBlockReference("ContentType"));
-            presets.Add((activity.ContentType.MemoryBlockReference(), contentType));
-        }
-
-        if (headers is not null)
-        {
-            activity.Headers = new(new MemoryBlockReference("Headers"));
-            presets.Add((activity.Headers.MemoryBlockReference(), headers));
-        }
-
-        var services = new ServiceCollection();
-        configure(services);
-        var context = new SimpleActivityExecutionContext(services.BuildServiceProvider(), activity, CancellationToken.None, workflowExecutionId: "wf-1");
-        foreach (var (reference, value) in presets)
-            context.Set(reference, value);
-
-        return (activity, context);
+        var store = new InMemoryActivityExecutionStateStore();
+        await store.SaveAsync(state);
+        return store;
     }
 
     private static DefaultHttpContext NewHttpContext()
@@ -184,13 +139,6 @@ public sealed class WriteHttpResponseLiveWriteTests
         return httpContext;
     }
 
-    private static SyncHttpResponseSink PopulatedSink(HttpContext httpContext)
-    {
-        var sink = new SyncHttpResponseSink();
-        sink.Populate(httpContext);
-        return sink;
-    }
-
     private static async Task<string> ReadBody(HttpContext httpContext)
     {
         httpContext.Response.Body.Position = 0;
@@ -198,16 +146,6 @@ public sealed class WriteHttpResponseLiveWriteTests
         return await reader.ReadToEndAsync();
     }
 
-    private static void AssertArtifactRecorded(SimpleActivityExecutionContext context, int status, string? body, string? contentType)
-    {
-        Assert.True(context.WorkflowOutputAssignmentRequested);
-        var instruction = Assert.IsType<HttpResponseInstruction>(context.RequestedWorkflowOutputs[HttpResponseInstruction.OutputName]);
-        Assert.Equal(status, instruction.StatusCode);
-        Assert.Equal(body, instruction.Body);
-        Assert.Equal(contentType, instruction.ContentType);
-    }
-
-    /// <summary>Builds a <see cref="DefaultHttpContext"/> whose response reports <c>HasStarted == true</c>.</summary>
     private static DefaultHttpContext StartedHttpContext()
     {
         var features = new Microsoft.AspNetCore.Http.Features.FeatureCollection();
@@ -215,7 +153,6 @@ public sealed class WriteHttpResponseLiveWriteTests
         return new DefaultHttpContext(features);
     }
 
-    /// <summary>A minimal public <see cref="IHttpContentFactory"/> mimicking the JSON factory (the real one is internal).</summary>
     private sealed class StubJsonContentFactory : IHttpContentFactory
     {
         public IEnumerable<string> SupportedContentTypes => ["application/json", "text/json"];
@@ -224,7 +161,6 @@ public sealed class WriteHttpResponseLiveWriteTests
             new RawStringContent((string)content, Encoding.UTF8, contentType);
     }
 
-    /// <summary>An <see cref="Microsoft.AspNetCore.Http.Features.IHttpResponseFeature"/> that reports the response has already started.</summary>
     private sealed class StartedResponseFeature : Microsoft.AspNetCore.Http.Features.IHttpResponseFeature
     {
         public int StatusCode { get; set; } = 200;
@@ -235,5 +171,13 @@ public sealed class WriteHttpResponseLiveWriteTests
 
         public void OnStarting(Func<object, Task> callback, object state) { }
         public void OnCompleted(Func<object, Task> callback, object state) { }
+    }
+
+    private sealed class ThrowingActivityStateStore : Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore
+    {
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("State should not be read after the response started.");
+        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

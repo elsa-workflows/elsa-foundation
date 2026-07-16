@@ -15,9 +15,8 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Activities.Http;
 
 /// <summary>
-/// HTTP activities. The activity types (<see cref="Activities.SendHttpRequest"/>, <see cref="HttpEndpoint"/>,
-/// <see cref="WriteHttpResponse"/>) are resolved by the runtime's <c>ClrActivityConstructor</c> — no per-type
-/// DI registration is required. This feature owns the outbound transport (the named
+/// HTTP activities. CLR activity types are transiently activated by the runtime — no per-type DI registration
+/// is required. This feature owns the outbound transport (the named
 /// <see cref="System.Net.Http.IHttpClientFactory"/> client configured from <see cref="HttpActivityOptions"/>),
 /// contributes the <see cref="HttpEndpoint"/> start-trigger's stimulus provider to the publish-time trigger
 /// extractor, and mounts the inbound <see cref="HttpEndpointMiddleware"/> into the shell's request pipeline
@@ -75,11 +74,11 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         // IMiddlewareFactory in the shell container, so only the middleware itself needs registering.
         services.AddScoped<HttpEndpointMiddleware>();
 
-        // The request-scoped sync-response sink (spec 089 sub-unit E, E-D2): the middleware populates the request
-        // scope's instance with the live HttpContext for a sync-mode dispatch, and WriteHttpResponse resolves it
-        // to decide between a live write and the artifact-only path. Scoped so a fresh internal scope (async mode)
-        // gets a distinct, unpopulated instance — the load-bearing discriminator (never IHttpContextAccessor).
+        // Request-owned synchronous response services. The activity returns a typed instruction inside its
+        // isolated attempt scope; delivery reads the committed completion only after the inline drain returns.
+        // The sink remains the scoped marker for a custom response that already started during dispatch.
         services.AddScoped<SyncHttpResponseSink>();
+        services.AddScoped<HttpResponseInstructionDelivery>();
     }
 
     /// <summary>

@@ -71,9 +71,9 @@ public sealed class HttpEndpointRuntimePerformanceTests
             await response.Content.ReadAsStringAsync(),
             response.Content.Headers.ContentType?.MediaType,
             workflow.Status,
-            artifact.GetProperty(nameof(HttpResponseInstruction.StatusCode)).GetInt32(),
-            artifact.GetProperty(nameof(HttpResponseInstruction.Body)).GetString(),
-            artifact.GetProperty(nameof(HttpResponseInstruction.ContentType)).GetString(),
+            artifact.GetProperty("statusCode").GetInt32(),
+            artifact.GetProperty("body").GetString(),
+            artifact.GetProperty("contentType").GetString(),
             commitsAfterRequest - commitsBeforeRequest);
     }
 

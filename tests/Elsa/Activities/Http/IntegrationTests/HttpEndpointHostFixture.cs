@@ -4,6 +4,7 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Testing;
 using Elsa.Events;
@@ -11,6 +12,7 @@ using Elsa.Expressions;
 using Elsa.Http.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
@@ -589,30 +591,55 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     private ExecutableNode NewWriteHttpResponseNode(string nodeId, int statusCode, string body, string contentType, (string Name, string Value)? header)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(WriteHttpResponse));
 
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
-            [nameof(WriteHttpResponse.StatusCode)] = LiteralBinding(nameof(WriteHttpResponse.StatusCode), statusCode, "System.Int32"),
-            [nameof(WriteHttpResponse.Body)] = LiteralBinding(nameof(WriteHttpResponse.Body), body, "System.String"),
-            [nameof(WriteHttpResponse.ContentType)] = LiteralBinding(nameof(WriteHttpResponse.ContentType), contentType, "System.String")
+            [nameof(WriteHttpResponse.StatusCode)] = TypedLiteralBinding(nameof(WriteHttpResponse.StatusCode), statusCode, typeof(int)),
+            [nameof(WriteHttpResponse.Body)] = TypedLiteralBinding(nameof(WriteHttpResponse.Body), body, typeof(string)),
+            [nameof(WriteHttpResponse.ContentType)] = TypedLiteralBinding(nameof(WriteHttpResponse.ContentType), contentType, typeof(string)),
+            [nameof(WriteHttpResponse.Headers)] = TypedLiteralBinding(nameof(WriteHttpResponse.Headers), null, typeof(IDictionary<string, string[]>))
         };
 
         if (header is { } h)
-            inputBindings[nameof(WriteHttpResponse.Headers)] = LiteralBinding(
+            inputBindings[nameof(WriteHttpResponse.Headers)] = TypedLiteralBinding(
                 nameof(WriteHttpResponse.Headers),
                 new Dictionary<string, string[]> { [h.Name] = [h.Value] },
-                "System.Collections.Generic.IDictionary`2[[System.String],[System.String[]]]");
+                typeof(IDictionary<string, string[]>));
+
+        var activityType = TypeAliasConvention.CanonicalAlias(typeof(WriteHttpResponse));
+        var inputContracts = new[]
+        {
+            WriteResponseInputContract(nameof(WriteHttpResponse.StatusCode), typeof(int)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.Body), typeof(string)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.ContentType), typeof(string)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.Headers), typeof(IDictionary<string, string[]>))
+        };
+        var contract = new ActivityContract(
+            activityType,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            inputContracts,
+            new ActivityResultContract(
+                RuntimeValueType(typeof(HttpResponseInstruction)),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityType));
 
         return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
-            activityType: typeof(WriteHttpResponse).FullName!,
+            activityType: activityType,
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(WriteHttpResponse)),
+            descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
     }
 
     /// <summary>Builds a <see cref="StallingActivity"/> node that stalls the inline drain for <paramref name="duration"/> (scenario 5.3 timeout).</summary>
@@ -636,19 +663,18 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     /// <summary>
-    /// Reads the single durable <see cref="HttpResponseInstruction"/> artifact <see cref="WriteHttpResponse"/> records
-    /// under the well-known workflow-output name (keyed on the runtime output-name metadata, mirroring the activity's
-    /// own execution tests) — the durable proof the artifact was recorded regardless of sync/async delivery.
+    /// Reads the single durable <see cref="HttpResponseInstruction"/> completion result returned by
+    /// <see cref="WriteHttpResponse"/> — the durable proof that the instruction was committed regardless of
+    /// sync/async delivery.
     /// </summary>
     public async Task<JsonElement> ReadHttpResponseArtifactAsync(string workflowExecutionId)
     {
-        var durableValues = await Services.GetRequiredService<IDurableValueStateStore>().ListAsync(workflowExecutionId);
-        var artifact = Assert.Single(
-            durableValues,
-            value => value.Metadata.TryGetValue(RuntimeMetadataKeys.OutputName, out var name)
-                && name == HttpResponseInstruction.OutputName);
-        Assert.NotNull(artifact.InlineValue);
-        return artifact.InlineValue!.Value;
+        var activityStates = await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId);
+        var completion = Assert.Single(
+            activityStates,
+            state => state.Completion?.Result.Type.Alias == TypeAliasConvention.CanonicalAlias(typeof(HttpResponseInstruction)));
+        Assert.NotNull(completion.Completion?.Result.InlineValue);
+        return completion.Completion!.Result.InlineValue!.Value;
     }
 
     /// <summary>
@@ -897,6 +923,37 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             {
                 [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName
             });
+
+    private static RuntimeInputBinding TypedLiteralBinding(string inputKey, object? value, Type type)
+    {
+        var valueType = RuntimeValueType(type);
+        return new RuntimeInputBinding(
+            inputKey,
+            valueType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: value is null
+                ? ValueEnvelope.Null(valueType, ValueProtectionPolicy.InstanceInline)
+                : ValueEnvelope.Inline(
+                    valueType,
+                    JsonSerializer.SerializeToElement(value, type),
+                    ValueProtectionPolicy.InstanceInline));
+    }
+
+    private static ActivityInputContract WriteResponseInputContract(string key, Type type) =>
+        new(
+            key,
+            key,
+            RuntimeValueType(type),
+            isRequired: false,
+            hasDefault: false,
+            defaultValue: null,
+            ActivityValuePolicy.Default);
+
+    private static ValueTypeDescriptor RuntimeValueType(Type type) =>
+        TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias) is { } reference
+            ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
+            : throw new InvalidOperationException($"Could not describe '{type}'.");
 
     private static void RunStartupTasks(IServiceProvider provider)
     {

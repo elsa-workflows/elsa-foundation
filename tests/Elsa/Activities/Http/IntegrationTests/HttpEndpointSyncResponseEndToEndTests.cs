@@ -12,9 +12,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// Acceptance for spec 089 sub-unit E (synchronous HTTP responses) — User Story 5 acceptance 5.1-5.5 and FR-021 —
 /// proven at the host level over the real ASP.NET Core pipeline (see <see cref="HttpEndpointHostFixture"/>). These
 /// are the first tests to exercise the WHOLE sync-response chain end to end with no fakes: a sync-mode endpoint
-/// populates the request scope's <c>SyncHttpResponseSink</c> and dispatches with the request services as ambient
-/// services → the in-process actor drains INLINE on the caller's async flow → a <c>WriteHttpResponse</c> the run
-/// reaches resolves that same sink and writes the live response in the SAME exchange → the middleware returns the
+/// the in-process actor drains INLINE on the caller's async flow → a <c>WriteHttpResponse</c> the run reaches
+/// commits one typed instruction → the request-owned delivery adapter writes that result in the SAME exchange → the middleware returns the
 /// workflow-authored status/headers/body rather than the 202 baseline. The degrade path (suspend-first, timeout),
 /// the async baseline's bit-identical 202, the mid-flow (D+E) resume-writes-response scenario, and the FR-021
 /// ambient-services purity sweep are all covered here.
@@ -55,9 +54,9 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         // The durable artifact is recorded alongside the live write (E-D3: the artifact is unconditional).
         var artifact = await ReadArtifactForSingleRunAsync();
-        Assert.Equal(201, artifact.GetProperty(nameof(HttpResponseInstruction.StatusCode)).GetInt32());
-        Assert.Equal("""{"id":42}""", artifact.GetProperty(nameof(HttpResponseInstruction.Body)).GetString());
-        Assert.Equal("application/json", artifact.GetProperty(nameof(HttpResponseInstruction.ContentType)).GetString());
+        Assert.Equal(201, artifact.GetProperty("statusCode").GetInt32());
+        Assert.Equal("""{"id":42}""", artifact.GetProperty("body").GetString());
+        Assert.Equal("application/json", artifact.GetProperty("contentType").GetString());
     }
 
     [Fact]
@@ -142,8 +141,8 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         // The artifact is still recorded — the async run reached WriteHttpResponse and recorded its intended response.
         var artifact = await _fixture.ReadHttpResponseArtifactAsync(startedId);
-        Assert.Equal(201, artifact.GetProperty(nameof(HttpResponseInstruction.StatusCode)).GetInt32());
-        Assert.Equal("""{"id":42}""", artifact.GetProperty(nameof(HttpResponseInstruction.Body)).GetString());
+        Assert.Equal(201, artifact.GetProperty("statusCode").GetInt32());
+        Assert.Equal("""{"id":42}""", artifact.GetProperty("body").GetString());
     }
 
     [Fact]
@@ -179,7 +178,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         // And the durable artifact was recorded on the resumed run.
         var artifact = await _fixture.ReadHttpResponseArtifactAsync(workflowExecutionId);
-        Assert.Equal(203, artifact.GetProperty(nameof(HttpResponseInstruction.StatusCode)).GetInt32());
+        Assert.Equal(203, artifact.GetProperty("statusCode").GetInt32());
     }
 
     [Fact]
