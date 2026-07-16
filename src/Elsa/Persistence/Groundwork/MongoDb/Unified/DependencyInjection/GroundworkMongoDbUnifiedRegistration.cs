@@ -15,10 +15,12 @@ namespace Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 /// <summary>Materializes the host-selected Elsa store families through one MongoDB provider target.</summary>
 public static class GroundworkMongoDbUnifiedRegistration
 {
+    /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
     public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
-        string databaseName)
+        string databaseName,
+        bool autoApplyOnStartup = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -32,7 +34,7 @@ public static class GroundworkMongoDbUnifiedRegistration
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
         services.AddGroundworkPublishingStores();
-        services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName);
+        services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
         return services;
     }
 }

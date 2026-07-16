@@ -239,7 +239,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
-        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString, AutoApplySchemaOnStartup = false }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
         var exception = await Assert.ThrowsAsync<GroundworkRuntimeSchemaAdmissionException>(

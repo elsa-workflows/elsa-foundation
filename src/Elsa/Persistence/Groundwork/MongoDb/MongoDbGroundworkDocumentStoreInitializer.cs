@@ -9,51 +9,63 @@ using Groundwork.MongoDb.Documents;
 using Groundwork.MongoDb.Materialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace Elsa.Persistence.Groundwork.MongoDb;
 
 /// <summary>
-/// Admits the selected MongoDB target once during host preparation. Startup inspects topology and
-/// schema only; it never creates, migrates or repairs provider state.
+/// Admits the selected MongoDB target once during host preparation. By default, startup inspects
+/// topology and schema only; enable <c>autoApplyOnStartup</c> to apply safe pending operations
+/// automatically.
 /// </summary>
 public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, IShellInitializer
 {
     private readonly string _connectionString;
     private readonly string _databaseName;
+    private readonly bool _autoApplyOnStartup;
     private readonly GroundworkStoreSessionSource _sessionSource;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMongoDbGroundworkRuntimeAdmission _admission;
+    private readonly ILogger<MongoDbGroundworkDocumentStoreInitializer> _logger;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _initialized;
 
     public MongoDbGroundworkDocumentStoreInitializer(
         string connectionString,
         string databaseName,
+        bool autoApplyOnStartup,
         GroundworkStoreSessionSource sessionSource,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        ILogger<MongoDbGroundworkDocumentStoreInitializer> logger)
         : this(
             connectionString,
             databaseName,
+            autoApplyOnStartup,
             sessionSource,
             scopeFactory,
-            new MongoDbGroundworkRuntimeAdmission())
+            new MongoDbGroundworkRuntimeAdmission(),
+            logger)
     {
     }
 
     internal MongoDbGroundworkDocumentStoreInitializer(
         string connectionString,
         string databaseName,
+        bool autoApplyOnStartup,
         GroundworkStoreSessionSource sessionSource,
         IServiceScopeFactory scopeFactory,
-        IMongoDbGroundworkRuntimeAdmission admission)
+        IMongoDbGroundworkRuntimeAdmission admission,
+        ILogger<MongoDbGroundworkDocumentStoreInitializer> logger)
     {
         _connectionString = connectionString;
         _databaseName = databaseName;
+        _autoApplyOnStartup = autoApplyOnStartup;
         _sessionSource = sessionSource;
         _scopeFactory = scopeFactory;
         _admission = admission;
+        _logger = logger;
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -101,6 +113,8 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
                     _databaseName,
                     source,
                     _sessionSource,
+                    _autoApplyOnStartup,
+                    _logger,
                     cancellationToken);
             }
 
@@ -126,6 +140,8 @@ public interface IMongoDbGroundworkRuntimeAdmission
         string databaseName,
         GroundworkPhysicalSchemaManifestSource source,
         GroundworkStoreSessionSource sessionSource,
+        bool autoApplyOnStartup,
+        ILogger logger,
         CancellationToken cancellationToken);
 }
 
@@ -198,6 +214,8 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
         string databaseName,
         GroundworkPhysicalSchemaManifestSource source,
         GroundworkStoreSessionSource sessionSource,
+        bool autoApplyOnStartup,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -213,6 +231,11 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
                 source.PhysicalTarget.Provider,
                 DocumentStoreAccess.Global,
                 source.CreateNamePolicy(),
+                options: new MongoDbPhysicalDocumentStoreOptions
+                {
+                    AutoApplyOnStartup = autoApplyOnStartup,
+                    SchemaAdmissionLogger = logger
+                },
                 cancellationToken: cancellationToken);
             if (!IsExactTarget(source, handle))
             {

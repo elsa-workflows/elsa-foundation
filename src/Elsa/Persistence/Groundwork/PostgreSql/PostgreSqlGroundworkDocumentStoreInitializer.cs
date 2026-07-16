@@ -2,7 +2,8 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
-using Elsa.Persistence.Groundwork.Unified.Composition;
+using Groundwork.Core.SchemaEvolution;
+using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.PostgreSql;
@@ -10,17 +11,21 @@ using Groundwork.PostgreSql.Documents;
 using Groundwork.PostgreSql.PhysicalStorage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql;
 
 /// <summary>
 /// Admits the exact host-selected PostgreSQL schema and then exposes one physical document store.
-/// Runtime startup only inspects durable history/live state; it never applies or repairs schema.
+/// By default, runtime startup only inspects schema; enable <c>autoApplyOnStartup</c> to apply
+/// safe pending operations automatically.
 /// </summary>
 public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
     string connectionString,
+    bool autoApplyOnStartup,
     IServiceScopeFactory scopeFactory,
-    GroundworkStoreSessionSource sessionSource) : IHostedService, IShellInitializer
+    GroundworkStoreSessionSource sessionSource,
+    ILogger<PostgreSqlGroundworkDocumentStoreInitializer> logger) : IHostedService, IShellInitializer
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
@@ -60,9 +65,16 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
 
             var admission = await source.InspectRuntimeAdmissionAsync(
                 new PostgreSqlPhysicalSchemaExecutor(connectionString),
+                new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = autoApplyOnStartup },
+                entry => logger.Log(
+                    entry.Level == GroundworkRuntimeSchemaAdmissionLogLevel.Information
+                        ? LogLevel.Information
+                        : LogLevel.Warning,
+                    "{AdmissionMessage}",
+                    entry.Message),
                 cancellationToken);
             if (!admission.IsReady)
-                throw new GroundworkRuntimeSchemaAdmissionException(admission);
+                throw new ElsaAdmissionException(admission);
 
             var workflowRoute = source.PhysicalTarget.Routes.SingleOrDefault(route =>
                 route.StorageUnit.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind);
@@ -103,7 +115,7 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
         {
             throw;
         }
-        catch (GroundworkRuntimeSchemaAdmissionException)
+        catch (ElsaAdmissionException)
         {
             throw;
         }

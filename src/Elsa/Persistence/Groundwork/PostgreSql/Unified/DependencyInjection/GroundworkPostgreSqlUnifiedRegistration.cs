@@ -23,10 +23,11 @@ public static class GroundworkPostgreSqlUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The PostgreSQL connection string the single document store opens.</param>
-    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(this IServiceCollection services, string connectionString)
+    /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
+    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(this IServiceCollection services, string connectionString, bool autoApplyOnStartup = false)
     {
         services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>();
-        services.AddPostgreSqlGroundworkDocumentStore(connectionString);
+        services.AddPostgreSqlGroundworkDocumentStore(connectionString, autoApplyOnStartup);
 
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkIdentityStores();

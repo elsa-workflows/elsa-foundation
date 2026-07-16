@@ -2,7 +2,8 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
-using Elsa.Persistence.Groundwork.Unified.Composition;
+using Groundwork.Core.SchemaEvolution;
+using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite;
@@ -11,17 +12,21 @@ using Groundwork.Sqlite.PhysicalStorage;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
 
 /// <summary>
 /// Admits the exact host-selected SQLite schema and then exposes one physical document store.
-/// Runtime startup only inspects durable history/live state; it never applies or repairs schema.
+/// By default, runtime startup only inspects schema; enable <c>autoApplyOnStartup</c> to apply
+/// safe pending operations automatically.
 /// </summary>
 public sealed class SqliteGroundworkDocumentStoreInitializer(
     string connectionString,
+    bool autoApplyOnStartup,
     IServiceScopeFactory scopeFactory,
-    GroundworkStoreSessionSource sessionSource) : IHostedService, IShellInitializer
+    GroundworkStoreSessionSource sessionSource,
+    ILogger<SqliteGroundworkDocumentStoreInitializer> logger) : IHostedService, IShellInitializer
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
@@ -62,9 +67,16 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             await using var inspectionConnection = new SqliteConnection(connectionString);
             var admission = await source.InspectRuntimeAdmissionAsync(
                 new SqlitePhysicalSchemaExecutor(inspectionConnection),
+                new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = autoApplyOnStartup },
+                entry => logger.Log(
+                    entry.Level == GroundworkRuntimeSchemaAdmissionLogLevel.Information
+                        ? LogLevel.Information
+                        : LogLevel.Warning,
+                    "{AdmissionMessage}",
+                    entry.Message),
                 cancellationToken);
             if (!admission.IsReady)
-                throw new GroundworkRuntimeSchemaAdmissionException(admission);
+                throw new ElsaAdmissionException(admission);
 
             var workflowRoute = source.PhysicalTarget.Routes.SingleOrDefault(route =>
                 route.StorageUnit.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind);
@@ -105,7 +117,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         {
             throw;
         }
-        catch (GroundworkRuntimeSchemaAdmissionException)
+        catch (ElsaAdmissionException)
         {
             throw;
         }

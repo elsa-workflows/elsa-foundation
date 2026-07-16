@@ -31,11 +31,17 @@ public class SqlServerGroundworkUnifiedPersistenceShellFeature : IShellFeature
         Secret = true)]
     public string? ConnectionString { get; set; }
 
+    [ManifestSetting(
+        DisplayName = "Auto-apply schema on startup",
+        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Category = "Persistence")]
+    public bool AutoApplySchemaOnStartup { get; set; } = true;
+
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString)
             ? DefaultConnectionString
             : ConnectionString;
-        services.AddGroundworkSqlServerUnifiedPersistence(connectionString);
+        services.AddGroundworkSqlServerUnifiedPersistence(connectionString, AutoApplySchemaOnStartup);
     }
 }

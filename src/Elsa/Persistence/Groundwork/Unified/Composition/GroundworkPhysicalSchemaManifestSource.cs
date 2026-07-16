@@ -39,44 +39,36 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
     public IPhysicalNamePolicy CreateNamePolicy() => Snapshot.PhysicalNamePolicy;
 
     /// <summary>
-    /// Reads the applied history and live compatibility snapshot, then computes the additive diff
-    /// without acquiring an application lock, creating schema infrastructure or applying work.
+    /// Inspects the runtime schema target, optionally applying safe pending operations when
+    /// <see cref="GroundworkRuntimeSchemaAdmissionOptions.AutoApplyOnStartup"/> is enabled.
     /// </summary>
     public async ValueTask<GroundworkRuntimeSchemaAdmissionResult> InspectRuntimeAdmissionAsync(
-        IPhysicalSchemaHistoryInspector inspector,
+        IPhysicalSchemaExecutor executor,
+        GroundworkRuntimeSchemaAdmissionOptions? options = null,
+        Action<GroundworkRuntimeSchemaAdmissionLogEntry>? log = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(inspector);
+        ArgumentNullException.ThrowIfNull(executor);
         cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
-            var inspection = await inspector.InspectHistoryAsync(PhysicalTarget, cancellationToken);
-            var plan = PhysicalSchemaDiffPlanner.Plan(
+            var coreResult = await GroundworkRuntimeSchemaAdmission.InspectRuntimeAdmissionAsync(
+                executor,
                 PhysicalTarget,
-                inspection.History,
-                DateTimeOffset.UnixEpoch);
-            var diagnostics = new List<GroundworkDiagnostic>(plan.Diagnostics);
-            if (!inspection.IsAppliedSchemaValid || !plan.IsApplicable)
-            {
-                diagnostics.Add(DriftDiagnostic());
-            }
-            else if (plan.Operations.Count != 0)
-            {
-                diagnostics.Add(GroundworkDiagnostic.Error(
-                    "ELSA-GW-SCHEMA-PENDING",
-                    $"Groundwork physical target '{TargetFingerprint}' for provider '{PhysicalTarget.Provider.Name}' has {plan.Operations.Count} pending schema operation(s). Apply the exact reviewed plan through Groundwork.Tool before starting the host.",
-                    "schema.pendingOperations"));
-            }
-
+                options,
+                log,
+                cancellationToken);
             return new GroundworkRuntimeSchemaAdmissionResult(
                 PhysicalTarget,
                 CompositionFingerprint,
                 ResolvedNames,
-                inspection.History.AppliedState?.TargetFingerprint,
-                inspection.IsAppliedSchemaValid,
-                plan.Operations,
-                diagnostics);
+                coreResult.Inspection.History.AppliedState?.TargetFingerprint,
+                coreResult.Inspection.IsAppliedSchemaValid,
+                coreResult.PendingOperations,
+                coreResult.Diagnostics,
+                coreResult.IsReady,
+                coreResult.AppliedOperationCount);
         }
         catch (InvalidOperationException)
         {
@@ -87,7 +79,9 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
                 appliedTargetFingerprint: null,
                 isAppliedSchemaValid: false,
                 pendingOperations: [],
-                diagnostics: [DriftDiagnostic()]);
+                diagnostics: [DriftDiagnostic()],
+                isReady: false,
+                appliedOperationCount: 0);
         }
     }
 
@@ -116,7 +110,7 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
         .ToArray());
 }
 
-/// <summary>Immutable, side-effect-free runtime schema-admission evidence.</summary>
+/// <summary>Immutable runtime schema-admission evidence, including auto-apply outcomes.</summary>
 public sealed class GroundworkRuntimeSchemaAdmissionResult
 {
     public GroundworkRuntimeSchemaAdmissionResult(
@@ -126,7 +120,9 @@ public sealed class GroundworkRuntimeSchemaAdmissionResult
         string? appliedTargetFingerprint,
         bool isAppliedSchemaValid,
         IReadOnlyCollection<PhysicalSchemaOperation> pendingOperations,
-        IReadOnlyCollection<GroundworkDiagnostic> diagnostics)
+        IReadOnlyCollection<GroundworkDiagnostic> diagnostics,
+        bool isReady,
+        int appliedOperationCount)
     {
         PhysicalTarget = physicalTarget ?? throw new ArgumentNullException(nameof(physicalTarget));
         CompositionFingerprint = string.IsNullOrWhiteSpace(compositionFingerprint)
@@ -148,6 +144,8 @@ public sealed class GroundworkRuntimeSchemaAdmissionResult
             .ThenBy(diagnostic => diagnostic.Target, StringComparer.Ordinal)
             .ThenBy(diagnostic => diagnostic.Message, StringComparer.Ordinal)
             .ToArray());
+        IsReady = isReady;
+        AppliedOperationCount = appliedOperationCount;
     }
 
     public PhysicalSchemaTarget PhysicalTarget { get; }
@@ -166,7 +164,13 @@ public sealed class GroundworkRuntimeSchemaAdmissionResult
 
     public IReadOnlyList<GroundworkDiagnostic> Diagnostics { get; }
 
-    public bool IsReady => IsAppliedSchemaValid &&
-                           PendingOperations.Count == 0 &&
-                           Diagnostics.All(diagnostic => !diagnostic.IsError);
+    /// <summary>
+    /// True when the target is admitted — either it was already up-to-date or safe auto-apply
+    /// succeeded. Accounts for the <see cref="GroundworkRuntimeSchemaAdmissionOptions.AutoApplyOnStartup"/>
+    /// outcome from the Groundwork core admission gate.
+    /// </summary>
+    public bool IsReady { get; }
+
+    /// <summary>Number of schema operations that were auto-applied at startup (0 when auto-apply is off).</summary>
+    public int AppliedOperationCount { get; }
 }

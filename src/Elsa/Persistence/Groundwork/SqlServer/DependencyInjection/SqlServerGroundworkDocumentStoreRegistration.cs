@@ -20,7 +20,8 @@ public static class SqlServerGroundworkDocumentStoreRegistration
 {
     public static IServiceCollection AddSqlServerGroundworkDocumentStore(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        bool autoApplyOnStartup = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -45,8 +46,10 @@ public static class SqlServerGroundworkDocumentStoreRegistration
 
         services.AddSingleton(serviceProvider => new SqlServerGroundworkDocumentStoreInitializer(
             connectionString,
+            autoApplyOnStartup,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            serviceProvider.GetRequiredService<GroundworkStoreSessionSource>()));
+            serviceProvider.GetRequiredService<GroundworkStoreSessionSource>(),
+            serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SqlServerGroundworkDocumentStoreInitializer>>()));
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<SqlServerGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(serviceProvider =>
