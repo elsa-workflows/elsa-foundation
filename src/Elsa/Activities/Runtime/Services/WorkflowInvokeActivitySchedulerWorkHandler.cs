@@ -319,6 +319,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowOutputChanges = [];
         ActivityTransition? returnedTransition = null;
         ActivityCompletionProjection? valueFlowCompletion = null;
+        ActivityExecutionState? typedSuspendedState = null;
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> typedSuspensionDurableValueChanges = [];
         try
         {
             if (!await activity.CanExecuteAsync(context))
@@ -373,7 +375,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 // mutated a variable / set an output.
                 var suspendDurableValueChanges = CombineDurableValueChanges(workflowVariableWriteBackChanges, workflowOutputChanges);
 
-                if (bookmarkRequests.Count > 0)
+                if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
+                {
+                    if (executableNode.ActivityContract is null || valueFlowAttempt is null)
+                        throw new InvalidOperationException("A stateful suspension requires a pinned typed activity contract and active attempt.");
+
+                    if (bookmarkRequests.Count > 0 || childScheduleRequests.Count > 0 || context.CompositeCompletionRequested || finishWorkflowRequested)
+                        throw new InvalidOperationException("A stateful suspension transition cannot also request legacy bookmarks, child scheduling, composite completion, or workflow completion.");
+
+                    ValidateStatefulSuspensionRegistrations(executable, executableNode, statefulSuspension);
+                    typedSuspendedState = StatefulActivitySuspensionProjector.Project(
+                        state,
+                        valueFlowAttempt,
+                        statefulSuspension,
+                        _timeProvider.GetUtcNow());
+                    typedSuspensionDurableValueChanges = suspendDurableValueChanges;
+                }
+                else if (bookmarkRequests.Count > 0)
                 {
                     // A suspending activity does not reach the completion checkpoint; carry any write-back on the
                     // bookmark work item so the downstream WorkflowCreateBookmarkSchedulerWorkHandler commits it
@@ -381,8 +399,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, valueSnapshots, suspendDurableValueChanges, cancellationToken);
                     return;
                 }
-
-                if (childScheduleRequests.Count > 0)
+                else if (childScheduleRequests.Count > 0)
                 {
                     var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
                     if (inspectionAccumulator is null)
@@ -495,6 +512,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     item.Key,
                     item.Value.Presence == ValuePresence.ExplicitNull ? null : item.Value.InlineValue))
                 .ToArray();
+        }
+
+        if (typedSuspendedState is not null)
+        {
+            await CommitStatefulSuspensionAsync(
+                checkpointCommitter,
+                inspectionAccumulator,
+                workItem,
+                invokePayload,
+                typedSuspendedState,
+                valueSnapshots,
+                typedSuspensionDurableValueChanges,
+                cancellationToken);
+            return;
         }
 
         if (pendingChildScheduling is { } childScheduling)
@@ -690,6 +721,120 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return metadata;
     }
 
+    private static void ValidateStatefulSuspensionRegistrations(
+        WorkflowExecutable executable,
+        ExecutableNode executableNode,
+        IStatefulActivitySuspensionTransition suspension)
+    {
+        foreach (var registration in suspension.Registrations)
+        {
+            if (!executable.ResumeTargets.TryGetValue(registration.ResumeTargetKey, out var resumeTarget))
+            {
+                throw new InvalidOperationException(
+                    $"Stateful activity '{executableNode.ExecutableNodeId}' registered missing resume target '{registration.ResumeTargetKey}'.");
+            }
+
+            if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, executableNode.ExecutableNodeId))
+            {
+                throw new InvalidOperationException(
+                    $"Resume target '{registration.ResumeTargetKey}' belongs to executable node '{resumeTarget.ExecutableNodeId}', not '{executableNode.ExecutableNodeId}'.");
+            }
+        }
+    }
+
+    private async ValueTask CommitStatefulSuspensionAsync(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        RuntimeSchedulerWorkItem invokeWorkItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ActivityExecutionState suspendedState,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        CancellationToken cancellationToken)
+    {
+        var occurredAt = _timeProvider.GetUtcNow();
+        var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:activity-suspended:{invokePayload.ActivityExecutionId}";
+        var metadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = invokeWorkItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = invokeWorkItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = invokePayload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = invokePayload.ExecutableNodeId,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = invokePayload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = invokePayload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = invokePayload.PinnedExecutable.ArtifactHash
+        };
+        var inspection = inspectionAccumulator is null
+            ? null
+            : await inspectionAccumulator.BuildProjectionAsync(
+                suspendedState,
+                checkpointId,
+                occurredAt,
+                valueSnapshots: valueSnapshots,
+                metadata: metadata,
+                cancellationToken: cancellationToken);
+        var bookmarkRequests = suspendedState.TriggerRegistrations!
+            .Select(registration => new ActivityBookmarkRequest(
+                registration.RegistrationId,
+                registration.ResumeTargetKey,
+                registration.StimulusType,
+                registration.StimulusHash))
+            .ToArray();
+        var bookmarkWorkItems = NewBookmarkCreationWorkItems(
+                invokeWorkItem,
+                invokePayload,
+                bookmarkRequests,
+                valueSnapshots: [],
+                durableValueChanges: [])
+            .ToArray();
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: $"commit:{invokeWorkItem.WorkItemId}:activity-suspended:{invokePayload.ActivityExecutionId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: checkpointId,
+                Name: RuntimeCheckpointNames.ActivitySuspended,
+                WorkflowExecutionId: invokeWorkItem.WorkflowExecutionId,
+                OccurredAt: occurredAt,
+                ActivityExecutionIds: [invokePayload.ActivityExecutionId],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: invokePayload.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: suspendedState,
+                        Metadata: metadata)
+                ],
+                bookmarks: [],
+                durableValues: durableValueChanges,
+                incidents: [],
+                operational: [],
+                activityExecutionInspections: inspection is null
+                    ? []
+                    :
+                    [
+                        new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: invokePayload.ActivityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: inspection,
+                            Metadata: metadata)
+                    ]),
+            PostCommitIntents: bookmarkWorkItems
+                .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+                    invokeWorkItem,
+                    invokePayload.ActivityExecutionId,
+                    workItem,
+                    occurredAt))
+                .ToArray(),
+            Metadata: metadata);
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
     private async ValueTask EnqueueBookmarkCreationWorkAsync(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         RuntimeSchedulerWorkItem invokeWorkItem,
@@ -698,6 +843,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
+    {
+        foreach (var workItem in NewBookmarkCreationWorkItems(invokeWorkItem, invokePayload, bookmarkRequests, valueSnapshots, durableValueChanges))
+            await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    }
+
+    private IEnumerable<RuntimeSchedulerWorkItem> NewBookmarkCreationWorkItems(
+        RuntimeSchedulerWorkItem invokeWorkItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        IReadOnlyCollection<ActivityBookmarkRequest> bookmarkRequests,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges)
     {
         var requests = bookmarkRequests.ToArray();
         if (requests.Select(request => request.BookmarkId).Distinct(StringComparer.Ordinal).Count() != requests.Length)
@@ -724,7 +880,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 // atomically in that bookmark-created checkpoint (#310). The changes are idempotent upserts.
                 durableValueChanges: index == 0 ? durableValueChanges : []);
 
-            var workItem = new RuntimeSchedulerWorkItem(
+            yield return new RuntimeSchedulerWorkItem(
                 workItemId: $"{invokeWorkItem.WorkItemId}:create-bookmark:{request.BookmarkId}",
                 workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
                 commandId: $"{invokeWorkItem.CommandId}:create-bookmark:{request.BookmarkId}",
@@ -737,8 +893,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 payload: JsonSerializer.SerializeToElement(payload),
                 commandMetadata: MergeMetadata(invokeWorkItem.CommandMetadata, request),
                 envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
-
-            await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
         }
     }
 
