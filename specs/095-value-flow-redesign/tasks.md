@@ -137,7 +137,7 @@ request members, variables, a conditional, a child workflow, prior results, and 
 
 ### Tests — write and fail first
 
-- [ ] T047 [P] [US2] Add foundational builder ordering, `.From`, `.Value`, null/default/omitted, lexical-scope, and connection tests in `tests/Elsa/Workflows/Design/Tests/WorkflowBuilderTests.cs`
+- [X] T047 [P] [US2] Add foundational builder ordering, `.From`, `.Value`, null/default/omitted, lexical-scope, and connection tests in `tests/Elsa/Workflows/Design/Tests/WorkflowBuilderTests.cs`
 - [X] T048 [P] [US2] Add generator golden/diagnostic tests for named activity methods and call-handle shapes in `tests/Elsa/Workflows/Design/CodeGeneration/Tests/ActivityCallGeneratorTests.cs`
 - [X] T049 [P] [US2] Add Build-once/version-input determinism tests in `tests/Elsa/Workflows/Design/Tests/WorkflowDefinitionCompilerTests.cs`
 - [X] T050 [US2] Add paired code-first/dynamic canonical equivalence and validation tests in `tests/Elsa/Workflows/Publishing/Api/Tests/CodeFirstDynamicConformanceTests.cs`
@@ -145,12 +145,12 @@ request members, variables, a conditional, a child workflow, prior results, and 
 ### Implementation
 
 - [X] T051 [US2] Implement `WorkflowDefinition<TRequest,TResult>` and the IDE-guided build/compiler entry point in `src/Elsa/Workflows/Design/Core/Authoring/WorkflowDefinition.cs`
-- [ ] T052 [US2] Implement sequence/structured builders, workflow request/result sources, nodes, connections, and authoring-only `ActivityArgument<T>` in `src/Elsa/Workflows/Design/Core/Authoring/`
+- [X] T052 [US2] Implement sequence/structured builders, workflow request/result sources, nodes, connections, and authoring-only `ActivityArgument<T>` in `src/Elsa/Workflows/Design/Core/Authoring/`
 - [ ] T053 [US2] Implement lexical `Variable<T>` declaration/read handles and engine-intrinsic `Set`, return, merge, and control authored nodes in `src/Elsa/Workflows/Design/Core/Authoring/`
 - [X] T054 [US2] Implement the incremental activity-call generator and stable diagnostics in `src/Elsa/Workflows/Design/CodeGeneration/`
 - [X] T055 [US2] Generate call handles exposing `Node`, whole `Result`, typed `Outputs`, and typed `Outcomes` in `src/Elsa/Workflows/Design/CodeGeneration/`
 - [X] T056 [US2] Lower builder state into the existing `WorkflowDefinitionState` without serializing carriers or delegates in `src/Elsa/Workflows/Design/Core/Authoring/WorkflowDefinitionCompiler.cs`
-- [ ] T057 [US2] Add typed child-workflow request/result calls and ordinary builder extension support in `src/Elsa/Workflows/Design/Core/Authoring/`
+- [X] T057 [US2] Add typed child-workflow request/result calls and ordinary builder extension support in `src/Elsa/Workflows/Design/Core/Authoring/`
 - [ ] T058 [US2] Run generator, design, publishing golden/equivalence, and architecture tests and mark US2 ledger successors implemented/passing
 
 **Checkpoint**: Code-first authoring is a compiler front end, not a second runtime or persisted CLR
@@ -168,14 +168,14 @@ explicit boundary transfer, concurrent-write rejection, and stable collection or
 
 ### Tests — write and fail first
 
-- [ ] T059 [P] [US4] Replace direct memory variable tests with root/container/iteration frame conformance in `tests/Elsa/Activities/Runtime/Tests/VariableFrameRuntimeTests.cs`
+- [X] T059 [P] [US4] Replace direct memory variable tests with root/container/iteration frame conformance in `tests/Elsa/Activities/Runtime/Tests/VariableFrameRuntimeTests.cs`
 - [ ] T060 [P] [US4] Add concurrent-write, unavailable-producer, explicit-scope-return, and cyclic-back-edge validation tests in `tests/Elsa/Workflows/Design/Tests/ValueFlowValidatorTests.cs`
 - [ ] T061 [P] [US4] Add stable branch/iteration collection ordering tests across repeated randomized completion orders in `tests/Elsa/Activities/ControlFlow/Tests/DeterministicCollectionTests.cs`
-- [ ] T062 [US4] Replace SetVariable durability/write-back tests with intrinsic Set checkpoint/recovery tests in `tests/Elsa/Activities/Runtime/Tests/SetVariableDurabilityExecutionTests.cs`
+- [X] T062 [US4] Replace SetVariable durability/write-back tests with intrinsic Set checkpoint/recovery tests in `tests/Elsa/Activities/Runtime/Tests/SetVariableDurabilityExecutionTests.cs`
 
 ### Implementation
 
-- [ ] T063 [US4] Implement Runtime-owned `VariableFrameState` and root/container/iteration frame creation in `src/Elsa/Workflows/Runtime/Core/Models/VariableFrameState.cs` and runtime scope services
+- [X] T063 [US4] Implement Runtime-owned `VariableFrameState` and root/container/iteration frame creation in `src/Elsa/Workflows/Runtime/Core/Models/VariableFrameState.cs` and runtime scope services
 - [ ] T064 [US4] Implement explicit intrinsic Set/merge/reduce execution and checkpoint ordering in `src/Elsa/Workflows/Runtime/Services/WorkflowIntrinsicExecutor.cs`
 - [ ] T065 [US4] Compile variable reads, explicit scope returns, collections, merges, and reductions in `src/Elsa/Workflows/Publishing/Api/Services/ExecutableNodeCompiler.cs`
 - [ ] T066 [US4] Implement publication data-flow validation for concurrency, availability, scopes, cycles, and stable collection identity in `src/Elsa/Workflows/Design/Validations/`
