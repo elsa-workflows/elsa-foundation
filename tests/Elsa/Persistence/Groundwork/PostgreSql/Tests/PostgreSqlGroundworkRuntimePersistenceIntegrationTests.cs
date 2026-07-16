@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -109,8 +110,12 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
             command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
             await using var reader = await command.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
-            Assert.Equal("3", reader.GetString(0));
+            Assert.Equal(
+                ElsaRuntimeDocumentVersions.Stamp(
+                    ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)),
+                reader.GetString(0));
             Assert.Contains("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
+            Assert.Contains("\"rootVariableFrame\"", reader.GetString(1), StringComparison.Ordinal);
         }
 
         await using (var command = connection.CreateCommand())

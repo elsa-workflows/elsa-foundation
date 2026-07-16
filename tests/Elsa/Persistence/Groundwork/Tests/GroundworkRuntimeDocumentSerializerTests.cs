@@ -249,20 +249,95 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Equal(new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero).UtcTicks, result["historySortTicks"]!.GetValue<long>());
     }
 
+    [Fact]
+    public void WorkflowExecutionStateV3ToV4Upcaster_adds_a_neutral_root_variable_frame()
+    {
+        var content = JsonNode.Parse("""{"state":{"workflowExecutionId":"wf-1"}}""")!.AsObject();
+
+        var result = new WorkflowExecutionStateDocumentV3ToV4Upcaster().Upcast(content);
+
+        var state = Assert.IsType<JsonObject>(result["state"]);
+        Assert.True(state.ContainsKey("rootVariableFrame"));
+        Assert.Null(state["rootVariableFrame"]);
+    }
+
+    [Fact]
+    public void WorkflowExecutableV3ToV4Upcaster_adds_neutral_value_flow_fields_recursively()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "executable": {
+                "rootActivity": {
+                  "childSlots": [
+                    { "activities": [{ "childSlots": [] }] }
+                  ]
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var result = new WorkflowExecutableDocumentV3ToV4Upcaster().Upcast(content);
+
+        var root = Assert.IsType<JsonObject>(result["executable"]!["rootActivity"]);
+        var child = Assert.IsType<JsonObject>(root["childSlots"]![0]!["activities"]![0]);
+        AssertNeutralExecutableNode(root);
+        AssertNeutralExecutableNode(child);
+    }
+
+    [Fact]
+    public void ActivityExecutionStateV2ToV3Upcaster_adds_a_neutral_variable_frame()
+    {
+        var content = JsonNode.Parse("""{"state":{"invocationId":"ae-1"}}""")!.AsObject();
+
+        var result = new ActivityExecutionStateDocumentV2ToV3Upcaster().Upcast(content);
+
+        var state = Assert.IsType<JsonObject>(result["state"]);
+        Assert.True(state.ContainsKey("variableFrame"));
+        Assert.Null(state["variableFrame"]);
+    }
+
+    [Fact]
+    public void DurableTimerV1ToV2Upcaster_adds_neutral_typed_payload_metadata()
+    {
+        var content = JsonNode.Parse("""{"timer":{"timerId":"timer-1"}}""")!.AsObject();
+
+        var result = new DurableTimerDocumentV1ToV2Upcaster().Upcast(content);
+
+        var timer = Assert.IsType<JsonObject>(result["timer"]);
+        Assert.True(timer.ContainsKey("payloadType"));
+        Assert.Null(timer["payloadType"]);
+        Assert.True(timer.ContainsKey("providerId"));
+        Assert.Null(timer["providerId"]);
+    }
+
     private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
         params IGroundworkRuntimeDocumentUpcaster[] additional) =>
         new(
         [
             new WorkflowExecutableDocumentV1ToV2Upcaster(),
             new WorkflowExecutableDocumentV2ToV3Upcaster(),
+            new WorkflowExecutableDocumentV3ToV4Upcaster(),
             new ActivityExecutionStateDocumentV1ToV2Upcaster(),
+            new ActivityExecutionStateDocumentV2ToV3Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
+            new WorkflowExecutionStateDocumentV3ToV4Upcaster(),
+            new DurableTimerDocumentV1ToV2Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
             new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
             new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),
             .. additional
         ]);
+
+    private static void AssertNeutralExecutableNode(JsonObject node)
+    {
+        Assert.True(node.ContainsKey("activityContract"));
+        Assert.Null(node["activityContract"]);
+        Assert.True(node.ContainsKey("intrinsicKind"));
+        Assert.Null(node["intrinsicKind"]);
+        Assert.True(node.ContainsKey("intrinsicVariable"));
+        Assert.Null(node["intrinsicVariable"]);
+    }
 
     private static BookmarkState Bookmark() => new(
         BookmarkId: "bm-1",

@@ -28,11 +28,11 @@ public static class ElsaRuntimeDocumentVersions
     private static readonly IReadOnlyDictionary<string, int> Current = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2,
-        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.DurableValueStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind] = 1,
@@ -41,7 +41,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1
