@@ -167,15 +167,55 @@ public sealed class ActivityFaultIncidentRecorder
         AddExceptionMetadata(metadata, faultInfo, request.Exception);
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
 
-        return request.State with
+        var state = EndOpenAttempt(request.State, incidentId, completedAt);
+        return state with
         {
             Status = ActivityExecutionStatus.Faulted,
             SubStatus = request.SubStatus,
             CompletedAt = completedAt,
-            IncidentIds = request.State.IncidentIds.Append(incidentId).Distinct(StringComparer.Ordinal).ToArray(),
-            FaultCount = request.State.FaultCount + 1,
-            AggregateFaultCount = request.State.AggregateFaultCount + 1,
+            IncidentIds = state.IncidentIds.Append(incidentId).Distinct(StringComparer.Ordinal).ToArray(),
+            FaultCount = state.FaultCount + 1,
+            AggregateFaultCount = state.AggregateFaultCount + 1,
+            Fault = state.Fault ?? new NormalizedActivityFault(
+                request.SubStatus,
+                faultInfo.ExceptionType,
+                faultInfo.Message,
+                faultInfo.StackTrace,
+                isRetryable: false),
             Metadata = metadata
+        };
+    }
+
+    private static ActivityExecutionState EndOpenAttempt(
+        ActivityExecutionState state,
+        string incidentId,
+        DateTimeOffset endedAt)
+    {
+        var attempts = state.Attempts ?? [];
+        var openAttempt = attempts
+            .Where(attempt => attempt.EndedAt is null)
+            .OrderByDescending(attempt => attempt.Ordinal)
+            .FirstOrDefault();
+        if (openAttempt is null)
+            return state;
+
+        var endedAttempt = new ActivityAttempt(
+            openAttempt.AttemptId,
+            openAttempt.InvocationId,
+            openAttempt.Ordinal,
+            openAttempt.Reason,
+            openAttempt.StartedAt,
+            endedAt,
+            openAttempt.TriggerDeliveryId,
+            ActivityTransitionKind.Fault,
+            incidentId);
+        return state with
+        {
+            Attempts = attempts
+                .Where(attempt => attempt.AttemptId != openAttempt.AttemptId)
+                .Append(endedAttempt)
+                .OrderBy(attempt => attempt.Ordinal)
+                .ToArray()
         };
     }
 

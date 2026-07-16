@@ -391,6 +391,44 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         _timeProvider.GetUtcNow());
                     typedSuspensionDurableValueChanges = suspendDurableValueChanges;
                 }
+                else if (returnedTransition is IActivityFaultTransition faultTransition)
+                {
+                    var fault = faultTransition.Fault;
+                    var faultedState = state with
+                    {
+                        Fault = new NormalizedActivityFault(
+                            fault.Code,
+                            typeof(ActivityFault).FullName!,
+                            fault.Message,
+                            sanitizedStackTrace: null,
+                            fault.IsRetryable)
+                    };
+                    await RecordFaultAsync(
+                        activityFaultIncidentRecorder,
+                        activityExecutionStateStore,
+                        checkpointCommitter,
+                        workItem,
+                        invokePayload,
+                        faultedState,
+                        new ActivityTransitionFaultException(fault),
+                        "ActivityReturnedFault",
+                        valueSnapshots,
+                        cancellationToken);
+                    return;
+                }
+                else if (returnedTransition is IActivityCancellationTransition cancellationTransition)
+                {
+                    await ActivityCancellationCheckpointService.CommitAsync(
+                        checkpointCommitter,
+                        inspectionAccumulator,
+                        _timeProvider,
+                        workItem,
+                        state,
+                        cancellationTransition.Reason,
+                        valueSnapshots,
+                        cancellationToken: cancellationToken);
+                    return;
+                }
                 else if (bookmarkRequests.Count > 0)
                 {
                     // A suspending activity does not reach the completion checkpoint; carry any write-back on the

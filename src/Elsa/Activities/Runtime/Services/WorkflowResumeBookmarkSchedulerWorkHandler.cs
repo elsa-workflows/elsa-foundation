@@ -322,6 +322,50 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                         transition,
                         _timeProvider.GetUtcNow());
                 }
+                else if (transition is IActivityFaultTransition faultTransition)
+                {
+                    var fault = faultTransition.Fault;
+                    executionState = executionState with
+                    {
+                        Fault = new NormalizedActivityFault(
+                            fault.Code,
+                            typeof(ActivityFault).FullName!,
+                            fault.Message,
+                            sanitizedStackTrace: null,
+                            fault.IsRetryable)
+                    };
+                    await RecordFaultAsync(
+                        serviceProvider,
+                        activityFaultIncidentRecorder,
+                        checkpointCommitter,
+                        workItem,
+                        resumePayload,
+                        executionState,
+                        new ActivityTransitionFaultException(fault),
+                        "ActivityReturnedFault",
+                        valueSnapshots,
+                        cancellationToken);
+                    return;
+                }
+                else if (transition is IActivityCancellationTransition cancellationTransition)
+                {
+                    executionState = executionState with
+                    {
+                        TriggerDeliveries = MarkTriggerConsumed(executionState.TriggerDeliveries!, triggerDelivery.DeliveryId),
+                        BookmarkIds = RemoveBookmark(executionState.BookmarkIds, bookmark.BookmarkId)
+                    };
+                    await ActivityCancellationCheckpointService.CommitAsync(
+                        checkpointCommitter,
+                        serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
+                        _timeProvider,
+                        workItem,
+                        executionState,
+                        cancellationTransition.Reason,
+                        valueSnapshots,
+                        consumedBookmark: bookmark,
+                        cancellationToken: cancellationToken);
+                    return;
+                }
                 else
                 {
                     throw new InvalidOperationException(

@@ -38,7 +38,34 @@ public sealed class ActivityFaultIncidentRecorderTests
         Assert.False(string.IsNullOrWhiteSpace(incident.Metadata[RuntimeMetadataKeys.FaultStackTrace]));
     }
 
-    private ActivityFaultIncidentRecordRequest NewRequest(Exception exception)
+    [Fact]
+    public async Task CommitAsync_EndsOpenAttemptAndPersistsNormalizedFault()
+    {
+        var recorder = new ActivityFaultIncidentRecorder(TimeProvider.System);
+        var attempt = new ActivityAttempt(
+            "attempt-1",
+            "actexec-1",
+            1,
+            ActivityAttemptReason.Initial,
+            Now);
+
+        await recorder.CommitAsync(NewRequest(
+            new InvalidOperationException("boom"),
+            NewRunningState() with { Attempts = [attempt] }));
+
+        var commit = Assert.IsType<RuntimeCheckpointCommit>(_store.Commit);
+        var state = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("InputMaterializationFailed", state.Fault!.Code);
+        Assert.Equal(typeof(InvalidOperationException).FullName, state.Fault.ExceptionType);
+        Assert.Equal("boom", state.Fault.Message);
+        var endedAttempt = Assert.Single(state.Attempts!);
+        Assert.NotNull(endedAttempt.EndedAt);
+        Assert.Equal(ActivityTransitionKind.Fault, endedAttempt.TransitionKind);
+        Assert.Equal(Assert.Single(state.IncidentIds), endedAttempt.IncidentId);
+    }
+
+    private ActivityFaultIncidentRecordRequest NewRequest(Exception exception, ActivityExecutionState? state = null)
     {
         var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _store);
         return new ActivityFaultIncidentRecordRequest(
@@ -46,7 +73,7 @@ public sealed class ActivityFaultIncidentRecorderTests
             WorkItem: NewWorkItem(),
             ActivityExecutionId: "actexec-1",
             ExecutableNodeId: "node-1",
-            State: NewRunningState(),
+            State: state ?? NewRunningState(),
             Exception: exception,
             SubStatus: "InputMaterializationFailed",
             ActivityMetadata: new Dictionary<string, string>(),

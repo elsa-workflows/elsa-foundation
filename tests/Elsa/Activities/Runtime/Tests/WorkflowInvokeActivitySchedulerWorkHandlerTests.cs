@@ -100,6 +100,59 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_TypedNode_CommitsReturnedFaultAsFaultTransition()
+    {
+        var fault = new ActivityFault("payment.declined", "The payment was declined", isRetryable: false);
+        var activator = new ReturningTypedActivator(ActivityTransition.Fault<TypedResult>(fault));
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(
+            new RecordingActivityFactory(new RecordingActivity()),
+            includeInspection: true,
+            activityActivator: activator);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.True(activator.Activity!.Disposed);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.Equal("payment.declined", state.Fault!.Code);
+        Assert.Equal("The payment was declined", state.Fault.Message);
+        Assert.False(state.Fault.IsRetryable);
+        var attempt = Assert.Single(state.Attempts!);
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, attempt.TransitionKind);
+        Assert.NotNull(attempt.IncidentId);
+        Assert.Null(state.Completion);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_TypedNode_CommitsReturnedCancellationAndSchedulesWorkflowCancellation()
+    {
+        var activator = new ReturningTypedActivator(ActivityTransition.Cancel<TypedResult>("Caller disconnected"));
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(
+            new RecordingActivityFactory(new RecordingActivity()),
+            includeInspection: true,
+            activityActivator: activator);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.True(activator.Activity!.Disposed);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Cancelled, state!.Status);
+        Assert.Equal("Caller disconnected", state.Metadata[RuntimeMetadataKeys.CancellationReason]);
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Cancel, Assert.Single(state.Attempts!).TransitionKind);
+        Assert.Null(state.Completion);
+        var commit = Assert.Single(_checkpointWriter.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.ActivityCancelled, commit.Checkpoint.Name);
+        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(WorkflowExecutionCommandKind.Cancel, cancelWork.CommandKind);
+        Assert.Equal("Caller disconnected", cancelWork.CommandMetadata[RuntimeMetadataKeys.CancellationReason]);
+    }
+
+    [Fact]
     public async Task HandleAsync_ReplayedTypedInvocation_UsesCommittedCompletionWithoutReactivation()
     {
         var legacyFactory = new RecordingActivityFactory(new RecordingActivity());
@@ -1305,6 +1358,27 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(text.Length)));
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class ReturningTypedActivator(ActivityTransition<TypedResult> transition) : IActivityActivator
+    {
+        public ReturningTypedActivity? Activity { get; private set; }
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            Activity = new ReturningTypedActivity(transition);
+            return ValueTask.FromResult(new ActivityActivationLease(Activity));
+        }
+    }
+
+    private sealed class ReturningTypedActivity(ActivityTransition<TypedResult> transition) : Activity<TypedResult>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(transition);
 
         public void Dispose() => Disposed = true;
     }

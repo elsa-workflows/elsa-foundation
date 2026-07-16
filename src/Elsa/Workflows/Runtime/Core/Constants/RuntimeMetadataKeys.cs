@@ -9,6 +9,7 @@ public static class RuntimeMetadataKeys
     public const string ActivityExecutionId = "runtime.activityExecutionId";
     public const string BookmarkId = "runtime.bookmarkId";
     public const string CheckpointReason = "runtime.checkpointReason";
+    public const string CancellationReason = "runtime.cancellationReason";
     public const string ChildExecutableNodeId = "runtime.childExecutableNodeId";
     public const string ChildFaulted = "runtime.childFaulted";
     public const string CommandId = "runtime.commandId";

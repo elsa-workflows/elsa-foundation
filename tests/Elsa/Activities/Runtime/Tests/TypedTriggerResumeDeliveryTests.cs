@@ -142,6 +142,65 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.True(Assert.Single(activator.Activities).Disposed);
     }
 
+    [Fact]
+    public async Task HandleAsync_TypedResumeCommitsReturnedFaultAsFaultTransition()
+    {
+        var executable = NewTypedExecutable(currentLiteral: "original");
+        var contract = executable.RootActivity.ActivityContract!;
+        var triggerType = Descriptor<ApprovalTrigger>();
+        var activator = new FaultingResumeActivator();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, triggerType));
+        await SaveBookmarkAsync();
+        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+
+        await NewHandler(provider).HandleAsync(NewResumeWorkItem(
+            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            triggerDelivery: Delivery(triggerType, "dedupe-42")));
+
+        Assert.True(Assert.Single(activator.Activities).Disposed);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.Equal("approval.rejected", state.Fault!.Code);
+        Assert.Equal("Approval was rejected", state.Fault.Message);
+        Assert.Collection(
+            state.Attempts!.OrderBy(attempt => attempt.Ordinal),
+            attempt => Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, attempt.TransitionKind),
+            attempt => Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, attempt.TransitionKind));
+        Assert.NotNull(state.Attempts!.OrderBy(attempt => attempt.Ordinal).Last().IncidentId);
+        Assert.Null(state.Completion);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TypedResumeCommitsReturnedCancellationAndConsumesDelivery()
+    {
+        var executable = NewTypedExecutable(currentLiteral: "original");
+        var contract = executable.RootActivity.ActivityContract!;
+        var triggerType = Descriptor<ApprovalTrigger>();
+        var activator = new CancellingResumeActivator();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, triggerType));
+        await SaveBookmarkAsync();
+        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+
+        await NewHandler(provider).HandleAsync(NewResumeWorkItem(
+            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            triggerDelivery: Delivery(triggerType, "dedupe-42")));
+
+        Assert.True(Assert.Single(activator.Activities).Disposed);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Cancelled, state!.Status);
+        Assert.Equal("Approval request withdrawn", state.Metadata[Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CancellationReason]);
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Cancel, state.Attempts!.OrderBy(attempt => attempt.Ordinal).Last().TransitionKind);
+        Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, Assert.Single(state.TriggerDeliveries!).Status);
+        Assert.Empty(state.BookmarkIds);
+        Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        var commit = Assert.Single(_checkpointWriter.ListCommits()).Commit;
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.ActivityCancelled, commit.Checkpoint.Name);
+        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(WorkflowExecutionCommandKind.Cancel, cancelWork.CommandKind);
+    }
+
     private ActivityExecutionState NewTypedTriggerState(ActivityContract contract, ValueTypeDescriptor triggerType)
     {
         var stateType = Descriptor<ApprovalState>();
@@ -225,6 +284,34 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         }
     }
 
+    private sealed class FaultingResumeActivator : IActivityActivator
+    {
+        public List<FaultingApprovalActivity> Activities { get; } = [];
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var activity = new FaultingApprovalActivity();
+            Activities.Add(activity);
+            return ValueTask.FromResult(new ActivityActivationLease(activity));
+        }
+    }
+
+    private sealed class CancellingResumeActivator : IActivityActivator
+    {
+        public List<CancellingApprovalActivity> Activities { get; } = [];
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var activity = new CancellingApprovalActivity();
+            Activities.Add(activity);
+            return ValueTask.FromResult(new ActivityActivationLease(activity));
+        }
+    }
+
     private sealed class ApprovalActivity : StatefulActivity<ActivityUnit, ApprovalState, ApprovalTrigger>, IDisposable
     {
         public ApprovalState? ObservedState { get; private set; }
@@ -263,6 +350,34 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                     "delivery-status",
                     "sha256:delivery-status:order-124",
                     ActivityTriggerDeduplicationMode.IdempotencyKey)]));
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class FaultingApprovalActivity : StatefulActivity<ActivityUnit, ApprovalState, ApprovalTrigger>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        protected override ValueTask<ActivityTransition<ActivityUnit, ApprovalState>> ExecuteAsync(ActivityExecutionContext context) =>
+            throw new NotSupportedException();
+
+        protected override ValueTask<ActivityTransition<ActivityUnit, ApprovalState>> ResumeAsync(
+            ActivityResumeContext<ApprovalState, ApprovalTrigger> context) =>
+            ValueTask.FromResult(Fault(new ActivityFault("approval.rejected", "Approval was rejected")));
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class CancellingApprovalActivity : StatefulActivity<ActivityUnit, ApprovalState, ApprovalTrigger>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        protected override ValueTask<ActivityTransition<ActivityUnit, ApprovalState>> ExecuteAsync(ActivityExecutionContext context) =>
+            throw new NotSupportedException();
+
+        protected override ValueTask<ActivityTransition<ActivityUnit, ApprovalState>> ResumeAsync(
+            ActivityResumeContext<ApprovalState, ApprovalTrigger> context) =>
+            ValueTask.FromResult(Cancel("Approval request withdrawn"));
 
         public void Dispose() => Disposed = true;
     }
