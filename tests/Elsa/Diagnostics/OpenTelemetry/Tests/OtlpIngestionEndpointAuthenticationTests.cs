@@ -83,7 +83,8 @@ public sealed class OtlpIngestionEndpointAuthenticationTests
             context.Response.Body = new MemoryStream();
         };
 
-        return (BaseEndpoint)create.Invoke(null, [configure, new object[] { ingestor, authenticator, options }])!;
+        var handler = new OtlpHttpIngestionHandler(ingestor, authenticator, options);
+        return (BaseEndpoint)create.Invoke(null, [configure, new object[] { handler, options }])!;
     }
 
     private static Task HandleAsync(BaseEndpoint endpoint)
@@ -155,6 +156,12 @@ public sealed class OtlpIngestionEndpointAuthenticationTests
     private sealed class RecordingIngestor : IOpenTelemetryIngestor
     {
         public int IngestCount { get; private set; }
+
+        public ValueTask IngestAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
+        {
+            IngestCount++;
+            return ValueTask.CompletedTask;
+        }
 
         public ValueTask IngestAsync(OpenTelemetryBatch batch, OpenTelemetryIngestionContext ingestionContext, CancellationToken cancellationToken = default)
         {

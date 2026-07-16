@@ -10,6 +10,17 @@ namespace Elsa.Diagnostics.OpenTelemetry.Tests.Services;
 public sealed class OpenTelemetryIngestorTests
 {
     [Fact]
+    public async Task ContextAwareOverloadPreservesLegacyIngestorCompatibility()
+    {
+        IOpenTelemetryIngestor legacy = new LegacyIngestor();
+        var batch = EmptyBatch();
+
+        await legacy.IngestAsync(batch, OpenTelemetryIngestionContext.Authenticated("source-1"));
+
+        Assert.Same(batch, Assert.IsType<LegacyIngestor>(legacy).LastBatch);
+    }
+
+    [Fact]
     public async Task IngestAsync_ThreeArgumentConstructorPreservesStoreThenLiveFeedBehavior()
     {
         var calls = new List<string>();
@@ -174,6 +185,17 @@ public sealed class OpenTelemetryIngestorTests
             Batches.Add(redactedBatch);
             Contexts.Add(ingestionContext);
             return contribute?.Invoke(redactedBatch, cancellationToken) ?? ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class LegacyIngestor : IOpenTelemetryIngestor
+    {
+        public OpenTelemetryBatch? LastBatch { get; private set; }
+
+        public ValueTask IngestAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
+        {
+            LastBatch = batch;
+            return ValueTask.CompletedTask;
         }
     }
 

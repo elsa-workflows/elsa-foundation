@@ -1,11 +1,12 @@
 # Extension points — Diagnostics: OpenTelemetry domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.OpenTelemetry` — the server feature that collects OpenTelemetry signals (traces, metrics, logs) over OTLP/HTTP protobuf into capacity-bounded in-memory stores and exposes them over HTTP query endpoints + Server-Sent Events. Single-role seams are **overridable `.Core` contracts**; post-redaction ingestion uses an additive contributor contract.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.OpenTelemetry` — the server feature that collects OpenTelemetry signals (traces, metrics, logs) over OTLP/HTTP protobuf into capacity-bounded in-memory stores and exposes them over HTTP query endpoints + Server-Sent Events. Data-pipeline seams are **overridable `.Core` contracts**; the ASP.NET Core package adds a scoped receiver-authentication seam, and post-redaction ingestion uses an additive contributor contract.
 
 The collect/serve pipeline is decomposed into single-responsibility roles so a durable backend or external transport can replace just one of them:
 
 - **`IOpenTelemetryIngestor`** is the write path: redact → await additive contributors → store → publish to the live feed (keeping history and the tail consistent).
 - **`IOpenTelemetryIngestionContributor`** is the additive post-redaction handoff for independently composed features. Contributor completion gates ingestion acknowledgement.
+- **`IOtlpRequestAuthenticator`** is the scoped ASP.NET Core ingress-authentication seam. It establishes immutable, server-authoritative source identity and claims before the receiver reads the request body.
 - **`IOpenTelemetryStore`** is pure history (`WriteAsync` + the `Query*`/`Get*` reads). On write it also populates the source registry (`MarkSeen`). Swap this to make telemetry durable.
 - **`IOpenTelemetryLiveFeed`** is the in-process fan-out to SSE subscribers. It stays in-process for every storage backend.
 - **`IOpenTelemetryRedactor`**, **`IOpenTelemetrySourceRegistry`**, **`IOpenTelemetryProvider`**, **`ICollectorConfigurationProvider`** round out the redaction, resource-tracking, read-facade, and collector-config roles.
@@ -14,11 +15,11 @@ The collect/serve pipeline is decomposed into single-responsibility roles so a d
 
 ## Overridable contracts
 
-All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registers each default with `TryAdd*` (see `AddOpenTelemetryDiagnosticsServices`), so a persistence or transport feature can replace a single role regardless of feature order. The in-memory store and live feed are each registered as a concrete singleton plus a `TryAddSingleton` factory binding the interface to the same instance.
+Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-specific `IOtlpRequestAuthenticator` lives in `Elsa.Diagnostics.OpenTelemetry`. The feature registers each default with `TryAdd*` (see `AddOpenTelemetryDiagnosticsServices`), so a persistence or transport feature can replace a single role regardless of feature order. The in-memory store and live feed are each registered as a concrete singleton plus a `TryAddSingleton` factory binding the interface to the same instance.
 
 ### `IOpenTelemetryIngestionContributor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
-- **Signature:** `ValueTask ContributeAsync(OpenTelemetryBatch redactedBatch, CancellationToken cancellationToken)`.
-- **Invocation:** every registered contributor is awaited sequentially in registration order after the batch is redacted and before it reaches `IOpenTelemetryStore` or `IOpenTelemetryLiveFeed`. Each receives the same batch instance and must treat it as read-only.
+- **Signature:** `ValueTask ContributeAsync(OpenTelemetryBatch redactedBatch, OpenTelemetryIngestionContext ingestionContext, CancellationToken cancellationToken)`.
+- **Invocation:** every registered contributor is awaited sequentially in registration order after the batch is redacted and before it reaches `IOpenTelemetryStore` or `IOpenTelemetryLiveFeed`. Each receives the same redacted batch and immutable server ingestion context and must treat both as read-only. Only authenticated context claims are authoritative; resource attributes remain sender-controlled evidence.
 - **Register:** `services.AddOpenTelemetryIngestionContributor<MyContributor>()`. Registration is additive and duplicate-safe for the same implementation type.
 - **Acknowledgement semantics:** exceptions and cancellation propagate, stop later contributors, and prevent store/live publication. A contributor offering durable handoff must complete only after its own durable acceptance; its background processing can then proceed independently. The contract does not itself add retries, persistence, de-duplication, or outbox behavior.
 - **Lifetime:** the default ingestor is a singleton, so the helper registers contributors as singletons. Contributors needing database access should depend on singleton-safe factories rather than scoped contexts.
@@ -34,9 +35,14 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 - **Override:** replace to source the live feed from an external broker (Redis Streams, a message bus) so multiple hosts fan into one stream.
 
 ### `IOpenTelemetryIngestor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
-- **Signature:** `ValueTask IngestAsync(OpenTelemetryBatch batch, …)`.
+- **Signature:** `ValueTask IngestAsync(OpenTelemetryBatch batch, OpenTelemetryIngestionContext ingestionContext, …)`. The built-in compatibility overload without context supplies `OpenTelemetryIngestionContext.Untrusted`. Existing custom ingestors that implement only the legacy overload remain compatible and safely ignore authority context until they explicitly override the new overload.
 - **Default impl:** `OpenTelemetryIngestor` — redacts the batch (`IOpenTelemetryRedactor`), awaits all `IOpenTelemetryIngestionContributor` instances, writes it to `IOpenTelemetryStore` (which in turn marks resources seen in the source registry), then publishes to `IOpenTelemetryLiveFeed`. This is the seam the OTLP collector endpoints write to.
 - **Override:** replace to tee ingested batches elsewhere (e.g. forward to an external collector) while keeping the in-memory store for the UI.
+
+### `IOtlpRequestAuthenticator` *(`Elsa.Diagnostics.OpenTelemetry`)*
+- **Signature:** `ValueTask<OtlpRequestAuthenticationResult> AuthenticateAsync(HttpContext httpContext, CancellationToken cancellationToken)`.
+- **Default impl:** scoped `DefaultOtlpRequestAuthenticator`. It preserves the API-key/loopback policy, produces no tenant claims for the global API key, and marks accepted loopback calls explicitly untrusted.
+- **Override:** register a host authenticator before `AddOpenTelemetryDiagnosticsServices(...)` to validate per-source credentials and return an `OpenTelemetryIngestionContext.Authenticated(...)` containing authoritative source identity and scope claims. Authentication runs before body read, decompression, or protobuf parsing.
 
 ### `IOpenTelemetryRedactor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `OpenTelemetryBatch Redact(OpenTelemetryBatch batch)`.
@@ -63,8 +69,9 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 ## Ingestion & transport (not extension points)
 
 - The **OTLP/HTTP protobuf parser** (`OtlpHttpProtobufParser` + the internal `ProtobufReader`) is the verbatim, dependency-free wire decoder; it is internal machinery behind the collector endpoints, not a seam. It is exercised directly by unit tests via `InternalsVisibleTo`.
-- **`OtlpIngestionSecurity`** (API-key header / loopback allowance) is the ingestion auth gate used by the collector endpoints. It is orthogonal to the FastEndpoints permission model that guards the query + SSE endpoints.
-- The **collector endpoints** (`Endpoints/Ingestion/{Traces,Metrics,Logs}IngestionEndpoint`) and the **SSE `stream` endpoint** are transport surfaces; the wire JSON/SSE shape is owned by `OpenTelemetryStreamItemSerializer` + `OpenTelemetrySseFormatter` (see [`README.md`](README.md)).
+- **`OtlpHttpIngestionHandler`** is the public, non-replaceable orchestration surface shared by both receiver compositions: authenticate → read/decompress under the configured limit → parse → call the context-aware ingestor. The parser remains internal machinery.
+- **`MapOpenTelemetryOtlpReceiver()`** maps exactly `POST {base}/traces`, `metrics`, and `logs` on any ASP.NET Core `IEndpointRouteBuilder`. Shell hosts can instead use the FastEndpoints collector endpoints auto-mapped through `MapShells()`; those endpoints delegate to the same handler. Do not map both surfaces in one route table.
+- The **SSE `stream` endpoint** is a separate transport surface; the wire JSON/SSE shape is owned by `OpenTelemetryStreamItemSerializer` + `OpenTelemetrySseFormatter` (see [`README.md`](README.md)).
 
 ## Deferred
 
@@ -76,7 +83,7 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 ## Notes
 
 - Live stream items (`OpenTelemetryStreamItem`) carry **no monotonic sequence/id**, so the SSE stream offers **no `Last-Event-ID` resume** (unlike Structured Logs, which resumes from `store.GetAfterAsync(sequence)`). SSE frames use typed `event:` names (`resource`/`trace`/`metric`/`log`/`dropped`) with no `id:`.
-- This domain was ported from elsa-core with two deliberate deviations — **SSE over SignalR** and the **OTLP collector as FastEndpoints** (not `EndpointRouteBuilderExtensions`/`IWebShellFeature`). See [`README.md`](README.md#deviations-from-the-elsa-core-source).
+- This domain uses **SSE instead of SignalR** and exposes the same OTLP handler through both FastEndpoints shell composition and an explicit ASP.NET Core route mapper. See [`README.md`](README.md#deviations-from-the-elsa-core-source).
 
 ---
 

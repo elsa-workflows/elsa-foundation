@@ -27,6 +27,7 @@ public sealed class OpenTelemetryFeatureTests
         Assert.NotNull(provider.GetRequiredService<IOpenTelemetrySourceRegistry>());
         Assert.NotNull(provider.GetRequiredService<IOpenTelemetryRedactor>());
         Assert.IsType<DefaultOtlpRequestAuthenticator>(provider.GetRequiredService<IOtlpRequestAuthenticator>());
+        Assert.NotNull(provider.GetRequiredService<OtlpHttpIngestionHandler>());
         Assert.Equal(
             ServiceLifetime.Scoped,
             Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IOtlpRequestAuthenticator)).Lifetime);

@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IOpenTelemetryLiveFeed>(sp => sp.GetRequiredService<InMemoryOpenTelemetryLiveFeed>());
         services.TryAddSingleton<IOpenTelemetryIngestor, OpenTelemetryIngestor>();
         services.TryAddScoped<IOtlpRequestAuthenticator, DefaultOtlpRequestAuthenticator>();
+        services.TryAddScoped<OtlpHttpIngestionHandler>();
         services.TryAddSingleton<IOpenTelemetryProvider, DefaultOpenTelemetryProvider>();
         services.TryAddSingleton<ICollectorConfigurationProvider, CollectorConfigurationProvider>();
 

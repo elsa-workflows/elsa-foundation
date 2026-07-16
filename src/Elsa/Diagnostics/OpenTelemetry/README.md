@@ -9,7 +9,9 @@ SQLite persistence feature name: **`DiagnosticsOpenTelemetryPersistenceEFCoreSql
 
 - **Decomposed roles** behind separate contracts (all registered with `TryAdd*` so a persistence/transport feature can replace just one):
   - **`OpenTelemetryIngestor`** → `IOpenTelemetryIngestor` — the write path: redacts the batch, awaits every additive ingestion contributor, writes it to the store, then publishes it to the live feed.
-  - **`IOpenTelemetryIngestionContributor`** — additive post-redaction processing for independently composed features. Contributors are awaited sequentially in registration order before storage and live publication; register one with `AddOpenTelemetryIngestionContributor<TContributor>()`.
+  - **`IOpenTelemetryIngestionContributor`** — additive post-redaction processing for independently composed features. Contributors receive both the redacted batch and an immutable `OpenTelemetryIngestionContext`; register one with `AddOpenTelemetryIngestionContributor<TContributor>()`.
+  - **`IOtlpRequestAuthenticator`** — scoped request authentication and trusted source-context construction. A host can replace the default API-key/loopback implementation with per-source credential validation and authoritative workspace/application/environment claims.
+  - **`OtlpHttpIngestionHandler`** — the single public OTLP/HTTP request handler shared by the explicit ASP.NET Core route mapper and the FastEndpoints receiver.
   - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). On every write it also marks the batch's resource as seen in the source registry (so resource and storage views stay populated). Registered with `TryAddSingleton` so a persistence feature can override it — **any override must also populate `IOpenTelemetrySourceRegistry`**, or the resources/storage views go empty.
   - **`EfCoreOpenTelemetryStore`** → `IOpenTelemetryStore` (via `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite`) — durable EF Core-backed history for resources, traces, spans, metric instruments, metric points, and logs. It uses the same non-blocking write pattern as Structured Logs persistence: ingestion enqueues batches onto a bounded channel, a startup task starts the async drain loop after migrations, and retention pruning keeps high-volume tables bounded by the configured capacities. It also marks resources seen synchronously before enqueueing.
   - **`InMemoryOpenTelemetryLiveFeed`** → `IOpenTelemetryLiveFeed` — an independent bounded channel per live subscriber (in-process fan-out) with the same backpressure/drop model as the Structured Logs feed; a slow consumer's overflow is dropped and surfaced in-band as a `dropped` signal.
@@ -17,7 +19,7 @@ SQLite persistence feature name: **`DiagnosticsOpenTelemetryPersistenceEFCoreSql
   - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources. Populated by the store on each write (not by the ingestor); read by the resource and storage query endpoints.
   - **`DefaultOpenTelemetryProvider`** → `IOpenTelemetryProvider` — the read facade the query endpoints call.
   - **`CollectorConfigurationProvider`** → `ICollectorConfigurationProvider` — surfaces the endpoint paths/auth shape a collector needs to push to this host.
-- **OTLP/HTTP protobuf collector** (FastEndpoints, auto-mapped via `app.MapShells()`): `POST {base}/traces`, `POST {base}/metrics`, `POST {base}/logs` (base default `/elsa/otlp/v1`). The protobuf wire format is parsed by a self-contained, dependency-free hand-rolled parser (`OtlpHttpProtobufParser` + an internal `ProtobufReader`) — no protobuf NuGet package is required. `Content-Encoding: gzip` / `deflate` / `br` bodies are decompressed (size cap applied to the decompressed bytes). These endpoints are authenticated by `OtlpIngestionSecurity` (API-key header or loopback), not by the studio permission model.
+- **OTLP/HTTP protobuf collector**: `POST {base}/traces`, `POST {base}/metrics`, `POST {base}/logs` (base default `/elsa/otlp/v1`). Shell hosts receive these through FastEndpoints and `app.MapShells()`. Plain or root ASP.NET Core hosts can map the same receiver explicitly with `app.MapOpenTelemetryOtlpReceiver()` after `AddOpenTelemetryDiagnosticsServices(...)`. Both transports call the same `OtlpHttpIngestionHandler`; a host must choose one mapping path rather than map duplicate routes. The dependency-free parser requires no protobuf package. `Content-Encoding: gzip` / `deflate` / `br` bodies are decompressed and the size cap applies to decompressed bytes.
 - **Query endpoints** (FastEndpoints):
   - `POST /diagnostics/opentelemetry/resources/search`
   - `POST /diagnostics/opentelemetry/traces/search`
@@ -38,7 +40,7 @@ Exposed manifest settings: **Trace / Span / Metric point / Log record / Resource
 Two distinct auth surfaces:
 
 - **Query + SSE endpoints** call `ConfigurePermissions("Diagnostics:OpenTelemetry")` (the FastEndpoints permission model used across the foundation). They are **default-permissive (anonymous)** while host endpoint security is disabled; once the host enables security (`EndpointSecurityOptions`), it assigns this permission to authorized principals.
-- **OTLP collector endpoints** are `AllowAnonymous()` to the FastEndpoints permission model and instead gated by `OtlpIngestionSecurity`: when `ApiKey` is set, requests must carry it in `ApiKeyHeaderName` (constant-time comparison); when unset, ingestion is allowed only from loopback if `AllowUnauthenticatedLoopback` is `true`. Ingestion auth is the API key, not a studio principal.
+- **OTLP collector endpoints** are outside the studio permission model and instead gated by `IOtlpRequestAuthenticator` before any body read or parse. The default implementation preserves the configured API-key/loopback policy: a valid global API key authenticates the collector but deliberately carries no tenant claims; accepted loopback requests are explicitly untrusted. A host can replace it with a scoped authenticator that validates per-source credentials and returns immutable, server-authoritative source claims. Telemetry resource attributes remain evidence and never become authority merely because a sender emitted them.
 
 ## Query parameters (SSE stream)
 
@@ -67,7 +69,7 @@ Both lists are surfaced through options so a host can extend or replace them.
 
 ## Post-redaction contributions and acknowledgement
 
-`IOpenTelemetryIngestionContributor` is the additive handoff seam for features that need an ingested batch without replacing the collector, redactor, diagnostics store, or live feed. Every contributor receives the same redacted `OpenTelemetryBatch` instance and must treat it as read-only. `OpenTelemetryIngestor` invokes contributors sequentially in registration order after redaction and before either diagnostics destination.
+`IOpenTelemetryIngestionContributor` is the additive handoff seam for features that need an ingested batch without replacing the collector, redactor, diagnostics store, or live feed. Every contributor receives the same redacted `OpenTelemetryBatch` instance plus the immutable `OpenTelemetryIngestionContext` established by the receiving server. Contributors must treat both as read-only and must use only authenticated context claims—not sender-controlled resource attributes—for authoritative tenant mapping. `OpenTelemetryIngestor` invokes contributors sequentially in registration order after redaction and before either diagnostics destination.
 
 Contributor completion participates in OTLP ingestion acknowledgement. A contributor that promises durable handoff must return only after its own durable store has accepted the batch. If a contributor throws or observes cancellation, later contributors are not called, the diagnostics store and live feed are not updated, and the exception reaches the ingestion endpoint; therefore the endpoint does not report the batch as accepted. Once a durable contributor has accepted a batch, its independent background processing can be unavailable without requiring the original sender to resubmit it.
 
@@ -94,10 +96,10 @@ The live SSE feed remains in-process (`IOpenTelemetryLiveFeed`) for every storag
 
 ## Deviations from the elsa-core source
 
-This domain was ported from `Elsa.Diagnostics.OpenTelemetry` in elsa-core. Two deliberate deviations:
+This domain was ported from `Elsa.Diagnostics.OpenTelemetry` in elsa-core. Its notable transport choices are:
 
 1. **SSE over SignalR.** The source streamed live telemetry via a SignalR hub (`OpenTelemetryHub` + `OpenTelemetrySubscriptionManager` + `IOpenTelemetryClient`). This port drops SignalR entirely and replaces it with an SSE `stream` endpoint mirroring the Structured Logs slice — for consistency, native `EventSource` reconnect, and no `@microsoft/signalr` dependency in studio.
-2. **OTLP collector as FastEndpoints.** The source mapped the collector via `EndpointRouteBuilderExtensions` / `IWebShellFeature`. This port implements the collector as FastEndpoints endpoints (consistent with the rest of the foundation, auto-mapped via `app.MapShells()`), avoiding a new CShells.AspNetCore host-plumbing dependency. The protobuf parser and `OtlpIngestionSecurity` are ported **verbatim** and reused by the FastEndpoints ingestion endpoints.
+2. **One receiver, two composition surfaces.** `OtlpHttpIngestionHandler` owns authentication-before-body-read, decompression, size limits, parsing, and context-aware ingestion. FastEndpoints delegates to it for shell-hosted composition, while `MapOpenTelemetryOtlpReceiver()` exposes the same receiver to a plain/root ASP.NET Core host without duplicating behavior.
 
 ## Replacing the defaults
 
