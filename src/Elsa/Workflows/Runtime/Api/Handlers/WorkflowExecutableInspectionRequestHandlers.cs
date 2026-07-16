@@ -22,6 +22,14 @@ public sealed class GetWorkflowExecutableRequestHandler(WorkflowExecutableInspec
         ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutable), request.ArtifactId);
 }
 
+public sealed class GetWorkflowExecutableInputSourcesRequestHandler(WorkflowExecutableInspector inspector)
+    : IRequestHandler<GetWorkflowExecutableInputSources, WorkflowExecutableInputSourcesView>
+{
+    public async Task<WorkflowExecutableInputSourcesView> Handle(GetWorkflowExecutableInputSources request, CancellationToken cancellationToken) =>
+        await inspector.GetInputSourcesAsync(request.ArtifactId, request.SourceReferenceId, cancellationToken)
+        ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutableSourceReference), request.SourceReferenceId);
+}
+
 public sealed class GetWorkflowExecutableProvenanceRequestHandler(WorkflowExecutableInspector inspector)
     : IRequestHandler<GetWorkflowExecutableProvenance, ExecutableProvenanceView>
 {

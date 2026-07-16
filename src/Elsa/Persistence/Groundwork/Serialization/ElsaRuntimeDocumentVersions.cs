@@ -28,8 +28,8 @@ public static class ElsaRuntimeDocumentVersions
     private static readonly IReadOnlyDictionary<string, int> Current = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 2,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 3,

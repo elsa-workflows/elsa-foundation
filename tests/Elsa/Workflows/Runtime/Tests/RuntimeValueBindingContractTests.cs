@@ -268,6 +268,51 @@ public sealed class RuntimeValueBindingContractTests
             }));
     }
 
+    [Fact]
+    public async Task RuntimeActivityInputMaterializer_ReturnsOrderedSuccessAndSafeFailureResults()
+    {
+        var stringType = typeof(string).AssemblyQualifiedName!;
+        var node = NewExecutableNode(
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                ["First"] = new(
+                    "First",
+                    RuntimeInputBindingSource.Literal,
+                    literalValue: Json("\"alpha\""),
+                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = stringType },
+                    inputKey: "first-key"),
+                ["Broken"] = new(
+                    "Broken",
+                    RuntimeInputBindingSource.Literal,
+                    literalValue: Json("\"do-not-expose\""),
+                    isSensitive: true,
+                    inputKey: "broken-key"),
+                ["Last"] = new(
+                    "Last",
+                    RuntimeInputBindingSource.Literal,
+                    literalValue: Json("\"omega\""),
+                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = stringType },
+                    inputKey: "last-key")
+            },
+            new Dictionary<string, RuntimeOutputCapture>());
+
+        var batch = await new RuntimeActivityInputMaterializer().MaterializeInputResultsAsync(node);
+
+        Assert.Collection(
+            batch.Results,
+            first => Assert.Equal("alpha", first.Input?.Value),
+            failed =>
+            {
+                Assert.Equal("broken-key", failed.InputKey);
+                Assert.True(failed.IsSensitive);
+                Assert.Equal("InputMaterializationFailed", failed.Failure?.Code);
+                Assert.DoesNotContain("do-not-expose", failed.Failure?.Message ?? "", StringComparison.Ordinal);
+            },
+            last => Assert.Equal("omega", last.Input?.Value));
+        Assert.Equal(["First", "Last"], batch.Inputs.Select(input => input.Name));
+        Assert.Throws<RuntimeActivityInputMaterializationException>(() => batch.RequireAllInputs());
+    }
+
     private RuntimeInputBindingResolutionContext NewContext() =>
         new(
             workflowExecutionId: "wfexec-1",

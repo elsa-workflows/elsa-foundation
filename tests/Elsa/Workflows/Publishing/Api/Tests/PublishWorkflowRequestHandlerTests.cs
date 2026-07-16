@@ -266,6 +266,53 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task PublishedReferenceCarriesVerbatimAuthoredInputSourceOutsideArtifactHash()
+    {
+        const string authoredJson = "{\"code\":\"return variables.orderId;\",\"options\":{\"strict\":true}}";
+        using var document = JsonDocument.Parse(authoredJson);
+        var input = new WorkflowArgumentState(
+            "Text",
+            new ArgumentValue(document.RootElement.Clone(), "JavaScript"),
+            null,
+            null,
+            null,
+            true);
+        var version = WorkflowVersion(Node("write-one", input));
+
+        var view = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        var reference = Assert.Single(await _referenceStore.ListByArtifactAsync(view.ArtifactId));
+        var authored = Assert.Single(reference.AuthoredInputs);
+        Assert.Equal("write-one", authored.ExecutableNodeId);
+        Assert.Equal("Text", authored.InputKey);
+        Assert.Equal("JavaScript", authored.ExpressionType);
+        Assert.Equal(authoredJson, authored.Value.GetRawText());
+
+        var executable = await _store.FindAsync(view.ArtifactId);
+        Assert.Equal(view.ArtifactHash, executable!.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task CompiledInputBindingCarriesStableInputKeyAndSensitivity()
+    {
+        var input = new WorkflowArgumentState(
+            "Text",
+            new ArgumentValue("classified", "Literal"),
+            null,
+            null,
+            null,
+            true);
+
+        var view = await Handler(WorkflowVersion(Node("write-one", input)))
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        var executable = await _store.FindAsync(view.ArtifactId);
+        var binding = Assert.Single(executable!.RootActivity.InputBindings).Value;
+        Assert.Equal("Text", binding.InputKey);
+        Assert.True(binding.IsSensitive);
+    }
+
+    [Fact]
     public async Task PublishedExecutableArtifactCanBeDispatchedForExecution()
     {
         var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
@@ -556,7 +603,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System),
             TimeProvider.System,
             workflowVersionStore: versionStore,
-            snapshotReviews: _snapshotReviews);
+            snapshotReviews: _snapshotReviews,
+            authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)));
     }
 
     private static WorkflowPublicationPreflightPlan SnapshotPlan() =>

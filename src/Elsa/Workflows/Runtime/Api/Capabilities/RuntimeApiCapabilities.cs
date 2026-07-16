@@ -15,6 +15,7 @@ public static class RuntimeApiCapabilities
         [
             new("workflow-executables", "runtime/workflows/executables"),
             new("workflow-executable", "runtime/workflows/executables/{artifactId}", templated: true),
+            new("workflow-executable-input-sources", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true),
             new("workflow-executable-provenance", "runtime/workflows/executables/{artifactId}/provenance", templated: true),
             new("workflow-execute", "runtime/workflows/executables/{artifactId}/execute", templated: true),
             new("workflow-instances", "runtime/workflows/instances"),
