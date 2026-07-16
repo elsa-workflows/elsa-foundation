@@ -145,8 +145,8 @@ public sealed class SequenceActivityTests : IDisposable
 
     public void Dispose() => _serviceProvider.Dispose();
 
-    private ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        ((IActivity)new SequenceActivity()).ExecuteAsync(context);
+    private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
+        await ((IActivity)new SequenceActivity()).ExecuteAsync(context);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode)
     {

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Runtime.Core.Contracts;
 
@@ -56,5 +57,5 @@ public interface IActivity
     /// <summary>
     /// Invoked when the activity executes.
     /// </summary>
-    ValueTask ExecuteAsync(IActivityExecutionContext context);
+    ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context);
 }

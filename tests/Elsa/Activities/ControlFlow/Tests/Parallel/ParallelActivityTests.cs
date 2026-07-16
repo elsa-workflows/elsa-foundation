@@ -214,8 +214,8 @@ public sealed class ParallelActivityTests : IDisposable
             .AsTask());
     }
 
-    private static ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        ((IActivity)context.Activity).ExecuteAsync(context);
+    private static async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
+        await ((IActivity)context.Activity).ExecuteAsync(context);
 
     private static ValueTask CompleteAsync(SimpleActivityExecutionContext context, string completedNodeId) =>
         ((ParallelActivity)context.Activity).OnChildCompletedAsync(

@@ -322,7 +322,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         public Dictionary<string, object> Metadata { get; set; } = new();
 
         public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+        public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
+            ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
 
         public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
         {
@@ -344,7 +345,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         public Dictionary<string, object> Metadata { get; set; } = new();
 
         public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+        public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
+            ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
 
         public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
         {
@@ -366,7 +368,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         public Dictionary<string, object> Metadata { get; set; } = new();
 
         public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+        public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
+            ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
         public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context) => throw exception;
     }
 

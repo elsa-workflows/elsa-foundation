@@ -72,17 +72,17 @@ projections, two outcomes, and disposable dependencies; verify one-time hydratio
 
 ### Tests — write and fail first
 
-- [ ] T019 [P] [US1] Replace constructor/binder coverage with transient activation and plain-property hydration tests in `tests/Elsa/Activities/Runtime/Tests/ClrActivityActivatorTests.cs`
-- [ ] T020 [P] [US1] Add complete/suspend/fault/cancel transition algebra tests in `tests/Elsa/Activities/Runtime/Tests/ActivityTransitionContractTests.cs`
+- [X] T019 [P] [US1] Replace constructor/binder coverage with transient activation and plain-property hydration tests in `tests/Elsa/Activities/Runtime/Tests/ClrActivityActivatorTests.cs`
+- [X] T020 [P] [US1] Add complete/suspend/fault/cancel transition algebra tests in `tests/Elsa/Activities/Runtime/Tests/ActivityTransitionContractTests.cs`
 - [ ] T021 [P] [US1] Replace `WriteLineBoundInputExecutionTests` with wrapper-free end-to-end hydration tests in `tests/Elsa/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs`
-- [ ] T022 [P] [US1] Add atomic typed-result/projection/outcome and partial-result rejection tests in `tests/Elsa/Activities/Runtime/Tests/ActivityCompletionContractTests.cs`
+- [X] T022 [P] [US1] Add atomic typed-result/projection/outcome and partial-result rejection tests in `tests/Elsa/Activities/Runtime/Tests/ActivityCompletionContractTests.cs`
 - [ ] T023 [US1] Expand `tests/Elsa/Activities/Runtime/Tests/ActivityLibraryAcceptanceTests.cs` to require ordinary input properties and one result contract for every first-party activity
 
 ### Implementation
 
 - [ ] T024 [US1] Replace mutable execution output methods with `IActivity.ExecuteAsync` returning the closed transition contract in `src/Elsa/Activities/Runtime/Core/Contracts/IActivity.cs` and `Models/ActivityTransition.cs`
-- [ ] T025 [US1] Add author-facing generic `Activity<TResult>` and reduced cancellation/identity-only execution contexts in `src/Elsa/Activities/Runtime/Core/Models/ActivityExecutionContext.cs`
-- [ ] T026 [US1] Implement `IActivityActivator`, async-disposable activation leases, and fresh CLR construction in `src/Elsa/Activities/Runtime/Contracts/IActivityActivator.cs` and `src/Elsa/Activities/Primitives/Activation/ClrActivityActivator.cs`
+- [X] T025 [US1] Add author-facing generic `Activity<TResult>` and reduced cancellation/identity-only execution contexts in `src/Elsa/Activities/Runtime/Core/Models/ActivityExecutionContext.cs`
+- [X] T026 [US1] Implement `IActivityActivator`, async-disposable activation leases, and fresh CLR construction in `src/Elsa/Activities/Runtime/Contracts/IActivityActivator.cs` and `src/Elsa/Activities/Primitives/Activation/ClrActivityActivator.cs`
 - [ ] T027 [US1] Replace `ActivityArgumentBinder` with stable-key, one-time `ActivityInputHydrator` in `src/Elsa/Activities/Primitives/Binding/ActivityInputHydrator.cs`
 - [ ] T028 [US1] Replace runtime memory seeding and mutable output publication with snapshot hydration and an atomic completion projector in `src/Elsa/Activities/Runtime/Services/ActivityCompletionProjector.cs`
 - [ ] T029 [US1] Migrate invoke and parent-completion handlers to activation leases and returned transitions in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs` and `WorkflowParentActivityCompletionSchedulerWorkHandler.cs`

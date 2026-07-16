@@ -73,7 +73,8 @@ internal sealed class TestActivity : IActivity
     public Dictionary<string, object> SyntheticProperties { get; set; } = new();
     public Dictionary<string, object> Metadata { get; set; } = new();
     public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
-    public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
+        ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
 }
 
 /// <summary>Seeds an artifact and the live Published reference required by the public execute boundary.</summary>

@@ -181,8 +181,8 @@ public sealed class FlowchartActivityTests : IDisposable
         return services.BuildServiceProvider();
     }
 
-    private ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        ((IActivity)new FlowchartActivity()).ExecuteAsync(context);
+    private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
+        await ((IActivity)new FlowchartActivity()).ExecuteAsync(context);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode)
     {

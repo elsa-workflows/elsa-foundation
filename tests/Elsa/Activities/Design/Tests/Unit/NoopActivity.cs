@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Design.Tests.Unit;
 
@@ -17,5 +18,6 @@ public sealed class NoopActivity : IActivity
     public Dictionary<string, object> SyntheticProperties { get; set; } = [];
     public Dictionary<string, object> Metadata { get; set; } = [];
     public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
-    public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
+        ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
 }

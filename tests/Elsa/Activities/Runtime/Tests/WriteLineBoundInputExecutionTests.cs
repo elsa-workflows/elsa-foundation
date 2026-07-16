@@ -48,7 +48,7 @@ public sealed class WriteLineBoundInputExecutionTests
         var context = new SimpleActivityExecutionContext(serviceProvider, writeLine, CancellationToken.None);
         RuntimeActivityInputMemory.Seed(context, [new RuntimeMaterializedActivityInput("Text", textArgument, "Hello World!")]);
 
-        var output = await CaptureConsoleAsync(() => ((IActivity)writeLine).ExecuteAsync(context));
+        var output = await CaptureConsoleAsync(async () => await ((IActivity)writeLine).ExecuteAsync(context));
 
         Assert.Equal("Hello World!", output.Trim());
     }

@@ -43,7 +43,7 @@ public sealed class WriteLinesActivityTests : IDisposable
         var writeLines = new WriteLines();
         var context = NewContext(writeLines);
 
-        var output = await ConsoleCapture.RunAsync(() => ((IActivity)writeLines).ExecuteAsync(context));
+        var output = await ConsoleCapture.RunAsync(async () => await ((IActivity)writeLines).ExecuteAsync(context));
 
         Assert.Equal(string.Empty, output);
     }
@@ -57,7 +57,7 @@ public sealed class WriteLinesActivityTests : IDisposable
         var context = NewContext(writeLines);
         context.Set(input.MemoryBlockReference(), lines);
 
-        return await ConsoleCapture.RunAsync(() => ((IActivity)writeLines).ExecuteAsync(context));
+        return await ConsoleCapture.RunAsync(async () => await ((IActivity)writeLines).ExecuteAsync(context));
     }
 
     private static string[] SplitLines(string output) =>

@@ -133,6 +133,18 @@ public abstract class ActivityBase : IActivity, ISignalHandler
     }
 
     /// <summary>
+    /// Produces the immutable transition returned to the engine. Legacy activities continue through
+    /// <see cref="ExecuteAsync(IActivityExecutionContext)"/> until they are migrated to <see cref="Activity{TResult}"/>.
+    /// </summary>
+    protected virtual async ValueTask<ActivityTransition> ExecuteTransitionAsync(IActivityExecutionContext context)
+    {
+        await ExecuteAsync(context);
+        return ActivityTransition.Complete(
+            ActivityUnit.Value,
+            context.GetOutcomes().FirstOrDefault() ?? "Done");
+    }
+
+    /// <summary>
     /// Override this method to implement activity-specific logic.
     /// </summary>
     protected virtual void Execute(IActivityExecutionContext context)
@@ -191,13 +203,15 @@ public abstract class ActivityBase : IActivity, ISignalHandler
         return await CanExecuteAsync(context);
     }
 
-    async ValueTask IActivity.ExecuteAsync(IActivityExecutionContext context)
+    async ValueTask<ActivityTransition> IActivity.ExecuteAsync(IActivityExecutionContext context)
     {
-        await ExecuteAsync(context);
+        var transition = await ExecuteTransitionAsync(context);
 
         // Invoke behaviors.
         foreach (var behavior in Behaviors)
             await behavior.ExecuteAsync(context);
+
+        return transition;
     }
 
     async ValueTask ISignalHandler.ReceiveSignalAsync(object signal, SignalContext context)

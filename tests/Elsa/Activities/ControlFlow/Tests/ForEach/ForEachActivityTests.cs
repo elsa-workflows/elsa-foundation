@@ -174,8 +174,8 @@ public sealed class ForEachActivityTests : IDisposable
             .AsTask());
     }
 
-    private static ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        ((IActivity)context.Activity).ExecuteAsync(context);
+    private static async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
+        await ((IActivity)context.Activity).ExecuteAsync(context);
 
     private static ActivityChildCompletedContext NewCompletion(SimpleActivityExecutionContext context, int iterationIndex) =>
         new(context, "actexec-body", BodyNodeId, [ActivityOutcomes.Done], $"{ForEachExecutionId}:foreach-iteration:{iterationIndex}");

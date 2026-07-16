@@ -83,7 +83,8 @@ internal sealed class StubActivity : IActivity
     public Dictionary<string, object> Metadata { get; set; } = new();
 
     public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-    public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
+        ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
 }
 
 /// <summary>Captures what the bridge passed across the seam and returns a preset activity.</summary>
