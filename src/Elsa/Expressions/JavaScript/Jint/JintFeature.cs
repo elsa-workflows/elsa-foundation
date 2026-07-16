@@ -80,6 +80,7 @@ public class JintFeature : IShellFeature
 
             // JINT Evaluation / Execution
             .AddScoped<IJavaScriptEvaluator, JintJavaScriptEvaluator>()
+            .AddScoped<IPortableJavaScriptEvaluator, JintPortableJavaScriptEvaluator>()
             .AddScoped<IPreparedScriptFactory, PreparedScriptFactory>()
             .AddScoped<IJintEngineFactory, JintEngineFactory>()
             ;

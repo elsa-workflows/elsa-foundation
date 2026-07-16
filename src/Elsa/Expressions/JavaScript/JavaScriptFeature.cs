@@ -51,6 +51,7 @@ public class JavaScriptFeature : IShellFeature
             .AddScoped<IScriptPreProcessor, TypeRegistrationPreProcessor>()
 
             .AddScoped<IExpressionHandler, JavaScriptExpressionHandler>()
+            .AddScoped<IPortableExpressionHandler, PortableJavaScriptExpressionHandler>()
             .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>();
     }
 }
