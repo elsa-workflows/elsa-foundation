@@ -100,6 +100,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
+        state.EnsureValueFlowCompatible();
+
         if (state.Status is ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
             return;
 
@@ -138,10 +140,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
     {
         // The resumed activity's carrier identity (ADR 0030) is projected from the durable values below (spec 083
         // review) — no per-resume workflow-execution-state read, and a Correlate/SetName in this run is visible here.
-        var scopeService = new RuntimeContainerScopeService(serviceProvider.GetRequiredService<IActivityExecutionStateStore>());
+        var scopeService = new RuntimeContainerScopeService(
+            serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
 
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
-        VariableScope? variableScope;
+        RuntimeVisibleVariableFrames visibleFrames;
         RuntimeInputBindingStateProjectionSet projections;
         IReadOnlyDictionary<string, object?> workflowVariables;
         IReadOnlyDictionary<string, object?> workflowInputValues;
@@ -152,15 +156,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
             projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-            workflowVariables = projections.WorkflowVariables;
             workflowInputValues = projections.WorkflowInputs;
             activityOutputValues = projections.ActivityOutputValues;
 
-            // Build the visible container-scope chain (ADR 0027) anchored from the current durable-value variable
-            // projection, so a resume callback's freehand expressions read container/workflow-scoped variables and
-            // in-evaluation write-back lands in the declaring scope — parity with the invoke path. The post-callback
-            // write-back below persists any resume-time mutation durably across the bookmark-consumption checkpoint.
-            variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken, workflowVariables);
+            // Build the canonical visible-frame chain. Resume-time variable reads use these immutable envelopes;
+            // ordinary activity callbacks cannot mutate workflow variables.
+            visibleFrames = await scopeService.BuildVisibleFramesAsync(
+                workItem.WorkflowExecutionId,
+                state,
+                cancellationToken: cancellationToken);
+            workflowVariables = scopeService.ProjectVisibleVariables(executable, visibleFrames);
 
             if (executableNode.ActivityContract is null)
             {
@@ -173,9 +178,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     workflowVariables: workflowVariables,
                     workflowInputs: workflowInputValues,
                     activityOutputValues: activityOutputValues,
-                    variableScope: variableScope,
                     workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
-                    variableEnvelopes: projections.VariableEnvelopes);
+                    variableEnvelopes: visibleFrames.Values);
                 inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
             }
             else
@@ -248,7 +252,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             activity.Id = resumePayload.ActivityExecutionId;
 
             // Populate the live execution-time expression carrier (ADR 0030) for the resume callback: workflow
-            // identity, the visible variable scope, and the durable-value projections for inputs/variables/outputs.
+            // identity, canonical frame variables, and durable projections for inputs/outputs.
             // Previously the resume context was built with none of these, so a resume callback that evaluated
             // JavaScript/Liquid saw empty getWorkflowInstanceId()/getInput()/getVariable()/getOutput() and had no
             // scope to write variables into. Populated identically to the invoke path via the shared helper.
@@ -256,7 +260,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // [ResumeTarget] can read the resuming request's payload via IExecutionExpressionState.ResumeInput while
             // keeping full Set/output access to the context. It is a live per-invocation value, never durable state,
             // so the invoke/start/parent-completion paths (which call Create without it) leave it null.
-            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, resumePayload.PinnedExecutable, resumePayload.Input);
+            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, resumePayload.PinnedExecutable, workflowVariables, resumePayload.Input);
             context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,
@@ -266,7 +270,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 executableNode,
                 executionState,
-                variableScope,
+                variableScope: null,
                 carrier);
             if (executableNode.ActivityContract is null)
                 RuntimeActivityInputMemory.Seed(context, inputs);
@@ -283,7 +287,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
         ActivityCompletionProjection? typedCompletion = null;
         ActivityExecutionState? replacementSuspendedState = null;
         try
@@ -379,15 +382,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 var resumeMethod = ResolveResumeMethod(activity.GetType(), resumePayload.ResumeTargetId);
                 await InvokeResumeMethodAsync(resumeMethod, activity, context, resumePayload.Input, cancellationToken);
             }
-
-            // Write back the resume callback's variable mutations, mirroring the invoke path's post-execution
-            // write-back: container-scope assignments persist to their owning execution snapshots so sibling
-            // branches and later activities observe them and a subsequent resume restores them (ADR 0027), and the
-            // returned workflow-scope changes (#286) are folded into the bookmark-consumption checkpoint below so
-            // they commit atomically with the consumption rather than out-of-band (#310). Dirty-tracked against the
-            // start-of-resume projection, so a callback that reads but does not mutate produces no change.
-            workflowVariableWriteBackChanges = await scopeService.PersistAndCaptureWorkflowScopeWriteBackAsync(
-                variableScope, executable, workItem.WorkflowExecutionId, workflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -418,10 +412,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // Durably persist the resume target's CaptureOnSuccessfulCompletion outputs, mirroring the invoke path: a
         // resume callback that sets outputs (e.g. the mid-flow HttpEndpoint's Result/RouteData/ParsedContent, spec
         // 089 D) captures them to durable values, not just inspection snapshots. Folded into the consumption
-        // checkpoint alongside the workflow-scope variable write-back so it commits atomically with the consumption.
+        // checkpoint so it commits atomically with the consumption.
         var durableOutputChanges = ActivityOutputPublisher.BuildDurableOutputChanges(
             workItem, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId, executableNode, recordedOutputs, _timeProvider.GetUtcNow());
-        var durableValueChanges = workflowVariableWriteBackChanges.Concat(durableOutputChanges).ToArray();
+        var durableValueChanges = durableOutputChanges;
 
         if (replacementSuspendedState is not null)
         {
@@ -793,14 +787,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         metadata[RuntimeMetadataKeys.ResumeTargetId] = resumePayload.ResumeTargetId;
         metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames);
 
-        return state with
+        return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {
             Status = ActivityExecutionStatus.Completed,
             SubStatus = null,
             CompletedAt = completedAt,
             Attempts = EndOpenAttempt(state, Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete, completedAt).Attempts,
             Metadata = metadata
-        };
+        });
     }
 
     private static ActivityInputSnapshot RequireCommittedSnapshot(ActivityExecutionState state, ActivityContract contract)
@@ -1024,4 +1018,5 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     metadata: decision.Metadata);
             })
             .ToArray();
+
 }

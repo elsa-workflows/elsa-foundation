@@ -172,7 +172,10 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             TriggerDeliveries: [],
             ValueFlowCompatibility: ActivityExecutionValueFlowDocumentVersionGuard.Compatible(
                 ActivityExecutionValueFlowDocumentVersions.Current,
-                ActivityExecutionValueFlowDocumentVersions.Current));
+                ActivityExecutionValueFlowDocumentVersions.Current))
+        {
+            IterationFrameRequest = schedulePayload.IterationFrame
+        };
     }
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(

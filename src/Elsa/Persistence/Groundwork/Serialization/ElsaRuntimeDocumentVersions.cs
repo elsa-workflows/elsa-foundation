@@ -30,7 +30,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2,
-        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.DurableValueStateDocumentKind] = 1,

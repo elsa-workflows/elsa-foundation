@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -26,8 +27,22 @@ internal static class ExecutionCarrierTestData
     public static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-7", "7.0.0", "sha256:test");
 
-    public static WorkflowExecutionState NewWorkflowState(DateTimeOffset now) =>
-        new(
+    public static WorkflowExecutionState NewWorkflowState(DateTimeOffset now, string variableValue = "seed")
+    {
+        var type = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        var rootFrame = new VariableFrameFactory().CreateRoot(
+            WorkflowExecutionId,
+            VariableReference.WorkflowScopeId,
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["var-greeting"] = ValueEnvelope.Inline(
+                    type,
+                    JsonSerializer.SerializeToElement(variableValue),
+                    policy)
+            });
+
+        return new(
             WorkflowExecutionId: WorkflowExecutionId,
             PinnedExecutable: NewIdentity(),
             Status: WorkflowExecutionStatus.Running,
@@ -39,7 +54,11 @@ internal static class ExecutionCarrierTestData
             CorrelationId: "corr-1",
             ParentWorkflowExecutionId: null,
             TenantId: null,
-            SystemMetadata: new Dictionary<string, string> { [RuntimeMetadataKeys.InstanceName] = "Instance A" });
+            SystemMetadata: new Dictionary<string, string> { [RuntimeMetadataKeys.InstanceName] = "Instance A" })
+        {
+            RootVariableFrame = rootFrame
+        };
+    }
 
     public static Task SeedInputAsync(InMemoryDurableValueStateStore store, DateTimeOffset now, string name, string value) =>
         SeedDurableValueAsync(store, now, $"input:{name}", RuntimeMetadataKeys.InputName, name, value);

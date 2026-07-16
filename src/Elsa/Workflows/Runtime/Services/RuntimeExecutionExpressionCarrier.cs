@@ -17,8 +17,9 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <remarks>
 /// This is the single home for the carrier's identity resolution — the same logic every scheduler work handler
 /// that constructs an execution-time context needs — so the invoke, resume, and parent-completion paths stay in
-/// lockstep rather than each re-deriving it. All state is Runtime-owned (the durable-value projections and the
-/// pinned executable identity); nothing here touches <c>Elsa.Workflows.Design.*</c>, so the carrier remains
+/// lockstep rather than each re-deriving it. All state is Runtime-owned (canonical variable frames, the durable
+/// input/output/identity projections, and the pinned executable identity); nothing here touches
+/// <c>Elsa.Workflows.Design.*</c>, so the carrier remains
 /// Design-free (constitution §E2.2 / §E2.6). Correlation id and instance name come from the durable-value identity
 /// projection every handler already computes (spec 083 review: <see cref="RuntimeIdentityStateProjection"/>), so a
 /// <c>Correlate</c>/<c>SetName</c> in one branch is visible to a concurrent sibling branch and no path pays a
@@ -28,23 +29,25 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public static class RuntimeExecutionExpressionCarrier
 {
     /// <summary>
-    /// Assembles the carrier state from the durable-value projection set (identity + inputs/variables/outputs, all
-    /// projected once from the handler's single <c>ListAsync</c>) and the pinned executable identity. Nothing is
-    /// projected twice — the caller passes the <see cref="RuntimeInputBindingStateProjectionSet"/> it already holds.
+    /// Assembles the carrier state from durable identity/input/output projections, the canonical visible-frame
+    /// variable view, and the pinned executable identity. Variable rows in the durable-value store are deliberately
+    /// ignored so the runtime has one variable source of truth.
     /// </summary>
     public static RuntimeExecutionExpressionCarrierState Create(
         RuntimeInputBindingStateProjectionSet projections,
         WorkflowExecutableIdentity pinnedExecutable,
+        IReadOnlyDictionary<string, object?> workflowVariables,
         JsonElement? resumeInput = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
+        ArgumentNullException.ThrowIfNull(workflowVariables);
 
         return new RuntimeExecutionExpressionCarrierState(
             CorrelationId: string.IsNullOrWhiteSpace(projections.CorrelationId) ? null : projections.CorrelationId,
             WorkflowName: string.IsNullOrWhiteSpace(projections.InstanceName) ? null : projections.InstanceName,
             WorkflowDefinitionVersion: ResolveWorkflowDefinitionVersion(pinnedExecutable),
             WorkflowInputs: projections.WorkflowInputs,
-            WorkflowVariables: projections.WorkflowVariables,
+            WorkflowVariables: workflowVariables,
             ActivityOutputValues: projections.ActivityOutputValues,
             StimulusInput: projections.StimulusInput,
             TriggerNodeId: string.IsNullOrWhiteSpace(projections.TriggerNodeId) ? null : projections.TriggerNodeId,

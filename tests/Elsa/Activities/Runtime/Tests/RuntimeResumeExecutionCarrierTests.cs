@@ -59,10 +59,9 @@ public sealed class RuntimeResumeExecutionCarrierTests
     public async Task ResumeCallback_ObservesExecutionTimeIdentityInputsVariablesAndOutputs()
     {
         await _executableStore.SaveAsync(NewExecutable());
-        await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now));
+        await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now, "Hello"));
         await ExecutionCarrierTestData.SeedIdentityAsync(_durableValueStateStore, _now, "corr-1", "Instance A");
         await ExecutionCarrierTestData.SeedInputAsync(_durableValueStateStore, _now, "orderId", "order-1");
-        await ExecutionCarrierTestData.SeedVariableAsync(_durableValueStateStore, _now, "Hello");
         await ExecutionCarrierTestData.SeedOutputAsync(_durableValueStateStore, _now, "prior", "prior-value");
         await _activityStateStore.SaveAsync(NewRunningState(RootNodeId, "actexec-root", parentActivityExecutionId: null));
         await _activityStateStore.SaveAsync(NewSuspendedWaitState());
@@ -85,8 +84,6 @@ public sealed class RuntimeResumeExecutionCarrierTests
         Assert.Equal("order-1", ExecutionCarrierTestData.AsString(activity.ObservedInput));
         Assert.Equal("Hello", ExecutionCarrierTestData.AsString(activity.ObservedVariable));
         Assert.Equal("prior-value", ExecutionCarrierTestData.AsString(activity.ObservedOutput));
-        // In-evaluation variable write-back lands in the visible scope (impossible before: no scope was passed).
-        Assert.Equal("Hi", activity.ReadBackAfterWrite);
         // Resume-only path: no resume input was dispatched, so ResumeInput is null (spec 089 D).
         Assert.Null(activity.ObservedResumeInput);
     }
@@ -271,7 +268,7 @@ public sealed class RuntimeResumeExecutionCarrierTests
             {
                 variables = new[]
                 {
-                    new VariableDefinition("var-greeting", VariableName, new TypeReference("String"), null, new ArgumentValue("seed", "Literal"))
+                    RuntimeVariableDeclarationTestData.Create("var-greeting", VariableName, "String", "seed")
                 }
             },
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -328,7 +325,6 @@ public sealed class RuntimeResumeExecutionCarrierTests
         public object? ObservedInput { get; private set; }
         public object? ObservedVariable { get; private set; }
         public object? ObservedOutput { get; private set; }
-        public object? ReadBackAfterWrite { get; private set; }
         public JsonElement? ObservedResumeInput { get; private set; }
 
         [ResumeTarget("resume-target:delivery")]
@@ -346,8 +342,6 @@ public sealed class RuntimeResumeExecutionCarrierTests
             ObservedVariable = state.WorkflowVariables.GetValueOrDefault(VariableName);
             ObservedOutput = state.ActivityOutputValues.GetValueOrDefault("prior");
 
-            context.ExpressionExecutionContext.SetVariable(VariableName, "Hi");
-            ReadBackAfterWrite = ((IScopedVariableProvider)context).TryGetVariableValueByName(VariableName, out var written) ? written : null;
         }
     }
 

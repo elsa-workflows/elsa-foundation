@@ -19,7 +19,7 @@ public sealed class RuntimeExecutionExpressionCarrierTests
     [Fact]
     public void ResolvesDefinitionVersionFromArtifactVersionMajor()
     {
-        var state = RuntimeExecutionExpressionCarrier.Create(Projections(), NewIdentity(artifactVersion: "7.3.1"));
+        var state = RuntimeExecutionExpressionCarrier.Create(Projections(), NewIdentity(artifactVersion: "7.3.1"), Empty);
 
         Assert.Equal(7, state.WorkflowDefinitionVersion);
     }
@@ -28,7 +28,7 @@ public sealed class RuntimeExecutionExpressionCarrierTests
     public void NonNumericArtifactVersionYieldsZeroRatherThanThrowing()
     {
         // Display version, not an execution precondition — a non-numeric format degrades to 0, never faults.
-        var state = RuntimeExecutionExpressionCarrier.Create(Projections(), NewIdentity(artifactVersion: "draft"));
+        var state = RuntimeExecutionExpressionCarrier.Create(Projections(), NewIdentity(artifactVersion: "draft"), Empty);
 
         Assert.Equal(0, state.WorkflowDefinitionVersion);
     }
@@ -38,12 +38,12 @@ public sealed class RuntimeExecutionExpressionCarrierTests
     {
         var pinned = NewIdentity(artifactVersion: "7.0.0");
 
-        var assigned = RuntimeExecutionExpressionCarrier.Create(Projections("corr-1", "Instance A"), pinned);
+        var assigned = RuntimeExecutionExpressionCarrier.Create(Projections("corr-1", "Instance A"), pinned, Empty);
         Assert.Equal("corr-1", assigned.CorrelationId);
         Assert.Equal("Instance A", assigned.WorkflowName);
 
         // A blank/whitespace projection (e.g. a cleared assignment) degrades to null rather than an empty string.
-        var cleared = RuntimeExecutionExpressionCarrier.Create(Projections("  ", null), pinned);
+        var cleared = RuntimeExecutionExpressionCarrier.Create(Projections("  ", null), pinned, Empty);
         Assert.Null(cleared.CorrelationId);
         Assert.Null(cleared.WorkflowName);
     }
@@ -51,7 +51,7 @@ public sealed class RuntimeExecutionExpressionCarrierTests
     [Fact]
     public void AbsentIdentityResolvesToNullWithVersionFromPinnedExecutable()
     {
-        var state = RuntimeExecutionExpressionCarrier.Create(Projections(), NewIdentity(artifactVersion: "7.0.0"));
+        var state = RuntimeExecutionExpressionCarrier.Create(Projections(), NewIdentity(artifactVersion: "7.0.0"), Empty);
 
         Assert.Null(state.CorrelationId);
         Assert.Null(state.WorkflowName);
@@ -64,13 +64,13 @@ public sealed class RuntimeExecutionExpressionCarrierTests
         // Spec 089 D (T003): the trigger-node identity rides through the projection set onto the carrier, blank → null.
         var pinned = NewIdentity(artifactVersion: "7.0.0");
 
-        var assigned = RuntimeExecutionExpressionCarrier.Create(Projections(triggerNodeId: "node-http"), pinned);
+        var assigned = RuntimeExecutionExpressionCarrier.Create(Projections(triggerNodeId: "node-http"), pinned, Empty);
         Assert.Equal("node-http", assigned.TriggerNodeId);
 
-        var blank = RuntimeExecutionExpressionCarrier.Create(Projections(triggerNodeId: "  "), pinned);
+        var blank = RuntimeExecutionExpressionCarrier.Create(Projections(triggerNodeId: "  "), pinned, Empty);
         Assert.Null(blank.TriggerNodeId);
 
-        var absent = RuntimeExecutionExpressionCarrier.Create(Projections(), pinned);
+        var absent = RuntimeExecutionExpressionCarrier.Create(Projections(), pinned, Empty);
         Assert.Null(absent.TriggerNodeId);
     }
 
@@ -80,10 +80,10 @@ public sealed class RuntimeExecutionExpressionCarrierTests
         // Spec 089 D (T002): the resume input is a per-invocation carrier value, null unless the caller passes it.
         var pinned = NewIdentity(artifactVersion: "7.0.0");
 
-        Assert.Null(RuntimeExecutionExpressionCarrier.Create(Projections(), pinned).ResumeInput);
+        Assert.Null(RuntimeExecutionExpressionCarrier.Create(Projections(), pinned, Empty).ResumeInput);
 
         var resumeInput = System.Text.Json.JsonSerializer.SerializeToElement(new { path = "/cb" });
-        var carried = RuntimeExecutionExpressionCarrier.Create(Projections(), pinned, resumeInput);
+        var carried = RuntimeExecutionExpressionCarrier.Create(Projections(), pinned, Empty, resumeInput);
         Assert.NotNull(carried.ResumeInput);
         Assert.Equal("/cb", carried.ResumeInput!.Value.GetProperty("path").GetString());
     }

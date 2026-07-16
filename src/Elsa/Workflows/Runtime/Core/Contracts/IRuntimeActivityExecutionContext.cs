@@ -18,7 +18,8 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         string executableNodeId,
         string? schedulingActivityExecutionId = null,
         IReadOnlyDictionary<string, string>? metadata = null,
-        ActivitySchedulingProvenance? schedulingProvenance = null);
+        ActivitySchedulingProvenance? schedulingProvenance = null,
+        LoopIterationScopeRequest? iterationFrame = null);
 
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
 

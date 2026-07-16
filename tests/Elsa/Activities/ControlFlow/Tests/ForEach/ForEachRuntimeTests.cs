@@ -147,11 +147,7 @@ public sealed class ForEachRuntimeTests
             descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Collection"] = new RuntimeInputBinding(
-                    inputName: "Collection",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(collection),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" })
+                ["Collection"] = CollectionBinding(collection)
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -175,11 +171,7 @@ public sealed class ForEachRuntimeTests
             descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Collection"] = new RuntimeInputBinding(
-                    inputName: "Collection",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(collection),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" })
+                ["Collection"] = CollectionBinding(collection)
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -190,6 +182,22 @@ public sealed class ForEachRuntimeTests
                 JsonSerializer.SerializeToElement(new { body = BodyNodeId })));
 
         return WorkflowExecutionHarness.NewExecutable(root);
+    }
+
+    private static RuntimeInputBinding CollectionBinding(IReadOnlyCollection<string>? collection)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        var envelope = collection is null
+            ? ValueEnvelope.Null(type, policy)
+            : ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(collection), policy);
+        return new RuntimeInputBinding(
+            nameof(ForEachActivity.Collection),
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: envelope,
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" });
     }
 
     private static ExecutableNode NewWriteLineNode(string nodeId, string text)

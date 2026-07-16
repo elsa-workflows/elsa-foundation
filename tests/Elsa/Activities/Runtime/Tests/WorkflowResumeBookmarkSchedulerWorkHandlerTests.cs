@@ -458,6 +458,8 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton(_activityStateStore);
         services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
+        services.AddSingleton<IWorkflowExecutionStateStore>(_ =>
+            CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()));
         services.AddSingleton(_bookmarkStateStore);
         services.AddSingleton<IBookmarkStateStore>(_ => _bookmarkStateStore);
         services.AddSingleton(_schedulerWorkQueue);

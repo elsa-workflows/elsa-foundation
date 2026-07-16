@@ -54,6 +54,16 @@ public sealed record ActivityExecutionState(
     /// </summary>
     public VariableFrameState? VariableFrame { get; init; }
 
+    /// <summary>
+    /// The loop-iteration frame introduced around this activation by its scheduling parent, when any.
+    /// It is separate from <see cref="VariableFrame"/> because a loop body can itself be a container:
+    /// the iteration frame is then the lexical parent of the body's container frame.
+    /// </summary>
+    public VariableFrameState? IterationVariableFrame { get; init; }
+
+    /// <summary>Typed scheduler-carried values used to activate <see cref="IterationVariableFrame"/>.</summary>
+    public LoopIterationScopeRequest? IterationFrameRequest { get; init; }
+
     public void EnsureValueFlowCompatible()
     {
         if (DocumentVersion != ActivityExecutionValueFlowDocumentVersions.Current)

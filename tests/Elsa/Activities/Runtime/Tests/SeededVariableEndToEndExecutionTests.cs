@@ -141,19 +141,14 @@ public sealed class SeededVariableEndToEndExecutionTests
 
     private WorkflowExecutable NewExecutableWithGreetingVariable()
     {
-        // The compiled root structure carries the workflow's authored variables in the generic `variables`
-        // shape (the same shape Sequence/Flowchart emit), here a single `greeting` defaulting to "Hello".
+        // Direct executable fixtures carry the canonical Runtime declaration shape; publishing performs
+        // this lowering for authored Sequence/Flowchart variables.
         var structurePayload = JsonSerializer.SerializeToElement(
             new
             {
                 variables = new[]
                 {
-                    new VariableDefinition(
-                        ReferenceKey: "var-greeting",
-                        Name: "greeting",
-                        Type: new Elsa.Primitives.Models.TypeReference("String"),
-                        StorageDriverType: null,
-                        Default: new ArgumentValue("Hello", "Literal"))
+                    RuntimeVariableDeclarationTestData.Create("var-greeting", "greeting", "String", "Hello")
                 }
             },
             new JsonSerializerOptions(JsonSerializerDefaults.Web));

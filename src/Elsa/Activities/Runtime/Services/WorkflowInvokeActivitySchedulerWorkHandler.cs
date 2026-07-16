@@ -123,6 +123,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (state.Status != ActivityExecutionStatus.Running)
             return;
 
+        state.EnsureValueFlowCompatible();
+
         var activityOutputRegister = serviceProvider.GetRequiredService<IRuntimeActivityOutputRegister>();
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var checkpointCommitter = serviceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
@@ -150,10 +152,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
-        var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
+        var scopeService = new RuntimeContainerScopeService(
+            activityExecutionStateStore,
+            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
 
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
-        VariableScope? variableScope;
+        RuntimeVisibleVariableFrames visibleFrames;
         RuntimeInputBindingStateProjectionSet projections;
         IReadOnlyDictionary<string, object?> workflowVariables;
         IReadOnlyDictionary<string, object?> workflowInputValues;
@@ -170,14 +174,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
             projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-            workflowVariables = projections.WorkflowVariables;
             workflowInputValues = projections.WorkflowInputs;
             activityOutputValues = projections.ActivityOutputValues;
 
-            // Build the scope with the workflow-scope variables anchored from the current durable-value
-            // projection (#286), so workflow-scope reads see prior mutations and writes land in the workflow
-            // scope for the post-execution write-back below.
-            variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken, workflowVariables);
+            // Build the canonical visible-frame chain. It is the only source for variable reads; durable-value
+            // projections remain limited to inputs, outputs, and identity compatibility channels.
+            visibleFrames = await scopeService.BuildVisibleFramesAsync(
+                workItem.WorkflowExecutionId,
+                state,
+                cancellationToken: cancellationToken);
+            workflowVariables = scopeService.ProjectVisibleVariables(executable, visibleFrames);
 
             if (executableNode.ActivityContract is null)
             {
@@ -190,9 +196,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     workflowVariables: workflowVariables,
                     workflowInputs: workflowInputValues,
                     activityOutputValues: activityOutputValues,
-                    variableScope: variableScope,
                     workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
-                    variableEnvelopes: projections.VariableEnvelopes);
+                    variableEnvelopes: visibleFrames.Values);
                 inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
             }
             else
@@ -267,7 +272,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = invokePayload.ActivityExecutionId;
 
-            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, invokePayload.PinnedExecutable);
+            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, invokePayload.PinnedExecutable, workflowVariables);
             var executionContextState = valueFlowAttempt is null
                 ? state
                 : state with
@@ -292,7 +297,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 executableNode,
                 executionContextState,
-                variableScope,
+                variableScope: null,
                 carrier);
             if (executableNode.ActivityContract is null)
                 RuntimeActivityInputMemory.Seed(context, inputs);
@@ -308,7 +313,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
 
         ActivityExecutionState? completedState = null;
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
         (IRuntimeExecutionIdGenerator IdGenerator, IReadOnlyCollection<RuntimeChildActivityScheduleRequest> Requests)? pendingChildScheduling = null;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> pendingChildSchedulingDurableValueChanges = [];
         var finishWorkflowRequested = false;
@@ -331,16 +335,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             else
             {
                 returnedTransition = await activity.ExecuteAsync(context);
-
-                // Write back the activity's variable mutations: container-scope assignments persist to their
-                // owning execution snapshots so sibling branches and later activities observe them and resume
-                // restores them (ADR 0027), and the returned workflow-scope changes (#286) are folded into the
-                // activity completion below so they commit on the activity's checkpoint boundary rather than
-                // out-of-band — making variable-driven While/Do loops terminate and SetVariable durable.
-                // Dirty-tracked against the start-of-activity projection, so a read-only activity produces no
-                // change. Shared with the resume path so both stay in lockstep.
-                workflowVariableWriteBackChanges = await scopeService.PersistAndCaptureWorkflowScopeWriteBackAsync(
-                    variableScope, executable, workItem.WorkflowExecutionId, workflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
 
                 // Control-leaf intents (Finish/Complete, Correlate, SetName, SetOutput): captured here and
                 // drained below so the engine ends the run or persists the new correlation id / instance name /
@@ -370,11 +364,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 if (bookmarkRequests.Count > 0 && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request durable bookmarks and schedule child activities in the same execution.");
 
-                // The workflow-scope variable write-back (#286) and SetOutput durable values (#260) the activity
-                // produced before suspending/handing off. Folded into the continuation's checkpoint below so they
-                // commit atomically with it rather than out-of-band (#310). Empty unless the activity actually
-                // mutated a variable / set an output.
-                var suspendDurableValueChanges = CombineDurableValueChanges(workflowVariableWriteBackChanges, workflowOutputChanges);
+                // SetOutput values produced before suspension/hand-off are folded into the continuation checkpoint.
+                var suspendDurableValueChanges = workflowOutputChanges;
 
                 if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
                 {
@@ -512,7 +503,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         if (containerVariableSnapshots.Count > 0)
                         {
                             valueSnapshots.AddRange(containerVariableSnapshots);
-                            completedState = RuntimeContainerScopeService.MarkScopeCompleted(completedState);
+                            completedState = RuntimeContainerScopeService.CloseOwnedFrames(completedState);
                         }
                     }
                 }
@@ -578,14 +569,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (completedState is null)
             throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' did not produce a completion or child scheduling result for activity execution '{invokePayload.ActivityExecutionId}'.");
 
-        // Fold the workflow-scope variable write-back (#286) into the activity's durable-value change set so it
-        // commits atomically with the completion (checkpoint path) or in the same save sequence (non-inspection
-        // path), rather than out-of-band. Dirty-tracked upstream, so this adds nothing for a read-only activity.
-        if (workflowVariableWriteBackChanges.Count > 0)
-            durableValueChanges = durableValueChanges.Concat(workflowVariableWriteBackChanges).ToArray();
-
-        // Fold SetOutput's OutputName-tagged durable values (#260) into the same change set, alongside the
-        // workflow-variable write-back, so the named workflow output commits on the activity's checkpoint.
+        // Fold SetOutput's OutputName-tagged durable values into the activity completion checkpoint.
         if (workflowOutputChanges.Count > 0)
             durableValueChanges = durableValueChanges.Concat(workflowOutputChanges).ToArray();
 
@@ -639,21 +623,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
 
         await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, finishWorkflowRequested, occurredAt, cancellationToken);
-    }
-
-    // Concatenates the workflow-scope variable write-back and the SetOutput durable-value changes into the single
-    // set the suspend paths fold into their continuation checkpoint (#310). Returns either input untouched when
-    // the other is empty so the common no-mutation case allocates nothing.
-    private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> CombineDurableValueChanges(
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> variableWriteBackChanges,
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> outputChanges)
-    {
-        if (outputChanges.Count == 0)
-            return variableWriteBackChanges;
-        if (variableWriteBackChanges.Count == 0)
-            return outputChanges;
-
-        return variableWriteBackChanges.Concat(outputChanges).ToArray();
     }
 
     // Records a blocking fault incident for the activity and commits it. Each fault arm in InvokeActivityAsync
@@ -735,6 +704,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 ? ApplyInstanceName(workflowState.SystemMetadata, requestedInstanceName)
                 : workflowState.SystemMetadata
         };
+
+        if (finishWorkflowRequested)
+            updatedState = RuntimeContainerScopeService.CloseRootFrame(updatedState);
 
         return new RuntimeStateChange<WorkflowExecutionState>(
             StateId: updatedState.WorkflowExecutionId,
@@ -1049,7 +1021,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         executionScopeId: null,
                         schedulingCause: RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
                         metadata: request.Metadata)
-                    : request.SchedulingProvenance);
+                    : request.SchedulingProvenance,
+                request.IterationFrame);
 
             var commandMetadata = invokeWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
             foreach (var item in request.Metadata)
@@ -1244,13 +1217,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (skipped)
             metadata[RuntimeMetadataKeys.InvokeSkipped] = bool.TrueString;
 
-        return state with
+        return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {
             Status = ActivityExecutionStatus.Completed,
             SubStatus = skipped ? SkippedSubStatus : null,
             CompletedAt = _timeProvider.GetUtcNow(),
             Metadata = metadata
-        };
+        });
     }
 
     private static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState)

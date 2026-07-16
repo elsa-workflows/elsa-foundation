@@ -168,7 +168,7 @@ public sealed class ActivityFaultIncidentRecorder
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
 
         var state = EndOpenAttempt(request.State, incidentId, completedAt);
-        return state with
+        return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {
             Status = ActivityExecutionStatus.Faulted,
             SubStatus = request.SubStatus,
@@ -183,7 +183,7 @@ public sealed class ActivityFaultIncidentRecorder
                 faultInfo.StackTrace,
                 isRetryable: false),
             Metadata = metadata
-        };
+        });
     }
 
     private static ActivityExecutionState EndOpenAttempt(

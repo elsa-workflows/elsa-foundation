@@ -32,20 +32,17 @@ namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
 /// Section-1 acceptance gate (#269, parent PRD #255): a single workflow that <b>composes</b> the ported
-/// control-flow, composite, and data-leaf activities — <c>If</c> + <c>ForEach</c> + <c>SetVariable</c> — and runs
+/// control-flow and explicit value-flow operations — <c>If</c> + <c>ForEach</c> + intrinsic <c>Set</c> — and runs
 /// to <see cref="WorkflowExecutionStatus.Completed"/> through the real
 /// <see cref="WorkflowExecutionHarness"/> (real in-process agent + scheduler, real JavaScript expression
 /// evaluation via Jint — no counting mock, no hand-built resolution context).
 ///
 /// The composed shape proves the activities genuinely interoperate, not merely run in isolation:
 /// <list type="number">
-/// <item><c>SetVariable</c> seeds a workflow-scope counter (<c>count = 0</c>).</item>
-/// <item><c>ForEach</c> iterates a three-item collection; on each pass the body is a <c>SetVariable</c> whose
-/// value is the real JS expression <c>variables.count + 1</c> — so each iteration <b>reads the variable a prior
-/// iteration wrote</b> and writes it back (variables flow across activities; loop bodies run; the keystone
-/// write-back of #286 carries the mutation forward each pass).</item>
-/// <item><c>If</c> branches on the real JS condition <c>variables.count === 3</c> — a condition over the variable
-/// the loop produced — and its Then branch is a final <c>SetVariable</c> that records the outcome
+/// <item><c>ForEach</c> iterates a three-item collection; on each pass its body is an intrinsic <c>Set</c> whose
+/// portable expression reads the explicitly declared <c>count</c> parameter and commits the next frame revision.</item>
+/// <item><c>If</c> branches on a portable expression over the explicitly declared <c>count</c> parameter, and its
+/// Then branch is a final intrinsic <c>Set</c> that records the outcome
 /// (<c>result = "all-iterated"</c>), proving the branch evaluated and the loop's effect is observable downstream.</item>
 /// </list>
 /// </summary>
@@ -98,14 +95,13 @@ public sealed class ActivityLibraryAcceptanceTests
     }
 
     [Fact]
-    public async Task IfForEachSetVariable_ComposeAndRunToCompletion_ThroughTheRealHarness()
+    public async Task IfForEachIntrinsicSet_ComposeAndRunToCompletion_ThroughTheRealHarness()
     {
         // Hand out a body-pass budget (5) comfortably beyond the collection size (3): a loop that failed to
         // observe its own per-pass mutation would not stop at the right count, and the If condition (== 3) would
         // not fire. Reaching the Then branch is therefore real proof the variable flowed across all three.
         await using var harness = NewHarness(
             "actexec-sequence",
-            "actexec-seed",
             "actexec-foreach",
             "actexec-incr-0", "actexec-incr-1", "actexec-incr-2", "actexec-incr-3", "actexec-incr-4",
             "actexec-if",
@@ -127,14 +123,13 @@ public sealed class ActivityLibraryAcceptanceTests
 
         // 4. The final persisted workflow-scope variables reflect the loop's effect end-to-end: the counter the
         //    ForEach body accumulated reads back as 3, and the Then-branch SetVariable recorded the outcome.
-        var durableValues = await harness.Services.GetRequiredService<IDurableValueStateStore>()
-            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
-        Assert.Equal(3, VariableInt(durableValues, "count"));
-        Assert.Equal("all-iterated", VariableString(durableValues, "result"));
+        var rootFrame = Assert.IsType<VariableFrameState>(run.WorkflowState?.RootVariableFrame);
+        Assert.Equal(3, rootFrame.Values["var-count"].InlineValue!.Value.GetInt32());
+        Assert.Equal("all-iterated", rootFrame.Values["var-result"].InlineValue!.Value.GetString());
     }
 
     [Fact]
-    public async Task IfForEachSetVariable_ComposeAndRunToCompletion_ThroughTheServerRequestHandlerPath()
+    public async Task IfForEachIntrinsicSet_ComposeAndRunToCompletion_ThroughTheServerRequestHandlerPath()
     {
         // Server / end-to-end variant: the same composed If + ForEach + SetVariable workflow is started through the
         // real ExecuteWorkflowRequestHandler → IWorkflowStartDispatcher → scheduler-drain path (the same
@@ -158,9 +153,9 @@ public sealed class ActivityLibraryAcceptanceTests
 
         // The loop's effect is observable end-to-end through the server path: the ForEach-accumulated counter reads
         // back as 3 and the If Then-branch SetVariable recorded the outcome.
-        var durableValues = await provider.GetRequiredService<IDurableValueStateStore>().ListAsync(view.WorkflowExecutionId);
-        Assert.Equal(3, VariableInt(durableValues, "count"));
-        Assert.Equal("all-iterated", VariableString(durableValues, "result"));
+        var rootFrame = Assert.IsType<VariableFrameState>(workflowState?.RootVariableFrame);
+        Assert.Equal(3, rootFrame.Values["var-count"].InlineValue!.Value.GetInt32());
+        Assert.Equal("all-iterated", rootFrame.Values["var-result"].InlineValue!.Value.GetString());
     }
 
     private static ServiceProvider BuildEndToEndProvider()
@@ -172,7 +167,6 @@ public sealed class ActivityLibraryAcceptanceTests
         services.AddSingleton<IActivityConstructor, SequenceConstructor>();
         services.AddSingleton<IActivityConstructor, ForEachConstructor>();
         services.AddSingleton<IActivityConstructor, IfConstructor>();
-        services.AddSingleton<IActivityConstructor, SetVariableConstructor>();
         new EventsFeature().ConfigureServices(services);
         new SerializationFeature().ConfigureServices(services);
         new ExpressionsFeature().ConfigureServices(services);
@@ -198,18 +192,6 @@ public sealed class ActivityLibraryAcceptanceTests
             createdAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
             compatibilityMetadata: new Dictionary<string, string>());
 
-    private static int VariableInt(IEnumerable<DurableValueState> durableValues, string variableName) =>
-        LatestVariable(durableValues, variableName).InlineValue!.Value.GetInt32();
-
-    private static string? VariableString(IEnumerable<DurableValueState> durableValues, string variableName) =>
-        LatestVariable(durableValues, variableName).InlineValue!.Value.GetString();
-
-    private static DurableValueState LatestVariable(IEnumerable<DurableValueState> durableValues, string variableName) =>
-        durableValues
-            .Where(durable => durable.Metadata.TryGetValue(RuntimeMetadataKeys.VariableName, out var name) && name == variableName)
-            .OrderBy(durable => durable.CapturedAt)
-            .Last();
-
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds)
     {
         var harness = WorkflowExecutionHarness.Create()
@@ -218,7 +200,6 @@ public sealed class ActivityLibraryAcceptanceTests
             .WithConstructor<SequenceConstructor>()
             .WithConstructor<ForEachConstructor>()
             .WithConstructor<IfConstructor>()
-            .WithConstructor<SetVariableConstructor>()
             .ConfigureServices(services =>
             {
                 services.AddLogging();
@@ -247,27 +228,19 @@ public sealed class ActivityLibraryAcceptanceTests
 
     /// <summary>
     /// Builds the composed executable: a Sequence root declaring workflow-scope variables <c>count</c> (Int32,
-    /// default 0) and <c>result</c> (String, default "none"), whose children are the seed SetVariable, the
-    /// ForEach loop, and the If branch.
+    /// default 0) and <c>result</c> (String, default "none"), whose children are the ForEach loop and If branch.
     /// </summary>
     private static WorkflowExecutable NewComposedExecutable(IReadOnlyCollection<string> collection) =>
         WorkflowExecutionHarness.NewExecutable(NewComposedRoot(collection));
 
     private static ExecutableNode NewComposedRoot(IReadOnlyCollection<string> collection)
     {
-        // (a) Seed the counter to 0 via SetVariable (literal). The value is bound as System.Object (the
-        //     SetVariable.Value contract is InputArgument<object>), matching the production materialization.
-        var seedNode = SetVariableNode(
-            nodeId: "node-seed",
-            variableName: "count",
-            valueBinding: Literal("Value", JsonSerializer.SerializeToElement(0), ObjectTypeName));
-
-        // (b) ForEach body: SetVariable count = `variables.count + 1` — each pass reads the variable a prior pass
-        //     wrote (real JS arithmetic over the re-projected workflow-scope variable) and writes it back.
-        var incrementNode = SetVariableNode(
+        // (a) ForEach body: intrinsic Set count = args.current + 1. The expression receives only its declared
+        // parameter and each pass commits the root frame before the next pass is scheduled.
+        var incrementNode = SetVariableIntrinsicNode(
             nodeId: "node-incr",
-            variableName: "count",
-            valueBinding: JavaScript("Value", "(variables.count == null ? 0 : variables.count) + 1", ObjectTypeName));
+            variableKey: "var-count",
+            valueBinding: PortableVariableExpression("args.current + 1", "Int32", "current", "var-count"));
 
         var foreachNode = new ExecutableNode(
             executableNodeId: "node-foreach",
@@ -278,7 +251,7 @@ public sealed class ActivityLibraryAcceptanceTests
             descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Collection"] = Literal("Collection", JsonSerializer.SerializeToElement(collection), ObjectTypeName)
+                ["Collection"] = CollectionBinding(collection)
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -288,12 +261,11 @@ public sealed class ActivityLibraryAcceptanceTests
                 ForEachActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new { body = "node-incr" })));
 
-        // (c) If on `variables.count === 3` — a condition over the variable the loop produced. Then branch records
-        //     the outcome; Else branch is a probe that must not run.
-        var setResultNode = SetVariableNode(
+        // (b) If sees the same canonical root-frame value through an explicitly declared expression parameter.
+        var setResultNode = SetVariableIntrinsicNode(
             nodeId: "node-set-result",
-            variableName: "result",
-            valueBinding: Literal("Value", JsonSerializer.SerializeToElement("all-iterated"), ObjectTypeName));
+            variableKey: "var-result",
+            valueBinding: CanonicalLiteral("value", "String", "all-iterated"));
 
         var elseNode = WorkflowExecutionHarness.NewProbeNode("node-else");
 
@@ -306,7 +278,7 @@ public sealed class ActivityLibraryAcceptanceTests
             descriptorPayload: JsonSerializer.SerializeToElement(new IfDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Condition"] = JavaScript("Condition", "variables.count === 3", BooleanTypeName)
+                ["Condition"] = PortableVariableExpression("args.count === 3", "Boolean", "count", "var-count")
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -320,14 +292,14 @@ public sealed class ActivityLibraryAcceptanceTests
                 IfActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new { then = "node-set-result", @else = "node-else" })));
 
-        var children = new[] { seedNode, foreachNode, ifNode };
+        var children = new[] { foreachNode, ifNode };
         var structurePayload = new
         {
             activities = children.Select(child => child.ExecutableNodeId).ToArray(),
             variables = new[]
             {
-                new VariableDefinition("var-count", "count", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal")),
-                new VariableDefinition("var-result", "result", new TypeReference("String"), null, new ArgumentValue("none", "Literal"))
+                RuntimeVariableDeclarationTestData.Create("var-count", "count", "Int32", 0),
+                RuntimeVariableDeclarationTestData.Create("var-result", "result", "String", "none")
             }
         };
 
@@ -350,21 +322,81 @@ public sealed class ActivityLibraryAcceptanceTests
         return root;
     }
 
-    private static ExecutableNode SetVariableNode(string nodeId, string variableName, RuntimeInputBinding valueBinding) =>
+    private static ExecutableNode SetVariableIntrinsicNode(
+        string nodeId,
+        string variableKey,
+        RuntimeInputBinding valueBinding) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
-            activityType: typeof(SetVariable).FullName!,
+            activityType: "elsa.intrinsic.set",
             activityTypeVersion: "1.0.0",
-            descriptorType: SetVariableConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SetVariableDescriptor()),
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Variable"] = Literal("Variable", JsonSerializer.SerializeToElement(variableName), StringTypeName),
-                ["Value"] = valueBinding
+                [WorkflowIntrinsicInputKeys.Value] = valueBinding
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference(variableKey, VariableReference.WorkflowScopeId));
+
+    private static RuntimeInputBinding CanonicalLiteral(string inputKey, string typeAlias, object? value)
+    {
+        var type = new ValueTypeDescriptor(typeAlias);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        var envelope = value is null
+            ? ValueEnvelope.Null(type, policy)
+            : ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), policy);
+        return new RuntimeInputBinding(
+            inputKey,
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: envelope);
+    }
+
+    private static RuntimeInputBinding CollectionBinding(IReadOnlyCollection<string> collection)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeInputBinding(
+            nameof(ForEachActivity.Collection),
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(collection), policy),
+            metadata: new Dictionary<string, string>
+            {
+                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = ObjectTypeName
+            });
+    }
+
+    private static RuntimeInputBinding PortableVariableExpression(
+        string source,
+        string resultTypeAlias,
+        string parameterName,
+        string variableKey)
+    {
+        var type = new ValueTypeDescriptor(resultTypeAlias);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeInputBinding(
+            parameterName == "count" ? "Condition" : WorkflowIntrinsicInputKeys.Value,
+            type,
+            policy,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                source,
+                new RuntimeValueTypeDescriptor("alias", resultTypeAlias, null),
+                parameters: new Dictionary<string, ExpressionParameterBinding>
+                {
+                    [parameterName] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, variableKey)
+                },
+                options: JsonSerializer.SerializeToElement(new { }),
+                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
+    }
 
     private static RuntimeInputBinding Literal(string inputName, JsonElement value, string typeName) =>
         new(
@@ -387,34 +419,6 @@ public sealed class ActivityLibraryAcceptanceTests
                 [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName,
                 ["referenceKey"] = inputName
             });
-
-    private sealed record SetVariableDescriptor
-    {
-        public static string DescriptorTypeKey => typeof(SetVariableDescriptor).FullName!;
-    }
-
-    private sealed class SetVariableConstructor : IActivityConstructor<SetVariableDescriptor>
-    {
-        public static string DescriptorTypeKey => SetVariableDescriptor.DescriptorTypeKey;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            Construct(new SetVariableDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(SetVariableDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
-        {
-            var activity = new SetVariable();
-            if (inputs is not null && inputs.TryGetValue("Variable", out var variableInput))
-                activity.Variable = (InputArgument<string>)variableInput;
-            // This hand-rolled constructor casts the materialized argument directly, so it requires the Value
-            // binding to be typed as System.Object (hence ObjectTypeName on every Value binding above). Typed
-            // (Int32/String) Value bindings through the *real* ClrActivityConstructor + ActivityArgumentBinder are
-            // covered by SetVariableTypedBindingTests (#313) — that path widens the argument to InputArgument<object>.
-            if (inputs is not null && inputs.TryGetValue("Value", out var valueInput))
-                activity.Value = (InputArgument<object>)valueInput;
-            return new(activity);
-        }
-    }
 
     private sealed record ForEachDescriptor;
 

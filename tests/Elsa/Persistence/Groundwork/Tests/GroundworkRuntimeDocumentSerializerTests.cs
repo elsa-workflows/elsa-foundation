@@ -2,7 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -297,6 +299,115 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
+    public void ActivityExecutionStateV3ToV4Upcaster_adds_neutral_iteration_frame_fields()
+    {
+        var content = JsonNode.Parse("""{"state":{"invocationId":"ae-1"}}""")!.AsObject();
+
+        var result = new ActivityExecutionStateDocumentV3ToV4Upcaster().Upcast(content);
+
+        var state = Assert.IsType<JsonObject>(result["state"]);
+        Assert.True(state.ContainsKey("iterationVariableFrame"));
+        Assert.Null(state["iterationVariableFrame"]);
+        Assert.True(state.ContainsKey("iterationFrameRequest"));
+        Assert.Null(state["iterationFrameRequest"]);
+    }
+
+    [Fact]
+    public void ActivityExecutionStateV3ToV4Upcaster_marks_legacy_inflight_iteration_metadata_incompatible()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "state": {
+                "invocationId": "ae-loop-body",
+                "provenance": {
+                  "metadata": {
+                    "runtime.loop.iterationOwnerNodeId": "node-loop",
+                    "runtime.loop.iterationItemName": "currentItem",
+                    "runtime.loop.iterationItemValue": "\"alpha\""
+                  }
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var result = new ActivityExecutionStateDocumentV3ToV4Upcaster().Upcast(content);
+
+        var compatibility = Assert.IsType<JsonObject>(result["state"]!["valueFlowCompatibility"]);
+        Assert.False(compatibility["isCompatible"]!.GetValue<bool>());
+        Assert.Equal("VF-ACT-009", compatibility["incompatibilityCode"]!.GetValue<string>());
+        Assert.Contains("typed iteration frame", compatibility["reason"]!.GetValue<string>(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Activity_iteration_frame_roundtrips_with_populated_protected_values()
+    {
+        var policy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            isSensitive: true,
+            requiresEncryption: true,
+            redactionMode: "mask");
+        var values = new Dictionary<string, ValueEnvelope>
+        {
+            ["currentItem"] = ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("secret"),
+                policy)
+        };
+        var parent = new VariableFrameFactory().CreateRoot("wf-1", "workflow", new Dictionary<string, ValueEnvelope>());
+        var frame = new VariableFrameFactory().CreateIteration("node-loop", "ae-body", "iteration-1", parent, values);
+        var document = new ActivityStateDocument("wf-1", ActivityState("ae-body") with { IterationVariableFrame = frame });
+
+        var (version, content) = Serializer.Serialize(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, document);
+        var restored = Serializer.Deserialize<ActivityStateDocument>(new DocumentEnvelope(
+            ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
+            "wf-1:ae-body",
+            version,
+            1,
+            content,
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch));
+
+        var item = restored.State.IterationVariableFrame!.Values["currentItem"];
+        Assert.Equal("secret", item.InlineValue!.Value.GetString());
+        Assert.Equal(policy.Lifecycle, item.Policy.Lifecycle);
+        Assert.Equal(policy.Storage, item.Policy.Storage);
+        Assert.Equal(policy.IsSensitive, item.Policy.IsSensitive);
+        Assert.Equal(policy.RequiresEncryption, item.Policy.RequiresEncryption);
+        Assert.Equal(policy.RedactionMode, item.Policy.RedactionMode);
+        Assert.Equal(frame.ParentFrameId, restored.State.IterationVariableFrame.ParentFrameId);
+    }
+
+    [Fact]
+    public void Activity_iteration_frame_request_roundtrips_with_populated_values()
+    {
+        var request = new LoopIterationScopeRequest(
+            "node-loop",
+            "iteration-1",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["currentIndex"] = ValueEnvelope.Inline(
+                    new ValueTypeDescriptor("Int32"),
+                    JsonSerializer.SerializeToElement(1),
+                    ValueProtectionPolicy.InstanceInline)
+            });
+        var document = new ActivityStateDocument("wf-1", ActivityState("ae-pending") with { IterationFrameRequest = request });
+
+        var (version, content) = Serializer.Serialize(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, document);
+        var restored = Serializer.Deserialize<ActivityStateDocument>(new DocumentEnvelope(
+            ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
+            "wf-1:ae-pending",
+            version,
+            1,
+            content,
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch));
+
+        Assert.Equal("node-loop", restored.State.IterationFrameRequest!.OwnerNodeId);
+        Assert.Equal(1, restored.State.IterationFrameRequest.Values["currentIndex"].InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
     public void DurableTimerV1ToV2Upcaster_adds_neutral_typed_payload_metadata()
     {
         var content = JsonNode.Parse("""{"timer":{"timerId":"timer-1"}}""")!.AsObject();
@@ -319,6 +430,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             new WorkflowExecutableDocumentV3ToV4Upcaster(),
             new ActivityExecutionStateDocumentV1ToV2Upcaster(),
             new ActivityExecutionStateDocumentV2ToV3Upcaster(),
+            new ActivityExecutionStateDocumentV3ToV4Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
             new WorkflowExecutionStateDocumentV3ToV4Upcaster(),
@@ -351,6 +463,26 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
+
+    private static ActivityExecutionState ActivityState(string activityExecutionId) => new(
+        new ActivityExecution(activityExecutionId, "wf-1", "node-body", "authored-body", "test/body", "1.0.0"),
+        ActivityExecutionStatus.Scheduled,
+        null,
+        DateTimeOffset.UnixEpoch,
+        null,
+        null,
+        "ae-loop",
+        "ae-loop",
+        null,
+        "iteration-1",
+        0,
+        [],
+        [],
+        0,
+        0,
+        new Dictionary<string, string>());
+
+    private sealed record ActivityStateDocument(string WorkflowExecutionId, ActivityExecutionState State);
 
     private static DocumentEnvelope Envelope(string schemaVersion, string contentJson) =>
         new(Kind, "bm-1", schemaVersion, 1, contentJson, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);

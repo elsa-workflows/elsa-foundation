@@ -151,7 +151,7 @@ request members, variables, a conditional, a child workflow, prior results, and 
 - [X] T055 [US2] Generate call handles exposing `Node`, whole `Result`, typed `Outputs`, and typed `Outcomes` in `src/Elsa/Workflows/Design/CodeGeneration/`
 - [X] T056 [US2] Lower builder state into the existing `WorkflowDefinitionState` without serializing carriers or delegates in `src/Elsa/Workflows/Design/Core/Authoring/WorkflowDefinitionCompiler.cs`
 - [X] T057 [US2] Add typed child-workflow request/result calls and ordinary builder extension support in `src/Elsa/Workflows/Design/Core/Authoring/`
-- [ ] T058 [US2] Run generator, design, publishing golden/equivalence, and architecture tests and mark US2 ledger successors implemented/passing
+- [X] T058 [US2] Run generator, design, publishing golden/equivalence, and architecture tests and mark US2 ledger successors implemented/passing
 
 **Checkpoint**: Code-first authoring is a compiler front end, not a second runtime or persisted CLR
 activity object graph.
@@ -179,8 +179,8 @@ explicit boundary transfer, concurrent-write rejection, and stable collection or
 - [X] T064 [US4] Implement explicit intrinsic Set/merge/reduce execution and checkpoint ordering in `src/Elsa/Workflows/Runtime/Services/WorkflowIntrinsicExecutor.cs`
 - [X] T065 [US4] Compile variable reads, explicit scope returns, collections, merges, and reductions in `src/Elsa/Workflows/Publishing/Api/Services/ExecutableNodeCompiler.cs`
 - [X] T066 [US4] Implement publication data-flow validation for concurrency, availability, scopes, cycles, and stable collection identity in `src/Elsa/Workflows/Design/Validations/`
-- [ ] T067 [US4] Migrate sequence, flowchart, loop, and parallel runtime scope services off memory-backed variables and metadata value bags in `src/Elsa/Activities/`
-- [ ] T068 [US4] Run variable, sequence, flowchart, control-flow, runtime recovery, and publishing validation tests and mark US4 ledger rows implemented/passing
+- [X] T067 [US4] Migrate sequence, flowchart, loop, and parallel runtime scope services off memory-backed variables and metadata value bags in `src/Elsa/Activities/`
+- [X] T068 [US4] Run variable, sequence, flowchart, control-flow, runtime recovery, and publishing validation tests and mark US4 ledger rows implemented/passing
 
 ---
 
@@ -207,7 +207,7 @@ parameters, and reject undeclared reads, mutation, delegates, and ambient nondet
 - [X] T076 [US5] Restrict Liquid binding evaluation to declared parameters in `src/Elsa/Expressions/Liquid/`
 - [X] T077 [US5] Remove delegate expressions, captured-closure converters, ambient variable/output/workflow accessors, mutation/write-back, service location, time/random/configuration backdoors from canonical binding evaluation in `src/Elsa/Expressions/` and `src/Elsa/Workflows/Runtime/JavaScript/`
 - [X] T078 [US5] Keep stateful scripting as transient activities returning typed results and requiring separate intrinsic Set operations in `src/Elsa/Activities/Scripting/`
-- [ ] T079 [US5] Run expressions, JavaScript, Liquid, activity materialization, hashing, and architecture tests and mark US5 ledger rows implemented/passing
+- [X] T079 [US5] Run expressions, JavaScript, Liquid, activity materialization, hashing, and architecture tests and mark US5 ledger rows implemented/passing
 
 ---
 

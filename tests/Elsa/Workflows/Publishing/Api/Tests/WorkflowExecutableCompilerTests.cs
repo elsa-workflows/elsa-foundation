@@ -398,12 +398,18 @@ public sealed class WorkflowExecutableCompilerTests
 
         var structure = executable.RootActivity.Structure;
         Assert.NotNull(structure);
-        var executableStructure = structure!.Payload.Deserialize<SequenceExecutableStructure>(
+        var executableStructure = structure!.Payload.Deserialize<RuntimeVariableStructureProjection>(
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(executableStructure);
         var materializedVariable = Assert.Single(executableStructure!.Variables);
-        Assert.Equal("var-counter", materializedVariable.ReferenceKey);
+        Assert.Equal("var-counter", materializedVariable.VariableKey);
         Assert.Equal("Counter", materializedVariable.Name);
+        Assert.Equal("String", materializedVariable.Type.Alias);
+        Assert.Equal(ValueProtectionPolicy.InstanceInline.Lifecycle, materializedVariable.Policy.Lifecycle);
+        Assert.Equal(ValueProtectionPolicy.InstanceInline.Storage, materializedVariable.Policy.Storage);
+        Assert.Equal(ValueProtectionPolicy.InstanceInline.IsSensitive, materializedVariable.Policy.IsSensitive);
+        Assert.Equal(ValueProtectionPolicy.InstanceInline.RequiresEncryption, materializedVariable.Policy.RequiresEncryption);
+        Assert.Equal("0", materializedVariable.InitialBinding!.Literal!.InlineValue!.Value.GetString());
     }
 
     [Fact]
@@ -590,6 +596,11 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static WorkflowArgumentState VariableText(JsonElement reference) =>
         new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
+
+    private sealed class RuntimeVariableStructureProjection
+    {
+        public IReadOnlyCollection<RuntimeVariableDeclaration> Variables { get; init; } = [];
+    }
 
     private static WorkflowArgumentState ObjectLines(IReadOnlyCollection<string> lines) =>
         new("Lines", new ArgumentValue(JsonSerializer.SerializeToElement(lines), "Object"), null, null, null, null);

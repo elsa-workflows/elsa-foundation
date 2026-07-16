@@ -8,6 +8,8 @@ using Elsa.Activities.Testing;
 using Elsa.Activities.Do;
 using Elsa.Events;
 using Elsa.Expressions;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Serialization.SystemText;
@@ -18,6 +20,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.JavaScript.PreProcessors;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Primitives.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -33,11 +36,9 @@ namespace Elsa.Activities.Do.Tests;
 /// tests cannot distinguish real observation from a hidden counter, so this locks the supported path.
 ///
 /// It also covers the post-test contract (the body runs at least once even when the condition is false on
-/// entry), the <c>Break</c> early-exit, and documents the #286 boundary: a condition over a
-/// <b>workflow-scope</b> variable the body mutates does NOT yet terminate. #286 mid-run write-back has
-/// landed on the leaf-invoke path, but a Do loop re-evaluates its condition on the parent-completion path,
-/// where named-variable write-back is still a documented follow-up — so a bounded run exhausts its
-/// deterministic id budget without the loop ever completing.
+/// entry), the <c>Break</c> early-exit, and workflow state advanced by an explicit graph-visible
+/// <c>Set</c> intrinsic. Variable reads are closed portable-expression parameters; no activity reaches
+/// into an ambient execution context to mutate workflow state.
 /// </summary>
 public sealed class DoRealExpressionRuntimeTests
 {
@@ -91,42 +92,17 @@ public sealed class DoRealExpressionRuntimeTests
     }
 
     [Fact]
-    public async Task WorkflowScopeVariableCondition_DoesNotYetTerminate_DocumentingThe286Limitation()
+    public async Task WorkflowScopeVariableCondition_TerminatesThroughExplicitSetIntrinsic()
     {
-        // The body writes a workflow-scope variable each pass. #286 mid-run workflow-variable write-back has
-        // landed on the leaf-invoke path, but a Do loop re-evaluates its condition on the parent-completion
-        // path, where named-variable write-back is still a documented follow-up (see the carrier comment in
-        // WorkflowParentActivityCompletionSchedulerWorkHandler). So the JS condition `variables.counter < 3`
-        // keeps seeing the start-time seed (0) and the loop never satisfies its exit condition.
-        //
-        // We prove that by handing out exactly `limit` body activity-execution ids — precisely what a
-        // terminating do-while would consume (passes at counter 0→1, 1→2, 2→3, then 3 < 3 is false). A loop
-        // that observed the write-back would complete inside that budget. Instead it asks for a `limit`+1'th
-        // pass and faults on id exhaustion, locking the boundary until write-back reaches this path.
         const int limit = 3;
         var bodyIds = Enumerable.Range(0, limit).Select(i => $"actexec-body-{i}").ToArray();
         await using var harness = NewHarness("actexec-do", bodyIds);
 
-        // The loop asks for a `limit`+1'th body pass; the deterministic-id generator runs dry, and the harness
-        // surfaces that as an AcceptedButFaulted dispatch which RunAsync rethrows (wrapping the inner reason).
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => harness.RunAsync(NewWorkflowVariableDrivenExecutable(limit)));
-        Assert.Contains("No deterministic activity execution ID is available", ex.Message);
+        var run = await harness.RunAsync(NewWorkflowVariableDrivenExecutable(limit));
 
-        // Tie the fault to genuine non-termination rather than a stray early id request: the body persisted
-        // exactly `limit` states before the fault, so the loop ran the full budget and only THEN requested one
-        // pass too many. A loop that observed the write-back would have stopped at `limit` and completed
-        // instead. (RunAsync throws before it can return the run, so read the persisted states directly.)
-        Assert.Equal(limit, await CountPersistedStatesAsync(harness, "node-body"));
-    }
-
-    // Counts how many execution states a node persisted, read straight from the store. Used when RunAsync
-    // faults mid-run (id-budget exhaustion) and cannot return a WorkflowExecutionRun to assert against.
-    private static async Task<int> CountPersistedStatesAsync(WorkflowExecutionHarness harness, string executableNodeId)
-    {
-        var store = harness.Services.GetRequiredService<IActivityExecutionStateStore>();
-        var states = await store.ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
-        return states.Count(state => state.Execution.ExecutableNodeId == executableNodeId);
+        Assert.Equal(limit, run.States("node-body").Count);
+        run.AssertOutcomes("node-do", ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
     }
 
     private static WorkflowExecutionHarness NewHarness(string compositeId, params string[][] bodyIdGroups)
@@ -206,27 +182,14 @@ public sealed class DoRealExpressionRuntimeTests
     }
 
     /// <summary>
-    /// Do(condition = JS `variables.counter &lt; limit`) over a body that mutates the workflow-scope
-    /// variable. Because Seam C has no mid-run write-back (#286), the condition never observes the change.
+    /// Do(condition = portable JS `args.counter &lt; limit`) over a graph-visible <c>Set</c> intrinsic.
     /// </summary>
     private static WorkflowExecutable NewWorkflowVariableDrivenExecutable(int limit)
     {
-        var body = new ExecutableNode(
-            executableNodeId: "node-body",
-            authoredActivityId: "authored-body",
-            activityType: CounterBody.ActivityTypeName,
-            activityTypeVersion: "1.0.0",
-            descriptorType: CounterBodyConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new CounterBodyDescriptor("counter")),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>
-            {
-                ["Next"] = JavaScriptInt("(variables.counter == null ? 0 : variables.counter) + 1")
-            },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+        var body = NewCounterSetIntrinsic();
 
         return NewDoExecutable(
-            conditionBinding: JavaScriptBool($"variables.counter == null ? true : variables.counter < {limit}"),
+            conditionBinding: PortableCounterExpression("Condition", $"args.counter < {limit}", "Boolean"),
             body: body,
             workflowVariableName: "counter");
     }
@@ -241,7 +204,10 @@ public sealed class DoRealExpressionRuntimeTests
             : new
             {
                 body = "node-body",
-                variables = new[] { new { referenceKey = $"var-{workflowVariableName}", name = workflowVariableName, @default = new { value = 0, type = "Literal" } } }
+                variables = new[]
+                {
+                    VariableDeclaration($"var-{workflowVariableName}", workflowVariableName, 0)
+                }
             };
 
         var root = new ExecutableNode(
@@ -258,9 +224,22 @@ public sealed class DoRealExpressionRuntimeTests
             structure: new ExecutableActivityStructure(
                 DoActivity.StructureKind,
                 DoActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(structurePayload)));
+                JsonSerializer.SerializeToElement(structurePayload, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 
         return WorkflowExecutionHarness.NewExecutable(root);
+    }
+
+    private static RuntimeVariableDeclaration VariableDeclaration(string key, string name, int value)
+    {
+        var type = new ValueTypeDescriptor("Int32");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        var envelope = ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), policy);
+        return new RuntimeVariableDeclaration(
+            key,
+            name,
+            type,
+            policy,
+            new RuntimeInputBinding(key, type, policy, RuntimeInputBindingSource.Literal, literal: envelope));
     }
 
     private static RuntimeInputBinding JavaScriptInt(string expression) =>
@@ -268,6 +247,43 @@ public sealed class DoRealExpressionRuntimeTests
 
     private static RuntimeInputBinding JavaScriptBool(string expression) =>
         JavaScript("Condition", expression, BooleanTypeName);
+
+    private static ExecutableNode NewCounterSetIntrinsic() =>
+        new(
+            executableNodeId: "node-body",
+            authoredActivityId: "authored-body",
+            activityType: "elsa.intrinsic.set",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Value] = PortableCounterExpression(
+                    WorkflowIntrinsicInputKeys.Value,
+                    "args.counter + 1",
+                    "Int32")
+            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("var-counter", VariableReference.WorkflowScopeId));
+
+    private static RuntimeInputBinding PortableCounterExpression(string inputName, string expression, string targetType) =>
+        new(
+            inputKey: inputName,
+            targetType: new ValueTypeDescriptor(targetType),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                expression,
+                new RuntimeValueTypeDescriptor("alias", targetType, null),
+                parameters: new Dictionary<string, ExpressionParameterBinding>
+                {
+                    ["counter"] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, "var-counter")
+                },
+                options: JsonSerializer.SerializeToElement(new { }),
+                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
 
     private static RuntimeInputBinding JavaScript(string inputName, string expression, string typeName) =>
         new(

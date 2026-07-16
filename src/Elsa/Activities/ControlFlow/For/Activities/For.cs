@@ -6,6 +6,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -121,7 +122,10 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
     {
         var ownerNodeId = runtimeContext.ExecutableNode.ExecutableNodeId;
         var iterationId = FormatIterationId(index);
-        var indexJson = JsonSerializer.Serialize(index);
+        var indexEnvelope = ValueEnvelope.Inline(
+            new ValueTypeDescriptor("Int32"),
+            JsonSerializer.SerializeToElement(index),
+            ValueProtectionPolicy.InstanceInline);
 
         // ADR 0028 / #259: publish this pass's iteration variable in the body child's scheduling
         // provenance. The runtime (RuntimeContainerScopeService) reads these keys to layer a fresh
@@ -141,19 +145,21 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
             metadata: new Dictionary<string, string>
             {
                 ["for.parentActivityExecutionId"] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
-                ["for.targetNodeId"] = body.ExecutableNodeId,
-                [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = ownerNodeId,
-                // For exposes a single counter; the current item and the zero-based index are the same
-                // value, surfaced under one variable name.
-                [RuntimeMetadataKeys.LoopIterationItemName] = IndexVariableName,
-                [RuntimeMetadataKeys.LoopIterationItemValue] = indexJson
+                ["for.targetNodeId"] = body.ExecutableNodeId
             });
 
         runtimeContext.ScheduleChildActivity(
             body.ExecutableNodeId,
             runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
             metadata: provenance.Metadata,
-            schedulingProvenance: provenance);
+            schedulingProvenance: provenance,
+            iterationFrame: new LoopIterationScopeRequest(
+                ownerNodeId,
+                iterationId,
+                new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
+                {
+                    [IndexVariableName] = indexEnvelope
+                }));
     }
 
     private ForRange ResolveRange() => ForRange.Create(Start, End, Step, EndInclusive);

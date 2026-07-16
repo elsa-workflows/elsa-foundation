@@ -58,7 +58,7 @@ public sealed class ActivityInputHydrator
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(inputs);
 
-        var properties = DiscoverProperties(activity.GetType());
+        var properties = DiscoverTransitionalProperties(activity.GetType());
         if (properties.Count == 0)
             return;
 
@@ -77,6 +77,24 @@ public sealed class ActivityInputHydrator
 
             property.SetValue(activity, input.Value);
         }
+    }
+
+    private static Dictionary<string, PropertyInfo> DiscoverTransitionalProperties(Type activityType)
+    {
+        var result = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var attribute = property.GetCustomAttribute<ActivityInputAttribute>(inherit: true);
+            if (attribute is null)
+                continue;
+            if (property.SetMethod is null || !property.SetMethod.IsPublic)
+                throw new InvalidOperationException($"Activity input property '{activityType.FullName}.{property.Name}' must have a public setter.");
+
+            result[property.Name] = property;
+            result[attribute.Key ?? property.Name] = property;
+        }
+
+        return result;
     }
 
     private void BeginHydration(IActivity activity)

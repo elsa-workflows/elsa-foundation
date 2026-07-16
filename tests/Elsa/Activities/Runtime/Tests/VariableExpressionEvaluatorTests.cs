@@ -1,133 +1,79 @@
 using System.Text.Json;
-using Elsa.Expressions.Core.Constants;
-using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.Models;
-using Elsa.Expressions.Options;
-using Elsa.Expressions.Services;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
 public sealed class VariableExpressionEvaluatorTests
 {
-    [Fact]
-    public async Task EvaluateAsync_ResolvesVariableExpressionThroughDefaultDescriptor()
-    {
-        var registry = new ExpressionDescriptorRegistry([new DefaultExpressionDescriptorProvider()]);
-        var evaluator = new ExpressionEvaluator(registry, new ServiceCollection().BuildServiceProvider(), Options.Create(ExpressionEvaluatorOptions.Empty));
-        var variable = new Variable("Counter", 42);
-        var context = new TestExpressionContext(variable);
-
-        var result = await evaluator.EvaluateAsync<int>(new TestExpression(WellKnownExpressionDescriptorTypes.Variable, "Counter"), context);
-
-        Assert.Equal(42, result);
-    }
+    private static readonly ValueTypeDescriptor Int32Type = new("Int32");
 
     [Fact]
-    public async Task EvaluateAsync_ResolvesStructuredWorkflowVariableReferenceThroughDefaultDescriptor()
+    public void Resolve_reads_workflow_variable_from_its_stable_frame_address()
     {
-        var registry = new ExpressionDescriptorRegistry([new DefaultExpressionDescriptorProvider()]);
-        var evaluator = new ExpressionEvaluator(registry, new ServiceCollection().BuildServiceProvider(), Options.Create(ExpressionEvaluatorOptions.Empty));
-        var variable = new Variable("Counter", 42);
-        var context = new TestExpressionContext(variable);
+        var resolved = Resolve(
+            Binding("var-counter", VariableReference.WorkflowScopeId),
+            Values((VariableReference.WorkflowScopeId, "var-counter", 42)));
 
-        var result = await evaluator.EvaluateAsync<int>(new TestExpression(WellKnownExpressionDescriptorTypes.Variable, new VariableReference("Counter")), context);
-
-        Assert.Equal(42, result);
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, resolved.Source);
+        Assert.Equal(42, resolved.Envelope!.InlineValue!.Value.GetInt32());
     }
 
     [Fact]
-    public async Task EvaluateAsync_ResolvesJsonWorkflowVariableReferenceThroughDefaultDescriptor()
+    public void Resolve_uses_reference_key_instead_of_authored_variable_name()
     {
-        var registry = new ExpressionDescriptorRegistry([new DefaultExpressionDescriptorProvider()]);
-        var evaluator = new ExpressionEvaluator(registry, new ServiceCollection().BuildServiceProvider(), Options.Create(ExpressionEvaluatorOptions.Empty));
-        var variable = new Variable("Counter", 42);
-        var context = new TestExpressionContext(variable);
-        var reference = JsonSerializer.SerializeToElement(new { referenceKey = "Counter", declaringScopeId = VariableReference.WorkflowScopeId });
+        var values = Values((VariableReference.WorkflowScopeId, "var-counter", 42));
 
-        var result = await evaluator.EvaluateAsync<int>(new TestExpression(WellKnownExpressionDescriptorTypes.Variable, reference), context);
+        var resolved = Resolve(Binding("var-counter", VariableReference.WorkflowScopeId), values);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Resolve(Binding("Counter", VariableReference.WorkflowScopeId), values));
 
-        Assert.Equal(42, result);
+        Assert.Equal(42, resolved.Envelope!.InlineValue!.Value.GetInt32());
+        Assert.Contains("Variable 'Counter'", exception.Message, StringComparison.Ordinal);
     }
 
-    private sealed class TestExpressionContext(params IVariable[] variables) : IExpressionExecutionContext
+    [Fact]
+    public void Resolve_rejects_variable_from_an_unavailable_scope()
     {
-        private readonly Dictionary<string, IVariable> variablesByName = variables.ToDictionary(x => x.Name);
+        var values = Values((VariableReference.WorkflowScopeId, "var-counter", 42));
 
-        public IMemoryRegister Memory { get; } = new TestMemoryRegister();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Resolve(Binding("var-counter", "sibling-scope"), values));
 
-        public IExpressionExecutionContext? ParentContext { get; set; }
-
-        public CancellationToken CancellationToken => CancellationToken.None;
-
-        public bool IsContainedWithinCompositeActivity() => false;
-
-        public bool TryGetActivityInput(string key, out object? value)
-        {
-            value = null;
-            return false;
-        }
-
-        public bool TryGetWorkflowInput(string key, out object? value)
-        {
-            value = null;
-            return false;
-        }
-
-        public object? GetVariableValueOrDefault(string variableName) => GetVariable(variableName)?.Get(this);
-
-        public string GetCorrelationId() => string.Empty;
-
-        public string GetWorkflowDefinitionId() => string.Empty;
-
-        public string GetWorkflowDefinitionVersionId() => string.Empty;
-
-        public int GetWorkflowDefinitionVersion() => 0;
-
-        public string GetWorkflowInstanceId() => string.Empty;
-
-        public object? GetRequiredService(Type type) => throw new InvalidOperationException($"No service registered for '{type}'.");
-
-        public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => Memory.Declare(blockReference);
-
-        public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) => Memory.TryGetBlock(blockReference.Id, out block);
-
-        public T? Get<T>(IMemoryBlockReference blockReference) => (T?)GetBlock(blockReference).Value;
-
-        public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null)
-        {
-            var block = Memory.Declare(blockReference);
-            block.Value = value;
-            configure?.Invoke(block);
-        }
-
-        public IVariable? GetVariable(string name, bool localScopeOnly = false) => variablesByName.GetValueOrDefault(name);
-
-        public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null)
-        {
-            var variable = new Variable<T>(name, value!);
-            variablesByName[name] = variable;
-            Set(variable, value, configure);
-            return variable;
-        }
-
-        public IEnumerable<IVariable> EnumerateVariablesInScope() => variablesByName.Values;
+        Assert.Contains("sibling-scope", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("unavailable", exception.Message, StringComparison.Ordinal);
     }
 
-    private sealed class TestMemoryRegister : IMemoryRegister
-    {
-        public IDictionary<string, IMemoryBlock> Blocks { get; } = new Dictionary<string, IMemoryBlock>();
-    }
+    private static RuntimeResolvedInput Resolve(
+        RuntimeInputBinding binding,
+        IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> values) =>
+        new RuntimeInputBindingResolver().Resolve(
+            binding,
+            new RuntimeInputBindingResolutionContext(
+                "workflow-1",
+                "activity-1",
+                new Dictionary<string, DurableValueState>(),
+                new InMemoryRuntimeActivityOutputRegister(),
+                variableEnvelopes: values));
 
-    private sealed class TestExpression(string type, object? value) : IExpression
-    {
-        public string Type { get; set; } = type;
+    private static RuntimeInputBinding Binding(string variableKey, string scopeId) =>
+        new(
+            "counter",
+            Int32Type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableRead,
+            variable: new RuntimeVariableReference(variableKey, scopeId));
 
-        public object? Value { get; set; } = value;
-
-        public TValue GetValue<TValue>() => (TValue)Value!;
-    }
+    private static IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> Values(
+        params (string ScopeId, string Key, int Value)[] values) =>
+        values.ToDictionary(
+            item => new RuntimeVariableValueAddress(item.ScopeId, item.Key),
+            item => ValueEnvelope.Inline(
+                Int32Type,
+                JsonSerializer.SerializeToElement(item.Value),
+                ValueProtectionPolicy.InstanceInline));
 }

@@ -113,7 +113,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var executable = NewExecutable(["node-start"], ["node-start"]);
         await store.SaveAsync(executable);
         var startHandler = NewHandler(store, queue);
-        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
+        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue, store);
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
@@ -161,7 +161,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             queue,
             [
                 NewHandler(store, queue),
-                NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue),
+                NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue, store),
                 new NoopWorkflowSchedulerWorkHandler()
             ],
             new FixedTimeProvider(_now));
@@ -200,7 +200,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             queue,
             [
                 NewHandler(executableStore, queue),
-                NewCheckpointHandler(activityStore, checkpointWriter, queue),
+                NewCheckpointHandler(activityStore, checkpointWriter, queue, executableStore),
                 new NoopWorkflowSchedulerWorkHandler()
             ],
             new FixedTimeProvider(_now));
@@ -252,7 +252,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var executable = NewExecutable(["node-start"], ["node-start"]);
         await store.SaveAsync(executable);
         var startHandler = NewHandler(store, queue);
-        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
+        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue, store);
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
@@ -293,7 +293,8 @@ public sealed class RuntimeStartCommandSchedulingTests
         var checkpointHandler = NewCheckpointHandler(
             new InMemoryActivityExecutionStateStore(),
             new ThrowingCheckpointWriter(),
-            dispatchQueue);
+            dispatchQueue,
+            store);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => checkpointHandler.HandleAsync(checkpointWork).AsTask());
 
@@ -422,14 +423,16 @@ public sealed class RuntimeStartCommandSchedulingTests
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
         IRuntimeCheckpointCommitStore checkpointWriter,
-        IWorkflowSchedulerWorkQueue queue) =>
+        IWorkflowSchedulerWorkQueue queue,
+        IWorkflowExecutableStore executableStore) =>
         new(
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter),
             inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(_now));
+            timeProvider: new FixedTimeProvider(_now),
+            workflowExecutableStore: executableStore);
 
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds) =>
         new(

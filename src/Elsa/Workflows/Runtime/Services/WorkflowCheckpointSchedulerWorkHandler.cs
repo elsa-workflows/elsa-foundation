@@ -16,6 +16,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IWorkflowExecutableStore? _workflowExecutableStore;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -29,7 +30,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IWorkflowExecutableStore? workflowExecutableStore = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
@@ -39,6 +41,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _workflowExecutableStore = workflowExecutableStore;
         _timeProvider = timeProvider;
     }
 
@@ -134,6 +137,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? null
             : await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
 
+        var executable = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted) && _workflowExecutableStore is not null
+            ? await _workflowExecutableStore.FindAsync(payload.PinnedExecutable.ArtifactId, cancellationToken)
+            : null;
+
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
@@ -144,7 +151,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState),
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -195,10 +202,11 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt,
-        WorkflowExecutionState? priorWorkflowState)
+        WorkflowExecutionState? priorWorkflowState,
+        WorkflowExecutable? executable)
     {
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted))
-            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState);
+            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable);
 
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
             return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt, priorWorkflowState);
@@ -210,7 +218,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt,
-        WorkflowExecutionState? priorWorkflowState)
+        WorkflowExecutionState? priorWorkflowState,
+        WorkflowExecutable? executable)
     {
         var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
@@ -233,7 +242,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
-            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables)
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -278,7 +287,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
-            RootVariableFrame = priorWorkflowState?.RootVariableFrame
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame
+                ? rootFrame.Status == VariableFrameStatus.Active ? rootFrame.Close(rootFrame.Revision) : rootFrame
+                : null
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -314,15 +325,28 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
 
     private static VariableFrameState CreateRootVariableFrame(
         string workflowExecutionId,
-        IReadOnlyDictionary<string, JsonElement> seedVariables)
+        IReadOnlyDictionary<string, JsonElement> seedVariables,
+        WorkflowExecutable? executable)
     {
-        var type = new ValueTypeDescriptor("Elsa.Any");
-        var values = seedVariables.ToDictionary(
-            item => item.Key,
-            item => item.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-                ? ValueEnvelope.Null(type, ValueProtectionPolicy.InstanceInline)
-                : ValueEnvelope.Inline(type, item.Value, ValueProtectionPolicy.InstanceInline),
-            StringComparer.Ordinal);
+        if (executable is null)
+            throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' cannot activate its canonical root variable frame without the pinned executable.");
+
+        var projector = new RuntimeVariableDeclarationProjector();
+        var declarations = projector.ProjectDeclarations(executable.RootActivity);
+        var initial = projector.ProjectInitialValues(executable.RootActivity);
+        var values = new Dictionary<string, ValueEnvelope>(initial, StringComparer.Ordinal);
+        foreach (var (referenceKey, declaration) in declarations)
+        {
+            if (!seedVariables.TryGetValue(referenceKey, out var seed) &&
+                !seedVariables.TryGetValue(declaration.Name, out seed))
+                continue;
+
+            var declared = initial[referenceKey];
+            values[referenceKey] = seed.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ValueEnvelope.Null(declared.Type, declared.Policy)
+                : ValueEnvelope.Inline(declared.Type, seed, declared.Policy);
+        }
+
         return new VariableFrameFactory().CreateRoot(
             workflowExecutionId,
             VariableReference.WorkflowScopeId,

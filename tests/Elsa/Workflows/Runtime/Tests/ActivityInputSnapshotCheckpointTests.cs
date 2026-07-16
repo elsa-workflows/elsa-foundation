@@ -19,6 +19,7 @@ public sealed class ActivityInputSnapshotCheckpointTests
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryRuntimeActivityOutputRegister _activityOutputRegister = new();
+    private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
 
     [Fact]
     public async Task ActivityStarted_checkpoint_commits_complete_input_snapshot_and_first_attempt_before_invoke_intent()
@@ -27,6 +28,7 @@ public sealed class ActivityInputSnapshotCheckpointTests
             ("message", DurableLiteral("message", "hello")),
             ("recipient", DurableLiteral("recipient", "world")));
         await _executableStore.SaveAsync(executable);
+        await SaveWorkflowStateAsync(executable.Identity);
         await _activityStateStore.SaveAsync(NewScheduledState());
         var commitStore = NewCommitStore();
         var handler = NewHandler(commitStore);
@@ -57,6 +59,7 @@ public sealed class ActivityInputSnapshotCheckpointTests
             ("message", DurableLiteral("message", "hello")),
             ("recipient", TransientLiteral("recipient", "unsafe")));
         await _executableStore.SaveAsync(executable);
+        await SaveWorkflowStateAsync(executable.Identity);
         await _activityStateStore.SaveAsync(NewScheduledState());
         var commitStore = NewCommitStore();
         var handler = NewHandler(commitStore);
@@ -83,7 +86,30 @@ public sealed class ActivityInputSnapshotCheckpointTests
             new FixedTimeProvider(Now),
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()),
             _durableValueStateStore,
-            _activityOutputRegister);
+            _activityOutputRegister,
+            workflowExecutionStateStore: _workflowStateStore);
+
+    private ValueTask<WorkflowExecutionState> SaveWorkflowStateAsync(WorkflowExecutableIdentity identity)
+    {
+        var root = new VariableFrameFactory().CreateRoot(
+            "wfexec-1",
+            Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
+            new Dictionary<string, ValueEnvelope>());
+        return _workflowStateStore.SaveAsync(new WorkflowExecutionState(
+            "wfexec-1",
+            identity,
+            WorkflowExecutionStatus.Running,
+            null,
+            Now,
+            Now,
+            Now,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>())
+        { RootVariableFrame = root });
+    }
 
     private InMemoryRuntimeCheckpointCommitStore NewCommitStore() =>
         new(activityExecutionStateStore: _activityStateStore, activityExecutionInspectionWriter: _inspectionStore);

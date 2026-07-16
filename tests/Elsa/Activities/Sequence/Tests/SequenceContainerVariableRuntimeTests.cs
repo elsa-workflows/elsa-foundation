@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
@@ -9,6 +10,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Options;
 using Elsa.Expressions.Services;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -39,7 +41,60 @@ public sealed class SequenceContainerVariableRuntimeTests
     {
         await using var provider = NewProvider(["actexec-sequence", "actexec-read"]);
         var executable = NewExecutable(
-            children: [CaptureNode("node-read", VariableBinding(CounterReferenceKey, SequenceNodeId))],
+            children: [CaptureNode("node-read", VariableBinding(CounterReferenceKey, VariableReference.WorkflowScopeId))],
+            variableDefault: "starting");
+
+        await ExecuteAsync(provider, executable);
+
+        var readState = Assert.Single(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1"),
+            state => state.Execution.ExecutableNodeId == "node-read");
+        Assert.True(readState.Status == ActivityExecutionStatus.Completed,
+            $"Read activity ended as {readState.Status}/{readState.SubStatus}: {readState.Fault?.Message}");
+        Assert.Equal("starting", CapturedValue(provider, "actexec-read"));
+    }
+
+    [Fact]
+    public async Task Root_frame_uses_the_variable_reference_key_as_durable_identity()
+    {
+        await using var provider = NewProvider(["actexec-sequence", "actexec-read"]);
+        var executable = NewExecutable(
+            children: [CaptureNode("node-read", VariableBinding(CounterReferenceKey, VariableReference.WorkflowScopeId))],
+            variableDefault: "starting");
+
+        await ExecuteAsync(provider, executable);
+
+        var workflow = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
+        Assert.NotNull(workflow?.RootVariableFrame);
+        Assert.Contains(CounterReferenceKey, workflow!.RootVariableFrame!.Values.Keys);
+        Assert.DoesNotContain("Counter", workflow.RootVariableFrame.Values.Keys);
+    }
+
+    [Fact]
+    public async Task Restarted_frame_resolution_reads_the_persisted_root_envelope()
+    {
+        await using var provider = NewProvider(["actexec-sequence", "actexec-read"]);
+        var executable = NewExecutable(
+            children: [CaptureNode("node-read", VariableBinding(CounterReferenceKey, VariableReference.WorkflowScopeId))],
+            variableDefault: "starting");
+        await ExecuteAsync(provider, executable);
+
+        var workflowStore = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+        var workflow = await workflowStore.FindAsync("wfexec-1");
+        var restored = workflow!.RootVariableFrame!.Values[CounterReferenceKey];
+        Assert.Equal(VariableFrameStatus.Closed, workflow.RootVariableFrame.Status);
+        Assert.Equal("starting", restored.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Ordinary_activities_cannot_hide_variable_writes_in_the_execution_context()
+    {
+        await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"]);
+        var executable = NewExecutable(
+            children:
+            [
+                AssignNode("node-assign", "Counter", "assigned-value"),
+                CaptureNode("node-read", VariableBinding(CounterReferenceKey, VariableReference.WorkflowScopeId))
+            ],
             variableDefault: "starting");
 
         await ExecuteAsync(provider, executable);
@@ -48,106 +103,24 @@ public sealed class SequenceContainerVariableRuntimeTests
     }
 
     [Fact]
-    public async Task Descendant_assignment_is_observed_by_a_later_sibling_in_the_same_container()
-    {
-        await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"]);
-        var executable = NewExecutable(
-            children:
-            [
-                AssignNode("node-assign", "Counter", "assigned-value"),
-                CaptureNode("node-read", VariableBinding(CounterReferenceKey, SequenceNodeId))
-            ],
-            variableDefault: "starting");
-
-        await ExecuteAsync(provider, executable);
-
-        // The later sibling sees the assignment the earlier sibling made through the shared container scope.
-        Assert.Equal("assigned-value", CapturedValue(provider, "actexec-read"));
-
-        // The assignment was persisted to the owning container execution's snapshot (single source of truth).
-        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
-        var sequenceState = Assert.Single(states, state => state.Execution.ExecutableNodeId == SequenceNodeId);
-        Assert.Contains("assigned-value", sequenceState.Metadata[RuntimeMetadataKeys.ScopedVariableValues]);
-    }
-
-    [Fact]
-    public async Task Resume_rebuilds_container_values_from_the_persisted_snapshot()
-    {
-        await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"]);
-        var executable = NewExecutable(
-            children:
-            [
-                AssignNode("node-assign", "Counter", "assigned-value"),
-                CaptureNode("node-read", VariableBinding(CounterReferenceKey, SequenceNodeId))
-            ],
-            variableDefault: "starting");
-        await ExecuteAsync(provider, executable);
-
-        // Simulate a resume: rebuild the descendant's visible scope from the persisted container
-        // state, exactly as the invoke handler does, and assert the assigned value is restored.
-        // A real resume targets a container that is still running (a descendant suspended on a
-        // bookmark), so clear the completion marker this finished run left behind — a completed
-        // scope is deliberately non-live (#210).
-        var store = provider.GetRequiredService<IActivityExecutionStateStore>();
-        var readState = Assert.Single(await store.ListAsync("wfexec-1"), state => state.Execution.ExecutableNodeId == "node-read");
-        var sequenceState = Assert.Single(await store.ListAsync("wfexec-1"), state => state.Execution.ExecutableNodeId == SequenceNodeId);
-        await store.SaveAsync(sequenceState with
-        {
-            Metadata = sequenceState.Metadata
-                .Where(entry => entry.Key != RuntimeMetadataKeys.ScopedVariableScopeCompleted)
-                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal)
-        });
-        var scope = await new RuntimeContainerScopeService(store).BuildScopeAsync(executable, "wfexec-1", readState);
-
-        Assert.NotNull(scope);
-        Assert.True(scope!.TryGetValue(new VariableReference(CounterReferenceKey, SequenceNodeId), out var restored));
-        Assert.Equal("assigned-value", restored?.ToString());
-    }
-
-    [Fact]
-    public async Task Container_completion_marks_scope_completed_and_captures_diagnostic_evidence_by_default()
-    {
-        await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"]);
-        var executable = NewExecutable(
-            children:
-            [
-                AssignNode("node-assign", "Counter", "assigned-value"),
-                CaptureNode("node-read", VariableBinding(CounterReferenceKey, SequenceNodeId))
-            ],
-            variableDefault: "starting");
-
-        await ExecuteAsync(provider, executable);
-
-        // The completed container's scope is marked completed (no longer live for later expressions).
-        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
-        var sequenceState = Assert.Single(states, state => state.Execution.ExecutableNodeId == SequenceNodeId);
-        Assert.Equal(bool.TrueString, sequenceState.Metadata[RuntimeMetadataKeys.ScopedVariableScopeCompleted]);
-
-        // The completed-scope variable is recorded as bounded diagnostic evidence by default.
-        var snapshot = await ContainerVariableSnapshot(provider, "actexec-sequence", "Counter");
-        Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, snapshot.CaptureMode);
-        var payload = Assert.IsType<JsonElement>(snapshot.Payload);
-        Assert.Equal("string", payload.GetProperty("kind").GetString());
-        Assert.Equal("assigned-value", payload.GetProperty("preview").GetString());
-    }
-
-    [Fact]
-    public async Task Capture_policy_retains_completed_scope_variable_payload()
+    public async Task Frame_values_survive_completion_as_inspection_evidence_without_metadata_bags()
     {
         await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"], new CapturingPolicy());
         var executable = NewExecutable(
             children:
             [
                 AssignNode("node-assign", "Counter", "assigned-value"),
-                CaptureNode("node-read", VariableBinding(CounterReferenceKey, SequenceNodeId))
+                CaptureNode("node-read", VariableBinding(CounterReferenceKey, VariableReference.WorkflowScopeId))
             ],
             variableDefault: "starting");
 
         await ExecuteAsync(provider, executable);
 
-        var snapshot = await ContainerVariableSnapshot(provider, "actexec-sequence", "Counter");
-        Assert.Equal(RuntimePayloadCaptureMode.Payload, snapshot.CaptureMode);
-        Assert.Equal("assigned-value", snapshot.Payload?.GetString());
+        var workflow = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
+        Assert.Equal("starting", workflow!.RootVariableFrame!.Values[CounterReferenceKey].InlineValue!.Value.GetString());
+        var sequence = Assert.Single(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1"),
+            state => state.Execution.ExecutableNodeId == SequenceNodeId);
+        Assert.DoesNotContain(RuntimeMetadataKeys.ScopedVariableValues, sequence.Metadata.Keys);
     }
 
     [Fact]
@@ -214,6 +187,7 @@ public sealed class SequenceContainerVariableRuntimeTests
         services.AddSingleton<IActivityConstructor, CaptureActivityConstructor>();
         services.AddSingleton<IActivityConstructor, AssignActivityConstructor>();
         services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
+        services.AddSingleton<IWellKnownTypeRegistry>(new TestTypeRegistry());
         if (capturePolicy is not null)
             services.AddSingleton(capturePolicy);
 
@@ -252,7 +226,7 @@ public sealed class SequenceContainerVariableRuntimeTests
             : new
             {
                 activities,
-                variables = new[] { new VariableDefinition(CounterReferenceKey, "Counter", new TypeReference("String"), null, new ArgumentValue(variableDefault, "Literal")) }
+                variables = new[] { VariableDeclaration(CounterReferenceKey, "Counter", variableDefault) }
             };
         var root = new ExecutableNode(
             executableNodeId: SequenceNodeId,
@@ -276,6 +250,19 @@ public sealed class SequenceContainerVariableRuntimeTests
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private static RuntimeVariableDeclaration VariableDeclaration(string key, string name, string value)
+    {
+        var type = new ValueTypeDescriptor("String");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        var envelope = ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), policy);
+        return new RuntimeVariableDeclaration(
+            key,
+            name,
+            type,
+            policy,
+            new RuntimeInputBinding(key, type, policy, RuntimeInputBindingSource.Literal, literal: envelope));
     }
 
     private static ExecutableNode CaptureNode(string nodeId, RuntimeInputBinding valueBinding) =>
@@ -304,12 +291,11 @@ public sealed class SequenceContainerVariableRuntimeTests
 
     private static RuntimeInputBinding VariableBinding(string referenceKey, string declaringScopeId) =>
         new(
-            inputName: "Value",
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding(
-                "Variable",
-                JsonSerializer.Serialize(new { referenceKey, declaringScopeId }),
-                new RuntimeValueTypeDescriptor("clr", "System.String", null)),
+            inputKey: "Value",
+            targetType: new ValueTypeDescriptor("String"),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.VariableRead,
+            variable: new RuntimeVariableReference(referenceKey, declaringScopeId),
             metadata: new Dictionary<string, string>
             {
                 [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String",
@@ -369,24 +355,23 @@ public sealed class SequenceContainerVariableRuntimeTests
         public string DescriptorType => DescriptorTypeKey;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new CaptureActivity(ResolveValueInput(inputs)));
+            new(new CaptureActivity());
 
         public ValueTask<IActivity> Construct(CaptureDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new CaptureActivity(ResolveValueInput(inputs)));
-
-        private static InputArgument<string>? ResolveValueInput(IDictionary<string, InputArgument>? inputs) =>
-            inputs is not null && inputs.TryGetValue("Value", out var input) ? (InputArgument<string>)input : null;
+            new(new CaptureActivity());
     }
 
     private sealed record CaptureDescriptor;
 
     // Reads its container-scoped "Value" input (resolved through the scope chain) and records it as output.
-    private sealed class CaptureActivity(InputArgument<string>? value) : CodeActivity("test/capture")
+    private sealed class CaptureActivity : ActivityBase
     {
+        [ActivityInput(Key = "Value")]
+        public string? Value { get; set; }
+
         protected override void Execute(IActivityExecutionContext context)
         {
-            var resolved = context.Get(value);
-            context.Set(new OutputArgument<string>(new CapturedMemoryBlockReference()), resolved, "Captured");
+            context.Set(new OutputArgument<string>(new CapturedMemoryBlockReference()), Value, "Captured");
             context.SetOutcomes([Workflows.Runtime.Core.Constants.ActivityOutcomes.Done]);
         }
     }
@@ -444,5 +429,26 @@ public sealed class SequenceContainerVariableRuntimeTests
             _activityExecutionIds.TryDequeue(out var activityExecutionId)
                 ? activityExecutionId
                 : throw new InvalidOperationException("No deterministic activity execution ID is available.");
+    }
+
+    private sealed class TestTypeRegistry : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+        public bool TryGetAlias(Type type, out string alias)
+        {
+            alias = type == typeof(string) ? "String" : string.Empty;
+            return alias.Length > 0;
+        }
+
+        public bool TryGetType(string alias, out Type type)
+        {
+            type = StringComparer.Ordinal.Equals(alias, "String") ? typeof(string) : typeof(object);
+            return type == typeof(string);
+        }
+
+        public IEnumerable<Type> ListTypes() => [typeof(string)];
+        public string GetAliasOrDefault(Type type) => type == typeof(string) ? "String" : type.FullName!;
+        public Type GetTypeOrDefault(string alias) => TryGetType(alias, out var type) ? type : typeof(object);
+        public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
     }
 }

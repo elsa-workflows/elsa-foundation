@@ -8,6 +8,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -26,12 +27,11 @@ namespace Elsa.Activities.ForEach.Activities;
 /// </summary>
 /// <remarks>
 /// The current item and index are loop-owned per-pass state realized through the shared loop-scope
-/// primitive (<see cref="RuntimeLoopIterationScopeFactory"/>, ADR 0028). For each pass the loop chooses a
+/// durable frame primitive (<see cref="VariableFrameState"/>, ADR 0028). For each pass the loop chooses a
 /// distinct <c>IterationId</c> and schedules the body child with that <c>IterationId</c> in
 /// <see cref="ActivitySchedulingProvenance.IterationId"/>, carrying the pass's item/index in the body's
-/// scheduling provenance metadata (the merged <c>RuntimeMetadataKeys.LoopIteration*</c> keys, #296). When the runtime starts the
-/// body it reads that metadata in <c>RuntimeContainerScopeService.BuildScopeAsync</c> and calls
-/// <c>BuildIterationScope</c> to layer a fresh per-pass iteration scope (item + optional index) as the
+/// typed scheduler request. When the runtime starts the body it activates a fresh per-pass iteration frame
+/// (item + optional index) as the
 /// innermost scope on the body's visible chain, so the body resolves the current item through the real
 /// expression evaluator. The runtime activity references only the runtime contract surface; the
 /// design-side structure handler references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
@@ -124,30 +124,20 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
         var parentActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
         var iterationId = StructuredExecutionIdentity.Iteration(parentActivityExecutionId, index);
 
-        // ADR 0028 / #259: publish this pass's iteration variables in the body child's scheduling
-        // provenance metadata, using the merged loop-scope keys (#296). The runtime
-        // (RuntimeContainerScopeService.BuildScopeAsync) reads these back and calls
-        // RuntimeLoopIterationScopeFactory.BuildIterationScope, layering a fresh per-pass iteration scope
-        // as the innermost scope on the body's enclosing container chain, so the body resolves
-        // 'currentItem' (and optionally 'currentIndex') through the real expression evaluator. The item
-        // and index values are JSON-serialized; the index is serialized as a JSON number so the scope
-        // builder's int parse recovers it. A distinct scope per pass (one per IterationId) isolates
-        // iterations; the IterationId is the scope's execution identity for correlation only.
+        // Routing metadata carries identity only. Iteration values travel as protected envelopes on the
+        // typed scheduler request and become a durable iteration frame before body input materialization.
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = ownerNodeId,
-            [RuntimeMetadataKeys.LoopIterationItemName] = CurrentItemVariableName,
-            [RuntimeMetadataKeys.LoopIterationItemValue] = JsonSerializer.Serialize(items.ItemAt(index)),
             ["foreach.parentActivityExecutionId"] = parentActivityExecutionId,
             ["foreach.targetNodeId"] = body.ExecutableNodeId,
             ["foreach.iterationIndex"] = index.ToString(CultureInfo.InvariantCulture)
         };
-
-        if (ExposeIndex)
+        var values = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
         {
-            metadata[RuntimeMetadataKeys.LoopIterationIndexName] = CurrentIndexVariableName;
-            metadata[RuntimeMetadataKeys.LoopIterationIndexValue] = JsonSerializer.Serialize(index);
-        }
+            [CurrentItemVariableName] = ToItemEnvelope(runtimeContext, items.ItemAt(index))
+        };
+        if (ExposeIndex)
+            values[CurrentIndexVariableName] = ToEnvelope(index, new ValueTypeDescriptor("Int32"), ValueProtectionPolicy.InstanceInline);
 
         // ADR 0028 contract step 3: schedule the body under that same IterationId (also carried in the
         // provenance metadata) so the body execution's iteration identity agrees with its scope.
@@ -164,7 +154,38 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
                 executionPathId: null,
                 executionScopeId: null,
                 schedulingCause: "foreach.iteration",
-                metadata: metadata));
+                metadata: metadata),
+            new LoopIterationScopeRequest(ownerNodeId, iterationId, values));
+    }
+
+    private static ValueEnvelope ToItemEnvelope(IRuntimeActivityExecutionContext runtimeContext, object? value)
+    {
+        if (!runtimeContext.ExecutableNode.InputBindings.TryGetValue(nameof(Collection), out var collectionBinding))
+            return ToEnvelope(value, new ValueTypeDescriptor("Elsa.Any"), ValueProtectionPolicy.InstanceInline);
+
+        var policy = collectionBinding.EffectivePolicy;
+        if (policy.Lifecycle == DurableValueLifecycle.None)
+            throw new ForEachExecutionException("ForEach cannot create a durable iteration frame from a transient Collection input.");
+        if (policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom)
+            throw new ForEachExecutionException($"ForEach cannot derive an item reference from Collection storage strategy '{policy.Storage}'. Materialize the items through an explicit persistable projection first.");
+
+        var collectionType = collectionBinding.TargetType;
+        var itemType = new ValueTypeDescriptor(
+            collectionType.Alias,
+            CollectionKind.Single,
+            collectionType.Schema,
+            collectionType.SchemaVersion);
+        return ToEnvelope(value, itemType, policy);
+    }
+
+    private static ValueEnvelope ToEnvelope(object? value, ValueTypeDescriptor type, ValueProtectionPolicy policy)
+    {
+        if (value is null)
+            return ValueEnvelope.Null(type, policy);
+        var json = value is JsonElement element
+            ? element.Clone()
+            : JsonSerializer.SerializeToElement(value, value.GetType());
+        return ValueEnvelope.Inline(type, json, policy);
     }
 
     private static int ResolveCompletedIndex(IRuntimeActivityExecutionContext runtimeContext, string? completedChildIterationId)

@@ -178,11 +178,9 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_PlainActivity_DoesNotReadWorkflowExecutionState()
+    public async Task HandleAsync_PlainActivity_ReadsCanonicalFrameOwnerState()
     {
-        // The common case: a plain activity that requests no control-leaf intent (no Finish/Correlate/SetName).
-        // Its execution-time carrier identity is projected from the tagged durable values it already re-lists, so the
-        // handler must not touch the workflow-execution-state store at all — the per-invocation read this unit removed.
+        // One provider bootstrap read and one invocation read establish the durable root-frame owner.
         var stateStore = new CountingWorkflowExecutionStateStore();
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
@@ -191,16 +189,16 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        Assert.Equal(0, stateStore.FindCount);
+        Assert.Equal(2, stateStore.FindCount);
         await AssertCompletionWorkAsync();
     }
 
     [Fact]
-    public async Task HandleAsync_PopulatesCarrierIdentityFromDurableValues_WithoutReadingState()
+    public async Task HandleAsync_PopulatesCarrierIdentityFromDurableValues_WhileReadingCanonicalFrames()
     {
         // The carrier's correlation id / instance name are projected from the IdentityName-tagged durable values the
         // invocation lists, so getCorrelationId() / getWorkflowInstanceName() are live at execution time without a
-        // workflow-execution-state read.
+        // workflow-execution-state identity projection. Canonical variable-frame ownership still requires the state.
         var stateStore = new CountingWorkflowExecutionStateStore();
         var activity = new IdentityCapturingActivity();
         await SeedIdentityDurableValuesAsync(correlationId: "order-123", instanceName: "Order 123");
@@ -213,7 +211,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         Assert.Equal("order-123", activity.ObservedCorrelationId);
         Assert.Equal("Order 123", activity.ObservedWorkflowName);
-        Assert.Equal(0, stateStore.FindCount);
+        Assert.Equal(2, stateStore.FindCount);
     }
 
     [Fact]
@@ -235,8 +233,8 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         await setHandler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        // Authoritative queryable home is updated with exactly one state read.
-        Assert.Equal(1, stateStore.FindCount);
+        // Provider bootstrap, canonical root-frame resolution, and authoritative control-leaf update each read state.
+        Assert.Equal(3, stateStore.FindCount);
         var savedState = await stateStore.FindAsync("wfexec-1");
         Assert.Equal("order-99", savedState?.CorrelationId);
         Assert.Equal("Order 99", savedState?.SystemMetadata[RuntimeMetadataKeys.InstanceName]);
@@ -998,8 +996,9 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddScoped(_ => factory);
         if (expressionEvaluator is not null)
             services.AddSingleton(expressionEvaluator);
-        if (workflowExecutionStateStore is not null)
-            services.AddSingleton(workflowExecutionStateStore);
+        var canonicalWorkflowStore = CanonicalWorkflowStateTestData.EnsureRunning(
+            workflowExecutionStateStore ?? new InMemoryWorkflowExecutionStateStore());
+        services.AddSingleton<IWorkflowExecutionStateStore>(_ => canonicalWorkflowStore);
         services.AddSingleton(_executableStore);
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton(_activityStateStore);
@@ -1022,6 +1021,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
         services.AddSingleton<ActivityCompletionProjector>();
+        services.AddSingleton<ActivityInputHydrator>();
         if (activityActivator is not null)
             services.AddSingleton(activityActivator);
         services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();

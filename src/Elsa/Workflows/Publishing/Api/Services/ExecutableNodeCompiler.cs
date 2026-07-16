@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -93,7 +94,7 @@ public sealed class ExecutableNodeCompiler(
                 [TriggerNodeMetadata.ExecutionTypeKey] = executionType
             },
             childSlots: childSlots,
-            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)),
+            structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
             activityContract: activityContract);
     }
 
@@ -187,7 +188,7 @@ public sealed class ExecutableNodeCompiler(
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
             childSlots: CompileChildSlots(projection.ChildProjections(activity), projection, activityRows),
-            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)),
+            structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
             activityContract: null,
             intrinsicKind: runtimeKind,
             intrinsicVariable: variable);
@@ -272,10 +273,50 @@ public sealed class ExecutableNodeCompiler(
             .ToArray();
     }
 
-    private static ExecutableActivityStructure? CompileStructure(ActivityNodeStructure? structure) =>
-        structure is null
-            ? null
-            : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
+    private ExecutableActivityStructure? CompileStructure(string nodeId, ActivityNodeStructure? structure)
+    {
+        if (structure is null)
+            return null;
+
+        var payload = JsonNode.Parse(structure.Payload.GetRawText()) as JsonObject
+            ?? throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
+        if (payload["variables"] is { } variablesNode)
+        {
+            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorSerializerOptions)
+                ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
+            var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
+            payload["variables"] = JsonSerializer.SerializeToNode(compiled, DescriptorSerializerOptions);
+        }
+
+        return new ExecutableActivityStructure(
+            structure.Kind,
+            structure.SchemaVersion,
+            JsonSerializer.SerializeToElement(payload, DescriptorSerializerOptions));
+    }
+
+    private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
+    {
+        var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        RuntimeInputBinding? initialBinding = null;
+        if (variable.Default is not null)
+        {
+            initialBinding = inputBindingCompiler.Compile(
+                nodeId,
+                new InputDefinition(
+                    variable.ReferenceKey,
+                    variable.Name,
+                    variable.Type,
+                    variable.StorageDriverType,
+                    variable.Name,
+                    Category: null),
+                variable.Default);
+            if (initialBinding.Source != RuntimeInputBindingSource.Literal)
+                throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");
+        }
+
+        return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
+    }
 
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(ExecutableNode root)
     {
@@ -335,6 +376,9 @@ public sealed class ExecutableNodeCompiler(
 
     private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)
     {
+        if (IsTypedStatefulResumeTarget(activityType, method))
+            return;
+
         var parameters = method.GetParameters();
         var hasSupportedParameter =
             parameters.Length == 0 ||
@@ -346,7 +390,33 @@ public sealed class ExecutableNodeCompiler(
 
         if (!hasSupportedParameter || !hasSupportedReturn)
             throw new ArgumentException(
-                $"Resume target method '{activityType.FullName}.{method.Name}' has an unsupported signature. A resume target must take no parameters or a single {nameof(IActivityExecutionContext)}/{nameof(JsonElement)} parameter and return void, Task, or ValueTask.");
+                $"Resume target method '{activityType.FullName}.{method.Name}' has an unsupported signature. A legacy resume target must take no parameters or a single {nameof(IActivityExecutionContext)}/{nameof(JsonElement)} parameter and return void, Task, or ValueTask; a typed stateful target must match IStatefulActivity<TResult,TState,TTrigger>.ResumeAsync.");
+    }
+
+    private static bool IsTypedStatefulResumeTarget(Type activityType, MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+        if (parameters.Length != 1 ||
+            !parameters[0].ParameterType.IsGenericType ||
+            parameters[0].ParameterType.GetGenericTypeDefinition() != typeof(ActivityResumeContext<,>) ||
+            !method.ReturnType.IsGenericType ||
+            method.ReturnType.GetGenericTypeDefinition() != typeof(ValueTask<>))
+            return false;
+
+        var transitionType = method.ReturnType.GetGenericArguments()[0];
+        if (!transitionType.IsGenericType || transitionType.GetGenericTypeDefinition() != typeof(ActivityTransition<,>))
+            return false;
+
+        var contextArguments = parameters[0].ParameterType.GetGenericArguments();
+        var transitionArguments = transitionType.GetGenericArguments();
+        return activityType.GetInterfaces()
+            .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IStatefulActivity<,,>))
+            .Select(candidate => candidate.GetGenericArguments())
+            .Any(contractArguments =>
+                contractArguments[0] == transitionArguments[0] &&
+                contractArguments[1] == transitionArguments[1] &&
+                contractArguments[1] == contextArguments[0] &&
+                contractArguments[2] == contextArguments[1]);
     }
 
     private static IEnumerable<ExecutableNode> FlattenExecutableNodes(ExecutableNode root)

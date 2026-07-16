@@ -6,26 +6,21 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Options;
-using Elsa.Expressions.Services;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Xunit;
 using ForEachActivity = Elsa.Activities.ForEach.Activities.ForEach;
 
 namespace Elsa.Activities.ForEach.Tests;
 
 /// <summary>
-/// End-to-end proof that a <c>ForEach</c> body resolves the current item (and index) through the
-/// <b>real</b> expression evaluator and the live publish→run pipeline — not a mock. The body is a capture
-/// activity whose <c>Value</c> input is a structured <c>Variable</c> expression addressing the loop's
-/// per-iteration item reference key (declaring scope = the ForEach node id). The runtime layers the
-/// iteration scope built by <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeLoopIterationScopeFactory"/>
-/// (ADR 0028) onto the body's visible chain, so each pass's capture records that pass's distinct item.
+/// End-to-end proof that a <c>ForEach</c> body resolves the current item and index through canonical
+/// variable-read bindings and the live publish→run pipeline. Each pass receives a distinct typed
+/// iteration frame owned by the ForEach node.
 /// </summary>
 public sealed class ForEachItemResolutionRuntimeTests
 {
@@ -80,22 +75,15 @@ public sealed class ForEachItemResolutionRuntimeTests
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithConstructor<ForEachActivityConstructor>()
             .WithConstructor(new CaptureActivityConstructor())
-            .ConfigureServices(WireRealExpressionEvaluator)
+            .ConfigureServices(services => services.AddSingleton<IWellKnownTypeRegistry>(
+                ClrConstruction.RegistryFor(typeof(string), typeof(int))))
             .Build(activityExecutionIds);
-
-    // Minimal real expression-evaluation surface, identical to the published wiring: the runtime
-    // materializer resolves the 'Variable' language through the descriptor registry and a real evaluator.
-    private static void WireRealExpressionEvaluator(IServiceCollection services)
-    {
-        services.AddSingleton<IExpressionDescriptorProvider, DefaultExpressionDescriptorProvider>();
-        services.AddSingleton<IExpressionDescriptorRegistry>(sp =>
-            new ExpressionDescriptorRegistry(sp.GetServices<IExpressionDescriptorProvider>()));
-        services.AddSingleton(Options.Create(ExpressionEvaluatorOptions.Empty));
-        services.AddScoped<IExpressionEvaluator, ExpressionEvaluator>();
-    }
 
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> collection, string bodyReferenceKey)
     {
+        var capturesIndex = StringComparer.Ordinal.Equals(bodyReferenceKey, ForEachActivity.CurrentIndexVariableName);
+        var targetAlias = capturesIndex ? "Int32" : "String";
+        var targetClrType = capturesIndex ? "System.Int32" : "System.String";
         var body = new ExecutableNode(
             executableNodeId: BodyNodeId,
             authoredActivityId: "authored-body",
@@ -106,15 +94,14 @@ public sealed class ForEachItemResolutionRuntimeTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Value"] = new RuntimeInputBinding(
-                    inputName: "Value",
-                    source: RuntimeInputBindingSource.Expression,
-                    expression: new RuntimeExpressionBinding(
-                        "Variable",
-                        JsonSerializer.Serialize(new { referenceKey = bodyReferenceKey, declaringScopeId = ForEachNodeId }),
-                        new RuntimeValueTypeDescriptor("clr", "System.String", null)),
+                    inputKey: "Value",
+                    targetType: new ValueTypeDescriptor(targetAlias),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.VariableRead,
+                    variable: new RuntimeVariableReference(bodyReferenceKey, ForEachNodeId),
                     metadata: new Dictionary<string, string>
                     {
-                        [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String",
+                        [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = targetClrType,
                         ["referenceKey"] = "Value"
                     })
             },
@@ -130,11 +117,7 @@ public sealed class ForEachItemResolutionRuntimeTests
             descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Collection"] = new RuntimeInputBinding(
-                    inputName: "Collection",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(collection),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" })
+                ["Collection"] = CollectionBinding(collection)
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -145,6 +128,19 @@ public sealed class ForEachItemResolutionRuntimeTests
                 JsonSerializer.SerializeToElement(new { body = BodyNodeId })));
 
         return WorkflowExecutionHarness.NewExecutable(root);
+    }
+
+    private static RuntimeInputBinding CollectionBinding(IReadOnlyCollection<string> collection)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeInputBinding(
+            nameof(ForEachActivity.Collection),
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(collection), policy),
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" });
     }
 
     private sealed class ForEachActivityConstructor : IActivityConstructor<ForEachDescriptor>
@@ -167,13 +163,22 @@ public sealed class ForEachItemResolutionRuntimeTests
         public string DescriptorType => DescriptorTypeKey;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new CaptureActivity(ResolveValueInput(inputs)));
+            new(NewCaptureActivity(inputs));
 
         public ValueTask<IActivity> Construct(CaptureDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new CaptureActivity(ResolveValueInput(inputs)));
+            new(NewCaptureActivity(inputs));
 
-        private static InputArgument<string>? ResolveValueInput(IDictionary<string, InputArgument>? inputs) =>
-            inputs is not null && inputs.TryGetValue("Value", out var input) ? (InputArgument<string>)input : null;
+        private static IActivity NewCaptureActivity(IDictionary<string, InputArgument>? inputs)
+        {
+            if (inputs is null || !inputs.TryGetValue("Value", out var input))
+                return new CaptureActivity(null);
+            return input switch
+            {
+                InputArgument<string> text => new CaptureActivity(text),
+                InputArgument<int> number => new IntCaptureActivity(number),
+                _ => throw new InvalidOperationException($"Unsupported capture input type '{input.GetType().Name}'.")
+            };
+        }
     }
 
     private sealed record CaptureDescriptor;
@@ -185,6 +190,18 @@ public sealed class ForEachItemResolutionRuntimeTests
         {
             var resolved = context.Get(value);
             context.Set(new OutputArgument<string>(new CapturedMemoryBlockReference()), resolved, "Captured");
+            context.SetOutcomes([Workflows.Runtime.Core.Constants.ActivityOutcomes.Done]);
+        }
+    }
+
+    private sealed class IntCaptureActivity(InputArgument<int> value) : CodeActivity("test/capture")
+    {
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            context.Set(
+                new OutputArgument<string>(new CapturedMemoryBlockReference()),
+                context.Get(value).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "Captured");
             context.SetOutcomes([Workflows.Runtime.Core.Constants.ActivityOutcomes.Done]);
         }
     }

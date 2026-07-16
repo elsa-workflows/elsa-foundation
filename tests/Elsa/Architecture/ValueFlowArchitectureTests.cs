@@ -44,7 +44,6 @@ public sealed partial class ValueFlowArchitectureTests(ITestOutputHelper output)
             ["src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/BlockReference.cs"] = 4,
             ["src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/ScriptExpressionContext.cs"] = 9,
             ["src/Elsa/Workflows/Runtime/Services/RuntimeActivityInputMaterializer.cs"] = 16,
-            ["src/Elsa/Workflows/Runtime/Services/RuntimeScopedVariableModel.cs"] = 3,
             ["src/Elsa/Workflows/Runtime/Services/SimpleActivityExecutionContext.cs"] = 19
         };
 

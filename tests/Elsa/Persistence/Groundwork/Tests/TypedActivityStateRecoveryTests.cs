@@ -40,6 +40,7 @@ public sealed class TypedActivityStateRecoveryTests
         await using (var worker = BuildWorker(fixture.DocumentStore, initialActivator))
         {
             await worker.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+            await worker.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(NewWorkflowState(executable.Identity));
             await worker.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewRunningState(executable.RootActivity.ActivityContract!));
 
             await Handler<WorkflowInvokeActivitySchedulerWorkHandler>(worker)
@@ -183,6 +184,30 @@ public sealed class TypedActivityStateRecoveryTests
             },
             Now,
             new Dictionary<string, string>());
+    }
+
+    private static WorkflowExecutionState NewWorkflowState(WorkflowExecutableIdentity identity)
+    {
+        var root = new VariableFrameFactory().CreateRoot(
+            WorkflowExecutionId,
+            Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
+            new Dictionary<string, ValueEnvelope>());
+        return new WorkflowExecutionState(
+            WorkflowExecutionId,
+            identity,
+            WorkflowExecutionStatus.Running,
+            null,
+            Now,
+            Now,
+            Now,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>())
+        {
+            RootVariableFrame = root
+        };
     }
 
     private static ActivityExecutionState NewRunningState(ActivityContract contract)

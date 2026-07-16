@@ -4,23 +4,20 @@ using Elsa.Activities.For;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
-using Elsa.Expressions;
-using Elsa.Expressions.Core.Constants;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ForActivity = Elsa.Activities.For.Activities.For;
 
 namespace Elsa.Activities.For.Tests;
 
 /// <summary>
-/// End-to-end proof that the loop body resolves the current index through the <b>real</b> expression
-/// evaluator. The body's <c>Value</c> input is bound to a <c>Variable</c> expression referencing the
-/// loop's per-iteration <c>index</c> variable (declaring scope = the For node). The body runs through the
-/// real <see cref="WorkflowExecutionHarness"/> agent — which builds the per-iteration scope via
-/// <see cref="RuntimeContainerScopeService"/> and materializes the input through the registered
-/// <c>IExpressionEvaluator</c> — and emits the resolved value as its outcome. No stub/deterministic
-/// evaluator is used: the recorded per-pass outcomes prove the index resolved in the body's scope chain.
+/// End-to-end proof that the loop body resolves the current index through a canonical variable-read
+/// binding. The live harness activates a typed per-iteration frame and materializes the body's input
+/// from that lexical frame before the body emits the resolved index as its outcome.
 /// </summary>
 public sealed class ForIndexResolutionEndToEndTests
 {
@@ -57,9 +54,10 @@ public sealed class ForIndexResolutionEndToEndTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithFeature(services => new ExpressionsFeature().ConfigureServices(services))
             .WithConstructor<ForActivityConstructor>()
             .WithConstructor<IndexCaptureActivityConstructor>()
+            .ConfigureServices(services => services.AddSingleton<IWellKnownTypeRegistry>(
+                ClrConstruction.RegistryFor(typeof(int))))
             .Build(activityExecutionIds);
 
     private static WorkflowExecutable NewExecutable(int start, int end, int step)
@@ -104,14 +102,13 @@ public sealed class ForIndexResolutionEndToEndTests
             descriptorPayload: JsonSerializer.SerializeToElement(new IndexCaptureDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                // Bind Value to a Variable expression referencing the loop's `index` declared by node-for.
+                // Bind Value to the typed `index` variable declared by node-for.
                 ["Value"] = new RuntimeInputBinding(
-                    inputName: "Value",
-                    source: RuntimeInputBindingSource.Expression,
-                    expression: new RuntimeExpressionBinding(
-                        WellKnownExpressionDescriptorTypes.Variable,
-                        JsonSerializer.Serialize(new { referenceKey = ForActivity.IndexVariableName, declaringScopeId = "node-for" }),
-                        new RuntimeValueTypeDescriptor("clr", "System.Int32", null)),
+                    inputKey: "Value",
+                    targetType: new ValueTypeDescriptor("Int32"),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.VariableRead,
+                    variable: new RuntimeVariableReference(ForActivity.IndexVariableName, "node-for"),
                     metadata: new Dictionary<string, string>
                     {
                         [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Int32",

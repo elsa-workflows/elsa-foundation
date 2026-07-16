@@ -36,7 +36,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
 {
     public const string RequestedBy = "workflow-designer-test-run";
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
-    private static readonly RuntimeVariableScopeFactory ScopeFactory = new();
+    private static readonly RuntimeVariableDeclarationProjector VariableDeclarations = new();
     // Unified with publish (ADR 0040): scope lives on the reference, not the artifact id, so a test run of a draft
     // behaviorally identical to a published version resolves to the SAME artifact id — the free equivalence signal.
     private const string ArtifactPrefix = "artifact-";
@@ -172,7 +172,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         // Seed authored workflow variable defaults from the compiled executable's root structure so a test
         // run resolves `variables.*` input expressions to their declared values (Seam C, #254), matching the
         // production runtime-API start path.
-        var variables = ScopeFactory.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
+        var variables = VariableDeclarations.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
 
         var dispatch = await startDispatcher.DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(

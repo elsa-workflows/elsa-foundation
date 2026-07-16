@@ -2,8 +2,8 @@
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "identity": {
-    "artifactHash": "sha256:a348c910445ec2cf368dec3778270db020c343d7e36094bb0388b63c56b47e28",
-    "artifactId": "artifact-a348c910445e",
+    "artifactHash": "sha256:fe8bb481ead911333c05d5c0bcd4759fb8b44ddc1025507c34fa945924587aad",
+    "artifactId": "artifact-fe8bb481ead9",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -81,17 +81,74 @@
         ],
         "variables": [
           {
-            "default": {
-              "expressionType": "Literal",
-              "value": "0"
+            "initialBinding": {
+              "activityOutput": null,
+              "activityResult": null,
+              "durableValue": null,
+              "effectivePolicy": {
+                "isSensitive": false,
+                "lifecycle": 1,
+                "metadata": {},
+                "redactionMode": null,
+                "requiresEncryption": false,
+                "retentionPolicy": null,
+                "storage": 1
+              },
+              "expression": null,
+              "inputKey": "var-counter",
+              "inputName": "var-counter",
+              "literal": {
+                "externalReference": null,
+                "inlineValue": "0",
+                "policy": {
+                  "isSensitive": false,
+                  "lifecycle": 1,
+                  "metadata": {},
+                  "redactionMode": null,
+                  "requiresEncryption": false,
+                  "retentionPolicy": null,
+                  "storage": 1
+                },
+                "presence": 2,
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                }
+              },
+              "literalValue": "0",
+              "metadata": {
+                "referenceKey": "var-counter"
+              },
+              "reference": null,
+              "source": 0,
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "variable": null,
+              "workflowRequest": null
             },
             "name": "Counter",
-            "referenceKey": "var-counter",
-            "storageDriverType": null,
+            "policy": {
+              "isSensitive": false,
+              "lifecycle": 1,
+              "metadata": {},
+              "redactionMode": null,
+              "requiresEncryption": false,
+              "retentionPolicy": null,
+              "storage": 1
+            },
             "type": {
               "alias": "String",
-              "collectionKind": "Single"
-            }
+              "collectionKind": "Single",
+              "schema": null,
+              "schemaVersion": null
+            },
+            "variableKey": "var-counter"
           }
         ]
       },

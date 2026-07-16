@@ -6,6 +6,7 @@ using Elsa.Activities.Testing;
 using Elsa.Expressions.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -16,7 +17,7 @@ public class ClrActivityConstructorTests
     private static JsonPayloadSerializer Serializer() => new(new JsonPayloadConverterRegistry());
 
     [Fact] // US4 / SC-003 — CLR round-trip with no Kind string
-    public async Task Create_ClrDescriptor_ConstructsActivityAndBindsInput()
+    public async Task Create_ClrDescriptor_ConstructsActivityAndHydratesPlainInput()
     {
         // Arrange: the CLR descriptor is the stable-alias ClrActivityDescriptor; the payload is serialized via
         // the canonical payload serializer (the same one the constructor reads with) and the activity type is
@@ -36,10 +37,14 @@ public class ClrActivityConstructorTests
 
         // Act
         var activity = await factory.Create(ClrConstruction.DescriptorType, payload, inputs, null);
+        new ActivityInputHydrator().Hydrate(activity,
+        [
+            new RuntimeMaterializedActivityInput("Message", inputs["Message"], "boom")
+        ]);
 
         // Assert
         var fault = Assert.IsType<Fault>(activity);
-        Assert.Same(inputs["Message"], fault.Message);
+        Assert.Equal("boom", fault.Message);
     }
 
     [Fact] // descriptor type is derived from typeof(TDescriptor) — never hand-authored

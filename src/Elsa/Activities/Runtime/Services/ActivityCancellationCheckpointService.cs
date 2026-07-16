@@ -41,14 +41,14 @@ internal static class ActivityCancellationCheckpointService
         metadata[RuntimeMetadataKeys.CancellationReason] = reason;
         metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
 
-        var cancelledState = EndOpenAttempt(state, occurredAt) with
+        var cancelledState = RuntimeContainerScopeService.CloseOwnedFrames(EndOpenAttempt(state, occurredAt) with
         {
             Status = ActivityExecutionStatus.Cancelled,
             SubStatus = CancellationSubStatus,
             CompletedAt = occurredAt,
             Completion = null,
             Metadata = metadata
-        };
+        });
         var checkpointId = $"checkpoint:{sourceWorkItem.WorkItemId}:activity-cancelled:{state.InvocationId}";
         var inspection = inspectionAccumulator is null
             ? null

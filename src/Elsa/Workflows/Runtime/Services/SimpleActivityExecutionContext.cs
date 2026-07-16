@@ -179,13 +179,15 @@ public sealed class SimpleActivityExecutionContext(
         string executableNodeId,
         string? schedulingActivityExecutionId = null,
         IReadOnlyDictionary<string, string>? metadata = null,
-        ActivitySchedulingProvenance? schedulingProvenance = null)
+        ActivitySchedulingProvenance? schedulingProvenance = null,
+        LoopIterationScopeRequest? iterationFrame = null)
     {
         _childActivityScheduleRequests.Add(new RuntimeChildActivityScheduleRequest(
             executableNodeId,
             schedulingActivityExecutionId,
             metadata,
-            schedulingProvenance));
+            schedulingProvenance,
+            iterationFrame));
     }
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
@@ -271,7 +273,8 @@ public sealed class SimpleActivityExecutionContext(
     // IExecutionExpressionState — the live execution-time expression carrier (ADR 0030). Populated by the
     // scheduler work handler from runtime state; read by the JavaScript pre/post-processors after casting the
     // passed IExpressionExecutionContext. Identity is sourced from WorkflowExecutionState + the pinned
-    // executable; inputs/variables/outputs are the durable-value projections. No Design dependency (§E2.2/§E2.6).
+    // executable; variables come from canonical frames while inputs/outputs retain their durable projections.
+    // No Design dependency (§E2.2/§E2.6).
     public string WorkflowInstanceId => WorkflowExecutionId;
     // Reflect a pending script assignment (setCorrelationId/setWorkflowInstanceName) so a read-after-write within
     // the same evaluation observes the new value, even though the durable change is folded at the checkpoint

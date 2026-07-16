@@ -8,14 +8,14 @@ the index. When the range is exhausted — or empty — the composite completes 
 
 ## How the index reaches the body
 
-The loop owner publishes the per-pass index in the body child's **scheduling-provenance metadata**
-(`runtime.loop.*` keys on `RuntimeMetadataKeys`). When the body runs, `RuntimeContainerScopeService`
-reads those keys and layers a fresh per-iteration `VariableScope` — built by
-`RuntimeLoopIterationScopeFactory`, exposing the index under the `index` reference key — as the
-**innermost** scope on top of the body's enclosing container chain (ADR 0028). The body's input
+The loop owner publishes the per-pass index as a protected `ValueEnvelope` on a typed
+`LoopIterationScopeRequest`; scheduling metadata carries identity only. When the body starts,
+`RuntimeContainerScopeService` consumes that request and activates a durable `VariableFrameState` — built
+by `RuntimeLoopIterationFrameFactory`, exposing the index under the `index` reference key — as the
+**innermost** frame on top of the body's enclosing lexical chain (ADR 0028). The body's input
 expressions therefore resolve the current index through the **real** expression-evaluation path: a body
 input bound to a `Variable` expression `{ referenceKey: "index", declaringScopeId: <For node id> }`
-resolves to the current pass's value. This wires #259's loop-scope factory into execution; it is the
+resolves to the current pass's value. This wires #259's loop-frame factory into execution; it is the
 shared hook `ForEach`/`While`/`Do` (#264/#266/#267) reuse rather than re-inventing iteration-variable
 threading.
 

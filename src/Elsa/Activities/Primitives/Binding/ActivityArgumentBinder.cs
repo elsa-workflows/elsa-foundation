@@ -1,4 +1,5 @@
 using System.Reflection;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
@@ -37,9 +38,18 @@ public sealed class ActivityArgumentBinder
 
         foreach (var (name, argument) in namedValues)
         {
-            var property = argumentProperties.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidOperationException(
+            var property = argumentProperties.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (property is null)
+            {
+                // During the value-flow migration, plain [ActivityInput] properties are hydrated once by
+                // ActivityInputHydrator after construction. Do not force those values back through the
+                // obsolete InputArgument channel merely because a legacy executable descriptor was loaded.
+                if (argumentBaseType == typeof(InputArgument) && HasPlainInput(activity.GetType(), name))
+                    continue;
+
+                throw new InvalidOperationException(
                     $"Activity '{activity.GetType().Name}' has no {argumentBaseType.Name} property named '{name}'.");
+            }
 
             // The runtime materializer builds the argument as InputArgument<T> from the value's *materialized*
             // CLR type (e.g. InputArgument<int> for a literal Int32). Generic InputArgument<T> is invariant, so
@@ -55,6 +65,15 @@ public sealed class ActivityArgumentBinder
             setter.Invoke(activity, [boundArgument]);
         }
     }
+
+    private static bool HasPlainInput(Type activityType, string name) =>
+        activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance).Any(property =>
+        {
+            var attribute = property.GetCustomAttribute<ActivityInputAttribute>(inherit: true);
+            return attribute is not null &&
+                   (property.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                    (attribute.Key ?? property.Name).Equals(name, StringComparison.OrdinalIgnoreCase));
+        });
 
     /// <summary>
     /// Returns <paramref name="argument"/> unchanged when it is already assignable to <paramref name="propertyType"/>.

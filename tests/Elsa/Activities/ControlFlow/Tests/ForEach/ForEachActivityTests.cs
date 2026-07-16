@@ -3,6 +3,7 @@ using Elsa.Activities.ForEach.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -36,6 +37,36 @@ public sealed class ForEachActivityTests : IDisposable
         Assert.Equal($"{ForEachExecutionId}:foreach-iteration:0", request.SchedulingProvenance.IterationId);
         Assert.Equal("0", request.Metadata["foreach.iterationIndex"]);
         Assert.False(context.CompositeCompletionRequested);
+    }
+
+    [Fact]
+    public async Task Execute_PreservesCollectionProtectionPolicyOnIterationItem()
+    {
+        var policy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            isSensitive: true,
+            requiresEncryption: true,
+            redactionMode: "mask");
+        var context = NewContext(new[] { "secret" }, CollectionBinding(policy));
+
+        await ExecuteAsync(context);
+
+        var item = Assert.Single(context.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName];
+        Assert.Equal("String", item.Type.Alias);
+        Assert.Equal(CollectionKind.Single, item.Type.CollectionKind);
+        Assert.Equal(policy, item.Policy);
+    }
+
+    [Fact]
+    public async Task Execute_RejectsTransientCollectionBeforeSchedulingDurableIterationFrame()
+    {
+        var context = NewContext(new[] { "ephemeral" }, CollectionBinding(ValueProtectionPolicy.Transient));
+
+        var exception = await Assert.ThrowsAsync<ForEachExecutionException>(() => ExecuteAsync(context).AsTask());
+
+        Assert.Contains("transient Collection", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
     [Fact]
@@ -96,9 +127,8 @@ public sealed class ForEachActivityTests : IDisposable
         Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
     }
 
-    // Characterization for #413 item 4 (O(n²)->O(n) item resolution): the completion callback must
-    // publish the NEXT item's exact serialized value in the scheduling metadata. Pins the identity of the
-    // item resolved on advance (off-by-one guard): completing index 0 of ["x","y","z"] must schedule "y".
+    // The completion callback must publish the next item in the typed iteration frame. This pins the
+    // identity of the item resolved on advance (off-by-one guard): completing index 0 schedules "y".
     [Fact]
     public async Task OnChildCompleted_PublishesNextItemSerializedValue()
     {
@@ -107,11 +137,13 @@ public sealed class ForEachActivityTests : IDisposable
         await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
-        Assert.Equal(JsonSerializer.Serialize("y"), request.Metadata[RuntimeMetadataKeys.LoopIterationItemValue]);
+        var item = Assert.IsType<ValueEnvelope>(request.IterationFrame!.Values[ForEachActivity.CurrentItemVariableName]);
+        Assert.Equal("y", item.InlineValue!.Value.GetString());
+        Assert.DoesNotContain(RuntimeMetadataKeys.LoopIterationItemValue, request.Metadata);
     }
 
     // The item value on the completion path must survive JsonElement unwrapping identically to Execute:
-    // a JSON array collection input resolves the scalar CLR item, whose re-serialized value is published.
+    // a JSON array collection input resolves the scalar CLR item stored in the typed envelope.
     [Fact]
     public async Task OnChildCompleted_ResolvesJsonElementItem_ThroughScalarUnwrapping()
     {
@@ -121,8 +153,9 @@ public sealed class ForEachActivityTests : IDisposable
         await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
-        // Unwrapped to the CLR string "beta", then re-serialized — not a raw JsonElement.
-        Assert.Equal(JsonSerializer.Serialize("beta"), request.Metadata[RuntimeMetadataKeys.LoopIterationItemValue]);
+        var item = Assert.IsType<ValueEnvelope>(request.IterationFrame!.Values[ForEachActivity.CurrentItemVariableName]);
+        Assert.Equal("beta", item.InlineValue!.Value.GetString());
+        Assert.DoesNotContain(RuntimeMetadataKeys.LoopIterationItemValue, request.Metadata);
     }
 
     // The non-enumerable guard must fire on the completion path too, not only at Execute — the callback
@@ -180,7 +213,7 @@ public sealed class ForEachActivityTests : IDisposable
     private static ActivityChildCompletedContext NewCompletion(SimpleActivityExecutionContext context, int iterationIndex) =>
         new(context, "actexec-body", BodyNodeId, [ActivityOutcomes.Done], $"{ForEachExecutionId}:foreach-iteration:{iterationIndex}");
 
-    private SimpleActivityExecutionContext NewContext(object? collection)
+    private SimpleActivityExecutionContext NewContext(object? collection, RuntimeInputBinding? collectionBinding = null)
     {
         var activity = new ForEachActivity { Id = ForEachExecutionId, NodeId = ForEachNodeId, Collection = collection };
         var context = new SimpleActivityExecutionContext(
@@ -190,12 +223,12 @@ public sealed class ForEachActivityTests : IDisposable
             "wfexec-1",
             NewIdentity(),
             NewWorkItem(),
-            NewForEachNode(),
+            NewForEachNode(collectionBinding),
             NewRunningState());
         return context;
     }
 
-    private static ExecutableNode NewForEachNode() =>
+    private static ExecutableNode NewForEachNode(RuntimeInputBinding? collectionBinding = null) =>
         new(
             executableNodeId: ForEachNodeId,
             authoredActivityId: "authored-foreach",
@@ -203,7 +236,9 @@ public sealed class ForEachActivityTests : IDisposable
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            inputBindings: collectionBinding is null
+                ? new Dictionary<string, RuntimeInputBinding>()
+                : new Dictionary<string, RuntimeInputBinding> { [nameof(ForEachActivity.Collection)] = collectionBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [NewBodyNode()])],
@@ -211,6 +246,17 @@ public sealed class ForEachActivityTests : IDisposable
                 ForEachActivity.StructureKind,
                 ForEachActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new { body = BodyNodeId })));
+
+    private static RuntimeInputBinding CollectionBinding(ValueProtectionPolicy policy)
+    {
+        var type = new ValueTypeDescriptor("String", CollectionKind.List);
+        return new RuntimeInputBinding(
+            nameof(ForEachActivity.Collection),
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(new[] { "value" }), policy));
+    }
 
     private static ExecutableNode NewBodyNode() =>
         new(

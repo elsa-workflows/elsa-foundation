@@ -178,6 +178,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton(_activityStateStore);
         services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
+        services.AddSingleton<IWorkflowExecutionStateStore>(_ =>
+            CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()));
         services.AddSingleton(_schedulerWorkQueue);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
         services.AddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
@@ -194,6 +196,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
         services.AddSingleton<ActivityFaultIncidentRecorder>();
+        services.AddSingleton<ActivityInputHydrator>();
         return services.BuildServiceProvider();
     }
 

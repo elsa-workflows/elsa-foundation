@@ -328,12 +328,12 @@ public sealed class WorkflowIntrinsicExecutor(
         var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"Finish intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
         var occurredAt = timeProvider.GetUtcNow();
-        var changedWorkflow = workflowState with
+        var changedWorkflow = RuntimeContainerScopeService.CloseRootFrame(workflowState with
         {
             Status = WorkflowExecutionStatus.Completed,
             SubStatus = null,
             CompletedAt = occurredAt
-        };
+        });
 
         return await CompleteIntrinsicAsync(
             startWorkItem,
@@ -381,7 +381,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 outcomeNames.Single(),
                 occurredAt,
                 $"intrinsic:{intrinsicKind}:1.0.0");
-        var completedState = intrinsicState with
+        var completedState = RuntimeContainerScopeService.CloseOwnedFrames(intrinsicState with
         {
             Status = ActivityExecutionStatus.Completed,
             StartedAt = occurredAt,
@@ -389,7 +389,7 @@ public sealed class WorkflowIntrinsicExecutor(
             Attempts = intrinsicState.Attempts ?? [],
             Completion = completion,
             Metadata = RuntimeModelMetadata.Snapshot(completedMetadata)
-        };
+        });
         var metadataValues = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [RuntimeMetadataKeys.SchedulerWorkItemId] = startWorkItem.WorkItemId,
@@ -577,8 +577,6 @@ public sealed class WorkflowIntrinsicExecutor(
         var durableValues = await durableValueStateStore.ListAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var frameEnvelopes = BuildVisibleFrameEnvelopes(workflowState, intrinsicState, runtimeView);
-        foreach (var (address, value) in projections.VariableEnvelopes)
-            frameEnvelopes.TryAdd(address, value);
 
         var context = new RuntimeInputBindingResolutionContext(
             workflowState.WorkflowExecutionId,
@@ -645,6 +643,14 @@ public sealed class WorkflowIntrinsicExecutor(
         if (activityOwner?.VariableFrame is { } activityFrame)
             return new FrameOwner(activityFrame, WorkflowOwned: false, activityOwner);
 
+        var readOnlyIteration = ancestors
+            .Select(state => state.IterationVariableFrame)
+            .Append(intrinsicState.IterationVariableFrame)
+            .FirstOrDefault(frame => frame is { Status: VariableFrameStatus.Active } &&
+                                     StringComparer.Ordinal.Equals(frame.ScopeId, declaringScopeId));
+        if (readOnlyIteration is not null)
+            throw new InvalidOperationException($"Iteration variable scope '{declaringScopeId}' is read-only and cannot be targeted by a Set, merge, or reduce intrinsic.");
+
         if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root &&
             StringComparer.Ordinal.Equals(root.ScopeId, declaringScopeId))
             return new FrameOwner(root, WorkflowOwned: true, ActivityOwner: null);
@@ -674,9 +680,14 @@ public sealed class WorkflowIntrinsicExecutor(
 
         foreach (var ancestor in ancestors)
         {
+            if (ancestor.IterationVariableFrame is { Status: VariableFrameStatus.Active } iteration)
+                AddFrame(iteration, result);
             if (ancestor.VariableFrame is { Status: VariableFrameStatus.Active } frame)
                 AddFrame(frame, result);
         }
+
+        if (intrinsicState.IterationVariableFrame is { Status: VariableFrameStatus.Active } currentIteration)
+            AddFrame(currentIteration, result);
 
         return result;
     }
