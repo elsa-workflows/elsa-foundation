@@ -15,9 +15,11 @@ namespace Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 /// <summary>Registers all seven selected store families against one SQL Server Groundwork target.</summary>
 public static class GroundworkSqlServerUnifiedRegistration
 {
+    /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
     public static IServiceCollection AddGroundworkSqlServerUnifiedPersistence(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        bool autoApplyOnStartup = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -30,7 +32,7 @@ public static class GroundworkSqlServerUnifiedRegistration
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
         services.AddGroundworkPublishingStores();
-        services.AddSqlServerGroundworkDocumentStore(connectionString);
+        services.AddSqlServerGroundworkDocumentStore(connectionString, autoApplyOnStartup);
         return services;
     }
 }

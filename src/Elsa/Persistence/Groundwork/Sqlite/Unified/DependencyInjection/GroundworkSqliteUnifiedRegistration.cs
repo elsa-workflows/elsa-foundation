@@ -23,10 +23,11 @@ public static class GroundworkSqliteUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The SQLite connection string the single document store opens.</param>
-    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(this IServiceCollection services, string connectionString)
+    /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(this IServiceCollection services, string connectionString, bool autoApplyOnStartup = false)
     {
         services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>();
-        services.AddSqliteGroundworkDocumentStore(connectionString);
+        services.AddSqliteGroundworkDocumentStore(connectionString, autoApplyOnStartup);
 
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkIdentityStores();

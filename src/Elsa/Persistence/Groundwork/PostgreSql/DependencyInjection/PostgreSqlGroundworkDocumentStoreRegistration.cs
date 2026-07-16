@@ -23,7 +23,8 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
 {
     public static IServiceCollection AddPostgreSqlGroundworkDocumentStore(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        bool autoApplyOnStartup = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -41,8 +42,10 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             sp.GetRequiredService<GroundworkWorkflowExecutionStatePageRouteSource>()));
         services.AddSingleton(sp => new PostgreSqlGroundworkDocumentStoreInitializer(
             connectionString,
+            autoApplyOnStartup,
             sp.GetRequiredService<IServiceScopeFactory>(),
-            sp.GetRequiredService<GroundworkStoreSessionSource>()));
+            sp.GetRequiredService<GroundworkStoreSessionSource>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PostgreSqlGroundworkDocumentStoreInitializer>>()));
         services.AddHostedService(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

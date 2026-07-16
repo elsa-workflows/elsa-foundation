@@ -19,7 +19,8 @@ public static class MongoDbGroundworkDocumentStoreRegistration
     public static IServiceCollection AddMongoDbGroundworkDocumentStore(
         this IServiceCollection services,
         string connectionString,
-        string databaseName)
+        string databaseName,
+        bool autoApplyOnStartup = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -43,9 +44,10 @@ public static class MongoDbGroundworkDocumentStoreRegistration
         services.AddSingleton(serviceProvider => new MongoDbGroundworkDocumentStoreInitializer(
             connectionString,
             databaseName,
+            autoApplyOnStartup,
             serviceProvider.GetRequiredService<GroundworkStoreSessionSource>(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            serviceProvider.GetRequiredService<IMongoDbGroundworkRuntimeAdmission>()));
+            serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MongoDbGroundworkDocumentStoreInitializer>>()));
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(serviceProvider =>

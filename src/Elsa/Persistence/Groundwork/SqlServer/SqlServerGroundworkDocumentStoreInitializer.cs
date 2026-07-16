@@ -2,8 +2,8 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
-using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
+using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.SqlServer;
@@ -11,30 +11,38 @@ using Groundwork.SqlServer.Documents;
 using Groundwork.SqlServer.PhysicalStorage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.Groundwork.SqlServer;
 
 /// <summary>
-/// Admits one already-applied SQL Server physical target before exposing its document store.
-/// Runtime startup performs inspection only; deployment tooling owns every schema mutation.
+/// Admits one SQL Server physical target before exposing its document store. By default, runtime
+/// startup only inspects schema; enable <c>autoApplyOnStartup</c> to apply safe pending operations
+/// automatically.
 /// </summary>
 public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService, IShellInitializer
 {
     private readonly string _connectionString;
+    private readonly bool _autoApplyOnStartup;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly GroundworkStoreSessionSource _sessionSource;
+    private readonly ILogger<SqlServerGroundworkDocumentStoreInitializer> _logger;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _initialized;
 
     internal SqlServerGroundworkDocumentStoreInitializer(
         string connectionString,
+        bool autoApplyOnStartup,
         IServiceScopeFactory scopeFactory,
-        GroundworkStoreSessionSource sessionSource)
+        GroundworkStoreSessionSource sessionSource,
+        ILogger<SqlServerGroundworkDocumentStoreInitializer> logger)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         _connectionString = connectionString;
+        _autoApplyOnStartup = autoApplyOnStartup;
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _sessionSource = sessionSource ?? throw new ArgumentNullException(nameof(sessionSource));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -56,10 +64,18 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                 return;
 
             var schemaSource = await CreateSchemaSourceAsync(cancellationToken);
-            IPhysicalSchemaHistoryInspector inspector = new SqlServerPhysicalSchemaExecutor(_connectionString);
-            var admission = await schemaSource.InspectRuntimeAdmissionAsync(inspector, cancellationToken);
+            var admission = await schemaSource.InspectRuntimeAdmissionAsync(
+                new SqlServerPhysicalSchemaExecutor(_connectionString),
+                new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = _autoApplyOnStartup },
+                entry => _logger.Log(
+                    entry.Level == GroundworkRuntimeSchemaAdmissionLogLevel.Information
+                        ? LogLevel.Information
+                        : LogLevel.Warning,
+                    "{AdmissionMessage}",
+                    entry.Message),
+                cancellationToken);
             if (!admission.IsReady)
-                throw AdmissionFailure(admission);
+                throw new ElsaAdmissionException(admission);
 
             var historyRoute = admission.PhysicalTarget.Routes.SingleOrDefault(route =>
                 string.Equals(
@@ -103,8 +119,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         {
             throw;
         }
-        catch (InvalidOperationException exception) when (
-            exception.Message.StartsWith("SQL Server Groundwork", StringComparison.Ordinal))
+        catch (ElsaAdmissionException)
         {
             throw;
         }
@@ -140,18 +155,5 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
             capabilities,
             SqlServerGroundworkCapabilities.PhysicalNames,
             cancellationToken);
-    }
-
-    private static InvalidOperationException AdmissionFailure(GroundworkRuntimeSchemaAdmissionResult admission)
-    {
-        var codes = admission.Diagnostics
-            .Where(diagnostic => diagnostic.IsError)
-            .Select(diagnostic => diagnostic.Code)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        var reason = codes.Length == 0 ? "not-ready" : string.Join(",", codes);
-        return new InvalidOperationException(
-            $"SQL Server Groundwork target '{admission.TargetFingerprint}' was not admitted ({reason}); no schema changes were attempted and no document store was exposed.");
     }
 }

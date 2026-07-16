@@ -23,7 +23,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
 {
     public static IServiceCollection AddSqliteGroundworkDocumentStore(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        bool autoApplyOnStartup = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -41,8 +42,10 @@ public static class SqliteGroundworkDocumentStoreRegistration
             sp.GetRequiredService<GroundworkWorkflowExecutionStatePageRouteSource>()));
         services.AddSingleton(sp => new SqliteGroundworkDocumentStoreInitializer(
             connectionString,
+            autoApplyOnStartup,
             sp.GetRequiredService<IServiceScopeFactory>(),
-            sp.GetRequiredService<GroundworkStoreSessionSource>()));
+            sp.GetRequiredService<GroundworkStoreSessionSource>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SqliteGroundworkDocumentStoreInitializer>>()));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

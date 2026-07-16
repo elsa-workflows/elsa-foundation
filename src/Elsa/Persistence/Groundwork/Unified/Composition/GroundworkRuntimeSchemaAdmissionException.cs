@@ -17,7 +17,10 @@ public sealed class GroundworkRuntimeSchemaAdmissionException : InvalidOperation
                 Environment.NewLine,
                 result.Diagnostics.Select(diagnostic =>
                     $"{diagnostic.Code}: {diagnostic.Message} [{diagnostic.Target}]"));
+        var reason = result.AppliedOperationCount > 0
+            ? "Auto-apply was attempted but the target is still not ready."
+            : "Runtime startup did not apply or repair schema.";
         return $"Groundwork runtime schema admission failed for target '{result.TargetFingerprint}'. " +
-               "Runtime startup did not apply or repair schema." + Environment.NewLine + diagnostics;
+               reason + Environment.NewLine + diagnostics;
     }
 }

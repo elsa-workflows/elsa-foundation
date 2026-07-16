@@ -37,6 +37,12 @@ public class MongoDbGroundworkUnifiedPersistenceShellFeature : IShellFeature
         Category = "Persistence")]
     public string? DatabaseName { get; set; }
 
+    [ManifestSetting(
+        DisplayName = "Auto-apply schema on startup",
+        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Category = "Persistence")]
+    public bool AutoApplySchemaOnStartup { get; set; } = true;
+
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString)
@@ -45,6 +51,6 @@ public class MongoDbGroundworkUnifiedPersistenceShellFeature : IShellFeature
         var databaseName = string.IsNullOrWhiteSpace(DatabaseName)
             ? DefaultDatabaseName
             : DatabaseName;
-        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName);
+        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName, AutoApplySchemaOnStartup);
     }
 }
