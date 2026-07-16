@@ -9,4 +9,6 @@ public sealed record ListWorkflowExecutables(
 
 public sealed record GetWorkflowExecutable(string ArtifactId, string? Ref = null) : IRequest<WorkflowExecutableDetailsView>;
 
+public sealed record GetWorkflowExecutableInputSources(string ArtifactId, string SourceReferenceId) : IRequest<WorkflowExecutableInputSourcesView>;
+
 public sealed record GetWorkflowExecutableProvenance(string ArtifactId) : IRequest<ExecutableProvenanceView>;

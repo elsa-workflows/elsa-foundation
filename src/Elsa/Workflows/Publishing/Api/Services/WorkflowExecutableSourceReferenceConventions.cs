@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -29,4 +31,29 @@ public static class WorkflowExecutableLayoutSidecar
                     record.Height,
                     record.AdditionalProperties))
                 .ToArray();
+}
+
+/// <summary>
+/// Projects authored input sources into the per-publish source-reference sidecar. The activity tree projection is
+/// shared with executable compilation so inputs nested in activity-owned structures are included as well as the root.
+/// </summary>
+public sealed class WorkflowExecutableAuthoredInputsSidecar(ActivityTreeProjector activityTreeProjector)
+{
+    public IReadOnlyList<WorkflowExecutableAuthoredInputRecord> CopyFrom(WorkflowDefinitionState state)
+    {
+        if (state.RootActivity is null)
+            return [];
+
+        return activityTreeProjector.Project(state.RootActivity).Nodes
+            .SelectMany(node => node.Inputs.Select(input => new WorkflowExecutableAuthoredInputRecord(
+                node.NodeId,
+                input.ReferenceKey,
+                input.Value.ExpressionType,
+                CopyValue(input.Value.Value),
+                input.IsSensitive is true)))
+            .ToArray();
+    }
+
+    private static JsonElement CopyValue(object? value) =>
+        value is JsonElement json ? json.Clone() : JsonSerializer.SerializeToElement(value);
 }

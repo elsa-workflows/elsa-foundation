@@ -30,7 +30,8 @@ public sealed class PublishWorkflowRequestHandler(
     WorkflowPublicationPreflightReader? publicationPreflightReader = null,
     IWorkflowDefinitionVersionStore? workflowVersionStore = null,
     PublicationSnapshotReviewService? snapshotReviews = null,
-    WorkflowExecutablePlacementSidecarContext? placementSidecars = null)
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -176,6 +177,9 @@ public sealed class PublishWorkflowRequestHandler(
     {
         var identity = executable.Identity;
         var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
+        var authoredInputs = workflowVersionStore is not null && authoredInputsSidecar is not null
+            ? authoredInputsSidecar.CopyFrom((await workflowVersionStore.GetWithDefinitionAsync(identity.DefinitionVersionId, cancellationToken)).State)
+            : [];
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
             ArtifactId: identity.ArtifactId,
@@ -191,7 +195,8 @@ public sealed class PublishWorkflowRequestHandler(
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             PublicationId: publicationId,
             SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
-            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId));
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
+            AuthoredInputs: authoredInputs);
     }
 
     private async ValueTask RetireReferenceAsync(string publicationId, DateTimeOffset now, CancellationToken cancellationToken)

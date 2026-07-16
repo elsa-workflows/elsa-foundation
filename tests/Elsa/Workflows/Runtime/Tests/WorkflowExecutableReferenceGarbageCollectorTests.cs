@@ -148,9 +148,11 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
 
         var liveSweep = await collector.SweepAsync(_now);
 
-        Assert.Equal(2, liveSweep.DeletedReferenceCount);
+        Assert.Equal(0, liveSweep.DeletedReferenceCount);
         Assert.NotNull(await _executableStore.FindAsync(executable.Identity.ArtifactId));
         Assert.NotNull(await templates.FindAsync(template.TemplateId));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("wrapper-ref"));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("template-ref"));
 
         await _workflowExecutionStateStore.SaveAsync(Execution("execution-1", executable.Identity.ArtifactId, WorkflowExecutionStatus.Completed));
         var terminalSweep = await collector.SweepAsync(_now);
@@ -160,8 +162,11 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.True(await _workflowExecutionStateStore.DeleteAsync("execution-1"));
         var collectedSweep = await collector.SweepAsync(_now);
 
+        Assert.Equal(2, collectedSweep.DeletedReferenceCount);
         Assert.Equal(1, collectedSweep.DeletedArtifactCount);
         Assert.Equal(1, collectedSweep.DeletedActivityTemplateCount);
+        Assert.Null(await _sourceReferenceStore.FindAsync("wrapper-ref"));
+        Assert.Null(await _sourceReferenceStore.FindAsync("template-ref"));
     }
 
     private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector() =>

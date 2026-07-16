@@ -151,7 +151,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
     {
         var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
 
-        IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        RuntimeActivityInputMaterializationBatch materialization;
         VariableScope? variableScope;
         RuntimeInputBindingStateProjectionSet projections;
         IReadOnlyDictionary<string, object?> workflowVariables;
@@ -192,7 +192,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 workflowInputs: workflowInputValues,
                 activityOutputValues: activityOutputValues,
                 variableScope: variableScope);
-            inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
+            materialization = await _inputMaterializer.MaterializeInputResultsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -203,13 +203,40 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
             return;
         }
-        var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
+        var incidentId = materialization.HasFailures
+            ? ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, invokePayload.ActivityExecutionId, "InputMaterializationFailed")
+            : null;
+        var valueSnapshots = ActivityOutputPublisher.BuildInputValueSnapshots(
+            payloadCapturePolicy,
+            workItem,
+            invokePayload.ActivityExecutionId,
+            invokePayload.ExecutableNodeId,
+            "Invoke",
+            materialization.Results,
+            _timeProvider.GetUtcNow(),
+            RuntimeMetadataKeys.InvokeSchedulerWorkItemId,
+            incidentId).ToList();
+        if (materialization.HasFailures)
+        {
+            await RecordFaultAsync(
+                activityFaultIncidentRecorder,
+                activityExecutionStateStore,
+                checkpointCommitter,
+                workItem,
+                invokePayload,
+                state,
+                new RuntimeActivityInputMaterializationException(materialization.Results),
+                "InputMaterializationFailed",
+                valueSnapshots,
+                cancellationToken);
+            return;
+        }
+
+        var inputs = materialization.Inputs;
         IActivity activity;
         SimpleActivityExecutionContext context;
         try
         {
-            valueSnapshots.AddRange(ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, inputs, _timeProvider.GetUtcNow()));
-
             // Activity construction + argument binding (ActivityArgumentBinder, invoked inside Create) runs
             // inside the same fault boundary as input materialization (#317). Previously this step sat between
             // the two materialization try/catch blocks, so a binder/constructor throw (e.g. a typed-binding

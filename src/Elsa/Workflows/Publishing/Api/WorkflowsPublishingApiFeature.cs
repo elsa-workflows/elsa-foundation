@@ -78,6 +78,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<RuntimeOutputCaptureCompiler>();
         services.TryAddScoped<WorkflowExecutableHasher>();
         services.TryAddScoped<ActivityTreeProjector>();
+        services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
         services.TryAddScoped<ExecutableNodeCompiler>();
         services.TryAddScoped<WorkflowExecutablePlacementSidecarContext>();
         services.TryAddSingleton<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();

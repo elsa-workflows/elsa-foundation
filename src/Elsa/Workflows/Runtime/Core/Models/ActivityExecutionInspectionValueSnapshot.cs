@@ -11,7 +11,12 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
     JsonElement? Payload,
     string CaptureReason,
     bool IsSensitive,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? InputKey = null,
+    string? EvaluationId = null,
+    string? Phase = null,
+    long? Sequence = null,
+    RuntimeInputEvaluationFailure? Failure = null)
 {
     public static ActivityExecutionInspectionValueSnapshot FromDecision(
         string name,
@@ -21,7 +26,12 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
         DateTimeOffset capturedAt,
         JsonElement? payload,
         bool isSensitive,
-        IReadOnlyDictionary<string, string>? metadata = null) =>
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? inputKey = null,
+        string? evaluationId = null,
+        string? phase = null,
+        long? sequence = null,
+        RuntimeInputEvaluationFailure? failure = null) =>
         new(
             Name: name,
             Subject: subject,
@@ -31,8 +41,15 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
             Payload: decision.CapturesEvidence ? payload?.Clone() : null,
             CaptureReason: decision.Reason,
             IsSensitive: isSensitive,
-            Metadata: RuntimeModelMetadata.Snapshot(metadata));
+            Metadata: RuntimeModelMetadata.Snapshot(metadata),
+            InputKey: inputKey,
+            EvaluationId: evaluationId,
+            Phase: phase,
+            Sequence: sequence,
+            Failure: failure);
 }
+
+public sealed record RuntimeInputEvaluationFailure(string Code, string Message, string? IncidentId = null);
 
 public enum ActivityExecutionInspectionValueSubject
 {

@@ -55,7 +55,8 @@ public sealed class WorkflowExecutableHasher
             _ => input.Value.LiteralValue?.GetRawText()
         };
 
-        return $"{input.Key}={payload}[{metadata}]";
+        var sensitivity = input.Value.IsSensitive ? "[sensitive=true]" : string.Empty;
+        return $"{input.Key}={payload}[{metadata}]{sensitivity}";
     }
 
     private static string FormatOutputCapture(KeyValuePair<string, RuntimeOutputCapture> output)

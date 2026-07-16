@@ -61,6 +61,41 @@ public sealed class RuntimeActivityExecutionInspectionTests
     }
 
     [Fact]
+    public async Task Accumulator_DeduplicatesEvaluationIdsAndAllocatesPerInputSequences()
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        var accumulator = new RuntimeActivityExecutionInspectionAccumulator(store);
+        var state = NewStateForStatus(ActivityExecutionStatus.Completed);
+        var first = InputSnapshot("message", "eval-1");
+        var initial = await accumulator.BuildProjectionAsync(
+            state,
+            "checkpoint-1",
+            DateTimeOffset.UnixEpoch,
+            valueSnapshots: [first]);
+        await store.SaveAsync(initial);
+
+        var merged = await accumulator.BuildProjectionAsync(
+            state,
+            "checkpoint-2",
+            DateTimeOffset.UnixEpoch.AddSeconds(1),
+            valueSnapshots:
+            [
+                first,
+                InputSnapshot("message", "eval-2"),
+                InputSnapshot("recipient", "eval-3"),
+                InputSnapshot("legacy", null)
+            ]);
+
+        Assert.Collection(
+            merged.ValueSnapshots,
+            snapshot => Assert.Equal(1, snapshot.Sequence),
+            snapshot => Assert.Equal(2, snapshot.Sequence),
+            snapshot => Assert.Equal(1, snapshot.Sequence),
+            snapshot => Assert.Null(snapshot.Sequence));
+        Assert.Single(merged.ValueSnapshots, snapshot => snapshot.EvaluationId == "eval-1");
+    }
+
+    [Fact]
     public async Task CheckpointWriter_Projects_ActivityExecutionInspection_Lane()
     {
         var store = new InMemoryActivityExecutionInspectionStore();
@@ -391,6 +426,21 @@ public sealed class RuntimeActivityExecutionInspectionTests
             Incidents: [],
             ValueSnapshots: [],
             Metadata: new Dictionary<string, string>());
+
+    private static ActivityExecutionInspectionValueSnapshot InputSnapshot(string inputKey, string? evaluationId) =>
+        new(
+            Name: inputKey,
+            Subject: ActivityExecutionInspectionValueSubject.ActivityInput,
+            CaptureMode: RuntimePayloadCaptureMode.MetadataOnly,
+            Type: null,
+            CapturedAt: DateTimeOffset.UnixEpoch,
+            Payload: null,
+            CaptureReason: "test",
+            IsSensitive: false,
+            Metadata: new Dictionary<string, string>(),
+            InputKey: inputKey,
+            EvaluationId: evaluationId,
+            Phase: "invoke");
 
     private static ActivityExecutionState NewStateForStatus(ActivityExecutionStatus status) =>
         new(

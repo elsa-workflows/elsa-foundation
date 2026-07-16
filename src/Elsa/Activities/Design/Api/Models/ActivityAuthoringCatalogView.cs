@@ -22,6 +22,7 @@ public sealed record ActivityAuthoringDescriptorView(
     ActivityAuthoringTemplateView AuthoringTemplate);
 
 public sealed record ActivityInputDescriptorView(
+    string ReferenceKey,
     string Name,
     string Type,
     string? DisplayName,

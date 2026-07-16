@@ -252,6 +252,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(_now, state.CompletedAt);
         Assert.Contains("typeName", state.Metadata["runtime.faultMessage"]);
         await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("typeName", message));
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(projection);
+        var snapshot = Assert.Single(projection.ValueSnapshots);
+        Assert.Equal("Text", snapshot.InputKey);
+        Assert.Equal("BookmarkResume", snapshot.Phase);
+        Assert.Equal("InputMaterializationFailed", snapshot.Failure?.Code);
+        Assert.Equal("incident:resume-work:actexec-1:InputMaterializationFailed", snapshot.Failure?.IncidentId);
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
     }

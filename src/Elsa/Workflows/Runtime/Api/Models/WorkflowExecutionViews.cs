@@ -302,7 +302,13 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     object? Snapshot,
     string CaptureReason,
     bool IsSensitive,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? InputKey = null,
+    string? EvaluationId = null,
+    string? EvaluationPhase = null,
+    long? EvaluationSequence = null,
+    string? AccessState = null,
+    RuntimeInputEvaluationFailure? Failure = null)
 {
     public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot, bool canInspectSensitiveValues = false) =>
         new(
@@ -316,7 +322,13 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             canInspectSensitiveValues && snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
             snapshot.CaptureReason,
             snapshot.IsSensitive,
-            ActivityExecutionInspectionDisclosure.Metadata(snapshot.Metadata, canInspectSensitiveValues));
+            ActivityExecutionInspectionDisclosure.Metadata(snapshot.Metadata, canInspectSensitiveValues),
+            snapshot.InputKey,
+            snapshot.EvaluationId,
+            snapshot.Phase,
+            snapshot.Sequence,
+            canInspectSensitiveValues ? "allowed" : "redacted",
+            canInspectSensitiveValues ? snapshot.Failure : null);
 
     private static string SnapshotState(ActivityExecutionInspectionValueSnapshot snapshot) =>
         snapshot.CaptureMode switch

@@ -72,10 +72,10 @@ operational/control-plane/incident/durable-value state, checkpoint commits, the 
 the durable scheduler work queue, workflow trigger bindings)
 must be able to evolve without silently breaking already-suspended workflows. The contract:
 
-- **Per-kind integer versions, hosted in the envelope.** Each of the 14 runtime document kinds has a
-  current integer version declared in
-  [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)
-  (all `1` today). The version is stamped into the Groundwork **envelope** `SchemaVersion` field on
+- **Per-kind integer versions, hosted in the envelope.** Each runtime document kind has a current integer
+  version declared in
+  [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs).
+  The version is stamped into the Groundwork **envelope** `SchemaVersion` field on
   every write — never inside the content JSON and never on the domain state records, keeping
   persistence concerns out of `WorkflowExecutionState` et al. The legacy manifest-wide stamp
   `"1.0.0"` (everything written before versioning) parses as version `1` for every kind.
@@ -177,11 +177,12 @@ scope for this wave — a heavy durable dedup store was explicitly out of scope.
 ### Published executables are durable (DS-2, W17)
 
 A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Groundwork
-bridge as every other runtime kind — the **`workflowExecutable`** document kind (version 1 in
+bridge as every other runtime kind — the **`workflowExecutable`** document kind (version 3 in
 [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)),
 written by
 [`GroundworkWorkflowExecutableStore`](../src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableStore.cs)
-over the `IWorkflowExecutableStore` seam, with golden fixture `Fixtures/v1/workflowExecutable.json`. The
+over the `IWorkflowExecutableStore` seam, with current golden fixture `Fixtures/v3/workflowExecutable.json`
+and historical fixtures retained for upcast verification. The
 `InMemory` executable store registered by `WorkflowsPublishingApiFeature` is a `TryAdd` default that the
 Groundwork runtime-persistence feature overrides; when durable persistence is composed, publishing is durable
 by construction. The `PublishWorkflowRequestHandler` saves the compiled artifact and then builds its trigger

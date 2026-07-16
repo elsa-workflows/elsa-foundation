@@ -67,7 +67,7 @@ public sealed record ActivityExecutionInspectionProjection(
             OutcomeNames: outcomeNames ?? [],
             Bookmarks: bookmarks ?? [],
             Incidents: incidents ?? [],
-            ValueSnapshots: valueSnapshots ?? [],
+            ValueSnapshots: MergeValueSnapshots([], valueSnapshots),
             Metadata: RuntimeModelMetadata.Snapshot(mergedMetadata));
     }
 
@@ -103,7 +103,7 @@ public sealed record ActivityExecutionInspectionProjection(
             OutcomeNames = outcomeNames ?? OutcomeNames,
             Bookmarks = MergeBy(Bookmarks, bookmarks, item => item.BookmarkId),
             Incidents = MergeBy(Incidents, incidents, item => item.IncidentId),
-            ValueSnapshots = valueSnapshots is null ? ValueSnapshots : ValueSnapshots.Concat(valueSnapshots).ToArray(),
+            ValueSnapshots = MergeValueSnapshots(ValueSnapshots, valueSnapshots),
             Metadata = RuntimeModelMetadata.Snapshot(mergedMetadata)
         };
     }
@@ -120,6 +120,49 @@ public sealed record ActivityExecutionInspectionProjection(
         foreach (var item in additions)
             result[keySelector(item)] = item;
         return result.Values.ToArray();
+    }
+
+    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> MergeValueSnapshots(
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> existing,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? additions)
+    {
+        if (additions is null || additions.Count == 0)
+            return existing;
+
+        var result = existing.ToList();
+        var evaluationIds = existing
+            .Where(snapshot => !string.IsNullOrWhiteSpace(snapshot.EvaluationId))
+            .Select(snapshot => snapshot.EvaluationId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var addition in additions)
+        {
+            if (string.IsNullOrWhiteSpace(addition.EvaluationId))
+            {
+                result.Add(addition);
+                continue;
+            }
+
+            if (!evaluationIds.Add(addition.EvaluationId))
+                continue;
+
+            if (addition.Subject != ActivityExecutionInspectionValueSubject.ActivityInput || string.IsNullOrWhiteSpace(addition.InputKey))
+            {
+                result.Add(addition);
+                continue;
+            }
+
+            var nextSequence = result
+                .Where(snapshot =>
+                    snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityInput &&
+                    StringComparer.Ordinal.Equals(snapshot.InputKey, addition.InputKey))
+                .Select(snapshot => snapshot.Sequence ?? 0)
+                .DefaultIfEmpty(0)
+                .Max() + 1;
+            result.Add(addition with { Sequence = nextSequence });
+        }
+
+        return result;
     }
 }
 

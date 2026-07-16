@@ -314,14 +314,32 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
             var latestFaultedParentState = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
                                            ?? parentState;
-            var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, exception, "ParentCompletionFaulted", valueSnapshots);
+            var subStatus = exception is RuntimeActivityInputMaterializationException
+                ? "InputMaterializationFailed"
+                : "ParentCompletionFaulted";
+            if (exception is RuntimeActivityInputMaterializationException materializationException)
+            {
+                var materializationIncidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, subStatus);
+                valueSnapshots = ActivityOutputPublisher.BuildInputValueSnapshots(
+                    payloadCapturePolicy,
+                    workItem,
+                    payload.ActivityExecutionId,
+                    payload.ExecutableNodeId,
+                    "ParentCompletion",
+                    materializationException.Results,
+                    _timeProvider.GetUtcNow(),
+                    RuntimeMetadataKeys.ParentCompletionSchedulerWorkItemId,
+                    materializationIncidentId);
+            }
+
+            var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, exception, subStatus, valueSnapshots);
 
             // Unlike a leaf activity, the faulting node here is the parent composite whose own
             // OnChildCompleted/OnChildFaulted threw. Mirror the sibling invoke/resume handlers and ride a
             // child-fault parent-evaluation work item along on the incident checkpoint so the grandparent join
             // resolves deterministically instead of waiting forever for a completion that never arrives (#379).
             // TryBuildAsync returns null when the faulted parent has no parent, leaving a plain blocking incident.
-            var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ParentCompletionFaulted");
+            var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, subStatus);
             var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
                 activityExecutionStateStore, _timeProvider, workItem, payload.PinnedExecutable, latestFaultedParentState, incidentId, cancellationToken);
 
@@ -855,6 +873,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     activityExecutionId: payload.ActivityExecutionId,
                     valueName: input.Name,
                     type: type,
+                    isSensitive: input.IsSensitive,
                     metadata: new Dictionary<string, string>
                     {
                         [RuntimeMetadataKeys.ExecutableNodeId] = payload.ExecutableNodeId,
@@ -867,8 +886,12 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     type,
                     capturedAt,
                     ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value, input.Name, type),
-                    isSensitive: false,
-                    metadata: decision.Metadata);
+                    isSensitive: input.IsSensitive,
+                    metadata: decision.Metadata,
+                    inputKey: input.InputKey ?? input.Name,
+                    evaluationId: ActivityOutputPublisher.EvaluationId(workItem, payload.ActivityExecutionId, input.InputKey ?? input.Name, "ParentCompletion"),
+                    phase: "ParentCompletion",
+                    sequence: null);
             })
             .ToArray();
 

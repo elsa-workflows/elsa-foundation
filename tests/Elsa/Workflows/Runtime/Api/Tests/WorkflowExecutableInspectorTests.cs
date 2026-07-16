@@ -253,6 +253,20 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public void Authored_input_source_route_requires_publishing_read_independently_of_runtime_evidence()
+    {
+        var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(
+            "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources");
+
+        Assert.Contains(PermissionNames.WorkflowPublishingRead, endpoint.Definition.AllowedPermissions!);
+        Assert.DoesNotContain(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
+        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.Null(endpoint.Definition.AnonymousVerbs);
+        AssertProperties(RuntimeApiEndpointTestFactory.Contract(endpoint).Response,
+            "ArtifactId", "SourceReferenceId", "AccessState", "AuthoredInputs", "CompiledInputs");
+    }
+
+    [Fact]
     public void Executable_list_exposes_retention_counts_without_definition_reads()
     {
         var response = RuntimeApiEndpointTestFactory.Contract(
@@ -419,6 +433,81 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task DetailScrubsSourcePayloadWhilePublishingProjectionReturnsStructuredBindingWithoutSummaryParsing()
+    {
+        var binding = new RuntimeInputBinding(
+            "Text",
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                "return variables.orderId;",
+                new RuntimeValueTypeDescriptor("clr", "System.String, System.Private.CoreLib", null)),
+            metadata: new Dictionary<string, string> { ["typeName"] = "System.String, System.Private.CoreLib" },
+            inputKey: "text-input-key",
+            isSensitive: false);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding>
+        {
+            ["Text"] = binding
+        }));
+        await _referenceStore.SaveAsync(Reference("source-1", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs =
+            [
+                new WorkflowExecutableAuthoredInputRecord(
+                    "executable-root",
+                    "text-input-key",
+                    "JavaScript",
+                    JsonSerializer.SerializeToElement("return variables.orderId;"))
+            ]
+        });
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        var projected = Assert.Single(detail!.RootActivity.InputBindings);
+        Assert.Equal("Text", projected.InputName);
+        Assert.Equal("text-input-key", projected.InputKey);
+        Assert.False(projected.IsSensitive);
+        Assert.Equal("Expression", projected.Source);
+        Assert.Null(projected.Summary);
+        Assert.Null(projected.Expression);
+        Assert.Null(projected.LiteralValue);
+        Assert.Null(projected.Metadata);
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-1");
+        var authored = Assert.Single(sources!.AuthoredInputs);
+        Assert.Equal("allowed", authored.AccessState);
+        Assert.Equal("return variables.orderId;", authored.Value!.Value.GetString());
+        var compiled = Assert.Single(sources.CompiledInputs).Binding;
+        Assert.Equal("JavaScript", compiled.Expression!.Language);
+        Assert.Equal("return variables.orderId;", compiled.Expression.Expression);
+    }
+
+    [Fact]
+    public async Task InputSourcesRedactSensitiveAuthoredAndCompiledPayloads()
+    {
+        var binding = new RuntimeInputBinding(
+            "Secret",
+            RuntimeInputBindingSource.Literal,
+            literalValue: JsonSerializer.SerializeToElement("must-not-leak"),
+            inputKey: "secret-key",
+            isSensitive: true);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["Secret"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-sensitive", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord("executable-root", "secret-key", "Literal", JsonSerializer.SerializeToElement("must-not-leak"), true)]
+        });
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-sensitive");
+        var json = JsonSerializer.Serialize(sources, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal("redacted", Assert.Single(sources!.AuthoredInputs).AccessState);
+        Assert.Null(Assert.Single(sources.AuthoredInputs).Value);
+        Assert.Equal("redacted", Assert.Single(sources.CompiledInputs).AccessState);
+        Assert.Null(Assert.Single(sources.CompiledInputs).Binding.LiteralValue);
+        Assert.DoesNotContain("must-not-leak", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Detail_projects_immutable_flowchart_connections_with_ports()
     {
         var structure = new ExecutableActivityStructure(
@@ -459,7 +548,8 @@ public sealed class WorkflowExecutableInspectorTests
     private static WorkflowExecutable Executable(
         DateTimeOffset now,
         JsonElement? descriptor = null,
-        ExecutableActivityStructure? structure = null) =>
+        ExecutableActivityStructure? structure = null,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null) =>
         new(
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             new ExecutableNode(
@@ -468,7 +558,7 @@ public sealed class WorkflowExecutableInspectorTests
                     "Test",
                     RuntimeActivityDescriptor.InitialSchemaVersion,
                     descriptor ?? JsonSerializer.SerializeToElement(new { })),
-                new Dictionary<string, RuntimeInputBinding>(),
+                inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
                 new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(),
                 structure: structure),

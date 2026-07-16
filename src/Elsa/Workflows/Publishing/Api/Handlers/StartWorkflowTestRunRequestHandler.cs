@@ -31,6 +31,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowStartDispatcher startDispatcher,
     IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
     TimeProvider timeProvider,
+    IWorkflowDefinitionVersionStore? workflowVersionStore = null,
+    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null,
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
@@ -51,7 +53,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         IWorkflowTestRunStore testRunStore,
         IWorkflowStartDispatcher startDispatcher,
         IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
-        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, rootWriteLeaseManager, TimeProvider.System, null)
+        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, rootWriteLeaseManager, TimeProvider.System)
     {
     }
 
@@ -255,6 +257,12 @@ public sealed class StartWorkflowTestRunRequestHandler(
     {
         var identity = executable.Identity;
         var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
+        var sourceState = source?.State ?? (workflowVersionStore is null
+            ? null
+            : (await workflowVersionStore.GetWithDefinitionAsync(identity.DefinitionVersionId, cancellationToken)).State);
+        var authoredInputs = sourceState is not null && authoredInputsSidecar is not null
+            ? authoredInputsSidecar.CopyFrom(sourceState)
+            : [];
 
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
@@ -270,7 +278,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             Scope: WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt: expiresAt,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
-            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId));
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
+            AuthoredInputs: authoredInputs);
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

@@ -15,12 +15,16 @@ public sealed class RuntimeInputBinding
         RuntimeActivityOutputReference? activityOutput = null,
         RuntimeDurableValueReference? durableValue = null,
         RuntimeReferenceValue? reference = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? inputKey = null,
+        bool isSensitive = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputName);
         Validate(source, literalValue, expression, activityOutput, durableValue, reference);
 
         InputName = inputName;
+        InputKey = inputKey ?? inputName;
+        IsSensitive = isSensitive;
         Source = source;
         LiteralValue = literalValue?.Clone();
         Expression = expression;
@@ -31,6 +35,8 @@ public sealed class RuntimeInputBinding
     }
 
     public string InputName { get; }
+    public string InputKey { get; }
+    public bool IsSensitive { get; }
     public RuntimeInputBindingSource Source { get; }
     public JsonElement? LiteralValue { get; }
     public RuntimeExpressionBinding? Expression { get; }

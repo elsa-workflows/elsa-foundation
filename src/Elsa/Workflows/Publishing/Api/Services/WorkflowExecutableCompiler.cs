@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -178,10 +179,12 @@ public sealed class WorkflowExecutableCompiler(
         var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
         foreach (var input in contract.Inputs.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
         {
-            ArgumentValue? value = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
-                ? state.Value
-                : input.Default is not null ? new(input.Default.Value, input.Default.Syntax) : null;
-            if (value is null)
+            ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
+                ? state
+                : input.Default is not null
+                    ? new(input.ReferenceKey, new ArgumentValue(input.Default.Value, input.Default.Syntax), null, null, null, null)
+                    : null;
+            if (inputState is null)
             {
                 if (input.IsRequired)
                     throw new ArgumentException($"Activity node '{activity.NodeId}' is missing required input '{input.ReferenceKey}'.");
@@ -202,7 +205,7 @@ public sealed class WorkflowExecutableCompiler(
                 IsRequired: input.IsRequired,
                 DefaultValue: input.Default?.Value,
                 DefaultSyntax: input.Default?.Syntax);
-            result[input.Name] = compiler.Compile(activity.NodeId, definition, value);
+            result[input.Name] = compiler.Compile(activity.NodeId, definition, inputState);
         }
         return result;
     }

@@ -109,6 +109,37 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task DraftTestRunCopiesAuthoredInputSourceOntoItsExpiringReference()
+    {
+        const string authoredJson = "{\"script\":\"return input.customerId;\"}";
+        using var document = JsonDocument.Parse(authoredJson);
+        var state = new WorkflowDefinitionState(
+            [],
+            Node("write-one", new WorkflowArgumentState(
+                "Text",
+                new ArgumentValue(document.RootElement.Clone(), "JavaScript"),
+                null,
+                null,
+                null,
+                false)),
+            [],
+            [],
+            null);
+
+        var view = await DraftSnapshotHandler().Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-authored-input",
+            State: state), CancellationToken.None);
+
+        var reference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(view.ArtifactId!));
+        var authored = Assert.Single(reference.AuthoredInputs);
+        Assert.Equal("write-one", authored.ExecutableNodeId);
+        Assert.Equal("Text", authored.InputKey);
+        Assert.Equal("JavaScript", authored.ExpressionType);
+        Assert.Equal(authoredJson, authored.Value.GetRawText());
+    }
+
+    [Fact]
     public async Task TestRunDoesNotWriteSourceReferenceWhileDeletionGuardOwnsArtifact()
     {
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
@@ -413,10 +444,12 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private StartWorkflowTestRunRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         IWorkflowStartDispatcher? dispatcher = null,
-        IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null) =>
-        new(
+        IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null)
+    {
+        var versionStore = new FakeVersionStore(workflowVersion);
+        return new(
             TestCompiler.Create(
-                new FakeVersionStore(workflowVersion),
+                versionStore,
                 new FakeActivityVersionStore((activityVersions ?? [_writeLineActivity]).ToList()),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create()),
@@ -426,10 +459,14 @@ public sealed class WorkflowTestRunRequestHandlerTests
             _testRunStore,
             dispatcher ?? Dispatcher(),
             TestRootWriteLeases.Create(_executableStore),
-            TimeProvider.System);
+            TimeProvider.System,
+            versionStore,
+            new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)));
+    }
 
-    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null) =>
-        new(
+    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null)
+    {
+        return new(
             TestCompiler.Create(
                 new ThrowingVersionStore(),
                 new FakeActivityVersionStore([_writeLineActivity]),
@@ -441,7 +478,9 @@ public sealed class WorkflowTestRunRequestHandlerTests
             _testRunStore,
             dispatcher ?? Dispatcher(),
             TestRootWriteLeases.Create(_executableStore),
-            TimeProvider.System);
+            TimeProvider.System,
+            authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)));
+    }
 
     private WorkflowStartDispatcher Dispatcher() =>
         new(
