@@ -119,7 +119,7 @@ and then recover after completion without reevaluation or reactivation.
 - [X] T042 [US3] Make retry, resume, and parent completion hydrate only from the committed snapshot in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs` and related handlers
 - [X] T043 [US3] Commit result/outcome/status/inspection/continuation intent atomically and short-circuit already-completed invocations in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
 - [X] T044 [US3] Replace active/latest-output semantics with structural-frame and causal-lineage result resolution in `src/Elsa/Workflows/Runtime/Services/CausalActivityResultResolver.cs`
-- [ ] T045 [US3] Propagate effective persistence, external-payload, encryption, sensitivity, and redaction policy through materialization and projection in `src/Elsa/Workflows/Runtime/Services/`
+- [X] T045 [US3] Propagate effective persistence, external-payload, encryption, sensitivity, and redaction policy through materialization and projection in `src/Elsa/Workflows/Runtime/Services/`
 - [ ] T046 [US3] Run focused runtime, Groundwork, distributed recovery, and publishing tests and mark US3 ledger successors implemented/passing
 
 **Checkpoint**: The runtime can recover a durable invocation using only its pinned snapshot, attempts,

@@ -457,7 +457,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 else
                 {
                     var recordedOutputs = executableNode.ActivityContract is { } activityContract
-                        ? ProjectReturnedCompletion(activityContract)
+                        ? await ProjectReturnedCompletionAsync(activityContract)
                         : context.GetRecordedOutputs();
                     if (recordedOutputs.Count > 0)
                     {
@@ -533,19 +533,21 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 await activationLease.DisposeAsync();
         }
 
-        IReadOnlyCollection<RecordedActivityOutput> ProjectReturnedCompletion(ActivityContract activityContract)
+        async ValueTask<IReadOnlyCollection<RecordedActivityOutput>> ProjectReturnedCompletionAsync(ActivityContract activityContract)
         {
             if (returnedTransition is null || valueFlowAttempt is null)
                 throw new InvalidOperationException($"Typed activity invocation '{invokePayload.ActivityExecutionId}' returned no transition.");
 
-            valueFlowCompletion = serviceProvider.GetRequiredService<ActivityCompletionProjector>().Project(
+            valueFlowCompletion = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
+                workItem.WorkflowExecutionId,
                 invokePayload.ActivityExecutionId,
                 valueFlowAttempt,
                 activityContract,
                 returnedTransition,
-                _timeProvider.GetUtcNow());
+                _timeProvider.GetUtcNow(),
+                cancellationToken);
             return valueFlowCompletion.Projections
-                .Where(item => item.Value.Presence != ValuePresence.Absent)
+                .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
                 .Select(item => new RecordedActivityOutput(
                     item.Key,
                     item.Value.Presence == ValuePresence.ExplicitNull ? null : item.Value.InlineValue))

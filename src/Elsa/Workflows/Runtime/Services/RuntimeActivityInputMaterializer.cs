@@ -18,6 +18,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     public const string InputTypeMetadataKey = "typeName";
     private readonly IRuntimeInputBindingResolver _inputBindingResolver;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry;
+    private readonly IExternalPayloadStore? _externalPayloadStore;
 
     public RuntimeActivityInputMaterializer()
         : this(new RuntimeInputBindingResolver())
@@ -33,13 +34,26 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
     public RuntimeActivityInputMaterializer(
         IRuntimeInputBindingResolver inputBindingResolver,
-        IWellKnownTypeRegistry wellKnownTypeRegistry)
+        IExternalPayloadStore externalPayloadStore)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+        ArgumentNullException.ThrowIfNull(externalPayloadStore);
+
+        _inputBindingResolver = inputBindingResolver;
+        _externalPayloadStore = externalPayloadStore;
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IExternalPayloadStore? externalPayloadStore = null)
     {
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
         ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
 
         _inputBindingResolver = inputBindingResolver;
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
+        _externalPayloadStore = externalPayloadStore;
     }
 
     public async ValueTask<ActivityInputSnapshot> MaterializeSnapshotAsync(
@@ -67,6 +81,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
             var value = await MaterializeEnvelopeAsync(
                 node,
+                invocationId,
                 input,
                 binding,
                 resolutionContext,
@@ -140,6 +155,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
     private async ValueTask<ValueEnvelope> MaterializeEnvelopeAsync(
         ExecutableNode node,
+        string invocationId,
         ActivityInputContract input,
         RuntimeInputBinding binding,
         RuntimeInputBindingResolutionContext resolutionContext,
@@ -175,12 +191,75 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (source.Policy.Lifecycle == DurableValueLifecycle.None || !binding.EffectivePolicy.Satisfies(source.Policy))
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' would downgrade its source persistence or protection policy.");
 
+        if (source.ExternalReference is not null && HasExternalProjection(binding))
+            return await MaterializeExternalProjectionAsync(node, invocationId, input, binding, source, resolutionContext, cancellationToken);
+
         return new ValueEnvelope(
             binding.TargetType,
             source.Presence,
             source.InlineValue,
             source.ExternalReference,
             binding.EffectivePolicy);
+    }
+
+    private async ValueTask<ValueEnvelope> MaterializeExternalProjectionAsync(
+        ExecutableNode node,
+        string invocationId,
+        ActivityInputContract input,
+        RuntimeInputBinding binding,
+        ValueEnvelope source,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
+    {
+        if (_externalPayloadStore is null)
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' requires an IExternalPayloadStore for projection.");
+
+        var payload = await _externalPayloadStore.ReadAsync(source.ExternalReference!, cancellationToken);
+        var path = ResolveProjectionPath(binding, resolutionContext);
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (payload.ValueKind != JsonValueKind.Object || !TryGetProperty(payload, segment, out payload))
+                throw new InvalidOperationException($"VF-ACT-004: External source path '{path}' for input '{input.Key}' on executable node '{node.ExecutableNodeId}' is unavailable.");
+        }
+
+        if (payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy);
+
+        var reference = await _externalPayloadStore.WriteAsync(
+            new ExternalPayloadWriteRequest(
+                resolutionContext.WorkflowExecutionId,
+                $"activity:{invocationId}:input:{input.Key}",
+                source.ExternalReference!.StorageProfile,
+                binding.TargetType,
+                payload.Clone(),
+                binding.EffectivePolicy),
+            cancellationToken);
+        return ValueEnvelope.External(binding.TargetType, reference, binding.EffectivePolicy);
+    }
+
+    private static bool HasExternalProjection(RuntimeInputBinding binding) =>
+        binding.Source == RuntimeInputBindingSource.ActivityResult &&
+        !StringComparer.Ordinal.Equals(binding.ActivityResult!.ProjectionKey, "$result") ||
+        binding.Source == RuntimeInputBindingSource.WorkflowRequest &&
+        !string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path);
+
+    private static string ResolveProjectionPath(
+        RuntimeInputBinding binding,
+        RuntimeInputBindingResolutionContext resolutionContext)
+    {
+        if (binding.Source == RuntimeInputBindingSource.WorkflowRequest)
+        {
+            var reference = binding.WorkflowRequest!;
+            var segments = reference.Path!.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var offset = segments.Length > 0 && StringComparer.OrdinalIgnoreCase.Equals(segments[0], reference.MemberKey) ? 1 : 0;
+            return string.Join('.', segments.Skip(offset));
+        }
+
+        var resultReference = binding.ActivityResult!;
+        var producer = resolutionContext.Executable?.NodesById.GetValueOrDefault(resultReference.ProducerExecutableNodeId)
+            ?? throw new InvalidOperationException($"External activity result input '{binding.InputName}' requires the pinned producer executable contract.");
+        return producer.ActivityContract?.Result.Projections.GetValueOrDefault(resultReference.ProjectionKey)?.Path
+            ?? throw new InvalidOperationException($"Producer node '{resultReference.ProducerExecutableNodeId}' has no result projection '{resultReference.ProjectionKey}'.");
     }
 
     private static void ValidateCompleteBindingSet(ExecutableNode node, ActivityContract contract)
@@ -213,14 +292,32 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' is not persistable at the durable ActivityStarted boundary.");
 
         var contractMinimum = new ValueProtectionPolicy(
-            DurableValueLifecycle.Instance,
-            DurableValueStorage.Inline,
+            ToLifecycle(input.Policy.Lifecycle),
+            ToStorage(input.Policy.Storage),
             input.Policy.IsSensitive,
             input.Policy.RequiresEncryption,
-            input.Policy.RedactionMode);
+            input.Policy.RedactionMode,
+            input.Policy.RetentionPolicy);
         if (!policy.Satisfies(contractMinimum))
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' would downgrade its contract protection policy.");
     }
+
+    private static DurableValueLifecycle ToLifecycle(ActivityValueLifecycle lifecycle) => lifecycle switch
+    {
+        ActivityValueLifecycle.Instance => DurableValueLifecycle.Instance,
+        ActivityValueLifecycle.Result => DurableValueLifecycle.Result,
+        ActivityValueLifecycle.Audit => DurableValueLifecycle.Audit,
+        ActivityValueLifecycle.Custom => DurableValueLifecycle.Custom,
+        _ => throw new ArgumentOutOfRangeException(nameof(lifecycle), lifecycle, null)
+    };
+
+    private static DurableValueStorage ToStorage(ActivityValueStorage storage) => storage switch
+    {
+        ActivityValueStorage.Inline => DurableValueStorage.Inline,
+        ActivityValueStorage.External => DurableValueStorage.External,
+        ActivityValueStorage.Custom => DurableValueStorage.Custom,
+        _ => throw new ArgumentOutOfRangeException(nameof(storage), storage, null)
+    };
 
     private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&

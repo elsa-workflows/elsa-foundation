@@ -315,12 +315,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 }
                 else if (transition is IActivityCompletionTransition)
                 {
-                    typedCompletion = serviceProvider.GetRequiredService<ActivityCompletionProjector>().Project(
+                    typedCompletion = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
+                        workItem.WorkflowExecutionId,
                         state.InvocationId,
                         resumeAttempt!,
                         contract,
                         transition,
-                        _timeProvider.GetUtcNow());
+                        _timeProvider.GetUtcNow(),
+                        cancellationToken);
                 }
                 else if (transition is IActivityFaultTransition faultTransition)
                 {
@@ -406,7 +408,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var recordedOutputs = typedCompletion is null
             ? context.GetRecordedOutputs()
             : typedCompletion.Projections
-                .Where(item => item.Value.Presence != ValuePresence.Absent)
+                .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
                 .Select(item => new RecordedActivityOutput(
                     item.Key,
                     item.Value.Presence == ValuePresence.ExplicitNull ? null : item.Value.InlineValue))

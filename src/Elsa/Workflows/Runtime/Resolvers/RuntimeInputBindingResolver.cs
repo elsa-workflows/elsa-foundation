@@ -116,8 +116,16 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
                 Envelope = projectedNull
             };
         }
+        if (!result.InlineValue.HasValue && result.ExternalReference is not null)
+        {
+            var externalProjectionSource = ValueEnvelope.External(binding.TargetType, result.ExternalReference, projectedPolicy);
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null, null, null, null)
+            {
+                Envelope = externalProjectionSource
+            };
+        }
         if (!result.InlineValue.HasValue)
-            throw new InvalidOperationException($"Activity result '{reference.ProjectionKey}' for input '{binding.InputName}' uses external storage and cannot be projected without a payload reader.");
+            throw new InvalidOperationException($"Activity result '{reference.ProjectionKey}' for input '{binding.InputName}' has no readable payload.");
 
         var value = result.InlineValue.Value;
         foreach (var segment in projection.Path.Split('.', StringSplitOptions.RemoveEmptyEntries))
@@ -226,8 +234,16 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             };
         }
 
+        if (!source.InlineValue.HasValue && source.ExternalReference is not null)
+        {
+            var externalProjectionSource = ValueEnvelope.External(binding.TargetType, source.ExternalReference, source.Policy);
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null, null, null, null)
+            {
+                Envelope = externalProjectionSource
+            };
+        }
         if (!source.InlineValue.HasValue)
-            throw new InvalidOperationException($"Workflow request path '{reference.Path}' for input '{binding.InputName}' cannot be projected from an external or null payload.");
+            throw new InvalidOperationException($"Workflow request path '{reference.Path}' for input '{binding.InputName}' cannot be projected from a null payload.");
 
         var json = source.InlineValue.Value;
         var segments = reference.Path.Split('.', StringSplitOptions.RemoveEmptyEntries);

@@ -270,10 +270,29 @@ public sealed record ActivityValuePolicy(
     bool IsPersistable,
     bool IsSensitive,
     bool RequiresEncryption,
-    string? RedactionMode = null)
+    string? RedactionMode = null,
+    ActivityValueLifecycle Lifecycle = ActivityValueLifecycle.Instance,
+    ActivityValueStorage Storage = ActivityValueStorage.Inline,
+    string? StorageProfile = null,
+    string? RetentionPolicy = null)
 {
     public static ActivityValuePolicy Default { get; } = new(
         IsPersistable: true,
         IsSensitive: false,
         RequiresEncryption: false);
+}
+
+public enum ActivityValueLifecycle
+{
+    Instance,
+    Result,
+    Audit,
+    Custom
+}
+
+public enum ActivityValueStorage
+{
+    Inline,
+    External,
+    Custom
 }

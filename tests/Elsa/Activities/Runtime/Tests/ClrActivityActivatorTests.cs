@@ -9,6 +9,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -76,10 +77,49 @@ public sealed class ClrActivityActivatorTests
         dependency.Dispose();
     }
 
+    [Fact]
+    public async Task External_input_is_dereferenced_only_for_activation()
+    {
+        await using var root = Services().BuildServiceProvider();
+        var store = new FixedExternalPayloadStore("from-external-store");
+        var (activator, contract) = Activator(root, store);
+        var policy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.External,
+            isSensitive: true,
+            requiresEncryption: true,
+            redactionMode: "Full",
+            retentionPolicy: "P30D");
+        var persistedSnapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["message"] = ValueEnvelope.External(
+                    StringType,
+                    new DurableValueExternalReference("encrypted", "payloads/message", new Dictionary<string, string>()),
+                    policy)
+            },
+            DateTimeOffset.UtcNow);
+
+        await using var lease = await activator.ActivateAsync(new ActivityActivationRequest(
+            contract,
+            persistedSnapshot,
+            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow)));
+
+        Assert.Equal("from-external-store", Assert.IsType<ServiceBearingActivity>(lease.Activity).Message);
+        Assert.NotNull(persistedSnapshot.Values["message"].ExternalReference);
+        Assert.Null(persistedSnapshot.Values["message"].InlineValue);
+        Assert.Equal("payloads/message", Assert.Single(store.Reads).Locator);
+    }
+
     private static IServiceCollection Services() =>
         new ServiceCollection().AddScoped<ScopedDependency>();
 
-    private static (ClrActivityActivator Activator, ActivityContract Contract) Activator(IServiceProvider services)
+    private static (ClrActivityActivator Activator, ActivityContract Contract) Activator(
+        IServiceProvider services,
+        IExternalPayloadStore? externalPayloadStore = null)
     {
         var registry = new WellKnownTypeRegistry();
         var alias = typeof(ServiceBearingActivity).FullName!;
@@ -99,7 +139,8 @@ public sealed class ClrActivityActivatorTests
             services.GetRequiredService<IServiceScopeFactory>(),
             registry,
             serializer,
-            new ActivityInputHydrator()), contract);
+            new ActivityInputHydrator(),
+            externalPayloadStore), contract);
     }
 
     private static ActivityActivationRequest Request(ActivityContract contract, string attemptId, string message) =>
@@ -136,5 +177,23 @@ public sealed class ClrActivityActivatorTests
         public static int DisposeCount => _disposeCount;
         public static void Reset() => _disposeCount = 0;
         public void Dispose() => Interlocked.Increment(ref _disposeCount);
+    }
+
+    private sealed class FixedExternalPayloadStore(string value) : IExternalPayloadStore
+    {
+        public List<DurableValueExternalReference> Reads { get; } = [];
+
+        public ValueTask<DurableValueExternalReference> WriteAsync(
+            ExternalPayloadWriteRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<JsonElement> ReadAsync(
+            DurableValueExternalReference reference,
+            CancellationToken cancellationToken = default)
+        {
+            Reads.Add(reference);
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(value));
+        }
     }
 }

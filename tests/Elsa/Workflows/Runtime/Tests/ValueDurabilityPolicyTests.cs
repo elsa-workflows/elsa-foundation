@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -144,6 +145,69 @@ public sealed class ValueDurabilityPolicyTests
         Assert.DoesNotContain("secret", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task External_request_projection_is_dereferenced_and_re_externalized_for_the_pinned_input()
+    {
+        var policy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.External,
+            isSensitive: true,
+            requiresEncryption: true,
+            redactionMode: "Full",
+            retentionPolicy: "P30D");
+        var sourceReference = new DurableValueExternalReference(
+            "encrypted",
+            "requests/customer-7",
+            new Dictionary<string, string>());
+        var store = new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
+        {
+            [sourceReference.Locator] = JsonSerializer.SerializeToElement(new { customer = new { id = "customer-7" } })
+        });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            policy,
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference("request", "request.customer.id"));
+        var context = NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+        {
+            ["request"] = ValueEnvelope.External(new ValueTypeDescriptor("Request"), sourceReference, policy)
+        });
+        var contractPolicy = new ActivityValuePolicy(
+            true, true, true, "Full", ActivityValueLifecycle.Instance,
+            ActivityValueStorage.External, "encrypted", "P30D");
+
+        var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
+            .MaterializeSnapshotAsync(NewTypedNode(binding, contractPolicy), "invocation-1", context, Now);
+
+        var value = snapshot.Values["message"];
+        Assert.Null(value.InlineValue);
+        Assert.Equal("payloads/activity:invocation-1:input:message", value.ExternalReference!.Locator);
+        Assert.Equal("customer-7", store.Writes.Single().Payload.GetString());
+        Assert.Equal("P30D", store.Writes.Single().Policy.RetentionPolicy);
+    }
+
+    [Fact]
+    public async Task Input_retention_policy_cannot_be_downgraded()
+    {
+        var sourcePolicy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            retentionPolicy: "P30D");
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, retentionPolicy: "P7D"),
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("value"), sourcePolicy));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => NewMaterializer()
+            .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", NewResolutionContext(), Now)
+            .AsTask());
+
+        Assert.Contains("downgrade", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static RuntimeActivityInputMaterializer NewMaterializer() =>
         new(new RuntimeInputBindingResolver());
 
@@ -216,5 +280,26 @@ public sealed class ValueDurabilityPolicyTests
         }
 
         public IReadOnlyCollection<ActiveActivityOutput> GetActivityOutputs(string workflowExecutionId, string activityExecutionId) => [];
+    }
+
+    private sealed class RecordingExternalPayloadStore(IReadOnlyDictionary<string, JsonElement> payloads) : IExternalPayloadStore
+    {
+        public List<ExternalPayloadWriteRequest> Writes { get; } = [];
+
+        public ValueTask<DurableValueExternalReference> WriteAsync(
+            ExternalPayloadWriteRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Writes.Add(request);
+            return ValueTask.FromResult(new DurableValueExternalReference(
+                request.StorageProfile,
+                $"payloads/{request.OwnerKey}",
+                new Dictionary<string, string>()));
+        }
+
+        public ValueTask<JsonElement> ReadAsync(
+            DurableValueExternalReference reference,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(payloads[reference.Locator].Clone());
     }
 }

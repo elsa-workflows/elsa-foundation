@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Runtime.Services;
@@ -9,7 +10,7 @@ namespace Elsa.Activities.Runtime.Services;
 /// Validates and materializes a successful transition as one completion document plus read-only
 /// projections. Nothing is returned when any projection or outcome is invalid.
 /// </summary>
-public sealed class ActivityCompletionProjector
+public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalPayloadStore = null)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -18,7 +19,31 @@ public sealed class ActivityCompletionProjector
         ActivityAttempt attempt,
         ActivityContract contract,
         ActivityTransition transition,
-        DateTimeOffset completedAt)
+        DateTimeOffset completedAt) =>
+        ProjectCoreAsync(null, invocationId, attempt, contract, transition, completedAt, CancellationToken.None)
+            .AsTask().GetAwaiter().GetResult();
+
+    public ValueTask<ActivityCompletionProjection> ProjectAsync(
+        string workflowExecutionId,
+        string invocationId,
+        ActivityAttempt attempt,
+        ActivityContract contract,
+        ActivityTransition transition,
+        DateTimeOffset completedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        return ProjectCoreAsync(workflowExecutionId, invocationId, attempt, contract, transition, completedAt, cancellationToken);
+    }
+
+    private async ValueTask<ActivityCompletionProjection> ProjectCoreAsync(
+        string? workflowExecutionId,
+        string invocationId,
+        ActivityAttempt attempt,
+        ActivityContract contract,
+        ActivityTransition transition,
+        DateTimeOffset completedAt,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         ArgumentNullException.ThrowIfNull(attempt);
@@ -35,27 +60,56 @@ public sealed class ActivityCompletionProjector
             throw new InvalidOperationException($"VF-ACT-006: Activity contract '{contract.ActivityTypeKey}' requires a result.");
 
         var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, SerializerOptions);
-        var resultEnvelope = ToEnvelope(contract.Result.Type, resultJson, contract.Result.Policy);
-        var projections = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        var selectedProjections = new Dictionary<string, (ActivityResultProjectionContract Contract, JsonElement? Value, ActivityValuePolicy EffectivePolicy)>(StringComparer.Ordinal);
 
         foreach (var projection in contract.Result.Projections.Values)
         {
             if (!projection.Policy.IsPersistable)
                 throw new InvalidOperationException($"VF-ACT-005: Result projection '{projection.Key}' is not persistable.");
 
+            var effectivePolicy = Combine(contract.Result.Policy, projection.Policy, projection.Key);
             if (!TrySelect(resultJson, projection.Path, out var selected))
             {
                 if (projection.IsRequired)
                     throw new InvalidOperationException($"VF-ACT-006: Required result projection '{projection.Key}' was not produced.");
 
-                projections.Add(projection.Key, ValueEnvelope.Absent(projection.Type, ToProtectionPolicy(projection.Policy)));
+                selectedProjections.Add(projection.Key, (projection, null, effectivePolicy));
                 continue;
             }
 
             if (projection.IsRequired && selected.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
                 throw new InvalidOperationException($"VF-ACT-006: Required result projection '{projection.Key}' was null.");
 
-            projections.Add(projection.Key, ToEnvelope(projection.Type, selected, projection.Policy));
+            selectedProjections.Add(projection.Key, (projection, selected.Clone(), effectivePolicy));
+        }
+
+        // Validate every projection before external writes so a malformed projection never exposes a
+        // partially projected completion. External writes use deterministic owner keys and are idempotent.
+        var resultEnvelope = await ToEnvelopeAsync(
+            workflowExecutionId,
+            $"activity:{invocationId}:result",
+            contract.Result.Type,
+            resultJson,
+            contract.Result.Policy,
+            externalize: true,
+            cancellationToken);
+        var projections = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var (key, selected) in selectedProjections)
+        {
+            if (!selected.Value.HasValue)
+            {
+                projections.Add(key, ValueEnvelope.Absent(selected.Contract.Type, ToProtectionPolicy(selected.EffectivePolicy)));
+                continue;
+            }
+
+            projections.Add(key, await ToEnvelopeAsync(
+                workflowExecutionId,
+                $"activity:{invocationId}:projection:{key}",
+                selected.Contract.Type,
+                selected.Value.Value,
+                selected.EffectivePolicy,
+                externalize: false,
+                cancellationToken));
         }
 
         var durableCompletion = new ActivityCompletion(
@@ -68,20 +122,97 @@ public sealed class ActivityCompletionProjector
         return new ActivityCompletionProjection(durableCompletion, projections);
     }
 
-    private static ValueEnvelope ToEnvelope(ValueTypeDescriptor type, JsonElement value, ActivityValuePolicy policy) =>
-        value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-            ? ValueEnvelope.Null(type, ToProtectionPolicy(policy))
-            : ValueEnvelope.Inline(type, value, ToProtectionPolicy(policy));
+    private async ValueTask<ValueEnvelope> ToEnvelopeAsync(
+        string? workflowExecutionId,
+        string ownerKey,
+        ValueTypeDescriptor type,
+        JsonElement value,
+        ActivityValuePolicy policy,
+        bool externalize,
+        CancellationToken cancellationToken)
+    {
+        var effectivePolicy = ToProtectionPolicy(policy);
+        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return ValueEnvelope.Null(type, effectivePolicy);
+        // Named projections are read-only views over the atomic result and are never independent
+        // durable output slots. Keep those views local; only the owning whole result is externalized.
+        if (effectivePolicy.Storage != DurableValueStorage.External || !externalize)
+            return ValueEnvelope.Inline(type, value, effectivePolicy);
+        if (workflowExecutionId is null)
+            throw new InvalidOperationException("VF-ACT-005: External result projection requires asynchronous projection with a workflow execution ID.");
+        if (externalPayloadStore is null)
+            throw new InvalidOperationException("VF-ACT-005: External result projection requires an IExternalPayloadStore.");
+        if (string.IsNullOrWhiteSpace(policy.StorageProfile))
+            throw new InvalidOperationException("VF-ACT-005: External result policy requires a storage profile.");
+
+        var reference = await externalPayloadStore.WriteAsync(
+            new ExternalPayloadWriteRequest(
+                workflowExecutionId,
+                ownerKey,
+                policy.StorageProfile,
+                type,
+                value.Clone(),
+                effectivePolicy),
+            cancellationToken);
+        return ValueEnvelope.External(type, reference, effectivePolicy);
+    }
 
     private static ValueProtectionPolicy ToProtectionPolicy(ActivityValuePolicy policy) =>
         policy.IsPersistable
             ? new ValueProtectionPolicy(
-                DurableValueLifecycle.Instance,
-                DurableValueStorage.Inline,
+                ToLifecycle(policy.Lifecycle),
+                ToStorage(policy.Storage),
                 policy.IsSensitive,
                 policy.RequiresEncryption,
-                policy.RedactionMode)
+                policy.RedactionMode,
+                policy.RetentionPolicy)
             : ValueProtectionPolicy.Transient;
+
+    private static ActivityValuePolicy Combine(
+        ActivityValuePolicy source,
+        ActivityValuePolicy projection,
+        string projectionKey)
+    {
+        if (source.RedactionMode is not null && projection.RedactionMode is not null &&
+            !StringComparer.Ordinal.Equals(source.RedactionMode, projection.RedactionMode))
+            throw new InvalidOperationException($"VF-ACT-005: Result projection '{projectionKey}' declares an incompatible redaction policy.");
+        if (source.RetentionPolicy is not null && projection.RetentionPolicy is not null &&
+            !StringComparer.Ordinal.Equals(source.RetentionPolicy, projection.RetentionPolicy))
+            throw new InvalidOperationException($"VF-ACT-005: Result projection '{projectionKey}' declares an incompatible retention policy.");
+
+        var storage = source.Storage == ActivityValueStorage.External || projection.Storage == ActivityValueStorage.External
+            ? ActivityValueStorage.External
+            : source.Storage == ActivityValueStorage.Custom || projection.Storage == ActivityValueStorage.Custom
+                ? ActivityValueStorage.Custom
+                : ActivityValueStorage.Inline;
+        return source with
+        {
+            IsPersistable = source.IsPersistable && projection.IsPersistable,
+            IsSensitive = source.IsSensitive || projection.IsSensitive,
+            RequiresEncryption = source.RequiresEncryption || projection.RequiresEncryption,
+            RedactionMode = projection.RedactionMode ?? source.RedactionMode,
+            Storage = storage,
+            StorageProfile = projection.StorageProfile ?? source.StorageProfile,
+            RetentionPolicy = projection.RetentionPolicy ?? source.RetentionPolicy
+        };
+    }
+
+    private static DurableValueLifecycle ToLifecycle(ActivityValueLifecycle lifecycle) => lifecycle switch
+    {
+        ActivityValueLifecycle.Instance => DurableValueLifecycle.Instance,
+        ActivityValueLifecycle.Result => DurableValueLifecycle.Result,
+        ActivityValueLifecycle.Audit => DurableValueLifecycle.Audit,
+        ActivityValueLifecycle.Custom => DurableValueLifecycle.Custom,
+        _ => throw new ArgumentOutOfRangeException(nameof(lifecycle), lifecycle, null)
+    };
+
+    private static DurableValueStorage ToStorage(ActivityValueStorage storage) => storage switch
+    {
+        ActivityValueStorage.Inline => DurableValueStorage.Inline,
+        ActivityValueStorage.External => DurableValueStorage.External,
+        ActivityValueStorage.Custom => DurableValueStorage.Custom,
+        _ => throw new ArgumentOutOfRangeException(nameof(storage), storage, null)
+    };
 
     private static bool TrySelect(JsonElement root, string path, out JsonElement selected)
     {

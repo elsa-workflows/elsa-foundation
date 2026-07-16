@@ -2,6 +2,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -55,9 +56,67 @@ public sealed class ActivityCompletionContractTests
             "invocation-1", Attempt(), Contract(resultPolicy: ActivityValuePolicy.Default with { IsPersistable = false }), ActivityTransition.Complete(new ChargeResult("r", true), "Charged"), DateTimeOffset.UtcNow));
     }
 
+    [Fact]
+    public async Task External_result_is_stored_and_projection_views_preserve_policy_without_downgrade()
+    {
+        var store = new RecordingExternalPayloadStore();
+        var policy = new ActivityValuePolicy(
+            true,
+            true,
+            true,
+            "Full",
+            ActivityValueLifecycle.Result,
+            ActivityValueStorage.External,
+            "encrypted-payloads",
+            "P30D");
+
+        var projected = await new ActivityCompletionProjector(store).ProjectAsync(
+            "workflow-1",
+            "invocation-1",
+            Attempt(),
+            Contract(resultPolicy: policy),
+            ActivityTransition.Complete(new ChargeResult("receipt-1", true), "Charged"),
+            DateTimeOffset.UtcNow);
+
+        Assert.Null(projected.Completion.Result.InlineValue);
+        Assert.Equal(DurableValueStorage.External, projected.Completion.Result.Policy.Storage);
+        Assert.All(projected.Projections.Values, envelope =>
+        {
+            Assert.NotNull(envelope.InlineValue);
+            Assert.Null(envelope.ExternalReference);
+            Assert.Equal("P30D", envelope.Policy.RetentionPolicy);
+            Assert.True(envelope.Policy.IsSensitive);
+            Assert.True(envelope.Policy.RequiresEncryption);
+            Assert.Equal("Full", envelope.Policy.RedactionMode);
+        });
+        Assert.Single(store.Writes);
+        Assert.All(store.Writes, write => Assert.Equal("encrypted-payloads", write.StorageProfile));
+    }
+
+    [Fact]
+    public async Task Incompatible_projection_retention_is_rejected_before_external_write()
+    {
+        var store = new RecordingExternalPayloadStore();
+        var resultPolicy = new ActivityValuePolicy(
+            true, true, true, "Full", ActivityValueLifecycle.Result,
+            ActivityValueStorage.External, "encrypted-payloads", "P30D");
+        var projectionPolicy = resultPolicy with { RetentionPolicy = "P7D" };
+        var contract = Contract(resultPolicy: resultPolicy, projectionPolicy: projectionPolicy);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new ActivityCompletionProjector(store)
+            .ProjectAsync(
+                "workflow-1", "invocation-1", Attempt(), contract,
+                ActivityTransition.Complete(new ChargeResult("receipt-1", true), "Charged"),
+                DateTimeOffset.UtcNow).AsTask());
+
+        Assert.Contains("VF-ACT-005", exception.Message);
+        Assert.Empty(store.Writes);
+    }
+
     private static ActivityContract Contract(
         string requiredProjectionPath = "receiptId",
-        ActivityValuePolicy? resultPolicy = null) =>
+        ActivityValuePolicy? resultPolicy = null,
+        ActivityValuePolicy? projectionPolicy = null) =>
         new(
             "Payments.Charge",
             "1.0.0",
@@ -69,7 +128,7 @@ public sealed class ActivityCompletionContractTests
                 true,
                 resultPolicy ?? ActivityValuePolicy.Default,
                 [
-                    new ActivityResultProjectionContract("receipt-id", requiredProjectionPath, StringType, true, ActivityValuePolicy.Default),
+                    new ActivityResultProjectionContract("receipt-id", requiredProjectionPath, StringType, true, projectionPolicy ?? ActivityValuePolicy.Default),
                     new ActivityResultProjectionContract("approved", "approved", new ValueTypeDescriptor("Boolean"), true, ActivityValuePolicy.Default)
                 ]),
             ["Charged", "Declined"],
@@ -79,4 +138,25 @@ public sealed class ActivityCompletionContractTests
         new("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow);
 
     private sealed record ChargeResult(string ReceiptId, bool Approved);
+
+    private sealed class RecordingExternalPayloadStore : IExternalPayloadStore
+    {
+        public List<ExternalPayloadWriteRequest> Writes { get; } = [];
+
+        public ValueTask<DurableValueExternalReference> WriteAsync(
+            ExternalPayloadWriteRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Writes.Add(request);
+            return ValueTask.FromResult(new DurableValueExternalReference(
+                request.StorageProfile,
+                $"payloads/{request.OwnerKey}",
+                new Dictionary<string, string>()));
+        }
+
+        public ValueTask<System.Text.Json.JsonElement> ReadAsync(
+            DurableValueExternalReference reference,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 }
