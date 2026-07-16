@@ -37,7 +37,8 @@ public sealed class WorkflowDispatchReadinessInitializer(
         var report = await scopedServices
             .GetRequiredService<IWorkflowDispatchReadinessAssessor>()
             .AssessAsync(cancellationToken);
-        if (report.Guarantee == WorkflowDispatchReadinessGuarantee.DurableReady)
+        if (report.Guarantee is WorkflowDispatchReadinessGuarantee.DurableReady or
+            WorkflowDispatchReadinessGuarantee.DistributedReady)
         {
             logger.LogInformation("DispatchWorkflow readiness is {Guarantee}", report.Guarantee);
             return;

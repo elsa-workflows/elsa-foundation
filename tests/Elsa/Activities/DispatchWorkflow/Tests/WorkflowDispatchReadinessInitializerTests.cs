@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -28,6 +29,32 @@ public sealed class WorkflowDispatchReadinessInitializerTests
             NullLogger<WorkflowDispatchReadinessInitializer>.Instance);
 
         await initializer.InitializeAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_AcceptsAndLogsDistributedReadyAsInformation()
+    {
+        var atomicOutbox = new InMemoryRuntimeCheckpointCommitStore();
+        var evidence = WorkflowDispatchDurabilityComponents.Required
+            .Append(WorkflowDispatchDurabilityComponents.Distribution)
+            .Select(component => new WorkflowDispatchDurabilityEvidence(
+                component,
+                WorkflowDispatchDurabilityLevel.Durable));
+        var services = new ServiceCollection()
+            .AddSingleton<IWorkflowDispatchStore, InMemoryWorkflowDispatchStore>()
+            .AddSingleton<IRuntimePostCommitOutboxStore>(atomicOutbox)
+            .AddSingleton<IRuntimePostCommitOutboxClaimStore>(atomicOutbox)
+            .AddSingleton<IRuntimePostCommitOutboxClaimCompletionStore>(atomicOutbox)
+            .AddSingleton<IWorkflowDispatchRedriveStore, StubRedriveStore>()
+            .AddSingleton<IWorkflowDispatchReadinessAssessor>(
+                new WorkflowDispatchReadinessAssessor(evidence))
+            .BuildServiceProvider();
+        var logger = new RecordingLogger<WorkflowDispatchReadinessInitializer>();
+        var initializer = new WorkflowDispatchReadinessInitializer(services, logger);
+
+        await initializer.InitializeAsync(CancellationToken.None);
+
+        Assert.Equal([LogLevel.Information], logger.Levels);
     }
 
     [Fact]
@@ -88,5 +115,21 @@ public sealed class WorkflowDispatchReadinessInitializerTests
         public ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
             WorkflowDispatchRedriveRequest request,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogLevel> Levels { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
     }
 }

@@ -329,6 +329,10 @@ public sealed class ArchitectureGuardTests
         Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);
         Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(PackageReferences(design), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
 
         var sourceFiles = new[] { runtime, design }
             .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories));
@@ -337,6 +341,26 @@ public sealed class ArchitectureGuardTests
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .ToArray();
         Assert.Empty(workflowDefinitionActivityReferences);
+
+        var forbiddenContractTerms = new[]
+        {
+            "MassTransit",
+            "ServiceBus",
+            "RoutingChannel",
+            "TransportSelection",
+            "Priority",
+            "Affinity"
+        };
+        var transportContractReferences = sourceFiles
+            .SelectMany(file =>
+            {
+                var text = StripCommentsAndStringLiterals(File.ReadAllText(file));
+                return forbiddenContractTerms
+                    .Where(term => text.Contains(term, StringComparison.Ordinal))
+                    .Select(term => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {term}");
+            })
+            .ToArray();
+        Assert.Empty(transportContractReferences);
     }
 
     [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).

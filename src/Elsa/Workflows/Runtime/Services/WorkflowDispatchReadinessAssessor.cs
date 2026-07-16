@@ -24,12 +24,30 @@ public sealed class WorkflowDispatchReadinessAssessor(
             .Select(component => contributions[component])
             .ToArray();
         var hasResumption = contributions.ContainsKey(WorkflowDispatchDurabilityComponents.Resumption);
-        var guarantee = hasResumption && hasAllInfrastructure && infrastructureLevels.All(level => level == WorkflowDispatchDurabilityLevel.Durable)
+        var baseGuarantee = hasResumption && hasAllInfrastructure && infrastructureLevels.All(level => level == WorkflowDispatchDurabilityLevel.Durable)
             ? WorkflowDispatchReadinessGuarantee.DurableReady
             : hasResumption && hasAllInfrastructure && infrastructureLevels.All(level => level == WorkflowDispatchDurabilityLevel.ProcessLocal)
                 ? WorkflowDispatchReadinessGuarantee.ProcessLocal
                 : WorkflowDispatchReadinessGuarantee.Unsafe;
-        var components = WorkflowDispatchDurabilityComponents.Required
+        var hasDistribution = contributions.TryGetValue(
+            WorkflowDispatchDurabilityComponents.Distribution,
+            out var distributionLevel);
+        var guarantee = (baseGuarantee, hasDistribution, distributionLevel) switch
+        {
+            (WorkflowDispatchReadinessGuarantee.DurableReady, false, _) =>
+                WorkflowDispatchReadinessGuarantee.DurableReady,
+            (WorkflowDispatchReadinessGuarantee.DurableReady, true, WorkflowDispatchDurabilityLevel.Durable) =>
+                WorkflowDispatchReadinessGuarantee.DistributedReady,
+            (WorkflowDispatchReadinessGuarantee.ProcessLocal, false, _) =>
+                WorkflowDispatchReadinessGuarantee.ProcessLocal,
+            (WorkflowDispatchReadinessGuarantee.ProcessLocal, true, WorkflowDispatchDurabilityLevel.ProcessLocal) =>
+                WorkflowDispatchReadinessGuarantee.ProcessLocal,
+            _ => WorkflowDispatchReadinessGuarantee.Unsafe
+        };
+        var componentNames = hasDistribution
+            ? WorkflowDispatchDurabilityComponents.Required.Append(WorkflowDispatchDurabilityComponents.Distribution)
+            : WorkflowDispatchDurabilityComponents.Required;
+        var components = componentNames
             .Select(component => contributions.TryGetValue(component, out var level)
                 ? new WorkflowDispatchReadinessComponent(
                     component,
@@ -49,7 +67,8 @@ public sealed class WorkflowDispatchReadinessAssessor(
 
         return ValueTask.FromResult(new WorkflowDispatchReadinessReport(
             guarantee,
-            guarantee == WorkflowDispatchReadinessGuarantee.DurableReady,
+            guarantee is WorkflowDispatchReadinessGuarantee.DurableReady or
+                WorkflowDispatchReadinessGuarantee.DistributedReady,
             components,
             reasonCodes));
     }

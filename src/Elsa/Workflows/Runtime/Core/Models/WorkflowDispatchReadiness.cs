@@ -7,6 +7,7 @@ public static class WorkflowDispatchDurabilityComponents
     public const string Outbox = "outbox";
     public const string Scheduler = "scheduler";
     public const string Resumption = "resumption";
+    public const string Distribution = "distribution";
 
     public static readonly IReadOnlyCollection<string> Required =
     [Checkpoint, DispatchStore, Outbox, Scheduler, Resumption];
@@ -22,7 +23,8 @@ public enum WorkflowDispatchReadinessGuarantee
 {
     ProcessLocal = 0,
     DurableReady = 1,
-    Unsafe = 2
+    Unsafe = 2,
+    DistributedReady = 3
 }
 
 public sealed record WorkflowDispatchReadinessComponent(
