@@ -6,11 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
 
 /// <summary>
-/// Opt-in host feature that backs <b>every</b> Elsa persistence lane — workflow runtime, workflows-design and
-/// activities-design — with a single Groundwork SQLite document store. Composing this one feature is all a host
-/// does to select the provider for the whole product; runtime, design and domain code never reference Groundwork
-/// or SQLite. It supersedes composing the per-lane features individually when the host wants one database to back
-/// everything.
+/// Opt-in host feature that backs all seven shipped Elsa persistence families with one Groundwork
+/// SQLite target: workflow runtime, identity, secrets, distributed runtime, workflows design,
+/// activities design, and workflows publishing. Runtime, design, and domain code remain
+/// provider-neutral.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -19,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceSqlite",
     DisplayName = "Groundwork SQLite Unified Persistence",
-    Description = "Backs the workflow runtime, workflows-design and activities-design persistence seams with a single Groundwork SQLite document store. Durable storage keeps runtime checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
+    Description = "Backs all seven shipped Elsa persistence families with one admission-gated Groundwork SQLite target. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {

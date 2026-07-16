@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Testcontainers.MongoDb" />
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="Groundwork.Core" />
+    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\MongoDb\Elsa.Persistence.Groundwork.MongoDb.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\MongoDb\Unified\Elsa.Persistence.Groundwork.MongoDb.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\UnifiedHost\Tests\GroundworkProviderRegistrationAssertions.cs"
+             Link="GroundworkProviderRegistrationAssertions.cs" />
+  </ItemGroup>
+
+</Project>

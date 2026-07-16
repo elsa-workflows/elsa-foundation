@@ -22,15 +22,31 @@ namespace Elsa.Persistence.Groundwork.Testing;
 /// compatibility tests, and provides a working cross-document unit of work mirroring the relational
 /// provider's <see cref="TransactionBoundary.CrossUnitAtomic"/> boundary.
 /// </remarks>
-public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentStore
+public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStore
 {
+    private readonly StorageManifest manifest;
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
     private readonly Lock _gate = new();
+    private int _saveCount;
+    private int _loadCount;
+    private int _deleteCount;
+    private int _beginCount;
 
-    public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
+    public InMemoryDocumentStore(StorageManifest manifest, DocumentStoreAccess? access = null)
+    {
+        this.manifest = manifest ?? throw new ArgumentNullException(nameof(manifest));
+        Access = access ?? GroundworkTestAccess.ForManifest(manifest);
+    }
+
+    public DocumentStoreAccess Access { get; }
+    public int SaveCount => Volatile.Read(ref _saveCount);
+    public int LoadCount => Volatile.Read(ref _loadCount);
+    public int DeleteCount => Volatile.Read(ref _deleteCount);
+    public int BeginCount => Volatile.Read(ref _beginCount);
 
     public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _saveCount);
         lock (_gate)
         {
             var key = (request.DocumentKind, request.Id);
@@ -66,8 +82,11 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
         return existing.Version == expected ? null : DocumentStoreWriteResult.ConcurrencyConflict;
     }
 
-    public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_docs.GetValueOrDefault((documentKind, id)));
+    public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _loadCount);
+        return Task.FromResult(_docs.GetValueOrDefault((documentKind, id)));
+    }
 
     // Test-only: enumerate the stored envelopes of a kind. The golden-fixture compatibility test uses
     // this to discover the composite document id the bridge assigned, so it can re-seed the same id under
@@ -77,6 +96,7 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
 
     public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _deleteCount);
         lock (_gate)
         {
             var key = (request.DocumentKind, request.Id);
@@ -85,7 +105,7 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
             if (request.ExpectedVersion is { } expected && existing.Version != expected)
                 return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
             _docs.TryRemove(key, out _);
-            return Task.FromResult(DocumentStoreWriteResult.Deleted);
+            return Task.FromResult(DocumentStoreWriteResult.Deleted(existing.Id));
         }
     }
 
@@ -151,12 +171,69 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
     public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
 
+    public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+    {
+        var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
+        var declaration = unit.PhysicalStorage?.BoundedQueries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
+        var legacyDeclaration = unit.Queries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
+        var indexIdentity = declaration?.IndexIdentity ?? legacyDeclaration?.IndexIdentity
+            ?? throw new InvalidOperationException(
+                $"Document kind '{query.DocumentKind}' does not declare bounded query '{query.QueryIdentity}'.");
+        var predicatePaths = declaration is null || declaration.PredicateFields.Count == 0
+            ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields.Select(field => field.Path)
+            : declaration.PredicateFields.Select(field => field.Path);
+        var paths = predicatePaths
+            .Concat(declaration?.SortFields.Select(field => field.Path) ?? [])
+            .ToHashSet(StringComparer.Ordinal);
+        if (query.Clauses.SelectMany(clause => clause.Comparisons).Any(comparison => !paths.Contains(comparison.Path)))
+            throw new InvalidOperationException("The bounded query contains an undeclared stable field path.");
+
+        IEnumerable<DocumentEnvelope> matches = _docs.Values
+            .Where(document => document.DocumentKind == query.DocumentKind);
+        foreach (var clause in query.Clauses)
+        {
+            matches = matches.Where(document => clause.Comparisons.Any(comparison =>
+                comparison.Operator == QueryComparisonOperator.Equal &&
+                string.Equals(
+                    ReadField(document.ContentJson, comparison.Path),
+                    comparison.Values.Single(),
+                    StringComparison.Ordinal)));
+        }
+
+        var all = matches.OrderBy(document => document.Id, StringComparer.Ordinal).ToArray();
+        var window = all.Skip(query.Skip ?? 0);
+        if (query.Take is { } take)
+            window = window.Take(take);
+        return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
+    }
+
+    public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        (await QueryAsync(query, cancellationToken)).TotalCount;
+
+    public async Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        (await QueryAsync(new DocumentQuery(
+            query.DocumentKind,
+            query.QueryIdentity,
+            query.Clauses,
+            query.Order,
+            query.Skip,
+            1,
+            query.Continuation,
+            query.LatestPerKeyPath,
+            query.ResultOperation), cancellationToken)).Documents.FirstOrDefault();
+
+    public async Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        await FirstOrDefaultAsync(query, cancellationToken) is not null;
+
     // --- Document unit of work: an in-memory cross-document atomic batch mirroring the relational
     // provider's CrossUnitAtomic boundary (stage Save/Delete, read-your-writes, all-or-nothing commit). ---
     public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
 
-    public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
-        Task.FromResult<IDocumentUnitOfWork>(new InMemoryDocumentUnitOfWork(this));
+    public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _beginCount);
+        return Task.FromResult<IDocumentUnitOfWork>(new InMemoryDocumentUnitOfWork(this));
+    }
 
     private sealed class InMemoryDocumentUnitOfWork(InMemoryDocumentStore store) : IDocumentUnitOfWork
     {
@@ -190,7 +267,7 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
                 return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
             _staged[key] = null;
             _pending.Add(() => store.DeleteAsync(request, cancellationToken));
-            return Task.FromResult(DocumentStoreWriteResult.Deleted);
+            return Task.FromResult(DocumentStoreWriteResult.Deleted(existing.Id));
         }
 
         public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)

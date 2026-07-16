@@ -56,7 +56,7 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
             if (!IsTrigger(node))
                 continue;
 
-            var claims = new List<(string ProviderId, ActivityTriggerStimulusResult Result)>();
+            var claims = new List<(string ProviderId, TriggerCardinality Cardinality, ActivityTriggerStimulusResult Result)>();
             foreach (var provider in _providers)
             {
                 var providerId = provider.ProviderId;
@@ -82,7 +82,7 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
                         throw Failure(identity.ArtifactId, node, [], "ProviderIdentity",
                             $"Trigger provider type '{providerType}' recognizes node '{node.ExecutableNodeId}' but has a blank provider id.");
 
-                    claims.Add((providerId, describedResult));
+                    claims.Add((providerId, provider.Cardinality, describedResult));
                 }
             }
 
@@ -95,7 +95,7 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
                 throw Failure(identity.ArtifactId, node, providerIds, "ProviderRecognition",
                     $"Several trigger stimulus providers recognize node '{node.ExecutableNodeId}': {string.Join(", ", providerIds)}.");
 
-            var (recognizingProviderId, claimResult) = claims[0];
+            var (recognizingProviderId, cardinality, claimResult) = claims[0];
             var bindings = claimResult.Descriptors.Select(descriptor =>
                 new WorkflowTriggerBinding(
                     TriggerBindingId: WorkflowTriggerBinding.BuildId(identity.ArtifactId, node.ExecutableNodeId, descriptor.StimulusHash),
@@ -108,7 +108,8 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
                     StimulusHash: descriptor.StimulusHash,
                     CorrelationScope: descriptor.CorrelationScope,
                     Metadata: descriptor.Metadata,
-                    CreatedAt: now)).ToArray();
+                    CreatedAt: now,
+                    Cardinality: cardinality)).ToArray();
 
             var duplicateBindingId = bindings.GroupBy(x => x.TriggerBindingId, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1)?.Key;
             if (duplicateBindingId is not null)

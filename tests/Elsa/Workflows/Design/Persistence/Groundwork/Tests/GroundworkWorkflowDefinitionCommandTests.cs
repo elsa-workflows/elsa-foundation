@@ -27,22 +27,24 @@ public class GroundworkWorkflowDefinitionCommandTests
     private readonly HookEventPublisher _events = new();
     private readonly SequentialIdentityGenerator _identities = new();
     private readonly FakeSystemClock _clock = new();
+    private readonly Elsa.Persistence.Core.IPersistenceAccessContextAccessor _accessContext =
+        GroundworkTestAccess.DefaultAccessContextAccessor;
 
     private GroundworkCreateDraftCommand CreateCommand() =>
-        new(_identities, _locks, _store, Payloads, _events, _events, _clock);
+        new(_identities, _locks, _store, Payloads, _events, _events, _clock, _accessContext);
 
     private GroundworkUpdateDraftCommand UpdateCommand() =>
-        new(_locks, _store, Payloads, _events, _events, _clock);
+        new(_locks, _store, Payloads, _events, _events, _clock, _accessContext);
 
     private GroundworkWorkflowDefinitionVersionStore VersionStore() =>
         new(_store, new GroundworkWorkflowDefinitionStore(_store), Payloads);
 
     private GroundworkPromoteDraftToVersionCommand PromoteCommand() =>
-        new(_locks, _store, Payloads, _events, VersionStore(), _identities, _clock);
+        new(_locks, _store, Payloads, _events, VersionStore(), _identities, _clock, _accessContext);
 
     // Draft store reads only the draft/layout document; it never derives validation errors, so no
     // publisher is threaded through it (the gate is invoked directly on the publisher below).
-    private GroundworkWorkflowDefinitionDraftStore DraftStore() => new(_store, Payloads);
+    private GroundworkWorkflowDefinitionDraftStore DraftStore() => new(_store, Payloads, _accessContext);
 
     private GroundworkWorkflowDefinitionVersionLayoutStore VersionLayoutStore() => new(_store);
 
@@ -123,7 +125,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     public async Task DiscardDraft_deletes_the_embedded_draft_document()
     {
         var draftId = await CreateCommand().Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        var discard = new GroundworkDiscardDraftCommand(_locks, _store, Payloads, _events);
+        var discard = new GroundworkDiscardDraftCommand(_locks, _store, Payloads, _events, _accessContext);
 
         await discard.Execute(draftId, CancellationToken.None);
 
@@ -133,7 +135,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task SaveWorkflowDefinition_updates_definition_document()
     {
-        var command = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock);
+        var command = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock, _accessContext);
         var definition = new WorkflowDefinition { Id = "definition-1", Name = "Original" };
         await command.Execute(definition, CancellationToken.None);
         definition.Name = "Updated";
@@ -149,11 +151,34 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task SaveWorkflowDefinition_rejects_explicit_wrong_tenant_before_lookup_or_staging()
+    {
+        var command = new GroundworkSaveWorkflowDefinitionCommand(
+            _store,
+            _clock,
+            GroundworkTestAccess.AccessContext("tenant-a"));
+        var definition = new WorkflowDefinition
+        {
+            Id = "definition-wrong-scope",
+            Name = "Do not save",
+            TenantId = "tenant-b"
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => command.Execute(definition, CancellationToken.None));
+
+        Assert.Equal(0, _store.LoadCount);
+        Assert.Equal(0, _store.BeginCount);
+        Assert.Empty(_store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind));
+    }
+
+    [Fact]
     public async Task DeleteWorkflowDefinitionPermanently_removes_definition_draft_versions_and_layouts()
     {
-        var saveDefinition = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock);
+        var saveDefinition = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock, _accessContext);
         var createDraft = CreateCommand();
-        await saveDefinition.Execute(new WorkflowDefinition { Id = "definition-1", Name = "Delete me" }, CancellationToken.None);
+        await saveDefinition.Execute(
+            new WorkflowDefinition { Id = "definition-1", Name = "Delete me", DeletedAt = _clock.UtcNow },
+            CancellationToken.None);
         var draftId = await createDraft.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
         var versionStore = VersionStore();
         var promote = PromoteCommand();
@@ -164,9 +189,11 @@ public class GroundworkWorkflowDefinitionCommandTests
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             _store,
             Payloads,
+            new GroundworkWorkflowDefinitionStore(_store),
             DraftStore(),
             versionStore,
-            VersionLayoutStore());
+            VersionLayoutStore(),
+            _accessContext);
 
         await delete.Execute("definition-1", CancellationToken.None);
 
@@ -176,6 +203,28 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.NotEqual(draftId, secondDraftId);
         Assert.Null(await versionStore.FindByIdAsync(versionId));
         Assert.Null(await VersionLayoutStore().FindByVersionIdAsync(versionId));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_rejects_an_active_definition()
+    {
+        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        await new GroundworkSaveWorkflowDefinitionCommand(_store, _clock, _accessContext).Execute(
+            new WorkflowDefinition { Id = "definition-active", Name = "Keep me" },
+            CancellationToken.None);
+        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            Payloads,
+            definitions,
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            delete.Execute("definition-active", CancellationToken.None));
+
+        Assert.NotNull(await definitions.FindByIdAsync("definition-active"));
     }
 
     [Fact]
@@ -201,7 +250,8 @@ public class GroundworkWorkflowDefinitionCommandTests
             _store,
             Payloads,
             new EmptyActivityStructureService(),
-            _clock);
+            _clock,
+            _accessContext);
 
         var submitted = await command.Execute("Definition", null, MinimalState(), CancellationToken.None);
 

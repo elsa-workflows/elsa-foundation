@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -38,6 +39,69 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         await store.SavePendingAsync(Pending("item-1", "wf-1")); // no throw
 
         Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Nested_scheduler_identity_beyond_portable_document_limit_round_trips(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var sourceWorkItemId = string.Join(':', Enumerable.Repeat("schedule:node-sequence:start:activity:invoke", 6));
+        var targetWorkItemId = $"{sourceWorkItemId}:schedule-child:node-sync-endpoint:activity-scheduled";
+        var commitId = $"commit:wf-1:{sourceWorkItemId}:activity-started";
+        var intent = new RuntimePostCommitIntent(
+            intentId: $"{sourceWorkItemId}:post-commit:{targetWorkItemId}",
+            workflowExecutionId: "wf-1",
+            kind: "scheduler",
+            recordedAt: Now,
+            activityExecutionId: "activity-1",
+            idempotencyKey: null,
+            payload: null);
+        var logicalOutboxItemId = RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent);
+        Assert.True(logicalOutboxItemId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {logicalOutboxItemId.Length}.");
+        var pending = new RuntimePostCommitOutboxItem(
+            logicalOutboxItemId,
+            intent,
+            RuntimePostCommitOutboxStatus.Pending,
+            Now,
+            Now);
+
+        await store.SavePendingAsync(pending);
+        await store.SavePendingAsync(pending);
+
+        var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10));
+        Assert.Equal(logicalOutboxItemId, Assert.Single(deliverable).OutboxItemId);
+    }
+
+    [Theory]
+    [InlineData(450)]
+    [InlineData(451)]
+    public async Task Portable_identity_boundary_round_trips(int identityLength)
+    {
+        await using var fixture = CreateStore("sqlite");
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var outboxItemId = new string('x', identityLength);
+
+        await store.SavePendingAsync(Pending(outboxItemId, "wf-1"));
+
+        Assert.Equal(outboxItemId, Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10))).OutboxItemId);
+    }
+
+    [Fact]
+    public async Task Physical_alias_collision_fails_closed()
+    {
+        await using var fixture = CreateStore("sqlite");
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var longLogicalId = new string('x', 451);
+        var collidingShortLogicalId = GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(longLogicalId);
+        await store.SavePendingAsync(Pending(longLogicalId, "wf-long"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await store.SavePendingAsync(Pending(collidingShortLogicalId, "wf-short")));
+
+        Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
@@ -17,6 +18,14 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
     protected override (IExecutionPlacementStore PlacementStore, IExecutionCommandTransport Transport) CreateClusterState()
     {
         var documentStore = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
-        return (new GroundworkExecutionPlacementStore(documentStore), new GroundworkExecutionCommandTransport(documentStore));
+        return (
+            new GroundworkExecutionPlacementStore(documentStore),
+            new GroundworkExecutionCommandTransport(documentStore, new DefaultAccessContextAccessor()));
+    }
+
+    private sealed class DefaultAccessContextAccessor : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } =
+            PersistenceAccessContext.Scoped(new PersistenceScope(PersistenceScope.DefaultValue));
     }
 }

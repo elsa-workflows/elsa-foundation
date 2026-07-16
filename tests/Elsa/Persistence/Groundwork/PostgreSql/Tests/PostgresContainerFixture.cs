@@ -1,6 +1,5 @@
 using DotNet.Testcontainers.Builders;
-using Npgsql;
-using Testcontainers.PostgreSql;
+using Elsa.Persistence.Groundwork.Testing;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql.Tests;
@@ -13,11 +12,7 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Tests;
 /// </summary>
 public sealed class PostgresContainerFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
-        .WithDatabase("elsa")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private readonly PostgreSqlGroundworkProviderDriver _driver = new();
 
     /// <summary>True when the container started and a live PostgreSQL is reachable.</summary>
     public bool IsAvailable { get; private set; }
@@ -25,47 +20,27 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     /// <summary>Reason the container is unavailable, for diagnostics in skipped tests.</summary>
     public string? SkipReason { get; private set; }
 
-    /// <summary>The base connection string to the running container (only valid when <see cref="IsAvailable"/>).</summary>
-    public string ConnectionString => _container.GetConnectionString();
-
     /// <summary>
     /// Creates a fresh, uniquely-named database on the running container and returns a connection string to it,
     /// so each integration test materializes into an isolated schema and cannot collide with its neighbours.
     /// </summary>
-    public async Task<string> CreateIsolatedDatabaseAsync()
-    {
-        var databaseName = $"elsa_{Guid.NewGuid():N}";
-
-        await using (var connection = new NpgsqlConnection(ConnectionString))
-        {
-            await connection.OpenAsync();
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"CREATE DATABASE \"{databaseName}\"";
-            await command.ExecuteNonQueryAsync();
-        }
-
-        return new NpgsqlConnectionStringBuilder(ConnectionString) { Database = databaseName }.ConnectionString;
-    }
+    public Task<string> CreateIsolatedDatabaseAsync() => _driver.CreateIsolatedDatabaseAsync();
 
     public async Task InitializeAsync()
     {
         try
         {
-            await _container.StartAsync();
+            await _driver.InitializeAsync();
             IsAvailable = true;
         }
-        catch (DockerUnavailableException exception)
+        catch (DockerUnavailableException)
         {
             IsAvailable = false;
-            SkipReason = $"Docker/PostgreSQL container unavailable: {exception.Message}";
+            SkipReason = "Docker/PostgreSQL container unavailable.";
         }
     }
 
-    public async Task DisposeAsync()
-    {
-        if (IsAvailable)
-            await _container.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _driver.DisposeAsync();
 }
 
 [CollectionDefinition(Name)]

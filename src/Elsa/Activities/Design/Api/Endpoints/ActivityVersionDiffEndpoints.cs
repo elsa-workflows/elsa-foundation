@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -13,7 +14,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Versions
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("versions/{fromVersionId}/diff/{toVersionId}"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 }
@@ -26,7 +27,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Post(RouteConstants.GetRoute("drafts/{draftId}/diff"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 }

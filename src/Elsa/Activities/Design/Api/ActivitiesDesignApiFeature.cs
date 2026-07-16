@@ -15,6 +15,8 @@ using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Activities.Design.Api.Capabilities;
 
 namespace Elsa.Activities.Design.Api;
 
@@ -25,7 +27,8 @@ namespace Elsa.Activities.Design.Api;
 [ShellFeature(
     name: "ActivitiesDesignApi",
     DisplayName = "Activities Design API",
-    Description = "Contains endpoints to manage data in the Activities Design Domain"
+    Description = "Contains endpoints to manage data in the Activities Design Domain",
+    DependsOn = new object[] { "ApiCapabilities" }
 )]
 public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 {
@@ -76,6 +79,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
+        services.AddApiCapability(ActivityDesignApiCapabilities.StaticDeclaration);
     }
 
     private static void ApplyFeatureOptions(ActivityAvailabilityOptions? source, ActivityAvailabilityOptions target)

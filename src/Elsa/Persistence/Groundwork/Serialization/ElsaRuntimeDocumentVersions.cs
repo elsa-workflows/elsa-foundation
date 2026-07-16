@@ -33,7 +33,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.DurableValueStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind] = 1,
@@ -43,8 +43,9 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 1
+        [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1
     };
 
     private static readonly IReadOnlyDictionary<string, int> MinimumReadable = new Dictionary<string, int>(StringComparer.Ordinal)

@@ -1,11 +1,12 @@
 using Elsa.Persistence.Groundwork.Serialization;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
 /// Shared base for the Groundwork document-store bridges. Each bridge maps a runtime domain contract onto
-/// the provider-neutral <see cref="IDocumentStore"/> and repeats the same serialize→save, load→project and
+/// the scoped <see cref="IDocumentStore"/> adapter and repeats the same serialize→save, load→project and
 /// query→project plumbing. This base factors out that mechanical store interaction while every bridge keeps
 /// its own document-envelope shape, key composition and query set.
 /// </summary>
@@ -18,9 +19,12 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public abstract class GroundworkDocumentStore(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
-    string documentKind)
+    string documentKind,
+    IBoundedDocumentStore? boundedStore = null)
 {
-    /// <summary>The provider-neutral document store the bridge writes through.</summary>
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
+
+    /// <summary>The scoped document-store adapter the bridge writes through.</summary>
     protected IDocumentStore Store { get; } = store;
 
     /// <summary>The runtime document serializer that stamps and versions the document content.</summary>
@@ -29,7 +33,11 @@ public abstract class GroundworkDocumentStore(
     /// <summary>The document kind this bridge owns.</summary>
     protected string DocumentKind { get; } = documentKind;
 
-    /// <summary>Serialises <paramref name="document"/> under this bridge's kind and saves it under <paramref name="documentId"/>.</summary>
+    /// <summary>The admitted bounded-query runtime compiled for this bridge's document kind.</summary>
+    protected IBoundedDocumentStore BoundedStore => _boundedStore ?? throw new InvalidOperationException(
+        $"Document queries for '{DocumentKind}' require an admitted bounded document-store runtime.");
+
+    /// <summary>Serialises <paramref name="document"/> under this bridge's kind and upserts it under <paramref name="documentId"/>.</summary>
     protected Task<DocumentStoreWriteResult> SaveDocumentAsync<TDocument>(
         string documentId,
         TDocument document,
@@ -52,10 +60,20 @@ public abstract class GroundworkDocumentStore(
         return envelope is null ? null : project(Serializer.Deserialize<TDocument>(envelope));
     }
 
-    /// <summary>Queries the declared <paramref name="index"/> for <paramref name="value"/> and projects every matching document.</summary>
-    protected async ValueTask<IReadOnlyList<TResult>> QueryDocumentsAsync<TDocument, TResult>(string index, string value, Func<TDocument, TResult> project, CancellationToken cancellationToken)
+    /// <summary>Executes one declared equality query and projects every matching document.</summary>
+    protected async ValueTask<IReadOnlyList<TResult>> QueryDocumentsAsync<TDocument, TResult>(
+        string queryIdentity,
+        string fieldPath,
+        string value,
+        Func<TDocument, TResult> project,
+        CancellationToken cancellationToken)
     {
-        var envelopes = await Store.QueryAsync(new DocumentStoreQuery(DocumentKind, index, value), cancellationToken);
-        return envelopes.Select(envelope => project(Serializer.Deserialize<TDocument>(envelope))).ToArray();
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+            cancellationToken);
+        return result.Documents.Select(envelope => project(Serializer.Deserialize<TDocument>(envelope))).ToArray();
     }
 }

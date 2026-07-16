@@ -9,17 +9,40 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 public sealed class RuntimeStaleFencingTokenException : Exception
 {
     public RuntimeStaleFencingTokenException(string workflowExecutionId, long presentedFencingToken, long currentFencingToken)
+        : this(
+            workflowExecutionId,
+            presentedFencingToken,
+            currentFencingToken,
+            RuntimeFencingRejectionReason.StaleToken)
+    {
+    }
+
+    public RuntimeStaleFencingTokenException(
+        string workflowExecutionId,
+        long presentedFencingToken,
+        long currentFencingToken,
+        RuntimeFencingRejectionReason reason)
         : base(
             $"Checkpoint commit for workflow execution '{workflowExecutionId}' presented fencing token {presentedFencingToken} " +
-            $"but the current ownership fencing token is {currentFencingToken}. A stale or non-owning writer is fenced out of the " +
+            $"but the current ownership fencing state has token {currentFencingToken} and rejected it as '{reason}'. " +
+            "A stale or non-owning writer is fenced out of the " +
             "single-writer commit path (RT-2).")
     {
         WorkflowExecutionId = workflowExecutionId;
         PresentedFencingToken = presentedFencingToken;
         CurrentFencingToken = currentFencingToken;
+        Reason = reason;
     }
 
     public string WorkflowExecutionId { get; }
     public long PresentedFencingToken { get; }
     public long CurrentFencingToken { get; }
+    public RuntimeFencingRejectionReason Reason { get; }
+}
+
+public enum RuntimeFencingRejectionReason
+{
+    StaleToken,
+    NoActiveLease,
+    ExpiredLease
 }

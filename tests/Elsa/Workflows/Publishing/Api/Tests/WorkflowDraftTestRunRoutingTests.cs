@@ -32,11 +32,15 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton<IRequestSender>(_sender);
-        // FastEndpoints discovers all endpoints in referenced assemblies in this self-hosted fixture.
-        // Runtime diagnostics commands are out of scope for route selection, but their constructors still
-        // need a command sender while the endpoint graph is activated.
-        builder.Services.AddSingleton<ICommandSender, UnusedCommandSender>();
-        builder.Services.AddFastEndpoints(o => o.Assemblies = [typeof(StartWorkflowTestRun).Assembly]);
+        builder.Services.AddFastEndpoints(o =>
+        {
+            o.Assemblies = [typeof(StartWorkflowTestRun).Assembly];
+            // This narrowly scoped route-selection host needs only the two test-run endpoints. Keeping discovery
+            // explicit prevents unrelated management endpoints in the same feature assembly from pulling their
+            // production services into a matcher-only test.
+            o.Filter = type => type.Name is "Start" or "StartDraft" &&
+                               type.Namespace == "Elsa.Workflows.Publishing.Api.Endpoints.TestRuns";
+        });
 
         _app = builder.Build();
         // This test exercises route matching only; relax endpoint security the FastEndpoints way
@@ -138,14 +142,6 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         }
     }
 
-    private sealed class UnusedCommandSender : ICommandSender
-    {
-        public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull =>
-            throw new InvalidOperationException("The routing fixture does not execute commands.");
-
-        public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("The routing fixture does not execute commands.");
-    }
 }
 
 [CollectionDefinition(nameof(WorkflowDraftTestRunRoutingTests), DisableParallelization = true)]

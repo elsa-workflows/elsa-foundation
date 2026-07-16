@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -20,7 +21,7 @@ internal sealed class RuntimeRequirementPreflightEndpoint(
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("preflight"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowPublishingRead);
     }
 
     public override async Task HandleAsync(RunRuntimeRequirementPreflight request, CancellationToken cancellationToken)

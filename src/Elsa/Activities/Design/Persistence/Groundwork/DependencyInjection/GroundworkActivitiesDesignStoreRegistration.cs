@@ -6,6 +6,8 @@ using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +27,10 @@ public static class GroundworkActivitiesDesignStoreRegistration
 {
     public static IServiceCollection AddGroundworkActivitiesDesignStores(this IServiceCollection services)
     {
+        services.AddPersistenceCore();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, ActivitiesDesignGroundworkStorageManifestSource>());
+
         services.RemoveAll<IActivityDefinitionStore>();
         services.AddScoped<IActivityDefinitionStore, GroundworkActivityDefinitionStore>();
 

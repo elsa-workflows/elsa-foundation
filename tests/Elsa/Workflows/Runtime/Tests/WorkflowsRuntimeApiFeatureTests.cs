@@ -86,7 +86,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var rootProvider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = rootProvider.CreateScope();
+        var provider = scope.ServiceProvider;
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
         provider.GetRequiredService<IWorkflowExecutionActorProvider>();

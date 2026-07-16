@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
@@ -13,12 +14,16 @@ public sealed class GroundworkDiscardDraftCommand(
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
-    IDeferredEventPublisher deferredEventPublisher)
+    IDeferredEventPublisher deferredEventPublisher,
+    IPersistenceAccessContextAccessor accessContextAccessor)
     : IDiscardDraftCommand
 {
     public async Task Execute(string draftId, CancellationToken cancellationToken = default)
     {
-        var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer));
+        var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
+            store,
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+            accessContextAccessor);
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
         string workflowDefinitionId;
 

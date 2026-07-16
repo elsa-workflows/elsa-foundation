@@ -5,7 +5,10 @@ using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Querying.Tests;
@@ -23,6 +26,7 @@ public class GroundworkReadStoreTests
     private const string DocumentKind = "doc";
     private const string CollectionIndex = "by-collection";
     private const string CollectionField = "collection";
+    private const string ListAllQuery = "list-all";
     private const string CollectionValue = "doc";
     private const string SchemaVersion = "1.0.0";
 
@@ -46,7 +50,7 @@ public class GroundworkReadStoreTests
             await store.SaveAsync(new SaveDocumentRequest(DocumentKind, doc.Id, SchemaVersion, content));
         }
 
-        return new GroundworkReadStore<Doc>(store, DocumentKind, CollectionIndex, CollectionValue, Json);
+        return new GroundworkReadStore<Doc>(store, DocumentKind, ListAllQuery, CollectionField, CollectionValue, Json);
     }
 
     private static Doc[] Sample() =>
@@ -74,11 +78,48 @@ public class GroundworkReadStoreTests
     }
 
     [Fact]
+    public async Task FindById_does_not_require_a_bounded_query_runtime()
+    {
+        var inner = new InMemoryDocumentStore(BuildManifest());
+        var doc = Sample()[0];
+        var content = JsonSerializer.Serialize(new GroundworkDocument<Doc>(CollectionValue, doc), Json);
+        await inner.SaveAsync(new SaveDocumentRequest(DocumentKind, doc.Id, SchemaVersion, content));
+        var store = new GroundworkReadStore<Doc>(
+            new DocumentStoreOnlyAdapter(inner),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json);
+
+        var result = await store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, doc.Id));
+
+        Assert.Equal(doc.Name, result?.Name);
+    }
+
+    [Fact]
+    public async Task Collection_query_requires_a_bounded_runtime_when_executed()
+    {
+        var store = new GroundworkReadStore<Doc>(
+            new DocumentStoreOnlyAdapter(new InMemoryDocumentStore(BuildManifest())),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => store.QueryAsync(Query<Doc>.All()));
+
+        Assert.Contains(DocumentKind, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("bounded", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Malformed_document_reports_kind_and_id()
     {
         var documentStore = new InMemoryDocumentStore(BuildManifest());
         await documentStore.SaveAsync(new SaveDocumentRequest(DocumentKind, "bad", SchemaVersion, "null"));
-        var store = new GroundworkReadStore<Doc>(documentStore, DocumentKind, CollectionIndex, CollectionValue, Json);
+        var store = new GroundworkReadStore<Doc>(documentStore, DocumentKind, ListAllQuery, CollectionField, CollectionValue, Json);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, "bad")));
@@ -205,4 +246,34 @@ public class GroundworkReadStoreTests
         ],
         new HashSet<string> { "optimistic-concurrency" },
         []);
+
+    private sealed class DocumentStoreOnlyAdapter(IDocumentStore inner) : IDocumentStore
+    {
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+        public DocumentStoreAccess Access => inner.Access;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            inner.BeginAsync(scope, cancellationToken);
+    }
 }

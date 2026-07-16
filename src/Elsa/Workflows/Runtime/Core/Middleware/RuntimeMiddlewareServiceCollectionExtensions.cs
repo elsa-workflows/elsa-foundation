@@ -27,7 +27,7 @@ public static class RuntimeMiddlewareServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         var (resolvedSlot, resolvedOrder, resolvedName) = ResolvePlacement(typeof(TMiddleware), slot, order, name);
-        services.TryAddSingleton<TMiddleware>();
+        services.TryAddScoped<TMiddleware>();
         services.AddSingleton(new WorkflowRuntimeMiddlewareContribution(typeof(TMiddleware), resolvedSlot, resolvedOrder, resolvedName));
         return services;
     }
@@ -46,7 +46,7 @@ public static class RuntimeMiddlewareServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         var (resolvedSlot, resolvedOrder, resolvedName) = ResolvePlacement(typeof(TMiddleware), slot, order, name);
-        services.TryAddSingleton<TMiddleware>();
+        services.TryAddScoped<TMiddleware>();
         services.AddSingleton(new ActivityRuntimeMiddlewareContribution(typeof(TMiddleware), resolvedSlot, resolvedOrder, resolvedName));
         return services;
     }

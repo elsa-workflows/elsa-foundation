@@ -1,6 +1,8 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Documents.Store;
 using System.Text.Json;
 using Xunit;
 
@@ -11,6 +13,40 @@ namespace Elsa.Persistence.Groundwork.Tests;
 // bridges are provider-neutral, and round-tripping proves the runtime state survives serialization.
 public sealed class GroundworkRuntimeStateStoreTests
 {
+    [Fact]
+    public async Task Workflow_execution_write_rejects_explicit_wrong_tenant_before_store_io()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"));
+        var state = WorkflowState("wf-1", WorkflowExecutionStatus.Running) with { TenantId = "tenant-b" };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(state).AsTask());
+
+        Assert.Equal(0, documentStore.SaveCount);
+        Assert.Empty(documentStore.Snapshot(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+    }
+
+    [Fact]
+    public async Task Workflow_execution_query_rejects_explicit_wrong_tenant_before_provider_query()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var pageQuery = new RecordingPageQuery();
+        var store = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            pageQuery,
+            documentStore);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10, TenantId: "tenant-b")).AsTask());
+
+        Assert.Equal(0, pageQuery.QueryCount);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -74,16 +110,22 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task WorkflowExecutionState_RoundTrips_Replaces_And_Lists_All(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            null,
+            fixture.BoundedDocumentStore);
 
         await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Running));
         await store.SaveAsync(WorkflowState("wf-2", WorkflowExecutionStatus.Pending));
-        await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Completed));
+        await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Completed, WorkflowRunKind.PublishedRun));
 
         var found = await store.FindAsync("wf-1");
         Assert.NotNull(found);
         Assert.Equal(WorkflowExecutionStatus.Completed, found!.Status);
         Assert.Equal("artifact-wf-1", found.PinnedExecutable.ArtifactId);
+        Assert.Equal(WorkflowRunKind.PublishedRun, found.RunKind);
 
         Assert.Null(await store.FindAsync("missing"));
 
@@ -160,6 +202,38 @@ public sealed class GroundworkRuntimeStateStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task OperationalState_ConditionalWrites_PreserveWinnerAndRevision(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IExecutionLivenessStateStore store = new GroundworkExecutionLivenessStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer);
+        var first = OperationalWithValue("wf-1", "ownership:wf-1", "first");
+        var second = OperationalWithValue("wf-1", "ownership:wf-1", "second");
+
+        var created = await store.TrySaveAsync(first, expectedRevision: 0);
+        var duplicate = await store.TrySaveAsync(second, expectedRevision: 0);
+        var loaded = await store.FindVersionedAsync("wf-1", "ownership:wf-1");
+        var updated = await store.TrySaveAsync(second, expectedRevision: loaded!.Revision);
+        var stale = await store.TrySaveAsync(first, expectedRevision: loaded.Revision);
+        var missing = await store.TrySaveAsync(
+            OperationalWithValue("wf-1", "missing", "missing"),
+            expectedRevision: 1);
+
+        Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, created.Status);
+        Assert.Equal(1, created.Revision);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, duplicate.Status);
+        Assert.Equal("first", loaded.State.Metadata["value"]);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, updated.Status);
+        Assert.Equal(2, updated.Revision);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, stale.Status);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.NotFound, missing.Status);
+        Assert.Equal("second", (await store.FindAsync("wf-1", "ownership:wf-1"))!.Metadata["value"]);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task ControlPlaneState_RoundTrips_Scoped_And_Global(string provider)
     {
         await using var fixture = CreateStore(provider);
@@ -203,6 +277,50 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(new[] { "inc-1", "inc-2" }, blocking.Select(x => x.IncidentId).OrderBy(x => x));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task IncidentState_LongFaultIdentity_RoundTrips_And_Remains_InsertOnly(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var workItemId = $"work:{new string('x', 450)}";
+        var incidentId = $"incident:{workItemId}:activity-1:Faulted";
+        Assert.True(incidentId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {incidentId.Length}.");
+
+        Assert.True(await store.TryAddAsync(Incident("wf-1", incidentId, IncidentStatus.Open)));
+        Assert.False(await store.TryAddAsync(Incident("wf-1", incidentId, IncidentStatus.Blocking)));
+        Assert.Equal(IncidentStatus.Open, (await store.FindAsync("wf-1", incidentId))!.Status);
+
+        await store.SaveAsync(Incident("wf-1", incidentId, IncidentStatus.Blocking));
+
+        Assert.Equal(IncidentStatus.Blocking, (await store.FindAsync("wf-1", incidentId))!.Status);
+        Assert.Equal(incidentId, Assert.Single(await store.ListAsync("wf-1")).IncidentId);
+    }
+
+    [Fact]
+    public async Task IncidentState_PhysicalIdentityCollision_FailsClosed()
+    {
+        await using var fixture = CreateStore("sqlite");
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var incidentId = $"incident:work:{new string('x', 450)}:activity-1:Faulted";
+        var logicalDocumentId = DocumentId.Compose("wf-1", incidentId);
+        var physicalDocumentId = GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(logicalDocumentId);
+        var wrongState = Incident("wf-wrong", "incident-wrong", IncidentStatus.Open);
+        var (schemaVersion, content) = GroundworkTestSerialization.Serializer.Serialize(
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            wrongState);
+        await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            physicalDocumentId,
+            schemaVersion,
+            content));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.FindAsync("wf-1", incidentId));
+
+        Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
+    }
+
     private static ActivityExecutionState ActivityState(string workflowExecutionId, string activityExecutionId) => new(
         new ActivityExecution(activityExecutionId, workflowExecutionId, $"node-{activityExecutionId}", "authored", "Elsa.Log", "1.0.0"),
         ActivityExecutionStatus.Running,
@@ -239,7 +357,10 @@ public sealed class GroundworkRuntimeStateStoreTests
         AggregateFaultCount: 0,
         Metadata: new Dictionary<string, string>());
 
-    private static WorkflowExecutionState WorkflowState(string workflowExecutionId, WorkflowExecutionStatus status) => new(
+    private static WorkflowExecutionState WorkflowState(
+        string workflowExecutionId,
+        WorkflowExecutionStatus status,
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown) => new(
         workflowExecutionId,
         new WorkflowExecutableIdentity(
             ArtifactId: $"artifact-{workflowExecutionId}",
@@ -256,7 +377,29 @@ public sealed class GroundworkRuntimeStateStoreTests
         CorrelationId: null,
         ParentWorkflowExecutionId: null,
         TenantId: null,
-        SystemMetadata: new Dictionary<string, string>());
+        SystemMetadata: new Dictionary<string, string>())
+        {
+            RunKind = runKind
+        };
+
+    private sealed class RecordingPageQuery : IGroundworkWorkflowExecutionStatePageQuery
+    {
+        public int QueryCount { get; private set; }
+
+        public void Bind(global::Groundwork.Core.PhysicalStorage.ExecutableStorageRoute route)
+        {
+        }
+
+        public ValueTask PrepareAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+            WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            QueryCount++;
+            throw new InvalidOperationException("The provider query should not run for a mismatched tenant.");
+        }
+    }
 
     private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId) => new(
         durableValueId,
@@ -295,6 +438,19 @@ public sealed class GroundworkRuntimeStateStoreTests
         heartbeat: null,
         drain: null,
         interruptedExecution: null);
+
+    private static ExecutionLivenessState OperationalWithValue(
+        string workflowExecutionId,
+        string operationalStateId,
+        string value) =>
+        new(
+            operationalStateId,
+            workflowExecutionId,
+            executionLease: null,
+            heartbeat: null,
+            drain: null,
+            interruptedExecution: null,
+            metadata: new Dictionary<string, string> { ["value"] = value });
 
     private static IncidentState Incident(string workflowExecutionId, string incidentId, IncidentStatus status) => new(
         incidentId,

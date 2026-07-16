@@ -111,14 +111,16 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         var writer = new GroundworkRuntimeCheckpointWriter(
             documentStore,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
             inspectionStore,
             new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
-            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
         var projection = Projection("wf-1", "ae-1", sequence: 1);
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -189,12 +191,17 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task ListSummariesAsync_Wraps_DocumentStore_Exception()
     {
-        var store = new GroundworkActivityExecutionInspectionStore(new ThrowingDocumentStore(new InvalidOperationException("Provider failure.")), GroundworkTestSerialization.Serializer);
+        var failure = new InvalidOperationException("Provider failure.");
+        var store = new GroundworkActivityExecutionInspectionStore(
+            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()),
+            GroundworkTestSerialization.Serializer,
+            new ThrowingBoundedDocumentStore(failure));
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.ListSummariesAsync("wf-1").AsTask());
 
-        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Same(failure, exception.InnerException);
+        Assert.Equal("Provider failure.", exception.InnerException!.Message);
         Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
     }
 
@@ -356,14 +363,16 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         new(
             documentStore,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
-            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
 
     private static RuntimeCheckpointCommit InspectionCommit(ActivityExecutionInspectionProjection projection) =>
         new(
@@ -397,7 +406,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     private sealed class ThrowingDocumentStore(Exception exception) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
-        public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
+        public DocumentStoreAccess Access { get; } = GroundworkTestAccess.DefaultScoped;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             throw exception;
@@ -421,6 +430,21 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             throw exception;
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            throw exception;
+    }
+
+    private sealed class ThrowingBoundedDocumentStore(Exception exception) : IBoundedDocumentStore
+    {
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             throw exception;
     }
 

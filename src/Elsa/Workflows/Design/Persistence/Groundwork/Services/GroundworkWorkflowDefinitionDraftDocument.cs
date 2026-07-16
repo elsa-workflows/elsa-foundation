@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -16,7 +17,9 @@ internal sealed record GroundworkWorkflowDefinitionDraftDocument(
 
 internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     IDocumentStore store,
-    JsonSerializerOptions jsonOptions)
+    JsonSerializerOptions jsonOptions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null)
 {
     public async Task<GroundworkWorkflowDefinitionDraftDocument?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
@@ -28,24 +31,36 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         => CurrentDraft(await ListByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken));
 
     public async Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
+        => await ListByWorkflowDefinitionIdsAsync([workflowDefinitionId], cancellationToken);
+
+    public async Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
+        var definitionIds = workflowDefinitionIds.ToHashSet(StringComparer.Ordinal);
+        var result = await (boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+                "Workflow-definition draft queries require an admitted bounded document-store runtime."))
+            .QueryAsync(
+            new DocumentQuery(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                WorkflowsDesignStorageManifest.ByCollectionIndex,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection),
+                WorkflowsDesignStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    WorkflowsDesignStorageManifest.CollectionField,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection))]),
             cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(Deserialize)
-            .Where(document => document.Entity.WorkflowDefinitionId == workflowDefinitionId)
+            .Where(document => definitionIds.Contains(document.Entity.WorkflowDefinitionId))
             .ToList();
     }
 
     public SaveDocumentRequest ToSaveRequest(
         WorkflowDefinitionDraft draft,
-        IReadOnlyCollection<DesignMetadataRecord> layout) =>
-        JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+        IReadOnlyCollection<DesignMetadataRecord> layout)
+    {
+        accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
+        return JsonDocumentStoreExtensions.ToSaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
             draft.Id,
             WorkflowsDesignStorageManifest.SchemaVersion,
@@ -54,6 +69,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
                 draft,
                 layout),
             jsonOptions);
+    }
 
     public DeleteDocumentRequest ToDeleteRequest(string draftId) =>
         GroundworkDocumentWriter.ToDeleteRequest(
@@ -64,15 +80,19 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     {
         var document = JsonSerializer.Deserialize<GroundworkWorkflowDefinitionDraftDocument>(envelope.ContentJson, jsonOptions);
         if (document?.Entity is not null)
+        {
+            accessContextAccessor.Current.EnsureTenantScope(document.Entity.TenantId);
             return document with
             {
                 Layout = document.Layout ?? []
             };
+        }
 
         var legacyDocument = JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinitionDraft>>(envelope.ContentJson, jsonOptions);
         if (legacyDocument?.Entity is null)
             throw new InvalidOperationException($"Document '{envelope.Id}' of kind '{WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind}' could not be deserialized as {nameof(WorkflowDefinitionDraft)}.");
 
+        accessContextAccessor.Current.EnsureTenantScope(legacyDocument.Entity.TenantId);
         return new GroundworkWorkflowDefinitionDraftDocument(legacyDocument.Collection, legacyDocument.Entity, []);
     }
 

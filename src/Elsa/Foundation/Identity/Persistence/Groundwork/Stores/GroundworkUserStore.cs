@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Persistence.Core;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
@@ -9,10 +11,16 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// <c>tenantId:userId</c> document id and carry an <c>emailKey</c> index (<c>tenantId:email</c>) so
 /// email lookups resolve through the declared index rather than a scan.
 /// </summary>
-public sealed class GroundworkUserStore(IDocumentStore store) : IUserStore
+public sealed class GroundworkUserStore(
+    IDocumentStore store,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null) : IUserStore
 {
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
+
     public async ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
         var envelope = await store.LoadAsync(
             IdentityStorageManifest.UserDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, userId),
@@ -23,12 +31,15 @@ public sealed class GroundworkUserStore(IDocumentStore store) : IUserStore
 
     public async ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
+        accessContextAccessor.EnsureCurrentScope(tenantId);
+        var envelopes = (await BoundedStore.QueryAsync(
+            new DocumentQuery(
                 IdentityStorageManifest.UserDocumentKind,
-                IdentityStorageManifest.ByEmailIndex,
-                EmailKey(tenantId, email)),
-            cancellationToken);
+                IdentityStorageManifest.FindUserByEmailQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    IdentityStorageManifest.EmailKeyField,
+                    EmailKey(tenantId, email)))]),
+            cancellationToken)).Documents;
 
         var match = envelopes.Select(Map).FirstOrDefault();
         return match;
@@ -37,6 +48,7 @@ public sealed class GroundworkUserStore(IDocumentStore store) : IUserStore
     public async ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(user);
+        accessContextAccessor.EnsureCurrentScope(user.TenantId);
 
         var document = new UserDocument(EmailKey(user.TenantId, user.Email), user);
         var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
@@ -52,6 +64,9 @@ public sealed class GroundworkUserStore(IDocumentStore store) : IUserStore
 
     private static string EmailKey(string tenantId, string? email) =>
         $"{IdentityCompositeDocumentId.Normalize(tenantId)}:{IdentityCompositeDocumentId.Normalize(email)}";
+
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("Identity user queries require an admitted bounded document-store runtime.");
 
     private static UserRecord Map(DocumentEnvelope envelope) =>
         JsonSerializer.Deserialize<UserDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!.User;

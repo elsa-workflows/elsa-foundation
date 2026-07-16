@@ -158,7 +158,13 @@ public sealed class ActivityDraftTestRunPublisher(
         if (!string.IsNullOrWhiteSpace(request.CorrelationId))
             metadata["runtime.correlationId"] = request.CorrelationId;
         var dispatch = await startDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(artifactId, "activity-designer-test-run", metadata: metadata, inputs: inputValues),
+            new WorkflowExecutionStartDispatchRequest(
+                artifactId,
+                "activity-designer-test-run",
+                metadata: metadata,
+                inputs: inputValues,
+                runKind: WorkflowRunKind.TestRun,
+                sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: wrapperReference.SourceReferenceId)),
             WorkflowExecutableReferenceScope.TestRun,
             cancellationToken: cancellationToken);
 

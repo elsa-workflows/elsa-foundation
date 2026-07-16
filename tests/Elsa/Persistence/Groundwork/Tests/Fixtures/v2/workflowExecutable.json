@@ -1,5 +1,6 @@
 {
   "collection": "workflowExecutable",
+  "deletionGuard": null,
   "executable": {
     "compatibilityMetadata": {
       "slice": "slice-1"
@@ -91,5 +92,6 @@
       }
     ],
     "storageDriverRequirements": []
-  }
+  },
+  "rootWriteLeases": {}
 }

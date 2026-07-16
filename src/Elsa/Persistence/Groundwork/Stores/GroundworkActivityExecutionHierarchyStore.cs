@@ -8,8 +8,9 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public sealed class GroundworkActivityExecutionHierarchyStore(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
-    IActivityExecutionHierarchyCursorCodec? cursorCodec = null)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind),
+    IActivityExecutionHierarchyCursorCodec? cursorCodec = null,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind, boundedStore),
         IActivityExecutionHierarchyStore
 {
     public async ValueTask SaveAsync(ActivityExecutionHierarchyRecord record, CancellationToken cancellationToken = default)
@@ -43,7 +44,8 @@ public sealed class GroundworkActivityExecutionHierarchyStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         return await QueryDocumentsAsync<HierarchyDocument, ActivityExecutionHierarchyRecord>(
-            ElsaRuntimeStorageManifest.ActivityExecutionHierarchyByWorkflowExecution,
+            ElsaRuntimeStorageManifest.ListActivityExecutionHierarchyByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
             workflowExecutionId,
             document => document.Record,
             cancellationToken);

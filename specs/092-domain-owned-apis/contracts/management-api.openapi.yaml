@@ -1,0 +1,1407 @@
+openapi: 3.1.0
+info:
+  title: Elsa Domain-Owned Management API
+  version: 1.0.0-draft
+  description: |
+    Supported management-client API assembled from shell-scoped domain modules.
+    Paths are relative to the active shell. Capability contracts, rather than
+    internal feature names, tell clients which optional API areas are available.
+    This contract replaces the Elsa.Server /_elsa/workflow-management facade.
+servers:
+  - url: /
+    description: Active shell route base
+security:
+  - bearerAuth: []
+tags:
+  - name: Capabilities
+  - name: Workflow Design
+  - name: Activity Design
+  - name: Expressions
+  - name: Publishing
+  - name: Runtime
+
+paths:
+  /capabilities:
+    get:
+      tags: [Capabilities]
+      operationId: getApiCapabilities
+      summary: Discover the active shell's supported management capabilities
+      responses:
+        '200':
+          description: Caller-neutral capability document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityDocument'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /design/workflows/definitions:
+    get:
+      tags: [Workflow Design]
+      operationId: listWorkflowDefinitions
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - name: state
+          in: query
+          schema:
+            $ref: '#/components/schemas/DefinitionListState'
+      responses:
+        '200':
+          description: Definition summaries including draft, version, and deletion facts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowDefinitionSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Workflow Design]
+      operationId: createWorkflowDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowDefinitionRequest'
+      responses:
+        '201':
+          description: Definition and editable draft created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinitionDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /design/workflows/definitions/{definitionId}:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+    get:
+      tags: [Workflow Design]
+      operationId: getWorkflowDefinition
+      responses:
+        '200':
+          description: Definition details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinitionDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Workflow Design]
+      operationId: updateWorkflowDefinitionMetadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkflowDefinitionMetadataRequest'
+      responses:
+        '200':
+          description: Updated definition details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinitionDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Workflow Design]
+      operationId: softDeleteWorkflowDefinition
+      responses:
+        '204':
+          description: Definition soft-deleted; publications are unchanged
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /design/workflows/definitions/{definitionId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+    post:
+      tags: [Workflow Design]
+      operationId: restoreWorkflowDefinition
+      responses:
+        '204':
+          description: Definition restored; publications are unchanged
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /design/workflows/definitions/{definitionId}/permanent:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+    delete:
+      tags: [Workflow Design]
+      operationId: permanentlyDeleteWorkflowDefinition
+      summary: Permanently delete an already soft-deleted definition
+      responses:
+        '204':
+          description: Definition permanently deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /design/workflows/drafts/{draftId}:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    get:
+      tags: [Workflow Design]
+      operationId: getWorkflowDraft
+      responses:
+        '200':
+          description: Editable workflow draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDraft'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Workflow Design]
+      operationId: replaceWorkflowDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceWorkflowDraftRequest'
+      responses:
+        '200':
+          description: Replaced draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Workflow Design]
+      operationId: discardWorkflowDraft
+      responses:
+        '204':
+          description: Draft discarded
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /design/workflows/drafts/{draftId}/promote:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    post:
+      tags: [Workflow Design]
+      operationId: promoteWorkflowDraft
+      responses:
+        '201':
+          description: Immutable Design version created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinitionVersion'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /design/workflows/versions/{versionId}:
+    parameters:
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [Workflow Design]
+      operationId: getWorkflowDefinitionVersion
+      description: Resolves only persisted Design versions; synthetic draft identifiers are invalid.
+      responses:
+        '200':
+          description: Persisted immutable version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinitionVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /design/workflows/scoped-variables/analyze:
+    post:
+      tags: [Workflow Design]
+      operationId: analyzeScopedVariables
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopedVariableAnalysisRequest'
+      responses:
+        '200':
+          description: Variables visible at the selected node and shadowing diagnostics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopedVariableAnalysis'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /design/workflows/activities/{activityVersionId}/inputs/{inputName}/options:
+    parameters:
+      - name: activityVersionId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: inputName
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Workflow Design]
+      operationId: resolveActivityInputOptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityInputOptionsRequest'
+      responses:
+        '200':
+          description: Context-sensitive options
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [options]
+                properties:
+                  options:
+                    type: array
+                    items: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /design/activities/catalog:
+    get:
+      tags: [Activity Design]
+      operationId: getActivityAuthoringCatalog
+      parameters:
+        - name: availability
+          in: query
+          description: Privileged callers may request unavailable entries with diagnostics.
+          schema:
+            type: string
+            enum: [addable, all]
+            default: addable
+      responses:
+        '200':
+          description: Normalized authoring catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [activities]
+                properties:
+                  activities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivityAuthoringDescriptor'
+
+  /design/activities/availability/settings:
+    get:
+      tags: [Activity Design]
+      operationId: getActivityAvailabilitySettings
+      responses:
+        '200':
+          description: Effective persisted availability settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityAvailabilitySettings'
+    put:
+      tags: [Activity Design]
+      operationId: saveActivityAvailabilitySettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityAvailabilitySettings'
+      responses:
+        '200':
+          description: Saved settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityAvailabilitySettings'
+
+  /design/activities/availability/diagnostics:
+    get:
+      tags: [Activity Design]
+      operationId: listActivityAvailabilityDiagnostics
+      responses:
+        '200':
+          description: Installed activity availability decisions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivityAvailabilityDiagnostic'
+
+  /expressions/descriptors:
+    get:
+      tags: [Expressions]
+      operationId: listExpressionDescriptors
+      responses:
+        '200':
+          description: Expression descriptors contributed by active expression features
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExpressionDescriptor'
+
+  /expressions/variable-types:
+    get:
+      tags: [Expressions]
+      operationId: listVariableTypeDescriptors
+      responses:
+        '200':
+          description: Supported workflow variable type descriptors
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VariableTypeDescriptor'
+
+  /publishing/workflows/{versionId}/preflight:
+    parameters:
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Publishing]
+      operationId: preflightWorkflowPublication
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicationIntent'
+      responses:
+        '200':
+          description: Resolved action, slot, trigger changes, and conflicts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationPreflight'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /publishing/workflows/{versionId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Publishing]
+      operationId: publishWorkflowVersion
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicationIntent'
+      responses:
+        '200':
+          description: Existing identical publication remains authoritative
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '201':
+          description: Publication activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '202':
+          description: Authority recorded; projection reconciliation is pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /publishing/workflows/{definitionId}/slots:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+    get:
+      tags: [Publishing]
+      operationId: listWorkflowPublicationSlots
+      responses:
+        '200':
+          description: Publication slots for a definition
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicationSlot'
+
+  /publishing/workflows/{definitionId}/slots/{slotName}:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+      - $ref: '#/components/parameters/SlotName'
+    get:
+      tags: [Publishing]
+      operationId: getWorkflowPublicationSlot
+      responses:
+        '200':
+          description: Current slot authority and status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSlot'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Publishing]
+      operationId: retireWorkflowPublicationSlot
+      responses:
+        '202':
+          description: Slot retired or trigger reconciliation pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSlot'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publishing/workflows/{definitionId}/slots/{slotName}/restore:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+      - $ref: '#/components/parameters/SlotName'
+    post:
+      tags: [Publishing]
+      operationId: restoreWorkflowPublicationSlot
+      responses:
+        '200':
+          description: Slot restored and authoritative
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSlot'
+        '202':
+          description: Restore accepted; trigger reconciliation pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSlot'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /publishing/workflows/{definitionId}/policy:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+    get:
+      tags: [Publishing]
+      operationId: getWorkflowPublicationPolicy
+      responses:
+        '200':
+          description: Workflow policy and resolved host fallback
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationPolicy'
+    put:
+      tags: [Publishing]
+      operationId: setWorkflowPublicationPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPublicationPolicyRequest'
+      responses:
+        '200':
+          description: Saved workflow publication policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationPolicy'
+
+  /publishing/workflows/{versionId}/test-runs:
+    parameters:
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Publishing]
+      operationId: startWorkflowVersionTestRun
+      responses:
+        '201':
+          description: Test-run source reference and execution created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRun'
+
+  /publishing/workflows/drafts/test-runs:
+    post:
+      tags: [Publishing]
+      operationId: startWorkflowDraftTestRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [definitionId, snapshotId, state]
+              properties:
+                definitionId: { type: string }
+                snapshotId: { type: string }
+                state:
+                  $ref: '#/components/schemas/WorkflowDefinitionState'
+                artifactVersion: { type: [string, 'null'] }
+                inputs:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '201':
+          description: Draft snapshot, test-run source reference, and execution created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRun'
+
+  /runtime/workflows/executables:
+    get:
+      tags: [Runtime]
+      operationId: listWorkflowExecutables
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            $ref: '#/components/schemas/SourceReferenceScope'
+        - name: includeRetired
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Runtime-owned executable artifacts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowExecutableSummary'
+
+  /runtime/workflows/executables/{artifactId}:
+    parameters:
+      - $ref: '#/components/parameters/ArtifactId'
+    get:
+      tags: [Runtime]
+      operationId: getWorkflowExecutable
+      responses:
+        '200':
+          description: Executable artifact inspection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutableDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /runtime/workflows/executables/{artifactId}/provenance:
+    parameters:
+      - $ref: '#/components/parameters/ArtifactId'
+    get:
+      tags: [Runtime]
+      operationId: getWorkflowExecutableProvenance
+      description: Read-only source provenance. Publishing owns lifecycle mutation.
+      responses:
+        '200':
+          description: Source references and retained-execution protection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutableProvenance'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /runtime/workflows/executables/{artifactId}/execute:
+    parameters:
+      - $ref: '#/components/parameters/ArtifactId'
+    post:
+      tags: [Runtime]
+      operationId: executeWorkflowExecutable
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inputs:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '202':
+          description: Workflow start dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionDispatch'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /runtime/workflows/instances:
+    get:
+      tags: [Runtime]
+      operationId: listWorkflowInstances
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow execution instances
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowInstanceSummary'
+
+  /runtime/workflows/instances/{workflowExecutionId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkflowExecutionId'
+    get:
+      tags: [Runtime]
+      operationId: getWorkflowInstance
+      responses:
+        '200':
+          description: Workflow execution pinned to its executable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowInstanceDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkflowExecutionId'
+      - name: activityExecutionId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Runtime]
+      operationId: getActivityExecution
+      responses:
+        '200':
+          description: Activity execution details
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /runtime/workflows/instances/{workflowExecutionId}/incidents:
+    parameters:
+      - $ref: '#/components/parameters/WorkflowExecutionId'
+    get:
+      tags: [Runtime]
+      operationId: listWorkflowIncidents
+      responses:
+        '200':
+          description: Runtime incidents for the workflow execution
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /runtime/workflows/diagnostics/settings:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeDiagnosticsSettings
+      responses:
+        '200':
+          description: Runtime diagnostics settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeDiagnosticsSettings'
+    put:
+      tags: [Runtime]
+      operationId: saveRuntimeDiagnosticsSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuntimeDiagnosticsSettings'
+      responses:
+        '200':
+          description: Saved runtime diagnostics settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeDiagnosticsSettings'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+    DefinitionId:
+      name: definitionId
+      in: path
+      required: true
+      schema:
+        type: string
+    DraftId:
+      name: draftId
+      in: path
+      required: true
+      schema:
+        type: string
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^(?!draft:).+'
+    ArtifactId:
+      name: artifactId
+      in: path
+      required: true
+      schema:
+        type: string
+    SlotName:
+      name: slotName
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    WorkflowExecutionId:
+      name: workflowExecutionId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Authentication required
+    Forbidden:
+      description: Caller lacks the domain permission
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Current lifecycle state or trigger authority conflicts with the request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ServiceUnavailable:
+      description: Optional operational capability is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    CapabilityDocument:
+      type: object
+      required: [capabilities]
+      properties:
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiCapability'
+    ApiCapability:
+      type: object
+      required: [id, contractVersion, links]
+      properties:
+        id:
+          type: string
+          enum:
+            - elsa.api.workflow-design
+            - elsa.api.activity-design
+            - elsa.api.expressions
+            - elsa.api.publishing
+            - elsa.api.runtime
+        contractVersion:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          examples: ['1']
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapabilityLink'
+    CapabilityLink:
+      type: object
+      required: [rel, href]
+      properties:
+        rel:
+          type: string
+          description: |
+            Stable relation such as workflow-definitions, workflow-drafts,
+            workflow-versions, scoped-variable-analysis, activity-input-options,
+            activity-catalog, activity-availability, expression-descriptors,
+            variable-types, publication-preflight, publication-slots,
+            publication-policy, workflow-test-runs, workflow-executables,
+            workflow-executable-provenance, workflow-execute, workflow-instances,
+            or runtime-diagnostics.
+        href:
+          type: string
+          description: URI relative to the active shell route base
+        templated:
+          type: boolean
+          default: false
+
+    Problem:
+      type: object
+      required: [message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    DefinitionListState:
+      type: string
+      enum: [active, deleted, all]
+      default: active
+    WorkflowDefinitionSummary:
+      type: object
+      required: [id, name, createdAt, lastModifiedAt, versionCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        lastModifiedAt: { type: string, format: date-time }
+        deletedAt: { type: [string, 'null'], format: date-time }
+        draftId: { type: [string, 'null'] }
+        latestVersionId: { type: [string, 'null'] }
+        latestVersion: { type: [string, 'null'] }
+        versionCount: { type: integer, minimum: 0 }
+    WorkflowDefinitionDetails:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowDefinitionSummary'
+        - type: object
+          properties:
+            draft:
+              oneOf:
+                - $ref: '#/components/schemas/WorkflowDraft'
+                - type: 'null'
+            versions:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkflowDefinitionVersionSummary'
+    CreateWorkflowDefinitionRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: [string, 'null'] }
+        initialState:
+          oneOf:
+            - $ref: '#/components/schemas/WorkflowDefinitionState'
+            - type: 'null'
+        layout:
+          type: array
+          items:
+            $ref: '#/components/schemas/DesignMetadata'
+    UpdateWorkflowDefinitionMetadataRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: [string, 'null'] }
+    WorkflowDraft:
+      type: object
+      required: [id, definitionId, state, layout]
+      properties:
+        id: { type: string }
+        definitionId: { type: string }
+        sourceVersionId: { type: [string, 'null'] }
+        state:
+          $ref: '#/components/schemas/WorkflowDefinitionState'
+        layout:
+          type: array
+          items:
+            $ref: '#/components/schemas/DesignMetadata'
+    ReplaceWorkflowDraftRequest:
+      type: object
+      required: [state]
+      properties:
+        state:
+          $ref: '#/components/schemas/WorkflowDefinitionState'
+        layout:
+          type: array
+          items:
+            $ref: '#/components/schemas/DesignMetadata'
+    WorkflowDefinitionVersionSummary:
+      type: object
+      required: [id, definitionId, version]
+      properties:
+        id: { type: string }
+        definitionId: { type: string }
+        version: { type: string }
+        createdAt: { type: string, format: date-time }
+    WorkflowDefinitionVersion:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowDefinitionVersionSummary'
+        - type: object
+          required: [state, layout]
+          properties:
+            state:
+              $ref: '#/components/schemas/WorkflowDefinitionState'
+            layout:
+              type: array
+              items:
+                $ref: '#/components/schemas/DesignMetadata'
+    WorkflowDefinitionState:
+      type: object
+      properties:
+        variables:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        rootActivity:
+          oneOf:
+            - $ref: '#/components/schemas/AuthoredActivity'
+            - type: 'null'
+        inputs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        outputs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    AuthoredActivity:
+      type: object
+      required: [nodeId, activityVersionId]
+      properties:
+        nodeId: { type: string }
+        activityVersionId: { type: string }
+        inputs:
+          type: object
+          additionalProperties: true
+        outputs:
+          type: object
+          additionalProperties: true
+        structure:
+          type: object
+          additionalProperties: true
+    DesignMetadata:
+      type: object
+      additionalProperties: true
+    ScopedVariableAnalysisRequest:
+      type: object
+      required: [state]
+      properties:
+        state:
+          $ref: '#/components/schemas/WorkflowDefinitionState'
+        nodeId: { type: [string, 'null'] }
+    ScopedVariableAnalysis:
+      type: object
+      required: [visibleVariables, shadowingWarnings]
+      properties:
+        visibleVariables:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        shadowingWarnings:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ActivityInputOptionsRequest:
+      type: object
+      required: [nodeId, workflowState]
+      properties:
+        nodeId: { type: string }
+        workflowState:
+          $ref: '#/components/schemas/WorkflowDefinitionState'
+
+    ActivityAuthoringDescriptor:
+      type: object
+      required: [activityVersionId, activityTypeKey, version, displayName, inputs, outputs, ports, authoringTemplate]
+      properties:
+        activityVersionId: { type: string }
+        activityTypeKey: { type: string }
+        version: { type: string }
+        displayName: { type: string }
+        category: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        executionType: { type: string }
+        available: { type: boolean }
+        availabilityReason: { type: [string, 'null'] }
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityInputDescriptor'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityOutputDescriptor'
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityPortDescriptor'
+        containerStructure:
+          type: object
+          additionalProperties: true
+        authoringTemplate:
+          $ref: '#/components/schemas/AuthoredActivity'
+    ActivityInputDescriptor:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        displayName: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        order: { type: integer }
+        category: { type: [string, 'null'] }
+        isBrowsable: { type: boolean }
+        isRequired: { type: boolean }
+        uiHint: { type: [string, 'null'] }
+        defaultValue: {}
+        defaultSyntax: { type: [string, 'null'] }
+        uiSpecifications:
+          type: object
+          additionalProperties: true
+    ActivityOutputDescriptor:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        displayName: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        category: { type: [string, 'null'] }
+        isBrowsable: { type: boolean }
+    ActivityPortDescriptor:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        displayName: { type: [string, 'null'] }
+        type: { type: [string, 'null'] }
+        isBrowsable: { type: boolean }
+    ActivityAvailabilitySettings:
+      type: object
+      required: [scope, mode, rules]
+      properties:
+        scope: { type: string, default: host }
+        mode: { type: string }
+        rules:
+          type: object
+          properties:
+            activityTypes:
+              type: array
+              items: { type: string }
+            sets:
+              type: array
+              items: { type: string }
+    ActivityAvailabilityDiagnostic:
+      type: object
+      required: [activityTypeKey, available]
+      properties:
+        activityTypeKey: { type: string }
+        available: { type: boolean }
+        reason: { type: [string, 'null'] }
+
+    ExpressionDescriptor:
+      type: object
+      required: [type, displayName, editingMode]
+      properties:
+        type: { type: string }
+        displayName: { type: string }
+        description: { type: [string, 'null'] }
+        editingMode:
+          type: string
+          enum: [literal, text, structured, reference]
+    VariableTypeDescriptor:
+      type: object
+      required: [alias, displayName]
+      properties:
+        alias: { type: string }
+        displayName: { type: string }
+        category: { type: [string, 'null'] }
+        defaultEditor: { type: [string, 'null'] }
+
+    PublicationIntent:
+      type: object
+      properties:
+        slotName:
+          type: string
+          default: default
+        action:
+          type: string
+          enum: [replace, sideBySide]
+        expectedPublicationId:
+          type: [string, 'null']
+          description: Optional optimistic-concurrency token for the occupied slot
+    PublicationPreflight:
+      type: object
+      required: [definitionId, versionId, slotName, resolvedAction, triggers, canActivate]
+      properties:
+        definitionId: { type: string }
+        versionId: { type: string }
+        slotName: { type: string }
+        resolvedAction: { type: string, enum: [replace, sideBySide] }
+        policySource: { type: string, enum: [request, workflow, host] }
+        canActivate: { type: boolean }
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerChange'
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerConflict'
+    TriggerChange:
+      type: object
+      required: [change, key, cardinality]
+      properties:
+        change: { type: string, enum: [added, removed, retained] }
+        key: { type: string }
+        cardinality: { type: string, enum: [exclusive, fanOut] }
+    TriggerConflict:
+      type: object
+      required: [key, cardinality, publicationId, slotName]
+      properties:
+        key: { type: string }
+        cardinality: { type: string, enum: [exclusive, fanOut] }
+        publicationId: { type: string }
+        slotName: { type: string }
+    Publication:
+      type: object
+      required: [publicationId, definitionId, versionId, artifactId, slotName, status, sourceReferenceId]
+      properties:
+        publicationId: { type: string }
+        definitionId: { type: string }
+        versionId: { type: string }
+        artifactId: { type: string }
+        slotName: { type: string }
+        sourceReferenceId: { type: string }
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        activatedAt: { type: [string, 'null'], format: date-time }
+        retiredAt: { type: [string, 'null'], format: date-time }
+    PublicationSlot:
+      type: object
+      required: [definitionId, slotName, status]
+      properties:
+        definitionId: { type: string }
+        slotName: { type: string }
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        publication:
+          oneOf:
+            - $ref: '#/components/schemas/Publication'
+            - type: 'null'
+    PublicationStatus:
+      type: string
+      enum: [preparing, pending, active, retiring, retired, failed]
+    PublicationPolicy:
+      type: object
+      required: [defaultAction, defaultSlotName, source]
+      properties:
+        defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
+        defaultSlotName: { type: string, default: default }
+        source: { type: string, enum: [workflow, host] }
+    SetPublicationPolicyRequest:
+      type: object
+      properties:
+        defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
+        defaultSlotName: { type: string, default: default }
+    TestRun:
+      type: object
+      required: [testRunId, artifactId, sourceReferenceId, workflowExecutionId, expiresAt]
+      properties:
+        testRunId: { type: string }
+        artifactId: { type: string }
+        sourceReferenceId: { type: string }
+        workflowExecutionId: { type: string }
+        expiresAt: { type: string, format: date-time }
+
+    SourceReferenceScope:
+      type: string
+      enum: [Published, TestRun]
+    ExecutableSourceReference:
+      type: object
+      required: [sourceReferenceId, artifactId, scope, sourceType, sourceId, createdAt]
+      properties:
+        sourceReferenceId: { type: string }
+        artifactId: { type: string }
+        scope:
+          $ref: '#/components/schemas/SourceReferenceScope'
+        sourceType:
+          type: string
+          enum: [WorkflowDefinitionVersion, WorkflowDraftSnapshot]
+        sourceId: { type: string }
+        publicationId: { type: [string, 'null'] }
+        slotName: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        deletedAt: { type: [string, 'null'], format: date-time }
+        live: { type: boolean }
+    WorkflowExecutableSummary:
+      type: object
+      required: [artifactId, createdAt, liveSourceReferenceCount, retainedExecutionCount]
+      properties:
+        artifactId: { type: string }
+        createdAt: { type: string, format: date-time }
+        liveSourceReferenceCount: { type: integer, minimum: 0 }
+        retainedExecutionCount: { type: integer, minimum: 0 }
+    WorkflowExecutableDetails:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowExecutableSummary'
+        - type: object
+          required: [rootActivity]
+          properties:
+            rootActivity:
+              type: object
+              additionalProperties: true
+            metadata:
+              type: object
+              additionalProperties: true
+    ExecutableProvenance:
+      type: object
+      required: [artifactId, sourceReferences, retainedExecutionCount, protectedFromCollection]
+      properties:
+        artifactId: { type: string }
+        sourceReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutableSourceReference'
+        retainedExecutionCount: { type: integer, minimum: 0 }
+        protectedFromCollection: { type: boolean }
+    WorkflowExecutionDispatch:
+      type: object
+      required: [workflowExecutionId, artifactId, status]
+      properties:
+        workflowExecutionId: { type: string }
+        artifactId: { type: string }
+        status: { type: string }
+    WorkflowInstanceSummary:
+      type: object
+      required: [workflowExecutionId, artifactId, status, createdAt]
+      properties:
+        workflowExecutionId: { type: string }
+        artifactId: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+    WorkflowInstanceDetails:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowInstanceSummary'
+        - type: object
+          properties:
+            state:
+              type: object
+              additionalProperties: true
+    RuntimeDiagnosticsSettings:
+      type: object
+      additionalProperties: true

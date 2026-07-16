@@ -98,7 +98,7 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
     private async Task<string> RunSetOutputWorkflowAsync(ServiceProvider provider, string artifactId)
     {
         var executable = NewSetOutputExecutable(artifactId);
-        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await PublishedExecutableSeeder.SaveAsync(provider, executable);
 
         var executeHandler = new ExecuteWorkflowRequestHandler(
             provider.GetRequiredService<IWorkflowStartDispatcher>(),

@@ -13,6 +13,7 @@
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesSequence": {},
+          "ApiCapabilities": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
@@ -24,6 +25,7 @@
           "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
           "Expressions": {},
+          "ExpressionsApi": {},
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           },
@@ -59,7 +61,7 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkRuntimePersistenceSqlite": {},
+          "GroundworkUnifiedPersistenceSqlite": {},
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
@@ -143,7 +145,6 @@
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},

@@ -25,7 +25,8 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkReusableActivityStores(
     IDocumentStore store,
     ISystemClock clock,
-    IDistributedLockProvider lockProvider) :
+    IDistributedLockProvider lockProvider,
+    IBoundedDocumentStore? boundedStore = null) :
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
@@ -471,8 +472,26 @@ public sealed class GroundworkReusableActivityStores(
         CancellationToken cancellationToken)
         where TEntity : Entity
     {
-        var envelopes = await store.QueryAsync(new DocumentStoreQuery(kind, index, value), cancellationToken);
-        return envelopes.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
+        var (queryIdentity, fieldPath) = index switch
+        {
+            ActivitiesDesignStorageManifest.ByCollectionIndex => (ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
+            ActivitiesDesignStorageManifest.ByDefinitionIndex => ("list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField),
+            ActivitiesDesignStorageManifest.ByHeadVersionIndex => ("list-by-head-version", ActivitiesDesignStorageManifest.HeadVersionIdField),
+            ActivitiesDesignStorageManifest.ByDraftIndex => ("list-by-draft", ActivitiesDesignStorageManifest.DraftIdField),
+            ActivitiesDesignStorageManifest.ByDefinitionVersionIndex => ("list-by-definition-version", ActivitiesDesignStorageManifest.DefinitionVersionIdField),
+            ActivitiesDesignStorageManifest.ByOwnerVersionIndex => ("list-by-owner-version", ActivitiesDesignStorageManifest.OwnerVersionIdField),
+            ActivitiesDesignStorageManifest.ByDependencyVersionIndex => ("list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField),
+            _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The activity-design query index is not declared.")
+        };
+        var result = await (boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+                "Reusable-activity design queries require an admitted bounded document-store runtime."))
+            .QueryAsync(
+                new DocumentQuery(
+                    kind,
+                    queryIdentity,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+                cancellationToken);
+        return result.Documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
     }
 
     private static Stored<TEntity> Deserialize<TEntity>(DocumentEnvelope envelope, string kind)

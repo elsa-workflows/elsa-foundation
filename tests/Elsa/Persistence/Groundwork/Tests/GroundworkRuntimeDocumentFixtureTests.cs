@@ -18,6 +18,13 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
+    [Fact]
+    public void Workflow_execution_state_shape_is_explicitly_versioned_at_v3() =>
+        Assert.Equal(
+            3,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+
     // Set GROUNDWORK_FIXTURE_REGEN=1 and run this project to (re)write the committed fixtures into the
     // source tree after an intentional version bump. Off by default so a normal run only compares.
     private static readonly bool Regenerate =
@@ -36,8 +43,8 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     public async Task Fixture_Matches_What_The_Bridge_Writes_Today(string kind)
     {
         var (schemaVersion, contentJson) = await GroundworkRuntimeDocumentFixtureFactory.CaptureAsync(kind);
+        var currentVersion = Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(kind);
 
-        var currentVersion = ElsaRuntimeDocumentVersions.CurrentFor(kind);
         Assert.Equal(ElsaRuntimeDocumentVersions.Stamp(currentVersion), schemaVersion);
 
         if (Regenerate)
@@ -47,7 +54,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         }
 
         var expected = ReadCommittedFixture(kind, currentVersion);
-        AssertJsonSemanticallyEqual(expected, contentJson, kind);
+        AssertJsonSemanticallyEqual(expected, contentJson, kind, currentVersion);
     }
 
     [Theory]
@@ -84,7 +91,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     // ordering differences must not fail, but any field added, renamed, removed, or changed in value must.
     // Both sides are normalized to a canonical form (object properties recursively sorted by name, then
     // re-serialized) and compared as strings, which yields a readable diff on mismatch.
-    private static void AssertJsonSemanticallyEqual(string expectedJson, string actualJson, string kind)
+    private static void AssertJsonSemanticallyEqual(string expectedJson, string actualJson, string kind, int version)
     {
         var expected = JsonNode.Parse(expectedJson);
         var actual = JsonNode.Parse(actualJson);
@@ -97,7 +104,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
 
         Assert.Fail(
             $"The serialized shape of runtime document kind '{kind}' no longer matches its committed golden fixture " +
-            $"(Fixtures/v{ElsaRuntimeDocumentVersions.CurrentFor(kind)}/{kind}.json).\n\n" +
+            $"(Fixtures/v{version}/{kind}.json).\n\n" +
             "A state record shape changed. To evolve a runtime document shape you must, in the same change:\n" +
             "  1. bump that kind's version in ElsaRuntimeDocumentVersions,\n" +
             "  2. register an IGroundworkRuntimeDocumentUpcaster for each supported historical step, or explicitly advance the clean-break floor,\n" +

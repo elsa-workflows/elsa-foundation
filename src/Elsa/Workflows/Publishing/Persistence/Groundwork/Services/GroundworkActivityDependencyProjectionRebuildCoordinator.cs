@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 /// and replaces the projection at a new visible watermark.
 /// </summary>
 public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
-    IDocumentStore store,
+    IBoundedDocumentStore boundedStore,
     IPayloadSerializer payloadSerializer,
     IActivityDefinitionVersionPublicationStore publications,
     IActivityTemplateDependencyDiscovererRegistry discoverers,
@@ -52,7 +52,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         foreach (var envelope in await ListAsync(
                      ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-                     ActivitiesDesignStorageManifest.ByCollectionIndex,
+                     ActivitiesDesignStorageManifest.ListAllQuery,
+                     ActivitiesDesignStorageManifest.CollectionField,
                      ActivitiesDesignStorageManifest.ActivityDependencyEdgeCollection,
                      cancellationToken))
         {
@@ -76,7 +77,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         foreach (var envelope in await ListAsync(
                      ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                     ActivitiesDesignStorageManifest.ByCollectionIndex,
+                     ActivitiesDesignStorageManifest.ListAllQuery,
+                     ActivitiesDesignStorageManifest.CollectionField,
                      ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection,
                      cancellationToken))
         {
@@ -102,7 +104,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         foreach (var envelope in await ListAsync(
                      WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                     WorkflowsDesignStorageManifest.ByCollectionIndex,
+                     WorkflowsDesignStorageManifest.ListAllQuery,
+                     WorkflowsDesignStorageManifest.CollectionField,
                      WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
                      cancellationToken))
         {
@@ -122,7 +125,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         foreach (var envelope in await ListAsync(
                      WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-                     WorkflowsDesignStorageManifest.ByCollectionIndex,
+                     WorkflowsDesignStorageManifest.ListAllQuery,
+                     WorkflowsDesignStorageManifest.CollectionField,
                      WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
                      cancellationToken))
         {
@@ -168,10 +172,19 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
 
     private async Task<IReadOnlyList<DocumentEnvelope>> ListAsync(
         string kind,
-        string index,
+        string queryIdentity,
+        string fieldPath,
         string collection,
-        CancellationToken cancellationToken) =>
-        await store.QueryAsync(new DocumentStoreQuery(kind, index, collection), cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var result = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                kind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, collection))]),
+            cancellationToken);
+        return result.Documents;
+    }
 
     private async Task<ActivityDefinitionVersionPublication> RequiredPublicationAsync(string versionId, CancellationToken cancellationToken) =>
         await publications.FindAsync(versionId, cancellationToken)

@@ -1393,6 +1393,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             _inner.ListAsync(cancellationToken);
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+            WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            _inner.QueryPageAsync(query, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            _inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            _inner.DeleteAsync(workflowExecutionId, cancellationToken);
     }
 
     // Seeds the IdentityName-tagged durable values a Correlate/SetName leaf would have projected, so a plain

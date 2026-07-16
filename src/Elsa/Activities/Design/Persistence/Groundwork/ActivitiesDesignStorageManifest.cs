@@ -38,6 +38,7 @@ public static class ActivitiesDesignStorageManifest
     public const string DefinitionVersionIdField = "entity.definitionVersionId";
     public const string OwnerVersionIdField = "entity.ownerVersionId";
     public const string DependencyVersionIdField = "entity.dependencyVersionId";
+    public const string ListAllQuery = "list-all";
 
     public const string ActivityDefinitionDocumentKind = "activityDefinition";
 
@@ -90,17 +91,17 @@ public static class ActivitiesDesignStorageManifest
                 ActivityDefinitionDocumentKind,
                 "Activity definition",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 ActivityDefinitionVersionDocumentKind,
                 "Activity definition version",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 ActivityAvailabilitySettingsDocumentKind,
                 "Activity availability settings",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 ActivityDefinitionAuthoringStateDocumentKind,
                 "Activity definition authoring state",
@@ -110,7 +111,7 @@ public static class ActivitiesDesignStorageManifest
                     Keyword(ByHeadVersionIndex, HeadVersionIdField)
                 ],
                 [
-                    Query("list-all", ByCollectionIndex),
+                    Query(ListAllQuery, ByCollectionIndex),
                     Query("list-by-definition", ByDefinitionIndex),
                     Query("list-by-head-version", ByHeadVersionIndex)
                 ]),
@@ -118,17 +119,17 @@ public static class ActivitiesDesignStorageManifest
                 ActivityDefinitionDraftDocumentKind,
                 "Activity definition draft",
                 [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDefinitionIndex, DefinitionIdField)],
-                [Query("list-all", ByCollectionIndex), Query("list-by-definition", ByDefinitionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-definition", ByDefinitionIndex)]),
             Unit(
                 ActivityDefinitionDraftLayoutDocumentKind,
                 "Activity definition draft layout",
                 [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDraftIndex, DraftIdField)],
-                [Query("list-all", ByCollectionIndex), Query("list-by-draft", ByDraftIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-draft", ByDraftIndex)]),
             Unit(
                 ActivityDraftValidationDocumentKind,
                 "Activity draft validation",
                 [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDraftIndex, DraftIdField)],
-                [Query("list-all", ByCollectionIndex), Query("list-by-draft", ByDraftIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-draft", ByDraftIndex)]),
             Unit(
                 ActivityDefinitionVersionPublicationDocumentKind,
                 "Activity definition version publication",
@@ -138,7 +139,7 @@ public static class ActivitiesDesignStorageManifest
                     Keyword(ByDefinitionVersionIndex, DefinitionVersionIdField)
                 ],
                 [
-                    Query("list-all", ByCollectionIndex),
+                    Query(ListAllQuery, ByCollectionIndex),
                     Query("list-by-definition", ByDefinitionIndex),
                     Query("list-by-definition-version", ByDefinitionVersionIndex)
                 ]),
@@ -146,7 +147,7 @@ public static class ActivitiesDesignStorageManifest
                 ActivityDefinitionVersionLayoutDocumentKind,
                 "Activity definition version layout",
                 [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDefinitionVersionIndex, DefinitionVersionIdField)],
-                [Query("list-all", ByCollectionIndex), Query("list-by-definition-version", ByDefinitionVersionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-definition-version", ByDefinitionVersionIndex)]),
             Unit(
                 ActivityDependencyEdgeDocumentKind,
                 "Activity dependency edge",
@@ -156,7 +157,7 @@ public static class ActivitiesDesignStorageManifest
                     Keyword(ByDependencyVersionIndex, DependencyVersionIdField)
                 ],
                 [
-                    Query("list-all", ByCollectionIndex),
+                    Query(ListAllQuery, ByCollectionIndex),
                     Query("list-by-owner-version", ByOwnerVersionIndex),
                     Query("list-by-dependency-version", ByDependencyVersionIndex)
                 ]),
@@ -164,12 +165,12 @@ public static class ActivitiesDesignStorageManifest
                 ActivityDependencyProjectionDocumentKind,
                 "Activity dependency projection",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 ActivityUpgradePlanDocumentKind,
                 "Activity upgrade plan",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)])
+                [Query(ListAllQuery, ByCollectionIndex)])
         ],
         new HashSet<string> { "optimistic-concurrency" },
         []);
@@ -184,7 +185,7 @@ public static class ActivitiesDesignStorageManifest
         StorageIntent.PortableDocument(),
         LifecyclePolicy.Mutable,
         IdentityPolicy.StringId(),
-        TenancyPolicy.Global,
+        TenancyPolicy.Scoped,
         ConcurrencyPolicy.Optimistic(),
         SerializationPolicy.Json(),
         indexes,
@@ -205,5 +206,6 @@ public static class ActivitiesDesignStorageManifest
         false,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
 }

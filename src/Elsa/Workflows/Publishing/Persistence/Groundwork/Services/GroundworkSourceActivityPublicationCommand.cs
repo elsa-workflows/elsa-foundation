@@ -19,6 +19,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 /// <summary>Atomic Groundwork closure for source-owned catalog versions and Runtime templates.</summary>
 public sealed class GroundworkSourceActivityPublicationCommand(
     IDocumentStore store,
+    IBoundedDocumentStore boundedStore,
     IPayloadSerializer payloadSerializer,
     IGroundworkRuntimeDocumentSerializer runtimeSerializer)
     : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
@@ -141,14 +142,18 @@ public sealed class GroundworkSourceActivityPublicationCommand(
 
     private async Task<DocumentEnvelope?> FindAuthoringAsync(string definitionId, CancellationToken cancellationToken)
     {
-        var matches = await store.QueryAsync(new DocumentStoreQuery(
-            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-            ActivitiesDesignStorageManifest.ByDefinitionIndex,
-            definitionId), cancellationToken);
-        return matches.Count switch
+        var matches = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                "list-by-definition",
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.DefinitionIdField,
+                    definitionId))]),
+            cancellationToken);
+        return matches.Documents.Count switch
         {
             0 => null,
-            1 => matches[0],
+            1 => matches.Documents[0],
             _ => throw Conflict($"Multiple authoring states exist for activity definition '{definitionId}'.")
         };
     }

@@ -44,7 +44,7 @@ public sealed class SeededVariableEndToEndExecutionTests
         var probe = new SeededInputProbe();
         await using var provider = BuildServiceProvider(probe);
         var executable = NewExecutableWithGreetingVariable();
-        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await PublishedExecutableSeeder.SaveAsync(provider, executable);
 
         var handler = new ExecuteWorkflowRequestHandler(
             provider.GetRequiredService<IWorkflowStartDispatcher>(),
@@ -66,7 +66,7 @@ public sealed class SeededVariableEndToEndExecutionTests
         var probe = new SeededInputProbe();
         await using var provider = BuildServiceProvider(probe);
         var executable = NewExecutableWithGreetingVariable();
-        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await PublishedExecutableSeeder.SaveAsync(provider, executable);
 
         var handler = new ExecuteWorkflowRequestHandler(
             provider.GetRequiredService<IWorkflowStartDispatcher>(),
@@ -90,7 +90,7 @@ public sealed class SeededVariableEndToEndExecutionTests
         var probe = new SeededInputProbe();
         await using var provider = BuildServiceProvider(probe);
         var executable = NewExecutableWithInputBinding();
-        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await PublishedExecutableSeeder.SaveAsync(provider, executable);
 
         var handler = new ExecuteWorkflowRequestHandler(
             provider.GetRequiredService<IWorkflowStartDispatcher>(),

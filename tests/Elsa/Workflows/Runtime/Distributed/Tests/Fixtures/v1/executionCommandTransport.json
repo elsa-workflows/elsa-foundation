@@ -21,6 +21,9 @@
     "metadata": {
       "origin": "node-b"
     },
+    "partition": {
+      "value": "tenant-blue"
+    },
     "sequence": 1,
     "workflowExecutionId": "wf-1"
   },

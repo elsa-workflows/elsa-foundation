@@ -49,6 +49,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
 
         Assert.Equal(HttpEndpointRouting.StimulusType, descriptor.StimulusType);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
+        Assert.Equal(TriggerCardinality.Exclusive, ((IActivityTriggerStimulusProvider)_provider).Cardinality);
         Assert.Equal("orders/webhook", descriptor.Metadata[HttpEndpointRouting.TemplateMetadataKey]);
         Assert.Equal("get", descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey]);
     }

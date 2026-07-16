@@ -1,12 +1,16 @@
 using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using System.Globalization;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -25,23 +29,30 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </remarks>
 public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommitStore
 {
-    private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private static readonly TimeSpan CommitAcknowledgementReconciliationTimeout = TimeSpan.FromSeconds(10);
     private readonly IDocumentStore _commitLedger;
     private readonly IGroundworkRuntimeDocumentSerializer _serializer;
+    private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
+    private readonly IWorkflowExecutableRootWriteLeaseManager _rootWriteLeaseManager;
+    private readonly TimeProvider _timeProvider;
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
         IGroundworkRuntimeDocumentSerializer serializer,
+        IPersistenceAccessContextAccessor accessContextAccessor,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         ISchedulerStateStore schedulerStateStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         IBookmarkStateStore bookmarkStateStore,
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
-        IExecutionLivenessStateStore operationalStateStore)
+        IExecutionLivenessStateStore operationalStateStore,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
+        TimeProvider? timeProvider = null)
         : this(
             commitLedger,
             serializer,
+            accessContextAccessor,
             workflowExecutionStateStore,
             schedulerStateStore,
             activityExecutionStateStore,
@@ -49,13 +60,16 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             bookmarkStateStore,
             durableValueStateStore,
             incidentStateStore,
-            operationalStateStore)
+            operationalStateStore,
+            rootWriteLeaseManager,
+            timeProvider)
     {
     }
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
         IGroundworkRuntimeDocumentSerializer serializer,
+        IPersistenceAccessContextAccessor accessContextAccessor,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         ISchedulerStateStore schedulerStateStore,
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -63,10 +77,13 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IBookmarkStateStore bookmarkStateStore,
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
-        IExecutionLivenessStateStore operationalStateStore)
+        IExecutionLivenessStateStore operationalStateStore,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(commitLedger);
         ArgumentNullException.ThrowIfNull(serializer);
+        ArgumentNullException.ThrowIfNull(accessContextAccessor);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -75,8 +92,12 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ArgumentNullException.ThrowIfNull(durableValueStateStore);
         ArgumentNullException.ThrowIfNull(incidentStateStore);
         ArgumentNullException.ThrowIfNull(operationalStateStore);
+        ArgumentNullException.ThrowIfNull(rootWriteLeaseManager);
         _commitLedger = commitLedger;
         _serializer = serializer;
+        _accessContextAccessor = accessContextAccessor;
+        _rootWriteLeaseManager = rootWriteLeaseManager;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -85,45 +106,67 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ArgumentNullException.ThrowIfNull(decision);
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
         cancellationToken.ThrowIfCancellationRequested();
+        if (commit.StateChanges.WorkflowExecution is { } workflowExecutionChange)
+            _accessContextAccessor.Current.EnsureTenantScope(workflowExecutionChange.State.TenantId);
 
-        await _writeGate.WaitAsync(cancellationToken);
-        try
-        {
-            if (await IsCommittedAsync(commit, cancellationToken))
-                return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit));
+        var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+        if (await LoadMarkerAsync(commit, cancellationToken) is { } existing)
+            return ResolveReplay(commit, fingerprint, existing);
 
-            ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
-            ValidateSchedulerStateChange(commit);
-            ValidateActivityExecutionStateChanges(commit);
-            ValidateActivityExecutionInspectionChanges(commit);
-            ValidateBookmarkStateChanges(commit);
-            ValidateDurableValueStateChanges(commit);
-            ValidateIncidentStateChanges(commit);
-            ValidateOperationalStateChanges(commit);
-            ValidateActivityScopeCleanups(commit);
+        ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+        ValidateSchedulerStateChange(commit);
+        ValidateActivityExecutionStateChanges(commit);
+        ValidateActivityExecutionInspectionChanges(commit);
+        ValidateBookmarkStateChanges(commit);
+        ValidateDurableValueStateChanges(commit);
+        ValidateIncidentStateChanges(commit);
+        ValidateOperationalStateChanges(commit);
+        ValidateActivityScopeCleanups(commit);
 
-            await ApplyAtomicallyAsync(commit, cancellationToken);
+        return await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
+            commit,
+            (candidate, token) => ApplyAtomicallyAsync(candidate, fingerprint, token),
+            cancellationToken);
+    }
 
-            return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit));
-        }
-        finally
-        {
-            _writeGate.Release();
-        }
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
+        RuntimeCheckpointCommit commit,
+        Func<RuntimeCheckpointCommit, CancellationToken, ValueTask<RuntimeCheckpointCommitStoreResult>> write,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.WorkflowExecution is not { } workflowExecutionChange)
+            return await write(commit, cancellationToken);
+
+        RuntimeCheckpointCommitStoreResult? result = null;
+        await _rootWriteLeaseManager.ExecuteAsync(
+            workflowExecutionChange.State.PinnedExecutable.ArtifactId,
+            $"checkpoint:{commit.CommitId}",
+            async ct => result = await write(commit, ct),
+            cancellationToken);
+        return result ?? throw new InvalidOperationException("The checkpoint root-write lease completed without a store result.");
     }
 
     private static IReadOnlyCollection<string> OutboxIds(RuntimeCheckpointCommit commit) =>
-        commit.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId).ToArray();
+        commit.StateChanges.PostCommitOutbox
+            .Select(change => change.State.OutboxItemId)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
-    private async ValueTask<bool> IsCommittedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask<CheckpointCommitMarker?> LoadMarkerAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         try
         {
             var envelope = await _commitLedger.LoadAsync(
                 ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
-                commit.CommitId,
+                GroundworkPhysicalDocumentId.FromLogicalId(commit.CommitId),
                 cancellationToken);
-            return envelope is not null;
+            if (envelope is null)
+                return null;
+
+            var marker = _serializer.Deserialize<CheckpointCommitMarker>(envelope);
+            if (!StringComparer.Ordinal.Equals(marker.CommitId, commit.CommitId))
+                throw new InvalidOperationException($"Groundwork physical document identity collision detected for runtime checkpoint commit '{commit.CommitId}'.");
+            return marker;
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -131,33 +174,80 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         }
     }
 
-    private async ValueTask ApplyAtomicallyAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> ApplyAtomicallyAsync(
+        RuntimeCheckpointCommit commit,
+        string fingerprint,
+        CancellationToken cancellationToken)
     {
         if (_commitLedger.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
             throw new GroundworkRuntimeCheckpointWriterException($"The Groundwork document store cannot atomically commit runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}' because it does not support cross-unit atomic transactions.", new NotSupportedException($"Unsupported transaction boundary '{_commitLedger.TransactionBoundary}'."));
 
-        try
+        while (true)
         {
-            await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
-            var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, _commitLedger.Access, unitOfWork);
-            var stores = GroundworkApplyStores.Create(transactionalStore, _serializer);
-            await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
-            await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
-            await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
-            await ApplyActivityExecutionInspectionChangesAsync(stores.ActivityExecutionInspectionWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
-            await ApplyActivityExecutionHierarchyChangesAsync(stores.ActivityExecutionHierarchyWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
-            await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
-            await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
-            await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
-            await ApplyOperationalStateChangesAsync(stores.ExecutionLivenessStateStore, commit.StateChanges.Operational, cancellationToken);
-            await ApplyActivityScopeCleanupsAsync(stores, commit.StateChanges.ActivityScopeCleanups, cancellationToken);
-            await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
-            await MarkCommittedAsync(transactionalStore, commit, cancellationToken);
-            await unitOfWork.CommitAsync(cancellationToken);
-        }
-        catch (Exception e) when (e is not OperationCanceledException and not GroundworkRuntimeCheckpointWriterException)
-        {
-            throw new GroundworkRuntimeCheckpointWriterException($"Failed to atomically commit runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}'.", e);
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
+                var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, _commitLedger.Access, unitOfWork);
+                await ValidateAndTouchExpectedFenceAsync(transactionalStore, commit, cancellationToken);
+                var stores = GroundworkApplyStores.Create(transactionalStore, _serializer, _accessContextAccessor);
+                await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
+                await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
+                await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
+                await ApplyActivityExecutionInspectionChangesAsync(stores.ActivityExecutionInspectionWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+                await ApplyActivityExecutionHierarchyChangesAsync(stores.ActivityExecutionHierarchyWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+                await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
+                await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
+                await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
+                await ApplyOperationalStateChangesAsync(stores.ExecutionLivenessStateStore, commit.StateChanges.Operational, cancellationToken);
+                await ApplyActivityScopeCleanupsAsync(stores, commit.StateChanges.ActivityScopeCleanups, cancellationToken);
+                await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
+                await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
+                await unitOfWork.CommitAsync(cancellationToken);
+                return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit));
+            }
+            catch (FenceConcurrencyException)
+            {
+                if (await LoadMarkerAsync(commit, cancellationToken) is { } marker)
+                    return ResolveReplay(commit, fingerprint, marker);
+                if (await ExpectedFenceRemainsCurrentAsync(commit, cancellationToken))
+                    continue;
+                throw await NewStaleFenceExceptionAsync(commit, cancellationToken);
+            }
+            catch (CheckpointMarkerConcurrencyException)
+            {
+                var marker = await LoadMarkerAsync(commit, cancellationToken)
+                    ?? throw new GroundworkRuntimeCheckpointWriterException(
+                        $"Runtime checkpoint marker '{commit.CommitId}' conflicted but no committed marker could be reloaded.",
+                        new InvalidOperationException("The create-only marker conflict could not be reconciled."));
+                return ResolveReplay(commit, fingerprint, marker);
+            }
+            catch (DocumentCommitAcknowledgementUncertainException e)
+            {
+                using var reconciliation = new CancellationTokenSource(
+                    CommitAcknowledgementReconciliationTimeout,
+                    _timeProvider);
+                try
+                {
+                    if (await LoadMarkerAsync(commit, reconciliation.Token) is { } marker)
+                        return ResolveReplay(commit, fingerprint, marker);
+                }
+                catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
+                {
+                    // Preserve the uncertain-acknowledgement contract when the independently bounded
+                    // reconciliation read itself times out. The provider may still have committed.
+                }
+                throw new GroundworkRuntimeCheckpointWriterException(
+                    $"Runtime checkpoint '{commit.CommitId}' may have committed, but its durable acknowledgement could not be reconciled.",
+                    e);
+            }
+            catch (Exception e) when (e is not OperationCanceledException and
+                                      not RuntimeStaleFencingTokenException and
+                                      not RuntimeCheckpointReplayConflictException and
+                                      not GroundworkRuntimeCheckpointWriterException)
+            {
+                throw new GroundworkRuntimeCheckpointWriterException($"Failed to atomically commit runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}'.", e);
+            }
         }
     }
 
@@ -177,24 +267,148 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
             ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
 
-    private async ValueTask MarkCommittedAsync(IDocumentStore store, RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask ValidateAndTouchExpectedFenceAsync(
+        IDocumentStore store,
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
     {
-        try
+        if (commit.ExpectedFence is not { } expectedFence)
+            return;
+
+        var operationalStateId = GroundworkExecutionLivenessStateStore.OwnershipStateId(commit.WorkflowExecutionId);
+        var envelope = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
+            GroundworkExecutionLivenessStateStore.DocumentIdentity(commit.WorkflowExecutionId, operationalStateId),
+            cancellationToken);
+        if (envelope is null)
+            throw NewStaleFenceException(commit, currentToken: 0, RuntimeFencingRejectionReason.NoActiveLease);
+
+        var document = _serializer.Deserialize<GroundworkExecutionLivenessStateStore.ExecutionLivenessStateDocument>(envelope);
+        var state = document.State;
+        var currentToken = ReadHighestIssuedToken(state);
+        var current = state.ExecutionLease;
+        if (current is null)
+            throw NewStaleFenceException(commit, currentToken, RuntimeFencingRejectionReason.NoActiveLease);
+        if (current.IsExpired(_timeProvider.GetUtcNow()))
+            throw NewStaleFenceException(commit, currentToken, RuntimeFencingRejectionReason.ExpiredLease);
+        if (!Matches(current, expectedFence))
+            throw NewStaleFenceException(commit, currentToken, RuntimeFencingRejectionReason.StaleToken);
+
+        var result = await store.SaveAsync(
+            new SaveDocumentRequest(
+                envelope.DocumentKind,
+                envelope.Id,
+                envelope.SchemaVersion,
+                envelope.ContentJson,
+                envelope.Version),
+            cancellationToken);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return;
+        if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound)
+            throw new FenceConcurrencyException();
+        throw new InvalidOperationException($"Groundwork rejected execution-fence touch with status '{result.Status}'.");
+    }
+
+    private async ValueTask<bool> ExpectedFenceRemainsCurrentAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.ExpectedFence is not { } expectedFence)
+            return false;
+
+        var store = new GroundworkExecutionLivenessStateStore(_commitLedger, _serializer);
+        var loaded = await store.FindVersionedAsync(
+            commit.WorkflowExecutionId,
+            GroundworkExecutionLivenessStateStore.OwnershipStateId(commit.WorkflowExecutionId),
+            cancellationToken);
+        return loaded?.State.ExecutionLease is { } current &&
+               !current.IsExpired(_timeProvider.GetUtcNow()) &&
+               Matches(current, expectedFence);
+    }
+
+    private async ValueTask<RuntimeStaleFencingTokenException> NewStaleFenceExceptionAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        var store = new GroundworkExecutionLivenessStateStore(_commitLedger, _serializer);
+        var state = await store.FindAsync(
+            commit.WorkflowExecutionId,
+            GroundworkExecutionLivenessStateStore.OwnershipStateId(commit.WorkflowExecutionId),
+            cancellationToken);
+        var currentToken = ReadHighestIssuedToken(state);
+        var reason = state?.ExecutionLease is null
+            ? RuntimeFencingRejectionReason.NoActiveLease
+            : state.ExecutionLease.IsExpired(_timeProvider.GetUtcNow())
+                ? RuntimeFencingRejectionReason.ExpiredLease
+                : RuntimeFencingRejectionReason.StaleToken;
+        return NewStaleFenceException(commit, currentToken, reason);
+    }
+
+    private static RuntimeStaleFencingTokenException NewStaleFenceException(
+        RuntimeCheckpointCommit commit,
+        long currentToken,
+        RuntimeFencingRejectionReason reason) =>
+        new(
+            commit.WorkflowExecutionId,
+            commit.ExpectedFence?.FencingToken ?? 0,
+            currentToken,
+            reason);
+
+    private static bool Matches(RuntimeExecutionLease lease, RuntimeExecutionFence fence) =>
+        StringComparer.Ordinal.Equals(lease.LeaseId, fence.LeaseId) &&
+        StringComparer.Ordinal.Equals(lease.OwnerId, fence.OwnerId) &&
+        lease.FencingToken == fence.FencingToken;
+
+    private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
+    {
+        if (state is null)
+            return 0;
+        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
+            long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token))
         {
-            var marker = new CheckpointCommitMarker(commit.CommitId, commit.WorkflowExecutionId, commit.Checkpoint.OccurredAt);
-            var (schemaVersion, content) = _serializer.Serialize(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, marker);
-            await store.SaveAsync(
-                new SaveDocumentRequest(
-                    ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
-                    commit.CommitId,
-                    schemaVersion,
-                    content),
-                cancellationToken);
+            return token;
         }
-        catch (Exception e) when (e is not OperationCanceledException)
-        {
-            throw new GroundworkRuntimeCheckpointWriterException($"Failed to save the runtime checkpoint commit marker for commit '{commit.CommitId}' and workflow execution '{commit.WorkflowExecutionId}'.", e);
-        }
+
+        return state.ExecutionLease?.FencingToken ?? 0;
+    }
+
+    private static RuntimeCheckpointCommitStoreResult ResolveReplay(
+        RuntimeCheckpointCommit commit,
+        string fingerprint,
+        CheckpointCommitMarker marker)
+    {
+        if (!StringComparer.Ordinal.Equals(marker.Fingerprint, fingerprint))
+            throw new RuntimeCheckpointReplayConflictException(commit.CommitId);
+        return new RuntimeCheckpointCommitStoreResult(marker.PendingPostCommitWorkIds);
+    }
+
+    private async ValueTask MarkCommittedAsync(
+        IDocumentStore store,
+        RuntimeCheckpointCommit commit,
+        string fingerprint,
+        CancellationToken cancellationToken)
+    {
+        var marker = new CheckpointCommitMarker(
+            commit.CommitId,
+            commit.WorkflowExecutionId,
+            commit.Checkpoint.OccurredAt,
+            ElsaRuntimeStorageManifest.CheckpointCommitCollection,
+            fingerprint,
+            OutboxIds(commit));
+        var (schemaVersion, content) = _serializer.Serialize(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, marker);
+        var result = await store.SaveAsync(
+            new SaveDocumentRequest(
+                ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+                GroundworkPhysicalDocumentId.FromLogicalId(commit.CommitId),
+                schemaVersion,
+                content,
+                ExpectedVersion: 0),
+            cancellationToken);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return;
+        if (result.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+            throw new CheckpointMarkerConcurrencyException();
+        throw new InvalidOperationException($"Groundwork rejected runtime checkpoint commit marker '{commit.CommitId}' with status '{result.Status}'.");
     }
 
     private static async ValueTask ApplyWorkflowExecutionStateChangeAsync(
@@ -444,6 +658,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 
     private static void ValidateOperationalStateChanges(RuntimeCheckpointCommit commit)
     {
+        var ownershipStateId = GroundworkExecutionLivenessStateStore.OwnershipStateId(commit.WorkflowExecutionId);
         foreach (var stateChange in commit.StateChanges.Operational)
         {
             if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
@@ -452,6 +667,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 throw new InvalidOperationException("Operational state change StateId must match ExecutionLivenessState.OperationalStateId.");
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Operational state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            if (StringComparer.Ordinal.Equals(stateChange.State.OperationalStateId, ownershipStateId))
+                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
         }
     }
 
@@ -466,7 +683,21 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         }
     }
 
-    private sealed record CheckpointCommitMarker(string CommitId, string WorkflowExecutionId, DateTimeOffset OccurredAt);
+    private sealed record CheckpointCommitMarker(
+        string CommitId,
+        string WorkflowExecutionId,
+        DateTimeOffset OccurredAt,
+        string Collection,
+        string Fingerprint,
+        IReadOnlyCollection<string> PendingPostCommitWorkIds);
+
+    private sealed class FenceConcurrencyException : Exception
+    {
+    }
+
+    private sealed class CheckpointMarkerConcurrencyException : Exception
+    {
+    }
 
     private sealed record GroundworkApplyStores(
         IWorkflowExecutionStateStore WorkflowExecutionStateStore,
@@ -482,9 +713,12 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IDurableTimerStore DurableTimerStore,
         IWorkflowSchedulerWorkQueue SchedulerWorkQueue)
     {
-        public static GroundworkApplyStores Create(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) =>
+        public static GroundworkApplyStores Create(
+            IDocumentStore store,
+            IGroundworkRuntimeDocumentSerializer serializer,
+            IPersistenceAccessContextAccessor accessContextAccessor) =>
             new(
-                new GroundworkWorkflowExecutionStateStore(store, serializer),
+                new GroundworkWorkflowExecutionStateStore(store, serializer, accessContextAccessor),
                 new GroundworkSchedulerStateStore(store, serializer),
                 new GroundworkActivityExecutionStateStore(store, serializer),
                 new GroundworkActivityExecutionInspectionStore(store, serializer),
@@ -515,17 +749,25 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             unitOfWork.DeleteAsync(request, cancellationToken);
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility member; this unit-of-work adapter rejects reads.
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+#pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Nested document unit-of-work scopes are not supported.");

@@ -94,10 +94,12 @@ public sealed class GroundworkReusableActivityStoreTests
             candidate.SchemaVersion,
             candidate.ContentJson,
             envelope!.Version);
+        var racingStore = new RaceInjectingDocumentStore(harness.Documents, concurrentWrite);
         var stores = new GroundworkReusableActivityStores(
-            new RaceInjectingDocumentStore(harness.Documents, concurrentWrite),
+            racingStore,
             new FakeClock(),
-            new ImmediateDistributedLockProvider());
+            new ImmediateDistributedLockProvider(),
+            new TestBoundedDocumentStore(racingStore));
 
         await Assert.ThrowsAsync<DocumentAtomicWriteException>(() => stores.ExecuteAsync(new UpdateActivityDefinitionPresentationRequest(
             "definition-1", null, "Losing update", "Losing update", null, DateTimeOffset.UtcNow)));
@@ -286,7 +288,11 @@ public sealed class GroundworkReusableActivityStoreTests
             conflictingLayout,
             GroundworkActivitiesDesignJson.Options);
         var racingStore = new RaceInjectingDocumentStore(documents, conflict);
-        var stores = new GroundworkReusableActivityStores(racingStore, new FakeClock(), new ImmediateDistributedLockProvider());
+        var stores = new GroundworkReusableActivityStores(
+            racingStore,
+            new FakeClock(),
+            new ImmediateDistributedLockProvider(),
+            new TestBoundedDocumentStore(racingStore));
 
         await Assert.ThrowsAsync<DocumentAtomicWriteException>(() => stores.ExecuteAsync(CreateRequest()));
 
@@ -412,7 +418,11 @@ public sealed class GroundworkReusableActivityStoreTests
         public static Harness Create()
         {
             var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-            return new Harness(documents, new GroundworkReusableActivityStores(documents, new FakeClock(), new ImmediateDistributedLockProvider()));
+            return new Harness(documents, new GroundworkReusableActivityStores(
+                documents,
+                new FakeClock(),
+                new ImmediateDistributedLockProvider(),
+                new TestBoundedDocumentStore(documents)));
         }
 
         public Task SaveAsync<TEntity>(TEntity entity) where TEntity : Entity
@@ -487,6 +497,44 @@ public sealed class GroundworkReusableActivityStoreTests
                 Assert.Equal(DocumentStoreWriteStatus.Saved, (await inner.SaveAsync(conflict, cancellationToken)).Status);
             return await inner.BeginAsync(scope, cancellationToken);
         }
+    }
+
+    private sealed class TestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
+    {
+        public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            var index = query.QueryIdentity switch
+            {
+                ActivitiesDesignStorageManifest.ListAllQuery => ActivitiesDesignStorageManifest.ByCollectionIndex,
+                "list-by-definition" => ActivitiesDesignStorageManifest.ByDefinitionIndex,
+                "list-by-head-version" => ActivitiesDesignStorageManifest.ByHeadVersionIndex,
+                "list-by-draft" => ActivitiesDesignStorageManifest.ByDraftIndex,
+                "list-by-definition-version" => ActivitiesDesignStorageManifest.ByDefinitionVersionIndex,
+                "list-by-owner-version" => ActivitiesDesignStorageManifest.ByOwnerVersionIndex,
+                "list-by-dependency-version" => ActivitiesDesignStorageManifest.ByDependencyVersionIndex,
+                _ => throw new InvalidOperationException($"Unexpected activity-design test query '{query.QueryIdentity}'.")
+            };
+            var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+            Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+            var value = Assert.Single(comparison.Values)!;
+
+#pragma warning disable GW0004
+            var matches = await documents.QueryAsync(new DocumentStoreQuery(query.DocumentKind, index, value), cancellationToken);
+#pragma warning restore GW0004
+            IEnumerable<DocumentEnvelope> page = matches.Skip(query.Skip ?? 0);
+            if (query.Take is { } take)
+                page = page.Take(take);
+            return new DocumentQueryResult(page.ToArray(), matches.Count);
+        }
+
+        public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            (await QueryAsync(query, cancellationToken)).TotalCount;
+
+        public async Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            (await QueryAsync(query.Page(query.Skip, 1), cancellationToken)).Documents.FirstOrDefault();
+
+        public async Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            await FirstOrDefaultAsync(query, cancellationToken) is not null;
     }
 
 }

@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 85
+- Discovered feature classes: 91
 
 ## Features
 
@@ -59,6 +59,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | LiquidExpressionsFeature | direct IShellFeature | Elsa.Expressions.Liquid | IShellFeature | [LiquidExpressionsFeature.cs](../../src/Elsa/Expressions/Liquid/LiquidExpressionsFeature.cs) |
 | MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
 | MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
+| MongoDbGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb | IShellFeature | [MongoDbGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/MongoDbGroundworkRuntimePersistenceShellFeature.cs) |
+| MongoDbGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb.Unified | IShellFeature | [MongoDbGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/MongoDbGroundworkUnifiedPersistenceShellFeature.cs) |
 | NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | OidcAuthenticationFeature | direct IShellFeature | Elsa.Foundation.Identity.Oidc | IShellFeature | [OidcAuthenticationFeature.cs](../../src/Elsa/Foundation/Identity/Oidc/OidcAuthenticationFeature.cs) |
 | OpenIddictIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.OpenIddict | IShellFeature | [OpenIddictIdentityFeature.cs](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictIdentityFeature.cs) |
@@ -69,6 +71,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SecretsFeature | direct IShellFeature | Elsa.Secrets | IShellFeature | [SecretsFeature.cs](../../src/Elsa/Secrets/Features/SecretsFeature.cs) |
 | SecretsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Secrets.Persistence.Groundwork | IShellFeature | [SecretsGroundworkPersistenceFeature.cs](../../src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs) |
 | SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
+| SqlServerGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer | IShellFeature | [SqlServerGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/SqlServerGroundworkRuntimePersistenceShellFeature.cs) |
+| SqlServerGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer.Unified | IShellFeature | [SqlServerGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/SqlServerGroundworkUnifiedPersistenceShellFeature.cs) |
 | SqliteGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite | IShellFeature | [SqliteGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs) |
 | SqliteGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite.Unified | IShellFeature | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
 | TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
@@ -85,7 +89,9 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeTracingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Tracing | IShellFeature | [WorkflowsRuntimeTracingFeature.cs](../../src/Elsa/Workflows/Runtime/Tracing/WorkflowsRuntimeTracingFeature.cs) |
 | WorkflowsRuntimeTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
+| ApiCapabilitiesFeature | FastEndpoints feature | Elsa.Api.Capabilities | FastEndpointsFeatureBase | [ApiCapabilitiesFeature.cs](../../src/Elsa/Api/Capabilities/ApiCapabilitiesFeature.cs) |
 | AspNetCoreIdentityFeature | FastEndpoints feature | Elsa.Foundation.Identity.AspNetCoreIdentity | FastEndpointsFeatureBase | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
+| ExpressionsApiFeature | FastEndpoints feature | Elsa.Expressions.Api | FastEndpointsFeatureBase | [ExpressionsApiFeature.cs](../../src/Elsa/Expressions/Api/ExpressionsApiFeature.cs) |
 | FoundationAgentApiFeature | FastEndpoints feature | Elsa.Agent.Api | FastEndpointsFeatureBase | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
 | FoundationIdentityApiFeature | FastEndpoints feature | Elsa.Foundation.Identity.Api | FastEndpointsFeatureBase | [FoundationIdentityApiFeature.cs](../../src/Elsa/Foundation/Identity/Api/FoundationIdentityApiFeature.cs) |
 | JavaScriptActivitiesEndpointsFeature | FastEndpoints feature | Elsa.Workflows.Runtime.JavaScript | FastEndpointsFeatureBase | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |

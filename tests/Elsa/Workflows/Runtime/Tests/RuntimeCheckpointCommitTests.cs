@@ -1,8 +1,12 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -149,6 +153,48 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public void RuntimeCheckpointCommitFingerprint_IsCanonicalAcrossDictionaryAndIntentOrder()
+    {
+        var first = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
+        {
+            PostCommitIntents = [NewIntent("intent-2"), NewIntent("intent-1")],
+            Metadata = new Dictionary<string, string> { ["z"] = "last", ["a"] = "first" }
+        };
+        var second = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
+        {
+            PostCommitIntents = [NewIntent("intent-1"), NewIntent("intent-2")],
+            Metadata = new Dictionary<string, string> { ["a"] = "first", ["z"] = "last" }
+        };
+
+        Assert.Equal(
+            RuntimeCheckpointCommitFingerprint.Compute(first),
+            RuntimeCheckpointCommitFingerprint.Compute(second));
+    }
+
+    [Fact]
+    public void RuntimeCheckpointCommitFingerprint_ExcludesExpectedFence()
+    {
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
+        var first = commit with { ExpectedFence = new RuntimeExecutionFence("lease-1", "worker-1", 1) };
+        var successor = commit with { ExpectedFence = new RuntimeExecutionFence("lease-2", "worker-2", 2) };
+
+        Assert.Equal(
+            RuntimeCheckpointCommitFingerprint.Compute(first),
+            RuntimeCheckpointCommitFingerprint.Compute(successor));
+    }
+
+    [Fact]
+    public void RuntimeCheckpointCommitFingerprint_ChangesWithLogicalPayload()
+    {
+        var first = NewCommit(RuntimeCheckpointNames.ActivityStarted);
+        var changed = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
+
+        Assert.NotEqual(
+            RuntimeCheckpointCommitFingerprint.Compute(first),
+            RuntimeCheckpointCommitFingerprint.Compute(changed));
+    }
+
+    [Fact]
     public async Task CheckpointCommitter_UsesPolicyDecisionWithoutChangingCheckpointSemantics()
     {
         var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
@@ -249,11 +295,26 @@ public sealed class RuntimeCheckpointCommitTests
         var writer = new InMemoryRuntimeCheckpointCommitStore();
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.ActivityStarted);
-        var conflictingReplay = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
 
         await writer.CommitAsync(first, decision);
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+
+        var write = Assert.Single(writer.ListCommits());
+        Assert.Equal("commit-1", write.Commit.CommitId);
+        Assert.Equal(RuntimeCheckpointNames.ActivityStarted, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointCommitStore_RejectsConflictingPayloadForSameCommitId()
+    {
+        var writer = new InMemoryRuntimeCheckpointCommitStore();
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.ActivityStarted);
+        var conflictingReplay = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
+
+        await writer.CommitAsync(first, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var write = Assert.Single(writer.ListCommits());
         Assert.Equal("commit-1", write.Commit.CommitId);
@@ -264,7 +325,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointCommitStore_ProjectsWorkflowExecutionStateChanges()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var running = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
         var completed = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -289,10 +350,36 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointDoesNotWriteExecutionRootWhileDeletionGuardOwnsArtifact()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(Executable());
+        var now = DateTimeOffset.UtcNow;
+        var deletionGuard = await executableStore.TryBeginDeletionAsync(_executableIdentity.ArtifactId, "gc-test", now.AddMinutes(1), now);
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var rootWriteLeaseManager = new WorkflowExecutableRootWriteLeaseManager(
+            executableStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
+            TimeProvider.System);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(
+            workflowStateStore,
+            rootWriteLeaseManager: rootWriteLeaseManager);
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() =>
+            writer.CommitAsync(
+                NewCommit(RuntimeCheckpointNames.WorkflowStarted),
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+
+        Assert.NotNull(deletionGuard);
+        Assert.Null(await workflowStateStore.FindAsync(_workflowState.WorkflowExecutionId));
+        Assert.Empty(writer.ListCommits());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingReplay()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -311,7 +398,8 @@ public sealed class RuntimeCheckpointCommitTests
         };
 
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var state = await workflowStateStore.FindAsync("wfexec-1");
         Assert.NotNull(state);
@@ -325,7 +413,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedWorkflowStateProjectionBeforeRecordingWrite()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
         {
@@ -347,7 +435,9 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenWorkflowStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointCommitStore(new ThrowingWorkflowExecutionStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(
+            new ThrowingWorkflowExecutionStateStore(),
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
 
@@ -523,7 +613,8 @@ public sealed class RuntimeCheckpointCommitTests
         };
 
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var state = await schedulerStateStore.FindAsync("wfexec-1");
         Assert.NotNull(state);
@@ -604,7 +695,8 @@ public sealed class RuntimeCheckpointCommitTests
         };
 
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var state = await activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
@@ -702,7 +794,8 @@ public sealed class RuntimeCheckpointCommitTests
         };
 
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var bookmark = await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1");
         Assert.NotNull(bookmark);
@@ -799,7 +892,8 @@ public sealed class RuntimeCheckpointCommitTests
         };
 
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var durableValue = await durableValueStateStore.FindAsync("wfexec-1", "durable-1");
         Assert.NotNull(durableValue);
@@ -908,7 +1002,8 @@ public sealed class RuntimeCheckpointCommitTests
         };
 
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var incident = await incidentStateStore.FindAsync("wfexec-1", "incident-1");
         Assert.NotNull(incident);
@@ -1037,13 +1132,118 @@ public sealed class RuntimeCheckpointCommitTests
         };
 
         await writer.CommitAsync(first, decision);
-        await writer.CommitAsync(conflictingReplay, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => writer.CommitAsync(conflictingReplay, decision).AsTask());
 
         var operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
         Assert.NotNull(operationalState);
         Assert.Equal("worker-1", operationalState.ExecutionLease!.OwnerId);
         var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.PostCommitIntentRecorded, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointCommitStore_BlocksSuccessorOwnershipUntilFencedCommitIsRecorded()
+    {
+        var clock = new FixedTimeProvider(_now);
+        var operationalStateStore = new InMemoryExecutionLivenessStateStore();
+        var firstOwner = NewOwnershipService(operationalStateStore, clock, "worker-1");
+        var secondOwner = NewOwnershipService(operationalStateStore, clock, "worker-2");
+        var lease = await firstOwner.AcquireAsync("wfexec-1");
+        var bookmarks = new BlockingBookmarkStateStore();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(
+            bookmarkStateStore: bookmarks,
+            operationalStateStore: operationalStateStore,
+            timeProvider: clock);
+        var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated) with
+        {
+            ExpectedFence = lease.ToFence()
+        };
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+
+        var commitTask = writer.CommitAsync(commit, decision).AsTask();
+        await bookmarks.WaitUntilSaveBeginsAsync();
+        var successorTask = secondOwner.AcquireAsync("wfexec-1").AsTask();
+
+        Assert.False(successorTask.IsCompleted);
+        bookmarks.AllowSave();
+        await commitTask;
+        var successor = await successorTask;
+
+        Assert.Equal(2, successor.FencingToken);
+        Assert.Single(writer.ListCommits());
+        Assert.NotNull(await bookmarks.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointCommitStore_BlocksDirectOwnershipReplacementUntilFencedCommitIsRecorded()
+    {
+        var clock = new FixedTimeProvider(_now);
+        var operationalStateStore = new InMemoryExecutionLivenessStateStore();
+        var lease = await NewOwnershipService(operationalStateStore, clock, "worker-1")
+            .AcquireAsync("wfexec-1");
+        var bookmarks = new BlockingBookmarkStateStore();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(
+            bookmarkStateStore: bookmarks,
+            operationalStateStore: operationalStateStore,
+            timeProvider: clock);
+        var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated) with
+        {
+            ExpectedFence = lease.ToFence()
+        };
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var replacement = NewOwnershipState("worker-2", "lease-2", fencingToken: 2);
+
+        var commitTask = writer.CommitAsync(commit, decision).AsTask();
+        await bookmarks.WaitUntilSaveBeginsAsync();
+        var replacementTask = operationalStateStore.SaveAsync(replacement).AsTask();
+
+        Assert.False(replacementTask.IsCompleted);
+        bookmarks.AllowSave();
+        await commitTask;
+        await replacementTask;
+
+        var current = await operationalStateStore.FindAsync(
+            "wfexec-1",
+            "ownership:wfexec-1");
+        Assert.Equal("worker-2", current!.ExecutionLease!.OwnerId);
+        Assert.Single(writer.ListCommits());
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointCommitStore_RejectsReservedOwnershipProjectionWithoutMutatingLease()
+    {
+        var clock = new FixedTimeProvider(_now);
+        var operationalStateStore = new InMemoryExecutionLivenessStateStore();
+        var lease = await NewOwnershipService(operationalStateStore, clock, "worker-1")
+            .AcquireAsync("wfexec-1");
+        var writer = new InMemoryRuntimeCheckpointCommitStore(
+            operationalStateStore: operationalStateStore,
+            timeProvider: clock);
+        var ownershipState = NewOwnershipState("worker-2", "lease-2", fencingToken: 2);
+        var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
+        {
+            ExpectedFence = lease.ToFence(),
+            StateChanges = NewStateChanges(operational:
+            [
+                new RuntimeStateChange<ExecutionLivenessState>(
+                    ownershipState.OperationalStateId,
+                    RuntimeStateChangeOperation.Upsert,
+                    ownershipState,
+                    new Dictionary<string, string>())
+            ])
+        };
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => writer.CommitAsync(commit, decision).AsTask());
+
+        Assert.Contains("reserved execution-ownership state", exception.Message);
+        var current = await operationalStateStore.FindAsync(
+            "wfexec-1",
+            "ownership:wfexec-1");
+        Assert.Equal(lease.LeaseId, current!.ExecutionLease!.LeaseId);
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
@@ -1169,6 +1369,42 @@ public sealed class RuntimeCheckpointCommitTests
                 availableAt: _now,
                 deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? _now : null),
             Metadata: new Dictionary<string, string>());
+
+    private static RuntimeExecutionOwnershipService NewOwnershipService(
+        IExecutionLivenessStateStore store,
+        TimeProvider timeProvider,
+        string ownerId) =>
+        new(
+            store,
+            timeProvider,
+            new RuntimeExecutionOwnershipOptions
+            {
+                OwnerId = ownerId,
+                LeaseDuration = TimeSpan.FromMinutes(5)
+            });
+
+    private ExecutionLivenessState NewOwnershipState(string ownerId, string leaseId, long fencingToken)
+    {
+        var lease = new RuntimeExecutionLease(
+            leaseId,
+            "wfexec-1",
+            ownerId,
+            _now,
+            _now.AddMinutes(5),
+            fencingToken);
+        return new ExecutionLivenessState(
+            "ownership:wfexec-1",
+            "wfexec-1",
+            lease,
+            new RuntimeHeartbeat("heartbeat-replacement", "wfexec-1", ownerId, leaseId, _now),
+            drain: null,
+            interruptedExecution: null,
+            pendingPostCommitIntentIds: [],
+            new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.OwnershipFencingToken] = fencingToken.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+    }
 
     [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedActivityExecutionStateIds()
@@ -1381,6 +1617,25 @@ public sealed class RuntimeCheckpointCommitTests
         return document.RootElement.Clone();
     }
 
+    private WorkflowExecutable Executable() =>
+        new(
+            _executableIdentity,
+            new ExecutableNode(
+                executableNodeId: "node-root",
+                authoredActivityId: "activity-root",
+                activityType: "Test.Root",
+                activityTypeVersion: "1.0.0",
+                descriptor: new RuntimeActivityDescriptor(
+                    "Test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { })),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+                metadata: new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            _now,
+            new Dictionary<string, string>());
+
     private sealed class FixedPolicy(RuntimeCheckpointPersistenceMode mode) : IRuntimeCheckpointPersistencePolicy
     {
         public ValueTask<RuntimeCheckpointPersistenceDecision> DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default) =>
@@ -1406,6 +1661,46 @@ public sealed class RuntimeCheckpointCommitTests
         }
     }
 
+    private sealed class BlockingBookmarkStateStore : IBookmarkStateStore
+    {
+        private readonly InMemoryBookmarkStateStore _inner = new();
+        private readonly TaskCompletionSource _saveBegan = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _saveAllowed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task WaitUntilSaveBeginsAsync() => _saveBegan.Task;
+
+        public void AllowSave() => _saveAllowed.TrySetResult();
+
+        public async ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
+        {
+            _saveBegan.TrySetResult();
+            await _saveAllowed.Task.WaitAsync(cancellationToken);
+            return await _inner.SaveAsync(state, cancellationToken);
+        }
+
+        public ValueTask<bool> DeleteAsync(
+            string workflowExecutionId,
+            string bookmarkId,
+            CancellationToken cancellationToken = default) =>
+            _inner.DeleteAsync(workflowExecutionId, bookmarkId, cancellationToken);
+
+        public ValueTask<BookmarkState?> FindAsync(
+            string workflowExecutionId,
+            string bookmarkId,
+            CancellationToken cancellationToken = default) =>
+            _inner.FindAsync(workflowExecutionId, bookmarkId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<BookmarkState>> ListAsync(
+            string workflowExecutionId,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListAsync(workflowExecutionId, cancellationToken);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
     private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
     {
         public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
@@ -1416,6 +1711,17 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutionState>>([]);
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+            WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("workflow state projection failed");
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
     }
 
     private sealed class ThrowingActivityExecutionStateStore : IActivityExecutionStateStore
@@ -1498,8 +1804,20 @@ public sealed class RuntimeCheckpointCommitTests
         public ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("operational state projection failed");
 
+        public ValueTask<ExecutionLivenessStateWriteResult> TrySaveAsync(
+            ExecutionLivenessState state,
+            long expectedRevision,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("operational state projection failed");
+
         public ValueTask<ExecutionLivenessState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<ExecutionLivenessState?>(null);
+
+        public ValueTask<VersionedExecutionLivenessState?> FindVersionedAsync(
+            string workflowExecutionId,
+            string operationalStateId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<VersionedExecutionLivenessState?>(null);
 
         public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<ExecutionLivenessState>>([]);

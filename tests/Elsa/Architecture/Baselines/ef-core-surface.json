@@ -1,5 +1,11 @@
 {
   "SchemaVersion": 1,
+  "ProtectedProviderNeutralProjects": [
+    "Elsa.Workflows.Runtime.Core",
+    "Elsa.Foundation.Identity.Abstractions",
+    "Elsa.Secrets.Core",
+    "Elsa.Workflows.Runtime.Distributed"
+  ],
   "Surface": {
     "EfProjects": [
       "src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
@@ -468,11 +474,9 @@
     "HostConfigurationFiles": [
       "src/Apps/Elsa.Server/appsettings.json -\u003E json:$.Logging.LogLevel.Microsoft.EntityFrameworkCore -\u003E EntityFrameworkCore",
       "src/Apps/Elsa.Server/shells.Production.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore",
-      "src/Apps/Elsa.Server/shells.baseline.json -\u003E json:$.CShells.Shells.default.Features.WorkflowsDesignPersistenceEFCoreSqlite -\u003E EFCore",
       "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.DiagnosticsOpenTelemetryPersistenceEFCoreSqlite -\u003E EFCore",
       "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.DiagnosticsStructuredLogsPersistenceEFCoreSqlite -\u003E EFCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.WorkflowsDesignPersistenceEFCoreSqlite -\u003E EFCore"
+      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore"
     ],
     "EfFreeBoundaryViolations": []
   }

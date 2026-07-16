@@ -38,6 +38,28 @@ public sealed class DraftLayoutUpsertTests
     }
 
     [Fact]
+    public async Task AddWorkflowDefinition_persists_the_initial_layout_at_origin()
+    {
+        using var host = WorkflowsDesignTestHost.Create();
+        var records = new[] { new DesignMetadataRecord("node-1", 10, 20, 100, 80) };
+
+        using (var scope = host.Services.CreateScope())
+        {
+            var add = scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>();
+            await add.Execute(
+                new WorkflowDefinition { Id = "def-1", Name = "def-1" },
+                new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1", State = EmptyState },
+                records,
+                CancellationToken.None);
+        }
+
+        await using var ctx = host.CreateContext();
+        var layout = await ctx.WorkflowDefinitionDraftLayouts
+            .FirstAsync(item => item.WorkflowDefinitionDraftId == "draft-1");
+        Assert.Equal(records, layout.Records);
+    }
+
+    [Fact]
     public async Task UpdateDraft_upserts_a_layout_row_when_the_draft_has_none()
     {
         using var host = WorkflowsDesignTestHost.Create();

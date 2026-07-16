@@ -9,11 +9,13 @@ using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Publishing.Api.Contracts;
+using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Publishing.Api.Services;
-using Elsa.Workflows.Publishing.Api.Contracts;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -105,6 +107,17 @@ internal static class TestCompiler
         public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
     }
+}
+
+internal static class TestRootWriteLeases
+{
+    public static IWorkflowExecutableRootWriteLeaseManager Create(
+        IWorkflowExecutableStore executableStore,
+        TimeProvider? timeProvider = null) =>
+        new WorkflowExecutableRootWriteLeaseManager(
+            executableStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
+            timeProvider ?? TimeProvider.System);
 }
 
 /// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>

@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -110,7 +111,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Post(RouteConstants.Definitions);
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
@@ -124,7 +125,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Post(RouteConstants.GetRoute("definitions/{definitionId}/forks"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
@@ -134,7 +135,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Get(RouteConstants.Definitions);
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 
@@ -144,7 +145,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("definitions/{definitionId}"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 
@@ -154,7 +155,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Patch(RouteConstants.GetRoute("definitions/{definitionId}"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
@@ -164,7 +165,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("definitions/{definitionId}/drafts"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 
@@ -178,7 +179,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Post(RouteConstants.GetRoute("definitions/{definitionId}/drafts"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
@@ -188,7 +189,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("definitions/{definitionId}/versions"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 }
@@ -201,7 +202,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("drafts/{draftId}"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 
@@ -211,7 +212,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Put(RouteConstants.GetRoute("drafts/{draftId}"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
@@ -221,7 +222,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Post(RouteConstants.GetRoute("drafts/{draftId}/validate"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
@@ -235,7 +236,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Post(RouteConstants.GetRoute("drafts/{draftId}/migrate-provider"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
@@ -244,7 +245,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Delete(RouteConstants.GetRoute("drafts/{draftId}"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
 
         public override async Task HandleAsync(DiscardReusableActivityDraft request, CancellationToken cancellationToken)
@@ -289,7 +290,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Versions
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("versions/{versionId}"));
-            ConfigurePermissions();
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 }

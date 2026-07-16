@@ -134,6 +134,7 @@ public sealed class ActivityUpgradeGroundworkTests
                 ]));
             var subject = new GroundworkActivityUpgradePlanStore(
                 documents,
+                documents,
                 payloads,
                 projection,
                 projection,

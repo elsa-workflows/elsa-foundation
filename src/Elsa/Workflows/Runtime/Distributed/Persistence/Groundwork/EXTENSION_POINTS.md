@@ -16,8 +16,9 @@ overridable persistence provider for them.
 | `WorkflowsRuntimeDistributedGroundworkPersistence` | Server runtime (DependsOn `WorkflowsRuntimeDistributed`) | `WorkflowsRuntimeDistributedGroundworkPersistenceFeature` → `AddGroundworkDistributedRuntimeStores()` |
 
 `AddGroundworkDistributedRuntimeStores()` calls `RemoveAll` for each leaf store contract, then registers the
-Groundwork-backed store as a singleton. Registration is override-friendly and composition-order-independent
-(the distributed feature registers its in-memory defaults with `TryAddSingleton`). The host must register an
+Groundwork-backed stores as scoped services. Registration is override-friendly and composition-order-independent
+(the distributed feature registers its in-memory defaults with `TryAddScoped`). The singleton pump and actor provider
+resolve those stores only inside fresh persistence operation scopes. The host must register an
 `IDocumentStore` materialized from a manifest that includes `DistributedGroundworkStorageManifest.Create()`.
 
 ## Persisted document kinds

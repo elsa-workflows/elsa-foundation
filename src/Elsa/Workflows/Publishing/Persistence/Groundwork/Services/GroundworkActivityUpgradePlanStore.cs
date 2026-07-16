@@ -27,6 +27,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 /// </summary>
 public sealed class GroundworkActivityUpgradePlanStore(
     IDocumentStore store,
+    IBoundedDocumentStore boundedStore,
     IPayloadSerializer payloadSerializer,
     IActivityDependencyProjectionStore dependencyProjection,
     GroundworkActivityDependencyProjection dependencyProjectionWriter,
@@ -320,9 +321,19 @@ public sealed class GroundworkActivityUpgradePlanStore(
     {
         var draftEnvelope = await RequiredAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, step.Target.DraftId!, cancellationToken);
         var draft = DeserializeActivity<ActivityDefinitionDraft>(draftEnvelope);
-        var layoutEnvelope = await RequiredActivityByIndexAsync<ActivityDefinitionDraftLayout>(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ByDraftIndex, draft.Id, cancellationToken);
+        var layoutEnvelope = await RequiredActivityByIndexAsync<ActivityDefinitionDraftLayout>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
+            "list-by-draft",
+            ActivitiesDesignStorageManifest.DraftIdField,
+            draft.Id,
+            cancellationToken);
         var layout = DeserializeActivity<ActivityDefinitionDraftLayout>(layoutEnvelope);
-        var authoringEnvelope = await RequiredActivityByIndexAsync<ActivityDefinitionAuthoringState>(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ByDefinitionIndex, draft.DefinitionId, cancellationToken);
+        var authoringEnvelope = await RequiredActivityByIndexAsync<ActivityDefinitionAuthoringState>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+            "list-by-definition",
+            ActivitiesDesignStorageManifest.DefinitionIdField,
+            draft.DefinitionId,
+            cancellationToken);
         var authoring = DeserializeActivity<ActivityDefinitionAuthoringState>(authoringEnvelope);
         EnsureActivitySnapshot(step, draft, authoring);
         draft.State = draft.State with { Provider = await RewriteActivityAsync(draft.State.Provider, step.Replacements, cancellationToken) };
@@ -496,10 +507,22 @@ public sealed class GroundworkActivityUpgradePlanStore(
     private async Task<DocumentEnvelope> RequiredAsync(string kind, string id, CancellationToken cancellationToken) =>
         await store.LoadAsync(kind, id, cancellationToken) ?? throw Stale($"Required snapshot '{kind}/{id}' is unavailable.");
 
-    private async Task<DocumentEnvelope> RequiredActivityByIndexAsync<TEntity>(string kind, string index, string value, CancellationToken cancellationToken) where TEntity : Entity
+    private async Task<DocumentEnvelope> RequiredActivityByIndexAsync<TEntity>(
+        string kind,
+        string queryIdentity,
+        string fieldPath,
+        string value,
+        CancellationToken cancellationToken) where TEntity : Entity
     {
-        var matches = await store.QueryAsync(new DocumentStoreQuery(kind, index, value), cancellationToken);
-        return matches.Count == 1 ? matches[0] : throw Stale($"Expected one '{kind}' snapshot for '{value}'.");
+        var matches = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                kind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+            cancellationToken);
+        return matches.Documents.Count == 1
+            ? matches.Documents[0]
+            : throw Stale($"Expected one '{kind}' snapshot for '{value}'.");
     }
 
     private static TEntity DeserializeActivity<TEntity>(DocumentEnvelope envelope) where TEntity : Entity =>

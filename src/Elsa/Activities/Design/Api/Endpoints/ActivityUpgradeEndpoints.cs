@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -17,7 +18,7 @@ internal sealed class Create(ICommandSender sender, ILogger<Create> logger)
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("upgrade-plans"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignManage);
     }
 }
 
@@ -27,7 +28,7 @@ internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("upgrade-plans/{planId}"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignRead);
     }
 }
 
@@ -37,6 +38,6 @@ internal sealed class Apply(ICommandSender sender, ILogger<Apply> logger)
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("upgrade-plans/{planId}/apply"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignManage);
     }
 }

@@ -24,6 +24,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 /// </summary>
 public sealed class GroundworkActivityPublicationCommand(
     IDocumentStore store,
+    IBoundedDocumentStore boundedStore,
     IPayloadSerializer payloadSerializer,
     IGroundworkRuntimeDocumentSerializer runtimeSerializer,
     IActivityDefinitionVersionPublicationStore publications,
@@ -194,11 +195,15 @@ public sealed class GroundworkActivityPublicationCommand(
             return null;
         }
 
-        var sameHash = await store.QueryAsync(new DocumentStoreQuery(
-            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
-            ElsaRuntimeStorageManifest.ExecutableActivityTemplateByHash,
-            template.TemplateHash), cancellationToken);
-        if (sameHash.Count > 0)
+        var sameHash = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+                ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ElsaRuntimeStorageManifest.TemplateHashField,
+                    template.TemplateHash))]),
+            cancellationToken);
+        if (sameHash.Documents.Count > 0)
             throw Conflict($"Template hash '{template.TemplateHash}' is already bound to another template identity.");
 
         return CreateRuntimeRequest(
@@ -223,12 +228,16 @@ public sealed class GroundworkActivityPublicationCommand(
     private async Task EnsureNewVersionAsync(ActivityDefinitionVersion candidate, CancellationToken cancellationToken)
     {
         await EnsureAbsentAsync(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, candidate.Id, cancellationToken);
-        var envelopes = await store.QueryAsync(new DocumentStoreQuery(
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-            ActivitiesDesignStorageManifest.ByCollectionIndex,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection), cancellationToken);
+        var envelopes = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                ActivitiesDesignStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.CollectionField,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection))]),
+            cancellationToken);
         var richOptions = GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
-        foreach (var envelope in envelopes)
+        foreach (var envelope in envelopes.Documents)
         {
             var document = JsonSerializer.Deserialize<GroundworkDocument<ActivityDefinitionVersion>>(envelope.ContentJson, richOptions)
                            ?? throw Conflict($"Activity version document '{envelope.Id}' is unreadable.");
@@ -322,13 +331,17 @@ public sealed class GroundworkActivityPublicationCommand(
 
     private async Task<DocumentEnvelope> RequiredAuthoringByDefinitionAsync(string definitionId, CancellationToken cancellationToken)
     {
-        var matches = await store.QueryAsync(new DocumentStoreQuery(
-            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-            ActivitiesDesignStorageManifest.ByDefinitionIndex,
-            definitionId), cancellationToken);
-        return matches.Count switch
+        var matches = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                "list-by-definition",
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.DefinitionIdField,
+                    definitionId))]),
+            cancellationToken);
+        return matches.Documents.Count switch
         {
-            1 => matches[0],
+            1 => matches.Documents[0],
             0 => throw Conflict($"Authoring state for activity definition '{definitionId}' was not found."),
             _ => throw Conflict($"Multiple authoring states exist for activity definition '{definitionId}'.")
         };

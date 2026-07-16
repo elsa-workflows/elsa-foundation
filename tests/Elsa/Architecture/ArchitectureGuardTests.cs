@@ -108,6 +108,21 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void In_scope_persistence_contract_projects_remain_free_of_concrete_provider_dependencies()
+    {
+        var projects = ProjectFiles().ToArray();
+        var projectsByName = projects.ToDictionary(project => project.Name, StringComparer.Ordinal);
+        var missing = PersistenceProviderNeutralityBoundary.ProjectNames
+            .Where(projectName => !projectsByName.ContainsKey(projectName))
+            .ToArray();
+        Assert.True(missing.Length == 0, "Missing provider-neutral persistence projects: " + string.Join(", ", missing));
+
+        var violations = new EfCoreSurfaceScanner(RepoRoot).FindProtectedProviderNeutralityViolations();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
     public void Elsa_primitives_has_no_external_package_references()
     {
         var primitives = ProjectFiles().Single(x => x.Name == "Elsa.Primitives");
@@ -178,6 +193,67 @@ public sealed class ArchitectureGuardTests
 
         Assert.Equal("Coalesced", settings["Mode"]?.GetValue<string>());
         Assert.Equal(50, settings["MaxSegmentCheckpoints"]?.GetValue<int>());
+    }
+
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_selects_one_unified_Groundwork_persistence_leaf(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+
+        Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
+            $"{fileName} must select one Groundwork SQLite target for all seven persistence families.");
+        Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
+            $"{fileName} must not compose a second Groundwork provider leaf.");
+        Assert.False(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),
+            $"{fileName} must not select the retired standalone Publishing lane.");
+        Assert.False(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
+            $"{fileName} must not override unified workflow-design persistence with EF Core.");
+        Assert.False(features.ContainsKey("ActivitiesDesignPersistenceEFCoreSqlite"),
+            $"{fileName} must not override unified activity-design persistence with EF Core.");
+    }
+
+    [Fact]
+    public void Groundwork_production_reads_use_only_admitted_bounded_query_APIs()
+    {
+        var productionTargets = XDocument.Load(Path.Combine(RepoRoot, "src", "Elsa", "Directory.Build.targets"));
+        var warningsAsErrors = productionTargets.Descendants("WarningsAsErrors").Single().Value;
+        Assert.Contains("GW0004", warningsAsErrors.Split(';', StringSplitOptions.RemoveEmptyEntries));
+
+        const string checkpointAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs";
+        var checkpointSource = File.ReadAllText(Path.Combine(RepoRoot, checkpointAdapterPath));
+        Assert.Single(Regex.Matches(checkpointSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(checkpointSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Equal(4, Regex.Matches(checkpointSource, "Runtime checkpoint commit unit-of-work does not query documents.").Count);
+
+        const string scopedAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkScopedDocumentStore.cs";
+        var scopedAdapterSource = File.ReadAllText(Path.Combine(RepoRoot, scopedAdapterPath));
+        Assert.Single(Regex.Matches(scopedAdapterSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(scopedAdapterSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Equal(7, Regex.Matches(scopedAdapterSource, @"WithDocumentsAsync\(store => store\.").Count);
+
+        var forbiddenTypes = new[] { "DocumentStoreQuery", "PortableDocumentQuery" };
+        var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
+            .Select(file => new
+            {
+                File = file,
+                RelativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')
+            })
+            .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
+            .Where(candidate =>
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, checkpointAdapterPath) &&
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterPath))
+            .SelectMany(candidate =>
+            {
+                var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));
+                return forbiddenTypes
+                    .Where(type => Regex.IsMatch(source, $@"\b{type}\b"))
+                    .Select(type => $"{candidate.RelativePath}: {type}");
+            })
+            .ToArray();
+
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
     }
 
     [Fact]

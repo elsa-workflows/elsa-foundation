@@ -1,5 +1,22 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
+/// <summary>Immutable provider-neutral partition identity transported with an execution command.</summary>
+public sealed record WorkflowExecutionPartition
+{
+    public const string DefaultValue = "default";
+
+    public WorkflowExecutionPartition(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        if (!string.Equals(value, value.Trim(), StringComparison.Ordinal))
+            throw new ArgumentException("Workflow execution partition values cannot have leading or trailing whitespace.", nameof(value));
+
+        Value = value;
+    }
+
+    public string Value { get; }
+}
+
 public sealed class WorkflowExecutionCommandEnvelope
 {
     public WorkflowExecutionCommandEnvelope(
@@ -10,7 +27,8 @@ public sealed class WorkflowExecutionCommandEnvelope
         WorkflowExecutionCommandDeliveryMode deliveryMode,
         DateTimeOffset enqueuedAt,
         long? sequence = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        WorkflowExecutionPartition? partition = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(envelopeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -31,6 +49,7 @@ public sealed class WorkflowExecutionCommandEnvelope
         Sequence = sequence;
         EnqueuedAt = enqueuedAt;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        Partition = partition ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
     }
 
     public string EnvelopeId { get; }
@@ -41,6 +60,7 @@ public sealed class WorkflowExecutionCommandEnvelope
     public long? Sequence { get; }
     public DateTimeOffset EnqueuedAt { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public WorkflowExecutionPartition Partition { get; }
 }
 
 public sealed class WorkflowExecutionCommandDispatchResult
@@ -105,7 +125,8 @@ public sealed class WorkflowExecutionActorActivationRequest
         DateTimeOffset requestedAt,
         string requestedBy,
         WorkflowExecutionActorCapabilities requiredCapabilities,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        WorkflowExecutionPartition? partition = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -116,6 +137,7 @@ public sealed class WorkflowExecutionActorActivationRequest
         RequestedBy = requestedBy;
         RequiredCapabilities = requiredCapabilities;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        Partition = partition ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
     }
 
     public string WorkflowExecutionId { get; }
@@ -124,6 +146,7 @@ public sealed class WorkflowExecutionActorActivationRequest
     public string RequestedBy { get; }
     public WorkflowExecutionActorCapabilities RequiredCapabilities { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public WorkflowExecutionPartition Partition { get; }
 }
 
 public sealed class WorkflowExecutionActorDescriptor
@@ -172,7 +195,8 @@ public sealed class WorkflowExecutionActorPassivationRequest
         WorkflowExecutionActorPassivationBoundary boundary,
         DateTimeOffset requestedAt,
         string reason,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        WorkflowExecutionPartition? partition = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
@@ -182,6 +206,7 @@ public sealed class WorkflowExecutionActorPassivationRequest
         RequestedAt = requestedAt;
         Reason = reason;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        Partition = partition ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
     }
 
     public string WorkflowExecutionId { get; }
@@ -189,6 +214,7 @@ public sealed class WorkflowExecutionActorPassivationRequest
     public DateTimeOffset RequestedAt { get; }
     public string Reason { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public WorkflowExecutionPartition Partition { get; }
 }
 
 [Flags]

@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -13,6 +14,6 @@ internal sealed class Start(IRequestSender requestSender, ILogger<Start> logger)
     public override void Configure()
     {
         Post(RouteConstants.VersionedWorkflowTestRuns);
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowPublishingManage);
     }
 }

@@ -18,10 +18,15 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// The persisted <see cref="ExecutionPlacementLease"/> shape is the frozen v1 <c>executionPlacement</c> golden
 /// fixture; the wrapping document adds only the constant collection partition for the list sweep.
 /// </remarks>
-public sealed class GroundworkExecutionPlacementStore(IDocumentStore store) : IExecutionPlacementStore
+public sealed class GroundworkExecutionPlacementStore(
+    IDocumentStore store,
+    IBoundedDocumentStore? boundedStore = null) : IExecutionPlacementStore
 {
     private const string Kind = DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind;
     private const int MaxCasAttempts = 8;
+
+    private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+        $"Placement queries for '{Kind}' require an admitted bounded document-store runtime.");
 
     public async ValueTask<ExecutionPlacementLease?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
@@ -113,11 +118,16 @@ public sealed class GroundworkExecutionPlacementStore(IDocumentStore store) : IE
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(Kind, DistributedGroundworkStorageManifest.ByCollectionIndex, Kind),
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                Kind,
+                DistributedGroundworkStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    DistributedGroundworkStorageManifest.CollectionField,
+                    Kind))]),
             cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(envelope => DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease)
             .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
             .ToArray();

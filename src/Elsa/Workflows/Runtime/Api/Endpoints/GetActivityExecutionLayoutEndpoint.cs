@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -15,7 +16,7 @@ public sealed class GetActivityExecutionLayoutEndpoint(
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeRead);
     }
 
     public override async Task HandleAsync(GetActivityExecutionLayout req, CancellationToken ct)

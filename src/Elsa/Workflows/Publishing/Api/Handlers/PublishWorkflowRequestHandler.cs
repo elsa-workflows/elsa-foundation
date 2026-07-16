@@ -1,6 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Identity;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
@@ -12,67 +11,171 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
-/// <summary>
-/// Publish = compile → hash → resolve-or-create the content-addressed artifact by ArtifactId (idempotent: an
-/// existing artifact is never overwritten) → ALWAYS append a new <see cref="WorkflowExecutableSourceReference"/>
-/// carrying the source identity, artifact-version label, publish time, Published scope and the layout sidecar
-/// copied verbatim from the definition version's layout store (ADR 0038/0039/0040).
-/// </summary>
+/// <summary>Compiles an immutable artifact and activates it through one policy-resolved publication slot.</summary>
 public sealed class PublishWorkflowRequestHandler(
     IWorkflowExecutableCompiler compiler,
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
-    IWorkflowTriggerIndexer triggerIndexer,
+    IWorkflowTriggerBindingExtractor triggerExtractor,
+    IWorkflowTriggerBindingStore triggerBindingStore,
     IWorkflowDefinitionVersionLayoutStore layoutStore,
+    IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
+    IPublicationPolicyStore policyStore,
+    IPublicationPolicyResolver policyResolver,
+    IPublicationSlotStore slotStore,
+    IPublicationRecordStore publicationStore,
+    IPublicationPreflightService preflightService,
+    IPublicationActivator activator,
+    TimeProvider timeProvider,
+    WorkflowPublicationPreflightReader? publicationPreflightReader = null,
+    IWorkflowDefinitionVersionStore? workflowVersionStore = null,
+    PublicationSnapshotReviewService? snapshotReviews = null,
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
+    private readonly WorkflowPublicationPreflightReader _publicationPreflightReader = publicationPreflightReader ?? new(
+        policyStore,
+        policyResolver,
+        slotStore,
+        publicationStore,
+        preflightService,
+        triggerExtractor,
+        triggerBindingStore,
+        timeProvider);
 
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        ArgumentNullException.ThrowIfNull(request);
+        var now = timeProvider.GetUtcNow();
+        var executable = await CompileAsync(request.VersionId, now, cancellationToken);
+        var identity = executable.Identity;
+        var resolvedReview = request.PreflightToken is { } preflightToken
+            ? await (snapshotReviews ?? throw new InvalidOperationException("Publication snapshot review services are not configured."))
+                .GetAsync(preflightToken, request.TenantId, cancellationToken)
+            : null;
+        if (resolvedReview is not null)
+            snapshotReviews!.ValidateRequestedIntent(resolvedReview, request.Action, request.SlotName, request.ExpectedPublicationId);
+        var requestIntent = resolvedReview is not null
+            ? RequestIntent(resolvedReview.RequestedAction, resolvedReview.RequestedSlotName)
+            : RequestIntent(request.Action, request.SlotName);
+        var publicationId = $"publication-{ShortIdentityGenerator.Generate(now)}";
+        var plan = await _publicationPreflightReader.EvaluateAsync(
+            executable,
+            requestIntent,
+            resolvedReview?.ActivePublicationId ?? request.ExpectedPublicationId,
+            publicationId,
+            cancellationToken);
+        if (resolvedReview is not null)
+        {
+            var version = await (workflowVersionStore
+                ?? throw new InvalidOperationException("Workflow definition version services are not configured."))
+                .GetWithDefinitionAsync(request.VersionId, cancellationToken);
+            var layout = await layoutStore.FindByVersionIdAsync(request.VersionId, cancellationToken);
+            var candidateHash = snapshotReviews!.ComputeCandidateHash(version.State, layout?.Records ?? []);
+            await snapshotReviews.ValidateAndConsumeAsync(
+                request.PreflightToken!, candidateHash, plan, request.TenantId, cancellationToken);
+        }
+        if (!plan.Result.CanActivate)
+            throw new PublicationPreflightConflictException(plan.Result.Conflicts);
 
-        // Compilation failures surface as WorkflowExecutableCompilationException (itself an ArgumentException),
-        // carrying the DefinitionId/VersionId context. Let the typed exception propagate rather than rewrapping
-        // it into a bare ArgumentException that discards that context (#397).
-        var executable = await compiler.CompileAsync(
+        // A supplied snapshot token is fully revalidated and consumed before this first write. Stale candidates,
+        // intents, policies, and slot authorities therefore fail without persisting an executable or publication.
+        await executableStore.SaveAsync(executable, cancellationToken);
+
+        var resolved = plan.ResolvedAction;
+        var slot = plan.Slot;
+        if (slot?.ActivePublicationId is { } activePublicationId)
+        {
+            var current = await publicationStore.FindAsync(activePublicationId, cancellationToken)
+                ?? throw new InvalidOperationException($"Active publication '{activePublicationId}' does not exist.");
+            if (StringComparer.Ordinal.Equals(current.ArtifactId, identity.ArtifactId) &&
+                plan.Result.Changes.All(change => change.Change == PublicationTriggerChangeKind.Retained))
+            {
+                var currentReference = current.SourceReferenceId is { } sourceReferenceId
+                    ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
+                    : null;
+                if (currentReference is not null && currentReference.DeletedAt is null)
+                    return PublishedWorkflowView.From(executable, currentReference, current, wasCreated: false);
+            }
+        }
+
+        var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, now, cancellationToken);
+        var candidate = new PublicationRecord(
+            publicationId,
+            PublicationSlotIdentity.Create(identity.DefinitionId, resolved.SlotName),
+            identity.DefinitionId,
+            identity.DefinitionVersionId,
+            identity.ArtifactId,
+            reference.SourceReferenceId,
+            slot?.Revision ?? 0,
+            PublicationStatus.Candidate,
+            now,
+            ActivatedAt: null,
+            RetiredAt: null,
+            Failure: null,
+            resolved.SlotName);
+
+        PublicationActivationResult? activation = null;
+        await rootWriteLeaseManager.ExecuteAsync(
+            identity.ArtifactId,
+            $"publish:{publicationId}",
+            async ct =>
+            {
+                await sourceReferenceStore.SaveAsync(reference, ct);
+                try
+                {
+                    activation = await activator.ActivateAsync(new PublicationActivationRequest(candidate), ct);
+                    if (!activation.Succeeded)
+                        throw new PublicationActivationException(activation.Failure);
+                }
+                catch
+                {
+                    await sourceReferenceStore.RetireAsync(
+                        reference.SourceReferenceId,
+                        timeProvider.GetUtcNow(),
+                        "publication-activation-failed",
+                        CancellationToken.None);
+                    throw;
+                }
+            },
+            cancellationToken);
+
+        if (activation!.ReplacedPublicationId is { } replacedPublicationId &&
+            !StringComparer.Ordinal.Equals(replacedPublicationId, publicationId))
+            await RetireReferenceAsync(replacedPublicationId, now, cancellationToken);
+
+        return PublishedWorkflowView.From(executable, reference, activation.Publication);
+    }
+
+    private ValueTask<WorkflowExecutable> CompileAsync(string versionId, DateTimeOffset now, CancellationToken cancellationToken) =>
+        compiler.CompileAsync(
             new WorkflowExecutableCompileRequest(
-                request.VersionId,
+                versionId,
                 WorkflowExecutableReferenceScope.Published,
                 now,
                 now,
                 ExpiresAt: null,
                 PublishedArtifactPrefix,
-                new Dictionary<string, string>
-                {
-                    ["slice"] = "workflow-execution-vertical-slice"
-                }),
+                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" }),
             cancellationToken);
 
-        // Idempotent by artifact id: a behaviorally identical republish resolves to the existing artifact and
-        // leaves it untouched (ADR 0038). The reference below is appended unconditionally.
-        await executableStore.SaveAsync(executable, cancellationToken);
+    private static PublicationRequestIntent? RequestIntent(PublicationAction? action, string? slotName) =>
+        action is { } requestedAction
+            ? new PublicationRequestIntent(requestedAction, slotName)
+            : slotName is not null
+                ? new PublicationRequestIntent(PublicationAction.Replace, slotName)
+                : null;
 
-        var reference = await BuildSourceReferenceAsync(executable, now, cancellationToken);
-        await sourceReferenceStore.SaveAsync(reference, cancellationToken);
-
-        // Index this artifact's start-triggers within the publish flow (W7, E3-1). A failure here propagates and
-        // fails the publish by design: a silently unindexed published trigger — one that can never start a
-        // workflow — is a worse outcome than a failed publish the caller can retry (indexing is idempotent).
-        await triggerIndexer.IndexAsync(executable, cancellationToken);
-
-        return PublishedWorkflowView.From(executable, reference);
-    }
-
-    private async Task<WorkflowExecutableSourceReference> BuildSourceReferenceAsync(
+    private async ValueTask<WorkflowExecutableSourceReference> BuildSourceReferenceAsync(
         WorkflowExecutable executable,
+        string publicationId,
+        string slotName,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         var identity = executable.Identity;
         var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
-
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
             ArtifactId: identity.ArtifactId,
@@ -86,6 +189,29 @@ public sealed class PublishWorkflowRequestHandler(
             PublishedAt: now,
             Scope: WorkflowExecutableReferenceScope.Published,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
+            PublicationId: publicationId,
+            SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId));
     }
+
+    private async ValueTask RetireReferenceAsync(string publicationId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var publication = await publicationStore.FindAsync(publicationId, cancellationToken);
+        if (publication?.SourceReferenceId is not { } sourceReferenceId)
+            return;
+        await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-replaced", cancellationToken);
+    }
+
+}
+
+public sealed class PublicationActivationException(PublicationFailure? failure)
+    : InvalidOperationException(failure?.Message ?? "Publication activation failed.")
+{
+    public string Code { get; } = failure?.Code ?? "publication_activation_failed";
+}
+
+public sealed class PublicationPreflightConflictException(IReadOnlyCollection<PublicationTriggerConflict> conflicts)
+    : InvalidOperationException("Publication trigger preflight found one or more authoritative conflicts.")
+{
+    public IReadOnlyCollection<PublicationTriggerConflict> Conflicts { get; } = conflicts;
 }

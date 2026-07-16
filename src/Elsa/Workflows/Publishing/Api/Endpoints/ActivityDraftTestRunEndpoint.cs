@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -14,7 +15,7 @@ internal sealed class ActivityDraftTestRunEndpoint(
     public override void Configure()
     {
         Post("publishing/activity-drafts/{draftId}/test-runs");
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowPublishingManage);
     }
 
     public override async Task HandleAsync(StartActivityDraftTestRun request, CancellationToken cancellationToken)

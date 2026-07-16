@@ -1,0 +1,11 @@
+{
+  "workflowDefinitionId": "definition-1",
+  "slot": {
+    "slotId": "publication-slot:12:definition-1:7:default",
+    "workflowDefinitionId": "definition-1",
+    "slotName": "default",
+    "activePublicationId": "publication-1",
+    "revision": 1,
+    "updatedAt": "2026-07-13T12:00:00+00:00"
+  }
+}

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
@@ -48,7 +49,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
-        ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind
+        ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
+        ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind
     ];
 
     private const string Wf = "wf-1";
@@ -59,11 +61,14 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     // through the writer against an in-memory store and read back.
     public static async Task<(string SchemaVersion, string ContentJson)> CaptureAsync(string kind)
     {
-        if (kind == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind)
+        if (kind is ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind or ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind)
         {
             var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
             await DriveSaveAsync(kind, store);
-            var envelope = await store.LoadAsync(kind, CommitId);
+            var documentId = kind == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind
+                ? CommitId
+                : ProjectionStateId;
+            var envelope = await store.LoadAsync(kind, documentId);
             return (envelope!.SchemaVersion, envelope.ContentJson);
         }
 
@@ -104,7 +109,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 await new GroundworkWorkflowExecutableStore(store, Serializer).SaveAsync(Executable());
                 break;
             case ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind:
-                await new GroundworkExecutableActivityTemplateStore(store, Serializer).SaveAsync(ActivityTemplate());
+                await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).SaveAsync(ActivityTemplate());
                 break;
             case ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind:
                 await new GroundworkWorkflowExecutableSourceReferenceStore(store, Serializer).SaveAsync(Reference());
@@ -119,7 +124,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 await new GroundworkActivityExecutionHierarchyStore(store, Serializer).SaveAsync(HierarchyRecord());
                 break;
             case ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind:
-                await new GroundworkWorkflowExecutionStateStore(store, Serializer).SaveAsync(WorkflowState());
+                await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.AccessContext("tenant-1")).SaveAsync(WorkflowState());
                 break;
             case ElsaRuntimeStorageManifest.DurableValueStateDocumentKind:
                 await new GroundworkDurableValueStateStore(store, Serializer).SaveAsync(DurableValue());
@@ -151,6 +156,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind:
                 await new GroundworkRecurringTriggerScheduleStore(store, Serializer).SaveAsync(Schedule());
                 break;
+            case ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind:
+                await new GroundworkWorkflowTriggerBindingStore(store, Serializer)
+                    .PreparePublicationAsync("publication-1", []);
+                break;
             case ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind:
                 await CheckpointWriter(store).CommitAsync(Commit(), ImmediateDecision);
                 break;
@@ -168,7 +177,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind =>
             (await new GroundworkWorkflowExecutableStore(store, Serializer).FindAsync("artifact-1"))?.Identity.DefinitionId,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind =>
-            (await new GroundworkExecutableActivityTemplateStore(store, Serializer).FindAsync("template-1"))?.TemplateHash,
+            (await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).FindAsync("template-1"))?.TemplateHash,
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind =>
             (await new GroundworkWorkflowExecutableSourceReferenceStore(store, Serializer).FindAsync("sourceref-1"))?.ArtifactId,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind =>
@@ -179,7 +188,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkActivityExecutionHierarchyStore(store, Serializer, CursorCodec())
                 .FindBoundaryAsync(Wf, "ae-1"))?.DefinitionVersionId,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind =>
-            (await new GroundworkWorkflowExecutionStateStore(store, Serializer).FindAsync(Wf))?.Status,
+            (await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(Wf))?.Status,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind =>
             (await new GroundworkDurableValueStateStore(store, Serializer).FindAsync(Wf, "dv-1"))?.ValueId,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind =>
@@ -205,7 +214,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 .ListByArtifactAsync("artifact-1"))
                 .SingleOrDefault()?.StimulusType,
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind =>
-            (await new GroundworkRecurringTriggerScheduleStore(store, Serializer).FindAsync("artifact-1:node-1"))?.StimulusHash,
+            (await new GroundworkRecurringTriggerScheduleStore(store, Serializer)
+                .FindAsync(RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-1")))?.StimulusHash,
+        ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind =>
+            await ReadProjectionKindAsync(store),
         // The checkpoint marker has no typed domain store; the writer's dedup reads it via LoadAsync, so
         // that is the appropriate read path. The spot value is the commitId parsed from the loaded content.
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind =>
@@ -234,6 +246,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind => "timer-hash-1",
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind => "Event",
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind => "schedule-hash-1",
+        ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind => "triggerBindings",
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
     };
@@ -248,12 +261,23 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         return document.RootElement.GetProperty("commitId").GetString();
     }
 
+    private static async Task<object?> ReadProjectionKindAsync(IDocumentStore store)
+    {
+        var envelope = await store.LoadAsync(ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind, ProjectionStateId);
+        if (envelope is null)
+            return null;
+
+        using var document = JsonDocument.Parse(envelope.ContentJson);
+        return document.RootElement.GetProperty("projectionKind").GetString();
+    }
+
     // --- Canonical builders (deterministic ids and timestamps) ---
 
     private const string CommitId = "commit-1";
+    private const string ProjectionStateId = "triggerBindings:13:publication-1";
 
     private static WorkflowTriggerBinding TriggerBinding() => new(
-        TriggerBindingId: WorkflowTriggerBinding.BuildId("artifact-1", "node-trigger", "hash-order-approved"),
+        TriggerBindingId: WorkflowTriggerBinding.BuildId("publication-1", "artifact-1", "node-trigger", "hash-order-approved"),
         ArtifactId: "artifact-1",
         DefinitionId: "definition-1",
         ArtifactVersion: "1",
@@ -263,7 +287,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         StimulusHash: "hash-order-approved",
         CorrelationScope: "order-42",
         Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
-        CreatedAt: DateTimeOffset.UnixEpoch);
+        CreatedAt: DateTimeOffset.UnixEpoch,
+        PublicationId: "publication-1",
+        SlotId: "slot-default",
+        Cardinality: TriggerCardinality.FanOut);
 
     private static BookmarkState Bookmark() => new(
         BookmarkId: "bm-1",
@@ -366,7 +393,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ExpiresAt: null,
         DeletedAt: null,
         DeletedReason: null,
-        Layout: [new WorkflowExecutableLayoutRecord("root", 10, 20, 100, 60, Json("""{ "collapsed": false }"""))]);
+        Layout: [new WorkflowExecutableLayoutRecord("root", 10, 20, 100, 60, Json("""{ "collapsed": false }"""))],
+        PublicationId: "publication-1",
+        SlotId: "slot-default");
 
     private static ActivityExecutionState ActivityState() => new(
         Execution: new ActivityExecution("ae-1", Wf, "node-ae-1", "authored", "Elsa.Log", "1.0.0"),
@@ -578,14 +607,16 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         Metadata: new Dictionary<string, string> { ["tag"] = "v1" });
 
     private static RecurringTriggerSchedule Schedule() => new(
-        ScheduleId: "artifact-1:node-1",
+        ScheduleId: RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-1"),
         ArtifactId: "artifact-1",
         StimulusType: "Timer",
         StimulusHash: "schedule-hash-1",
         Kind: RecurringScheduleKind.Interval,
         Expression: "PT5M",
         NextOccurrence: DateTimeOffset.UnixEpoch.AddMinutes(5),
-        CreatedAt: DateTimeOffset.UnixEpoch);
+        CreatedAt: DateTimeOffset.UnixEpoch,
+        PublicationId: "publication-1",
+        SlotId: "slot-default");
 
     private static RuntimeCheckpointCommit Commit()
     {
@@ -608,13 +639,15 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private static GroundworkRuntimeCheckpointWriter CheckpointWriter(IDocumentStore store) => new(
         store,
         Serializer,
-        new GroundworkWorkflowExecutionStateStore(store, Serializer),
+        GroundworkTestAccess.DefaultAccessContextAccessor,
+        new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
         new GroundworkSchedulerStateStore(store, Serializer),
         new GroundworkActivityExecutionStateStore(store, Serializer),
         new GroundworkBookmarkStateStore(store, Serializer),
         new GroundworkDurableValueStateStore(store, Serializer),
         new GroundworkIncidentStateStore(store, Serializer),
-        new GroundworkExecutionLivenessStateStore(store, Serializer));
+        new GroundworkExecutionLivenessStateStore(store, Serializer),
+        PassThroughRootWriteLeaseManager.Instance);
 
     private static JsonElement Json(string json)
     {
@@ -628,7 +661,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private sealed class CapturingDocumentStore : IDocumentStore
     {
         private readonly Dictionary<string, (string SchemaVersion, string ContentJson)> _captured = new(StringComparer.Ordinal);
-        public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
+        public DocumentStoreAccess Access { get; } = GroundworkTestAccess.DefaultScoped;
 
         public (string SchemaVersion, string ContentJson) Captured(string kind) => _captured[kind];
 

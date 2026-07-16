@@ -25,8 +25,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// shift a committed deadline.
 /// </para>
 /// </remarks>
-public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.DurableTimerDocumentKind), IDurableTimerStore
+public sealed class GroundworkDurableTimerStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.DurableTimerDocumentKind, boundedStore), IDurableTimerStore
 {
     public async ValueTask<DurableTimer> SaveAsync(DurableTimer timer, CancellationToken cancellationToken = default)
     {
@@ -55,7 +58,8 @@ public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundwor
         cancellationToken.ThrowIfCancellationRequested();
 
         var timers = await QueryDocumentsAsync<DurableTimerEnvelope, DurableTimer>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
             envelope => envelope.Timer,
             cancellationToken);
@@ -83,7 +87,8 @@ public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundwor
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
         var timers = await QueryDocumentsAsync<DurableTimerEnvelope, DurableTimer>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
             envelope => envelope.Timer,
             cancellationToken);

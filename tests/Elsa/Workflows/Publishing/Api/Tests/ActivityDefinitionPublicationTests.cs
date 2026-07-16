@@ -774,7 +774,11 @@ public sealed class ActivityDefinitionPublicationTests
             [
                 new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind),
                 new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind),
-                new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind)
+                new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind),
+                new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
+                new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
+                new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
+                new RecurringTriggerScheduleDocumentV1ToV2Upcaster()
             ]));
             IDocumentStore store = documents;
             if (injectLateLayoutConflict)
@@ -791,7 +795,7 @@ public sealed class ActivityDefinitionPublicationTests
             var commit = CreateCommit();
             var publications = new PublisherPublicationStore([]);
             var projection = new GroundworkActivityDependencyProjection(store, publications);
-            return new(documents, new(store, payloads, runtimeSerializer, publications, projection), commit);
+            return new(documents, new(store, documents, payloads, runtimeSerializer, publications, projection), commit);
         }
 
         private static async Task SeedAsync(IDocumentStore store)

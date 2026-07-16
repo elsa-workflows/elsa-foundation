@@ -35,6 +35,20 @@ Feature-development workflows remain here for now, but the documentation and ope
 dotnet build Elsa.Server.slnx
 ```
 
+## Supported management APIs
+
+Management-client APIs are owned by their Elsa domains and can be composed directly by custom applications.
+`Elsa.Server` is a reference composition, not the implementation home of a server-wide management facade.
+
+The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
+[API Capabilities](src/Elsa/Api/Capabilities/README.md). An authenticated client loads one shell-relative
+`GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
+capability and expose no routes; endpoint-level action permissions remain authoritative.
+
+See the [domain-owned API specification](specs/092-domain-owned-apis/spec.md),
+[OpenAPI contract](specs/092-domain-owned-apis/contracts/management-api.openapi.yaml), and
+[validation quickstart](specs/092-domain-owned-apis/quickstart.md) for composition and compatibility details.
+
 ## Run with Docker
 
 Fastest way to try the stack — pull the published images and run them, no clone or build:

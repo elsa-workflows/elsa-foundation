@@ -12,6 +12,7 @@ using Elsa.Expressions;
 using Elsa.Http.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
@@ -85,7 +86,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     public IServiceProvider Services => _host.Services;
 
-    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
+    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null, null);
 
     /// <summary>
     /// Starts the production HTTP runtime against an isolated Groundwork SQLite database and applies the requested
@@ -98,13 +99,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
+        var connectionString = $"Data Source={databasePath}";
 
         return StartAsync(
             services =>
             {
                 new SqliteGroundworkRuntimePersistenceShellFeature
                 {
-                    ConnectionString = $"Data Source={databasePath}"
+                    ConnectionString = connectionString
                 }.ConfigureServices(services);
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
@@ -113,12 +115,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     MaxSegmentCheckpoints = maxSegmentCheckpoints
                 }.PostConfigureServices(services);
             },
-            databaseDirectory);
+            databaseDirectory,
+            connectionString);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
         Action<IServiceCollection>? configurePersistence,
-        string? databaseDirectory)
+        string? databaseDirectory,
+        string? groundworkSqliteConnectionString)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -217,6 +221,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             })
             .Build();
 
+        if (groundworkSqliteConnectionString is not null)
+            await host.Services.ApplySqliteGroundworkSchemaAsync(groundworkSqliteConnectionString);
         await host.StartAsync();
 
         RunStartupTasks(host.Services);
@@ -254,8 +260,83 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         // Store the executable (start dispatch resolves it by artifact id) and index its trigger binding so the
         // stimulus router can match an inbound request to it — the two things the publish flow does. IndexAsync
         // also fires the route-table index observer, so the published template lands in the live route table.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+    }
+
+    /// <summary>
+    /// Prepares, but does not expose, a publication-scoped HTTP trigger. This is the serving-projection phase used
+    /// by publication slots: the executable is durable and its binding exists, but the binding remains inactive
+    /// until <see cref="ActivatePublishedHttpTriggerAsync"/> switches authority.
+    /// </summary>
+    public async Task PreparePublishedHttpTriggerAsync(
+        string publicationId,
+        string slotId,
+        string artifactId,
+        string path,
+        string resultValueId,
+        params string[] methods)
+    {
+        var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods);
+        await SaveExecutableAsync(executable);
+        await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                $"reference:{publicationId}",
+                artifactId,
+                "WorkflowDefinitionVersion",
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                WorkflowExecutableReferenceScope.Published,
+                PublicationId: publicationId,
+                SlotId: slotId));
+        await Services.GetRequiredService<IWorkflowTriggerIndexer>()
+            .PreparePublicationAsync(executable, publicationId, slotId);
+    }
+
+    /// <summary>
+    /// Switches publication-scoped trigger authority and notifies the real Runtime HTTP observer. The observer
+    /// resolves the complete active binding set and atomically replaces the live route table.
+    /// </summary>
+    public async Task ActivatePublishedHttpTriggerAsync(
+        string publicationId,
+        string? replacedPublicationId,
+        string artifactId)
+    {
+        var store = Services.GetRequiredService<IWorkflowTriggerBindingStore>();
+        await store.ActivatePublicationAsync(publicationId, replacedPublicationId);
+        var bindings = await store.ListByPublicationAsync(publicationId);
+        await NotifyPublicationAuthorityChangedAsync(artifactId, bindings);
+    }
+
+    /// <summary>Removes a prepared projection so a subsequent activation exercises the real missing-candidate failure.</summary>
+    public async Task RemovePreparedPublishedHttpTriggerAsync(string publicationId) =>
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByPublicationAsync(publicationId);
+
+    /// <summary>
+    /// Retires an artifact-scoped start projection while retaining its executable and any waiting bookmarks. Used
+    /// to prove that an already-started execution remains pinned to and resumable from the old artifact.
+    /// </summary>
+    public async Task RetireArtifactTriggerAsync(string artifactId)
+    {
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByArtifactAsync(artifactId);
+        await NotifyPublicationAuthorityChangedAsync(artifactId, []);
+    }
+
+    private async Task NotifyPublicationAuthorityChangedAsync(
+        string artifactId,
+        IReadOnlyCollection<WorkflowTriggerBinding> bindings)
+    {
+        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings)
+        {
+            RequiresProjectionRefresh = true
+        };
+        foreach (var observer in Services.GetServices<IWorkflowTriggerIndexObserver>())
+            await observer.OnTriggersIndexedAsync(snapshot);
     }
 
     /// <summary>
@@ -280,7 +361,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — exactly the spec 089 D US4 independent test's shape.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
     }
 
     /// <summary>
@@ -339,7 +420,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
@@ -455,7 +536,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — the mid-flow route goes live off the bookmark-lifecycle notification.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
     }
 
     /// <summary>
@@ -483,7 +564,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
@@ -621,11 +702,43 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
         Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
 
+    /// <summary>Reads one persisted execution by id.</summary>
+    public async Task<WorkflowExecutionState> WorkflowExecutionAsync(string workflowExecutionId) =>
+        await Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId)
+        ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' was not found.");
+
+    private async Task SaveExecutableAsync(WorkflowExecutable executable)
+    {
+        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                $"fixture-reference:{executable.Identity.ArtifactId}",
+                executable.Identity.ArtifactId,
+                "WorkflowDefinitionVersion",
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                WorkflowExecutableReferenceScope.Published));
+    }
+
     /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
     public async Task<int> CountPhysicalCheckpointCommitsAsync()
     {
-        var result = await Services.GetRequiredService<IDocumentStore>()
-            .QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+        var result = await Services.GetRequiredService<IBoundedDocumentStore>()
+            .QueryAsync(
+                new DocumentQuery(
+                    ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+                    ElsaRuntimeStorageManifest.ListCheckpointCommitsQuery,
+                    [
+                        DocumentQueryClause.Of(
+                            DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.CollectionField,
+                                ElsaRuntimeStorageManifest.CheckpointCommitCollection))
+                    ]));
         return checked((int)result.TotalCount);
     }
 

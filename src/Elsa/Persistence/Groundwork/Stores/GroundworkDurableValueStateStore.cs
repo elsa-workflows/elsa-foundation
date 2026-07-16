@@ -10,8 +10,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// <c>workflowExecutionId</c>, so the document is stored directly and indexed by that field for the
 /// per-workflow list.
 /// </summary>
-public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.DurableValueStateDocumentKind), IDurableValueStateStore
+public sealed class GroundworkDurableValueStateStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.DurableValueStateDocumentKind, boundedStore), IDurableValueStateStore
 {
     public async ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
     {
@@ -48,6 +51,10 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGrou
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         return await QueryDocumentsAsync<DurableValueState, DurableValueState>(
-            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, state => state, cancellationToken);
+            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
+            state => state,
+            cancellationToken);
     }
 }

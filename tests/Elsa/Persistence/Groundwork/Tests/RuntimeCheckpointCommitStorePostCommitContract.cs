@@ -102,13 +102,15 @@ public sealed class GroundworkRuntimeCheckpointCommitStorePostCommitContractTest
         var writer = new GroundworkRuntimeCheckpointWriter(
             store,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
-            new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
         return (writer, new GroundworkRuntimePostCommitOutboxStore(store, GroundworkTestSerialization.Serializer));
     }
 }

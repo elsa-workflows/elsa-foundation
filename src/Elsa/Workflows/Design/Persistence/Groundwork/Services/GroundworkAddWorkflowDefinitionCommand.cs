@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -14,26 +15,42 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 /// embedded <c>workflowDefinitionDraft</c> into one Groundwork <see cref="IDocumentUnitOfWork"/> and commits them
 /// together.
 /// </summary>
-public sealed class GroundworkAddWorkflowDefinitionCommand(IDocumentStore store, IPayloadSerializer payloadSerializer, ISystemClock clock)
+public sealed class GroundworkAddWorkflowDefinitionCommand(
+    IDocumentStore store,
+    IPayloadSerializer payloadSerializer,
+    ISystemClock clock,
+    IPersistenceAccessContextAccessor accessContextAccessor)
     : IAddWorkflowDefinitionCommand
 {
-    public async Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation)
+    public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation) =>
+        Execute(workflowDefinition, draft, [], cancellation);
+
+    public async Task Execute(
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        CancellationToken cancellation)
     {
+        accessContextAccessor.Current.EnsureTenantScope(workflowDefinition.TenantId);
+        accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
+
         var now = clock.UtcNow;
         GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
         GroundworkEntityTimestamps.StampAdded(draft, now);
 
-        var definitionSave = GroundworkDocumentWriter.ToSaveRequest(
+        var definitionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
             WorkflowsDesignStorageManifest.SchemaVersion,
             workflowDefinition,
-            GroundworkDesignJson.Options);
+            GroundworkDesignJson.Options,
+            accessContextAccessor.Current);
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
-            GroundworkDesignDocumentSerialization.Create(payloadSerializer));
-        var draftSave = draftDocuments.ToSaveRequest(draft, []);
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+            accessContextAccessor);
+        var draftSave = draftDocuments.ToSaveRequest(draft, layout.ToArray());
 
         await store.SaveAllAsync(
             DocumentCommitScope.Of(

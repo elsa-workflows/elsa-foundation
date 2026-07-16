@@ -1,7 +1,11 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -11,6 +15,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
     private readonly DateTimeOffset _now = new(2026, 7, 10, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _sourceReferenceStore = new();
+    private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore = new InMemoryWorkflowExecutionStateStore();
 
     [Fact]
     public async Task Sweep_RemovesExpiredReferencesThenTheirNowUnreferencedArtifacts_ButKeepsArtifactsWithALiveReference()
@@ -74,8 +79,46 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.NotNull(await _executableStore.FindAsync("artifact-1"));
     }
 
+    [Theory]
+    [InlineData(WorkflowExecutionStatus.Pending)]
+    [InlineData(WorkflowExecutionStatus.Running)]
+    [InlineData(WorkflowExecutionStatus.Suspended)]
+    [InlineData(WorkflowExecutionStatus.Completed)]
+    [InlineData(WorkflowExecutionStatus.Faulted)]
+    [InlineData(WorkflowExecutionStatus.Cancelled)]
+    public async Task Sweep_KeepsArtifactPinnedByAnyRetainedExecutionStatus(WorkflowExecutionStatus status)
+    {
+        var artifactId = $"artifact-{status}";
+        await _executableStore.SaveAsync(Executable(artifactId));
+        await _workflowExecutionStateStore.SaveAsync(Execution($"execution-{status}", artifactId, status));
+
+        var result = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(0, result.DeletedArtifactCount);
+        Assert.NotNull(await _executableStore.FindAsync(artifactId));
+    }
+
     [Fact]
-    public async Task Sweep_RetainsExpiredTestRunMaterialWhileExecutionIsLive_ThenCollectsAfterTerminalState()
+    public async Task Sweep_CollectsArtifactOnlyAfterItsFinalRetainedExecutionRootIsRemoved()
+    {
+        await _executableStore.SaveAsync(Executable("artifact-1"));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-1", "artifact-1", WorkflowExecutionStatus.Completed));
+
+        var protectedSweep = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(0, protectedSweep.DeletedArtifactCount);
+        Assert.NotNull(await _executableStore.FindAsync("artifact-1"));
+
+        Assert.True(await _workflowExecutionStateStore.DeleteAsync("execution-1"));
+
+        var collectibleSweep = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(1, collectibleSweep.DeletedArtifactCount);
+        Assert.Null(await _executableStore.FindAsync("artifact-1"));
+    }
+
+    [Fact]
+    public async Task Sweep_RetainsReusableActivityTemplateUntilItsFinalExecutionRootIsRemoved()
     {
         var templates = new InMemoryExecutableActivityTemplateStore();
         var template = new ExecutableActivityTemplate(
@@ -93,38 +136,60 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         await _executableStore.SaveAsync(executable);
         await _sourceReferenceStore.SaveAsync(Reference("wrapper-ref", executable.Identity.ArtifactId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
         await _sourceReferenceStore.SaveAsync(Reference("template-ref", template.TemplateId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
-        var states = new InMemoryWorkflowExecutionStateStore();
-        await states.SaveAsync(new(
-            "wfexec-1", executable.Identity, WorkflowExecutionStatus.Running, null, _now.AddHours(-1), _now.AddHours(-1), _now, null, null, null, null,
-            new Dictionary<string, string>()));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-1", executable.Identity.ArtifactId, WorkflowExecutionStatus.Running));
         var collector = new WorkflowExecutableReferenceGarbageCollector(
-            _executableStore, _sourceReferenceStore, templates, states, TimeProvider.System,
+            _executableStore,
+            _sourceReferenceStore,
+            templates,
+            _workflowExecutionStateStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
+            TimeProvider.System,
             NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
 
         var liveSweep = await collector.SweepAsync(_now);
 
-        Assert.False(liveSweep.DidWork);
+        Assert.Equal(2, liveSweep.DeletedReferenceCount);
         Assert.NotNull(await _executableStore.FindAsync(executable.Identity.ArtifactId));
         Assert.NotNull(await templates.FindAsync(template.TemplateId));
 
-        await states.SaveAsync((await states.FindAsync("wfexec-1"))! with
-        {
-            Status = WorkflowExecutionStatus.Completed,
-            CompletedAt = _now
-        });
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-1", executable.Identity.ArtifactId, WorkflowExecutionStatus.Completed));
         var terminalSweep = await collector.SweepAsync(_now);
+        Assert.Equal(0, terminalSweep.DeletedArtifactCount);
+        Assert.Equal(0, terminalSweep.DeletedActivityTemplateCount);
 
-        Assert.Equal(2, terminalSweep.DeletedReferenceCount);
-        Assert.Equal(1, terminalSweep.DeletedArtifactCount);
-        Assert.Equal(1, terminalSweep.DeletedActivityTemplateCount);
+        Assert.True(await _workflowExecutionStateStore.DeleteAsync("execution-1"));
+        var collectedSweep = await collector.SweepAsync(_now);
+
+        Assert.Equal(1, collectedSweep.DeletedArtifactCount);
+        Assert.Equal(1, collectedSweep.DeletedActivityTemplateCount);
     }
 
     private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector() =>
         new(
             _executableStore,
             _sourceReferenceStore,
+            _workflowExecutionStateStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
             TimeProvider.System,
             NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+
+    private WorkflowExecutionState Execution(
+        string workflowExecutionId,
+        string artifactId,
+        WorkflowExecutionStatus status) =>
+        new(
+            WorkflowExecutionId: workflowExecutionId,
+            PinnedExecutable: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            Status: status,
+            SubStatus: null,
+            CreatedAt: _now,
+            StartedAt: _now,
+            UpdatedAt: _now,
+            CompletedAt: status.IsTerminal() ? _now : null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
 
     private WorkflowExecutableSourceReference Reference(
         string sourceReferenceId,
@@ -153,7 +218,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
                 authoredActivityId: "authored-root",
                 activityType: "test/activity",
                 activityTypeVersion: "1.0.0",
-                descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" })),
+                descriptor: new RuntimeActivityDescriptor(
+                    "test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { type = "test" })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),

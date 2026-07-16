@@ -41,6 +41,10 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
     private readonly InMemoryRecurringTriggerScheduleStore _scheduleStore = new();
+    private readonly InMemoryPublicationSlotStore _slotStore = new();
+    private readonly InMemoryPublicationRecordStore _publicationStore = new();
+    private readonly InMemoryPublicationPolicyStore _policyStore = new();
+    private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
 
     [Fact]
     public async Task PublishingStartTrigger_IndexesBindingOverPublishedArtifact()
@@ -57,8 +61,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
     [Fact]
     public async Task RepublishingReplacesTriggerBindings()
     {
-        await Handler(new StubTriggerProvider("Event", "hash-old")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var view = await Handler(new StubTriggerProvider("Event", "hash-new")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        await Handler("old", new StubTriggerProvider("Event", "hash-old")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var view = await Handler("new", new StubTriggerProvider("Event", "hash-new")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
         Assert.Empty(await _bindingStore.ListByStimulusAsync("Event", "hash-old"));
         Assert.Equal(view.ArtifactId, Assert.Single(await _bindingStore.ListByStimulusAsync("Event", "hash-new")).ArtifactId);
@@ -94,7 +98,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             Assert.False(string.IsNullOrWhiteSpace(binding.StimulusHash));
         });
 
-        var schedule = await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(view.ArtifactId, "trigger-node"));
+        var publicationId = Assert.Single(bindings.Select(binding => binding.PublicationId).Distinct())!;
+        var schedule = (await _scheduleStore.ListByPublicationAsync(publicationId)).SingleOrDefault();
         if (scenario.IsRecurring)
         {
             Assert.NotNull(schedule);
@@ -113,19 +118,19 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var seededBindings = await _bindingStore.ListByArtifactAsync(seededView.ArtifactId);
-        var seededSchedule = await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(seededView.ArtifactId, "trigger-node"));
+        var seededPublicationId = Assert.Single(seededBindings.Select(binding => binding.PublicationId).Distinct())!;
+        var seededSchedule = (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault();
 
-        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
+        await AssertInvalidPublicationAsync(scenario, () =>
             FirstPartyHandler(scenario, scenario.InvalidInputs)
                 .Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        Assert.Equal([scenario.ActivityType], exception.ProviderIds);
         Assert.Equal(
             seededBindings.OrderBy(x => x.TriggerBindingId),
             (await _bindingStore.ListByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
         Assert.Equal(
             seededSchedule,
-            await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(seededView.ArtifactId, "trigger-node")));
+            (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault());
     }
 
     [Theory]
@@ -173,7 +178,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             await _scheduleStore.SaveAsync(seededSchedule);
         }
 
-        await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
+        await AssertInvalidPublicationAsync(scenario, () =>
             FirstPartyHandler(scenario, scenario.InvalidInputs, legacyActionCatalog: true)
                 .Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
@@ -181,6 +186,19 @@ public sealed class PublishWorkflowTriggerIndexingTests
         Assert.Equal(
             seededSchedule,
             await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node")));
+    }
+
+    private static async Task AssertInvalidPublicationAsync(FirstPartyScenario scenario, Func<Task> publish)
+    {
+        if (scenario.IsRecurring)
+        {
+            var exception = await Assert.ThrowsAsync<PublicationActivationException>(publish);
+            Assert.Equal("projection_preparation_failed", exception.Code);
+            return;
+        }
+
+        var preflightException = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(publish);
+        Assert.Equal([scenario.ActivityType], preflightException.ProviderIds);
     }
 
     public static TheoryData<FirstPartyScenario> FirstPartyScenarios =>
@@ -246,11 +264,20 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private PublishWorkflowRequestHandler Handler(params IActivityTriggerStimulusProvider[] providers)
         => Handler(TriggerActivityTypeKey, providers);
 
+    private PublishWorkflowRequestHandler Handler(string eventName, IActivityTriggerStimulusProvider provider)
+    {
+        var workflowVersion = WorkflowVersion(TriggerNode("trigger-node", [Input("EventName", eventName)]));
+        var triggerActivity = TriggerActivityVersion();
+        var extractor = new WorkflowTriggerBindingExtractor([provider]);
+        return Handler(workflowVersion, triggerActivity, extractor, new WorkflowTriggerIndexer(extractor, _bindingStore));
+    }
+
     private PublishWorkflowRequestHandler Handler(string activityType, params IActivityTriggerStimulusProvider[] providers)
     {
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node"));
         var triggerActivity = TriggerActivityVersion(activityType);
-        return Handler(workflowVersion, triggerActivity, new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor(providers), _bindingStore));
+        var extractor = new WorkflowTriggerBindingExtractor(providers);
+        return Handler(workflowVersion, triggerActivity, extractor, new WorkflowTriggerIndexer(extractor, _bindingStore));
     }
 
     private PublishWorkflowRequestHandler FirstPartyHandler(
@@ -260,7 +287,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node", inputs));
         var triggerActivity = FirstPartyActivityVersion(scenario, legacyActionCatalog);
-        IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor([scenario.TriggerProvider]), _bindingStore);
+        var extractor = new WorkflowTriggerBindingExtractor([scenario.TriggerProvider]);
+        IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
         indexer = new RecurringTriggerScheduleIndexer(
             indexer,
             scenario.ScheduleProviders,
@@ -268,7 +296,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             new RecurringScheduleCalculator(),
             TimeProvider.System,
             NullLogger<RecurringTriggerScheduleIndexer>.Instance);
-        return Handler(workflowVersion, triggerActivity, indexer, scenario.ClrType);
+        return Handler(workflowVersion, triggerActivity, extractor, indexer, scenario.ClrType);
     }
 
     private WorkflowExecutableCompiler FirstPartyCompiler(
@@ -291,15 +319,33 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private PublishWorkflowRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         ActivityDefinitionVersion triggerActivity,
+        IWorkflowTriggerBindingExtractor extractor,
         IWorkflowTriggerIndexer indexer,
         Type? clrType = null)
     {
+        var reconciler = new PublicationProjectionReconciler(
+            _intentStore,
+            _executableStore,
+            indexer,
+            _bindingStore,
+            TimeProvider.System,
+            _scheduleStore);
+        var activator = new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System);
         return new PublishWorkflowRequestHandler(
             Compiler(workflowVersion, triggerActivity, clrType),
             _executableStore,
             _referenceStore,
-            indexer,
-            new NullLayoutStore());
+            extractor,
+            _bindingStore,
+            new NullLayoutStore(),
+            TestRootWriteLeases.Create(_executableStore),
+            _policyStore,
+            new PublicationPolicyResolver(),
+            _slotStore,
+            _publicationStore,
+            new PublicationPreflightService(),
+            activator,
+            TimeProvider.System);
     }
 
     private static WorkflowExecutableCompiler Compiler(

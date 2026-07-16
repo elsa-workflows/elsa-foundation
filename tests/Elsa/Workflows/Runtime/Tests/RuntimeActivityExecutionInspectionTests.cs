@@ -133,7 +133,11 @@ public sealed class RuntimeActivityExecutionInspectionTests
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, activityStateStore, null, null, null, null, null, inspectionStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowStateStore,
+            activityStateStore,
+            activityExecutionInspectionWriter: inspectionStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var workflowState = NewWorkflowState(WorkflowExecutionStatus.Running);
         var activityState = NewStateForStatus(ActivityExecutionStatus.Running) with
         {

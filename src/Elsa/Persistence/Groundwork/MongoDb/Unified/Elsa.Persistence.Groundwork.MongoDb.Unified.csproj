@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.MongoDb" />
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Persistence.Groundwork.MongoDb.csproj" />
+    <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="..\..\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
+    <ProjectReference Include="..\..\..\..\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
+  </ItemGroup>
+
+</Project>

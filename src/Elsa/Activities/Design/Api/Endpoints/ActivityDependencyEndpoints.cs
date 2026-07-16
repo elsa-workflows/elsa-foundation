@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Endpoints;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,6 @@ internal sealed class Dependencies(IRequestSender sender, ILogger<Dependencies> 
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("versions/{versionId}/dependencies"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignRead);
     }
 }

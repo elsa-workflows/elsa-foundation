@@ -25,16 +25,24 @@ public static class ElsaRuntimeStorageManifest
     public const string ByWorkflowExecutionIndex = "by-workflow-execution";
     public const string ByCollectionIndex = "by-collection";
     public const string ByStimulusIndex = "by-stimulus";
+    public const string ByStimulusTypeIndex = "by-stimulus-type";
     public const string ByArtifactIndex = "by-artifact";
     public const string ByTemplateHashIndex = "by-template-hash";
     public const string ByExecutionScopeIndex = "by-execution-scope";
+    public const string ByPublicationIndex = "by-publication";
     public const string ByParentActivityExecutionIndex = "by-parent-activity-execution";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
+    public const string StimulusTypeField = "stimulusType";
     public const string ArtifactIdField = "artifactId";
     public const string TemplateHashField = "templateHash";
     public const string ExecutionScopeIdField = "executionScopeId";
+    public const string PublicationIdField = "publicationId";
+    public const string ListAllQuery = "list-all";
+    public const string ListByWorkflowExecutionQuery = "list-by-workflow-execution";
+    public const string ListByArtifactQuery = "list-by-artifact";
+    public const string ListByParentActivityExecutionQuery = "list-by-parent-activity-execution";
     // Nested dot-path into the persisted activity-execution document: the parent id already lives under
     // the document's "state" envelope, so indexing this path adds an index over an EXISTING serialized
     // field without changing the document shape. Groundwork index fields are dot-paths resolved by walking
@@ -52,6 +60,13 @@ public static class ElsaRuntimeStorageManifest
     /// alone; the caller post-filters by stimulus type (the hash is already type-derived in practice).
     /// </summary>
     public const string BookmarkStateByStimulus = ByStimulusIndex;
+
+    /// <summary>Bounded route used to rebuild stimulus-type bookmark indexes at startup.</summary>
+    public const string BookmarkStateByStimulusType = ByStimulusTypeIndex;
+
+    public const string ListBookmarksByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
+    public const string ListBookmarksByStimulusQuery = "list-by-stimulus";
+    public const string ListBookmarksByStimulusTypeQuery = "list-by-stimulus-type";
 
     public const string WorkflowExecutableDocumentKind = "workflowExecutable";
 
@@ -72,6 +87,8 @@ public static class ElsaRuntimeStorageManifest
     public const string ExecutableActivityTemplateCollection = "executableActivityTemplate";
     public const string ExecutableActivityTemplateByCollection = ByCollectionIndex;
     public const string ExecutableActivityTemplateByHash = ByTemplateHashIndex;
+    public const string ListExecutableActivityTemplatesQuery = ListAllQuery;
+    public const string FindExecutableActivityTemplateByHashQuery = "find-by-template-hash";
 
     // Per-publish source references into the content-addressed artifact store (ADR 0038/0039/0040). One document
     // per reference; carries source identity, scope/expiry, retirement facts and the embedded layout sidecar.
@@ -79,9 +96,11 @@ public static class ElsaRuntimeStorageManifest
 
     /// <summary>Index used by <c>IWorkflowExecutableSourceReferenceStore.ListAsync()</c> to enumerate every reference.</summary>
     public const string WorkflowExecutableSourceReferenceByCollection = ByCollectionIndex;
+    public const string ListWorkflowExecutableSourceReferencesQuery = ListAllQuery;
 
     /// <summary>Index used by <c>IWorkflowExecutableSourceReferenceStore.ListByArtifactAsync</c> and the GC unreferenced-artifact sweep.</summary>
     public const string WorkflowExecutableSourceReferenceByArtifact = ByArtifactIndex;
+    public const string ListWorkflowExecutableSourceReferencesByArtifactQuery = ListByArtifactQuery;
 
     /// <summary>Constant partition value stamped on every source-reference document so the unfiltered list/expiry sweep can use a keyword equality index.</summary>
     public const string WorkflowExecutableSourceReferenceCollection = "workflowExecutableSourceReference";
@@ -105,7 +124,10 @@ public static class ElsaRuntimeStorageManifest
     public const string ActivityExecutionHierarchyDocumentKind = "activityExecutionHierarchy";
     public const string ActivityExecutionHierarchyByWorkflowExecution = ByWorkflowExecutionIndex;
     public const string ActivityExecutionHierarchyByExecutionScope = ByExecutionScopeIndex;
+    public const string ListActivityExecutionHierarchyByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
+    public const string WorkflowExecutionStateCollection = "workflowExecutionState";
+    public const string ListWorkflowExecutionsQuery = ListAllQuery;
     public const string DurableValueStateDocumentKind = "durableValueState";
     public const string SchedulerStateDocumentKind = "schedulerState";
     // Persisted wire identifiers — the string values predate the W14 type renames
@@ -119,6 +141,9 @@ public static class ElsaRuntimeStorageManifest
     // that a checkpoint commit has been fully applied, so an at-least-once redelivery of the same commit
     // is skipped. This survives process restarts, unlike the in-memory writer's in-process dedup set.
     public const string CheckpointCommitDocumentKind = "checkpointCommit";
+    public const string CheckpointCommitByCollection = ByCollectionIndex;
+    public const string CheckpointCommitCollection = "checkpointCommit";
+    public const string ListCheckpointCommitsQuery = ListAllQuery;
 
     public const string PostCommitOutboxDocumentKind = "postCommitOutbox";
 
@@ -137,6 +162,9 @@ public static class ElsaRuntimeStorageManifest
     // and by artifact id (replace-on-republish).
     public const string WorkflowTriggerBindingDocumentKind = "workflowTriggerBinding";
 
+    /// <summary>Durable prepared/active marker for a publication-owned Runtime serving projection.</summary>
+    public const string PublicationProjectionStateDocumentKind = "publicationProjectionState";
+
     /// <summary>
     /// Cross-artifact index used by <c>IWorkflowTriggerBindingStore.ListByStimulusAsync</c> so a single
     /// stimulus can start instances of any workflow that triggers on it. Keyed by stimulus hash alone; the
@@ -144,8 +172,19 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public const string WorkflowTriggerBindingByStimulus = ByStimulusIndex;
 
+    /// <summary>Bounded route used to resolve all active bindings for one stimulus type.</summary>
+    public const string WorkflowTriggerBindingByStimulusType = ByStimulusTypeIndex;
+
     /// <summary>Index used by <c>IWorkflowTriggerBindingStore.ListByArtifactAsync</c> and the republish replace path.</summary>
     public const string WorkflowTriggerBindingByArtifact = ByArtifactIndex;
+
+    /// <summary>Index used by publication projection prepare, activate, and delete operations.</summary>
+    public const string WorkflowTriggerBindingByPublication = ByPublicationIndex;
+
+    public const string ListTriggerBindingsByStimulusQuery = "list-by-stimulus";
+    public const string ListTriggerBindingsByStimulusTypeQuery = "list-by-stimulus-type";
+    public const string ListTriggerBindingsByArtifactQuery = ListByArtifactQuery;
+    public const string ListTriggerBindingsByPublicationQuery = "list-by-publication";
 
     // Durable recurring-trigger schedule store (W16). Each Timer/Cron start trigger in a published artifact
     // becomes one schedule document with no execution id, so the recurring-trigger pump can start a NEW
@@ -171,11 +210,13 @@ public static class ElsaRuntimeStorageManifest
                 "Bookmark state",
                 [
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
-                    Keyword(ByStimulusIndex, StimulusHashField)
+                    Keyword(ByStimulusIndex, StimulusHashField),
+                    Keyword(ByStimulusTypeIndex, StimulusTypeField)
                 ],
                 [
-                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
-                    Query("list-by-stimulus", ByStimulusIndex)
+                    Query(ListBookmarksByWorkflowExecutionQuery, ByWorkflowExecutionIndex),
+                    Query(ListBookmarksByStimulusQuery, ByStimulusIndex),
+                    Query(ListBookmarksByStimulusTypeQuery, ByStimulusTypeIndex)
                 ]),
             Unit(
                 WorkflowExecutableDocumentKind,
@@ -276,8 +317,8 @@ public static class ElsaRuntimeStorageManifest
             Unit(
                 CheckpointCommitDocumentKind,
                 "Checkpoint commit ledger",
-                [],
-                []),
+                [Keyword(CheckpointCommitByCollection, CollectionField)],
+                [Query(ListCheckpointCommitsQuery, CheckpointCommitByCollection)]),
             Unit(
                 PostCommitOutboxDocumentKind,
                 "Post-commit outbox",
@@ -310,11 +351,15 @@ public static class ElsaRuntimeStorageManifest
                 "Workflow trigger binding",
                 [
                     Keyword(ByStimulusIndex, StimulusHashField),
-                    Keyword(ByArtifactIndex, ArtifactIdField)
+                    Keyword(ByStimulusTypeIndex, StimulusTypeField),
+                    Keyword(ByArtifactIndex, ArtifactIdField),
+                    Keyword(ByPublicationIndex, PublicationIdField)
                 ],
                 [
-                    Query("list-by-stimulus", ByStimulusIndex),
-                    Query("list-by-artifact", ByArtifactIndex)
+                    Query(ListTriggerBindingsByStimulusQuery, ByStimulusIndex),
+                    Query(ListTriggerBindingsByStimulusTypeQuery, ByStimulusTypeIndex),
+                    Query(ListTriggerBindingsByArtifactQuery, ByArtifactIndex),
+                    Query(ListTriggerBindingsByPublicationQuery, ByPublicationIndex)
                 ]),
             Unit(
                 RecurringTriggerScheduleDocumentKind,
@@ -326,7 +371,12 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Query("list-all", ByCollectionIndex),
                     Query("list-by-artifact", ByArtifactIndex)
-                ])
+                ]),
+            Unit(
+                PublicationProjectionStateDocumentKind,
+                "Publication projection state",
+                [],
+                [])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);
@@ -341,7 +391,7 @@ public static class ElsaRuntimeStorageManifest
         StorageIntent.PortableDocument(),
         LifecyclePolicy.Mutable,
         IdentityPolicy.StringId(),
-        TenancyPolicy.Global,
+        TenancyPolicy.Scoped,
         ConcurrencyPolicy.Optimistic(),
         SerializationPolicy.Json(),
         indexes,
@@ -362,5 +412,6 @@ public static class ElsaRuntimeStorageManifest
         isUnique,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
 }

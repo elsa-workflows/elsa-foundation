@@ -17,7 +17,10 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     public async Task SaveAndQuery_ByStimulusAndArtifact_RoundTrips(string provider)
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
-        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
 
         await store.SaveAsync(Binding("artifact-1", "node-a", "Event", "hash-order"));
         await store.SaveAsync(Binding("artifact-2", "node-b", "Event", "hash-order"));
@@ -43,7 +46,10 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     public async Task DeleteByArtifact_RemovesOnlyThatArtifact(string provider)
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
-        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
 
         await store.SaveAsync(Binding("artifact-1", "node-a", "Event", "hash-order"));
         await store.SaveAsync(Binding("artifact-1", "node-b", "Event", "hash-order2"));
@@ -63,7 +69,10 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     public async Task ListByStimulusType_ReturnsEveryBindingOfType_AcrossArtifacts(string provider)
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
-        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
 
         // Two HTTP bindings on different artifacts + hashes, plus one of another type.
         await store.SaveAsync(Binding("artifact-1", "node-a", "HttpEndpoint", "hash-1"));

@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
@@ -16,7 +17,7 @@ internal sealed class PublishActivityDraftEndpoint(
     public override void Configure()
     {
         Post("design/activities/drafts/{draftId}/publish");
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowPublishingManage);
     }
 
     public override async Task HandleAsync(PublishActivityDraft request, CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork;
+using Groundwork.Core.Indexing;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -64,5 +65,20 @@ public sealed class ElsaRuntimeStorageManifestTests
         // the physicalized index-set change, not on this string — the pre-existing bookmarkState by-stimulus index added
         // an index without bumping it too.
         Assert.Equal("1.0.0", ElsaRuntimeStorageManifest.SchemaVersion);
+    }
+
+    [Fact]
+    public void Every_Query_Backed_Index_Is_An_Optimized_Physical_Projection()
+    {
+        var manifest = ElsaRuntimeStorageManifest.Create();
+
+        foreach (var unit in manifest.StorageUnits)
+        {
+            foreach (var query in unit.Queries)
+            {
+                var index = Assert.Single(unit.Indexes, candidate => candidate.Identity == query.IndexIdentity);
+                Assert.Equal(IndexPhysicalizationPolicy.Optimized, index.Physicalization);
+            }
+        }
     }
 }

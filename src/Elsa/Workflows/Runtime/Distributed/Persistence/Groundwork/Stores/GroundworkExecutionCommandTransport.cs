@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
@@ -29,16 +30,23 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// <c>workflowExecutionId</c> and constant collection partition for the declared indexes.
 /// </para>
 /// </remarks>
-public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : IExecutionCommandTransport
+public sealed class GroundworkExecutionCommandTransport(
+    IDocumentStore store,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null) : IExecutionCommandTransport
 {
     private const string Kind = DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind;
     private const int MaxCreateAttempts = 16;
+
+    private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+        $"Command-transport queries for '{Kind}' require an admitted bounded document-store runtime.");
 
     public async ValueTask<ExecutionCommandTransportItem> SendAsync(string workflowExecutionId, WorkflowExecutionCommandEnvelope envelope, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(envelope);
         cancellationToken.ThrowIfCancellationRequested();
+        accessContextAccessor.Current.EnsureScope(new PersistenceScope(envelope.Partition.Value));
 
         for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
         {
@@ -150,11 +158,16 @@ public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : 
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(Kind, DistributedGroundworkStorageManifest.ByCollectionIndex, Kind),
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                Kind,
+                DistributedGroundworkStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    DistributedGroundworkStorageManifest.CollectionField,
+                    Kind))]),
             cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(envelope => DistributedGroundworkDocuments.Deserialize<TransportItemDocument>(envelope).Item)
             .Where(item => item.IsVisible(now))
             .Select(item => item.WorkflowExecutionId)
@@ -173,11 +186,16 @@ public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : 
 
     private async Task<IReadOnlyList<(ExecutionCommandTransportItem Item, long Version)>> LoadItemsAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(Kind, DistributedGroundworkStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId),
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                Kind,
+                DistributedGroundworkStorageManifest.ListByWorkflowExecutionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    DistributedGroundworkStorageManifest.WorkflowExecutionIdField,
+                    workflowExecutionId))]),
             cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(envelope => (DistributedGroundworkDocuments.Deserialize<TransportItemDocument>(envelope).Item, envelope.Version))
             .OrderBy(entry => entry.Item.Sequence)
             .ThenBy(entry => entry.Item.TransportItemId, StringComparer.Ordinal)

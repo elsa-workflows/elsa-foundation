@@ -130,12 +130,11 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Applies_A_v1_To_v3_Chain_In_Order()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry(
-        ProductionUpcasters().Concat<IGroundworkRuntimeDocumentUpcaster>(
+        var registry = Registry(
         [
             new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
             new RenameFieldUpcaster("test-thing", fromVersion: 2, "b", "c")
-        ]));
+        ]);
 
         var content = new JsonObject { ["a"] = "value" };
         var upcasted = registry.Upcast("test-thing", fromVersion: 1, toVersion: 3, content);
@@ -148,7 +147,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Leaves_Content_Untouched_When_From_Equals_To()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry(ProductionUpcasters());
+        var registry = Registry();
 
         var content = new JsonObject { ["a"] = "value" };
         var result = registry.Upcast("test-thing", fromVersion: 2, toVersion: 2, content);
@@ -221,15 +220,81 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
-    public void Registry_With_No_Upcasters_Constructs_And_Passes_Content_Through()
+    public void Registry_With_Only_Production_Upcasters_Passes_Unrelated_Content_Through()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry(ProductionUpcasters());
+        var registry = Registry();
 
         var content = new JsonObject { ["a"] = "value" };
         var result = registry.Upcast("test-thing", fromVersion: 1, toVersion: 1, content);
 
         Assert.Same(content, result);
     }
+
+    [Fact]
+    public void PublicationProjectionUpcasters_AreNeutralAndPreserveLegacyTriggerSemantics()
+    {
+        var registry = Registry();
+        var eventBinding = registry.Upcast(
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
+            1,
+            2,
+            new JsonObject { ["stimulusType"] = "Event" });
+        var httpBinding = registry.Upcast(
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
+            1,
+            2,
+            new JsonObject { ["stimulusType"] = "HttpEndpoint" });
+        var schedule = registry.Upcast(
+            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
+            1,
+            2,
+            new JsonObject { ["schedule"] = new JsonObject() });
+
+        Assert.Equal((int)TriggerCardinality.FanOut, eventBinding["cardinality"]!.GetValue<int>());
+        Assert.Equal((int)TriggerCardinality.Exclusive, httpBinding["cardinality"]!.GetValue<int>());
+        Assert.False(eventBinding["isActive"]!.GetValue<bool>());
+        Assert.False(httpBinding["isActive"]!.GetValue<bool>());
+        var scheduleState = Assert.IsType<JsonObject>(schedule["schedule"]);
+        Assert.Null(scheduleState["publicationId"]);
+        Assert.Null(scheduleState["slotId"]);
+        Assert.False(scheduleState["isActive"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void WorkflowExecutionStateV1ToV2Upcaster_AddsNeutralClassificationAndSourceProvenance()
+    {
+        var content = JsonNode.Parse("""{"collection":"workflowExecutionState","state":{"workflowExecutionId":"wf-1"}}""")!.AsObject();
+
+        var result = new WorkflowExecutionStateDocumentV1ToV2Upcaster().Upcast(content);
+
+        var state = Assert.IsType<JsonObject>(result["state"]);
+        Assert.Equal(0, state["runKind"]!.GetValue<int>());
+        Assert.Null(state["pinnedSource"]);
+    }
+
+    [Fact]
+    public void WorkflowExecutionStateV2ToV3Upcaster_adds_the_effective_history_timestamp()
+    {
+        var content = JsonNode.Parse("""{"collection":"workflowExecutionState","state":{"createdAt":"2026-07-13T09:00:00+00:00","startedAt":"2026-07-13T10:00:00+00:00","completedAt":"2026-07-13T11:00:00+00:00","updatedAt":"2026-07-13T12:00:00+00:00"}}""")!.AsObject();
+
+        var result = new WorkflowExecutionStateDocumentV2ToV3Upcaster().Upcast(content);
+
+        Assert.Equal(new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero).UtcTicks, result["historySortTicks"]!.GetValue<long>());
+    }
+
+    private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
+        params IGroundworkRuntimeDocumentUpcaster[] additional) =>
+        new(
+        [
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind),
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind),
+            new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind),
+            new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
+            new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
+            new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
+            new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),
+            .. additional
+        ]);
 
     private static BookmarkState Bookmark() => new(
         BookmarkId: "bm-1",
@@ -243,13 +308,6 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
-
-    private static IReadOnlyCollection<IGroundworkRuntimeDocumentUpcaster> ProductionUpcasters() =>
-    [
-        new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind),
-        new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind),
-        new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind)
-    ];
 
     private static DocumentEnvelope Envelope(string schemaVersion, string contentJson) =>
         new(Kind, "bm-1", schemaVersion, 1, contentJson, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);

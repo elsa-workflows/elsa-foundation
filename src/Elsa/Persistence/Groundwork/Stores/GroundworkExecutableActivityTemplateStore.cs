@@ -11,8 +11,9 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkExecutableActivityTemplateStore(
     IDocumentStore store,
-    IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind),
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind, boundedStore),
         IExecutableActivityTemplateStore
 {
     private readonly SemaphoreSlim _saveGate = new(1, 1);
@@ -74,7 +75,8 @@ public sealed class GroundworkExecutableActivityTemplateStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(templateHash);
 
         var matches = await QueryDocumentsAsync<TemplateDocument, ExecutableActivityTemplate>(
-            ElsaRuntimeStorageManifest.ExecutableActivityTemplateByHash,
+            ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery,
+            ElsaRuntimeStorageManifest.TemplateHashField,
             templateHash,
             document => document.Template,
             cancellationToken);
@@ -90,7 +92,8 @@ public sealed class GroundworkExecutableActivityTemplateStore(
 
     public async ValueTask<IReadOnlyCollection<ExecutableActivityTemplate>> ListAsync(CancellationToken cancellationToken = default) =>
         (await QueryDocumentsAsync<TemplateDocument, ExecutableActivityTemplate>(
-            ElsaRuntimeStorageManifest.ExecutableActivityTemplateByCollection,
+            ElsaRuntimeStorageManifest.ListExecutableActivityTemplatesQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.ExecutableActivityTemplateCollection,
             document => document.Template,
             cancellationToken)).ToArray();

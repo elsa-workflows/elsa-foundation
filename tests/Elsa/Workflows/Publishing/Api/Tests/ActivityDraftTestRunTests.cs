@@ -231,6 +231,13 @@ public sealed class ActivityDraftTestRunTests
                 Assert.Equal("ExecutedReference", layout!.Selection);
                 Assert.Equal(first.SourceReferenceId, layout.SourceReferenceId);
 
+                var retainedSweep = await generation2.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync();
+                Assert.False(retainedSweep.DidWork);
+                Assert.NotNull(await generation2.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(first.SourceReferenceId));
+
+                var executionStore = generation2.GetRequiredService<IWorkflowExecutionStateStore>();
+                Assert.True(await executionStore.DeleteAsync(first.WorkflowExecutionId));
+                Assert.True(await executionStore.DeleteAsync(second.WorkflowExecutionId));
                 var sweep = await generation2.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync();
                 Assert.Equal(3, sweep.DeletedReferenceCount);
                 Assert.Equal(1, sweep.DeletedArtifactCount);
@@ -318,6 +325,7 @@ public sealed class ActivityDraftTestRunTests
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.AddSingleton(documents);
+        services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
         services.AddGroundworkRuntimeStores();
 
         var provider = services.BuildServiceProvider();
@@ -337,6 +345,7 @@ public sealed class ActivityDraftTestRunTests
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
         services.AddSingleton(documents);
+        services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
         services.AddGroundworkRuntimeStores();
 
         var provider = services.BuildServiceProvider();
@@ -356,7 +365,7 @@ public sealed class ActivityDraftTestRunTests
             connectionString,
             ElsaRuntimeStorageManifest.Create(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-            DocumentStoreAccess.Global);
+            GroundworkTestAccess.DefaultScoped);
 
     private static async ValueTask DisposeStoreAsync(IDocumentStore store)
     {

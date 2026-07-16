@@ -124,7 +124,6 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
             sp.GetRequiredService<IRuntimeCheckpointPersistencePolicy>(),
             sp.GetRequiredService<IRuntimeCheckpointCommitStore>(),
             ownershipContextAccessor: null,
-            ownershipService: null,
             tracer: sp.GetRequiredService<IWorkflowEngineTracer>()));
 
         services.AddSingleton<RuntimeActivityLoadStateMiddleware>();

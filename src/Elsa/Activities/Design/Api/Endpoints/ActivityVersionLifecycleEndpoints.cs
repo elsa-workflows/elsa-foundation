@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +13,7 @@ internal sealed class Retire(ICommandSender sender, ILogger<Retire> logger)
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("versions/{versionId}/retire"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignManage);
     }
 }
 
@@ -22,7 +23,7 @@ internal sealed class Restore(ICommandSender sender, ILogger<Restore> logger)
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("versions/{versionId}/restore"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignManage);
     }
 }
 
@@ -32,6 +33,6 @@ internal sealed class Revoke(ICommandSender sender, ILogger<Revoke> logger)
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("versions/{versionId}/revoke"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignManage);
     }
 }

@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>

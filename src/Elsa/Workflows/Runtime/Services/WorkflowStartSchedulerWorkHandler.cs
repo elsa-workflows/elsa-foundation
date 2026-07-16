@@ -172,7 +172,9 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             seedVariables: startPayload.Variables,
             seedInputs: startPayload.Inputs,
             seedStimulusInput: startPayload.StimulusInput,
-            seedTriggerNodeId: startPayload.TriggerNodeId);
+            seedTriggerNodeId: startPayload.TriggerNodeId,
+            runKind: startPayload.RunKind,
+            pinnedSource: startPayload.PinnedSource);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
