@@ -247,6 +247,7 @@ public sealed class DispatchWorkflow : CodeActivity
             WorkflowDispatchStatus.Completed => DispatchWorkflowOutcomes.Completed,
             WorkflowDispatchStatus.Faulted => DispatchWorkflowOutcomes.Faulted,
             WorkflowDispatchStatus.Cancelled => DispatchWorkflowOutcomes.Cancelled,
+            WorkflowDispatchStatus.DispatchFailed => DispatchWorkflowOutcomes.DispatchFailed,
             _ => throw new InvalidOperationException("DispatchWorkflow completion resume payload has an unsupported child terminal status.")
         }]);
     }

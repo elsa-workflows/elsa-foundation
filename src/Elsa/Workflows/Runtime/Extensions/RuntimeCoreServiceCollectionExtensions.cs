@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Configuration;
+using Elsa.Workflows.Runtime.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -118,7 +119,16 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxClaimStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
-        services.TryAddScoped<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
+        services.TryAddScoped<IWorkflowDispatchRedriveStore, ScopedWorkflowDispatchRedriveStore>();
+        services.TryAddScoped<IRuntimePostCommitOutboxProcessor>(serviceProvider =>
+            new RuntimePostCommitOutboxProcessor(
+                serviceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+                serviceProvider.GetRequiredService<IRuntimePostCommitIntentDispatcher>(),
+                serviceProvider.GetRequiredService<TimeProvider>(),
+                serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
+                serviceProvider.GetService<IWorkflowDispatchStore>(),
+                serviceProvider.GetServices<IPostCommitFailureProjector>(),
+                serviceProvider.GetService<ILogger<RuntimePostCommitOutboxProcessor>>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();

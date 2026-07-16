@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Core;
 using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -476,35 +477,118 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask CompleteClaimAsync(
+    public async ValueTask CompleteClaimAsync(
         RuntimePostCommitOutboxClaimCompletion completion,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(completion);
         cancellationToken.ThrowIfCancellationRequested();
 
+        await _state.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            var childExecution = completion.WorkflowDispatch is { } projectedDispatch &&
+                                 _workflowExecutionStateStore is not null
+                ? await _workflowExecutionStateStore.FindAsync(
+                    projectedDispatch.ChildWorkflowExecutionId,
+                    cancellationToken)
+                : null;
+
+            lock (_state.SyncRoot)
+            {
+                if (!_state.OutboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
+                    throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
+
+                // Validate the claim/fence before considering lifecycle precedence. A stale claimant cannot turn a
+                // newer generation into an acknowledgement merely because the deterministic child is now visible.
+                var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+                    existingOutbox,
+                    completion.Claim,
+                    completion.DeliveryResult);
+                WorkflowDispatchRecord? winningDispatch = null;
+                var admissionWins = false;
+                if (completion.WorkflowDispatch is { } dispatch)
+                {
+                    if (!_state.WorkflowDispatches.TryGetValue(dispatch.DispatchId, out var existingDispatch))
+                        throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the atomic checkpoint store.");
+
+                    winningDispatch = WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
+                        existingDispatch,
+                        childExecution,
+                        completion.DeliveryResult.RecordedAt);
+                    admissionWins = winningDispatch is not null;
+                    if (admissionWins)
+                    {
+                        completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+                            existingOutbox,
+                            completion.Claim,
+                            new RuntimePostCommitOutboxDeliveryResult(
+                                completion.Claim.OutboxItemId,
+                                RuntimePostCommitOutboxStatus.Delivered,
+                                completion.DeliveryResult.RecordedAt));
+                    }
+                    else
+                    {
+                        WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
+                        winningDispatch = dispatch;
+                    }
+                }
+
+                if (!admissionWins && completion.FollowUpOutboxItem is { } followUp)
+                {
+                    if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
+                        throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+                    if (_state.OutboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
+                        !PendingOutboxItemsEquivalent(existingFollowUp, followUp))
+                    {
+                        throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
+                    }
+                }
+
+                _state.OutboxItems[completion.Claim.OutboxItemId] = completedOutbox;
+                if (winningDispatch is not null)
+                    _state.WorkflowDispatches[winningDispatch.DispatchId] = winningDispatch;
+                if (!admissionWins && completion.FollowUpOutboxItem is { } followUpOutboxItem)
+                    _state.OutboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem);
+            }
+        }
+        finally
+        {
+            _state.WriteGate.Release();
+        }
+    }
+
+    internal ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
+        WorkflowDispatchRedriveRequest request,
+        CancellationToken cancellationToken = default)
+        => RedriveAsync(request, accessContext: null, cancellationToken);
+
+    internal ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
+        WorkflowDispatchRedriveRequest request,
+        PersistenceAccessContext? accessContext,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
         lock (_state.SyncRoot)
         {
-            if (!_state.OutboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
-                throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
+            _state.WorkflowDispatches.TryGetValue(request.DispatchId, out var dispatch);
+            if (dispatch is not null)
+                accessContext?.EnsureTenantScope(dispatch.TenantId);
+            RuntimePostCommitOutboxItem? deadLetter = null;
+            var deadLetterId = dispatch is null ? null : WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch);
+            if (deadLetterId is not null)
+                _state.OutboxItems.TryGetValue(deadLetterId, out deadLetter);
 
-            var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
-                existingOutbox,
-                completion.Claim,
-                completion.DeliveryResult);
-            if (completion.WorkflowDispatch is { } dispatch)
+            var transition = WorkflowDispatchRedriveTransitions.Evaluate(request, dispatch, deadLetter);
+            if (transition.HasMutation)
             {
-                if (!_state.WorkflowDispatches.TryGetValue(dispatch.DispatchId, out var existingDispatch))
-                    throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the atomic checkpoint store.");
-                WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
+                _state.WorkflowDispatches[request.DispatchId] = transition.WorkflowDispatch!;
+                _state.OutboxItems[transition.OutboxItem!.OutboxItemId] = transition.OutboxItem;
             }
-
-            _state.OutboxItems[completion.Claim.OutboxItemId] = completedOutbox;
-            if (completion.WorkflowDispatch is { } workflowDispatch)
-                _state.WorkflowDispatches[workflowDispatch.DispatchId] = workflowDispatch;
+            return ValueTask.FromResult(transition.Result);
         }
-
-        return ValueTask.CompletedTask;
     }
 
     private async ValueTask ApplyWorkflowExecutionStateChangeAsync(
@@ -988,6 +1072,15 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         && existing.Intent.WaitFailurePolicy == item.Intent.WaitFailurePolicy
         && PayloadEquals(existing.Intent.Payload, item.Intent.Payload)
         && MetadataEquals(existing.Intent.Metadata, item.Intent.Metadata);
+
+    private static bool PendingOutboxItemsEquivalent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
+        IsSamePendingIntent(existing, item) &&
+        existing.RecordedAt == item.RecordedAt &&
+        existing.AvailableAt == item.AvailableAt &&
+        existing.DeliveryAttemptCount == item.DeliveryAttemptCount &&
+        existing.DeliveryFencingToken == item.DeliveryFencingToken &&
+        existing.RetryPolicy.IsEquivalentTo(item.RetryPolicy) &&
+        MetadataEquals(existing.Metadata, item.Metadata);
 
     private static bool PayloadEquals(System.Text.Json.JsonElement? left, System.Text.Json.JsonElement? right)
     {

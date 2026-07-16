@@ -32,6 +32,14 @@ public sealed record WorkflowDispatchView(
     string? DiagnosticCode,
     string? DiagnosticCategory)
 {
+    public string? DeliveryIncidentId { get; init; }
+    public string? DeliveryDeadLetterId { get; init; }
+    public int DeliveryGeneration { get; init; }
+    public int DeliveryAttemptCount { get; init; }
+    public DateTimeOffset? DeliveryFirstAttemptAt { get; init; }
+    public DateTimeOffset? DeliveryFailedAt { get; init; }
+    public bool RedriveEligible { get; init; }
+
     public static WorkflowDispatchView From(WorkflowDispatchRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -59,6 +67,37 @@ public sealed record WorkflowDispatchView(
             record.CreatedAt,
             record.UpdatedAt,
             WorkflowDispatchLifecycle.ReadSafeDiagnosticCode(record),
-            WorkflowDispatchLifecycle.ReadSafeDiagnosticCategory(record));
+            WorkflowDispatchLifecycle.ReadSafeDiagnosticCategory(record))
+        {
+            DeliveryIncidentId = WorkflowDispatchLifecycle.ReadDeliveryIncidentId(record),
+            DeliveryDeadLetterId = WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(record),
+            DeliveryGeneration = WorkflowDispatchLifecycle.ReadDeliveryGeneration(record),
+            DeliveryAttemptCount = WorkflowDispatchLifecycle.ReadDeliveryAttemptCount(record),
+            DeliveryFirstAttemptAt = WorkflowDispatchLifecycle.ReadDeliveryFirstAttemptAt(record),
+            DeliveryFailedAt = WorkflowDispatchLifecycle.ReadDeliveryFailedAt(record),
+            RedriveEligible = WorkflowDispatchLifecycle.IsRedriveEligible(record)
+        };
+    }
+}
+
+/// <summary>Allowlist-only result of a separately authorized dispatch redrive request.</summary>
+public sealed record WorkflowDispatchRedriveView(
+    string DispatchId,
+    WorkflowDispatchRedriveDisposition Disposition,
+    WorkflowDispatchStatus? Status,
+    int DeliveryGeneration,
+    string? DeliveryIncidentId,
+    string? DeliveryDeadLetterId)
+{
+    public static WorkflowDispatchRedriveView From(WorkflowDispatchRedriveResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return new(
+            result.DispatchId,
+            result.Disposition,
+            result.Status,
+            result.Generation,
+            result.IncidentId,
+            result.DeadLetterId);
     }
 }

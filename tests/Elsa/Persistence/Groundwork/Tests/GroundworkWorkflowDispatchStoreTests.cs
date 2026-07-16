@@ -155,6 +155,34 @@ public sealed class GroundworkWorkflowDispatchStoreTests
         Assert.Equal(0, store.LoadCount);
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Find_and_query_fail_closed_for_a_dispatch_outside_the_selected_tenant(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        var tenantA = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            fixture.BoundedDocumentStore);
+        var tenantB = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-b"),
+            fixture.BoundedDocumentStore);
+        var record = Pending("parent-tenant", "activity-1", tenantId: "tenant-a");
+        await tenantA.SaveAsync(record);
+
+        var findException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            tenantB.FindAsync(record.DispatchId).AsTask());
+        var queryException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            tenantB.QueryAsync(new WorkflowDispatchQuery(parentWorkflowExecutionId: record.ParentWorkflowExecutionId)).AsTask());
+
+        Assert.DoesNotContain("tenant-a", findException.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-a", queryException.Message, StringComparison.Ordinal);
+    }
+
     private static GroundworkWorkflowDispatchStore CreateStore(GroundworkDocumentStoreFixture fixture) => new(
         fixture.DocumentStore,
         GroundworkTestSerialization.Serializer,

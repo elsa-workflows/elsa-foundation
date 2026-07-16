@@ -124,6 +124,18 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 - **Usage:** stores delivery state for post-commit intents so providers can preserve record, commit, deliver, and mark-delivered ordering.
 - **Default implementation:** `InMemoryRuntimePostCommitOutboxStore` *(single-node in-memory default for the current runtime slice; durable providers replace this)*.
 
+### `IPostCommitFailureProjector` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Optional replacement contract. Exactly one active owning feature may recognize and safely project its own effective-final intent failures; feature registration rejects an existing replacement with a clear diagnostic.
+- **Signature:** `ProjectAsync(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxDeliveryResult finalResult, ...)` returns an optional dispatch/follow-up aggregate.
+- **Usage and safety:** the outbox processor invokes it only at effective final failure, then passes its result to the fenced claim-completion store. The projection must validate the canonical intent/dispatch identity and may expose only fixed diagnostics and stable identifiers; it cannot persist independently of the claimed outbox completion.
+- **Known cross-domain replacement:** `Elsa.Activities.DispatchWorkflow.Runtime.WorkflowDispatchDeliveryFailureProjector`, selected by `ActivitiesDispatchWorkflowRuntime`; registration rejects a second replacement instead of silently choosing one.
+
+### `IWorkflowDispatchRedriveStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Additive atomic provider capability for separately authorized delivery recovery.
+- **Signature:** `RedriveAsync(WorkflowDispatchRedriveRequest request, ...)` returns a safe disposition and lifecycle summary.
+- **Usage and safety:** only a fire-and-forget, delivery-caused `DispatchFailed` record linked to its exact `FailedFinal` start item can be reopened. The provider advances generation and fencing while reusing the original dispatch, child, intent, payload, retry policy, and idempotency identities. Wait dispatches and ordinary terminal states remain closed, and ordinary `IWorkflowDispatchStore.SaveAsync` still rejects `DispatchFailed -> Pending`.
+- **Default and replacements:** `InMemoryRuntimeCheckpointCommitStore` supplies the process-local atomic implementation. Durable providers must bind this capability to the same physical dispatch/outbox transaction owner they use for fenced completion.
+
 ### `IPostCommitOutboxLookupStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement read capability (one provider resolves an exact already-committed post-commit outbox item without widening the base outbox store).
 - **Signature:** `FindAsync(string outboxItemId, CancellationToken cancellationToken = default)`.

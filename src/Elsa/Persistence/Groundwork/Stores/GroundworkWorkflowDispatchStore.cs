@@ -79,7 +79,38 @@ public sealed class GroundworkWorkflowDispatchStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
-        return (await LoadAsync(dispatchId, cancellationToken))?.Record;
+        var record = (await LoadAsync(dispatchId, cancellationToken))?.Record;
+        if (record is not null)
+            _accessContextAccessor.Current.EnsureTenantScope(record.TenantId);
+        return record;
+    }
+
+    internal async ValueTask<bool> TrySaveRedriveAsync(
+        WorkflowDispatchRecord expected,
+        WorkflowDispatchRecord candidate,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(candidate);
+        cancellationToken.ThrowIfCancellationRequested();
+        _accessContextAccessor.Current.EnsureTenantScope(expected.TenantId);
+
+        var loaded = await LoadAsync(expected.DispatchId, cancellationToken);
+        if (loaded is null || !WorkflowDispatchLifecycle.RecordsEqual(loaded.Record, expected))
+            return false;
+        var requestId = WorkflowDispatchLifecycle.ReadDeliveryRedriveRequestId(candidate)
+            ?? throw new InvalidOperationException("A sanctioned workflow-dispatch redrive requires its operator request identity.");
+        var expectedCandidate = WorkflowDispatchLifecycle.RedriveDelivery(expected, requestId, candidate.UpdatedAt);
+        if (!WorkflowDispatchLifecycle.RecordsEqual(expectedCandidate, candidate))
+            throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' carries a conflicting redrive transition.");
+
+        var result = await SaveAsync(candidate, loaded.Version, cancellationToken);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return true;
+        if (result.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+            return false;
+        throw new InvalidOperationException(
+            $"Groundwork rejected workflow dispatch redrive '{candidate.DispatchId}' with status '{result.Status}'.");
     }
 
     public async ValueTask<WorkflowDispatchAdmissionResult> TryAdmitAsync(
@@ -218,11 +249,14 @@ public sealed class GroundworkWorkflowDispatchStore :
             skip += documents.Count;
         }
 
-        return selected
+        var records = selected
             .OrderBy(record => record.CreatedAt)
             .ThenBy(record => record.DispatchId, StringComparer.Ordinal)
             .Take(query.Take)
             .ToArray();
+        foreach (var record in records)
+            _accessContextAccessor.Current.EnsureTenantScope(record.TenantId);
+        return records;
     }
 
     public async ValueTask DeleteAsync(string dispatchId, CancellationToken cancellationToken = default)

@@ -11,11 +11,15 @@ public static class DispatchWorkflowDiagnostics
     public const string IncidentCountKey = "incidentCount";
     public const string IncidentIdsTruncatedKey = "incidentIdsTruncated";
     public const string IncidentIdPrefix = "incidentId.";
+    public const string DeliveryIncidentIdKey = "incidentId";
     public const string Category = "execution";
+    public const string DeliveryCategory = "delivery";
     public const string FaultedCode = "child-workflow-faulted";
     public const string CancelledCode = "child-workflow-cancelled";
+    public const string DispatchFailedCode = "child-start-delivery-failed";
     public const string FaultedSummary = "The child workflow faulted.";
     public const string CancelledSummary = "The child workflow was cancelled.";
+    public const string DispatchFailedSummary = "The child workflow could not be started.";
     public const int MaximumIncidentIds = 32;
 
     internal static IReadOnlyDictionary<string, string> Faulted(IReadOnlyCollection<string> incidentIds)
@@ -36,6 +40,14 @@ public static class DispatchWorkflowDiagnostics
 
     internal static IReadOnlyDictionary<string, string> Cancelled() =>
         Fixed(CancelledCode, CancelledSummary);
+
+    internal static IReadOnlyDictionary<string, string> DispatchFailed(string incidentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(incidentId);
+        var metadata = Fixed(DispatchFailedCode, DispatchFailedSummary, DeliveryCategory);
+        metadata[DeliveryIncidentIdKey] = incidentId.Trim();
+        return metadata;
+    }
 
     internal static void ValidateFaulted(IReadOnlyDictionary<string, string> metadata)
     {
@@ -76,11 +88,18 @@ public static class DispatchWorkflowDiagnostics
     internal static void ValidateCancelled(IReadOnlyDictionary<string, string> metadata) =>
         ValidateFixed(metadata, CancelledCode, CancelledSummary, allowIncidentIds: false);
 
-    private static Dictionary<string, string> Fixed(string code, string summary) =>
+    internal static void ValidateDispatchFailed(IReadOnlyDictionary<string, string> metadata)
+    {
+        ValidateFixed(metadata, DispatchFailedCode, DispatchFailedSummary, allowIncidentIds: false, DeliveryCategory, DeliveryIncidentIdKey);
+        if (!metadata.TryGetValue(DeliveryIncidentIdKey, out var incidentId) || string.IsNullOrWhiteSpace(incidentId))
+            throw new ArgumentException("Dispatch-failed diagnostics require one safe incident identity.", nameof(metadata));
+    }
+
+    private static Dictionary<string, string> Fixed(string code, string summary, string category = Category) =>
         new(StringComparer.Ordinal)
         {
             [CodeKey] = code,
-            [CategoryKey] = Category,
+            [CategoryKey] = category,
             [SummaryKey] = summary
         };
 
@@ -88,16 +107,19 @@ public static class DispatchWorkflowDiagnostics
         IReadOnlyDictionary<string, string> metadata,
         string code,
         string summary,
-        bool allowIncidentIds)
+        bool allowIncidentIds,
+        string category = Category,
+        string? additionalAllowedKey = null)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         if (!metadata.TryGetValue(CodeKey, out var actualCode) || !StringComparer.Ordinal.Equals(actualCode, code) ||
-            !metadata.TryGetValue(CategoryKey, out var actualCategory) || !StringComparer.Ordinal.Equals(actualCategory, Category) ||
+            !metadata.TryGetValue(CategoryKey, out var actualCategory) || !StringComparer.Ordinal.Equals(actualCategory, category) ||
             !metadata.TryGetValue(SummaryKey, out var actualSummary) || !StringComparer.Ordinal.Equals(actualSummary, summary) ||
             metadata.Keys.Any(key =>
                 !StringComparer.Ordinal.Equals(key, CodeKey) &&
                 !StringComparer.Ordinal.Equals(key, CategoryKey) &&
                 !StringComparer.Ordinal.Equals(key, SummaryKey) &&
+                !StringComparer.Ordinal.Equals(key, additionalAllowedKey) &&
                 (!allowIncidentIds || !StringComparer.Ordinal.Equals(key, IncidentCountKey)) &&
                 (!allowIncidentIds || !StringComparer.Ordinal.Equals(key, IncidentIdsTruncatedKey)) &&
                 (!allowIncidentIds || !key.StartsWith(IncidentIdPrefix, StringComparison.Ordinal))))

@@ -1,12 +1,17 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
-public sealed class ListWorkflowDispatchesRequestHandler(IWorkflowDispatchQueryStore queryStore)
+public sealed class ListWorkflowDispatchesRequestHandler(
+    IWorkflowDispatchQueryStore queryStore,
+    IPersistenceAccessContextAccessor? accessContextAccessor = null)
     : IRequestHandler<ListWorkflowDispatches, IReadOnlyCollection<WorkflowDispatchView>>
 {
     private const int DefaultTake = WorkflowDispatchQuery.MaximumTake;
@@ -31,8 +36,16 @@ public sealed class ListWorkflowDispatchesRequestHandler(IWorkflowDispatchQueryS
                 parentId,
                 childId,
                 status,
-                take),
+                take,
+                request.AfterCreatedAt,
+                EmptyToNull(request.AfterDispatchId)),
             cancellationToken);
+
+        if (accessContextAccessor is not null)
+        {
+            foreach (var record in records)
+                accessContextAccessor.Current.EnsureTenantScope(record.TenantId);
+        }
 
         return records.Select(WorkflowDispatchView.From).ToArray();
     }
@@ -49,7 +62,47 @@ public sealed class ListWorkflowDispatchesRequestHandler(IWorkflowDispatchQueryS
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }
 
-public sealed class GetWorkflowDispatchRequestHandler(IWorkflowDispatchStore store)
+public sealed class RedriveWorkflowDispatchRequestHandler : IRequestHandler<RedriveWorkflowDispatch, WorkflowDispatchRedriveView>
+{
+    private readonly IWorkflowDispatchRedriveStore _store;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<RedriveWorkflowDispatchRequestHandler> _logger;
+
+    public RedriveWorkflowDispatchRequestHandler(
+        IWorkflowDispatchRedriveStore store,
+        TimeProvider? timeProvider = null,
+        ILogger<RedriveWorkflowDispatchRequestHandler>? logger = null)
+    {
+        _store = store;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _logger = logger ?? NullLogger<RedriveWorkflowDispatchRequestHandler>.Instance;
+    }
+
+    public async Task<WorkflowDispatchRedriveView> Handle(
+        RedriveWorkflowDispatch request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.DispatchId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RequestId);
+
+        var result = await _store.RedriveAsync(
+            new WorkflowDispatchRedriveRequest(request.DispatchId, request.RequestId, _timeProvider.GetUtcNow()),
+            cancellationToken);
+
+        _logger.LogInformation(
+            new EventId(68109, "WorkflowDispatchRedriveEvaluated"),
+            "Workflow dispatch redrive {Disposition} for {DispatchId} at generation {DeliveryGeneration}",
+            result.Disposition,
+            result.DispatchId,
+            result.Generation);
+        return WorkflowDispatchRedriveView.From(result);
+    }
+}
+
+public sealed class GetWorkflowDispatchRequestHandler(
+    IWorkflowDispatchStore store,
+    IPersistenceAccessContextAccessor? accessContextAccessor = null)
     : IRequestHandler<GetWorkflowDispatch, GetWorkflowDispatchResponse>
 {
     public async Task<GetWorkflowDispatchResponse> Handle(
@@ -58,6 +111,8 @@ public sealed class GetWorkflowDispatchRequestHandler(IWorkflowDispatchStore sto
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.DispatchId);
         var record = await store.FindAsync(request.DispatchId, cancellationToken);
+        if (record is not null)
+            accessContextAccessor?.Current.EnsureTenantScope(record.TenantId);
         return new(record is null ? null : WorkflowDispatchView.From(record));
     }
 }

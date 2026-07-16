@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -445,6 +446,8 @@ public sealed class WorkflowDispatchQuery
 /// <summary>Shared identity and monotonic-lifecycle rules used by every dispatch store.</summary>
 public static class WorkflowDispatchLifecycle
 {
+    public const string StartChildIntentKind = "Elsa.Activities.DispatchWorkflow.StartChild";
+    public const string ResumeParentIntentKind = "Elsa.Activities.DispatchWorkflow.ResumeParent";
     public const string DiagnosticCodeMetadataKey = "runtime.diagnostic.code";
     public const string DiagnosticCategoryMetadataKey = "runtime.diagnostic.category";
     public const string ChildStartDeliveryFailedCode = "child-start-delivery-failed";
@@ -453,6 +456,13 @@ public static class WorkflowDispatchLifecycle
     public const string CancellationStateMetadataKey = "runtime.dispatch.cancellationState";
     public const string CancelledBeforeAdmissionState = "parent-before-admission";
     public const string CancellationRequestedState = "parent-cancellation-requested";
+    public const string DeliveryGenerationMetadataKey = "runtime.dispatch.deliveryGeneration";
+    public const string DeliveryDeadLetterIdMetadataKey = "runtime.dispatch.deliveryDeadLetterId";
+    public const string DeliveryIncidentIdMetadataKey = "runtime.dispatch.deliveryIncidentId";
+    public const string DeliveryAttemptCountMetadataKey = "runtime.dispatch.deliveryAttemptCount";
+    public const string DeliveryFirstAttemptAtMetadataKey = "runtime.dispatch.deliveryFirstAttemptAt";
+    public const string DeliveryFailedAtMetadataKey = "runtime.dispatch.deliveryFailedAt";
+    public const string DeliveryRedriveRequestIdMetadataKey = "runtime.dispatch.deliveryRedriveRequestId";
 
     public static void SetEffectiveCancellationPolicy(
         IDictionary<string, string> metadata,
@@ -567,6 +577,59 @@ public static class WorkflowDispatchLifecycle
         return candidate;
     }
 
+    /// <summary>Creates the safe terminal projection for exhausted child-start delivery.</summary>
+    public static WorkflowDispatchRecord TransitionToDispatchFailed(
+        WorkflowDispatchRecord record,
+        string deadLetterId,
+        int generation,
+        int attemptCount,
+        DateTimeOffset firstAttemptAt,
+        DateTimeOffset failedAt)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deadLetterId);
+        if (generation < 0)
+            throw new ArgumentOutOfRangeException(nameof(generation));
+        if (attemptCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(attemptCount), "A delivery dead letter requires at least one attempt.");
+        if (firstAttemptAt == default)
+            throw new ArgumentOutOfRangeException(nameof(firstAttemptAt));
+        if (failedAt < firstAttemptAt)
+            throw new ArgumentOutOfRangeException(nameof(failedAt), "Final delivery failure cannot precede the first attempt.");
+
+        var identity = new WorkflowDispatchIdentity(record.ParentWorkflowExecutionId, record.ParentActivityExecutionId);
+        var metadata = record.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[DiagnosticCodeMetadataKey] = ChildStartDeliveryFailedCode;
+        metadata[DiagnosticCategoryMetadataKey] = DeliveryCategory;
+        metadata[DeliveryGenerationMetadataKey] = generation.ToString(CultureInfo.InvariantCulture);
+        metadata[DeliveryDeadLetterIdMetadataKey] = deadLetterId;
+        metadata[DeliveryIncidentIdMetadataKey] = identity.DeliveryIncidentId(generation);
+        metadata[DeliveryAttemptCountMetadataKey] = attemptCount.ToString(CultureInfo.InvariantCulture);
+        metadata[DeliveryFirstAttemptAtMetadataKey] = firstAttemptAt.ToString("O", CultureInfo.InvariantCulture);
+        metadata[DeliveryFailedAtMetadataKey] = failedAt.ToString("O", CultureInfo.InvariantCulture);
+        var candidate = new WorkflowDispatchRecord(
+            record.DispatchId,
+            record.ParentWorkflowExecutionId,
+            record.ParentActivityExecutionId,
+            record.ChildWorkflowExecutionId,
+            record.ChildExecutable,
+            record.ChildSource,
+            record.Mode,
+            WorkflowDispatchStatus.DispatchFailed,
+            record.CorrelationId,
+            record.TenantId,
+            record.Partition,
+            record.RunKind,
+            record.Authority,
+            record.InputDescriptors,
+            record.CreatedAt,
+            failedAt > record.UpdatedAt ? failedAt : record.UpdatedAt,
+            metadata,
+            record.DispatchNestingDepth);
+        ValidateTransition(record, candidate);
+        return candidate;
+    }
+
     public static void ValidateNew(WorkflowDispatchRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -660,6 +723,60 @@ public static class WorkflowDispatchLifecycle
         left.UpdatedAt == right.UpdatedAt &&
         MetadataEquals(left.Metadata, right.Metadata);
 
+    /// <summary>
+    /// Resolves stronger durable child evidence before committing a final start-delivery failure. A visible child
+    /// repairs Pending to Started; a business-terminal dispatch remains unchanged; no evidence returns null. A state
+    /// at the deterministic child ID with conflicting retained context fails closed.
+    /// </summary>
+    public static WorkflowDispatchRecord? ResolveSuccessfulChildDelivery(
+        WorkflowDispatchRecord dispatch,
+        WorkflowExecutionState? childExecution,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(dispatch);
+        if (observedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(observedAt));
+        if (dispatch.Status is
+            WorkflowDispatchStatus.Completed or
+            WorkflowDispatchStatus.Faulted or
+            WorkflowDispatchStatus.Cancelled)
+        {
+            return dispatch;
+        }
+        if (dispatch.Status == WorkflowDispatchStatus.DispatchFailed)
+            return null;
+        if (childExecution is null)
+            return null;
+
+        var matches =
+            StringComparer.Ordinal.Equals(childExecution.WorkflowExecutionId, dispatch.ChildWorkflowExecutionId) &&
+            WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(
+                childExecution.PinnedExecutable,
+                dispatch.ChildExecutable) &&
+            Equals(childExecution.PinnedSource, dispatch.ChildSource) &&
+            StringComparer.Ordinal.Equals(
+                childExecution.ParentWorkflowExecutionId,
+                dispatch.ParentWorkflowExecutionId) &&
+            StringComparer.Ordinal.Equals(childExecution.CorrelationId, dispatch.CorrelationId) &&
+            StringComparer.Ordinal.Equals(childExecution.TenantId, dispatch.TenantId) &&
+            Equals(childExecution.Partition, dispatch.Partition) &&
+            childExecution.RunKind == dispatch.RunKind &&
+            childExecution.DispatchNestingDepth == dispatch.DispatchNestingDepth &&
+            childExecution.Authority is not null &&
+            AuthorityEquals(childExecution.Authority, dispatch.Authority);
+        if (!matches)
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{dispatch.ChildWorkflowExecutionId}' conflicts with its retained workflow dispatch context.");
+        }
+
+        return dispatch.Status == WorkflowDispatchStatus.Pending
+            ? dispatch.TransitionTo(
+                WorkflowDispatchStatus.Started,
+                observedAt > dispatch.UpdatedAt ? observedAt : dispatch.UpdatedAt)
+            : dispatch;
+    }
+
     public static string? ReadSafeDiagnosticCode(WorkflowDispatchRecord record) =>
         record.Metadata.TryGetValue(DiagnosticCodeMetadataKey, out var value) &&
         StringComparer.Ordinal.Equals(value, ChildStartDeliveryFailedCode)
@@ -671,6 +788,105 @@ public static class WorkflowDispatchLifecycle
         StringComparer.Ordinal.Equals(value, DeliveryCategory)
             ? value
             : null;
+
+    public static string? ReadDeliveryIncidentId(WorkflowDispatchRecord record) =>
+        IsDeliveryFailure(record) &&
+        record.Metadata.TryGetValue(DeliveryIncidentIdMetadataKey, out var incidentId) &&
+        !string.IsNullOrWhiteSpace(incidentId)
+            ? incidentId
+            : null;
+
+    public static string? ReadDeliveryDeadLetterId(WorkflowDispatchRecord record) =>
+        IsDeliveryFailure(record) &&
+        record.Metadata.TryGetValue(DeliveryDeadLetterIdMetadataKey, out var deadLetterId) &&
+        !string.IsNullOrWhiteSpace(deadLetterId)
+            ? deadLetterId
+            : null;
+
+    /// <summary>Legacy dispatches without delivery metadata belong to original generation zero.</summary>
+    public static int ReadDeliveryGeneration(WorkflowDispatchRecord record) =>
+        TryReadNonNegativeInt(record, DeliveryGenerationMetadataKey, out var generation) ? generation : 0;
+
+    public static int ReadDeliveryAttemptCount(WorkflowDispatchRecord record) =>
+        TryReadNonNegativeInt(record, DeliveryAttemptCountMetadataKey, out var attemptCount) ? attemptCount : 0;
+
+    public static DateTimeOffset? ReadDeliveryFirstAttemptAt(WorkflowDispatchRecord record) =>
+        IsDeliveryFailure(record) &&
+        record.Metadata.TryGetValue(DeliveryFirstAttemptAtMetadataKey, out var value) &&
+        DateTimeOffset.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var firstAttemptAt)
+            ? firstAttemptAt
+            : null;
+
+    public static DateTimeOffset? ReadDeliveryFailedAt(WorkflowDispatchRecord record) =>
+        IsDeliveryFailure(record) &&
+        record.Metadata.TryGetValue(DeliveryFailedAtMetadataKey, out var value) &&
+        DateTimeOffset.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var failedAt)
+            ? failedAt
+            : null;
+
+    public static bool IsRedriveEligible(WorkflowDispatchRecord record) =>
+        record.Mode == WorkflowDispatchMode.FireAndForget &&
+        record.Status == WorkflowDispatchStatus.DispatchFailed &&
+        ReadDeliveryIncidentId(record) is not null &&
+        ReadDeliveryDeadLetterId(record) is not null &&
+        ReadDeliveryAttemptCount(record) > 0 &&
+        ReadDeliveryFailedAt(record) is not null;
+
+    public static string? ReadDeliveryRedriveRequestId(WorkflowDispatchRecord record) =>
+        record.Metadata.TryGetValue(DeliveryRedriveRequestIdMetadataKey, out var requestId) &&
+        !string.IsNullOrWhiteSpace(requestId)
+            ? requestId
+            : null;
+
+    /// <summary>
+    /// Creates the only sanctioned DispatchFailed-to-Pending transition. Ordinary dispatch saves deliberately
+    /// continue to reject terminal reopening; atomic redrive stores call this builder only after validating the
+    /// matching failed-final outbox item in the same mutation boundary.
+    /// </summary>
+    public static WorkflowDispatchRecord RedriveDelivery(
+        WorkflowDispatchRecord record,
+        string requestId,
+        DateTimeOffset requestedAt)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        if (requestedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(requestedAt), "A workflow dispatch redrive requires a recorded request time.");
+        if (!IsRedriveEligible(record))
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' is not eligible for delivery redrive.");
+
+        var generation = checked(ReadDeliveryGeneration(record) + 1);
+        var metadata = record.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata.Remove(DiagnosticCodeMetadataKey);
+        metadata.Remove(DiagnosticCategoryMetadataKey);
+        metadata.Remove(DeliveryDeadLetterIdMetadataKey);
+        metadata.Remove(DeliveryIncidentIdMetadataKey);
+        metadata.Remove(DeliveryAttemptCountMetadataKey);
+        metadata.Remove(DeliveryFirstAttemptAtMetadataKey);
+        metadata.Remove(DeliveryFailedAtMetadataKey);
+        metadata[DeliveryGenerationMetadataKey] = generation.ToString(CultureInfo.InvariantCulture);
+        metadata[DeliveryRedriveRequestIdMetadataKey] = requestId;
+
+        return new WorkflowDispatchRecord(
+            record.DispatchId,
+            record.ParentWorkflowExecutionId,
+            record.ParentActivityExecutionId,
+            record.ChildWorkflowExecutionId,
+            record.ChildExecutable,
+            record.ChildSource,
+            record.Mode,
+            WorkflowDispatchStatus.Pending,
+            record.CorrelationId,
+            record.TenantId,
+            record.Partition,
+            record.RunKind,
+            record.Authority,
+            record.InputDescriptors,
+            record.CreatedAt,
+            requestedAt > record.UpdatedAt ? requestedAt : record.UpdatedAt,
+            metadata,
+            record.DispatchNestingDepth);
+    }
 
     private static bool AuthorityEquals(WorkflowExecutionAuthoritySnapshot left, WorkflowExecutionAuthoritySnapshot right) =>
         StringComparer.Ordinal.Equals(left.SystemIdentity, right.SystemIdentity) &&
@@ -694,7 +910,14 @@ public static class WorkflowDispatchLifecycle
     private static bool IsMutableMetadataKey(string key) =>
         StringComparer.Ordinal.Equals(key, DiagnosticCodeMetadataKey) ||
         StringComparer.Ordinal.Equals(key, DiagnosticCategoryMetadataKey) ||
-        StringComparer.Ordinal.Equals(key, CancellationStateMetadataKey);
+        StringComparer.Ordinal.Equals(key, CancellationStateMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, DeliveryGenerationMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, DeliveryDeadLetterIdMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, DeliveryIncidentIdMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, DeliveryAttemptCountMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, DeliveryFirstAttemptAtMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, DeliveryFailedAtMetadataKey) ||
+        StringComparer.Ordinal.Equals(key, DeliveryRedriveRequestIdMetadataKey);
 
     private static bool HasCancellationState(WorkflowDispatchRecord record, string expected) =>
         record.Metadata.TryGetValue(CancellationStateMetadataKey, out var value) &&
@@ -772,5 +995,47 @@ public static class WorkflowDispatchLifecycle
         {
             throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' carries an unsupported diagnostic classification.");
         }
+
+        var deliveryFields = new[]
+        {
+            DeliveryGenerationMetadataKey,
+            DeliveryDeadLetterIdMetadataKey,
+            DeliveryIncidentIdMetadataKey,
+            DeliveryAttemptCountMetadataKey,
+            DeliveryFirstAttemptAtMetadataKey,
+            DeliveryFailedAtMetadataKey
+        };
+        var fieldCount = deliveryFields.Count(record.Metadata.ContainsKey);
+        if (fieldCount == 0)
+            return;
+        if (fieldCount != deliveryFields.Length ||
+            !TryReadNonNegativeInt(record, DeliveryGenerationMetadataKey, out var generation) ||
+            !TryReadNonNegativeInt(record, DeliveryAttemptCountMetadataKey, out var attemptCount) ||
+            attemptCount <= 0 ||
+            string.IsNullOrWhiteSpace(record.Metadata[DeliveryDeadLetterIdMetadataKey]) ||
+            !DateTimeOffset.TryParseExact(record.Metadata[DeliveryFirstAttemptAtMetadataKey], "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var firstAttemptAt) ||
+            !DateTimeOffset.TryParseExact(record.Metadata[DeliveryFailedAtMetadataKey], "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var failedAt) ||
+            failedAt < firstAttemptAt ||
+            failedAt > record.UpdatedAt)
+        {
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' carries incomplete delivery-failure evidence.");
+        }
+
+        var identity = new WorkflowDispatchIdentity(record.ParentWorkflowExecutionId, record.ParentActivityExecutionId);
+        if (!StringComparer.Ordinal.Equals(record.Metadata[DeliveryIncidentIdMetadataKey], identity.DeliveryIncidentId(generation)))
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' carries a noncanonical delivery incident identity.");
+    }
+
+    private static bool IsDeliveryFailure(WorkflowDispatchRecord record) =>
+        record.Status == WorkflowDispatchStatus.DispatchFailed &&
+        StringComparer.Ordinal.Equals(ReadSafeDiagnosticCode(record), ChildStartDeliveryFailedCode) &&
+        StringComparer.Ordinal.Equals(ReadSafeDiagnosticCategory(record), DeliveryCategory);
+
+    private static bool TryReadNonNegativeInt(WorkflowDispatchRecord record, string key, out int value)
+    {
+        value = 0;
+        return record.Metadata.TryGetValue(key, out var raw) &&
+               int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out value) &&
+               value >= 0;
     }
 }

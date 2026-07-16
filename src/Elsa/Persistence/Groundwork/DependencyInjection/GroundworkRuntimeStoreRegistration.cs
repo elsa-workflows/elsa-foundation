@@ -94,12 +94,14 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IPostCommitOutboxLookupStore>();
         services.RemoveAll<IRuntimePostCommitOutboxClaimStore>();
         services.RemoveAll<IRuntimePostCommitOutboxClaimCompletionStore>();
+        services.RemoveAll<IWorkflowDispatchRedriveStore>();
         services.RemoveAll<GroundworkRuntimePostCommitOutboxStore>();
         services.AddScoped<GroundworkRuntimePostCommitOutboxStore>();
         services.AddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
         services.AddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
         services.AddScoped<IRuntimePostCommitOutboxClaimStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
         services.AddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
+        services.AddScoped<IWorkflowDispatchRedriveStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
 
         // Versioned document serialization: every bridge store routes its content JSON through the
         // serializer, which stamps per-kind schema versions on write and enforces each current-only pre-GA

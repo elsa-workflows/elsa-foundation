@@ -59,3 +59,15 @@ internal sealed class GetWorkflowDispatchEndpoint(
         }
     }
 }
+
+internal sealed class RedriveWorkflowDispatchEndpoint(
+    IRequestSender requestSender,
+    ILogger<RedriveWorkflowDispatchEndpoint> logger)
+    : ElsaRequestHandlerEndpoint<RedriveWorkflowDispatch, WorkflowDispatchRedriveView>(requestSender, logger)
+{
+    public override void Configure()
+    {
+        Post(RouteConstants.DispatchRedrive);
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeManage);
+    }
+}

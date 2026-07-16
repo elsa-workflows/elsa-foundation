@@ -16,6 +16,10 @@ The runtime feature registers the default allow start policy. Hosts may replace 
 
 #679 adds successful `WaitForCompletion=true` execution. The parent wait checkpoint atomically records its non-expiring bookmark, suspended activity, Pending dispatch record, child ID output, and child-start intent. A successful child terminal checkpoint records the Completed dispatch projection and one deterministic parent-resume intent containing only policy-safe outputs. Resume delivery is performed by the global post-commit pump and retries with positive backoff until bookmark consumption is durably observable; duplicate delivery before or after consumption converges without a second logical completion. Unbounded retries emit payload-free structured warnings for operational alerting.
 
-Fault and cancellation propagation, retry exhaustion/dead-letter/redrive, TestRun behavior, and distributed two-node delivery remain owned by #680, #681, #682, and #683 respectively.
+#680 completes waited child fault/cancellation propagation and parent-cancellation delivery. Terminal child evidence is projected through the same deterministic resume route, while cancel commands retain their original dispatch/child/idempotency identities and converge across duplicate or restarted delivery.
 
-See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the feature specifications under `specs/096-dispatch-workflow-fire-and-forget/` through `specs/099-dispatch-wait-success/`.
+#681 adds host-configured finite child-start retry, fixed safe delivery classification, provider-atomic exhausted-delivery projection, and separately authorized detached redrive. The Runtime domain owns the replacement seam and fenced completion/redrive contracts; this feature supplies the single `WorkflowDispatchDeliveryFailureProjector` replacement and the child-specific policy. A visible deterministic child always wins over a stale failure. Wait exhaustion produces one safe, permanently non-redrivable `DispatchFailed` resume; fire-and-forget exhaustion exposes only allowlisted incident/dead-letter metadata and can reopen the same dispatch/outbox identity through the tenant-scoped manage endpoint.
+
+TestRun behavior and distributed two-node delivery remain owned by #682 and #683 respectively.
+
+See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the feature specifications under `specs/096-dispatch-workflow-fire-and-forget/` through `specs/101-dispatch-delivery-recovery/`.

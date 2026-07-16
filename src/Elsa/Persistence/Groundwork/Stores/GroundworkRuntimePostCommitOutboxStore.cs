@@ -30,7 +30,8 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
     IRuntimePostCommitOutboxStore,
     IPostCommitOutboxLookupStore,
     IRuntimePostCommitOutboxClaimStore,
-    IRuntimePostCommitOutboxClaimCompletionStore
+    IRuntimePostCommitOutboxClaimCompletionStore,
+    IWorkflowDispatchRedriveStore
 {
     private const int CandidatePageSize = 100;
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
@@ -215,7 +216,8 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         await using var unitOfWork = await store.BeginAsync(
             DocumentCommitScope.Of(
                 ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
-                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind),
+                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind),
             cancellationToken);
         var transactionalStore = new GroundworkDocumentUnitOfWorkStore(store, unitOfWork);
         var transactionalOutbox = new GroundworkRuntimePostCommitOutboxStore(
@@ -226,10 +228,52 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         var loaded = await transactionalOutbox.LoadAsync(completion.Claim.OutboxItemId, cancellationToken)
             ?? throw new InvalidOperationException(
                 $"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
+        // Always validate the current claim/fence before lifecycle precedence. A stale claimant cannot acknowledge
+        // a newer redrive generation merely because the deterministic child is now visible.
         var completed = RuntimePostCommitOutboxClaimTransitions.Complete(
             loaded.Item,
             completion.Claim,
             completion.DeliveryResult);
+        GroundworkWorkflowDispatchStore? dispatchStore = null;
+        WorkflowDispatchRecord? winningDispatch = null;
+        var admissionWins = false;
+        if (completion.WorkflowDispatch is { } projectedDispatch)
+        {
+            dispatchStore = new GroundworkWorkflowDispatchStore(
+                transactionalStore,
+                serializer,
+                accessContextAccessor!);
+            var existingDispatch = await dispatchStore.FindAsync(projectedDispatch.DispatchId, cancellationToken)
+                ?? throw new InvalidOperationException(
+                    $"Workflow dispatch '{projectedDispatch.DispatchId}' was not found in the atomic completion transaction.");
+            accessContextAccessor!.Current.EnsureTenantScope(existingDispatch.TenantId);
+            var executionStore = new GroundworkWorkflowExecutionStateStore(
+                transactionalStore,
+                serializer,
+                accessContextAccessor);
+            var childExecution = await executionStore.FindAsync(
+                existingDispatch.ChildWorkflowExecutionId,
+                cancellationToken);
+            winningDispatch = WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
+                existingDispatch,
+                childExecution,
+                completion.DeliveryResult.RecordedAt);
+            admissionWins = winningDispatch is not null;
+            if (admissionWins)
+            {
+                completed = RuntimePostCommitOutboxClaimTransitions.Complete(
+                    loaded.Item,
+                    completion.Claim,
+                    new RuntimePostCommitOutboxDeliveryResult(
+                        completion.Claim.OutboxItemId,
+                        RuntimePostCommitOutboxStatus.Delivered,
+                        completion.DeliveryResult.RecordedAt));
+            }
+            else
+            {
+                winningDispatch = projectedDispatch;
+            }
+        }
         var writeResult = await transactionalOutbox.SaveAsync(completed, loaded.Version, cancellationToken);
         if (writeResult.Status != DocumentStoreWriteStatus.Saved)
         {
@@ -237,10 +281,11 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
                 $"Groundwork rejected the claimed delivery result for post-commit outbox item '{completion.Claim.OutboxItemId}' with status '{writeResult.Status}'.");
         }
 
-        if (completion.WorkflowDispatch is { } workflowDispatch)
+        if (winningDispatch is { } workflowDispatch)
         {
-            if (completed.Status != RuntimePostCommitOutboxStatus.FailedFinal ||
-                workflowDispatch.Status != WorkflowDispatchStatus.DispatchFailed)
+            if (!admissionWins &&
+                (completed.Status != RuntimePostCommitOutboxStatus.FailedFinal ||
+                 workflowDispatch.Status != WorkflowDispatchStatus.DispatchFailed))
             {
                 throw new InvalidOperationException(
                     "An atomic workflow-dispatch projection is valid only for a final outbox failure and DispatchFailed lifecycle state.");
@@ -252,14 +297,74 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
                     "The workflow-dispatch failure projection does not match the claimed child-start intent.");
             }
 
-            var dispatchStore = new GroundworkWorkflowDispatchStore(
-                transactionalStore,
-                serializer,
-                accessContextAccessor!);
-            await dispatchStore.SaveAsync(workflowDispatch, cancellationToken);
+            await dispatchStore!.SaveAsync(workflowDispatch, cancellationToken);
+        }
+        if (!admissionWins && completion.FollowUpOutboxItem is { } followUpOutboxItem)
+        {
+            if (StringComparer.Ordinal.Equals(followUpOutboxItem.OutboxItemId, completion.Claim.OutboxItemId))
+                throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+            await transactionalOutbox.SavePendingAsync(followUpOutboxItem, cancellationToken);
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
+    }
+
+    public async ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
+        WorkflowDispatchRedriveRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (accessContextAccessor is null)
+            throw new InvalidOperationException("Workflow-dispatch redrive requires the active persistence access context.");
+        if (store.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
+        {
+            throw new InvalidOperationException(
+                "Groundwork cannot atomically redrive a workflow dispatch because the active document store does not support cross-unit transactions.");
+        }
+
+        await using var unitOfWork = await store.BeginAsync(
+            DocumentCommitScope.Of(
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind),
+            cancellationToken);
+        var transactionalStore = new GroundworkDocumentUnitOfWorkStore(store, unitOfWork);
+        var transactionalOutbox = new GroundworkRuntimePostCommitOutboxStore(
+            transactionalStore,
+            serializer,
+            accessContextAccessor: accessContextAccessor);
+        var transactionalDispatch = new GroundworkWorkflowDispatchStore(
+            transactionalStore,
+            serializer,
+            accessContextAccessor);
+
+        var dispatch = await transactionalDispatch.FindAsync(request.DispatchId, cancellationToken);
+        if (dispatch is not null)
+            accessContextAccessor.Current.EnsureTenantScope(dispatch.TenantId);
+        var deadLetterId = dispatch is null ? null : WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch);
+        var loadedDeadLetter = deadLetterId is null
+            ? null
+            : await transactionalOutbox.LoadAsync(deadLetterId, cancellationToken);
+        var transition = WorkflowDispatchRedriveTransitions.Evaluate(request, dispatch, loadedDeadLetter?.Item);
+        if (!transition.HasMutation)
+            return transition.Result;
+
+        var outboxWrite = await transactionalOutbox.SaveAsync(
+            transition.OutboxItem!,
+            loadedDeadLetter!.Version,
+            cancellationToken);
+        if (outboxWrite.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+            throw new InvalidOperationException($"Workflow dispatch redrive '{request.DispatchId}' lost its outbox fence.");
+        if (outboxWrite.Status != DocumentStoreWriteStatus.Saved)
+        {
+            throw new InvalidOperationException(
+                $"Groundwork rejected workflow dispatch redrive outbox '{transition.OutboxItem!.OutboxItemId}' with status '{outboxWrite.Status}'.");
+        }
+        if (!await transactionalDispatch.TrySaveRedriveAsync(dispatch!, transition.WorkflowDispatch!, cancellationToken))
+            throw new InvalidOperationException($"Workflow dispatch redrive '{request.DispatchId}' lost its dispatch fence.");
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        return transition.Result;
     }
 
     private async ValueTask<LoadedOutboxItem?> LoadAsync(string outboxItemId, CancellationToken cancellationToken)
@@ -358,9 +463,22 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
     // intent's shape over time.
     private bool IsSamePendingIntent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
         existing.Status == RuntimePostCommitOutboxStatus.Pending
+        && item.Status == RuntimePostCommitOutboxStatus.Pending
         && StringComparer.Ordinal.Equals(
             serializer.SerializeForComparison(existing.Intent),
-            serializer.SerializeForComparison(item.Intent));
+            serializer.SerializeForComparison(item.Intent))
+        && existing.RecordedAt == item.RecordedAt
+        && existing.AvailableAt == item.AvailableAt
+        && existing.DeliveryAttemptCount == item.DeliveryAttemptCount
+        && existing.DeliveryFencingToken == item.DeliveryFencingToken
+        && existing.RetryPolicy.IsEquivalentTo(item.RetryPolicy)
+        && MetadataEquals(existing.Metadata, item.Metadata);
+
+    private static bool MetadataEquals(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right) =>
+        left.Count == right.Count &&
+        left.All(item => right.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
 
     private static bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)
     {

@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed class WorkflowDispatchIdentity
 {
     public const string Version = "v1";
+    private readonly string _digest;
 
     public WorkflowDispatchIdentity(string parentWorkflowExecutionId, string parentActivityExecutionId)
     {
@@ -15,6 +16,7 @@ public sealed class WorkflowDispatchIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(parentActivityExecutionId);
 
         var digest = ComputeDigest(parentWorkflowExecutionId, parentActivityExecutionId);
+        _digest = digest;
         DispatchId = $"dispatch:{Version}:{digest}";
         ChildWorkflowExecutionId = $"wfexec:dispatch:{Version}:{digest}";
         StartIntentId = $"intent:dispatch-start:{Version}:{digest}";
@@ -41,6 +43,22 @@ public sealed class WorkflowDispatchIdentity
     public string ChildCancelIdempotencyKey { get; }
     public string ChildCancelCommandId { get; }
     public string ChildCancelEnvelopeId { get; }
+
+    /// <summary>Stable, generation-scoped safe incident identity for exhausted child-start delivery.</summary>
+    public string DeliveryIncidentId(int generation)
+    {
+        if (generation < 0)
+            throw new ArgumentOutOfRangeException(nameof(generation), "Workflow dispatch delivery generation cannot be negative.");
+        return $"incident:dispatch-delivery:{Version}:{_digest}:g{generation}";
+    }
+
+    /// <summary>Stable outbox identity for the wait-parent failure responsibility of one delivery generation.</summary>
+    public string WaitFailureResumeOutboxItemId(int generation)
+    {
+        if (generation < 0)
+            throw new ArgumentOutOfRangeException(nameof(generation), "Workflow dispatch delivery generation cannot be negative.");
+        return $"outbox:dispatch-failed-resume:{Version}:{_digest}:g{generation}";
+    }
 
     public string ParentResumeOutboxItemId(string commitId)
     {

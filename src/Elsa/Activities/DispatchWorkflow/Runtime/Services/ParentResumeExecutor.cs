@@ -4,6 +4,8 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
@@ -12,9 +14,11 @@ public sealed class ParentResumeExecutor(
     IBookmarkResumeDispatcher bookmarkResumeDispatcher,
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
-    IBookmarkStateStore bookmarkStateStore) : IRuntimePostCommitIntentHandler
+    IBookmarkStateStore bookmarkStateStore,
+    ILogger<ParentResumeExecutor>? logger = null) : IRuntimePostCommitIntentHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly ILogger<ParentResumeExecutor> _logger = logger ?? NullLogger<ParentResumeExecutor>.Instance;
 
     public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
     {
@@ -51,7 +55,18 @@ public sealed class ParentResumeExecutor(
             ValidateBookmark(resolvedBookmark, payload);
 
         if (await IsConsumedOrTerminalAsync(payload, cancellationToken))
+        {
+            if (payload.Result.Status == WorkflowDispatchStatus.DispatchFailed)
+            {
+                _logger.LogInformation(
+                    new EventId(68108, "WorkflowDispatchFailureResumeConsumed"),
+                    "Workflow dispatch failure resume consumed for {DispatchId}, parent {ParentWorkflowExecutionId}, activity {ParentActivityExecutionId}",
+                    payload.DispatchId,
+                    payload.ParentWorkflowExecutionId,
+                    payload.ParentActivityExecutionId);
+            }
             return;
+        }
 
         throw new ParentResumeDeferredException(
             payload.DispatchId,

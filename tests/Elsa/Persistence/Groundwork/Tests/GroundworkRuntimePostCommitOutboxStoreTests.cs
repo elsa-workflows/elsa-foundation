@@ -1,4 +1,6 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
+using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -323,6 +325,60 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task Claimed_child_start_failure_cannot_override_a_visible_matching_child(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var access = GroundworkTestAccess.DefaultAccessContextAccessor;
+        var outbox = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore,
+            access);
+        var dispatches = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            access,
+            fixture.BoundedDocumentStore);
+        var executions = new GroundworkWorkflowExecutionStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            access);
+        var pendingDispatch = GroundworkWorkflowDispatchStoreTests.Pending(
+            "parent-visible",
+            "activity-visible",
+            mode: WorkflowDispatchMode.WaitForCompletion);
+        var pendingStart = PendingDispatch("item-visible", pendingDispatch);
+        await dispatches.SaveAsync(pendingDispatch);
+        await outbox.SavePendingAsync(pendingStart);
+        var claim = Assert.Single(await outbox.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest("owner-1", Now, TimeSpan.FromMinutes(1), 1)));
+        var failure = new RuntimePostCommitOutboxDeliveryResult(
+            pendingStart.OutboxItemId,
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            Now.AddSeconds(1),
+            "secret stale failure");
+        var projection = Assert.IsType<PostCommitFailureProjection>(
+            await new WorkflowDispatchDeliveryFailureProjector(dispatches).ProjectAsync(claim.Item, failure));
+        await executions.SaveAsync(ChildState(pendingDispatch));
+
+        await outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+            claim,
+            failure,
+            projection.WorkflowDispatch,
+            projection.FollowUpOutboxItem));
+
+        var completed = Assert.IsType<RuntimePostCommitOutboxItem>(await outbox.FindAsync(pendingStart.OutboxItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, completed.Status);
+        Assert.Null(completed.LastFailureMessage);
+        Assert.Equal(WorkflowDispatchStatus.Started, (await dispatches.FindAsync(pendingDispatch.DispatchId))!.Status);
+        var followUpId = new WorkflowDispatchIdentity("parent-visible", "activity-visible")
+            .WaitFailureResumeOutboxItemId(0);
+        Assert.Null(await outbox.FindAsync(followUpId));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task Invalid_dispatch_projection_rolls_back_outbox_completion(string provider)
     {
         await using var fixture = CreateStore(provider);
@@ -379,6 +435,73 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
             new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(2)));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Wait_exhaustion_atomically_persists_dead_letter_dispatch_and_resume_across_recreation(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var access = GroundworkTestAccess.DefaultAccessContextAccessor;
+        var outbox = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore,
+            access);
+        var dispatches = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            access,
+            fixture.BoundedDocumentStore);
+        var pendingDispatch = GroundworkWorkflowDispatchStoreTests.Pending(
+            "parent-wait",
+            "activity-wait",
+            mode: WorkflowDispatchMode.WaitForCompletion);
+        var pendingStart = PendingDispatch("item-wait", pendingDispatch);
+        await dispatches.SaveAsync(pendingDispatch);
+        await outbox.SavePendingAsync(pendingStart);
+        var claim = Assert.Single(await outbox.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest("owner-1", Now, TimeSpan.FromMinutes(1), 1)));
+        var failure = new RuntimePostCommitOutboxDeliveryResult(
+            pendingStart.OutboxItemId,
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            Now.AddSeconds(1),
+            "secret provider failure");
+        var projection = Assert.IsType<PostCommitFailureProjection>(
+            await new WorkflowDispatchDeliveryFailureProjector(dispatches).ProjectAsync(claim.Item, failure));
+
+        await outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+            claim,
+            failure,
+            projection.WorkflowDispatch,
+            projection.FollowUpOutboxItem));
+
+        var recoveredOutbox = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore,
+            access);
+        var recoveredDispatches = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            access,
+            fixture.BoundedDocumentStore);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, (await recoveredOutbox.FindAsync(pendingStart.OutboxItemId))!.Status);
+        var failed = Assert.IsType<WorkflowDispatchRecord>(await recoveredDispatches.FindAsync(pendingDispatch.DispatchId));
+        Assert.Equal(WorkflowDispatchStatus.DispatchFailed, failed.Status);
+        Assert.DoesNotContain(failed.Metadata.Values, value => value.Contains("secret", StringComparison.OrdinalIgnoreCase));
+        var followUpId = new WorkflowDispatchIdentity("parent-wait", "activity-wait").WaitFailureResumeOutboxItemId(0);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await recoveredOutbox.FindAsync(followUpId))!.Status);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            recoveredOutbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+                claim,
+                failure,
+                projection.WorkflowDispatch,
+                projection.FollowUpOutboxItem)).AsTask());
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, (await recoveredOutbox.FindAsync(pendingStart.OutboxItemId))!.Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await recoveredOutbox.FindAsync(followUpId))!.Status);
+    }
+
     private static RuntimePostCommitOutboxItem Pending(
         string outboxItemId,
         string workflowExecutionId,
@@ -397,6 +520,26 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         recordedAt: Now,
         availableAt: Now,
         retryPolicy: retryPolicy);
+
+    private static WorkflowExecutionState ChildState(WorkflowDispatchRecord dispatch) => new(
+        dispatch.ChildWorkflowExecutionId,
+        dispatch.ChildExecutable,
+        WorkflowExecutionStatus.Running,
+        null,
+        Now,
+        Now,
+        Now,
+        null,
+        dispatch.CorrelationId,
+        dispatch.ParentWorkflowExecutionId,
+        dispatch.TenantId,
+        new Dictionary<string, string>())
+    {
+        RunKind = dispatch.RunKind,
+        PinnedSource = dispatch.ChildSource,
+        Partition = dispatch.Partition,
+        Authority = dispatch.Authority
+    };
 
     private static RuntimePostCommitOutboxItem PendingAt(string outboxItemId, DateTimeOffset recordedAt) => new(
         outboxItemId,
@@ -419,7 +562,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         new RuntimePostCommitIntent(
             new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId).StartIntentId,
             dispatch.ParentWorkflowExecutionId,
-            "elsa.dispatch-workflow.start-child.v1",
+            DispatchWorkflowConstants.StartChildIntentKind,
             Now,
             dispatch.ParentActivityExecutionId,
             new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId).StartIdempotencyKey,

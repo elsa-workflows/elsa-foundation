@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Elsa.Persistence.Core;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resumption.Options;
 using Microsoft.Extensions.DependencyInjection;
@@ -115,6 +116,17 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (OutboxProcessingException exception)
+        {
+            var failures = Interlocked.Increment(ref _consecutiveSweepFailures);
+            _logger.LogError(
+                new EventId(68107, "RuntimePostCommitResultRecordingFailed"),
+                "Runtime resumption sweep could not record a post-commit delivery result. OutboxItemId={OutboxItemId} IntentId={IntentId} ConsecutiveFailures={ConsecutiveFailures} BackoffInterval={BackoffInterval}",
+                exception.OutboxItemId,
+                exception.IntentId,
+                failures,
+                ComputeInterval());
         }
         catch (Exception exception)
         {

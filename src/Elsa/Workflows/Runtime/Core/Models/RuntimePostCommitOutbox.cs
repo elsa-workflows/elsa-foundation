@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -188,7 +189,8 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
     public RuntimePostCommitOutboxClaimCompletion(
         RuntimePostCommitOutboxClaim claim,
         RuntimePostCommitOutboxDeliveryResult deliveryResult,
-        WorkflowDispatchRecord? workflowDispatch = null)
+        WorkflowDispatchRecord? workflowDispatch = null,
+        RuntimePostCommitOutboxItem? followUpOutboxItem = null)
     {
         ArgumentNullException.ThrowIfNull(claim);
         ArgumentNullException.ThrowIfNull(deliveryResult);
@@ -209,7 +211,8 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
             var identity = new WorkflowDispatchIdentity(
                 workflowDispatch.ParentWorkflowExecutionId,
                 workflowDispatch.ParentActivityExecutionId);
-            var authorized = StringComparer.Ordinal.Equals(claim.Item.Intent.WorkflowExecutionId, workflowDispatch.ParentWorkflowExecutionId) &&
+            var authorized = StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, WorkflowDispatchLifecycle.StartChildIntentKind) &&
+                StringComparer.Ordinal.Equals(claim.Item.Intent.WorkflowExecutionId, workflowDispatch.ParentWorkflowExecutionId) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.ActivityExecutionId, workflowDispatch.ParentActivityExecutionId) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.IntentId, identity.StartIntentId) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.IdempotencyKey, identity.StartIdempotencyKey) &&
@@ -221,20 +224,85 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
             if (!authorized)
                 throw new ArgumentException("The claimed outbox intent does not authorize this workflow-dispatch failure projection.", nameof(workflowDispatch));
         }
+        if (followUpOutboxItem is not null)
+        {
+            if (workflowDispatch is null || workflowDispatch.Mode != WorkflowDispatchMode.WaitForCompletion)
+                throw new ArgumentException("A failure follow-up is valid only for a waited workflow dispatch.", nameof(followUpOutboxItem));
+            var identity = new WorkflowDispatchIdentity(
+                workflowDispatch.ParentWorkflowExecutionId,
+                workflowDispatch.ParentActivityExecutionId);
+            var generation = WorkflowDispatchLifecycle.ReadDeliveryGeneration(workflowDispatch);
+            var authorized = followUpOutboxItem.Status == RuntimePostCommitOutboxStatus.Pending &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.Kind, WorkflowDispatchLifecycle.ResumeParentIntentKind) &&
+                followUpOutboxItem.DeliveryAttemptCount == 0 &&
+                followUpOutboxItem.DeliveringOwnerId is null &&
+                followUpOutboxItem.DeliveryStartedAt is null &&
+                followUpOutboxItem.DeliveredAt is null &&
+                followUpOutboxItem.LastFailureMessage is null &&
+                followUpOutboxItem.RetryPolicy.RetryUntilAcknowledged &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.OutboxItemId, identity.WaitFailureResumeOutboxItemId(generation)) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.IntentId, identity.ParentResumeIntentId) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.IdempotencyKey, identity.ParentResumeIdempotencyKey) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.WorkflowExecutionId, workflowDispatch.ParentWorkflowExecutionId) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.ActivityExecutionId, workflowDispatch.ParentActivityExecutionId) &&
+                followUpOutboxItem.Intent.RecordedAt == deliveryResult.RecordedAt &&
+                followUpOutboxItem.RecordedAt == deliveryResult.RecordedAt &&
+                followUpOutboxItem.AvailableAt == deliveryResult.RecordedAt &&
+                followUpOutboxItem.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var followUpDispatchId) &&
+                StringComparer.Ordinal.Equals(followUpDispatchId, workflowDispatch.DispatchId) &&
+                followUpOutboxItem.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.ChildWorkflowExecutionId, out var childWorkflowExecutionId) &&
+                StringComparer.Ordinal.Equals(childWorkflowExecutionId, workflowDispatch.ChildWorkflowExecutionId);
+            if (!authorized)
+                throw new ArgumentException("The failure follow-up does not match the waited dispatch and deterministic parent-resume identity.", nameof(followUpOutboxItem));
+        }
 
         Claim = claim;
         DeliveryResult = deliveryResult;
         WorkflowDispatch = workflowDispatch;
+        FollowUpOutboxItem = followUpOutboxItem;
     }
 
     public RuntimePostCommitOutboxClaim Claim { get; }
     public RuntimePostCommitOutboxDeliveryResult DeliveryResult { get; }
     public WorkflowDispatchRecord? WorkflowDispatch { get; }
+    public RuntimePostCommitOutboxItem? FollowUpOutboxItem { get; }
+}
+
+/// <summary>Provider-neutral DispatchWorkflow final-failure projection produced before fenced completion.</summary>
+public sealed class PostCommitFailureProjection
+{
+    public PostCommitFailureProjection(
+        WorkflowDispatchRecord workflowDispatch,
+        RuntimePostCommitOutboxItem? followUpOutboxItem = null)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDispatch);
+        if (workflowDispatch.Status != WorkflowDispatchStatus.DispatchFailed)
+            throw new ArgumentException("A delivery-failure projection requires DispatchFailed lifecycle state.", nameof(workflowDispatch));
+        if (followUpOutboxItem is not null && workflowDispatch.Mode != WorkflowDispatchMode.WaitForCompletion)
+            throw new ArgumentException("Only a waited dispatch can carry a delivery-failure follow-up.", nameof(followUpOutboxItem));
+
+        WorkflowDispatch = workflowDispatch;
+        FollowUpOutboxItem = followUpOutboxItem;
+    }
+
+    public WorkflowDispatchRecord WorkflowDispatch { get; }
+    public RuntimePostCommitOutboxItem? FollowUpOutboxItem { get; }
 }
 
 /// <summary>Shared claim and completion transitions for in-memory and durable outbox stores.</summary>
 public static class RuntimePostCommitOutboxClaimTransitions
 {
+    public const string FirstDeliveryAttemptedAtMetadataKey = "runtime.delivery.firstAttemptedAt";
+
+    public static DateTimeOffset? ReadFirstDeliveryAttemptedAt(RuntimePostCommitOutboxItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Metadata.TryGetValue(FirstDeliveryAttemptedAtMetadataKey, out var value) &&
+               DateTimeOffset.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var attemptedAt)
+            ? attemptedAt
+            : null;
+    }
+
     public static bool CanClaim(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxClaimRequest request)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -264,6 +332,8 @@ public static class RuntimePostCommitOutboxClaimTransitions
 
         var token = checked(item.DeliveryFencingToken + 1);
         var visibleAfter = request.Now.Add(request.VisibilityTimeout);
+        var metadata = item.Metadata.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        metadata.TryAdd(FirstDeliveryAttemptedAtMetadataKey, request.Now.ToString("O", CultureInfo.InvariantCulture));
         var claimedItem = Copy(
             item,
             RuntimePostCommitOutboxStatus.Delivering,
@@ -274,7 +344,8 @@ public static class RuntimePostCommitOutboxClaimTransitions
             deliveredAt: null,
             item.LastFailureMessage,
             token,
-            visibleAfter);
+            visibleAfter,
+            metadata);
         return new RuntimePostCommitOutboxClaim(claimedItem, request.OwnerId, token, request.Now, visibleAfter);
     }
 
@@ -314,7 +385,36 @@ public static class RuntimePostCommitOutboxClaimTransitions
             deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             result.FailureMessage,
             current.DeliveryFencingToken,
-            deliveryVisibleAfter: null);
+            deliveryVisibleAfter: null,
+            current.Metadata);
+    }
+
+    /// <summary>Reopens the same terminal delivery responsibility while advancing its fence.</summary>
+    public static RuntimePostCommitOutboxItem RedriveFailedFinal(
+        RuntimePostCommitOutboxItem item,
+        DateTimeOffset availableAt)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (availableAt == default)
+            throw new ArgumentOutOfRangeException(nameof(availableAt), "A post-commit redrive requires a recorded availability time.");
+        if (item.Status != RuntimePostCommitOutboxStatus.FailedFinal)
+            throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' is not a failed-final dead letter.");
+
+        var metadata = item.Metadata
+            .Where(entry => !StringComparer.Ordinal.Equals(entry.Key, FirstDeliveryAttemptedAtMetadataKey))
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        return Copy(
+            item,
+            RuntimePostCommitOutboxStatus.Pending,
+            availableAt,
+            deliveryAttemptCount: 0,
+            deliveringOwnerId: null,
+            deliveryStartedAt: null,
+            deliveredAt: null,
+            lastFailureMessage: null,
+            deliveryFencingToken: checked(item.DeliveryFencingToken + 1),
+            deliveryVisibleAfter: null,
+            metadata);
     }
 
     private static RuntimePostCommitOutboxItem Copy(
@@ -327,7 +427,8 @@ public static class RuntimePostCommitOutboxClaimTransitions
         DateTimeOffset? deliveredAt,
         string? lastFailureMessage,
         long deliveryFencingToken,
-        DateTimeOffset? deliveryVisibleAfter) =>
+        DateTimeOffset? deliveryVisibleAfter,
+        IReadOnlyDictionary<string, string> metadata) =>
         new(
             item.OutboxItemId,
             item.Intent,
@@ -340,7 +441,7 @@ public static class RuntimePostCommitOutboxClaimTransitions
             deliveryStartedAt,
             deliveredAt,
             lastFailureMessage,
-            item.Metadata,
+            metadata,
             deliveryFencingToken,
             deliveryVisibleAfter);
 }

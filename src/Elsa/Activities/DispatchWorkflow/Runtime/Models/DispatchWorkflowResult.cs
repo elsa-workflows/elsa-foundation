@@ -63,6 +63,9 @@ public sealed class DispatchWorkflowResult
             case WorkflowDispatchStatus.Cancelled:
                 DispatchWorkflowDiagnostics.ValidateCancelled(diagnosticSnapshot);
                 break;
+            case WorkflowDispatchStatus.DispatchFailed:
+                DispatchWorkflowDiagnostics.ValidateDispatchFailed(diagnosticSnapshot);
+                break;
         }
 
         ChildWorkflowExecutionId = childWorkflowExecutionId.Trim();
@@ -77,5 +80,5 @@ public sealed class DispatchWorkflowResult
     public IReadOnlyDictionary<string, string> DiagnosticMetadata { get; }
 
     internal static bool SupportsParentResume(WorkflowDispatchStatus status) =>
-        status is WorkflowDispatchStatus.Completed or WorkflowDispatchStatus.Faulted or WorkflowDispatchStatus.Cancelled;
+        status is WorkflowDispatchStatus.Completed or WorkflowDispatchStatus.Faulted or WorkflowDispatchStatus.Cancelled or WorkflowDispatchStatus.DispatchFailed;
 }

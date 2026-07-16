@@ -3,6 +3,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
@@ -76,6 +77,20 @@ public sealed class ChildStartExecutorTests
         Assert.Equal(1, result.FailedCount);
         Assert.NotEqual(RuntimePostCommitOutboxStatus.Delivered, Assert.Single(store.Results).Status);
         Assert.Single(startDispatcher.Requests);
+    }
+
+    [Fact]
+    public async Task RejectedStart_IsClassifiedAsSafePermanentDeliveryFailure()
+    {
+        var executor = new ChildStartExecutor(new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Rejected));
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(PostCommitFailureKind.Permanent, exception.Kind);
+        Assert.Equal("child-start-delivery-failed", exception.Code);
+        Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
+        Assert.DoesNotContain("set by test", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -218,6 +233,76 @@ public sealed class ChildStartExecutorTests
     }
 
     [Fact]
+    public async Task DeferredStartWithoutDurableEvidence_IsClassifiedAsSafeTransientDeliveryFailure()
+    {
+        var executor = new ChildStartExecutor(new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Deferred));
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
+        Assert.Equal("child-start-delivery-failed", exception.Code);
+        Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
+        Assert.DoesNotContain("set by test", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DispatcherInfrastructureException_IsClassifiedWithoutLeakingDetails()
+    {
+        var executor = new ChildStartExecutor(new ThrowingStartDispatcher(
+            new InvalidOperationException("provider-secret stack-secret")));
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
+        Assert.Equal("child-start-delivery-failed", exception.Code);
+        Assert.DoesNotContain("provider-secret", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stack-secret", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task AdmissionStoreException_IsClassifiedWithoutLeakingDetails()
+    {
+        var executor = new ChildStartExecutor(
+            new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted),
+            new ThrowingAdmissionStore(),
+            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
+        Assert.Equal("child-start-delivery-failed", exception.Code);
+        Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
+        Assert.DoesNotContain("provider-secret", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task DispatcherSuppliedDeliveryClassification_IsWrappedWithFixedChildStartClassification()
+    {
+        var hostile = new RuntimePostCommitDeliveryException(
+            PostCommitFailureKind.Permanent,
+            "provider-controlled-code",
+            "provider-secret summary-secret");
+        var executor = new ChildStartExecutor(new ThrowingStartDispatcher(hostile));
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.NotSame(hostile, exception);
+        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
+        Assert.Equal("child-start-delivery-failed", exception.Code);
+        Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
+        Assert.DoesNotContain("provider-controlled-code", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("provider-secret", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("summary-secret", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Same(hostile, exception.InnerException);
+    }
+
+    [Fact]
     public async Task TamperedStartContext_IsRejectedBeforeAdmissionOrExternalDispatch()
     {
         var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
@@ -351,6 +436,16 @@ public sealed class ChildStartExecutorTests
         }
     }
 
+    private sealed class ThrowingStartDispatcher(Exception exception) : IWorkflowStartDispatcher
+    {
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
+            WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<WorkflowExecutionStartDispatchResult>(exception);
+    }
+
     private sealed class RecordingOutboxStore(RuntimePostCommitOutboxItem item) : IRuntimePostCommitOutboxStore
     {
         internal List<RuntimePostCommitOutboxDeliveryResult> Results { get; } = [];
@@ -367,6 +462,27 @@ public sealed class ChildStartExecutorTests
             Results.Add(result);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class ThrowingAdmissionStore : IWorkflowDispatchStore, IWorkflowDispatchAdmissionStore
+    {
+        public ValueTask<WorkflowDispatchRecord> SaveAsync(
+            WorkflowDispatchRecord record,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<WorkflowDispatchRecord?> FindAsync(
+            string dispatchId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<WorkflowDispatchRecord?>(new InvalidOperationException("provider-secret"));
+
+        public ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListAsync(
+            string parentWorkflowExecutionId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<WorkflowDispatchAdmissionResult> TryAdmitAsync(
+            string dispatchId,
+            DateTimeOffset admittedAt,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

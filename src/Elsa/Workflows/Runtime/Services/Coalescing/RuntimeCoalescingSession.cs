@@ -372,11 +372,57 @@ public sealed class RuntimeCoalescingSession
                 throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the coalescing session.");
             WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
         }
+        if (completion.FollowUpOutboxItem is { } followUp)
+        {
+            if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
+                throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+            if (_outboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
+                !PendingOutboxItemsEquivalent(existingFollowUp, followUp))
+            {
+                throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
+            }
+        }
 
         _outboxItems[completion.Claim.OutboxItemId] = completedOutbox;
         if (completion.WorkflowDispatch is { } workflowDispatch)
             _workflowDispatchUpserts[workflowDispatch.DispatchId] = workflowDispatch;
+        if (completion.FollowUpOutboxItem is { } followUpOutboxItem)
+        {
+            if (_outboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem))
+                _outboxOrder.Add(followUpOutboxItem.OutboxItemId);
+        }
     }
+
+    private static bool PendingOutboxItemsEquivalent(
+        RuntimePostCommitOutboxItem left,
+        RuntimePostCommitOutboxItem right) =>
+        left.Status == RuntimePostCommitOutboxStatus.Pending &&
+        right.Status == RuntimePostCommitOutboxStatus.Pending &&
+        left.RecordedAt == right.RecordedAt &&
+        left.AvailableAt == right.AvailableAt &&
+        left.DeliveryAttemptCount == right.DeliveryAttemptCount &&
+        left.DeliveryFencingToken == right.DeliveryFencingToken &&
+        left.RetryPolicy.IsEquivalentTo(right.RetryPolicy) &&
+        StringComparer.Ordinal.Equals(left.Intent.IntentId, right.Intent.IntentId) &&
+        StringComparer.Ordinal.Equals(left.Intent.WorkflowExecutionId, right.Intent.WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(left.Intent.Kind, right.Intent.Kind) &&
+        StringComparer.Ordinal.Equals(left.Intent.ActivityExecutionId, right.Intent.ActivityExecutionId) &&
+        StringComparer.Ordinal.Equals(left.Intent.IdempotencyKey, right.Intent.IdempotencyKey) &&
+        StringComparer.Ordinal.Equals(left.Intent.DependsOnWaitRegistrationId, right.Intent.DependsOnWaitRegistrationId) &&
+        left.Intent.WaitFailurePolicy == right.Intent.WaitFailurePolicy &&
+        NullableJsonEquals(left.Intent.Payload, right.Intent.Payload) &&
+        MetadataEquals(left.Intent.Metadata, right.Intent.Metadata) &&
+        MetadataEquals(left.Metadata, right.Metadata);
+
+    private static bool NullableJsonEquals(System.Text.Json.JsonElement? left, System.Text.Json.JsonElement? right) =>
+        left.HasValue == right.HasValue &&
+        (!left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText()));
+
+    private static bool MetadataEquals(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right) =>
+        left.Count == right.Count &&
+        left.All(item => right.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
 
     // ---- Queue overlay ---------------------------------------------------------------------------------------------
 

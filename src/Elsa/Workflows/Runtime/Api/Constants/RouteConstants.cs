@@ -15,4 +15,5 @@ internal static class RouteConstants
     internal static string InstancesPage => GetRoute("instances/page");
     internal static string Dispatches => GetRoute("dispatches");
     internal static string Dispatch => GetRoute("dispatches/{dispatchId}");
+    internal static string DispatchRedrive => GetRoute("dispatches/{dispatchId}/redrive");
 }

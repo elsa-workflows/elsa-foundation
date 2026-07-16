@@ -23,6 +23,16 @@ public sealed class WorkflowDispatchReadinessInitializer(
                 $"DispatchWorkflow requires '{nameof(IWorkflowDispatchAdmissionStore)}' and " +
                 $"'{nameof(IWorkflowDispatchCancellationStore)}' on the configured workflow-dispatch store.");
         }
+        var outboxStore = scopedServices.GetService<IRuntimePostCommitOutboxStore>();
+        if (outboxStore is not IRuntimePostCommitOutboxClaimStore ||
+            outboxStore is not IRuntimePostCommitOutboxClaimCompletionStore ||
+            scopedServices.GetService<IWorkflowDispatchRedriveStore>() is null)
+        {
+            throw new InvalidOperationException(
+                $"DispatchWorkflow finite delivery recovery requires '{nameof(IRuntimePostCommitOutboxClaimStore)}', " +
+                $"'{nameof(IRuntimePostCommitOutboxClaimCompletionStore)}', and " +
+                $"'{nameof(IWorkflowDispatchRedriveStore)}' from the configured atomic persistence provider.");
+        }
 
         var report = await scopedServices
             .GetRequiredService<IWorkflowDispatchReadinessAssessor>()

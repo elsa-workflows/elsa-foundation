@@ -11,6 +11,8 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 /// <summary>Delivers a committed child-start intent through the existing workflow start dispatcher.</summary>
 public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
 {
+    private const string DeliveryFailureCode = "child-start-delivery-failed";
+    private const string DeliveryFailureSummary = "The child workflow could not be started.";
     private const string DistributedOwningNodeMetadataKey = "runtime.distributed.owningNode";
     private const string DistributedTransportItemIdMetadataKey = "runtime.distributed.transportItemId";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -88,16 +90,40 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                     $"DispatchWorkflow child start requires '{nameof(IWorkflowDispatchAdmissionStore)}' on the configured dispatch store.");
             }
 
-            durableDispatch = await _workflowDispatchStore.FindAsync(payload.DispatchId, cancellationToken)
-                ?? throw new InvalidOperationException($"Committed workflow dispatch '{payload.DispatchId}' was not found before child admission.");
+            try
+            {
+                durableDispatch = await _workflowDispatchStore.FindAsync(payload.DispatchId, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
+            }
+            if (durableDispatch is null)
+                throw DeliveryFailure(PostCommitFailureKind.Transient);
             if (WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(durableDispatch) || IsTerminal(durableDispatch.Status))
                 return;
             ValidatePayloadAgainstDispatch(intent.IntentId, payload, durableDispatch);
 
-            var admission = await admissionStore.TryAdmitAsync(
-                payload.DispatchId,
-                _timeProvider.GetUtcNow(),
-                cancellationToken);
+            WorkflowDispatchAdmissionResult admission;
+            try
+            {
+                admission = await admissionStore.TryAdmitAsync(
+                    payload.DispatchId,
+                    _timeProvider.GetUtcNow(),
+                    cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
+            }
             if (admission.Disposition is
                 WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission or
                 WorkflowDispatchAdmissionDisposition.Terminal)
@@ -119,51 +145,57 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         var partition = durableDispatch?.Partition ?? payload.Partition;
         var runKind = durableDispatch?.RunKind ?? payload.RunKind;
         var retainedStart = payload.ParentExecutable is not null;
-        var result = await _workflowStartDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(
-                artifactId: childExecutable.ArtifactId,
-                requestedBy: authority.SystemIdentity,
-                workflowExecutionId: payload.ChildWorkflowExecutionId,
-                idempotencyKey: identity.StartIdempotencyKey,
-                metadata: null,
-                variables: null,
-                inputs: payload.Inputs.ToDictionary(item => item.Key, item => (object?)item.Value.Clone(), StringComparer.Ordinal),
-                stimulusInput: null,
-                triggerNodeId: null,
-                runKind: runKind,
-                sourceSelection: retainedStart
-                    ? null
-                    : new WorkflowExecutableSourceSelection(sourceReferenceId: childSource!.SourceReferenceId),
-                provenanceRequirement: retainedStart
-                    ? WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy
-                    : WorkflowExecutableProvenanceRequirement.RequireLiveReference,
-                parentWorkflowExecutionId: parentWorkflowExecutionId,
-                correlationId: correlationId,
-                tenantId: tenantId,
-                partition: partition,
-                authority: authority,
-                startAuthority: retainedStart
-                    ? WorkflowExecutableStartAuthority.FromRetainedDependency(
-                        payload.ParentExecutable!.ArtifactId,
-                        payload.ParentExecutable.ArtifactHash,
-                        payload.DispatchNodeId!)
-                    : null,
-                dispatchNestingDepth: payload.DispatchNestingDepth),
-            WorkflowExecutableReferenceScope.Published,
-            cancellationToken: cancellationToken);
+        WorkflowExecutionStartDispatchResult result;
+        try
+        {
+            result = await _workflowStartDispatcher.DispatchAsync(
+                new WorkflowExecutionStartDispatchRequest(
+                    artifactId: childExecutable.ArtifactId,
+                    requestedBy: authority.SystemIdentity,
+                    workflowExecutionId: payload.ChildWorkflowExecutionId,
+                    idempotencyKey: identity.StartIdempotencyKey,
+                    metadata: null,
+                    variables: null,
+                    inputs: payload.Inputs.ToDictionary(item => item.Key, item => (object?)item.Value.Clone(), StringComparer.Ordinal),
+                    stimulusInput: null,
+                    triggerNodeId: null,
+                    runKind: runKind,
+                    sourceSelection: retainedStart
+                        ? null
+                        : new WorkflowExecutableSourceSelection(sourceReferenceId: childSource!.SourceReferenceId),
+                    provenanceRequirement: retainedStart
+                        ? WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy
+                        : WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                    parentWorkflowExecutionId: parentWorkflowExecutionId,
+                    correlationId: correlationId,
+                    tenantId: tenantId,
+                    partition: partition,
+                    authority: authority,
+                    startAuthority: retainedStart
+                        ? WorkflowExecutableStartAuthority.FromRetainedDependency(
+                            payload.ParentExecutable!.ArtifactId,
+                            payload.ParentExecutable.ArtifactHash,
+                            payload.DispatchNodeId!)
+                        : null,
+                    dispatchNestingDepth: payload.DispatchNestingDepth),
+                WorkflowExecutableReferenceScope.Published,
+                cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
+        }
 
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Rejected)
-        {
-            throw new InvalidOperationException(
-                $"DispatchWorkflow child-start intent '{intent.IntentId}' was rejected: {result.CommandDispatch.Reason ?? "no reason supplied"}.");
-        }
+            throw DeliveryFailure(PostCommitFailureKind.Permanent);
 
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Deferred &&
             !HasDurableDistributedForwardingEvidence(result.CommandDispatch.Metadata))
-        {
-            throw new InvalidOperationException(
-                $"DispatchWorkflow child-start intent '{intent.IntentId}' was deferred without durable distributed-forwarding evidence: {result.CommandDispatch.Reason ?? "no reason supplied"}.");
-        }
+            throw DeliveryFailure(PostCommitFailureKind.Transient);
 
         if (!admittedBeforeDispatch && result.CommandDispatch.Status is
             WorkflowExecutionCommandDispatchStatus.Accepted or
@@ -223,6 +255,11 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         !string.IsNullOrWhiteSpace(owningNode) &&
         metadata.TryGetValue(DistributedTransportItemIdMetadataKey, out var transportItemId) &&
         !string.IsNullOrWhiteSpace(transportItemId);
+
+    private static RuntimePostCommitDeliveryException DeliveryFailure(
+        PostCommitFailureKind kind,
+        Exception? innerException = null) =>
+        new(kind, DeliveryFailureCode, DeliveryFailureSummary, innerException);
 
     private static void ValidatePayloadAgainstDispatch(
         string intentId,

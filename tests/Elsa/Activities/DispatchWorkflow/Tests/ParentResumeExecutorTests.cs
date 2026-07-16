@@ -5,6 +5,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -45,6 +46,45 @@ public sealed class ParentResumeExecutorTests
         await fixture.Executor.HandleAsync(NewIntent());
 
         Assert.Single(fixture.Dispatcher.Requests);
+    }
+
+    [Fact]
+    public async Task DispatchFailedPayload_UsesOrdinaryDeterministicBookmarkRoute()
+    {
+        var fixture = await NewFixtureAsync(
+            withBookmark: false,
+            ActivityExecutionStatus.Completed,
+            dispatchStatus: BookmarkResumeDispatchStatus.Duplicate);
+
+        await fixture.Executor.HandleAsync(NewIntent(WorkflowDispatchStatus.DispatchFailed));
+
+        var request = Assert.Single(fixture.Dispatcher.Requests);
+        Assert.Equal(Identity().ParentResumeIdempotencyKey, request.IdempotencyKey);
+        var payload = request.Input!.Value.Deserialize<WorkflowDispatchParentResumePayload>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(payload);
+        Assert.Equal(WorkflowDispatchStatus.DispatchFailed, payload.Result.Status);
+        Assert.Empty(payload.Result.Outputs);
+    }
+
+    [Fact]
+    public async Task ConsumedDispatchFailedResume_LogsStableSafeEvent()
+    {
+        var fixture = await NewFixtureAsync(
+            withBookmark: false,
+            ActivityExecutionStatus.Completed,
+            dispatchStatus: BookmarkResumeDispatchStatus.Duplicate);
+
+        await fixture.Executor.HandleAsync(NewIntent(WorkflowDispatchStatus.DispatchFailed));
+
+        var entry = Assert.Single(fixture.Logger.Entries);
+        Assert.Equal(68108, entry.EventId.Id);
+        Assert.Equal("WorkflowDispatchFailureResumeConsumed", entry.EventId.Name);
+        Assert.Null(entry.Exception);
+        var serialized = string.Join(" ", entry.Fields.Select(pair => $"{pair.Key}={pair.Value}"));
+        Assert.Contains(Identity().DispatchId, serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("payload", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("incident", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -216,19 +256,33 @@ public sealed class ParentResumeExecutorTests
         if (withBookmark)
             await bookmarkStore.SaveAsync(storedBookmark ?? NewBookmark());
         var dispatcher = new StubBookmarkResumeDispatcher(dispatchStatus, resolvedBookmark);
+        var logger = new RecordingLogger<ParentResumeExecutor>();
         return new Fixture(
-            new ParentResumeExecutor(dispatcher, workflowStore, activityStore, bookmarkStore),
-            dispatcher);
+            new ParentResumeExecutor(dispatcher, workflowStore, activityStore, bookmarkStore, logger),
+            dispatcher,
+            logger);
     }
 
     private static RuntimePostCommitIntent NewIntent(
+        WorkflowDispatchStatus status = WorkflowDispatchStatus.Completed,
         string? kind = null,
         string? intentId = null,
         JsonElement? payload = null,
         bool includePayload = true)
     {
         var identity = Identity();
-        var result = new DispatchWorkflowResult(identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.Completed);
+        var result = new DispatchWorkflowResult(
+            identity.ChildWorkflowExecutionId,
+            status,
+            diagnosticMetadata: status == WorkflowDispatchStatus.DispatchFailed
+                ? new Dictionary<string, string>
+                {
+                    [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.DispatchFailedCode,
+                    [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.DeliveryCategory,
+                    [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.DispatchFailedSummary,
+                    [DispatchWorkflowDiagnostics.DeliveryIncidentIdKey] = identity.DeliveryIncidentId(0)
+                }
+                : null);
         var serializedPayload = payload ?? JsonSerializer.SerializeToElement(
             new WorkflowDispatchParentResumePayload(
                 identity.DispatchId,
@@ -289,7 +343,34 @@ public sealed class ParentResumeExecutorTests
 
     private static WorkflowDispatchIdentity Identity() => new("parent-resume", "activity-resume");
 
-    private sealed record Fixture(ParentResumeExecutor Executor, StubBookmarkResumeDispatcher Dispatcher);
+    private sealed record Fixture(
+        ParentResumeExecutor Executor,
+        StubBookmarkResumeDispatcher Dispatcher,
+        RecordingLogger<ParentResumeExecutor> Logger);
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var fields = state is IEnumerable<KeyValuePair<string, object?>> structured
+                ? structured.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                : new Dictionary<string, object?> { ["Message"] = formatter(state, exception) };
+            Entries.Add(new LogEntry(eventId, fields, exception));
+        }
+    }
+
+    private sealed record LogEntry(
+        EventId EventId,
+        IReadOnlyDictionary<string, object?> Fields,
+        Exception? Exception);
 
     private sealed class StubBookmarkResumeDispatcher(
         BookmarkResumeDispatchStatus status,
