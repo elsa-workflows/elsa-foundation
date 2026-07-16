@@ -45,7 +45,10 @@ public sealed class WorkflowExecutableCompiler(
             ActivityTreeProjector.Validate(projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
-            foreach (var activityVersionId in projection.Nodes.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
+            foreach (var activityVersionId in projection.Nodes
+                         .Where(node => node.Intrinsic is null)
+                         .Select(node => node.ActivityVersionId)
+                         .Distinct(StringComparer.Ordinal))
                 activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
             var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows);

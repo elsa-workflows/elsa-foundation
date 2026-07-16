@@ -48,6 +48,16 @@ public sealed class ExecutableNode
             if (!inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value))
                 throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a '{WorkflowIntrinsicInputKeys.Value}' input binding.", nameof(inputBindings));
         }
+        else if (intrinsicKind is WorkflowIntrinsicKind.Return &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a '{WorkflowIntrinsicInputKeys.Value}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.Control &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Outcome))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires an '{WorkflowIntrinsicInputKeys.Outcome}' input binding.", nameof(inputBindings));
+        }
         else if (intrinsicVariable is not null)
         {
             throw new ArgumentException("Only variable-writing intrinsics can carry a variable target.", nameof(intrinsicVariable));
@@ -109,4 +119,5 @@ public enum WorkflowIntrinsicKind
 public static class WorkflowIntrinsicInputKeys
 {
     public const string Value = "value";
+    public const string Outcome = "outcome";
 }

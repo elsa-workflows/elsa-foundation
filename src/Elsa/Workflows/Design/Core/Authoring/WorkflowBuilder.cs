@@ -20,6 +20,10 @@ public interface ISequenceBuilder
     string ScopeId { get; }
     Variable<T> Variable<T>(string name, T? initialValue = default);
     void Set<T>(Variable<T> variable, WorkflowValue<T> value);
+    void Merge<T>(Variable<T> variable, WorkflowValue<T> mergedValue);
+    void Reduce<T>(Variable<T> variable, WorkflowValue<T> reducedValue);
+    void Return<T>(WorkflowValue<T> result);
+    void Control(string outcomeKey);
     ActivityCall<TResult> Add<TActivity, TResult>(
         string activityVersionId,
         Action<IActivityInputBuilder<TActivity>>? inputs = null,
@@ -122,6 +126,15 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
     public void Set<T>(Variable<T> variable, WorkflowValue<T> value)
         => _root.Set(variable, value);
 
+    public void Merge<T>(Variable<T> variable, WorkflowValue<T> mergedValue)
+        => _root.Merge(variable, mergedValue);
+
+    public void Reduce<T>(Variable<T> variable, WorkflowValue<T> reducedValue)
+        => _root.Reduce(variable, reducedValue);
+
+    public void Control(string outcomeKey)
+        => _root.Control(outcomeKey);
+
     public ActivityCall<TActivityResult> Add<TActivity, TActivityResult>(
         string activityVersionId,
         Action<IActivityInputBuilder<TActivity>>? inputs = null,
@@ -134,7 +147,10 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
         string? nodeId = null) => _root.AddStructured<TActivity, TActivityResult>(activityVersionId, structure, inputs, nodeId);
 
     public void Return(WorkflowValue<TResult> result)
-        => _root.AddReturn(result);
+        => _root.Return(result);
+
+    public void Return<T>(WorkflowValue<T> result)
+        => _root.Return(result);
 
     internal WorkflowDefinitionState BuildState()
     {
@@ -222,24 +238,33 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
         }
 
         public void Set<T>(Variable<T> variable, WorkflowValue<T> value)
-        {
-            ArgumentNullException.ThrowIfNull(variable);
-            ArgumentNullException.ThrowIfNull(value);
-            EnsureVisible(new WorkflowValueScope(WorkflowValueScopeKind.Variable, variable.Value.DeclaringScopeId));
-            EnsureVisible(value.Scope);
-            AddIntrinsic("elsa.intrinsic.set@1", [
-                new ArgumentState("variable", new ArgumentValue(
-                    JsonSerializer.SerializeToElement(new { referenceKey = variable.ReferenceKey, declaringScopeId = variable.Value.DeclaringScopeId }),
-                    AuthoringExpressionTypes.Variable), null, null, null, null),
-                new ArgumentState("value", value.Lower(), null, null, null, null)
-            ]);
-        }
+            => AddVariableWriteIntrinsic(AuthoredWorkflowIntrinsicKind.Set, variable, value);
 
-        public void AddReturn<T>(WorkflowValue<T> result)
+        public void Merge<T>(Variable<T> variable, WorkflowValue<T> mergedValue)
+            => AddVariableWriteIntrinsic(AuthoredWorkflowIntrinsicKind.Merge, variable, mergedValue);
+
+        public void Reduce<T>(Variable<T> variable, WorkflowValue<T> reducedValue)
+            => AddVariableWriteIntrinsic(AuthoredWorkflowIntrinsicKind.Reduce, variable, reducedValue);
+
+        public void Return<T>(WorkflowValue<T> result)
         {
             ArgumentNullException.ThrowIfNull(result);
             EnsureVisible(result.Scope);
-            AddIntrinsic("elsa.intrinsic.return@1", [new ArgumentState("result", result.Lower(), null, null, null, null)]);
+            AddIntrinsic(
+                WorkflowIntrinsicAuthoringIds.Return,
+                new AuthoredWorkflowIntrinsic(
+                    AuthoredWorkflowIntrinsicKind.Return,
+                    TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias)),
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Value, result.Lower(), null, null, null, null)]);
+        }
+
+        public void Control(string outcomeKey)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(outcomeKey);
+            AddIntrinsic(
+                WorkflowIntrinsicAuthoringIds.Control,
+                new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Control),
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, new ArgumentValue(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
         }
 
         public ActivityCall<TActivityResult> Add<TActivity, TActivityResult>(
@@ -298,10 +323,38 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
             return new ActivityCall<TActivityResult>(handle);
         }
 
-        private void AddIntrinsic(string activityVersionId, IReadOnlyCollection<ArgumentState> inputs)
+        private void AddVariableWriteIntrinsic<T>(
+            AuthoredWorkflowIntrinsicKind kind,
+            Variable<T> variable,
+            WorkflowValue<T> value)
+        {
+            ArgumentNullException.ThrowIfNull(variable);
+            ArgumentNullException.ThrowIfNull(value);
+            EnsureVisible(new WorkflowValueScope(WorkflowValueScopeKind.Variable, variable.Value.DeclaringScopeId));
+            EnsureVisible(value.Scope);
+            var id = kind switch
+            {
+                AuthoredWorkflowIntrinsicKind.Set => WorkflowIntrinsicAuthoringIds.Set,
+                AuthoredWorkflowIntrinsicKind.Merge => WorkflowIntrinsicAuthoringIds.Merge,
+                AuthoredWorkflowIntrinsicKind.Reduce => WorkflowIntrinsicAuthoringIds.Reduce,
+                _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Intrinsic is not a variable write.")
+            };
+            AddIntrinsic(
+                id,
+                new AuthoredWorkflowIntrinsic(
+                    kind,
+                    TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias),
+                    new VariableReference(variable.ReferenceKey, variable.Value.DeclaringScopeId)),
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Value, value.Lower(), null, null, null, null)]);
+        }
+
+        private void AddIntrinsic(
+            string activityVersionId,
+            AuthoredWorkflowIntrinsic intrinsic,
+            IReadOnlyCollection<ArgumentState> inputs)
         {
             var nodeId = owner.AllocateIntrinsicNodeId();
-            _activities.Add(new ActivityNode(nodeId, activityVersionId, inputs, []));
+            _activities.Add(new ActivityNode(nodeId, activityVersionId, inputs, []) { Intrinsic = intrinsic });
         }
 
         private void EnsureVisible(WorkflowValueScope source)
@@ -360,4 +413,19 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
             return region.Lower(regionNodeId, activityVersionId);
         }
     }
+}
+
+internal static class WorkflowIntrinsicAuthoringIds
+{
+    public const string Set = "elsa.intrinsic.set@1";
+    public const string Merge = "elsa.intrinsic.merge@1";
+    public const string Reduce = "elsa.intrinsic.reduce@1";
+    public const string Return = "elsa.intrinsic.return@1";
+    public const string Control = "elsa.intrinsic.control@1";
+}
+
+internal static class WorkflowIntrinsicAuthoringInputKeys
+{
+    public const string Value = "value";
+    public const string Outcome = "outcome";
 }

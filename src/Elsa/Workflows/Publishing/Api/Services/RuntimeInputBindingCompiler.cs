@@ -353,14 +353,23 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             if (jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
                 return null;
 
+            if (jsonElement.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+                return jsonElement.Deserialize(nullableTargetType);
+
             value = jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
         }
+
+        if (nullableTargetType.IsInstanceOfType(value))
+            return value;
 
         if (nullableTargetType == typeof(string))
             return $"{value}";
 
         if (nullableTargetType.IsEnum)
             return Enum.Parse(nullableTargetType, $"{value}", ignoreCase: true);
+
+        if (!typeof(IConvertible).IsAssignableFrom(nullableTargetType) || value is not IConvertible)
+            return JsonSerializer.SerializeToElement(value).Deserialize(nullableTargetType);
 
         return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
     }

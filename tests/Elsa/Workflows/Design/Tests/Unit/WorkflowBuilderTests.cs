@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.If.Authoring;
 using Elsa.Activities.If.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Authoring;
 using Elsa.Workflows.Design.Core.Models;
 using Xunit;
@@ -120,6 +122,45 @@ public sealed class WorkflowBuilderTests
         var json = JsonSerializer.Serialize(state);
         Assert.DoesNotContain(nameof(ChildWorkflowCall<object>), json, StringComparison.Ordinal);
         Assert.DoesNotContain("Extension", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Variables_and_value_operations_lower_to_typed_graph_visible_intrinsics()
+    {
+        var state = new IntrinsicWorkflow().Compile();
+        var children = Children(state).ToArray();
+
+        Assert.Equal(5, children.Length);
+        Assert.Equal(
+            [
+                AuthoredWorkflowIntrinsicKind.Set,
+                AuthoredWorkflowIntrinsicKind.Merge,
+                AuthoredWorkflowIntrinsicKind.Reduce,
+                AuthoredWorkflowIntrinsicKind.Control,
+                AuthoredWorkflowIntrinsicKind.Return
+            ],
+            children.Select(node => node.Intrinsic!.Kind));
+
+        var variableWrites = children.Take(3).ToArray();
+        Assert.All(variableWrites, node =>
+        {
+            Assert.Equal("items", node.Intrinsic!.Variable!.ReferenceKey);
+            Assert.Equal(VariableReference.WorkflowScopeId, node.Intrinsic.Variable.DeclaringScopeId);
+            Assert.Equal("String", node.Intrinsic.ValueType!.Alias);
+            Assert.Equal(CollectionKind.List, node.Intrinsic.ValueType.CollectionKind);
+            Assert.Equal("value", Assert.Single(node.Inputs).ReferenceKey);
+        });
+
+        var outcome = Assert.IsType<JsonElement>(Assert.Single(children[3].Inputs).Value.Value);
+        Assert.Equal("Approved", outcome.GetString());
+        Assert.Equal("String", children[4].Intrinsic!.ValueType!.Alias);
+        Assert.Equal("value", Assert.Single(children[4].Inputs).ReferenceKey);
+        var json = JsonSerializer.Serialize(state);
+        Assert.DoesNotContain("ActivityArgument", json, StringComparison.Ordinal);
+        var roundTripped = JsonSerializer.Deserialize<WorkflowDefinitionState>(json)!;
+        Assert.Equal(
+            children.Select(node => node.Intrinsic!.Kind),
+            Children(roundTripped).Select(node => node.Intrinsic!.Kind));
     }
 
     private static IReadOnlyCollection<ActivityNode> Children(WorkflowDefinitionState state) =>
@@ -259,6 +300,19 @@ public sealed class WorkflowBuilderTests
                 "test/child-workflow@1",
                 workflow.From(request => request.Child),
                 "child");
+        }
+    }
+
+    private sealed class IntrinsicWorkflow : WorkflowDefinition<Request, string>
+    {
+        protected override void Build(IWorkflowBuilder<Request, string> workflow)
+        {
+            var items = workflow.Variable<IReadOnlyList<string>>("items", []);
+            workflow.Set(items, workflow.Value<IReadOnlyList<string>>(["set"]));
+            workflow.Merge(items, workflow.Value<IReadOnlyList<string>>(["merged"]));
+            workflow.Reduce(items, workflow.Value<IReadOnlyList<string>>(["reduced"]));
+            workflow.Control("Approved");
+            workflow.Return(workflow.Value("done"));
         }
     }
 }

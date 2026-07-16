@@ -407,6 +407,35 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Compiles_typed_intrinsics_without_activity_catalog_rows()
+    {
+        var variable = new VariableReference("items", VariableReference.WorkflowScopeId);
+        var stringList = new TypeReference("String", CollectionKind.List);
+        var nodes = new[]
+        {
+            IntrinsicNode("set", AuthoredWorkflowIntrinsicKind.Set, stringList, variable, JsonSerializer.SerializeToElement(new[] { "set" })),
+            IntrinsicNode("merge", AuthoredWorkflowIntrinsicKind.Merge, stringList, variable, JsonSerializer.SerializeToElement(new[] { "merge" })),
+            IntrinsicNode("reduce", AuthoredWorkflowIntrinsicKind.Reduce, stringList, variable, JsonSerializer.SerializeToElement(new[] { "reduce" })),
+            IntrinsicNode("return", AuthoredWorkflowIntrinsicKind.Return, new TypeReference("String"), null, "done"),
+            IntrinsicNode("control", AuthoredWorkflowIntrinsicKind.Control, null, null, "Approved")
+        };
+        var compiler = Compiler(WorkflowVersion(SequenceNode("sequence", nodes)));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var compiled = executable.NodesById;
+        Assert.Equal(WorkflowIntrinsicKind.Set, compiled["set"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.Merge, compiled["merge"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.Reduce, compiled["reduce"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.Return, compiled["return"].IntrinsicKind);
+        Assert.Equal(WorkflowIntrinsicKind.Control, compiled["control"].IntrinsicKind);
+        Assert.All(nodes, authored => Assert.Null(compiled[authored.NodeId].ActivityContract));
+        Assert.Equal(CollectionKind.List, compiled["merge"].InputBindings[WorkflowIntrinsicInputKeys.Value].TargetType.CollectionKind);
+        Assert.Equal("items", compiled["reduce"].IntrinsicVariable!.VariableKey);
+        Assert.Equal("Approved", compiled["control"].InputBindings[WorkflowIntrinsicInputKeys.Outcome].LiteralValue!.Value.GetString());
+    }
+
+    [Fact]
     public async Task IndexesResumeTargetHandlerIntoExecutable()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
@@ -502,6 +531,26 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static ActivityNode WriteLinesNode(string nodeId, params WorkflowArgumentState[] inputs) =>
         new(nodeId, "activity-write-lines", inputs, Outputs: []);
+
+    private static ActivityNode IntrinsicNode(
+        string nodeId,
+        AuthoredWorkflowIntrinsicKind kind,
+        TypeReference? valueType,
+        VariableReference? variable,
+        object value)
+    {
+        var inputKey = kind == AuthoredWorkflowIntrinsicKind.Control
+            ? WorkflowIntrinsicInputKeys.Outcome
+            : WorkflowIntrinsicInputKeys.Value;
+        return new ActivityNode(
+            nodeId,
+            $"elsa.intrinsic.{kind.ToString().ToLowerInvariant()}@1",
+            [new WorkflowArgumentState(inputKey, new ArgumentValue(value, "Literal"), null, null, null, null)],
+            Outputs: [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(kind, valueType, variable)
+        };
+    }
 
     private static ActivityNode SequenceNode(
         string nodeId,

@@ -1,9 +1,11 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -37,6 +39,9 @@ public sealed class ExecutableNodeCompiler(
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
     {
+        if (activity.Intrinsic is not null)
+            return CompileIntrinsicNode(activity, projection, activityRows);
+
         var activityVersion = activityRows[activity.ActivityVersionId];
 
         var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
@@ -90,6 +95,81 @@ public sealed class ExecutableNodeCompiler(
             childSlots: childSlots,
             structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)),
             activityContract: activityContract);
+    }
+
+    private ExecutableNode CompileIntrinsicNode(
+        ActivityNode activity,
+        ActivityTreeProjection projection,
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
+    {
+        var intrinsic = activity.Intrinsic!;
+        var runtimeKind = intrinsic.Kind switch
+        {
+            AuthoredWorkflowIntrinsicKind.Set => WorkflowIntrinsicKind.Set,
+            AuthoredWorkflowIntrinsicKind.Merge => WorkflowIntrinsicKind.Merge,
+            AuthoredWorkflowIntrinsicKind.Reduce => WorkflowIntrinsicKind.Reduce,
+            AuthoredWorkflowIntrinsicKind.Return => WorkflowIntrinsicKind.Return,
+            AuthoredWorkflowIntrinsicKind.Control => WorkflowIntrinsicKind.Control,
+            _ => throw new ArgumentOutOfRangeException(nameof(intrinsic.Kind), intrinsic.Kind, "Authored workflow intrinsic kind is not defined.")
+        };
+        var inputKey = runtimeKind == WorkflowIntrinsicKind.Control
+            ? WorkflowIntrinsicInputKeys.Outcome
+            : WorkflowIntrinsicInputKeys.Value;
+        var authoredInput = activity.Inputs.SingleOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, inputKey))
+            ?? throw new ArgumentException($"Workflow intrinsic node '{activity.NodeId}' requires one '{inputKey}' input.");
+        if (activity.Inputs.Count() != 1)
+            throw new ArgumentException($"Workflow intrinsic node '{activity.NodeId}' must carry exactly one '{inputKey}' input.");
+
+        var valueType = runtimeKind == WorkflowIntrinsicKind.Control
+            ? new TypeReference("String")
+            : intrinsic.ValueType!;
+        var inputDefinition = new InputDefinition(
+            inputKey,
+            inputKey,
+            valueType,
+            StorageDriverType: null,
+            DisplayName: inputKey,
+            Category: null,
+            IsRequired: true);
+        var binding = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, authoredInput.Value);
+        if (runtimeKind == WorkflowIntrinsicKind.Control &&
+            (binding.Source != RuntimeInputBindingSource.Literal ||
+             binding.Literal is not { Presence: ValuePresence.Present, InlineValue.ValueKind: JsonValueKind.String } outcome ||
+             string.IsNullOrWhiteSpace(outcome.InlineValue.Value.GetString())))
+        {
+            throw new ArgumentException($"Workflow control intrinsic node '{activity.NodeId}' requires a non-blank literal outcome key.");
+        }
+        var variable = intrinsic.Variable is null
+            ? null
+            : new RuntimeVariableReference(
+                intrinsic.Variable.ReferenceKey,
+                intrinsic.Variable.DeclaringScopeId ?? VariableReference.WorkflowScopeId);
+        var activityType = $"elsa.intrinsic.{intrinsic.Kind.ToString().ToLowerInvariant()}";
+        var descriptorPayload = JsonSerializer.SerializeToElement(new
+        {
+            kind = intrinsic.Kind.ToString(),
+            schemaVersion = "1.0.0"
+        });
+
+        return new ExecutableNode(
+            executableNodeId: activity.NodeId,
+            authoredActivityId: activity.NodeId,
+            activityType: activityType,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "intrinsic",
+            descriptorPayload: descriptorPayload,
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal) { [inputKey] = binding },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
+            metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["authoredNodeId"] = activity.NodeId,
+                [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
+            },
+            childSlots: CompileChildSlots(projection.ChildProjections(activity), projection, activityRows),
+            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)),
+            activityContract: null,
+            intrinsicKind: runtimeKind,
+            intrinsicVariable: variable);
     }
 
     private static ActivityContract? BuildActivityContract(ActivityDefinitionVersion activityVersion, Type activityType, string activityTypeKey)
