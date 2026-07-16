@@ -3,7 +3,9 @@ using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Options;
 using Elsa.Primitives.Models;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -78,6 +80,7 @@ public sealed class ExplicitExpressionParametersTests
     [InlineData("getInput")]
     [InlineData("getOutput")]
     [InlineData("getOutputFrom")]
+    [InlineData("getConfiguration")]
     [InlineData("services")]
     public async Task Ambient_workflow_values_and_host_functions_are_unavailable(string name)
     {
@@ -102,11 +105,48 @@ public sealed class ExplicitExpressionParametersTests
         Assert.Equal("undefined:undefined", result.GetString());
     }
 
-    private static ServiceProvider BuildProvider(bool allowClrAccess = false)
+    [Fact]
+    public async Task Pure_evaluation_never_inherits_the_legacy_configuration_host_function()
+    {
+        await using var provider = BuildProvider(allowConfigurationAccess: true);
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var result = await evaluator.EvaluateAsync(Request(
+            "typeof getConfiguration + ':' + typeof configuration",
+            new Dictionary<string, JsonElement>()));
+
+        Assert.Equal("undefined:undefined", result.GetString());
+    }
+
+    [Fact]
+    public async Task Time_random_locale_and_environment_intrinsics_are_unavailable()
+    {
+        await using var provider = BuildProvider(allowClrAccess: true);
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var result = await evaluator.EvaluateAsync(Request(
+            "[typeof globalThis.Date, typeof globalThis.Temporal, typeof globalThis.Intl, typeof Math.random, typeof globalThis.crypto, typeof globalThis.performance, typeof globalThis.process].join(':')",
+            new Dictionary<string, JsonElement>()));
+
+        Assert.Equal("undefined:undefined:undefined:undefined:undefined:undefined:undefined", result.GetString());
+    }
+
+    private static ServiceProvider BuildProvider(bool allowClrAccess = false, bool allowConfigurationAccess = false)
     {
         var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Secret"] = "must-not-leak" })
+            .Build());
         new ExpressionsFeature().ConfigureServices(services);
-        new JavaScriptFeature().ConfigureServices(services);
+        new JavaScriptFeature
+        {
+            GetConfigurationFunction = new ConfigurationAccessFunctionProviderOptions
+            {
+                AllowConfigurationAccess = allowConfigurationAccess
+            }
+        }.ConfigureServices(services);
         new JintFeature { AllowClrAccess = allowClrAccess }.ConfigureServices(services);
         services.AddMemoryCache();
         return services.BuildServiceProvider();

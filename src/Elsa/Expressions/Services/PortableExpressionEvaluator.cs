@@ -28,6 +28,13 @@ public sealed class PortableExpressionEvaluator : IPortableExpressionEvaluator
     {
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
+        if (!StringComparer.Ordinal.Equals(request.Definition.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
+        {
+            throw new InvalidOperationException(
+                $"Portable expression evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'. " +
+                $"Profile '{request.Definition.CapabilityProfile}' belongs to an explicitly separate evaluator path.");
+        }
+
         if (!_handlers.TryGetValue(request.Definition.Language, out var handler))
             throw new InvalidOperationException($"No portable expression handler is registered for language '{request.Definition.Language}'.");
 

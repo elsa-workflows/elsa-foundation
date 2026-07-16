@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Xunit;
@@ -90,6 +91,35 @@ public sealed class ExpressionDefinitionContractTests
         Assert.Contains("unknown: [other]", unknown.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Portable_contract_surface_cannot_carry_delegates_execution_contexts_or_service_locators()
+    {
+        var contractTypes = new[]
+        {
+            typeof(ExpressionDefinition),
+            typeof(ExpressionParameterBinding),
+            typeof(LiteralExpressionParameterBinding),
+            typeof(WorkflowRequestExpressionParameterBinding),
+            typeof(VariableExpressionParameterBinding),
+            typeof(ActivityResultExpressionParameterBinding),
+            typeof(ExpressionEvaluationRequest),
+            typeof(IPortableExpressionEvaluator),
+            typeof(IPortableExpressionHandler)
+        };
+        var exposedTypes = contractTypes.SelectMany(type =>
+                type.GetConstructors().SelectMany(constructor => constructor.GetParameters().Select(parameter => parameter.ParameterType))
+                    .Concat(type.GetProperties().Select(property => property.PropertyType))
+                    .Concat(type.GetMethods().Where(method => !method.IsSpecialName).Select(method => method.ReturnType))
+                    .Concat(type.GetMethods().Where(method => !method.IsSpecialName).SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType))))
+            .SelectMany(FlattenType)
+            .Distinct()
+            .ToArray();
+
+        Assert.DoesNotContain(exposedTypes, type => typeof(Delegate).IsAssignableFrom(type));
+        Assert.DoesNotContain(typeof(IServiceProvider), exposedTypes);
+        Assert.DoesNotContain(typeof(IExpressionExecutionContext), exposedTypes);
+    }
+
     private static ExpressionDefinition Definition(IReadOnlyDictionary<string, ExpressionParameterBinding> parameters) =>
         new(
             "JavaScript",
@@ -98,4 +128,20 @@ public sealed class ExpressionDefinitionContractTests
             parameters,
             JsonSerializer.SerializeToElement(new { strict = true }),
             ExpressionCapabilityProfiles.BindingPureV1);
+
+    private static IEnumerable<Type> FlattenType(Type type)
+    {
+        yield return type;
+        if (type.HasElementType)
+        {
+            foreach (var nested in FlattenType(type.GetElementType()!))
+                yield return nested;
+        }
+
+        foreach (var argument in type.GetGenericArguments())
+        {
+            foreach (var nested in FlattenType(argument))
+                yield return nested;
+        }
+    }
 }

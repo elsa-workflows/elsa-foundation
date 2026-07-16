@@ -41,6 +41,23 @@ public sealed class PortableExpressionEvaluatorTests
     }
 
     [Fact]
+    public async Task Rejects_legacy_ambient_profile_before_dispatch()
+    {
+        var handler = new RecordingHandler("JavaScript", JsonSerializer.SerializeToElement(42));
+        var evaluator = new PortableExpressionEvaluator([handler]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await evaluator.EvaluateAsync(Request(
+                "JavaScript",
+                new Dictionary<string, JsonElement>(),
+                ExpressionCapabilityProfiles.LegacyAmbientV1)));
+
+        Assert.Contains(ExpressionCapabilityProfiles.BindingPureV1, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(ExpressionCapabilityProfiles.LegacyAmbientV1, exception.Message, StringComparison.Ordinal);
+        Assert.Null(handler.Request);
+    }
+
+    [Fact]
     public void Rejects_duplicate_language_handlers()
     {
         var exception = Assert.Throws<InvalidOperationException>(() => new PortableExpressionEvaluator([
@@ -53,7 +70,8 @@ public sealed class PortableExpressionEvaluatorTests
 
     private static ExpressionEvaluationRequest Request(
         string language,
-        IReadOnlyDictionary<string, JsonElement> values)
+        IReadOnlyDictionary<string, JsonElement> values,
+        string capabilityProfile = ExpressionCapabilityProfiles.BindingPureV1)
     {
         var bindings = values.ToDictionary(
             item => item.Key,
@@ -65,7 +83,7 @@ public sealed class PortableExpressionEvaluatorTests
             new TypeReference("Int32"),
             bindings,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            capabilityProfile);
         return new ExpressionEvaluationRequest(definition, values, CancellationToken.None);
     }
 

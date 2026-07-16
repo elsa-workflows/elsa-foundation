@@ -5,6 +5,7 @@ using Elsa.Expressions.Liquid;
 using Elsa.Expressions.Liquid.Services;
 using Elsa.Primitives.Models;
 using Fluid;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -56,6 +57,71 @@ public sealed class LiquidExplicitParametersTests
             await Handler().EvaluateAsync(request));
 
         Assert.Contains("undeclared parameter", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Portable_handler_never_inherits_legacy_configuration_access()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Secret"] = "must-not-leak" })
+            .Build());
+        new LiquidExpressionsFeature { AllowConfigurationAccess = true }.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var handler = scope.ServiceProvider.GetServices<IPortableExpressionHandler>().Single();
+        var request = Request("{{ Configuration.Secret }}", new Dictionary<string, JsonElement>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await handler.EvaluateAsync(request));
+
+        Assert.Contains("undeclared parameter", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("must-not-leak", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Configuration")]
+    [InlineData("Environment")]
+    [InlineData("Services")]
+    [InlineData("DateTime")]
+    [InlineData("Guid")]
+    [InlineData("Random")]
+    [InlineData("now")]
+    [InlineData("today")]
+    public async Task Rejects_each_ambient_host_or_nondeterministic_root(string root)
+    {
+        var request = Request($"{{{{ {root} }}}}", new Dictionary<string, JsonElement>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await Handler().EvaluateAsync(request));
+
+        Assert.Contains("undeclared parameter", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Does_not_register_the_time_dependent_date_filter()
+    {
+        var request = Request("{{ 'now' | date: '%s' }}", new Dictionary<string, JsonElement>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await Handler().EvaluateAsync(request));
+
+        Assert.Contains("binding-pure-v1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Local_assignment_cannot_write_back_to_the_parameter_snapshot()
+    {
+        var request = Request(
+            "{% assign order = 'changed' %}{{ order }}",
+            new Dictionary<string, JsonElement>
+            {
+                ["order"] = JsonSerializer.SerializeToElement(new { status = "original" })
+            });
+
+        var result = await Handler().EvaluateAsync(request);
+
+        Assert.Equal("changed", result.GetString());
+        Assert.Equal("original", request.ParameterValues["order"].GetProperty("status").GetString());
     }
 
     [Fact]
