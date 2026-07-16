@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -22,6 +23,42 @@ public sealed class CausalActivityResultResolver
         IReadOnlyCollection<ActivityExecutionState> runtimeView)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        return ResolveCore(
+            reference.ProducerExecutableNodeId,
+            reference.ProjectionKey,
+            reference.IsOptional,
+            reference.ProducerScopeId,
+            consumer,
+            runtimeView);
+    }
+
+    /// <summary>
+    /// Resolves a portable expression parameter. Publication owns lexical-scope validation for this
+    /// closed binding, so Runtime selects the unique causal producer without an ambient scope lookup.
+    /// </summary>
+    public CausalActivityResultResolution? Resolve(
+        ActivityResultExpressionParameterBinding reference,
+        ActivityExecutionState consumer,
+        IReadOnlyCollection<ActivityExecutionState> runtimeView)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        return ResolveCore(
+            reference.ProducerNodeId,
+            reference.ProjectionKey,
+            reference.IsOptional,
+            producerScopeId: null,
+            consumer,
+            runtimeView);
+    }
+
+    private static CausalActivityResultResolution? ResolveCore(
+        string producerNodeId,
+        string projectionKey,
+        bool isOptional,
+        string? producerScopeId,
+        ActivityExecutionState consumer,
+        IReadOnlyCollection<ActivityExecutionState> runtimeView)
+    {
         ArgumentNullException.ThrowIfNull(consumer);
         ArgumentNullException.ThrowIfNull(runtimeView);
 
@@ -32,8 +69,8 @@ public sealed class CausalActivityResultResolver
         var causalLineage = BuildCausalLineage(consumer, statesByInvocationId);
         var candidates = statesByInvocationId.Values
             .Where(state => causalLineage.Contains(state.InvocationId))
-            .Where(state => StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, reference.ProducerExecutableNodeId))
-            .Where(state => IsStructurallyVisible(reference, state, consumer))
+            .Where(state => StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, producerNodeId))
+            .Where(state => IsStructurallyVisible(producerScopeId, state, consumer))
             .Where(IsCommittedCompletion)
             .OrderBy(state => state.ExecutionSequence)
             .ThenBy(state => state.InvocationId, StringComparer.Ordinal)
@@ -41,10 +78,10 @@ public sealed class CausalActivityResultResolver
 
         return candidates.Length switch
         {
-            0 when reference.IsOptional => null,
-            0 => throw NewUnavailable(reference, consumer),
-            1 => new CausalActivityResultResolution(candidates[0], candidates[0].Completion!, reference.ProjectionKey),
-            _ => throw NewAmbiguous(reference, consumer, candidates)
+            0 when isOptional => null,
+            0 => throw NewUnavailable(producerNodeId, projectionKey, producerScopeId, consumer),
+            1 => new CausalActivityResultResolution(candidates[0], candidates[0].Completion!, projectionKey),
+            _ => throw NewAmbiguous(producerNodeId, projectionKey, producerScopeId, consumer, candidates)
         };
     }
 
@@ -89,12 +126,13 @@ public sealed class CausalActivityResultResolver
         StringComparer.Ordinal.Equals(completion.InvocationId, state.InvocationId);
 
     private static bool IsStructurallyVisible(
-        RuntimeActivityResultReference reference,
+        string? declaredProducerScopeId,
         ActivityExecutionState producer,
         ActivityExecutionState consumer)
     {
-        var producerScopeId = GetExecutionScopeId(producer);
-        if (producerScopeId is not null && !StringComparer.Ordinal.Equals(producerScopeId, reference.ProducerScopeId))
+        var actualProducerScopeId = GetExecutionScopeId(producer);
+        if (declaredProducerScopeId is not null && actualProducerScopeId is not null &&
+            !StringComparer.Ordinal.Equals(actualProducerScopeId, declaredProducerScopeId))
             return false;
 
         return IsFrameDimensionVisible(GetBranchId(producer), GetBranchId(consumer)) &&
@@ -125,32 +163,36 @@ public sealed class CausalActivityResultResolver
         string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static CausalActivityResultResolutionException NewUnavailable(
-        RuntimeActivityResultReference reference,
+        string producerNodeId,
+        string projectionKey,
+        string? producerScopeId,
         ActivityExecutionState consumer) =>
         new(
-            $"Activity result projection '{reference.ProjectionKey}' from executable node '{reference.ProducerExecutableNodeId}' " +
-            $"in structural scope '{reference.ProducerScopeId}' is not available in the causal lineage of consumer invocation '{consumer.InvocationId}'.",
+            $"Activity result projection '{projectionKey}' from executable node '{producerNodeId}' " +
+            $"in structural scope '{producerScopeId ?? "<publication-validated>"}' is not available in the causal lineage of consumer invocation '{consumer.InvocationId}'.",
             CausalActivityResultResolutionFailureReason.Unavailable,
             consumer.InvocationId,
-            reference.ProducerExecutableNodeId,
-            reference.ProjectionKey,
-            reference.ProducerScopeId);
+            producerNodeId,
+            projectionKey,
+            producerScopeId ?? string.Empty);
 
     private static CausalActivityResultResolutionException NewAmbiguous(
-        RuntimeActivityResultReference reference,
+        string producerNodeId,
+        string projectionKey,
+        string? producerScopeId,
         ActivityExecutionState consumer,
         IReadOnlyCollection<ActivityExecutionState> candidates)
     {
         var candidateIds = candidates.Select(state => state.InvocationId).ToArray();
         return new CausalActivityResultResolutionException(
-            $"Activity result projection '{reference.ProjectionKey}' from executable node '{reference.ProducerExecutableNodeId}' " +
-            $"in structural scope '{reference.ProducerScopeId}' is ambiguous for consumer invocation '{consumer.InvocationId}'. " +
+            $"Activity result projection '{projectionKey}' from executable node '{producerNodeId}' " +
+            $"in structural scope '{producerScopeId ?? "<publication-validated>"}' is ambiguous for consumer invocation '{consumer.InvocationId}'. " +
             $"Causal candidates: {string.Join(", ", candidateIds)}.",
             CausalActivityResultResolutionFailureReason.Ambiguous,
             consumer.InvocationId,
-            reference.ProducerExecutableNodeId,
-            reference.ProjectionKey,
-            reference.ProducerScopeId,
+            producerNodeId,
+            projectionKey,
+            producerScopeId ?? string.Empty,
             candidateIds);
     }
 }

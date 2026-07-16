@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -131,6 +132,20 @@ public sealed class CausalActivityResultResolverTests
         var resolution = _resolver.Resolve(Reference(isOptional: true), consumer, [consumer]);
 
         Assert.Null(resolution);
+    }
+
+    [Fact]
+    public void Resolve_PortableExpressionBinding_UsesPublicationValidatedScopeAndCausalFrame()
+    {
+        var producer = Completed("producer-nested", ProducerNodeId, 1, "scope:nested", branchId: "branch-a");
+        var consumer = Running("consumer", "node-consumer", 2, RootScopeId, producer.InvocationId, branchId: "branch-a");
+        var binding = new ActivityResultExpressionParameterBinding(ProducerNodeId, ProjectionKey);
+
+        var resolution = _resolver.Resolve(binding, consumer, [producer, consumer]);
+
+        Assert.NotNull(resolution);
+        Assert.Equal(producer.InvocationId, resolution.ProducerInvocation.InvocationId);
+        Assert.Equal(ProjectionKey, resolution.ProjectionKey);
     }
 
     private static RuntimeActivityResultReference Reference(bool isOptional = false) =>

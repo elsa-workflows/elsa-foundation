@@ -130,7 +130,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
 
         if (resolved.Source == RuntimeInputBindingSource.Expression)
-            return CoerceToType(await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
+            return CoerceToType(await EvaluateExpressionAsync(resolved, type, binding.TargetType, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
 
         if (resolved.Value.HasValue)
             return JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
@@ -150,7 +150,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         {
             var type = ResolveInputType(binding, node.ExecutableNodeId, input.Key);
             var materialized = CoerceToType(
-                await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, input.Key, resolutionContext, cancellationToken),
+                await EvaluateExpressionAsync(resolved, type, binding.TargetType, node.ExecutableNodeId, input.Key, resolutionContext, cancellationToken),
                 type);
             return materialized is null
                 ? ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy)
@@ -251,6 +251,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private static async ValueTask<object?> EvaluateExpressionAsync(
         RuntimeResolvedInput resolved,
         Type type,
+        ValueTypeDescriptor targetType,
         string nodeId,
         string inputName,
         RuntimeInputBindingResolutionContext resolutionContext,
@@ -264,6 +265,37 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         var serviceProvider = resolutionContext.ServiceProvider
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no service provider was supplied to evaluate it.");
+
+        if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.LegacyAmbientV1))
+        {
+            var portableEvaluator = serviceProvider.GetService(typeof(IPortableExpressionEvaluator)) as IPortableExpressionEvaluator
+                ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no '{nameof(IPortableExpressionEvaluator)}' is registered.");
+            var definition = new ExpressionDefinition(
+                expression.Language,
+                expression.Expression,
+                targetType.ToTypeReference(),
+                expression.Parameters,
+                expression.Options,
+                expression.CapabilityProfile,
+                expression.Metadata);
+            var request = new ExpressionEvaluationRequest(
+                definition,
+                MaterializePortableParameters(expression, resolutionContext, nodeId, inputName),
+                cancellationToken);
+
+            try
+            {
+                return await portableEvaluator.EvaluateAsync(request);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its portable '{expression.Language}' expression.", exception);
+            }
+        }
 
         var evaluator = serviceProvider.GetService(typeof(IExpressionEvaluator)) as IExpressionEvaluator
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no '{nameof(IExpressionEvaluator)}' is registered.");
@@ -283,6 +315,154 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its '{expression.Language}' expression.", exception);
         }
     }
+
+    private static IReadOnlyDictionary<string, JsonElement> MaterializePortableParameters(
+        RuntimeExpressionBinding expression,
+        RuntimeInputBindingResolutionContext context,
+        string nodeId,
+        string inputName)
+    {
+        var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var (name, binding) in expression.Parameters.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            values.Add(name, binding switch
+            {
+                LiteralExpressionParameterBinding literal => ReadLiteralParameter(literal, name, nodeId, inputName),
+                WorkflowRequestExpressionParameterBinding request => ReadWorkflowRequestParameter(request, context, name, nodeId, inputName),
+                VariableExpressionParameterBinding variable => ReadVariableParameter(variable, context, name, nodeId, inputName),
+                ActivityResultExpressionParameterBinding result => ReadActivityResultParameter(result, context, name, nodeId, inputName),
+                _ => throw new InvalidOperationException($"Portable expression parameter '{name}' on input '{inputName}' uses unsupported binding type '{binding.GetType().Name}'.")
+            });
+        }
+
+        return values;
+    }
+
+    private static JsonElement ReadLiteralParameter(
+        LiteralExpressionParameterBinding binding,
+        string parameterName,
+        string nodeId,
+        string inputName)
+    {
+        if (binding.Value.ValueKind == JsonValueKind.Undefined)
+            throw NewPortableParameterException(parameterName, nodeId, inputName, "has an undefined literal");
+        return binding.Value.Clone();
+    }
+
+    private static JsonElement ReadWorkflowRequestParameter(
+        WorkflowRequestExpressionParameterBinding binding,
+        RuntimeInputBindingResolutionContext context,
+        string parameterName,
+        string nodeId,
+        string inputName)
+    {
+        if (!context.WorkflowInputEnvelopes.TryGetValue(binding.MemberKey, out var envelope))
+            throw NewPortableParameterException(parameterName, nodeId, inputName, $"references unavailable persistable workflow request member '{binding.MemberKey}'");
+
+        var value = ReadPersistableEnvelope(envelope, parameterName, nodeId, inputName);
+        return ProjectPath(value, binding.Path, binding.MemberKey, parameterName, nodeId, inputName);
+    }
+
+    private static JsonElement ReadVariableParameter(
+        VariableExpressionParameterBinding binding,
+        RuntimeInputBindingResolutionContext context,
+        string parameterName,
+        string nodeId,
+        string inputName)
+    {
+        var address = new RuntimeVariableValueAddress(binding.DeclaringScopeNodeId, binding.VariableKey);
+        if (!context.VariableEnvelopes.TryGetValue(address, out var envelope))
+            throw NewPortableParameterException(parameterName, nodeId, inputName, $"references unavailable variable '{binding.VariableKey}' in scope '{binding.DeclaringScopeNodeId}'");
+        return ReadPersistableEnvelope(envelope, parameterName, nodeId, inputName);
+    }
+
+    private static JsonElement ReadActivityResultParameter(
+        ActivityResultExpressionParameterBinding binding,
+        RuntimeInputBindingResolutionContext context,
+        string parameterName,
+        string nodeId,
+        string inputName)
+    {
+        var consumer = context.ConsumerInvocation
+            ?? throw NewPortableParameterException(parameterName, nodeId, inputName, "requires a consumer invocation identity");
+        var resolution = new CausalActivityResultResolver().Resolve(binding, consumer, context.RuntimeView);
+        if (resolution is null)
+            return JsonSerializer.SerializeToElement<object?>(null);
+
+        var result = resolution.Completion.Result;
+        var value = ReadPersistableEnvelope(result, parameterName, nodeId, inputName);
+        if (StringComparer.Ordinal.Equals(binding.ProjectionKey, "$result"))
+            return value;
+
+        var producerNode = context.Executable?.NodesById.GetValueOrDefault(binding.ProducerNodeId)
+            ?? throw NewPortableParameterException(parameterName, nodeId, inputName, $"requires the pinned contract for producer node '{binding.ProducerNodeId}'");
+        var projection = producerNode.ActivityContract?.Result.Projections.GetValueOrDefault(binding.ProjectionKey)
+            ?? throw NewPortableParameterException(parameterName, nodeId, inputName, $"references unknown result projection '{binding.ProjectionKey}' on producer node '{binding.ProducerNodeId}'");
+        return ProjectPath(value, projection.Path, null, parameterName, nodeId, inputName);
+    }
+
+    private static JsonElement ReadPersistableEnvelope(
+        ValueEnvelope envelope,
+        string parameterName,
+        string nodeId,
+        string inputName)
+    {
+        if (envelope.Policy.Lifecycle == DurableValueLifecycle.None)
+            throw NewPortableParameterException(parameterName, nodeId, inputName, "is transient and cannot cross the durable expression boundary");
+        if (envelope.Presence == ValuePresence.Absent)
+            throw NewPortableParameterException(parameterName, nodeId, inputName, "is absent");
+        if (envelope.Presence == ValuePresence.ExplicitNull)
+            return JsonSerializer.SerializeToElement<object?>(null);
+        if (!envelope.InlineValue.HasValue)
+            throw NewPortableParameterException(parameterName, nodeId, inputName, "uses external storage without a payload reader");
+        return envelope.InlineValue.Value.Clone();
+    }
+
+    private static JsonElement ProjectPath(
+        JsonElement value,
+        string? path,
+        string? rootName,
+        string parameterName,
+        string nodeId,
+        string inputName)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return value;
+
+        var segments = path.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        var offset = segments.Length > 0 && rootName is not null && StringComparer.OrdinalIgnoreCase.Equals(segments[0], rootName) ? 1 : 0;
+        for (var index = offset; index < segments.Length; index++)
+        {
+            if (value.ValueKind != JsonValueKind.Object || !TryGetProperty(value, segments[index], out value))
+                throw NewPortableParameterException(parameterName, nodeId, inputName, $"has unavailable path '{path}'");
+        }
+
+        return value.Clone();
+    }
+
+    private static bool TryGetProperty(JsonElement value, string name, out JsonElement property)
+    {
+        if (value.TryGetProperty(name, out property))
+            return true;
+        foreach (var candidate in value.EnumerateObject())
+        {
+            if (StringComparer.OrdinalIgnoreCase.Equals(candidate.Name, name))
+            {
+                property = candidate.Value;
+                return true;
+            }
+        }
+
+        property = default;
+        return false;
+    }
+
+    private static InvalidOperationException NewPortableParameterException(
+        string parameterName,
+        string nodeId,
+        string inputName,
+        string reason) =>
+        new($"Portable expression parameter '{parameterName}' for input '{inputName}' on executable node '{nodeId}' {reason}.");
 
     private static object? DeserializeObjectExpression(RuntimeExpressionBinding expression, Type type, string nodeId, string inputName)
     {
