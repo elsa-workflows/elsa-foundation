@@ -20,7 +20,7 @@ public sealed class SimpleActivityExecutionContext(
     ExecutableNode? executableNode = null,
     ActivityExecutionState? activityExecutionState = null,
     VariableScope? variableScope = null)
-    : IRuntimeActivityExecutionContext, IExpressionExecutionContext, IScopedVariableProvider, IExecutionExpressionState
+    : IRuntimeActivityExecutionContext, IActivityInvocationIdentity, IExpressionExecutionContext, IScopedVariableProvider, IExecutionExpressionState
 {
     private static readonly IReadOnlyDictionary<string, object?> EmptyExpressionState = new Dictionary<string, object?>(StringComparer.Ordinal);
 
@@ -101,6 +101,9 @@ public sealed class SimpleActivityExecutionContext(
     public IExpressionExecutionContext? ParentContext { get; set; }
     public CancellationToken CancellationToken { get; } = cancellationToken;
     public string WorkflowExecutionId { get; } = workflowExecutionId ?? string.Empty;
+    public string InvocationId => activityExecutionState?.InvocationId ?? Activity.Id;
+    public string AttemptId => activityExecutionState?.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId ?? string.Empty;
+    public string ExecutableNodeId => executableNode?.ExecutableNodeId ?? Activity.NodeId;
     public WorkflowExecutableIdentity PinnedExecutable => pinnedExecutable ?? throw MissingRuntimeValue(nameof(PinnedExecutable));
     public RuntimeSchedulerWorkItem SchedulerWorkItem => schedulerWorkItem ?? throw MissingRuntimeValue(nameof(SchedulerWorkItem));
     public ExecutableNode ExecutableNode => executableNode ?? throw MissingRuntimeValue(nameof(ExecutableNode));

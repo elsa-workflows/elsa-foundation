@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -19,7 +20,8 @@ public sealed class ExecutableNode
         IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
         IReadOnlyDictionary<string, string> metadata,
         IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
-        ExecutableActivityStructure? structure = null)
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -56,6 +58,7 @@ public sealed class ExecutableNode
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         ChildSlots = Array.AsReadOnly((childSlots ?? []).ToArray());
         Structure = structure;
+        ActivityContract = activityContract;
     }
 
     public string ExecutableNodeId { get; }
@@ -69,4 +72,5 @@ public sealed class ExecutableNode
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public IReadOnlyCollection<ExecutableChildSlot> ChildSlots { get; }
     public ExecutableActivityStructure? Structure { get; }
+    public ActivityContract? ActivityContract { get; }
 }

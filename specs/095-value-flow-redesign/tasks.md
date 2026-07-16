@@ -74,7 +74,7 @@ projections, two outcomes, and disposable dependencies; verify one-time hydratio
 
 - [X] T019 [P] [US1] Replace constructor/binder coverage with transient activation and plain-property hydration tests in `tests/Elsa/Activities/Runtime/Tests/ClrActivityActivatorTests.cs`
 - [X] T020 [P] [US1] Add complete/suspend/fault/cancel transition algebra tests in `tests/Elsa/Activities/Runtime/Tests/ActivityTransitionContractTests.cs`
-- [ ] T021 [P] [US1] Replace `WriteLineBoundInputExecutionTests` with wrapper-free end-to-end hydration tests in `tests/Elsa/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs`
+- [X] T021 [P] [US1] Replace `WriteLineBoundInputExecutionTests` with wrapper-free end-to-end hydration tests in `tests/Elsa/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs`
 - [X] T022 [P] [US1] Add atomic typed-result/projection/outcome and partial-result rejection tests in `tests/Elsa/Activities/Runtime/Tests/ActivityCompletionContractTests.cs`
 - [ ] T023 [US1] Expand `tests/Elsa/Activities/Runtime/Tests/ActivityLibraryAcceptanceTests.cs` to require ordinary input properties and one result contract for every first-party activity
 
@@ -89,7 +89,7 @@ projections, two outcomes, and disposable dependencies; verify one-time hydratio
 - [ ] T030 [P] [US1] Migrate primitive and scheduling activities to plain inputs/results in `src/Elsa/Activities/Primitives/` and `src/Elsa/Activities/Scheduling/`
 - [ ] T031 [P] [US1] Migrate HTTP and scripting activities to plain inputs/atomic result records in `src/Elsa/Activities/Http/` and `src/Elsa/Activities/Scripting/`
 - [ ] T032 [P] [US1] Migrate sequence, composition, flowchart, and control-flow CLR activities that remain non-intrinsic in `src/Elsa/Activities/Sequence/`, `Composition/`, `Flowchart/`, and `ControlFlow/`
-- [ ] T033 [US1] Update CLR discovery and registration to scan plain annotated inputs and result projections in `src/Elsa/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`
+- [X] T033 [US1] Update CLR discovery and registration to scan plain annotated inputs and result projections in `src/Elsa/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`
 - [ ] T034 [US1] Run US1 runtime, design scanner, activity-library, HTTP, scheduling, scripting, control-flow, and sequence test projects and mark corresponding ledger rows implemented/passing
 
 **Checkpoint**: A representative CLR activity executes end to end without `InputArgument`,

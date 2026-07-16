@@ -192,24 +192,37 @@ public sealed class ForEachRuntimeTests
         return WorkflowExecutionHarness.NewExecutable(root);
     }
 
-    private static ExecutableNode NewWriteLineNode(string nodeId, string text) =>
-        new(
+    private static ExecutableNode NewWriteLineNode(string nodeId, string text)
+    {
+        var descriptor = Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine))));
+        var contract = new ActivityContract(
+            typeof(WriteLine).FullName!,
+            "1.0.0",
+            typeof(ClrActivityDescriptor).FullName!,
+            descriptor,
+            [new ActivityInputContract("text", nameof(WriteLine.Text), new ValueTypeDescriptor("Elsa.Any"), true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(typeof(WriteLine))));
+        return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(WriteLine).FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: typeof(ClrActivityDescriptor).FullName!,
-            descriptorPayload: Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine)))),
+            descriptorPayload: descriptor,
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Text"] = new RuntimeInputBinding(
-                    inputName: "Text",
+                ["text"] = new RuntimeInputBinding(
+                    inputName: "text",
                     source: RuntimeInputBindingSource.Literal,
                     literalValue: JsonSerializer.SerializeToElement(text),
                     metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" })
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
+    }
 
     private static async Task<(WorkflowExecutionRun Run, string Output)> CaptureConsoleAsync(Func<Task<WorkflowExecutionRun>> action)
     {

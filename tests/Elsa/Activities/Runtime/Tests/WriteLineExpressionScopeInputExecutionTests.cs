@@ -84,7 +84,7 @@ public sealed class WriteLineExpressionScopeInputExecutionTests
         var serviceProvider = scope.ServiceProvider;
 
         var node = NewWriteLineNode("write-js", JavaScriptBinding(expression));
-        var materializer = new RuntimeActivityInputMaterializer();
+        var materializer = TypedActivityTestActivation.CreateMaterializer();
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: "wfexec-1",
             activityExecutionId: "activity-1",
@@ -98,32 +98,18 @@ public sealed class WriteLineExpressionScopeInputExecutionTests
         var materialized = await materializer.MaterializeInputsAsync(node, resolutionContext);
 
         var textInput = Assert.Single(materialized);
-        Assert.Equal("Text", textInput.Name);
+        Assert.Equal("text", textInput.Name);
         Assert.Equal(expected, textInput.Value);
 
-        var writeLine = await ConstructWriteLineAsync(serviceProvider, textInput.Argument);
+        await using var activation = await TypedActivityTestActivation.ActivateAsync<WriteLine>(
+            serviceProvider,
+            new Dictionary<string, object?> { [textInput.Name] = textInput.Value });
+        var writeLine = Assert.IsType<WriteLine>(activation.Activity);
         var context = new SimpleActivityExecutionContext(serviceProvider, writeLine, CancellationToken.None);
-        RuntimeActivityInputMemory.Seed(context, materialized);
 
         var output = await CaptureConsoleAsync(async () => await ((IActivity)writeLine).ExecuteAsync(context));
 
         Assert.Equal(expected, output.Trim());
-    }
-
-    private static async Task<WriteLine> ConstructWriteLineAsync(IServiceProvider serviceProvider, InputArgument textArgument)
-    {
-        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-        var registry = new ActivityConstructorRegistry();
-        registry.Add(ClrConstruction.Constructor(serviceProvider, serializer, typeof(WriteLine)));
-        var factory = new ActivityFactory(registry);
-
-        var activity = await factory.Create(
-            ClrConstruction.DescriptorType,
-            ClrConstruction.Payload(serializer, typeof(WriteLine)),
-            new Dictionary<string, InputArgument> { ["Text"] = textArgument },
-            outputs: null);
-
-        return Assert.IsType<WriteLine>(activity);
     }
 
     private static ServiceProvider BuildServiceProvider()
@@ -154,13 +140,15 @@ public sealed class WriteLineExpressionScopeInputExecutionTests
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: ClrConstruction.Payload(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()), typeof(WriteLine)),
-            inputBindings: new Dictionary<string, RuntimeInputBinding> { ["Text"] = textBinding },
+            inputBindings: new Dictionary<string, RuntimeInputBinding> { ["text"] = textBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static RuntimeInputBinding JavaScriptBinding(string expression) =>
         new(
-            inputName: "Text",
+            inputKey: "text",
+            targetType: new ValueTypeDescriptor("String"),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("JavaScript", expression, new RuntimeValueTypeDescriptor("clr", StringTypeName, null)),
             metadata: new Dictionary<string, string>

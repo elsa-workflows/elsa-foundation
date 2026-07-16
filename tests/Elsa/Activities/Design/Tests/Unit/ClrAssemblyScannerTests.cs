@@ -156,6 +156,23 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void Plain_typed_activity_maps_stable_input_and_result_projection_keys()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(PlainFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(PlainFixtureActivity).FullName);
+        var input = Assert.Single(model.Inputs);
+        var output = Assert.Single(model.Outputs);
+
+        Assert.Equal("message", input.ReferenceKey);
+        Assert.Equal(nameof(PlainFixtureActivity.Message), input.Name);
+        Assert.True(input.IsRequired);
+        Assert.Equal("length", output.ReferenceKey);
+        Assert.Equal(nameof(PlainFixtureResult.Length), output.Name);
+        Assert.True(output.IsRequired);
+    }
+
+    [Fact]
     public void ActivityInputAttribute_ParsesIntegerDefaultAsNumber()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);

@@ -171,3 +171,17 @@ public sealed class TriggerFixtureActivity : ActivityBase
     {
     }
 }
+
+/// <summary>A wrapper-free typed activity used to verify plain CLR contract discovery.</summary>
+public sealed class PlainFixtureActivity : Activity<PlainFixtureResult>
+{
+    [ActivityInput(Key = "message")]
+    [Required]
+    public string Message { get; set; } = null!;
+
+    protected override ValueTask<ActivityTransition<PlainFixtureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new PlainFixtureResult(Message.Length)));
+}
+
+public sealed record PlainFixtureResult(
+    [property: Output(Key = "length", Path = "length")] int Length);

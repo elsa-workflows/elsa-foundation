@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -47,7 +48,8 @@ public sealed class ExecutableNodeCompiler(
             if (!inputDefinitionsByReferenceKey.TryGetValue(inputState.ReferenceKey, out var inputDefinition))
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
 
-            inputBindings[inputDefinition.Name] = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState.Value);
+            var binding = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState.Value);
+            inputBindings[binding.InputName] = binding;
         }
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
@@ -59,6 +61,17 @@ public sealed class ExecutableNodeCompiler(
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
+        var activityContract = clrActivityType is null ? null : BuildActivityContract(activityVersion, clrActivityType, activityType);
+        var outputCaptures = activityContract?.Result.Projections.Values.ToDictionary(
+            projection => projection.Key,
+            projection => new RuntimeOutputCapture(
+                projection.Key,
+                $"{activity.NodeId}:result:{projection.Key}",
+                new RuntimeValueTypeDescriptor("alias", projection.Type.Alias, projection.Type.Schema),
+                DurableValueLifecycle.Instance,
+                DurableValueStorage.Inline,
+                captureOnSuccessfulCompletion: true),
+            StringComparer.Ordinal) ?? new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
 
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
@@ -68,14 +81,75 @@ public sealed class ExecutableNodeCompiler(
             descriptorType: activityVersion.DescriptorType,
             descriptorPayload: activityVersion.DescriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            outputCaptures: outputCaptures,
             metadata: new Dictionary<string, string>
             {
                 ["authoredNodeId"] = activity.NodeId,
                 [TriggerNodeMetadata.ExecutionTypeKey] = executionType
             },
             childSlots: childSlots,
-            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)));
+            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)),
+            activityContract: activityContract);
+    }
+
+    private static ActivityContract? BuildActivityContract(ActivityDefinitionVersion activityVersion, Type activityType, string activityTypeKey)
+    {
+        var resultType = FindTypedActivityResult(activityType);
+        if (resultType is null)
+            return null;
+
+        var inputs = activityVersion.Inputs.Select(input => new ActivityInputContract(
+            input.ReferenceKey,
+            input.Name,
+            new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind),
+            input.IsRequired,
+            input.DefaultValue.HasValue,
+            input.DefaultValue,
+            ActivityValuePolicy.Default));
+        var projections = resultType
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => (Property: property, Attribute: property.GetCustomAttribute<OutputAttribute>(inherit: true)))
+            .Where(candidate => candidate.Attribute is not null)
+            .Select(candidate =>
+            {
+                var attribute = candidate.Attribute!;
+                var type = TypeReferenceFactory.FromClrType(candidate.Property.PropertyType, TypeAliasConvention.CanonicalAlias);
+                return new ActivityResultProjectionContract(
+                    attribute.Key ?? candidate.Property.Name,
+                    attribute.Path ?? JsonNamingPolicy.CamelCase.ConvertName(candidate.Property.Name),
+                    new ValueTypeDescriptor(type.Alias, type.CollectionKind),
+                    attribute.IsRequired,
+                    ActivityValuePolicy.Default);
+            });
+        var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
+        var outcomes = activityType.GetCustomAttributes<ActivityOutcomeAttribute>(inherit: true)
+            .Select(attribute => attribute.Key)
+            .DefaultIfEmpty("Done");
+
+        return new ActivityContract(
+            activityTypeKey,
+            activityVersion.Version,
+            activityVersion.DescriptorType,
+            activityVersion.DescriptorPayload,
+            inputs,
+            new ActivityResultContract(
+                new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                projections),
+            outcomes,
+            new ActivityActivationRequirement(activityVersion.DescriptorType, TypeAliasConvention.CanonicalAlias(activityType)));
+    }
+
+    private static Type? FindTypedActivityResult(Type activityType)
+    {
+        for (var current = activityType; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Activity<>))
+                return current.GetGenericArguments()[0];
+        }
+
+        return null;
     }
 
     private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(

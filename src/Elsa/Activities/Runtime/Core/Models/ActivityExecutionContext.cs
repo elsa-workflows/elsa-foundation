@@ -34,13 +34,25 @@ public sealed record ActivityExecutionContext
     public string ExecutableNodeId { get; }
     public CancellationToken CancellationToken { get; }
 
-    internal static ActivityExecutionContext FromLegacy(IActivityExecutionContext context) =>
-        new(
-            workflowExecutionId: string.Empty,
-            invocationId: context.Activity.Id,
-            attemptId: string.Empty,
-            executableNodeId: context.Activity.NodeId,
+    internal static ActivityExecutionContext FromLegacy(IActivityExecutionContext context)
+    {
+        var identity = context as IActivityInvocationIdentity;
+        return new(
+            workflowExecutionId: identity?.WorkflowExecutionId ?? string.Empty,
+            invocationId: identity?.InvocationId ?? context.Activity.Id,
+            attemptId: identity?.AttemptId ?? string.Empty,
+            executableNodeId: identity?.ExecutableNodeId ?? context.Activity.NodeId,
             context.CancellationToken);
+    }
+}
+
+/// <summary>Identity carrier implemented by the engine's private execution context adapter.</summary>
+public interface IActivityInvocationIdentity
+{
+    string WorkflowExecutionId { get; }
+    string InvocationId { get; }
+    string AttemptId { get; }
+    string ExecutableNodeId { get; }
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>

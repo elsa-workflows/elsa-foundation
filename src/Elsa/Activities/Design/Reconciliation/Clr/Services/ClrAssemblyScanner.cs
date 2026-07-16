@@ -37,6 +37,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string OutputArgumentFullName = typeof(OutputArgument).FullName!;
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
     private static readonly string ActivityInputAttributeFullName = typeof(ActivityInputAttribute).FullName!;
+    private static readonly string OutputAttributeFullName = typeof(OutputAttribute).FullName!;
     private static readonly string ActivityInputOptionAttributeFullName = typeof(ActivityInputOptionAttribute).FullName!;
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
@@ -120,7 +121,8 @@ public sealed class ClrAssemblyScanner(
 
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var inputNames = properties
-            .Where(property => DerivesFrom(property.PropertyType, InputArgumentFullName))
+            .Where(property => DerivesFrom(property.PropertyType, InputArgumentFullName) ||
+                               ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, ActivityInputAttributeFullName))
             .Select(property => property.Name)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -145,6 +147,26 @@ public sealed class ClrAssemblyScanner(
                     DefaultSyntax: metadata.DefaultSyntax));
             }
 
+            else if (ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, ActivityInputAttributeFullName))
+            {
+                var metadata = ReadActivityInputMetadata(property, property.PropertyType, inputNames, type.FullName!);
+                var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName)!;
+                var key = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Key)) ?? property.Name;
+                inputs.Add(new InputDefinition(
+                    ReferenceKey: key,
+                    Name: property.Name,
+                    Type: ToTypeReference(property.PropertyType),
+                    StorageDriverType: null,
+                    DisplayName: property.Name,
+                    Category: metadata.Category,
+                    Order: metadata.Order,
+                    UiHint: metadata.UiHint,
+                    UISpecifications: metadata.UiSpecifications,
+                    IsRequired: HasRequired(property),
+                    DefaultValue: metadata.DefaultValue,
+                    DefaultSyntax: metadata.DefaultSyntax));
+            }
+
             else if (DerivesFrom(property.PropertyType, OutputArgumentFullName))
                 outputs.Add(new OutputDefinition(
                     ReferenceKey: property.Name,
@@ -154,6 +176,29 @@ public sealed class ClrAssemblyScanner(
                     DisplayName: property.Name,
                     Category: null,
                     IsRequired: HasRequired(property)));
+        }
+
+
+        var resultType = FindTypedActivityResult(type);
+        if (resultType is not null)
+        {
+            foreach (var property in resultType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var attribute = property.GetCustomAttributesData().FirstOrDefault(item => item.AttributeType.FullName == OutputAttributeFullName);
+                if (attribute is null)
+                    continue;
+
+                var key = ReadNamedStringArgument(attribute, nameof(OutputAttribute.Key)) ?? property.Name;
+                outputs.Add(new OutputDefinition(
+                    ReferenceKey: key,
+                    Name: property.Name,
+                    Type: ToTypeReference(property.PropertyType),
+                    StorageDriverType: null,
+                    DisplayName: property.Name,
+                    Category: null,
+                    IsRequired: !HasNamedArgument(attribute, nameof(OutputAttribute.IsRequired)) ||
+                                ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired))));
+            }
         }
 
         return new ActivityVersionReconciliationModel(
@@ -256,6 +301,18 @@ public sealed class ClrAssemblyScanner(
     private static bool IsActivityType(Type type) =>
         type is { IsClass: true, IsAbstract: false }
         && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName);
+
+    private static Type? FindTypedActivityResult(Type activityType)
+    {
+        var typedActivityName = typeof(Activity<>).FullName;
+        for (var current = activityType; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition().FullName == typedActivityName)
+                return current.GetGenericArguments()[0];
+        }
+
+        return null;
+    }
 
     private static bool IsRecoverableReflectionException(Exception exception) =>
         exception is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException;

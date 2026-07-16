@@ -22,24 +22,24 @@ public class ClrActivityConstructorTests
         // the canonical payload serializer (the same one the constructor reads with) and the activity type is
         // registered in the well-known type registry so its alias resolves — no assembly name/version anywhere.
         var serializer = Serializer();
-        var payload = ClrConstruction.Payload(serializer, typeof(WriteLine));
+        var payload = ClrConstruction.Payload(serializer, typeof(WriteLines));
 
         var registry = new ActivityConstructorRegistry();
         var serviceProvider = new ServiceCollection().BuildServiceProvider();
-        registry.Add(ClrConstruction.Constructor(serviceProvider, serializer, typeof(WriteLine)));
+        registry.Add(ClrConstruction.Constructor(serviceProvider, serializer, typeof(WriteLines)));
         var factory = new ActivityFactory(registry);
 
         var inputs = new Dictionary<string, InputArgument>
         {
-            ["Text"] = new InputArgument<string>(new MemoryBlockReference())
+            ["Lines"] = new InputArgument<ICollection<string>>(new MemoryBlockReference())
         };
 
         // Act
         var activity = await factory.Create(ClrConstruction.DescriptorType, payload, inputs, null);
 
         // Assert
-        var writeLine = Assert.IsType<WriteLine>(activity);
-        Assert.NotNull(writeLine.Text);
+        var writeLines = Assert.IsType<WriteLines>(activity);
+        Assert.NotNull(writeLines.Lines);
     }
 
     [Fact] // descriptor type is derived from typeof(TDescriptor) — never hand-authored

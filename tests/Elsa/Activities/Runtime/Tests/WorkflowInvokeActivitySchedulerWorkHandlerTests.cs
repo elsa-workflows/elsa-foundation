@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -67,6 +68,35 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal("node-start", completionPayload.ExecutableNodeId);
         Assert.Equal([ActivityOutcomes.Done], completionPayload.OutcomeNames);
         Assert.Equal(RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason, completionPayload.Reason);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TypedNode_UsesActivationLeaseAndCommitsReturnedResultAtomically()
+    {
+        var legacyFactory = new RecordingActivityFactory(new RecordingActivity());
+        var activator = new RecordingTypedActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(legacyFactory, activityActivator: activator);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal(0, legacyFactory.CreateCalls);
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.True(activator.Activity!.Disposed);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state?.InputSnapshot);
+        Assert.Equal("hello", state.InputSnapshot.Values["text"].InlineValue!.Value.GetString());
+        Assert.Equal("Done", state.Completion?.OutcomeKey);
+        Assert.Equal(5, state.Completion?.Result.InlineValue!.Value.GetProperty("length").GetInt32());
+        Assert.Single(state.Attempts!);
+        Assert.NotNull(state.Attempts!.Single().EndedAt);
+
+        var projected = (await _durableValueStateStore.ListAsync("wfexec-1"))
+            .Single(value => value.Metadata.TryGetValue(RuntimeMetadataKeys.OutputName, out var name) && name == "length");
+        Assert.Equal(5, projected.InlineValue!.Value.GetInt32());
+        await AssertCompletionWorkAsync();
     }
 
     [Fact]
@@ -883,7 +913,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         bool includeInspection = false,
         IRuntimePayloadCapturePolicy? payloadCapturePolicy = null,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
-        IExpressionEvaluator? expressionEvaluator = null)
+        IExpressionEvaluator? expressionEvaluator = null,
+        IActivityActivator? activityActivator = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => factory);
@@ -912,6 +943,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
+        services.AddSingleton<ActivityCompletionProjector>();
+        if (activityActivator is not null)
+            services.AddSingleton(activityActivator);
         services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         if (includeInspection)
         {
@@ -1039,6 +1073,55 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
+    private static WorkflowExecutable NewTypedExecutable()
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { type = "typed" });
+        var contract = new ActivityContract(
+            "test/typed",
+            "1.0.0",
+            "typed",
+            descriptor,
+            [new ActivityInputContract("text", "Text", new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Any"), true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(
+                new Elsa.Primitives.Models.ValueTypeDescriptor("test/typed-result"),
+                true,
+                ActivityValuePolicy.Default,
+                [new ActivityResultProjectionContract("length", "length", new Elsa.Primitives.Models.ValueTypeDescriptor("Int32"), true, ActivityValuePolicy.Default)]),
+            ["Done"],
+            new ActivityActivationRequirement("typed", "test/typed"));
+        var input = new RuntimeInputBinding(
+            inputName: "text",
+            source: RuntimeInputBindingSource.Literal,
+            literalValue: JsonSerializer.SerializeToElement("hello"),
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeof(string).FullName! });
+        var node = new ExecutableNode(
+            "node-start",
+            "authored-node-start",
+            "test/typed",
+            "1.0.0",
+            "typed",
+            descriptor,
+            new Dictionary<string, RuntimeInputBinding> { ["text"] = input },
+            new Dictionary<string, RuntimeOutputCapture>
+            {
+                ["length"] = new(
+                    "length",
+                    "node-start:result:length",
+                    new RuntimeValueTypeDescriptor("alias", "Int32", null),
+                    DurableValueLifecycle.Instance,
+                    DurableValueStorage.Inline,
+                    true)
+            },
+            new Dictionary<string, string>(),
+            activityContract: contract);
+        return new WorkflowExecutable(
+            NewIdentity(),
+            node,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UtcNow,
+            new Dictionary<string, string>());
+    }
+
     private static ExecutableNode WithChildren(ExecutableNode root, IReadOnlyCollection<ExecutableNode> children) =>
         new(
             executableNodeId: root.ExecutableNodeId,
@@ -1053,7 +1136,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             childSlots:
             [
                 new ExecutableChildSlot("children", children)
-            ]);
+            ],
+            activityContract: root.ActivityContract);
 
     private static ExecutableNode NewNode(
         string nodeId,
@@ -1136,6 +1220,32 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             return ValueTask.FromResult(activity);
         }
     }
+
+    private sealed class RecordingTypedActivator : IActivityActivator
+    {
+        public int ActivateCalls { get; private set; }
+        public TypedCompletingActivity? Activity { get; private set; }
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            ActivateCalls++;
+            var text = request.Inputs.Values["text"].InlineValue!.Value.GetString()!;
+            Activity = new TypedCompletingActivity(text);
+            return ValueTask.FromResult(new ActivityActivationLease(Activity));
+        }
+    }
+
+    private sealed class TypedCompletingActivity(string text) : Activity<TypedResult>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(text.Length)));
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed record TypedResult(int Length);
 
     private sealed class ThrowingActivityFactory(Exception exception) : IActivityFactory
     {
