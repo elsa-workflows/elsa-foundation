@@ -249,14 +249,67 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Equal(new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero).UtcTicks, result["historySortTicks"]!.GetValue<long>());
     }
 
+    [Fact]
+    public void WorkflowExecutableV2ToV3Upcaster_adds_input_identity_and_sensitivity_recursively()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "executable": {
+                "rootActivity": {
+                  "executableNodeId": "root",
+                  "inputBindings": {
+                    "rootInput": { "inputName": "rootInput" }
+                  },
+                  "childSlots": [
+                    {
+                      "activities": [
+                        {
+                          "executableNodeId": "child",
+                          "inputBindings": {
+                            "childInput": { "inputName": "childInput" }
+                          },
+                          "childSlots": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var result = new WorkflowExecutableDocumentV2ToV3Upcaster().Upcast(content);
+
+        var root = result["executable"]!["rootActivity"]!;
+        var rootBinding = root["inputBindings"]!["rootInput"]!;
+        Assert.Equal("rootInput", rootBinding["inputKey"]!.GetValue<string>());
+        Assert.False(rootBinding["isSensitive"]!.GetValue<bool>());
+
+        var childBinding = root["childSlots"]![0]!["activities"]![0]!["inputBindings"]!["childInput"]!;
+        Assert.Equal("childInput", childBinding["inputKey"]!.GetValue<string>());
+        Assert.False(childBinding["isSensitive"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void WorkflowExecutableSourceReferenceV2ToV3Upcaster_adds_empty_authored_inputs()
+    {
+        var content = JsonNode.Parse("""{"reference":{"sourceReferenceId":"reference-1"}}""")!.AsObject();
+
+        var result = new WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster().Upcast(content);
+
+        Assert.Empty(Assert.IsType<JsonArray>(result["reference"]!["authoredInputs"]));
+    }
+
     private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
         params IGroundworkRuntimeDocumentUpcaster[] additional) =>
         new(
         [
             new WorkflowExecutableDocumentV1ToV2Upcaster(),
+            new WorkflowExecutableDocumentV2ToV3Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
+            new WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster(),
             new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
             new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),
             .. additional
