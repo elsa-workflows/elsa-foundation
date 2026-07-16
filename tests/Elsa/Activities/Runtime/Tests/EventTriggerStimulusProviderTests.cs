@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -132,10 +134,24 @@ public sealed class EventTriggerStimulusProviderTests
 
     private static RuntimeInputBinding LiteralBinding(string name, string value)
     {
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(value));
-        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+        var type = new ValueTypeDescriptor("String");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
     }
 
     private static RuntimeInputBinding ExpressionBinding(string name) =>
-        new(name, RuntimeInputBindingSource.Expression, expression: new RuntimeExpressionBinding("JavaScript", "input.eventName"));
+        new(
+            name,
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                "input.eventName",
+                new RuntimeValueTypeDescriptor("alias", "String", null),
+                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
 }

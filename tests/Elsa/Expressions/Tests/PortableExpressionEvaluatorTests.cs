@@ -41,8 +41,9 @@ public sealed class PortableExpressionEvaluatorTests
     }
 
     [Fact]
-    public async Task Rejects_legacy_ambient_profile_before_dispatch()
+    public async Task Rejects_any_non_binding_pure_profile_before_dispatch()
     {
+        const string unsupportedProfile = "ambient-state-v1";
         var handler = new RecordingHandler("JavaScript", JsonSerializer.SerializeToElement(42));
         var evaluator = new PortableExpressionEvaluator([handler]);
 
@@ -50,14 +51,14 @@ public sealed class PortableExpressionEvaluatorTests
             await evaluator.EvaluateAsync(Request(
                 "JavaScript",
                 new Dictionary<string, JsonElement>(),
-                ExpressionCapabilityProfiles.LegacyAmbientV1)));
+                unsupportedProfile)));
 
         Assert.Contains(ExpressionCapabilityProfiles.BindingPureV1, exception.Message, StringComparison.Ordinal);
-        Assert.Contains(ExpressionCapabilityProfiles.LegacyAmbientV1, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(unsupportedProfile, exception.Message, StringComparison.Ordinal);
         Assert.False(Request(
             "JavaScript",
             new Dictionary<string, JsonElement>(),
-            ExpressionCapabilityProfiles.LegacyAmbientV1).Capabilities.IsBindingPure);
+            unsupportedProfile).Capabilities.IsBindingPure);
         Assert.Null(handler.Request);
     }
 

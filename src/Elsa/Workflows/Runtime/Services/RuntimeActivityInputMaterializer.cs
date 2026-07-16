@@ -15,7 +15,6 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMaterializer
 {
-    public const string InputTypeMetadataKey = "typeName";
     private readonly IRuntimeInputBindingResolver _inputBindingResolver;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry;
     private readonly IExternalPayloadStore? _externalPayloadStore;
@@ -96,61 +95,6 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ComputeBindingFingerprint(node),
             values,
             materializedAt);
-    }
-
-    public ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
-        ExecutableNode node,
-        IServiceProvider? serviceProvider = null,
-        CancellationToken cancellationToken = default) =>
-        MaterializeInputsAsync(
-            node,
-            new RuntimeInputBindingResolutionContext(
-                workflowExecutionId: "literal-only",
-                activityExecutionId: "literal-only",
-                durableValuesByValueId: new Dictionary<string, DurableValueState>(),
-                activityOutputs: EmptyRuntimeActivityOutputReader.Instance,
-                serviceProvider: serviceProvider),
-            cancellationToken);
-
-    public async ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
-        ExecutableNode node,
-        RuntimeInputBindingResolutionContext resolutionContext,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(node);
-        ArgumentNullException.ThrowIfNull(resolutionContext);
-
-        var inputs = new List<RuntimeMaterializedActivityInput>();
-
-        foreach (var (inputName, binding) in node.InputBindings)
-        {
-            var type = ResolveInputType(binding, node.ExecutableNodeId, inputName);
-            var value = await MaterializeValueAsync(node, inputName, binding, resolutionContext, cancellationToken, type);
-
-            inputs.Add(BuildInput(node.ExecutableNodeId, inputName, type, value));
-        }
-
-        return inputs;
-    }
-
-    private async ValueTask<object?> MaterializeValueAsync(
-        ExecutableNode node,
-        string inputName,
-        RuntimeInputBinding binding,
-        RuntimeInputBindingResolutionContext resolutionContext,
-        CancellationToken cancellationToken,
-        Type? resolvedType = null)
-    {
-        var type = resolvedType ?? ResolveInputType(binding, node.ExecutableNodeId, inputName);
-        var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
-
-        if (resolved.Source == RuntimeInputBindingSource.Expression)
-            return CoerceToType(await EvaluateExpressionAsync(resolved, type, binding.TargetType, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
-
-        if (resolved.Value.HasValue)
-            return JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
-
-        throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported materialized value binding.");
     }
 
     private async ValueTask<ValueEnvelope> MaterializeEnvelopeAsync(
@@ -360,14 +304,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Object, StringComparison.Ordinal))
             return DeserializeObjectExpression(expression, type, nodeId, inputName);
 
-        var serviceProvider = resolutionContext.ServiceProvider
-            ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no service provider was supplied to evaluate it.");
-
-        if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.LegacyAmbientV1))
-            return await EvaluatePortableExpressionAsync(expression, targetType, nodeId, inputName, resolutionContext, cancellationToken);
-
-        return await LegacyAmbientExpressionMaterializer.EvaluateAsync(
-            expression, type, nodeId, inputName, resolutionContext, cancellationToken);
+        return await EvaluatePortableExpressionAsync(expression, targetType, nodeId, inputName, resolutionContext, cancellationToken);
     }
 
     /// <summary>
@@ -384,8 +321,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(expression);
-        if (StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.LegacyAmbientV1))
-            throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' cannot use the legacy ambient capability profile.");
+        if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
+            throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
 
         var serviceProvider = resolutionContext.ServiceProvider
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no service provider was supplied to evaluate it.");
@@ -596,228 +533,21 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             : JsonSerializer.Deserialize(element.GetRawText(), type);
     }
 
-    private static RuntimeMaterializedActivityInput BuildInput(string nodeId, string inputName, Type type, object? value)
-    {
-        var memoryReference = new LiteralMemoryBlockReference($"{nodeId}:{inputName}");
-        var argumentType = typeof(InputArgument<>).MakeGenericType(type);
-        var argument = (InputArgument)Activator.CreateInstance(argumentType, memoryReference)!;
-        return new RuntimeMaterializedActivityInput(inputName, argument, value);
-    }
-
     private Type ResolveInputType(RuntimeInputBinding binding, string nodeId, string inputName)
     {
-        if (binding.TargetType.Alias != "Elsa.Any")
-        {
-            if (_wellKnownTypeRegistry is null)
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{binding.TargetType.Alias}', but no well-known type registry was supplied.");
+        if (binding.TargetType.Alias == "Elsa.Any")
+            return typeof(object);
+        if (_wellKnownTypeRegistry is null)
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{binding.TargetType.Alias}', but no well-known type registry was supplied.");
 
-            var typeReference = binding.TargetType.ToTypeReference();
-            var resolvedType = TypeReferenceFactory.Resolve(
-                typeReference,
-                alias => _wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
+        var typeReference = binding.TargetType.ToTypeReference();
+        var resolvedType = TypeReferenceFactory.Resolve(
+            typeReference,
+            alias => _wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
 
-            if (resolvedType == typeof(object) && !string.Equals(binding.TargetType.Alias, "Object", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{binding.TargetType.Alias}'.");
+        if (resolvedType == typeof(object) && !string.Equals(binding.TargetType.Alias, "Object", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{binding.TargetType.Alias}'.");
 
-            return resolvedType;
-        }
-
-        if (!binding.Metadata.TryGetValue(InputTypeMetadataKey, out var typeName))
-            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' is missing '{InputTypeMetadataKey}' metadata.");
-
-        return ResolveType(typeName, nodeId, inputName);
+        return resolvedType;
     }
-
-    private static Type ResolveType(string typeName, string nodeId, string inputName)
-    {
-        var type = Type.GetType(typeName, throwOnError: false);
-        if (type is not null)
-            return type;
-
-        var delimiterIndex = typeName.IndexOf(',', StringComparison.Ordinal);
-        var fullName = delimiterIndex >= 0 ? typeName[..delimiterIndex].Trim() : typeName.Trim();
-        var assemblyName = delimiterIndex >= 0 ? typeName[(delimiterIndex + 1)..].Split(',')[0].Trim() : null;
-
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            if (!string.IsNullOrWhiteSpace(assemblyName) && !StringComparer.Ordinal.Equals(assembly.GetName().Name, assemblyName))
-                continue;
-
-            type = assembly.GetType(fullName, throwOnError: false);
-            if (type is not null)
-                return type;
-        }
-
-        throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares type '{typeName}', but that type could not be loaded.");
-    }
-
-    private sealed class LiteralMemoryBlockReference(string id) : IMemoryBlockReference
-    {
-        public string Id { get; set; } = id;
-
-        public IMemoryBlock Declare() => new LiteralMemoryBlock();
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context)
-        {
-            var value = GetValue(memoryRegister);
-            var objectConverter = context.GetRequiredService<IObjectConverter>();
-            return objectConverter.ConvertTo<T>(value);
-        }
-
-        public object? Get(IExpressionExecutionContext context) => context.Get(this);
-
-        public T? Get<T>(IExpressionExecutionContext context) => context.Get<T>(this);
-
-        private object? GetValue(IMemoryRegister memoryRegister)
-        {
-            if (!memoryRegister.Blocks.TryGetValue(Id, out var block))
-                block = memoryRegister.Declare(this);
-
-            return block.Value;
-        }
-    }
-
-    private sealed class LiteralMemoryBlock : IMemoryBlock
-    {
-        public object? Value { get; set; }
-        public object? Metadata { get; set; }
-    }
-
-    private sealed class EmptyRuntimeActivityOutputReader : IRuntimeActivityOutputReader
-    {
-        public static readonly EmptyRuntimeActivityOutputReader Instance = new();
-
-        public bool TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)
-        {
-            output = null!;
-            return false;
-        }
-
-        public IReadOnlyCollection<ActiveActivityOutput> GetActivityOutputs(string workflowExecutionId, string activityExecutionId) => [];
-    }
-
-    /// <summary>
-    /// Compatibility-only evaluator for executable artifacts that still carry the explicit
-    /// <c>legacy-ambient-v1</c> profile. Canonical portable expressions never enter this adapter.
-    /// </summary>
-    private static class LegacyAmbientExpressionMaterializer
-    {
-        public static async ValueTask<object?> EvaluateAsync(
-            RuntimeExpressionBinding expression,
-            Type returnType,
-            string nodeId,
-            string inputName,
-            RuntimeInputBindingResolutionContext resolutionContext,
-            CancellationToken cancellationToken)
-        {
-            if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.LegacyAmbientV1))
-                throw new InvalidOperationException("The ambient compatibility evaluator only accepts legacy-ambient-v1 expressions.");
-            var serviceProvider = resolutionContext.ServiceProvider
-                ?? throw new InvalidOperationException($"Legacy expression input '{inputName}' on executable node '{nodeId}' has no evaluation service scope.");
-            var evaluator = serviceProvider.GetService(typeof(IExpressionEvaluator)) as IExpressionEvaluator
-                ?? throw new InvalidOperationException($"Legacy expression input '{inputName}' on executable node '{nodeId}' requires an '{nameof(IExpressionEvaluator)}'.");
-            var context = new LegacyMaterializationContext(resolutionContext, serviceProvider, cancellationToken);
-
-            try
-            {
-                return await evaluator.EvaluateAsync(
-                    new LegacyRuntimeExpression(expression.Language, BuildValue(expression)),
-                    returnType,
-                    context);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                throw new InvalidOperationException($"Legacy expression input '{inputName}' on executable node '{nodeId}' failed to evaluate.", exception);
-            }
-        }
-
-        private static object? BuildValue(RuntimeExpressionBinding expression)
-        {
-            if (!StringComparer.Ordinal.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Variable))
-                return expression.Expression;
-
-            try
-            {
-                return JsonSerializer.Deserialize<JsonElement>(expression.Expression);
-            }
-            catch (JsonException)
-            {
-                return expression.Expression;
-            }
-        }
-
-        private sealed class LegacyRuntimeExpression(string type, object? value) : IExpression
-        {
-            public string Type { get; set; } = type;
-            public object? Value { get; set; } = value;
-            public TValue GetValue<TValue>() => (TValue)Value!;
-        }
-
-        private sealed class LegacyMaterializationContext(
-            RuntimeInputBindingResolutionContext resolutionContext,
-            IServiceProvider serviceProvider,
-            CancellationToken cancellationToken)
-            : IExpressionExecutionContext, IMaterializationExpressionState, IScopedVariableProvider
-        {
-            public IReadOnlyDictionary<string, object?> WorkflowVariables => resolutionContext.WorkflowVariables;
-            public IReadOnlyDictionary<string, object?> WorkflowInputs => resolutionContext.WorkflowInputs;
-            public IReadOnlyDictionary<string, object?> ActivityOutputValues => resolutionContext.ActivityOutputValues;
-            public IMemoryRegister Memory => null!;
-            public IExpressionExecutionContext? ParentContext { get => null; set { } }
-            public CancellationToken CancellationToken { get; } = cancellationToken;
-            public object? GetRequiredService(Type type) => serviceProvider.GetService(type)
-                ?? throw new InvalidOperationException($"Required legacy expression service '{type.FullName}' is not registered.");
-            public bool IsContainedWithinCompositeActivity() => false;
-            public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }
-            public bool TryGetWorkflowInput(string key, out object? value) => WorkflowInputs.TryGetValue(key, out value);
-            public object? GetVariableValueOrDefault(string variableName) => WorkflowVariables.GetValueOrDefault(variableName);
-            public string GetCorrelationId() => string.Empty;
-            public string GetWorkflowDefinitionId() => string.Empty;
-            public string GetWorkflowDefinitionVersionId() => string.Empty;
-            public int GetWorkflowDefinitionVersion() => 0;
-            public string GetWorkflowInstanceId() => resolutionContext.WorkflowExecutionId;
-            public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => blockReference.Declare();
-            public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) { block = null!; return false; }
-            public T? Get<T>(IMemoryBlockReference blockReference) => (T?)blockReference.Declare().Value;
-            public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null) { }
-            public IVariable? GetVariable(string name, bool localScopeOnly = false) =>
-                WorkflowVariables.TryGetValue(name, out var value) ? new LegacyVariable(name, value) : null;
-            public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null) => new LegacyVariable(name, value);
-            public IEnumerable<IVariable> EnumerateVariablesInScope() =>
-                WorkflowVariables.Select(entry => new LegacyVariable(entry.Key, entry.Value)).ToArray();
-            public bool TryGetScopedVariableValue(VariableReference reference, out object? value) =>
-                resolutionContext.VariableScope?.TryGetValue(reference, out value) ?? ReturnFalse(out value);
-            public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
-                resolutionContext.VariableScope?.TrySetValue(reference, value) ?? false;
-            public IReadOnlyCollection<IVariable> GetVisibleVariables() =>
-                resolutionContext.VariableScope?.EnumerateVisibleVariables() ?? [];
-            public bool TryGetVariableValueByName(string name, out object? value) =>
-                resolutionContext.VariableScope?.TryGetValueByName(name, out value) ?? ReturnFalse(out value);
-            public bool TrySetVariableValueByName(string name, object? value) =>
-                resolutionContext.VariableScope?.TrySetValueByName(name, value) ?? false;
-
-            private static bool ReturnFalse(out object? value)
-            {
-                value = null;
-                return false;
-            }
-        }
-
-        private sealed class LegacyVariable(string name, object? value) : IVariable
-        {
-            public string Id { get; set; } = $"legacy-variable:{name}";
-            public string Name { get; set; } = name;
-            public object? DefaultValue { get; set; } = value;
-            public Type? StorageDriverType { get; set; }
-            public IMemoryBlock Declare() => new LiteralMemoryBlock { Value = DefaultValue };
-            public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
-            public object? Get(IExpressionExecutionContext context) => DefaultValue;
-            public T? Get<T>(IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
-        }
-    }
-
 }

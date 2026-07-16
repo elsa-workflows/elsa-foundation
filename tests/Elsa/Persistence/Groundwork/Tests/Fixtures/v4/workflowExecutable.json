@@ -44,19 +44,15 @@
               "executableNodeId": "child",
               "inputBindings": {
                 "to": {
-                  "activityOutput": null,
                   "activityResult": null,
-                  "durableValue": {
-                    "valueId": "customerEmail"
-                  },
                   "effectivePolicy": {
                     "isSensitive": false,
-                    "lifecycle": 0,
+                    "lifecycle": 1,
                     "metadata": {},
                     "redactionMode": null,
                     "requiresEncryption": false,
                     "retentionPolicy": null,
-                    "storage": 0
+                    "storage": 1
                   },
                   "expression": null,
                   "inputKey": "to",
@@ -64,16 +60,18 @@
                   "literal": null,
                   "literalValue": null,
                   "metadata": {},
-                  "reference": null,
-                  "source": 3,
+                  "source": 2,
                   "targetType": {
-                    "alias": "Elsa.Any",
+                    "alias": "String",
                     "collectionKind": "Single",
                     "schema": null,
                     "schemaVersion": null
                   },
                   "variable": null,
-                  "workflowRequest": null
+                  "workflowRequest": {
+                    "memberKey": "customerEmail",
+                    "path": null
+                  }
                 }
               },
               "intrinsicKind": null,

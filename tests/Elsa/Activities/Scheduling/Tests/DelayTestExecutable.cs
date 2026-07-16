@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Activities.Primitives.Binding;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Testing;
@@ -62,11 +61,7 @@ internal static class DelayTestExecutable
                     literal: ValueEnvelope.Inline(
                         new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(TimeSpan))),
                         JsonSerializer.SerializeToElement(duration),
-                        ValueProtectionPolicy.InstanceInline),
-                    metadata: new Dictionary<string, string>
-                    {
-                        [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeof(TimeSpan).FullName!
-                    })
+                        ValueProtectionPolicy.InstanceInline))
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),

@@ -1,5 +1,6 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Design.Tests.ClrFixture;
@@ -9,13 +10,17 @@ namespace Elsa.Activities.Design.Tests.ClrFixture;
 /// assembly's version (pinned to <c>2.1.0</c> in the fixture csproj). Carries a required input to
 /// exercise the scanner's <c>[Required]</c> → <c>IsRequired</c> mapping.
 /// </summary>
-public sealed class UnannotatedFixtureActivity : ActivityBase
+public sealed class UnannotatedFixtureActivity : Activity<UnannotatedFixtureResult>
 {
+    [ActivityInput]
     [Required]
-    public InputArgument<string> Message { get; set; } = null!;
+    public string Message { get; set; } = null!;
 
-    public OutputArgument<string> Result { get; set; } = null!;
+    protected override ValueTask<ActivityTransition<UnannotatedFixtureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new UnannotatedFixtureResult(Message)));
 }
+
+public sealed record UnannotatedFixtureResult([property: Output] string Result);
 
 /// <summary>
 /// An activity whose <c>[Version]</c> attribute overrides the assembly version — the scanner must
@@ -48,7 +53,7 @@ public abstract class RequiredInputBaseActivity : ActivityBase
 {
     [Required]
     [ActivityInput(Order = 42, Category = "Advanced", DefaultValue = "inherited-default", DefaultSyntax = "Literal")]
-    public virtual InputArgument<string> InheritedRequired { get; set; } = null!;
+    public virtual string InheritedRequired { get; set; } = null!;
 }
 
 /// <summary>
@@ -59,7 +64,7 @@ public abstract class RequiredInputBaseActivity : ActivityBase
 /// </summary>
 public sealed class InheritsRequiredFixtureActivity : RequiredInputBaseActivity
 {
-    public new InputArgument<string> InheritedRequired { get; set; } = null!;
+    public new string InheritedRequired { get; set; } = null!;
 }
 
 /// <summary>An enum used as a complex (non-primitive) activity input value type.</summary>
@@ -85,71 +90,74 @@ public sealed class FixturePayload
 public sealed class ComplexInputFixtureActivity : ActivityBase
 {
     [ActivityInput(Order = 20)]
-    public InputArgument<FixturePayload> Payload { get; set; } = null!;
+    public FixturePayload Payload { get; set; } = null!;
 
     [ActivityInput(Order = 10, Category = "Simple", DefaultValue = "Auto", DefaultSyntax = "Literal")]
-    public InputArgument<FixtureMode> Mode { get; set; } = null!;
+    public FixtureMode Mode { get; set; }
 
     [ActivityInput(Order = 30)]
-    public InputArgument<string> Label { get; set; } = null!;
+    public string Label { get; set; } = null!;
 
     [ActivityInput(Order = 40, DefaultValue = "1", DefaultSyntax = "Literal")]
-    public InputArgument<int> Count { get; set; } = null!;
+    public int Count { get; set; }
 }
 
 /// <summary>Valid option declarations used by the reflection-only scanner contract tests.</summary>
 public sealed class InputOptionsFixtureActivity : ActivityBase
 {
     [ActivityInput(UIHint = "dropdown", Options = ["red", "green"])]
-    public InputArgument<string> Color { get; set; } = null!;
+    public string Color { get; set; } = null!;
 
     [ActivityInput(UIHint = "dropdown")]
     [ActivityInputOption("Low", 1)]
     [ActivityInputOption("High", 10)]
-    public InputArgument<int> Priority { get; set; } = null!;
+    public int Priority { get; set; }
 
     [ActivityInput]
     [ActivityInputOption("Automatic", FixtureMode.Auto)]
     [ActivityInputOption("Disabled", FixtureMode.Off)]
-    public InputArgument<FixtureMode> Mode { get; set; } = null!;
+    public FixtureMode Mode { get; set; }
 
+    [ActivityInput]
     [ActivityInputOption("Enabled", true)]
     [ActivityInputOption("Disabled", false)]
-    public InputArgument<bool> Enabled { get; set; } = null!;
+    public bool Enabled { get; set; }
 
+    [ActivityInput]
     [ActivityInputOption("Minimum JS-safe integer", -9007199254740991L)]
     [ActivityInputOption("Maximum JS-safe integer", 9007199254740991L)]
-    public InputArgument<long> JsSafeIntegerBoundary { get; set; } = null!;
+    public long JsSafeIntegerBoundary { get; set; }
 
     [ActivityInput(OptionsProvider = "fixture.fields", OptionsProviderDependencies = [nameof(Entity)])]
-    public InputArgument<string> Field { get; set; } = null!;
+    public string Field { get; set; } = null!;
 
-    public InputArgument<string> Entity { get; set; } = null!;
+    [ActivityInput]
+    public string Entity { get; set; } = null!;
 }
 
 public abstract class InheritedInputOptionsBaseActivity : ActivityBase
 {
     [ActivityInput(UIHint = "dropdown", Options = ["base-a", "base-b"])]
-    public virtual InputArgument<string> Choice { get; set; } = null!;
+    public virtual string Choice { get; set; } = null!;
 }
 
 public sealed class InheritedInputOptionsFixtureActivity : InheritedInputOptionsBaseActivity
 {
-    public override InputArgument<string> Choice { get; set; } = null!;
+    public override string Choice { get; set; } = null!;
 }
 
 public abstract class ReplacedInputOptionsBaseActivity : ActivityBase
 {
     [ActivityInput(UIHint = "dropdown")]
     [ActivityInputOption("Base", 1)]
-    public virtual InputArgument<int> Choice { get; set; } = null!;
+    public virtual int Choice { get; set; }
 }
 
 public sealed class ReplacedInputOptionsFixtureActivity : ReplacedInputOptionsBaseActivity
 {
     [ActivityInputOption("Derived first", 2)]
     [ActivityInputOption("Derived second", 3)]
-    public override InputArgument<int> Choice { get; set; } = null!;
+    public override int Choice { get; set; }
 }
 
 /// <summary>
@@ -159,7 +167,9 @@ public sealed class ReplacedInputOptionsFixtureActivity : ReplacedInputOptionsBa
 [ActivityStructure("fixture.structure", "1.0.0", Mode = "sequence", SupportsScopedVariables = true)]
 [ActivityChildSlot("Fixture.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityChildSlot("Fixture.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class StructuredFixtureActivity : ActivityBase;
+public sealed class StructuredFixtureActivity : ActivityBase, IActivityResult<StructuredFixtureResult>;
+
+public sealed record StructuredFixtureResult([property: Output(Key = "summary")] string Summary);
 
 /// <summary>A trigger fixture that declares both its execution shape and stable catalog key.</summary>
 [TriggerActivity]
@@ -172,7 +182,7 @@ public sealed class TriggerFixtureActivity : ActivityBase
     }
 }
 
-/// <summary>A wrapper-free typed activity used to verify plain CLR contract discovery.</summary>
+/// <summary>A typed activity used to verify stable plain CLR contract discovery keys.</summary>
 public sealed class PlainFixtureActivity : Activity<PlainFixtureResult>
 {
     [ActivityInput(Key = "message")]

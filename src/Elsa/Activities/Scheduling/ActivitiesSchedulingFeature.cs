@@ -10,7 +10,7 @@ namespace Elsa.Activities.Scheduling;
 /// <summary>
 /// Scheduling activities: <see cref="Activities.Delay"/> (durable one-shot suspend/resume) plus the recurring
 /// start triggers <see cref="Activities.Timer"/> and <see cref="Activities.Cron"/>. The activity types are
-/// resolved by the runtime's <c>ClrActivityConstructor</c> — no per-type DI registration is required — but the
+/// resolved by the transient CLR activator — no per-type DI registration is required — but the
 /// two recurring triggers each contribute a publish-time <see cref="IActivityTriggerStimulusProvider"/> (for the
 /// trigger index) and an <see cref="IRecurringTriggerScheduleProvider"/> (for the recurring-schedule store),
 /// which this feature registers.

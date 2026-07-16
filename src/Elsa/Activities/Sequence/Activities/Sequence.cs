@@ -12,6 +12,8 @@ namespace Elsa.Activities.Sequence.Activities;
 
 [ActivityStructure("elsa.sequence.structure", "1.0.0", Mode = "sequence", SupportsScopedVariables = true)]
 [ActivityChildSlot("Sequence.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
+[ActivityOutcome(ActivityOutcomes.Done)]
+[ActivityOutcome(ActivityOutcomes.Break)]
 public sealed class Sequence : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
 {
     public const string ActivitiesSlotName = "Sequence.Activities";

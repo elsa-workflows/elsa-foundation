@@ -1,9 +1,6 @@
 using System.Linq.Expressions;
-using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
@@ -66,48 +63,6 @@ internal static class TestRootWriteLeases
             executableStore,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
             timeProvider ?? TimeProvider.System);
-}
-
-/// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>
-internal sealed class StubActivity : IActivity
-{
-    public string Greeting { get; set; } = "hello";
-
-    public string Id { get; set; } = "act-1";
-    public string NodeId { get; set; } = "node-1";
-    public string? Name { get; set; }
-    public string Type { get; set; } = "Stub";
-    public string Version { get; set; } = "1.0.0";
-    public Dictionary<string, object> CustomProperties { get; set; } = new() { ["author"] = "joey" };
-    public Dictionary<string, object> SyntheticProperties { get; set; } = new() { ["WorkflowIdentity"] = "wf-123" };
-    public Dictionary<string, object> Metadata { get; set; } = new();
-
-    public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-    public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
-        ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
-}
-
-/// <summary>Captures what the bridge passed across the seam and returns a preset activity.</summary>
-internal sealed class FakeActivityFactory(IActivity result) : IActivityFactory
-{
-    public string? LastDescriptorType { get; private set; }
-    public JsonElement LastPayload { get; private set; }
-    public IDictionary<string, InputArgument>? LastInputs { get; private set; }
-    public IDictionary<string, OutputArgument>? LastOutputs { get; private set; }
-
-    public ValueTask<IActivity> Create(
-        string descriptorType,
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
-        CancellationToken cancellationToken = default)
-    {
-        LastDescriptorType = descriptorType;
-        LastPayload = payload;
-        LastInputs = inputs;
-        LastOutputs = outputs;
-        return ValueTask.FromResult(result);
-    }
 }
 
 /// <summary>Minimal in-memory activity version read port: only the routes the bridge uses are real.</summary>

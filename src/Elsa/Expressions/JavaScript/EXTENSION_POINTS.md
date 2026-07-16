@@ -20,12 +20,6 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 - `Elsa.Expressions.JavaScript` — `ArgumentFunctionsPreProcessor` *(intra-domain)*
 - `Elsa.Expressions.JavaScript` — `ArgsObjectPreProcessor` *(intra-domain)*
 - `Elsa.Expressions.JavaScript.Libraries` — `LibraryResourcePreProcessor` *(cross-domain — injects library resources)*
-- `Elsa.Workflows.Runtime.JavaScript` — `VariableFunctionsPreProcessor` *(cross-domain — resolves get/set variable helpers through the visible scope chain via `IScopedVariableProvider` when the expression context exposes one, else workflow scope; ADR 0027)*
-- `Elsa.Workflows.Runtime.JavaScript` — `WorkflowFunctionsPreProcessor` *(cross-domain)*
-- `Elsa.Workflows.Runtime.JavaScript` — `WorkflowInputFunctionsPreProcessor` *(cross-domain)*
-- `Elsa.Workflows.Runtime.JavaScript` — `ActivityOutputFunctionsPreProcessor` *(cross-domain)*
-- `Elsa.Workflows.Runtime.JavaScript` — `WorkflowVariablesContextPreProcessor` *(cross-domain)*
-- `Elsa.Workflows.Runtime.JavaScript` — `MaterializationAccessorsPreProcessor` *(cross-domain — surfaces `variables`/`input`/`output` and `getVariable`/`getInput`/`getOutput`/`getOutputFrom` from `IMaterializationExpressionState` during activity-input materialization; no-op otherwise)*
 
 ### `IScriptPostProcessor` *(Core — `Elsa.Expressions.JavaScript.Core`)*
 - **Kind:** Contributor (receives execution context after the script has run and acts — push pattern).
@@ -34,8 +28,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 - **Aggregated by:** the single `PostProcessScript : IEventHandler<OnScriptEvaluated>` (this feature).
 - **Purpose:** copy outputs, extract results, or clean up after script execution.
 
-**Known implementations (shipped):**
-- `Elsa.Workflows.Runtime.JavaScript` — `CopyVariablesToWorkflowContext` *(cross-domain — copies JS variables back into workflow context)*
+**Known implementations (shipped):** none. Portable workflow expressions are read-only and receive only declared parameters.
 
 ---
 

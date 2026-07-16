@@ -11,7 +11,8 @@ namespace Elsa.Workflows.Runtime.JavaScript;
 [ShellFeature(
     name: "JavaScriptEndpoints",
     DisplayName = "JavaScript FastEndpoints",
-    Description = "Exposes runtime API endpoints for JavaScript workflow activities."
+    Description = "Exposes runtime API endpoints for JavaScript workflow activities.",
+    DependsOn = new object[] { "JavaScriptJintEngine" }
 )]
 public sealed class JavaScriptActivitiesEndpointsFeature : FastEndpointsFeatureBase
 {

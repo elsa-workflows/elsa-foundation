@@ -4,8 +4,8 @@ namespace Elsa.Workflows.Primitives.Models;
 /// A lightweight, dependency-free identity of a workflow definition version — usable anywhere.
 /// Serves as the descriptor for the Workflow activity kind: a catalog row for a workflow marked
 /// "usable as activity" carries a <see cref="WorkflowIdentity"/> as its descriptor, and the runtime
-/// <c>WorkflowActivityConstructor</c> uses it to configure the single backing
-/// <c>WorkflowDefinitionActivity</c>. Lives in the zero-dependency <c>Elsa.Workflows.Primitives</c>
+/// a future typed child-workflow boundary uses it as its explicit request identity. Lives in the
+/// zero-dependency <c>Elsa.Workflows.Primitives</c>
 /// building-block library so both the design-side producer and the runtime-side consumer can
 /// reference it without a feature → feature dependency.
 /// </summary>

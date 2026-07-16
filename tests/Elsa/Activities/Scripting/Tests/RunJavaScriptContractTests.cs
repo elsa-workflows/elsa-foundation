@@ -24,10 +24,8 @@ public sealed class RunJavaScriptContractTests
         Assert.Equal(typeof(JsonElement), arguments.PropertyType);
         Assert.NotNull(script.GetCustomAttributes(typeof(ActivityInputAttribute), inherit: true).SingleOrDefault());
         Assert.NotNull(arguments.GetCustomAttributes(typeof(ActivityInputAttribute), inherit: true).SingleOrDefault());
-        Assert.DoesNotContain(typeof(RunJavaScript).GetProperties(), property =>
-            property.PropertyType.IsGenericType &&
-            (property.PropertyType.GetGenericTypeDefinition() == typeof(InputArgument<>) ||
-             property.PropertyType.GetGenericTypeDefinition() == typeof(OutputArgument<>)));
+        Assert.All(typeof(RunJavaScript).GetProperties(), property =>
+            Assert.False(property.PropertyType.Name.EndsWith("Argument", StringComparison.Ordinal)));
     }
 
     [Fact]

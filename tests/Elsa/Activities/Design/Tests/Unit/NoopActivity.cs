@@ -15,7 +15,6 @@ public sealed class NoopActivity : IActivity
     public string Type { get; set; } = "Test.Noop";
     public string Version { get; set; } = "1.0.0";
     public Dictionary<string, object> CustomProperties { get; set; } = [];
-    public Dictionary<string, object> SyntheticProperties { get; set; } = [];
     public Dictionary<string, object> Metadata { get; set; } = [];
     public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
     public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>

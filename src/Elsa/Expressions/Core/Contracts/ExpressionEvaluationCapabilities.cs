@@ -10,8 +10,6 @@ public sealed record ExpressionEvaluationCapabilities
 {
     private static readonly ExpressionEvaluationCapabilities BindingPure = new(
         ExpressionCapabilityProfiles.BindingPureV1, true, false, false, false, false);
-    private static readonly ExpressionEvaluationCapabilities LegacyAmbient = new(
-        ExpressionCapabilityProfiles.LegacyAmbientV1, true, true, true, true, true);
 
     private ExpressionEvaluationCapabilities(
         string profile,
@@ -48,8 +46,6 @@ public sealed record ExpressionEvaluationCapabilities
         ArgumentException.ThrowIfNullOrWhiteSpace(profile);
         return StringComparer.Ordinal.Equals(profile, ExpressionCapabilityProfiles.BindingPureV1)
             ? BindingPure
-            : StringComparer.Ordinal.Equals(profile, ExpressionCapabilityProfiles.LegacyAmbientV1)
-                ? LegacyAmbient
-                : new ExpressionEvaluationCapabilities(profile, false, false, false, false, false);
+            : new ExpressionEvaluationCapabilities(profile, false, false, false, false, false);
     }
 }

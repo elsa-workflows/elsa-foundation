@@ -93,19 +93,32 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
             path: "sync/slow",
             method: "POST",
             resultValueId: "sync-slow-result",
-            requestTimeout: TimeSpan.FromMilliseconds(150),
+            // Leave enough headroom for a cold TestServer/runtime start to commit the endpoint result before
+            // cancellation reaches the deliberately long-running child. The 30-second stall still proves the
+            // endpoint timeout rather than a naturally completed dispatch.
+            requestTimeout: TimeSpan.FromSeconds(2),
             stallDuration: TimeSpan.FromSeconds(30));
 
         var response = await _fixture.Client.PostAsync($"{BasePath}sync/slow",
             new StringContent("""{"n":1}""", Encoding.UTF8, "application/json"));
 
-        Assert.Equal(HttpStatusCode.RequestTimeout, response.StatusCode);
+        if (response.StatusCode != HttpStatusCode.RequestTimeout)
+        {
+            var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync();
+            var states = executions.Count == 1
+                ? await _fixture.Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(executions.Single().WorkflowExecutionId)
+                : [];
+            Assert.Fail(
+                $"Expected 408, received {(int)response.StatusCode}. " +
+                string.Join(" | ", states.Select(state =>
+                    $"{state.Execution.ExecutableNodeId}:{state.Status}/{state.SubStatus}:{state.Fault?.Message}")));
+        }
 
         // Durable state remains valid (review-fix strengthening): the run persisted, its state row loads, and the
         // endpoint's captured result survived the aborted wait — the instance continues per normal runtime
         // semantics rather than merely still being counted.
         var execution = await _fixture.SingleWorkflowExecutionAsync();
-        var capturedResult = await _fixture.ReadCapturedOutputAsync(execution.WorkflowExecutionId, "sync-slow-result");
+        var capturedResult = await _fixture.ReadResultProjectionAsync(execution.WorkflowExecutionId, "sync-slow-result");
         Assert.Equal(JsonValueKind.Object, capturedResult.ValueKind);
     }
 

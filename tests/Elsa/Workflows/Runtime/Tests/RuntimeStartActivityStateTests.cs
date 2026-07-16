@@ -1,7 +1,10 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
@@ -14,12 +17,15 @@ public sealed class RuntimeStartActivityStateTests
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
+    private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
+    private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
 
     [Fact]
     public async Task HandleAsync_TransitionsScheduledActivityExecutionStateToRunning()
     {
         var executable = NewExecutable();
         await _executableStore.SaveAsync(executable);
+        await SaveWorkflowStateAsync(executable.Identity);
         await _activityStateStore.SaveAsync(NewScheduledState());
         var handler = NewHandler();
 
@@ -46,6 +52,7 @@ public sealed class RuntimeStartActivityStateTests
     {
         var executable = NewExecutable();
         await _executableStore.SaveAsync(executable);
+        await SaveWorkflowStateAsync(executable.Identity);
         await _activityStateStore.SaveAsync(NewScheduledState());
         var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore);
         var handler = NewCheckpointingHandler(checkpointWriter);
@@ -78,7 +85,8 @@ public sealed class RuntimeStartActivityStateTests
         await _activityStateStore.SaveAsync(NewScheduledState() with
         {
             Status = ActivityExecutionStatus.Running,
-            StartedAt = _now.AddMinutes(-1)
+            StartedAt = _now.AddMinutes(-1),
+            InputSnapshot = EmptySnapshot()
         });
         var handler = NewHandler();
 
@@ -120,6 +128,7 @@ public sealed class RuntimeStartActivityStateTests
     {
         var executable = NewExecutable();
         await _executableStore.SaveAsync(executable);
+        await SaveWorkflowStateAsync(executable.Identity);
         await _activityStateStore.SaveAsync(NewScheduledState());
         var pinned = executable.Identity;
         var handler = NewHandler();
@@ -216,7 +225,16 @@ public sealed class RuntimeStartActivityStateTests
     }
 
     private WorkflowStartActivitySchedulerWorkHandler NewHandler() =>
-        new(_executableStore, _activityStateStore, _schedulerWorkQueue, checkpointCommitter: null, inspectionAccumulator: null, timeProvider: new FixedTimeProvider(_now));
+        new(
+            _executableStore,
+            _activityStateStore,
+            _schedulerWorkQueue,
+            checkpointCommitter: null,
+            inspectionAccumulator: null,
+            timeProvider: new FixedTimeProvider(_now),
+            inputMaterializer: new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()),
+            durableValueStateStore: _durableValueStateStore,
+            workflowExecutionStateStore: _workflowStateStore);
 
     private WorkflowStartActivitySchedulerWorkHandler NewCheckpointingHandler(InMemoryRuntimeCheckpointCommitStore checkpointWriter) =>
         new(
@@ -227,7 +245,32 @@ public sealed class RuntimeStartActivityStateTests
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(_now));
+            new FixedTimeProvider(_now),
+            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()),
+            _durableValueStateStore,
+            workflowExecutionStateStore: _workflowStateStore);
+
+    private ValueTask<WorkflowExecutionState> SaveWorkflowStateAsync(WorkflowExecutableIdentity identity)
+    {
+        var root = new VariableFrameFactory().CreateRoot(
+            "wfexec-1",
+            Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
+            new Dictionary<string, ValueEnvelope>());
+        return _workflowStateStore.SaveAsync(new WorkflowExecutionState(
+            "wfexec-1",
+            identity,
+            WorkflowExecutionStatus.Running,
+            null,
+            _now,
+            _now,
+            _now,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>())
+        { RootVariableFrame = root });
+    }
 
     private RuntimeSchedulerWorkItem NewStartWorkItem(
         WorkflowExecutableIdentity? pinnedExecutable = null,
@@ -309,6 +352,7 @@ public sealed class RuntimeStartActivityStateTests
             inputBindings: root.InputBindings,
             outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
+            activityContract: root.ActivityContract,
             childSlots:
             [
                 new ExecutableChildSlot("children", children)
@@ -324,7 +368,30 @@ public sealed class RuntimeStartActivityStateTests
             descriptorPayload: descriptorPayload.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: EmptyContract(descriptorPayload));
+
+    private static ActivityContract EmptyContract(JsonElement descriptorPayload) =>
+        new(
+            "test/activity",
+            "1.0.0",
+            "test",
+            descriptorPayload,
+            [],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/activity"));
+
+    private static ActivityInputSnapshot EmptySnapshot()
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        return new ActivityInputSnapshot(
+            "actexec-1",
+            EmptyContract(document.RootElement).SchemaFingerprint,
+            "sha256:empty-bindings",
+            new Dictionary<string, ValueEnvelope>(),
+            DateTimeOffset.UnixEpoch);
+    }
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");

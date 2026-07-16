@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
 /// Turns workflow variables and inputs into persisted runtime state at workflow start, mirroring how
-/// activity outputs become durable values (see <c>ActivityOutputPublisher.NewDurableValueChange</c>). Each
+/// activity results become immutable completion records owned by the producing invocation. Each
 /// seeded value is a <see cref="DurableValueState"/> tagged with <see cref="RuntimeMetadataKeys.VariableName"/>
 /// or <see cref="RuntimeMetadataKeys.InputName"/> so that
 /// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/> /

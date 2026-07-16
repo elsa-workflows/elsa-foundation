@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Elsa.Activities.Flowchart.Models;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -61,7 +60,6 @@ public sealed class FlowchartHarnessSampleTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
-            .WithConstructor(new FlowchartActivityConstructor())
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
@@ -74,7 +72,7 @@ public sealed class FlowchartHarnessSampleTests
             authoredActivityId: "authored-flowchart",
             activityType: typeof(FlowchartActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: FlowchartActivityConstructor.DescriptorTypeKey,
+            descriptorType: typeof(FlowchartDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
@@ -90,26 +88,6 @@ public sealed class FlowchartHarnessSampleTests
 
     private static FlowchartConnection NewConnection(string sourceNodeId, string targetNodeId, string? sourcePort = null) =>
         new(new FlowchartEndpoint(sourceNodeId, sourcePort), new FlowchartEndpoint(targetNodeId));
-
-    private sealed class FlowchartActivityConstructor : IActivityConstructor<FlowchartDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(FlowchartDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            new(new FlowchartActivity());
-
-        public ValueTask<IActivity> Construct(
-            FlowchartDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            new(new FlowchartActivity());
-    }
 
     private sealed record FlowchartDescriptor;
 }

@@ -159,7 +159,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
         sequence: sequence,
         occurredAt: _now.AddSeconds(sequence),
         durability: GeneratedEventDurability.PolicyControlled,
-        payloadValue: new RuntimeDurableValueReference($"durable-payload-{sequence}"),
+        payloadValue: new GeneratedEventPayloadReference($"durable-payload-{sequence}"),
         metadata: new Dictionary<string, string> { ["Generator"] = "timer" });
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

@@ -11,41 +11,13 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed partial class ValueFlowArchitectureTests(ITestOutputHelper output)
 {
-    private static readonly HashSet<(string Project, string Reference)> RuntimeDesignMigrationAllowlist =
-    [
-        ("Elsa.Workflows.Runtime.JavaScript", "Elsa.Workflows.Design.Core")
-    ];
+    private static readonly HashSet<(string Project, string Reference)> RuntimeDesignMigrationAllowlist = [];
 
     private static readonly IReadOnlyDictionary<string, int> AssemblyQualifiedMetadataMigrationCeilings =
-        new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["src/Elsa/Activities/Runtime/Core/Models/InputArgument.cs"] = 1,
-            ["src/Elsa/Workflows/Publishing/Api/Services/RuntimeInputBindingCompiler.cs"] = 2
-        };
+        new Dictionary<string, int>(StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, int> MemoryReferenceMigrationCeilings =
-        new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["src/Elsa/Activities/Primitives/Binding/ActivityArgumentBinder.cs"] = 1,
-            ["src/Elsa/Activities/Runtime/Core/Abstractions/CodeActivity.cs"] = 2,
-            ["src/Elsa/Activities/Runtime/Core/Models/InputArgument.cs"] = 8,
-            ["src/Elsa/Activities/Runtime/Core/Models/OutputArgument.cs"] = 4,
-            ["src/Elsa/Activities/Runtime/Services/ActivityOutputPublisher.cs"] = 4,
-            ["src/Elsa/Expressions/Core/Contracts/IExpressionExecutionContext.cs"] = 20,
-            ["src/Elsa/Expressions/Core/Contracts/IMemoryBlock.cs"] = 1,
-            ["src/Elsa/Expressions/Core/Contracts/IMemoryBlockReference.cs"] = 10,
-            ["src/Elsa/Expressions/Core/Contracts/IMemoryBlockReferenceFactory.cs"] = 3,
-            ["src/Elsa/Expressions/Core/Contracts/IMemoryRegister.cs"] = 7,
-            ["src/Elsa/Expressions/Core/Contracts/IVariable.cs"] = 1,
-            ["src/Elsa/Expressions/Core/Models/Argument.cs"] = 3,
-            ["src/Elsa/Expressions/Models/MemoryBlock.cs"] = 1,
-            ["src/Elsa/Expressions/Models/MemoryBlockReference.cs"] = 10,
-            ["src/Elsa/Expressions/Models/Variable.cs"] = 1,
-            ["src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/BlockReference.cs"] = 4,
-            ["src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/ScriptExpressionContext.cs"] = 9,
-            ["src/Elsa/Workflows/Runtime/Services/RuntimeActivityInputMaterializer.cs"] = 16,
-            ["src/Elsa/Workflows/Runtime/Services/SimpleActivityExecutionContext.cs"] = 19
-        };
+        new Dictionary<string, int>(StringComparer.Ordinal);
 
     private static readonly string[] CanonicalMetadataRoots =
     [

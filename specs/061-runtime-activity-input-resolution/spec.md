@@ -1,5 +1,7 @@
 # Feature Specification: Runtime Activity Input Resolution
 
+> **Current status (2026-07-16): superseded by [spec 095](../095-value-flow-redesign/spec.md).** Inputs now resolve through role-owned canonical bindings into one immutable `ActivityInputSnapshot`; no execution-local memory reference or assembly-qualified type metadata remains.
+
 **Feature Branch**: `codex/runtime-activity-input-resolution`
 **Created**: 2026-06-11
 **Status**: Draft

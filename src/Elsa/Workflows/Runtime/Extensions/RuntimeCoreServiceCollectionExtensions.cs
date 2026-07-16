@@ -68,7 +68,6 @@ public static class RuntimeCoreServiceCollectionExtensions
         // observers themselves register as singletons that open their own scopes (mirroring RouteTableTriggerIndexObserver).
         services.TryAddSingleton<BookmarkLifecycleNotifier>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
-        services.TryAddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
         services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();

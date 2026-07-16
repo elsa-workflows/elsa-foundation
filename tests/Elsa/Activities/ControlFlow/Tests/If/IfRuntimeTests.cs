@@ -4,6 +4,7 @@ using Elsa.Activities.If;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -15,7 +16,7 @@ namespace Elsa.Activities.If.Tests;
 /// <summary>
 /// In-process execution coverage for the <c>If</c> composite running through the real workflow agent.
 /// Built on the shared <see cref="WorkflowExecutionHarness"/>: this file only declares the If-specific
-/// activity constructor and graph shape; provider wiring, execution, and assertions come from the harness.
+/// activity graph shape; provider wiring, CLR activation, execution, and assertions come from the harness.
 /// Asserts the matching branch runs, the other does not, and the composite emits the True/False outcome.
 /// </summary>
 public sealed class IfRuntimeTests
@@ -71,7 +72,6 @@ public sealed class IfRuntimeTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<IfActivityConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
@@ -88,15 +88,19 @@ public sealed class IfRuntimeTests
             authoredActivityId: "authored-if",
             activityType: typeof(IfActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: IfActivityConstructor.DescriptorTypeKey,
+            descriptorType: typeof(IfDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new IfDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Condition"] = new RuntimeInputBinding(
-                    inputName: "Condition",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(condition),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Boolean" })
+                    "Condition",
+                    new ValueTypeDescriptor("Boolean"),
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        new ValueTypeDescriptor("Boolean"),
+                        JsonSerializer.SerializeToElement(condition),
+                        ValueProtectionPolicy.InstanceInline))
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -111,26 +115,6 @@ public sealed class IfRuntimeTests
                 })));
 
         return WorkflowExecutionHarness.NewExecutable(root);
-    }
-
-    private sealed class IfActivityConstructor : IActivityConstructor<IfDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(IfDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new IfDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            IfDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-            => new(new IfActivity());
     }
 
     private sealed record IfDescriptor;

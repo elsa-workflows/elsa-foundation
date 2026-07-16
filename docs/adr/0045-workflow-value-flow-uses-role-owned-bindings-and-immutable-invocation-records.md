@@ -15,7 +15,7 @@ evidence recorded below.
 
 ## Context
 
-Elsa Foundation currently contains two competing value models.
+Before this decision was implemented, Elsa Foundation contained two competing value models.
 
 The runtime artifact already carries compiled `RuntimeInputBinding` declarations, projects workflow
 inputs and variables from `DurableValueState`, and records execution state in runtime-owned stores.

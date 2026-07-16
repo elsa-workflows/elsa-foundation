@@ -307,7 +307,6 @@ public sealed class SetVariableDurabilityExecutionTests
             activityStore,
             new RuntimeInputBindingResolver(),
             new InMemoryDurableValueStateStore(),
-            new InMemoryRuntimeActivityOutputRegister(),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             new FixedTimeProvider(Now));
         var handler = new WorkflowStartActivitySchedulerWorkHandler(

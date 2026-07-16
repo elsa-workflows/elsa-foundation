@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
-using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Constants;
@@ -20,7 +19,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// In-process execution coverage for the code &amp; I/O leaf activities (<c>WriteLines</c>, <c>ReadLine</c>,
 /// <c>Inline</c>) running through the real workflow agent via the shared <see cref="WorkflowExecutionHarness"/>
 /// (#258). Migrated typed leaves carry a pinned activity contract and run through snapshot hydration plus
-/// the transient CLR activator; legacy leaves retain the constructor adapter until their own migration slice.
+/// the transient CLR activator.
 /// Asserts each leaf runs to completion, emits the expected outcome, and that the run completes.
 /// </summary>
 // WriteLines writes to Console.Out during the run; share the capture collection so output does not
@@ -115,7 +114,7 @@ public sealed class CodeIoLeafRuntimeTests
     [Fact]
     public async Task Break_RunsToCompletion_AndEmitsBreakOutcome()
     {
-        // The Break leaf (#299) is constructed by the production ClrActivityConstructor and emits the
+        // The Break leaf (#299) is constructed by the production transient CLR activator and emits the
         // Break outcome (not the default Done); the enclosing loop reads that outcome to end early. Run on
         // its own here it completes the run, with Break recorded as its completion outcome.
         await using var harness = NewHarness("actexec-1");

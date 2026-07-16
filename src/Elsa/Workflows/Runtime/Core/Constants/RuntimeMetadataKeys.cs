@@ -99,8 +99,8 @@ public static class RuntimeMetadataKeys
     /// dedicated, spoof-proof channel — deliberately distinct from <see cref="InputName"/>: the trigger-node
     /// identity never shares the workflow-input namespace, so it cannot collide with an author-declared input
     /// and cannot be injected through the caller-facing inputs bag of the execute API. A mid-flow HttpEndpoint
-    /// reads it (via <see cref="Elsa.Workflows.Runtime.Core.Contracts.IExecutionExpressionState.TriggerNodeId"/>)
-    /// to tell whether it is the node that triggered this run and so should complete rather than suspend. Read by
+    /// receives it as typed invocation identity to tell whether it is the node that triggered this run and so
+    /// should complete rather than suspend. Read by
     /// <c>RuntimeInputBindingStateProjection.ProjectTriggerNodeId</c>. Absent for direct (non-stimulus) runs.
     /// </summary>
     public const string TriggerNodeId = "runtime.triggerNodeId";

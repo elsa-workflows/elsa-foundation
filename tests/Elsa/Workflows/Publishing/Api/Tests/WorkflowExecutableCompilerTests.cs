@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Sequence;
@@ -272,13 +273,17 @@ public sealed class WorkflowExecutableCompilerTests
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-"));
 
-        var materialized = await new RuntimeActivityInputMaterializer(
+        var snapshot = await new RuntimeActivityInputMaterializer(
             new RuntimeInputBindingResolver(),
-            TestWellKnownTypeRegistry.Create()).MaterializeInputsAsync(executable.RootActivity);
+            TestWellKnownTypeRegistry.Create()).MaterializeSnapshotAsync(
+                WithInputContract(executable.RootActivity),
+                "invocation-1",
+                new RuntimeInputBindingResolutionContext("workflow-1", "invocation-1"),
+                now);
 
-        var textInput = Assert.Single(materialized);
-        Assert.Equal("Text", textInput.Name);
-        Assert.Equal("Hello World!", textInput.Value);
+        var textInput = Assert.Single(snapshot.Values);
+        Assert.Equal("Text", textInput.Key);
+        Assert.Equal("Hello World!", textInput.Value.InlineValue!.Value.GetString());
     }
 
     [Fact]
@@ -299,13 +304,19 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(JsonValueKind.Array, binding.LiteralValue?.ValueKind);
 
-        var materialized = await new RuntimeActivityInputMaterializer(
+        var snapshot = await new RuntimeActivityInputMaterializer(
             new RuntimeInputBindingResolver(),
-            TestWellKnownTypeRegistry.Create()).MaterializeInputsAsync(executable.RootActivity);
+            TestWellKnownTypeRegistry.Create()).MaterializeSnapshotAsync(
+                WithInputContract(executable.RootActivity),
+                "invocation-1",
+                new RuntimeInputBindingResolutionContext("workflow-1", "invocation-1"),
+                now);
 
-        var linesInput = Assert.Single(materialized);
-        var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value);
-        Assert.Equal(["Hello", "World"], lines);
+        var linesInput = Assert.Single(snapshot.Values);
+        Assert.Equal("Lines", linesInput.Key);
+        Assert.Equal(
+            new string?[] { "Hello", "World" },
+            linesInput.Value.InlineValue!.Value.EnumerateArray().Select(item => item.GetString()).ToArray());
     }
 
     [Fact]
@@ -607,6 +618,40 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
+
+    private static ExecutableNode WithInputContract(ExecutableNode node)
+    {
+        var contract = new ActivityContract(
+            node.ActivityType,
+            node.ActivityTypeVersion,
+            node.DescriptorType,
+            node.DescriptorPayload,
+            node.InputBindings.Values.Select(binding => new ActivityInputContract(
+                binding.InputKey,
+                binding.InputKey,
+                binding.TargetType,
+                isRequired: true,
+                hasDefault: false,
+                defaultValue: null,
+                ActivityValuePolicy.Default)),
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement(node.DescriptorType, "test/activity"));
+
+        return new ExecutableNode(
+            node.ExecutableNodeId,
+            node.AuthoredActivityId,
+            node.ActivityType,
+            node.ActivityTypeVersion,
+            node.DescriptorType,
+            node.DescriptorPayload,
+            node.InputBindings,
+            node.OutputCaptures,
+            node.Metadata,
+            node.ChildSlots,
+            node.Structure,
+            contract);
+    }
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new("1.0.0", "activity-definition-1")

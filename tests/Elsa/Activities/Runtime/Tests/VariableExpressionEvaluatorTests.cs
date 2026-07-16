@@ -56,8 +56,6 @@ public sealed class VariableExpressionEvaluatorTests
             new RuntimeInputBindingResolutionContext(
                 "workflow-1",
                 "activity-1",
-                new Dictionary<string, DurableValueState>(),
-                new InMemoryRuntimeActivityOutputRegister(),
                 variableEnvelopes: values));
 
     private static RuntimeInputBinding Binding(string variableKey, string scopeId) =>

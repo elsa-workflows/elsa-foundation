@@ -111,8 +111,6 @@ public sealed class ContainerScopedVariableEvaluatorTests
             new RuntimeInputBindingResolutionContext(
                 "workflow-1",
                 "activity-1",
-                new Dictionary<string, DurableValueState>(),
-                new InMemoryRuntimeActivityOutputRegister(),
                 variableEnvelopes: frames.Values));
 
     private static FrameSet Frames()

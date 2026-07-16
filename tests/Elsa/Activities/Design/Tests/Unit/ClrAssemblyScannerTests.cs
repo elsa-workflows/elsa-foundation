@@ -77,7 +77,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
-        { typeof(HttpEndpoint), "89251E344255527968493DC31C6F5CF7207A2836B53165DE73915260E469C12A" }
+        { typeof(HttpEndpoint), "EA46E473944EE477E49F5138463660731F62CDF93479B4F032547D190432F2B7" }
     };
 
     [Theory]
@@ -263,7 +263,7 @@ public sealed class ClrAssemblyScannerTests
     public void InvalidActivityInputOptions_AreRejectedWithInputIdentity(Type activityType, string inputName, string expectedMessage)
     {
         var property = activityType.GetProperty(inputName)!;
-        var exception = Assert.Throws<InvalidOperationException>(() => InvokeReadActivityInputMetadata(property, property.PropertyType.GetGenericArguments()[0], activityType));
+        var exception = Assert.Throws<InvalidOperationException>(() => InvokeReadActivityInputMetadata(property, property.PropertyType, activityType));
 
         Assert.Contains(activityType.FullName!, exception.Message, StringComparison.Ordinal);
         Assert.Contains(inputName, exception.Message, StringComparison.Ordinal);
@@ -307,64 +307,72 @@ public sealed class ClrAssemblyScannerTests
     {
         [ActivityInput(Options = ["one"])]
         [ActivityInputOption("Two", "two")]
-        public InputArgument<string> Value { get; set; } = null!;
+        public string Value { get; set; } = null!;
     }
 
     private abstract class DuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
+        [ActivityInput]
         [ActivityInputOption("One", 1)]
         [ActivityInputOption("Also one", 1)]
-        public InputArgument<int> Value { get; set; } = null!;
+        public int Value { get; set; }
     }
 
     private abstract class BlankOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
         [ActivityInput(Options = [""])]
-        public InputArgument<string> Value { get; set; } = null!;
+        public string Value { get; set; } = null!;
     }
 
     private abstract class IncompatibleOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
+        [ActivityInput]
         [ActivityInputOption("Wrong", true)]
-        public InputArgument<int> Value { get; set; } = null!;
+        public int Value { get; set; }
     }
 
     private abstract class UnknownDependencyActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
         [ActivityInput(OptionsProvider = "fixture", OptionsProviderDependencies = ["Missing"])]
-        public InputArgument<string> Value { get; set; } = null!;
+        public string Value { get; set; } = null!;
     }
 
     private abstract class DependenciesWithoutProviderActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
         [ActivityInput(OptionsProviderDependencies = [nameof(Other)])]
-        public InputArgument<string> Value { get; set; } = null!;
-        public InputArgument<string> Other { get; set; } = null!;
+        public string Value { get; set; } = null!;
+
+        [ActivityInput]
+        public string Other { get; set; } = null!;
     }
 
     private abstract class UnsafePositiveIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
+        [ActivityInput]
         [ActivityInputOption("Unsafe", 9007199254740992L)]
-        public InputArgument<long> Value { get; set; } = null!;
+        public long Value { get; set; }
     }
 
     private abstract class UnsafeNegativeIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
+        [ActivityInput]
         [ActivityInputOption("Unsafe", -9007199254740992L)]
-        public InputArgument<long> Value { get; set; } = null!;
+        public long Value { get; set; }
     }
 
     private abstract class NonFiniteOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
+        [ActivityInput]
         [ActivityInputOption("Infinite", double.PositiveInfinity)]
-        public InputArgument<double> Value { get; set; } = null!;
+        public double Value { get; set; }
     }
 
     private abstract class NumericDuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
+        [ActivityInput]
         [ActivityInputOption("Integer", 1)]
         [ActivityInputOption("Floating point", 1.0)]
-        public InputArgument<double> Value { get; set; } = null!;
+        public double Value { get; set; }
     }
 
     [Fact]
@@ -383,7 +391,8 @@ public sealed class ClrAssemblyScannerTests
 
     private abstract class DecimalFidelityActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
     {
-        public InputArgument<decimal> Value { get; set; } = null!;
+        [ActivityInput]
+        public decimal Value { get; set; }
     }
 
     [Fact]
@@ -401,6 +410,10 @@ public sealed class ClrAssemblyScannerTests
 
         var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(StructuredFixtureActivity).FullName);
         var facet = Assert.Single(model.DesignFacets);
+        var output = Assert.Single(model.Outputs);
+
+        Assert.Equal("summary", output.ReferenceKey);
+        Assert.Equal(nameof(StructuredFixtureResult.Summary), output.Name);
 
         Assert.Equal("fixture.structure", facet.Kind);
         Assert.Equal("1.0.0", facet.SchemaVersion);

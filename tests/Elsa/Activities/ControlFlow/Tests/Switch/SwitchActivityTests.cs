@@ -290,19 +290,12 @@ public sealed class SwitchActivityTests : IDisposable
 
     private sealed class NonRuntimeActivityExecutionContext(IServiceProvider serviceProvider, IActivity activity) : IActivityExecutionContext
     {
-        public Elsa.Expressions.Core.Contracts.IExpressionExecutionContext ExpressionExecutionContext => null!;
         public IActivity Activity { get; } = activity;
         public IActivityExecutionContext ParentActivityExecutionContext => null!;
         public CancellationToken CancellationToken => CancellationToken.None;
 
         public TService GetRequiredService<TService>() where TService : notnull =>
             serviceProvider.GetRequiredService<TService>();
-
-        public T? Get<T>(InputArgument<T>? input) => default;
-
-        public void Set<T>(OutputArgument<T>? output, T? value, string? outputName = null)
-        {
-        }
 
         public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => AsyncEnumerable.Empty<ActivityOutputs>();
 

@@ -32,8 +32,6 @@ namespace Elsa.Activities.Http.Tests;
 public sealed class HttpEndpointExecutionTests
 {
     private const string NodeId = "node-http-endpoint";
-    private const string ResultValueId = "http-endpoint-result";
-    private const string ParsedContentValueId = "http-endpoint-parsed-content";
 
     // The endpoint is the root node, so it is handed the first deterministic activity-execution id (see NewHarness).
     private const string ActivityExecutionId = "actexec-http-endpoint";
@@ -117,13 +115,8 @@ public sealed class HttpEndpointExecutionTests
         var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
         run.AssertWorkflowCompleted();
 
-        // CLR null captured inline: the durable value is either absent or a JSON null token — the distinguishing
-        // fact (proven at HttpRequestBodyParserTests) is that this "no content" path never yields a JsonElement,
-        // whereas the explicit-JSON-null path above does.
-        var value = await harness.Services.GetRequiredService<IDurableValueStateStore>()
-            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, $"durable-{ParsedContentValueId}");
-        if (value?.InlineValue is { } inline)
-            Assert.Equal(JsonValueKind.Null, inline.ValueKind);
+        var parsed = await ParsedContentAsync(harness);
+        Assert.Equal(JsonValueKind.Null, parsed.ValueKind);
     }
 
     [Fact]
@@ -418,21 +411,22 @@ public sealed class HttpEndpointExecutionTests
             triggerDelivery: delivery);
     }
 
-    private static Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ResultValueId);
+    private static Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness) => CompletionProjectionAsync(harness, "Request");
 
-    private static Task<JsonElement> ParsedContentAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ParsedContentValueId);
+    private static Task<JsonElement> ParsedContentAsync(WorkflowExecutionHarness harness) => CompletionProjectionAsync(harness, "ParsedContent");
 
     private static JsonElement RequestProperty(JsonElement request, string clrPropertyName) =>
         request.TryGetProperty(clrPropertyName, out var value)
             ? value
             : request.GetProperty(JsonNamingPolicy.CamelCase.ConvertName(clrPropertyName));
 
-    private static async Task<JsonElement> CapturedAsync(WorkflowExecutionHarness harness, string valueId)
+    private static async Task<JsonElement> CompletionProjectionAsync(WorkflowExecutionHarness harness, string propertyName)
     {
-        var value = await harness.Services.GetRequiredService<IDurableValueStateStore>()
-            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, $"durable-{valueId}");
-        Assert.NotNull(value);
-        return value!.InlineValue!.Value;
+        var state = await harness.Services.GetRequiredService<IActivityExecutionStateStore>()
+            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, ActivityExecutionId);
+        var result = state?.Completion?.Result.InlineValue;
+        Assert.NotNull(result);
+        return RequestProperty(result.Value, propertyName);
     }
 
     private static WorkflowExecutionHarness NewHarness() =>
@@ -474,23 +468,7 @@ public sealed class HttpEndpointExecutionTests
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
-            {
-                ["Request"] = new(
-                    outputName: "Request",
-                    valueId: ResultValueId,
-                    type: RuntimeValueType(typeof(HttpRequestModel)),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true),
-                ["ParsedContent"] = new(
-                    outputName: "ParsedContent",
-                    valueId: ParsedContentValueId,
-                    type: RuntimeValueType(typeof(JsonElement)),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true)
-            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
 
@@ -575,13 +553,6 @@ public sealed class HttpEndpointExecutionTests
             createdAt: executable.CreatedAt,
             compatibilityMetadata: executable.CompatibilityMetadata);
     }
-
-    private static RuntimeInputBinding LiteralBinding(string name, JsonElement value, string clrType) =>
-        new(
-            inputName: name,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: value,
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = clrType });
 
     private static ActivityContract EndpointContract(JsonElement descriptorPayload) =>
         new(

@@ -37,24 +37,17 @@ namespace Elsa.Activities.Design.Tests.Registration;
 public sealed class FeatureRegistrationTests
 {
     [Fact]
-    public void ActivitiesRuntimeFeature_RegistersFactoryAndRegistries()
+    public void ActivitiesRuntimeFeature_RegistersCanonicalMaterializationAndTypeDiscovery()
     {
         var services = MinimalServices();
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotNull(provider.GetService<IActivityConstructorRegistry>());
-
-        using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetService<IActivityFactory>());
-
-        // The constructor registry is populated via the Registry + StartUp Task + Domain Event
-        // pattern (framework §2.6.1): the startup task publishes the init event; the single
-        // aggregating handler adds every contributed IActivityConstructor.
+        Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityInputMaterializer)
+            && d.ImplementationType == typeof(Elsa.Workflows.Runtime.Core.Services.RuntimeActivityInputMaterializer));
+        Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Activities.Runtime.Services.ActivityInputHydrator));
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
-            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Tasks.ActivityConstructorsStartupTask));
-        Assert.Contains(services, d => d.ServiceType == typeof(IEventHandler)
-            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Handlers.RegisterActivityConstructors));
+            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Tasks.RegisterActivityTypesStartupTask));
     }
 
     [Fact]

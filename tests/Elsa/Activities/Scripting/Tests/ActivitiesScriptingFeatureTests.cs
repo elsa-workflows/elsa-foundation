@@ -1,5 +1,4 @@
 using CShells.Features;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -21,16 +20,6 @@ public sealed class ActivitiesScriptingFeatureTests
         new ActivitiesScriptingFeature().ConfigureServices(services);
 
         Assert.Empty(services);
-    }
-
-    [Fact]
-    public void ConfigureServices_RegistersNoActivityConstructor()
-    {
-        var services = new ServiceCollection();
-
-        new ActivitiesScriptingFeature().ConfigureServices(services);
-
-        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IActivityConstructor));
     }
 
     [Fact]

@@ -24,6 +24,8 @@ namespace Elsa.Activities.Switch.Activities;
 /// equals any declared case.
 /// </remarks>
 [ActivityStructure("elsa.switch.structure", "1.0.0")]
+[ActivityOutcome(ActivityOutcomes.Default)]
+[ActivityOutcome(ActivityOutcomes.Break)]
 [ActivityChildSlot(
     "Switch.Case",
     "cases",

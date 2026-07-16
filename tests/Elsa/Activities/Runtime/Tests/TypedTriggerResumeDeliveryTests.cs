@@ -20,7 +20,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(state);
         await SaveBookmarkAsync();
-        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+        await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
             input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
@@ -64,7 +64,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, expectedType));
         await SaveBookmarkAsync();
-        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+        await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
             input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
@@ -89,7 +89,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(state with { TriggerDeliveries = [priorDelivery] });
         await SaveBookmarkAsync();
-        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+        await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
             input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
@@ -112,7 +112,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, triggerType));
         await SaveBookmarkAsync();
-        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+        await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
             input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
@@ -152,7 +152,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, triggerType));
         await SaveBookmarkAsync();
-        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+        await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
             input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
@@ -181,7 +181,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, triggerType));
         await SaveBookmarkAsync();
-        await using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()), activator);
+        await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
             input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),

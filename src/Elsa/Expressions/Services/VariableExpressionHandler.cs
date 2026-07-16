@@ -18,9 +18,6 @@ public sealed class VariableExpressionHandler : IExpressionHandler
         if (!reference.IsWorkflowScope)
             return new ValueTask<object?>((object?)null);
 
-        var variable = context.GetVariable(reference.ReferenceKey);
-        var value = variable?.Get(context);
-
-        return new(value);
+        return new(context.GetVariableValueOrDefault(reference.ReferenceKey));
     }
 }

@@ -28,12 +28,11 @@ public sealed class ForIndexResolutionEndToEndTests
 
         var run = await harness.RunAsync(NewExecutable(start: 0, end: 3, step: 1));
 
-        // Each body pass resolved `index` through the real evaluator and emitted it as its outcome.
-        var outcomes = run.States("node-body")
-            .Select(state => WorkflowExecutionRun.CompletionOutcomes(state).Single())
+        // Each body pass resolved `index` through the canonical variable binding and returned it atomically.
+        var values = run.States("node-body")
+            .Select(state => state.Completion!.Result.InlineValue!.Value.GetProperty("value").GetInt32())
             .ToArray();
-        string[] expected = [$"{IndexCaptureActivity.OutcomePrefix}0", $"{IndexCaptureActivity.OutcomePrefix}1", $"{IndexCaptureActivity.OutcomePrefix}2"];
-        Assert.Equal(expected, outcomes);
+        Assert.Equal(new[] { 0, 1, 2 }, values);
         run.AssertWorkflowCompleted();
     }
 
@@ -44,20 +43,15 @@ public sealed class ForIndexResolutionEndToEndTests
 
         var run = await harness.RunAsync(NewExecutable(start: 2, end: 8, step: 2));
 
-        var outcomes = run.States("node-body")
-            .Select(state => WorkflowExecutionRun.CompletionOutcomes(state).Single())
+        var values = run.States("node-body")
+            .Select(state => state.Completion!.Result.InlineValue!.Value.GetProperty("value").GetInt32())
             .ToArray();
-        string[] expected = [$"{IndexCaptureActivity.OutcomePrefix}2", $"{IndexCaptureActivity.OutcomePrefix}4", $"{IndexCaptureActivity.OutcomePrefix}6"];
-        Assert.Equal(expected, outcomes);
+        Assert.Equal(new[] { 2, 4, 6 }, values);
     }
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ForActivityConstructor>()
-            .WithConstructor<IndexCaptureActivityConstructor>()
-            .ConfigureServices(services => services.AddSingleton<IWellKnownTypeRegistry>(
-                ClrConstruction.RegistryFor(typeof(int))))
             .Build(activityExecutionIds);
 
     private static WorkflowExecutable NewExecutable(int start, int end, int step)
@@ -73,7 +67,7 @@ public sealed class ForIndexResolutionEndToEndTests
             authoredActivityId: "authored-for",
             activityType: typeof(ForActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForActivityConstructor.DescriptorTypeKey,
+            descriptorType: typeof(ForDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new ForDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
@@ -96,10 +90,10 @@ public sealed class ForIndexResolutionEndToEndTests
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
-            activityType: IndexCaptureActivity.ActivityType,
+            activityType: typeof(IndexCaptureActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: IndexCaptureActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new IndexCaptureDescriptor()),
+            descriptorType: "test-legacy-descriptor",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 // Bind Value to the typed `index` variable declared by node-for.
@@ -108,42 +102,18 @@ public sealed class ForIndexResolutionEndToEndTests
                     targetType: new ValueTypeDescriptor("Int32"),
                     effectivePolicy: ValueProtectionPolicy.InstanceInline,
                     source: RuntimeInputBindingSource.VariableRead,
-                    variable: new RuntimeVariableReference(ForActivity.IndexVariableName, "node-for"),
-                    metadata: new Dictionary<string, string>
-                    {
-                        [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Int32",
-                        ["referenceKey"] = "Value"
-                    })
+                    variable: new RuntimeVariableReference(ForActivity.IndexVariableName, "node-for"))
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static RuntimeInputBinding IntLiteral(string name, int value) =>
         new(
-            inputName: name,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Int32" });
-
-    private sealed class ForActivityConstructor : IActivityConstructor<ForDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(ForDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new ForDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            ForDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-            => new(new ForActivity());
-    }
+            name,
+            new ValueTypeDescriptor("Int32"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new ValueTypeDescriptor("Int32"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
 
     private sealed record ForDescriptor;
 }

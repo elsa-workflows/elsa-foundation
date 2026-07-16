@@ -366,47 +366,20 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Fact] // spec 006 T051 (SC-004) — construction + reconciliation dispatch on the DescriptorType key alone; no per-kind branch.
-    public void Construction_and_reconciliation_contain_no_per_descriptor_type_branch()
+    [Fact]
+    public void Legacy_activity_factory_and_constructor_registry_are_absent()
     {
-        string[] relativePaths =
+        string[] removedPaths =
         [
             "src/Elsa/Activities/Runtime/Services/ActivityFactory.cs",
             "src/Elsa/Activities/Runtime/Services/ActivityConstructorRegistry.cs",
-            // The task's "ActivityVersionsReconcilingHandler" is CollectActivityVersions in the current tree.
-            "src/Elsa/Activities/Design/Reconciliation/Handlers/CollectActivityVersions.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
         ];
-
-        // A per-kind branch would surface as a switch, an equality test against the descriptor-type/kind
-        // string, or a reference to a concrete descriptor type / the deleted kind discriminator. These three
-        // dispatchers key purely on the DescriptorType string (registry lookup), never branch on its value.
-        // NB: a lexical scan can't catch every conceivable rewrite (e.g. `.Equals(...)` or a lookup table
-        // keyed on kind); it pins the common forms and the concrete-type references.
-        string[] forbiddenTokens =
-        [
-            "switch",
-            "descriptorType ==",
-            "DescriptorType ==",
-            "ImplementationKind",
-            "ImplementationDescriptor",
-            "ClrActivityDescriptor",
-            "WorkflowIdentity",
-            "TypeInformation",
-        ];
-
-        var violations = new List<string>();
-        foreach (var relativePath in relativePaths)
-        {
-            var fullPath = Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-            Assert.True(File.Exists(fullPath), $"Expected source file '{relativePath}' to exist.");
-
-            var code = StripCommentsAndStringLiterals(File.ReadAllText(fullPath));
-            violations.AddRange(forbiddenTokens
-                .Where(token => code.Contains(token, StringComparison.Ordinal))
-                .Select(token => $"{relativePath}: {token}"));
-        }
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+        var violations = removedPaths.Where(relativePath =>
+            File.Exists(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Empty(violations);
     }
 
     private static bool IsDesignReference(ProjectInfo reference) =>

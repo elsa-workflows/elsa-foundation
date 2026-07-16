@@ -59,6 +59,12 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         var actualJson = CanonicalJson(executable);
         var goldenPath = GoldenPath(corpusName);
 
+        if (Environment.GetEnvironmentVariable("PUBLISHING_COMPILER_GOLDEN_REGEN") == "1")
+        {
+            File.WriteAllText(goldenPath, actualJson);
+            return;
+        }
+
         if (!File.Exists(goldenPath))
         {
             // Capture mode: write the golden into the source tree so it lands in the commit for review.

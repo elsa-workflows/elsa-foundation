@@ -16,7 +16,6 @@ public sealed class WorkflowIntrinsicExecutor(
     IActivityExecutionStateStore activityExecutionStateStore,
     IRuntimeInputBindingResolver inputBindingResolver,
     IDurableValueStateStore durableValueStateStore,
-    IRuntimeActivityOutputRegister activityOutputRegister,
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
     TimeProvider timeProvider)
 {
@@ -581,12 +580,7 @@ public sealed class WorkflowIntrinsicExecutor(
         var context = new RuntimeInputBindingResolutionContext(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
-            durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
-            activityOutputRegister,
             serviceProvider,
-            projections.WorkflowVariables,
-            projections.WorkflowInputs,
-            projections.ActivityOutputValues,
             consumerInvocation: intrinsicState,
             runtimeView: runtimeView,
             executable: executable,

@@ -60,7 +60,6 @@ public sealed class FinishCorrelateExecutionTests
     {
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
-            .WithConstructor<SequenceConstructor>()
             .WithProbeLeaf()
             .Build("actexec-sequence", "actexec-finish");
 
@@ -72,7 +71,7 @@ public sealed class FinishCorrelateExecutionTests
             "authored-sequence",
             typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!,
             "1.0.0",
-            SequenceConstructor.DescriptorTypeKey,
+            typeof(SequenceDescriptor).FullName!,
             JsonSerializer.SerializeToElement(new SequenceDescriptor()),
             new Dictionary<string, RuntimeInputBinding>(),
             new Dictionary<string, RuntimeOutputCapture>(),
@@ -117,21 +116,4 @@ public sealed class FinishCorrelateExecutionTests
 
     private sealed record SequenceDescriptor;
 
-    private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) => new(new Elsa.Activities.Sequence.Activities.Sequence());
-
-        public ValueTask<IActivity> Construct(
-            SequenceDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) => new(new Elsa.Activities.Sequence.Activities.Sequence());
-    }
 }

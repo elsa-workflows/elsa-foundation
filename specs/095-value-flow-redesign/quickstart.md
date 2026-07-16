@@ -43,11 +43,11 @@ public sealed record DownloadResult(int StatusCode, string Content);
 
 public sealed class DownloadDocument(HttpClient client) : Activity<DownloadResult>
 {
-    [Input(Key = "url")]
-    public required Uri Url { get; init; }
+    [ActivityInput(Key = "url")]
+    public required Uri Url { get; set; }
 
     protected override async ValueTask<ActivityTransition<DownloadResult>> ExecuteAsync(
-        ActivityContext context)
+        ActivityExecutionContext context)
     {
         using var response = await client.GetAsync(Url, context.CancellationToken);
         var content = await response.Content.ReadAsStringAsync(context.CancellationToken);
@@ -124,7 +124,8 @@ Before completion, search the canonical source and public API surface for forbid
 rg -n "IMemoryBlock|IMemoryRegister|InputArgument|OutputArgument|DelegateExpression" src/Elsa tests/Elsa
 ```
 
-Only importer-local Elsa 3 DTO terminology documented by the import contract may remain.
+Only importer-local Elsa 3 DTO terminology documented by the import contract may remain. Search tests
+separately when validating fixture convergence; production and test allowlists are intentionally distinct.
 
 ## Activation-scope evidence
 

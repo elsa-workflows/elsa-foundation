@@ -83,6 +83,12 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         if (Regenerate)
             return;
 
+        // Workflow executables carrying the removed generic value bindings are an intentional major-version
+        // incompatibility. They must be translated by the Elsa 3 importer, not revived in canonical runtime
+        // persistence through an upcaster or compatibility model.
+        if (kind == ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind)
+            return;
+
         var fixtureContent = ReadCommittedFixture(kind, 1);
 
         // Seed the committed fixture under the pre-versioning "1.0.0" stamp, exactly as a document written

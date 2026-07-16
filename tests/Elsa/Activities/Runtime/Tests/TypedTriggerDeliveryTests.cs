@@ -31,10 +31,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var activator = new SuspendingTypedActivator(transition);
         await _executableStore.SaveAsync(NewTypedStatefulExecutable());
         await _activityStateStore.SaveAsync(NewTypedRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(new RecordingActivity()),
-            includeInspection: includeInspection,
-            activityActivator: activator);
+        await using var provider = NewProvider(activator, includeInspection);
 
         await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
 

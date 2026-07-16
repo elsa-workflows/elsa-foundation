@@ -49,7 +49,7 @@ Content-Type: application/json
 ###    the WorkflowIdentity row from step 2 + the two CLR (ClrActivityDescriptor) rows from reconciliation.
 GET {{host}}/publishing/activities
 
-### 4. Cross the construction seam for one row. Paste an ActivityVersionId from step 3.
-###    - a ClrActivityDescriptor row → ClrActivityConstructor → e.g. WriteLine (+ its typed Input/Output args)
-###    - the WorkflowIdentity row → WorkflowActivityConstructor → WorkflowDefinitionActivity (carries the identity)
+### 4. Inspect the compiled contract surface for one row. Paste an ActivityVersionId from step 3.
+###    CLR rows expose canonical type aliases and stable plain-property inputs. WorkflowIdentity rows remain
+###    discovery metadata until the typed child-workflow execution boundary is implemented.
 GET {{host}}/publishing/activities/<paste ActivityVersionId>/construct

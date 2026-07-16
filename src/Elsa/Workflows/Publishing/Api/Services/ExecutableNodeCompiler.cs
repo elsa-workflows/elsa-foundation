@@ -67,7 +67,8 @@ public sealed class ExecutableNodeCompiler(
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
-        var activityContract = clrActivityType is null ? null : BuildActivityContract(activityVersion, clrActivityType, activityType);
+        var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
+        var activityContract = clrActivityType is null ? null : BuildActivityContract(activityVersion, clrActivityType, activityType, structure);
         var outputCaptures = activityContract?.Result.Projections.Values.ToDictionary(
             projection => projection.Key,
             projection => new RuntimeOutputCapture(
@@ -94,7 +95,7 @@ public sealed class ExecutableNodeCompiler(
                 [TriggerNodeMetadata.ExecutionTypeKey] = executionType
             },
             childSlots: childSlots,
-            structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
+            structure: structure,
             activityContract: activityContract);
     }
 
@@ -201,7 +202,11 @@ public sealed class ExecutableNodeCompiler(
         _ => []
     };
 
-    private static ActivityContract? BuildActivityContract(ActivityDefinitionVersion activityVersion, Type activityType, string activityTypeKey)
+    private static ActivityContract? BuildActivityContract(
+        ActivityDefinitionVersion activityVersion,
+        Type activityType,
+        string activityTypeKey,
+        ExecutableActivityStructure? structure)
     {
         var resultType = FindTypedActivityResult(activityType);
         if (resultType is null)
@@ -231,9 +236,7 @@ public sealed class ExecutableNodeCompiler(
                     ActivityValuePolicy.Default);
             });
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
-        var outcomes = activityType.GetCustomAttributes<ActivityOutcomeAttribute>(inherit: true)
-            .Select(attribute => attribute.Key)
-            .DefaultIfEmpty("Done");
+        var outcomes = ResolveOutcomes(activityType, structure);
 
         return new ActivityContract(
             activityTypeKey,
@@ -248,6 +251,27 @@ public sealed class ExecutableNodeCompiler(
                 projections),
             outcomes,
             new ActivityActivationRequirement(activityVersion.DescriptorType, TypeAliasConvention.CanonicalAlias(activityType)));
+    }
+
+    private static IReadOnlyCollection<string> ResolveOutcomes(Type activityType, ExecutableActivityStructure? structure)
+    {
+        var outcomes = activityType.GetCustomAttributes<ActivityOutcomeAttribute>(inherit: true)
+            .Select(attribute => attribute.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Switch case labels are authored control ports. They belong to the pinned invocation contract even
+        // though no finite set can be declared on the CLR type itself.
+        if (StringComparer.Ordinal.Equals(structure?.Kind, "elsa.switch.structure") &&
+            structure.Payload.TryGetProperty("cases", out var cases))
+        {
+            foreach (var @case in cases.EnumerateArray())
+                if (@case.TryGetProperty("match", out var match) && match.GetString() is { Length: > 0 } value)
+                    outcomes.Add(value);
+        }
+
+        if (outcomes.Count == 0)
+            outcomes.Add(ActivityOutcomes.Done);
+        return outcomes.ToArray();
     }
 
     private static Type? FindTypedActivityResult(Type activityType)

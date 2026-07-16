@@ -111,7 +111,7 @@ public sealed class PublishedHttpTriggerPublicationSlotEndToEndTests : IAsyncLif
         Assert.Equal(HttpStatusCode.Accepted, callbackResponse.StatusCode);
         Assert.Equal(oldExecutionId, Assert.Single(await ReadResumedIdsAsync(callbackResponse)));
 
-        var captured = await _fixture.ReadCapturedOutputAsync(oldExecutionId, "old-callback-result");
+        var captured = await _fixture.ReadResultProjectionAsync(oldExecutionId, "old-callback-result");
         Assert.Equal("old/callback", HttpEndpointHostFixture.DeserializeRequest(captured).Path);
     }
 

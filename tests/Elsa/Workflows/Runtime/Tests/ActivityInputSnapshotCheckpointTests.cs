@@ -18,7 +18,6 @@ public sealed class ActivityInputSnapshotCheckpointTests
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
-    private readonly InMemoryRuntimeActivityOutputRegister _activityOutputRegister = new();
     private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
 
     [Fact]
@@ -86,7 +85,6 @@ public sealed class ActivityInputSnapshotCheckpointTests
             new FixedTimeProvider(Now),
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()),
             _durableValueStateStore,
-            _activityOutputRegister,
             workflowExecutionStateStore: _workflowStateStore);
 
     private ValueTask<WorkflowExecutionState> SaveWorkflowStateAsync(WorkflowExecutableIdentity identity)

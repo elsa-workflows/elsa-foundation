@@ -38,7 +38,7 @@ public sealed class ClrReconciliationTests
         // Inherited [Version] on a base class is honoured (issue #417 item 3): no own [Version], so 4.0.0
         // comes from VersionedBaseActivity rather than the assembly's 2.1.0.
         Assert.Equal("4.0.0", VersionFor<InheritedVersionFixtureActivity>(store));
-        // The fixture assembly carries eleven concrete activities, including the wrapper-free typed fixture and three input-options
+        // The fixture assembly carries eleven concrete activities, including the typed result fixture and three input-options
         // fixtures added for option metadata coverage (the abstract bases are not activity types).
         Assert.Equal(11, store.Versions.Count);
 

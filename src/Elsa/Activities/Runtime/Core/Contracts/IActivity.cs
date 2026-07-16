@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Runtime.Core.Contracts;
@@ -37,12 +36,6 @@ public interface IActivity
     /// A bag of properties that can be used by custom activities and other code such as middleware components to store additional values with the activity.
     /// </summary>
     Dictionary<string, object> CustomProperties { get; set; }
-
-    /// <summary>
-    /// Synthetic properties are dynamic properties not found on the activity class itself.
-    /// </summary>
-    [JsonIgnore]
-    Dictionary<string, object> SyntheticProperties { get; set; }
 
     /// <summary>
     /// Metadata associated with the activity. This is typically used by the workflow designer to store information about the activity.

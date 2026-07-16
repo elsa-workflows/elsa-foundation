@@ -158,9 +158,13 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
         new(
             "workflow-1",
             consumer?.InvocationId ?? "consumer",
-            new Dictionary<string, DurableValueState>(),
-            EmptyOutputReader.Instance,
-            workflowInputs: workflowInputs,
+            workflowInputEnvelopes: workflowInputs?.ToDictionary(
+                item => item.Key,
+                item => ValueEnvelope.Inline(
+                    StringType,
+                    item.Value is JsonElement json ? json : JsonSerializer.SerializeToElement(item.Value),
+                    ValueProtectionPolicy.InstanceInline),
+                StringComparer.Ordinal),
             consumerInvocation: consumer,
             runtimeView: runtimeView,
             executable: executable);
@@ -280,15 +284,4 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             0,
             new Dictionary<string, string>());
 
-    private sealed class EmptyOutputReader : IRuntimeActivityOutputReader
-    {
-        public static readonly EmptyOutputReader Instance = new();
-        public bool TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)
-        {
-            output = null!;
-            return false;
-        }
-
-        public IReadOnlyCollection<ActiveActivityOutput> GetActivityOutputs(string workflowExecutionId, string activityExecutionId) => [];
-    }
 }

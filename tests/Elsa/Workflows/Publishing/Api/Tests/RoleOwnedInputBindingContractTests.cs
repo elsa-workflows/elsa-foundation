@@ -138,7 +138,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var changedCapability = ExpressionBinding(
             first.Expression.Parameters,
             first.Expression.Options,
-            ExpressionCapabilityProfiles.LegacyAmbientV1);
+            "test/non-binding-capability-v1");
         var hasher = new WorkflowExecutableHasher();
 
         Assert.Equal(hasher.ComputeHash(Node(first)), hasher.ComputeHash(Node(reordered)));

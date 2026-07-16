@@ -13,53 +13,6 @@ public sealed class RuntimeInputBinding
 {
     [JsonConstructor]
     public RuntimeInputBinding(
-        string inputName,
-        ValueTypeDescriptor targetType,
-        ValueProtectionPolicy effectivePolicy,
-        RuntimeInputBindingSource source,
-        ValueEnvelope? literal,
-        RuntimeWorkflowRequestReference? workflowRequest,
-        RuntimeVariableReference? variable,
-        RuntimeActivityResultReference? activityResult,
-        JsonElement? literalValue,
-        RuntimeExpressionBinding? expression,
-        RuntimeActivityOutputReference? activityOutput,
-        RuntimeDurableValueReference? durableValue,
-        RuntimeReferenceValue? reference,
-        IReadOnlyDictionary<string, string>? metadata)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(inputName);
-        ArgumentNullException.ThrowIfNull(targetType);
-        ArgumentNullException.ThrowIfNull(effectivePolicy);
-
-        if (source is RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.VariableRead or RuntimeInputBindingSource.ActivityResult ||
-            source is RuntimeInputBindingSource.Literal && literal is not null ||
-            source is RuntimeInputBindingSource.Expression && expression is not null && targetType.Alias != "Elsa.Any")
-            ValidateCanonical(source, literal, workflowRequest, variable, activityResult, expression);
-        else
-            Validate(source, literalValue, expression, activityOutput, durableValue, reference);
-
-        InputName = inputName;
-        TargetType = targetType;
-        EffectivePolicy = effectivePolicy;
-        Source = source;
-        Literal = literal;
-        WorkflowRequest = workflowRequest;
-        Variable = variable;
-        ActivityResult = activityResult;
-        LiteralValue = literalValue?.Clone();
-        Expression = expression;
-        ActivityOutput = activityOutput;
-        DurableValue = durableValue;
-        Reference = reference;
-        Metadata = RuntimeModelMetadata.Snapshot(metadata);
-    }
-
-    /// <summary>
-    /// Creates a canonical role-owned binding. Legacy constructor overloads remain only while the
-    /// invocation adapter is being migrated and are removed by spec 095's convergence phase.
-    /// </summary>
-    public RuntimeInputBinding(
         string inputKey,
         ValueTypeDescriptor targetType,
         ValueProtectionPolicy effectivePolicy,
@@ -94,34 +47,6 @@ public sealed class RuntimeInputBinding
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
-    public RuntimeInputBinding(
-        string inputName,
-        RuntimeInputBindingSource source,
-        JsonElement? literalValue = null,
-        RuntimeExpressionBinding? expression = null,
-        RuntimeActivityOutputReference? activityOutput = null,
-        RuntimeDurableValueReference? durableValue = null,
-        RuntimeReferenceValue? reference = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(inputName);
-        Validate(source, literalValue, expression, activityOutput, durableValue, reference);
-
-        InputName = inputName;
-        TargetType = new ValueTypeDescriptor("Elsa.Any");
-        EffectivePolicy = ValueProtectionPolicy.Transient;
-        Source = source;
-        LiteralValue = literalValue?.Clone();
-        Literal = literalValue.HasValue
-            ? ValueEnvelope.Inline(TargetType, literalValue.Value, EffectivePolicy)
-            : null;
-        Expression = expression;
-        ActivityOutput = activityOutput;
-        DurableValue = durableValue;
-        Reference = reference;
-        Metadata = RuntimeModelMetadata.Snapshot(metadata);
-    }
-
     public string InputName { get; }
     public string InputKey => InputName;
     public ValueTypeDescriptor TargetType { get; }
@@ -133,9 +58,6 @@ public sealed class RuntimeInputBinding
     public RuntimeActivityResultReference? ActivityResult { get; }
     public JsonElement? LiteralValue { get; }
     public RuntimeExpressionBinding? Expression { get; }
-    public RuntimeActivityOutputReference? ActivityOutput { get; }
-    public RuntimeDurableValueReference? DurableValue { get; }
-    public RuntimeReferenceValue? Reference { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 
     private static void ValidateCanonical(
@@ -170,46 +92,12 @@ public sealed class RuntimeInputBinding
             throw new ArgumentException($"Runtime input binding source '{source}' does not match its canonical payload.");
     }
 
-    private static void Validate(
-        RuntimeInputBindingSource source,
-        JsonElement? literalValue,
-        RuntimeExpressionBinding? expression,
-        RuntimeActivityOutputReference? activityOutput,
-        RuntimeDurableValueReference? durableValue,
-        RuntimeReferenceValue? reference)
-    {
-        var payloadCount =
-            (literalValue.HasValue ? 1 : 0) +
-            (expression is not null ? 1 : 0) +
-            (activityOutput is not null ? 1 : 0) +
-            (durableValue is not null ? 1 : 0) +
-            (reference is not null ? 1 : 0);
-
-        if (payloadCount != 1)
-            throw new ArgumentException("A runtime input binding must carry exactly one source payload.");
-
-        var valid = source switch
-        {
-            RuntimeInputBindingSource.Literal => literalValue.HasValue,
-            RuntimeInputBindingSource.Expression => expression is not null,
-            RuntimeInputBindingSource.ActivityOutput => activityOutput is not null,
-            RuntimeInputBindingSource.DurableValue => durableValue is not null,
-            RuntimeInputBindingSource.Reference => reference is not null,
-            _ => false
-        };
-
-        if (!valid)
-            throw new ArgumentException($"Runtime input binding source '{source}' does not match its payload.");
-    }
 }
 
 public enum RuntimeInputBindingSource
 {
     Literal,
     Expression,
-    ActivityOutput,
-    DurableValue,
-    Reference,
     WorkflowRequest,
     VariableRead,
     ActivityResult
@@ -294,7 +182,7 @@ public sealed class RuntimeExpressionBinding
         if (Options.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("Runtime expression evaluator options must be a JSON object.", nameof(options));
         CapabilityProfile = string.IsNullOrWhiteSpace(capabilityProfile)
-            ? ExpressionCapabilityProfiles.LegacyAmbientV1
+            ? ExpressionCapabilityProfiles.BindingPureV1
             : capabilityProfile;
     }
 
@@ -307,70 +195,11 @@ public sealed class RuntimeExpressionBinding
     public string CapabilityProfile { get; }
 }
 
-public sealed class RuntimeActivityOutputReference
-{
-    public RuntimeActivityOutputReference(
-        string? producerActivityExecutionId,
-        string? producerExecutableNodeId,
-        string outputName,
-        IReadOnlyDictionary<string, string>? metadata = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputName);
-
-        ProducerActivityExecutionId = producerActivityExecutionId;
-        ProducerExecutableNodeId = producerExecutableNodeId;
-        OutputName = outputName;
-        Metadata = RuntimeModelMetadata.Snapshot(metadata);
-    }
-
-    public string? ProducerActivityExecutionId { get; }
-    public string? ProducerExecutableNodeId { get; }
-    public string OutputName { get; }
-    public IReadOnlyDictionary<string, string> Metadata { get; }
-}
-
-public sealed class RuntimeDurableValueReference
-{
-    public RuntimeDurableValueReference(string valueId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(valueId);
-
-        ValueId = valueId;
-    }
-
-    public string ValueId { get; }
-}
-
-public sealed class RuntimeReferenceValue
-{
-    public RuntimeReferenceValue(
-        string referenceType,
-        string referenceId,
-        JsonElement? payload = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(referenceType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(referenceId);
-
-        ReferenceType = referenceType;
-        ReferenceId = referenceId;
-        Payload = payload?.Clone();
-        Metadata = RuntimeModelMetadata.Snapshot(metadata);
-    }
-
-    public string ReferenceType { get; }
-    public string ReferenceId { get; }
-    public JsonElement? Payload { get; }
-    public IReadOnlyDictionary<string, string> Metadata { get; }
-}
-
 public sealed record RuntimeResolvedInput(
     string InputName,
     RuntimeInputBindingSource Source,
     JsonElement? Value,
-    RuntimeExpressionBinding? Expression,
-    DurableValueState? DurableValue,
-    RuntimeReferenceValue? Reference)
+    RuntimeExpressionBinding? Expression)
 {
     /// <summary>
     /// Canonical materialized source including its effective protection policy and payload location.

@@ -1,5 +1,7 @@
 # Feature Specification: Runtime Activity Output Capture
 
+> **Current status (2026-07-16): superseded by [spec 095](../095-value-flow-redesign/spec.md).** Mutable output arguments, active output publication, and independently writable output slots were removed. Successful completion commits one typed result atomically; named outputs are read-only projections.
+
 **Feature Branch**: `codex/runtime-activity-output-capture`
 **Created**: 2026-06-11
 **Status**: Draft

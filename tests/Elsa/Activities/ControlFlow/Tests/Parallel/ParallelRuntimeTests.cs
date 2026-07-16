@@ -124,7 +124,6 @@ public sealed class ParallelRuntimeTests
         // own join never fires — the composite stays Running — because Finish short-circuits the run.
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ParallelConstructor>()
             .WithProbeLeaf()
             .Build("actexec-parallel", "actexec-finish", "actexec-b", "actexec-c");
 
@@ -178,14 +177,12 @@ public sealed class ParallelRuntimeTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ParallelConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
     private static WorkflowExecutionHarness NewFaultAwareHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ParallelConstructor>()
             .WithProbeLeaf()
             .WithFaultingLeaf()
             .Build(activityExecutionIds);
@@ -256,7 +253,7 @@ public sealed class ParallelRuntimeTests
             authoredActivityId: "authored-parallel",
             activityType: typeof(ParallelActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ParallelConstructor.DescriptorTypeKey,
+            descriptorType: typeof(ParallelDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new ParallelDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
@@ -272,17 +269,5 @@ public sealed class ParallelRuntimeTests
                 })));
 
     private sealed record ParallelDescriptor;
-
-    private sealed class ParallelConstructor : IActivityConstructor<ParallelDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(ParallelDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new ParallelActivity());
-
-        public ValueTask<IActivity> Construct(ParallelDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new ParallelActivity());
-    }
 
 }

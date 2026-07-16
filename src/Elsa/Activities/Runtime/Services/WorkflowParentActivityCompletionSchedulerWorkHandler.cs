@@ -19,7 +19,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
     // the type would change a wire value. Keep the type name to preserve the persisted HandlerName.
     public const string HandlerName = nameof(WorkflowParentActivityCompletionSchedulerWorkHandler);
 
-    private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly TimeProvider _timeProvider;
 
@@ -29,14 +28,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
     /// <see cref="IRuntimePipelineContext"/> workspace carrier).
     /// </summary>
     public WorkflowParentActivityCompletionSchedulerWorkHandler(
-        IRuntimeActivityInputMaterializer inputMaterializer,
         IServiceScopeFactory serviceScopeFactory,
         TimeProvider? timeProvider = null)
     {
-        ArgumentNullException.ThrowIfNull(inputMaterializer);
         ArgumentNullException.ThrowIfNull(serviceScopeFactory);
 
-        _inputMaterializer = inputMaterializer;
         _serviceScopeFactory = serviceScopeFactory;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
@@ -149,8 +145,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (parentState.Status != ActivityExecutionStatus.Running)
             return;
 
-        var activityFactory = serviceProvider.GetRequiredService<IActivityFactory>();
-        var activityOutputRegister = serviceProvider.GetRequiredService<IRuntimeActivityOutputRegister>();
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         var checkpointCommitter = serviceProvider.GetService<RuntimeCheckpointCommitter>();
@@ -170,27 +164,19 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         {
             var constructedParent = await ConstructActivityAsync(
                 serviceProvider,
-                activityFactory,
-                activityOutputRegister,
-                durableValueStateStore,
-                workItem,
-                payload,
-                executable,
                 parentExecutableNode,
                 parentState,
                 cancellationToken);
             await using var activationLease = constructedParent.ActivationLease;
-            valueSnapshots = parentExecutableNode.ActivityContract is { } contract
-                ? ActivityOutputPublisher.BuildInputValueSnapshots(
-                    payloadCapturePolicy,
-                    workItem,
-                    payload.ActivityExecutionId,
-                    payload.ExecutableNodeId,
-                    contract,
-                    constructedParent.InputSnapshot!,
-                    RuntimeMetadataKeys.ParentCompletionSchedulerWorkItemId,
-                    _timeProvider.GetUtcNow())
-                : BuildInputValueSnapshots(payloadCapturePolicy, workItem, payload, constructedParent.Inputs, _timeProvider.GetUtcNow());
+            valueSnapshots = ActivityExecutionInspection.BuildInputValueSnapshots(
+                payloadCapturePolicy,
+                workItem,
+                payload.ActivityExecutionId,
+                payload.ExecutableNodeId,
+                parentExecutableNode.ActivityContract!,
+                constructedParent.InputSnapshot,
+                RuntimeMetadataKeys.ParentCompletionSchedulerWorkItemId,
+                _timeProvider.GetUtcNow());
             var parentActivity = constructedParent.Activity;
             var childFaulted = IsChildFaulted(workItem);
 
@@ -211,13 +197,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             parentActivity.NodeId = parentExecutableNode.ExecutableNodeId;
             parentActivity.Id = payload.ActivityExecutionId;
 
-            // Populate the live execution-time expression carrier (ADR 0030) for the container's child-completion
-            // logic: variables come only from the canonical visible-frame chain; durable projections remain the
-            // compatibility source for identity, inputs, and outputs. Activity callbacks receive no mutable frame.
-            var carrier = RuntimeExecutionExpressionCarrier.Create(
-                constructedParent.Projections,
-                payload.PinnedExecutable,
-                constructedParent.WorkflowVariables);
             context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 parentActivity,
@@ -227,10 +206,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 workItem,
                 parentExecutableNode,
                 parentState,
-                variableScope: null,
-                carrier);
-            if (parentExecutableNode.ActivityContract is null)
-                RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
+                variableScope: null);
 
             if (childFaulted)
             {
@@ -337,63 +313,20 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
     private async ValueTask<ConstructedActivity> ConstructActivityAsync(
         IServiceProvider serviceProvider,
-        IActivityFactory activityFactory,
-        IRuntimeActivityOutputRegister activityOutputRegister,
-        IDurableValueStateStore durableValueStateStore,
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeCompleteActivityCommandPayload payload,
-        WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
-        var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-        var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-        var workflowInputs = projections.WorkflowInputs;
-        var activityOutputValues = projections.ActivityOutputValues;
-        var scopeService = new RuntimeContainerScopeService(
-            serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
-            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
-        var visibleFrames = await scopeService.BuildVisibleFramesAsync(
-            workItem.WorkflowExecutionId,
-            state,
-            cancellationToken: cancellationToken);
-        var workflowVariables = scopeService.ProjectVisibleVariables(executable, visibleFrames);
-
-        if (executableNode.ActivityContract is { } contract)
-        {
-            state.EnsureValueFlowCompatible();
-            var snapshot = RequireCommittedSnapshot(state, contract);
-            var attempt = state.Attempts?.LastOrDefault(item => item.EndedAt is null)
-                ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
-            var activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(contract, snapshot, attempt, state.PrivateState),
-                cancellationToken);
-            return new ConstructedActivity(activationLease.Activity, [], projections, workflowVariables, snapshot, activationLease);
-        }
-
-        var resolutionContext = new RuntimeInputBindingResolutionContext(
-            workflowExecutionId: workItem.WorkflowExecutionId,
-            activityExecutionId: payload.ActivityExecutionId,
-            durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
-            activityOutputs: activityOutputRegister,
-            serviceProvider: serviceProvider,
-            workflowVariables: workflowVariables,
-            workflowInputs: workflowInputs,
-            activityOutputValues: activityOutputValues,
-            workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
-            variableEnvelopes: visibleFrames.Values);
-        var inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
-
-        var activity = await activityFactory.Create(
-            executableNode.DescriptorType,
-            executableNode.DescriptorPayload,
-            inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            ActivityOutputPublisher.BuildOutputArguments(executableNode),
+        var contract = executableNode.ActivityContract
+            ?? throw new InvalidOperationException($"VF-ACT-001: Executable CLR activity node '{executableNode.ExecutableNodeId}' has no pinned activity contract.");
+        state.EnsureValueFlowCompatible();
+        var snapshot = RequireCommittedSnapshot(state, contract);
+        var attempt = state.Attempts?.LastOrDefault(item => item.EndedAt is null)
+            ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
+        var activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
+            new ActivityActivationRequest(contract, snapshot, attempt, state.PrivateState),
             cancellationToken);
-        serviceProvider.GetRequiredService<ActivityInputHydrator>().Hydrate(activity, inputs);
-
-        return new ConstructedActivity(activity, inputs, projections, workflowVariables, null, null);
+        return new ConstructedActivity(activationLease.Activity, snapshot, activationLease);
     }
 
     private static ActivityInputSnapshot RequireCommittedSnapshot(ActivityExecutionState state, ActivityContract contract)
@@ -775,40 +708,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             "completionKind" or
             "completedChildActivityExecutionId";
 
-    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
-        IRuntimePayloadCapturePolicy payloadCapturePolicy,
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeCompleteActivityCommandPayload payload,
-        IReadOnlyCollection<RuntimeMaterializedActivityInput> inputs,
-        DateTimeOffset capturedAt) =>
-        inputs
-            .Select(input =>
-            {
-                var type = ActivityOutputPublisher.TypeDescriptorFor(input.Value);
-                var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
-                    RuntimePayloadCaptureSubject.ActivityInput,
-                    workItem.WorkflowExecutionId,
-                    capturedAt,
-                    activityExecutionId: payload.ActivityExecutionId,
-                    valueName: input.Name,
-                    type: type,
-                    metadata: new Dictionary<string, string>
-                    {
-                        [RuntimeMetadataKeys.ExecutableNodeId] = payload.ExecutableNodeId,
-                        [RuntimeMetadataKeys.ParentCompletionSchedulerWorkItemId] = workItem.WorkItemId
-                    }));
-                return ActivityExecutionInspectionValueSnapshot.FromDecision(
-                    input.Name,
-                    ActivityExecutionInspectionValueSubject.ActivityInput,
-                    decision,
-                    type,
-                    capturedAt,
-                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value, input.Name, type),
-                    isSensitive: false,
-                    metadata: decision.Metadata);
-            })
-            .ToArray();
-
     private static ActivityFaultIncidentRecordRequest NewFaultIncidentRecordRequest(
         RuntimeCheckpointCommitter checkpointCommitter,
         RuntimeSchedulerWorkItem workItem,
@@ -855,9 +754,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
     private sealed record ConstructedActivity(
         IActivity Activity,
-        IReadOnlyList<RuntimeMaterializedActivityInput> Inputs,
-        RuntimeInputBindingStateProjectionSet Projections,
-        IReadOnlyDictionary<string, object?> WorkflowVariables,
-        ActivityInputSnapshot? InputSnapshot,
-        ActivityActivationLease? ActivationLease);
+        ActivityInputSnapshot InputSnapshot,
+        ActivityActivationLease ActivationLease);
 }

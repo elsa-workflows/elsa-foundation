@@ -3,8 +3,6 @@ using Elsa.Activities.ControlFlow;
 using Elsa.Activities.ForEach;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
-using Elsa.Activities.Primitives.Binding;
-using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
@@ -121,7 +119,6 @@ public sealed class ForEachRuntimeTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ForEachActivityConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
@@ -130,7 +127,6 @@ public sealed class ForEachRuntimeTests
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithConstructor<ForEachActivityConstructor>()
             .Build(activityExecutionIds);
 
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string>? collection, bool breakOnEntry = false)
@@ -143,7 +139,7 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForEachActivityConstructor.DescriptorTypeKey,
+            descriptorType: typeof(ForEachDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
@@ -167,7 +163,7 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForEachActivityConstructor.DescriptorTypeKey,
+            descriptorType: typeof(ForEachDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
@@ -196,8 +192,7 @@ public sealed class ForEachRuntimeTests
             type,
             policy,
             RuntimeInputBindingSource.Literal,
-            literal: envelope,
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" });
+            literal: envelope);
     }
 
     private static ExecutableNode NewWriteLineNode(string nodeId, string text)
@@ -256,26 +251,6 @@ public sealed class ForEachRuntimeTests
         output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
     private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-
-    private sealed class ForEachActivityConstructor : IActivityConstructor<ForEachDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(ForEachDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new ForEachDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            ForEachDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-            => new(new ForEachActivity());
-    }
 
     private sealed record ForEachDescriptor;
 }

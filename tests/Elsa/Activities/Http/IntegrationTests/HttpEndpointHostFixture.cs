@@ -391,13 +391,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         // endpoint runs first (its node id becomes the run's trigger identity → start path completes), then the
         // Sequence schedules the callback endpoint, which is mid-flow (foreign trigger identity → suspends). The
         // Sequence root itself is not a trigger — only its start child is.
+        var sequenceDescriptorPayload = ClrConstruction.Payload(serializer, typeof(SequenceActivity));
         var sequenceNode = new ExecutableNode(
             executableNodeId: "node-sequence",
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            descriptorPayload: sequenceDescriptorPayload,
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -405,7 +406,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             structure: new ExecutableActivityStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = new[] { startNode.ExecutableNodeId, callbackNode.ExecutableNodeId } })));
+                JsonSerializer.SerializeToElement(new { activities = new[] { startNode.ExecutableNodeId, callbackNode.ExecutableNodeId } })),
+            activityContract: UnitActivityContract(typeof(SequenceActivity), sequenceDescriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
 
         var resumeTargets = NewHttpEndpointResumeTargets(callbackNode.ExecutableNodeId);
 
@@ -569,6 +571,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     private ExecutableNode NewSequenceNode(string nodeId, params ExecutableNode[] children)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(SequenceActivity));
 
         return new ExecutableNode(
             executableNodeId: nodeId,
@@ -576,7 +579,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            descriptorPayload: descriptorPayload,
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -584,7 +587,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             structure: new ExecutableActivityStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
+                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })),
+            activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
     }
 
     /// <summary>Builds a <see cref="WriteHttpResponse"/> node authoring the given status/body/content-type and an optional header.</summary>
@@ -645,7 +649,20 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>Builds a <see cref="StallingActivity"/> node that stalls the inline drain for <paramref name="duration"/> (scenario 5.3 timeout).</summary>
     private ExecutableNode NewStallingNode(string nodeId, TimeSpan duration)
     {
+        const string durationKey = "duration";
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(StallingActivity));
+        ActivityInputContract[] inputs =
+        [
+            new(
+                durationKey,
+                nameof(StallingActivity.Duration),
+                RuntimeValueType(typeof(TimeSpan)),
+                isRequired: false,
+                hasDefault: true,
+                JsonSerializer.SerializeToElement(TimeSpan.FromMinutes(1)),
+                ActivityValuePolicy.Default)
+        ];
 
         return new ExecutableNode(
             executableNodeId: nodeId,
@@ -653,13 +670,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             activityType: typeof(StallingActivity).FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(StallingActivity)),
+            descriptorPayload: descriptorPayload,
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                [nameof(StallingActivity.Duration)] = LiteralBinding(nameof(StallingActivity.Duration), duration.ToString("c"), "System.TimeSpan")
+                [durationKey] = TypedLiteralBinding(durationKey, duration, typeof(TimeSpan))
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: UnitActivityContract(typeof(StallingActivity), descriptorPayload, inputs, [ActivityOutcomes.Done]));
     }
 
     /// <summary>
@@ -760,13 +778,37 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
         await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);
 
-    /// <summary>Reads the single durable value captured under the durable value id <paramref name="valueId"/> for a run.</summary>
-    public async Task<JsonElement> ReadCapturedOutputAsync(string workflowExecutionId, string valueId)
+    /// <summary>
+    /// Reads a named projection from the activity's immutable committed result. The fixture's authored
+    /// output-capture declaration supplies only the stable projection-to-test identifier mapping; the runtime
+    /// stores no second mutable output slot or independent durable value.
+    /// </summary>
+    public async Task<JsonElement> ReadResultProjectionAsync(string workflowExecutionId, string valueId)
     {
-        var durableValues = await Services.GetRequiredService<IDurableValueStateStore>().ListAsync(workflowExecutionId);
-        var captured = Assert.Single(durableValues, value => value.ValueId == valueId);
-        Assert.NotNull(captured.InlineValue);
-        return captured.InlineValue!.Value;
+        var workflowState = await WorkflowExecutionAsync(workflowExecutionId);
+        var executable = await Services.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(workflowState.PinnedExecutable.ArtifactId)
+            ?? throw new InvalidOperationException($"Executable '{workflowState.PinnedExecutable.ArtifactId}' was not found.");
+        var projectionOwner = Assert.Single(
+            executable.Nodes.SelectMany(node => node.OutputCaptures.Select(capture => (Node: node, Capture: capture.Value)))
+                .Where(candidate => StringComparer.Ordinal.Equals(candidate.Capture.ValueId, valueId)));
+        var contract = projectionOwner.Node.ActivityContract
+            ?? throw new InvalidOperationException($"Node '{projectionOwner.Node.ExecutableNodeId}' has no pinned activity contract.");
+        var projection = contract.Result.Projections[projectionOwner.Capture.OutputName];
+        var activityState = Assert.Single(
+            await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId),
+            state => state.Execution.ExecutableNodeId == projectionOwner.Node.ExecutableNodeId && state.Completion is not null);
+        var current = activityState.Completion!.Result.InlineValue
+            ?? throw new InvalidOperationException($"Activity '{activityState.InvocationId}' has no inline committed result.");
+
+        foreach (var segment in projection.Path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(segment, out var selected))
+                throw new InvalidOperationException($"Committed result projection path '{projection.Path}' was not found.");
+            current = selected;
+        }
+
+        return current.Clone();
     }
 
     public static HttpRequestModel DeserializeRequest(JsonElement value) =>
@@ -926,18 +968,30 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     private static ActivityResultProjectionContract HttpEndpointProjection(string key, string path, Type type, bool isRequired) =>
         new(key, path, RuntimeValueType(type), isRequired, ActivityValuePolicy.Default);
 
+    private static ActivityContract UnitActivityContract(
+        Type activityType,
+        JsonElement descriptorPayload,
+        IReadOnlyCollection<ActivityInputContract> inputs,
+        IReadOnlyCollection<string> outcomes)
+    {
+        var activityTypeAlias = TypeAliasConvention.CanonicalAlias(activityType);
+        return new ActivityContract(
+            activityTypeAlias,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            inputs,
+            new ActivityResultContract(
+                RuntimeValueType(typeof(ActivityUnit)),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            outcomes,
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityTypeAlias));
+    }
+
     private static RuntimeValueTypeDescriptor RuntimeCaptureType(Type type) =>
         new("clr", RuntimeValueType(type).Alias, null);
-
-    private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
-        new(
-            inputName: inputName,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName
-            });
 
     private static RuntimeInputBinding TypedLiteralBinding(string inputKey, object? value, Type type)
     {

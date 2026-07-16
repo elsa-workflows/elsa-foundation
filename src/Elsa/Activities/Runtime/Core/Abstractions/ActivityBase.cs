@@ -94,10 +94,6 @@ public abstract class ActivityBase : IActivity, ISignalHandler
     public Dictionary<string, object> CustomProperties { get; set; } = [];
 
     /// <inheritdoc />
-    [JsonIgnore]
-    public Dictionary<string, object> SyntheticProperties { get; set; } = [];
-
-    /// <inheritdoc />
     public Dictionary<string, object> Metadata { get; set; } = [];
 
     /// <summary>

@@ -222,9 +222,9 @@ public sealed class WorkflowExecutableInspector(
         {
             RuntimeInputBindingSource.Literal when binding.LiteralValue is { } value => value.GetRawText(),
             RuntimeInputBindingSource.Expression when binding.Expression is { } expression => $"{expression.Language}: {expression.Expression}",
-            RuntimeInputBindingSource.ActivityOutput => binding.ActivityOutput?.OutputName,
-            RuntimeInputBindingSource.DurableValue => binding.DurableValue?.ValueId,
-            RuntimeInputBindingSource.Reference => binding.Reference?.ReferenceId,
+            RuntimeInputBindingSource.WorkflowRequest => binding.WorkflowRequest?.MemberKey,
+            RuntimeInputBindingSource.VariableRead => binding.Variable?.VariableKey,
+            RuntimeInputBindingSource.ActivityResult => binding.ActivityResult?.ProjectionKey,
             _ => null
         };
         return text is null || text.Length <= PreviewLength ? text : $"{text[..PreviewLength]}…";

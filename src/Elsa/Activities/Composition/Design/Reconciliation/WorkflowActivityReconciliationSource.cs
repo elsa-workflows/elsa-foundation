@@ -7,7 +7,7 @@ namespace Elsa.Activities.Composition.Design.Reconciliation;
 /// <summary>
 /// An <see cref="IActivityReconciliationSource"/> that contributes one catalog row per usable-as-activity
 /// workflow version (§2.6.1). Each row carries the Workflow-kind descriptor (<see cref="WorkflowIdentity"/>)
-/// so the runtime <c>WorkflowActivityConstructor</c> can build a <c>WorkflowDefinitionActivity</c> for it;
+/// so a typed child-workflow boundary can compile a canonical request for it;
 /// the workflow's surfaced inputs/outputs are mirrored directly because both sides use the same
 /// <c>InputDefinition</c>/<c>OutputDefinition</c> shapes (spec 006 FR-012/FR-014, carried over from 005).
 /// </summary>

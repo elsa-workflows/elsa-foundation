@@ -20,7 +20,6 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     private readonly TimeProvider _timeProvider;
     private readonly IRuntimeActivityInputMaterializer? _inputMaterializer;
     private readonly IDurableValueStateStore? _durableValueStateStore;
-    private readonly IRuntimeActivityOutputRegister? _activityOutputRegister;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
     private readonly WorkflowIntrinsicExecutor? _intrinsicExecutor;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
@@ -34,7 +33,6 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         TimeProvider timeProvider,
         IRuntimeActivityInputMaterializer? inputMaterializer = null,
         IDurableValueStateStore? durableValueStateStore = null,
-        IRuntimeActivityOutputRegister? activityOutputRegister = null,
         IServiceScopeFactory? serviceScopeFactory = null,
         WorkflowIntrinsicExecutor? intrinsicExecutor = null,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
@@ -52,7 +50,6 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         _timeProvider = timeProvider;
         _inputMaterializer = inputMaterializer;
         _durableValueStateStore = durableValueStateStore;
-        _activityOutputRegister = activityOutputRegister;
         _serviceScopeFactory = serviceScopeFactory;
         _intrinsicExecutor = intrinsicExecutor;
         _workflowExecutionStateStore = workflowExecutionStateStore;
@@ -155,9 +152,12 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
                 cancellationToken);
         }
 
+        if (executableNode.ActivityContract is null)
+            throw new InvalidOperationException($"VF-ACT-001: Executable CLR activity node '{executableNode.ExecutableNodeId}' has no pinned activity contract.");
+
         if (state.Status == ActivityExecutionStatus.Running)
         {
-            if (executableNode.ActivityContract is not null && state.InputSnapshot is null)
+            if (state.InputSnapshot is null)
                 throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no committed input snapshot.");
 
             await EnqueueInvokeActivityAsync(workItem, startPayload, cancellationToken);
@@ -168,24 +168,19 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             return null;
 
         var startedAt = _timeProvider.GetUtcNow();
-        ActivityInputSnapshot? inputSnapshot = null;
-        ActivityAttempt? firstAttempt = null;
-        if (executableNode.ActivityContract is not null)
-        {
-            inputSnapshot = await MaterializeInputSnapshotAsync(
-                executable,
-                executableNode,
-                state,
-                serviceProvider,
-                startedAt,
-                cancellationToken);
-            firstAttempt = new ActivityAttempt(
-                $"{state.InvocationId}:attempt:1",
-                state.InvocationId,
-                1,
-                ActivityAttemptReason.Initial,
-                startedAt);
-        }
+        var inputSnapshot = await MaterializeInputSnapshotAsync(
+            executable,
+            executableNode,
+            state,
+            serviceProvider,
+            startedAt,
+            cancellationToken);
+        var firstAttempt = new ActivityAttempt(
+            $"{state.InvocationId}:attempt:1",
+            state.InvocationId,
+            1,
+            ActivityAttemptReason.Initial,
+            startedAt);
 
         var runningState = StartActivity(workItem, startPayload, state, executableNode.ActivityContract, inputSnapshot, firstAttempt, startedAt);
         if (_checkpointCommitter is null || _inspectionAccumulator is null)
@@ -254,9 +249,6 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
         var durableValueStateStore = _durableValueStateStore
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
-        var activityOutputRegister = _activityOutputRegister
-            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an activity output register.");
-
         var durableValues = await durableValueStateStore.ListAsync(state.Execution.WorkflowExecutionId, cancellationToken);
         var runtimeView = await _activityExecutionStateStore.ListAsync(state.Execution.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
@@ -269,12 +261,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
-            durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
-            activityOutputs: activityOutputRegister,
             serviceProvider: serviceProvider,
-            workflowVariables: projections.WorkflowVariables,
-            workflowInputs: projections.WorkflowInputs,
-            activityOutputValues: projections.ActivityOutputValues,
             consumerInvocation: state,
             runtimeView: runtimeView,
             executable: executable,

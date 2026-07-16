@@ -217,8 +217,6 @@ public sealed class ValueDurabilityPolicyTests
         new(
             "workflow-1",
             "invocation-1",
-            new Dictionary<string, DurableValueState>(),
-            EmptyOutputReader.Instance,
             workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: variableEnvelopes);
 
@@ -268,19 +266,6 @@ public sealed class ValueDurabilityPolicyTests
         isSensitive: true,
         requiresEncryption: true,
         redactionMode: "Full");
-
-    private sealed class EmptyOutputReader : Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityOutputReader
-    {
-        public static readonly EmptyOutputReader Instance = new();
-
-        public bool TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)
-        {
-            output = null!;
-            return false;
-        }
-
-        public IReadOnlyCollection<ActiveActivityOutput> GetActivityOutputs(string workflowExecutionId, string activityExecutionId) => [];
-    }
 
     private sealed class RecordingExternalPayloadStore(IReadOnlyDictionary<string, JsonElement> payloads) : IExternalPayloadStore
     {

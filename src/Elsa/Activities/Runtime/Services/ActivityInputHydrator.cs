@@ -9,9 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// Hydrates annotated plain CLR properties exactly once. Canonical invocations hydrate from the
-/// committed input snapshot; the value-list overload exists only while legacy executable artifacts
-/// still enter through the constructor adapter.
+/// Hydrates annotated plain CLR properties exactly once from the committed invocation snapshot.
 /// </summary>
 public sealed class ActivityInputHydrator
 {
@@ -46,55 +44,6 @@ public sealed class ActivityInputHydrator
 
             property.SetValue(activity, Materialize(property, envelope, input.Key));
         }
-    }
-
-    /// <summary>
-    /// Transitional adapter for pre-value-flow executable artifacts. It applies already-materialized
-    /// values directly to plain annotated properties and never exposes an argument or memory address to
-    /// activity code.
-    /// </summary>
-    public void Hydrate(IActivity activity, IReadOnlyCollection<RuntimeMaterializedActivityInput> inputs)
-    {
-        ArgumentNullException.ThrowIfNull(activity);
-        ArgumentNullException.ThrowIfNull(inputs);
-
-        var properties = DiscoverTransitionalProperties(activity.GetType());
-        if (properties.Count == 0)
-            return;
-
-        BeginHydration(activity);
-        foreach (var input in inputs)
-        {
-            if (!properties.TryGetValue(input.Name, out var property))
-                continue;
-
-            if (input.Value is null &&
-                (property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) is null ||
-                 _nullability.Create(property).WriteState == NullabilityState.NotNull))
-            {
-                throw new InvalidOperationException($"Activity input '{input.Name}' does not accept null.");
-            }
-
-            property.SetValue(activity, input.Value);
-        }
-    }
-
-    private static Dictionary<string, PropertyInfo> DiscoverTransitionalProperties(Type activityType)
-    {
-        var result = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
-        foreach (var property in activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var attribute = property.GetCustomAttribute<ActivityInputAttribute>(inherit: true);
-            if (attribute is null)
-                continue;
-            if (property.SetMethod is null || !property.SetMethod.IsPublic)
-                throw new InvalidOperationException($"Activity input property '{activityType.FullName}.{property.Name}' must have a public setter.");
-
-            result[property.Name] = property;
-            result[attribute.Key ?? property.Name] = property;
-        }
-
-        return result;
     }
 
     private void BeginHydration(IActivity activity)

@@ -23,6 +23,9 @@ namespace Elsa.Activities.If.Activities;
 /// <c>If</c> with no condition wired up runs the <c>Else</c> branch and emits <see cref="ActivityOutcomes.False"/>.
 /// </remarks>
 [ActivityStructure("elsa.if.structure", "1.0.0")]
+[ActivityOutcome(ActivityOutcomes.True)]
+[ActivityOutcome(ActivityOutcomes.False)]
+[ActivityOutcome(ActivityOutcomes.Break)]
 [ActivityChildSlot("If.Then", "then", "Then", ActivityChildSlotCardinalities.Single)]
 [ActivityChildSlot("If.Else", "else", "Else", ActivityChildSlotCardinalities.Single)]
 public sealed class If : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler

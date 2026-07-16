@@ -80,17 +80,17 @@ projections, two outcomes, and disposable dependencies; verify one-time hydratio
 
 ### Implementation
 
-- [ ] T024 [US1] Replace mutable execution output methods with `IActivity.ExecuteAsync` returning the closed transition contract in `src/Elsa/Activities/Runtime/Core/Contracts/IActivity.cs` and `Models/ActivityTransition.cs`
+- [X] T024 [US1] Replace mutable execution output methods with `IActivity.ExecuteAsync` returning the closed transition contract in `src/Elsa/Activities/Runtime/Core/Contracts/IActivity.cs` and `Models/ActivityTransition.cs`
 - [X] T025 [US1] Add author-facing generic `Activity<TResult>` and reduced cancellation/identity-only execution contexts in `src/Elsa/Activities/Runtime/Core/Models/ActivityExecutionContext.cs`
 - [X] T026 [US1] Implement `IActivityActivator`, async-disposable activation leases, and fresh CLR construction in `src/Elsa/Activities/Runtime/Contracts/IActivityActivator.cs` and `src/Elsa/Activities/Primitives/Activation/ClrActivityActivator.cs`
-- [ ] T027 [US1] Replace `ActivityArgumentBinder` with stable-key, one-time `ActivityInputHydrator` in `src/Elsa/Activities/Primitives/Binding/ActivityInputHydrator.cs`
-- [ ] T028 [US1] Replace runtime memory seeding and mutable output publication with snapshot hydration and an atomic completion projector in `src/Elsa/Activities/Runtime/Services/ActivityCompletionProjector.cs`
-- [ ] T029 [US1] Migrate invoke and parent-completion handlers to activation leases and returned transitions in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs` and `WorkflowParentActivityCompletionSchedulerWorkHandler.cs`
+- [X] T027 [US1] Replace `ActivityArgumentBinder` with stable-key, one-time `ActivityInputHydrator` in `src/Elsa/Activities/Primitives/Binding/ActivityInputHydrator.cs`
+- [X] T028 [US1] Replace runtime memory seeding and mutable output publication with snapshot hydration and an atomic completion projector in `src/Elsa/Activities/Runtime/Services/ActivityCompletionProjector.cs`
+- [X] T029 [US1] Migrate invoke and parent-completion handlers to activation leases and returned transitions in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs` and `WorkflowParentActivityCompletionSchedulerWorkHandler.cs`
 - [X] T030 [P] [US1] Migrate primitive and scheduling activities to plain inputs/results in `src/Elsa/Activities/Primitives/` and `src/Elsa/Activities/Scheduling/`
 - [X] T031 [P] [US1] Migrate HTTP and scripting activities to plain inputs/atomic result records in `src/Elsa/Activities/Http/` and `src/Elsa/Activities/Scripting/`
 - [X] T032 [P] [US1] Migrate sequence, composition, flowchart, and control-flow CLR activities that remain non-intrinsic in `src/Elsa/Activities/Sequence/`, `Composition/`, `Flowchart/`, and `ControlFlow/`
 - [X] T033 [US1] Update CLR discovery and registration to scan plain annotated inputs and result projections in `src/Elsa/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`
-- [ ] T034 [US1] Run US1 runtime, design scanner, activity-library, HTTP, scheduling, scripting, control-flow, and sequence test projects and mark corresponding ledger rows implemented/passing
+- [X] T034 [US1] Run US1 runtime, design scanner, activity-library, HTTP, scheduling, scripting, control-flow, and sequence test projects and mark corresponding ledger rows implemented/passing
 
 **Checkpoint**: A representative CLR activity executes end to end without `InputArgument`,
 `OutputArgument`, or mutable output context behavior.
@@ -120,7 +120,7 @@ and then recover after completion without reevaluation or reactivation.
 - [X] T043 [US3] Commit result/outcome/status/inspection/continuation intent atomically and short-circuit already-completed invocations in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
 - [X] T044 [US3] Replace active/latest-output semantics with structural-frame and causal-lineage result resolution in `src/Elsa/Workflows/Runtime/Services/CausalActivityResultResolver.cs`
 - [X] T045 [US3] Propagate effective persistence, external-payload, encryption, sensitivity, and redaction policy through materialization and projection in `src/Elsa/Workflows/Runtime/Services/`
-- [ ] T046 [US3] Run focused runtime, Groundwork, distributed recovery, and publishing tests and mark US3 ledger successors implemented/passing
+- [X] T046 [US3] Run focused runtime, Groundwork, distributed recovery, and publishing tests and mark US3 ledger successors implemented/passing
 
 **Checkpoint**: The runtime can recover a durable invocation using only its pinned snapshot, attempts,
 private state, completion, and executable contract.
@@ -232,7 +232,7 @@ fresh resume attempt and one committed completion.
 - [x] T085 [US6] Validate/deduplicate typed trigger delivery before fresh activation in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`
 - [x] T086 [US6] Preserve existing start-authority/provider-recognition ordering while adding typed resume metadata in `src/Elsa/Workflows/Runtime/Resumption/`
 - [X] T087 [US6] Migrate scheduling, HTTP, event, timer, and bookmark-producing activities to typed state/trigger transitions in `src/Elsa/Activities/`
-- [ ] T088 [US6] Run resumption, scheduling, HTTP, runtime, Groundwork, and disposal tests and mark US6 ledger rows implemented/passing
+- [X] T088 [US6] Run resumption, scheduling, HTTP, runtime, Groundwork, and disposal tests and mark US6 ledger rows implemented/passing
 
 ---
 
@@ -265,13 +265,13 @@ combined values, and assert successful authored state contains no legacy/runtime
 
 **Purpose**: Delete the adapter only after every affected behavioral objective has a passing successor.
 
-- [ ] T098 Verify every applicable Retain/Replace/Remove row in `specs/095-value-flow-redesign/test-migration-ledger.md` is implemented/passing before deleting a legacy test or source
-- [ ] T099 Remove `IMemoryBlock`, `IMemoryBlockReference`, `IMemoryRegister`, their factory/implementations, and memory-backed variable inheritance from `src/Elsa/Expressions/`
-- [ ] T100 Remove `Argument`, `InputArgument<T>`, `OutputArgument<T>`, legacy activity factory/constructor binding, runtime input seeding, mutable output recording/publication, and forwarding registrations from `src/Elsa/Activities/` and `src/Elsa/Workflows/Runtime/`
-- [ ] T101 Remove `IActivity.SyntheticProperties` as a workflow-value channel, active/latest-output semantic truth, generic reference bindings, and assembly-qualified input metadata from canonical `src/Elsa/`
-- [ ] T102 Delete or rewrite obsolete memory-fixture tests only after recording their passing successor in `specs/095-value-flow-redesign/test-migration-ledger.md`
-- [ ] T103 Make `tests/Elsa/Architecture/ValueFlowArchitectureTests.cs` enforce zero canonical source/public/internal references and the narrow Elsa 3 importer allowlist
-- [ ] T104 Build `Elsa.Server.slnx` and run all focused migrated projects after clean removal
+- [X] T098 Verify every applicable Retain/Replace/Remove row in `specs/095-value-flow-redesign/test-migration-ledger.md` is implemented/passing before deleting a legacy test or source
+- [X] T099 Remove `IMemoryBlock`, `IMemoryBlockReference`, `IMemoryRegister`, their factory/implementations, and memory-backed variable inheritance from `src/Elsa/Expressions/`
+- [X] T100 Remove `Argument`, `InputArgument<T>`, `OutputArgument<T>`, legacy activity factory/constructor binding, runtime input seeding, mutable output recording/publication, and forwarding registrations from `src/Elsa/Activities/` and `src/Elsa/Workflows/Runtime/`
+- [X] T101 Remove `IActivity.SyntheticProperties` as a workflow-value channel, active/latest-output semantic truth, generic reference bindings, and assembly-qualified input metadata from canonical `src/Elsa/`
+- [X] T102 Delete or rewrite obsolete memory-fixture tests only after recording their passing successor in `specs/095-value-flow-redesign/test-migration-ledger.md`
+- [X] T103 Make `tests/Elsa/Architecture/ValueFlowArchitectureTests.cs` enforce zero canonical source/public/internal references and the narrow Elsa 3 importer allowlist
+- [X] T104 Build `Elsa.Server.slnx` and run all focused migrated projects after clean removal
 
 **Checkpoint**: The repository has one canonical Elsa 4 value-flow path and no forwarding shim.
 
@@ -301,13 +301,13 @@ isolation, transitive-dependency, retry/resume, and disposal gates before compar
 **Purpose**: Reconcile every requirement and ensure generated maps and canonical documents reflect the
 implemented repository.
 
-- [ ] T111 [P] Supersede/reconcile specs 006, 011, 015, 029, 060, 061, 083, and 090 plus ADR 0030 with links to spec 095 in their current-status sections
-- [ ] T112 [P] Add major-version migration and removal notes for activity/expression authors under `docs/` without duplicating canonical glossary definitions
-- [ ] T113 Refresh the narrowest relevant generated architecture, domain, extension-point, and feature-dependency maps using `tools/maps/generate-*.sh` and review generated findings
-- [ ] T114 Run all focused commands in `specs/095-value-flow-redesign/quickstart.md`, then run `/usr/local/share/dotnet/dotnet test Elsa.Server.slnx`
-- [ ] T115 Search canonical source, tests, packages, serialized goldens, and service registrations for every forbidden legacy/generated/assembly-qualified carrier and resolve all non-importer hits
-- [ ] T116 Audit FR-001–FR-065 and SC-001–SC-014 against tests, benchmark evidence, code, and the migration ledger; record evidence and close every task
-- [ ] T117 Run `git diff --check`, review the full diff for accidental user-change overlap, and create the required local implementation commit
+- [X] T111 [P] Supersede/reconcile specs 006, 011, 015, 029, 060, 061, 083, and 090 plus ADR 0030 with links to spec 095 in their current-status sections
+- [X] T112 [P] Add major-version migration and removal notes for activity/expression authors under `docs/` without duplicating canonical glossary definitions
+- [X] T113 Refresh the narrowest relevant generated architecture, domain, extension-point, and feature-dependency maps using `tools/maps/generate-*.sh` and review generated findings
+- [X] T114 Run all focused commands in `specs/095-value-flow-redesign/quickstart.md`, then run `/usr/local/share/dotnet/dotnet test Elsa.Server.slnx`
+- [X] T115 Search canonical source, tests, packages, serialized goldens, and service registrations for every forbidden legacy/generated/assembly-qualified carrier and resolve all non-importer hits
+- [X] T116 Audit FR-001–FR-065 and SC-001–SC-014 against tests, benchmark evidence, code, and the migration ledger; record evidence and close every task
+- [X] T117 Run `git diff --check`, review the full diff for accidental user-change overlap, and create the required local implementation commit
 
 ---
 

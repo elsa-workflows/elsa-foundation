@@ -20,7 +20,6 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.JavaScript.PreProcessors;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -48,10 +47,6 @@ namespace Elsa.Activities.Runtime.Tests;
 /// </summary>
 public sealed class ActivityLibraryAcceptanceTests
 {
-    private const string BooleanTypeName = "System.Boolean";
-    private const string StringTypeName = "System.String";
-    private const string ObjectTypeName = "System.Object";
-
     public static TheoryData<Type, Type, string[]> MigratedPrimitiveLeafContracts =>
         new()
         {
@@ -79,7 +74,6 @@ public sealed class ActivityLibraryAcceptanceTests
             .ToArray();
 
         Assert.Equal(expectedInputKeys.Order(StringComparer.Ordinal), actualInputKeys);
-        Assert.DoesNotContain(properties, property => typeof(Argument).IsAssignableFrom(property.PropertyType));
         Assert.Equal(expectedResultType, FindActivityResultType(activityType));
     }
 
@@ -108,8 +102,6 @@ public sealed class ActivityLibraryAcceptanceTests
         foreach (var activityType in activityTypes)
         {
             var properties = activityType.GetProperties();
-            Assert.DoesNotContain(properties, property => typeof(Argument).IsAssignableFrom(property.PropertyType));
-
             var resultContracts = activityType.GetInterfaces()
                 .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
                 .Select(candidate => candidate.GetGenericArguments()[0])
@@ -162,78 +154,11 @@ public sealed class ActivityLibraryAcceptanceTests
         Assert.Equal("all-iterated", rootFrame.Values["var-result"].InlineValue!.Value.GetString());
     }
 
-    [Fact]
-    public async Task IfForEachIntrinsicSet_ComposeAndRunToCompletion_ThroughTheServerRequestHandlerPath()
-    {
-        // Server / end-to-end variant: the same composed If + ForEach + SetVariable workflow is started through the
-        // real ExecuteWorkflowRequestHandler → IWorkflowStartDispatcher → scheduler-drain path (the same
-        // path SeededVariableEndToEndExecutionTests exercises), not the harness's direct agent enqueue. A true
-        // HTTP-server run is not feasible in this unit-test project, so this uses the request-handler path — the
-        // server-side entrypoint — and asserts the run reaches Completed with the loop's effect observable in the
-        // persisted workflow-scope variables.
-        await using var provider = BuildEndToEndProvider();
-
-        var executable = WrapWithIdentity(NewComposedRoot(["a", "b", "c"]), artifactId: "acceptance-e2e");
-        await PublishedExecutableSeeder.SaveAsync(provider, executable);
-
-        var handler = new Elsa.Workflows.Runtime.Api.Handlers.ExecuteWorkflowRequestHandler(
-            provider.GetRequiredService<IWorkflowStartDispatcher>(),
-            provider.GetRequiredService<IWorkflowExecutableStore>());
-
-        var view = await handler.Handle(new Elsa.Workflows.Runtime.Api.Requests.ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
-
-        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(view.WorkflowExecutionId);
-        Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
-
-        // The loop's effect is observable end-to-end through the server path: the ForEach-accumulated counter reads
-        // back as 3 and the If Then-branch SetVariable recorded the outcome.
-        var rootFrame = Assert.IsType<VariableFrameState>(workflowState?.RootVariableFrame);
-        Assert.Equal(3, rootFrame.Values["var-count"].InlineValue!.Value.GetInt32());
-        Assert.Equal("all-iterated", rootFrame.Values["var-result"].InlineValue!.Value.GetString());
-    }
-
-    private static ServiceProvider BuildEndToEndProvider()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddMemoryCache();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        services.AddSingleton<IActivityConstructor, SequenceConstructor>();
-        services.AddSingleton<IActivityConstructor, ForEachConstructor>();
-        services.AddSingleton<IActivityConstructor, IfConstructor>();
-        new EventsFeature().ConfigureServices(services);
-        new SerializationFeature().ConfigureServices(services);
-        new ExpressionsFeature().ConfigureServices(services);
-        new JavaScriptFeature().ConfigureServices(services);
-        new JintFeature().ConfigureServices(services);
-        new Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        new ActivitiesRuntimeFeature().ConfigureServices(services);
-        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
-        new ActivitiesControlFlowFeature().ConfigureServices(services);
-        // Surfaces variables/inputs/outputs to the engine at materialization time (self-contained).
-        services.AddScoped<IScriptPreProcessor, MaterializationAccessorsPreProcessor>();
-
-        var provider = services.BuildServiceProvider();
-        RunStartupTasks(provider);
-        return provider;
-    }
-
-    private static WorkflowExecutable WrapWithIdentity(ExecutableNode root, string artifactId) =>
-        new(
-            identity: new WorkflowExecutableIdentity(artifactId, $"def-{artifactId}", $"ver-{artifactId}", "1.0.0", $"sha256:{artifactId}"),
-            rootActivity: root,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
-            compatibilityMetadata: new Dictionary<string, string>());
-
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds)
     {
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<SequenceConstructor>()
-            .WithConstructor<ForEachConstructor>()
-            .WithConstructor<IfConstructor>()
             .ConfigureServices(services =>
             {
                 services.AddLogging();
@@ -244,8 +169,6 @@ public sealed class ActivityLibraryAcceptanceTests
                 new ExpressionsFeature().ConfigureServices(services);
                 new JavaScriptFeature().ConfigureServices(services);
                 new JintFeature().ConfigureServices(services);
-                // Surfaces variables/inputs/outputs to the engine at materialization time (self-contained).
-                services.AddScoped<IScriptPreProcessor, MaterializationAccessorsPreProcessor>();
             })
             .Build(activityExecutionIds);
 
@@ -281,7 +204,7 @@ public sealed class ActivityLibraryAcceptanceTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForEachConstructor.DescriptorTypeKey,
+            descriptorType: typeof(ForEachDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
@@ -308,7 +231,7 @@ public sealed class ActivityLibraryAcceptanceTests
             authoredActivityId: "authored-if",
             activityType: typeof(IfActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: IfConstructor.DescriptorTypeKey,
+            descriptorType: typeof(IfDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new IfDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
@@ -342,7 +265,7 @@ public sealed class ActivityLibraryAcceptanceTests
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SequenceConstructor.SequenceDescriptorTypeKey,
+            descriptorType: typeof(SequenceDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
@@ -400,11 +323,7 @@ public sealed class ActivityLibraryAcceptanceTests
             type,
             policy,
             RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(collection), policy),
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = ObjectTypeName
-            });
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(collection), policy));
     }
 
     private static RuntimeInputBinding PortableVariableExpression(
@@ -432,67 +351,9 @@ public sealed class ActivityLibraryAcceptanceTests
                 capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
     }
 
-    private static RuntimeInputBinding Literal(string inputName, JsonElement value, string typeName) =>
-        new(
-            inputName: inputName,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: value,
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName,
-                ["referenceKey"] = inputName
-            });
-
-    private static RuntimeInputBinding JavaScript(string inputName, string expression, string typeName) =>
-        new(
-            inputName: inputName,
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", expression, new RuntimeValueTypeDescriptor("clr", typeName, null)),
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName,
-                ["referenceKey"] = inputName
-            });
-
     private sealed record ForEachDescriptor;
-
-    private sealed class ForEachConstructor : IActivityConstructor<ForEachDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(ForEachDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            Construct(new ForEachDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(ForEachDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new ForEachActivity());
-    }
 
     private sealed record IfDescriptor;
 
-    private sealed class IfConstructor : IActivityConstructor<IfDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(IfDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            Construct(new IfDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(IfDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new IfActivity());
-    }
-
     private sealed record SequenceDescriptor;
-
-    private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
-    {
-        public static string SequenceDescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => SequenceDescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new SequenceActivity());
-
-        public ValueTask<IActivity> Construct(SequenceDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new SequenceActivity());
-    }
 }

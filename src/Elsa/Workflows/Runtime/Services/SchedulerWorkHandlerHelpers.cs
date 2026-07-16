@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// Resume / Schedule / Start / Checkpoint / CreateBookmark handlers in both
 /// <c>Elsa.Workflows.Runtime</c> and <c>Elsa.Activities.Runtime</c>. Public (not internal) so the
 /// Activities-assembly handlers can consume it without <c>InternalsVisibleTo</c> (constitution
-/// §2.23.3), matching the existing <see cref="ActivityOutputPublisher"/> precedent.
+/// §2.23.3), matching the runtime inspection-capture convention.
 /// </summary>
 public static class SchedulerWorkHandlerHelpers
 {
