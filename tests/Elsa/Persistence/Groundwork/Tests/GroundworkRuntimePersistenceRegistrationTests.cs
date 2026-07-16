@@ -210,6 +210,34 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GroundworkTestScopeProvider_ReplacesTheInMemoryDefaultInEitherCompositionOrder(bool runtimeFirst)
+    {
+        var services = new ServiceCollection();
+        if (runtimeFirst)
+        {
+            services.AddWorkflowRuntime();
+            services.AddGroundworkRuntimeStores();
+        }
+        else
+        {
+            services.AddGroundworkRuntimeStores();
+            services.AddWorkflowRuntime();
+        }
+
+        var registration = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(WorkflowTestScopeProviderRegistration));
+        var claim = Assert.IsType<WorkflowTestScopeProviderRegistration>(registration.ImplementationInstance);
+        Assert.Equal(typeof(GroundworkWorkflowTestScopeStore), claim.ProviderType);
+        Assert.False(claim.IsInMemoryDefault);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeAdmissionStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+    }
+
     // Constitution §2.23.1: the versioned-document serializer must be registered as the sealed default.
     [Fact]
     public void AddGroundworkRuntimeStores_Registers_Default_Serializer_Without_Consuming_Foreign_Upcasters()

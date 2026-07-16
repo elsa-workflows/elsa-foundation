@@ -56,6 +56,20 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
 
             if (record.Status == WorkflowDispatchStatus.Pending)
             {
+                if (record is { Mode: WorkflowDispatchMode.FireAndForget, TestScope: { } testScope } &&
+                    (!_state.WorkflowTestScopes.TryGetValue(testScope.ScopeId, out var scopeRecord) ||
+                     scopeRecord.State != WorkflowTestScopeState.Open ||
+                     scopeRecord.Scope.IsExpired(admittedAt) ||
+                     !WorkflowTestScope.ContextEquals(scopeRecord.Scope, testScope)))
+                {
+                    var effectiveAdmittedAt = admittedAt > record.UpdatedAt ? admittedAt : record.UpdatedAt;
+                    var cancelled = WorkflowDispatchLifecycle.CancelTestScopeBeforeAdmission(record, effectiveAdmittedAt);
+                    _state.WorkflowDispatches[dispatchId] = cancelled;
+                    return ValueTask.FromResult(new WorkflowDispatchAdmissionResult(
+                        WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission,
+                        cancelled));
+                }
+
                 var admitted = record.TransitionTo(
                     WorkflowDispatchStatus.Started,
                     admittedAt > record.UpdatedAt ? admittedAt : record.UpdatedAt);
@@ -163,6 +177,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
                 .Where(record => query.ChildWorkflowExecutionId is null ||
                     StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, query.ChildWorkflowExecutionId))
                 .Where(record => query.Status is null || record.Status == query.Status)
+                .Where(record => query.TestScopeId is null ||
+                    StringComparer.Ordinal.Equals(record.TestScope?.ScopeId, query.TestScopeId))
                 .Where(record => query.AfterCreatedAt is null ||
                     record.CreatedAt > query.AfterCreatedAt ||
                     record.CreatedAt == query.AfterCreatedAt &&

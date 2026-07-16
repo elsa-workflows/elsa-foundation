@@ -75,24 +75,7 @@ public sealed class WorkflowDispatchCancellationEnricher : IRuntimeCheckpointCom
             if (existingRequest is null)
                 requests.Add(request);
 
-            var payload = new WorkflowDispatchChildCancelPayload(
-                record.DispatchId,
-                record.ParentWorkflowExecutionId,
-                record.ParentActivityExecutionId,
-                record.ChildWorkflowExecutionId);
-            var intent = new RuntimePostCommitIntent(
-                intentId: identity.ChildCancelIntentId,
-                workflowExecutionId: record.ParentWorkflowExecutionId,
-                kind: DispatchWorkflowConstants.CancelChildIntentKind,
-                recordedAt: commit.Checkpoint.OccurredAt,
-                activityExecutionId: record.ParentActivityExecutionId,
-                idempotencyKey: identity.ChildCancelIdempotencyKey,
-                payload: JsonSerializer.SerializeToElement(payload, SerializerOptions),
-                metadata: new Dictionary<string, string>
-                {
-                    [RuntimeMetadataKeys.DispatchId] = record.DispatchId,
-                    [RuntimeMetadataKeys.ChildWorkflowExecutionId] = record.ChildWorkflowExecutionId
-                });
+            var intent = WorkflowDispatchCancelIntentFactory.Create(record, commit.Checkpoint.OccurredAt);
             if (committed is not null && !Equivalent(committed.Intent, intent))
             {
                 throw new InvalidOperationException(

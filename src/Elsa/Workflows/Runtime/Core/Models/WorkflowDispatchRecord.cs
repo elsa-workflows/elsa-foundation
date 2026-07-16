@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Globalization;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -39,7 +40,8 @@ public sealed class WorkflowDispatchRecord
         IReadOnlyCollection<WorkflowDispatchInputDescriptor>? inputDescriptors,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        WorkflowTestScope? testScope = null)
         : this(
             dispatchId,
             parentWorkflowExecutionId,
@@ -58,7 +60,8 @@ public sealed class WorkflowDispatchRecord
             createdAt,
             updatedAt,
             metadata,
-            dispatchNestingDepth: 0)
+            dispatchNestingDepth: 0,
+            testScope)
     {
     }
 
@@ -81,7 +84,8 @@ public sealed class WorkflowDispatchRecord
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
         IReadOnlyDictionary<string, string>? metadata,
-        int dispatchNestingDepth)
+        int dispatchNestingDepth,
+        WorkflowTestScope? testScope = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         ArgumentException.ThrowIfNullOrWhiteSpace(parentWorkflowExecutionId);
@@ -103,6 +107,13 @@ public sealed class WorkflowDispatchRecord
 
         if (updatedAt < createdAt)
             throw new ArgumentOutOfRangeException(nameof(updatedAt), "UpdatedAt cannot precede CreatedAt.");
+        if (testScope is not null)
+        {
+            if (runKind != WorkflowRunKind.TestRun)
+                throw new ArgumentException("A workflow test scope requires TestRun run kind.", nameof(testScope));
+            if (!StringComparer.Ordinal.Equals(tenantId, testScope.TenantId) || !Equals(partition, testScope.Partition))
+                throw new ArgumentException("The workflow test scope must match the dispatch tenant and partition.", nameof(testScope));
+        }
 
         var descriptors = (inputDescriptors ?? [])
             .OrderBy(descriptor => descriptor?.Name, StringComparer.Ordinal)
@@ -131,6 +142,7 @@ public sealed class WorkflowDispatchRecord
         UpdatedAt = updatedAt;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         DispatchNestingDepth = dispatchNestingDepth;
+        TestScope = testScope;
     }
 
     public string DispatchId { get; }
@@ -151,6 +163,7 @@ public sealed class WorkflowDispatchRecord
     public DateTimeOffset UpdatedAt { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public int DispatchNestingDepth { get; }
+    public WorkflowTestScope? TestScope { get; }
 
     /// <summary>Creates a lifecycle successor while preserving every immutable dispatch field.</summary>
     public WorkflowDispatchRecord TransitionTo(WorkflowDispatchStatus status, DateTimeOffset updatedAt) =>
@@ -319,7 +332,8 @@ public sealed class WorkflowDispatchStartPayload
         WorkflowExecutionAuthoritySnapshot authority,
         WorkflowExecutableIdentity? parentExecutable,
         string? dispatchNodeId,
-        int dispatchNestingDepth)
+        int dispatchNestingDepth,
+        WorkflowTestScope? testScope = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         ArgumentException.ThrowIfNullOrWhiteSpace(parentWorkflowExecutionId);
@@ -337,6 +351,13 @@ public sealed class WorkflowDispatchStartPayload
             throw new ArgumentException("Retained child starts require both parent executable identity and dispatch node ID.", nameof(parentExecutable));
         if (parentExecutable is null && childSource is null)
             throw new ArgumentException("Legacy child starts require historical child source provenance.", nameof(childSource));
+        if (testScope is not null)
+        {
+            if (runKind != WorkflowRunKind.TestRun)
+                throw new ArgumentException("A workflow test scope requires TestRun run kind.", nameof(testScope));
+            if (!StringComparer.Ordinal.Equals(tenantId, testScope.TenantId) || !Equals(partition, testScope.Partition))
+                throw new ArgumentException("The workflow test scope must match the start payload tenant and partition.", nameof(testScope));
+        }
 
         DispatchId = dispatchId;
         ParentWorkflowExecutionId = parentWorkflowExecutionId;
@@ -354,6 +375,7 @@ public sealed class WorkflowDispatchStartPayload
         ParentExecutable = parentExecutable;
         DispatchNodeId = dispatchNodeId;
         DispatchNestingDepth = dispatchNestingDepth;
+        TestScope = testScope;
     }
 
     public string DispatchId { get; }
@@ -374,6 +396,7 @@ public sealed class WorkflowDispatchStartPayload
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DispatchNodeId { get; }
     public int DispatchNestingDepth { get; }
+    public WorkflowTestScope? TestScope { get; }
 
     private static void ValidateOptional(string? value, string parameterName)
     {
@@ -409,11 +432,13 @@ public sealed class WorkflowDispatchQuery
         WorkflowDispatchStatus? status = null,
         int take = MaximumTake,
         DateTimeOffset? afterCreatedAt = null,
-        string? afterDispatchId = null)
+        string? afterDispatchId = null,
+        string? testScopeId = null)
     {
         ValidateOptional(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
         ValidateOptional(childWorkflowExecutionId, nameof(childWorkflowExecutionId));
-        if (parentWorkflowExecutionId is null && childWorkflowExecutionId is null && status is null)
+        ValidateOptional(testScopeId, nameof(testScopeId));
+        if (parentWorkflowExecutionId is null && childWorkflowExecutionId is null && status is null && testScopeId is null)
             throw new ArgumentException("A workflow dispatch query requires at least one operational filter.");
         if (take is <= 0 or > MaximumTake)
             throw new ArgumentOutOfRangeException(nameof(take), $"Workflow dispatch query take must be between 1 and {MaximumTake}.");
@@ -427,6 +452,7 @@ public sealed class WorkflowDispatchQuery
         Take = take;
         AfterCreatedAt = afterCreatedAt;
         AfterDispatchId = afterDispatchId;
+        TestScopeId = testScopeId;
     }
 
     public string? ParentWorkflowExecutionId { get; }
@@ -435,6 +461,7 @@ public sealed class WorkflowDispatchQuery
     public int Take { get; }
     public DateTimeOffset? AfterCreatedAt { get; }
     public string? AfterDispatchId { get; }
+    public string? TestScopeId { get; }
 
     private static void ValidateOptional(string? value, string parameterName)
     {
@@ -456,6 +483,8 @@ public static class WorkflowDispatchLifecycle
     public const string CancellationStateMetadataKey = "runtime.dispatch.cancellationState";
     public const string CancelledBeforeAdmissionState = "parent-before-admission";
     public const string CancellationRequestedState = "parent-cancellation-requested";
+    public const string ScopeCancelledBeforeAdmissionState = "test-scope-before-admission";
+    public const string ScopeCancellationRequestedState = "test-scope-cancellation-requested";
     public const string DeliveryGenerationMetadataKey = "runtime.dispatch.deliveryGeneration";
     public const string DeliveryDeadLetterIdMetadataKey = "runtime.dispatch.deliveryDeadLetterId";
     public const string DeliveryIncidentIdMetadataKey = "runtime.dispatch.deliveryIncidentId";
@@ -491,10 +520,54 @@ public static class WorkflowDispatchLifecycle
     }
 
     public static bool WasCancelledBeforeAdmission(WorkflowDispatchRecord record) =>
-        HasCancellationState(record, CancelledBeforeAdmissionState);
+        HasCancellationState(record, CancelledBeforeAdmissionState) ||
+        HasCancellationState(record, ScopeCancelledBeforeAdmissionState);
 
     public static bool IsCancellationRequested(WorkflowDispatchRecord record) =>
         HasCancellationState(record, CancellationRequestedState);
+
+    public static bool IsTestScopeCancellationRequested(WorkflowDispatchRecord record) =>
+        HasCancellationState(record, ScopeCancellationRequestedState);
+
+    public static WorkflowDispatchRecord CancelTestScopeBeforeAdmission(
+        WorkflowDispatchRecord record,
+        DateTimeOffset requestedAt)
+    {
+        ValidateTestScopeCleanupTarget(record);
+        if (record.Status != WorkflowDispatchStatus.Pending)
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' must be Pending before test-scope admission can be cancelled.");
+        return WithCancellationState(record, WorkflowDispatchStatus.Cancelled, ScopeCancelledBeforeAdmissionState, requestedAt);
+    }
+
+    public static WorkflowDispatchRecord MarkTestScopeCancellationRequested(
+        WorkflowDispatchRecord record,
+        DateTimeOffset requestedAt)
+    {
+        ValidateTestScopeCleanupTarget(record);
+        if (record.Status != WorkflowDispatchStatus.Started)
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' must be Started before test-scope cancellation can be requested.");
+        return WithCancellationState(record, WorkflowDispatchStatus.Started, ScopeCancellationRequestedState, requestedAt);
+    }
+
+    public static void ValidateTestScopeCancellationIntent(
+        WorkflowDispatchRecord record,
+        RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(intent);
+        var identity = new WorkflowDispatchIdentity(record.ParentWorkflowExecutionId, record.ParentActivityExecutionId);
+        if (!StringComparer.Ordinal.Equals(intent.IntentId, identity.ChildCancelIntentId) ||
+            !StringComparer.Ordinal.Equals(intent.WorkflowExecutionId, record.ParentWorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(intent.ActivityExecutionId, record.ParentActivityExecutionId) ||
+            !StringComparer.Ordinal.Equals(intent.IdempotencyKey, identity.ChildCancelIdempotencyKey) ||
+            !intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId) ||
+            !StringComparer.Ordinal.Equals(dispatchId, record.DispatchId) ||
+            !intent.Metadata.TryGetValue(RuntimeMetadataKeys.ChildWorkflowExecutionId, out var childId) ||
+            !StringComparer.Ordinal.Equals(childId, record.ChildWorkflowExecutionId))
+        {
+            throw new InvalidOperationException("The workflow test-scope cancellation intent conflicts with the persisted dispatch.");
+        }
+    }
 
     public static WorkflowDispatchRecord CancelBeforeAdmission(
         WorkflowDispatchRecord record,
@@ -541,7 +614,8 @@ public static class WorkflowDispatchLifecycle
             record.CreatedAt,
             updatedAt,
             record.Metadata,
-            record.DispatchNestingDepth);
+            record.DispatchNestingDepth,
+            record.TestScope);
         ValidateTransition(record, candidate);
         return candidate;
     }
@@ -572,7 +646,8 @@ public static class WorkflowDispatchLifecycle
             record.CreatedAt,
             updatedAt,
             metadata,
-            record.DispatchNestingDepth);
+            record.DispatchNestingDepth,
+            record.TestScope);
         ValidateTransition(record, candidate);
         return candidate;
     }
@@ -625,7 +700,8 @@ public static class WorkflowDispatchLifecycle
             record.CreatedAt,
             failedAt > record.UpdatedAt ? failedAt : record.UpdatedAt,
             metadata,
-            record.DispatchNestingDepth);
+            record.DispatchNestingDepth,
+            record.TestScope);
         ValidateTransition(record, candidate);
         return candidate;
     }
@@ -662,7 +738,7 @@ public static class WorkflowDispatchLifecycle
             existing.Status == WorkflowDispatchStatus.Started &&
             candidate.Status == WorkflowDispatchStatus.Started &&
             !existing.Metadata.ContainsKey(CancellationStateMetadataKey) &&
-            IsCancellationRequested(candidate);
+            (IsCancellationRequested(candidate) || IsTestScopeCancellationRequested(candidate));
         var validTransition = addsCancellationRequest || existing.Status switch
         {
             WorkflowDispatchStatus.Pending => candidate.Status is
@@ -711,6 +787,7 @@ public static class WorkflowDispatchLifecycle
         StringComparer.Ordinal.Equals(left.TenantId, right.TenantId) &&
         Equals(left.Partition, right.Partition) &&
         left.RunKind == right.RunKind &&
+        WorkflowTestScope.ContextEquals(left.TestScope, right.TestScope) &&
         AuthorityEquals(left.Authority, right.Authority) &&
         left.InputDescriptors.SequenceEqual(right.InputDescriptors) &&
         left.DispatchNestingDepth == right.DispatchNestingDepth &&
@@ -753,7 +830,7 @@ public static class WorkflowDispatchLifecycle
             WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(
                 childExecution.PinnedExecutable,
                 dispatch.ChildExecutable) &&
-            Equals(childExecution.PinnedSource, dispatch.ChildSource) &&
+            (childExecution.PinnedSource is null || Equals(childExecution.PinnedSource, dispatch.ChildSource)) &&
             StringComparer.Ordinal.Equals(
                 childExecution.ParentWorkflowExecutionId,
                 dispatch.ParentWorkflowExecutionId) &&
@@ -762,6 +839,7 @@ public static class WorkflowDispatchLifecycle
             Equals(childExecution.Partition, dispatch.Partition) &&
             childExecution.RunKind == dispatch.RunKind &&
             childExecution.DispatchNestingDepth == dispatch.DispatchNestingDepth &&
+            WorkflowTestScope.ContextEquals(childExecution.TestScope, dispatch.TestScope) &&
             childExecution.Authority is not null &&
             AuthorityEquals(childExecution.Authority, dispatch.Authority);
         if (!matches)
@@ -885,7 +963,8 @@ public static class WorkflowDispatchLifecycle
             record.CreatedAt,
             requestedAt > record.UpdatedAt ? requestedAt : record.UpdatedAt,
             metadata,
-            record.DispatchNestingDepth);
+            record.DispatchNestingDepth,
+            record.TestScope);
     }
 
     private static bool AuthorityEquals(WorkflowExecutionAuthoritySnapshot left, WorkflowExecutionAuthoritySnapshot right) =>
@@ -952,7 +1031,8 @@ public static class WorkflowDispatchLifecycle
             record.CreatedAt,
             updatedAt,
             metadata,
-            record.DispatchNestingDepth);
+            record.DispatchNestingDepth,
+            record.TestScope);
         ValidateTransition(record, candidate);
         return candidate;
     }
@@ -980,8 +1060,28 @@ public static class WorkflowDispatchLifecycle
             return;
         if (StringComparer.Ordinal.Equals(state, CancellationRequestedState) && record.Status != WorkflowDispatchStatus.Pending)
             return;
+        if (StringComparer.Ordinal.Equals(state, ScopeCancelledBeforeAdmissionState) &&
+            record.Status == WorkflowDispatchStatus.Cancelled &&
+            IsTestScopeCleanupTarget(record))
+            return;
+        if (StringComparer.Ordinal.Equals(state, ScopeCancellationRequestedState) &&
+            record.Status != WorkflowDispatchStatus.Pending &&
+            IsTestScopeCleanupTarget(record))
+            return;
         throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' carries an invalid cancellation state.");
     }
+
+    private static void ValidateTestScopeCleanupTarget(WorkflowDispatchRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        if (!IsTestScopeCleanupTarget(record))
+            throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' is not an eligible detached test-scope cleanup target.");
+    }
+
+    private static bool IsTestScopeCleanupTarget(WorkflowDispatchRecord record) =>
+        record.Mode == WorkflowDispatchMode.FireAndForget &&
+        record.RunKind == WorkflowRunKind.TestRun &&
+        record.TestScope is not null;
 
     private static void ValidateDiagnostics(WorkflowDispatchRecord record)
     {

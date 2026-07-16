@@ -38,6 +38,33 @@ public sealed class ChildStartExecutorTests
     }
 
     [Fact]
+    public async Task Test_scoped_start_preserves_scope_and_exact_run_kind()
+    {
+        var scope = NewTestScope();
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        await new InMemoryWorkflowTestScopeStore(state).CreateAsync(
+            scope,
+            DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(-1));
+        var dispatchStore = new InMemoryWorkflowDispatchStore(state);
+        await dispatchStore.SaveAsync(NewDispatchRecord(WorkflowRunKind.TestRun, scope));
+        var executor = new ChildStartExecutor(
+            startDispatcher,
+            dispatchStore,
+            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+
+        await executor.HandleAsync(NewOutboxItem(runKind: WorkflowRunKind.TestRun, testScope: scope).Intent);
+
+        var request = Assert.Single(startDispatcher.Requests);
+        Assert.Equal(WorkflowRunKind.TestRun, request.RunKind);
+        Assert.NotNull(request.TestScope);
+        Assert.Equal(scope.ScopeId, request.TestScope.ScopeId);
+        Assert.Equal(scope.ExpiresAt, request.TestScope.ExpiresAt);
+        Assert.Equal(scope.TenantId, request.TestScope.TenantId);
+        Assert.Equal(scope.Partition.Value, request.TestScope.Partition.Value);
+    }
+
+    [Fact]
     public async Task SynchronousTerminalCheckpoint_SupersedesLaterStartedObservation()
     {
         var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
@@ -328,7 +355,9 @@ public sealed class ChildStartExecutorTests
         WorkflowExecutableIdentity? parentExecutable = null,
         string? dispatchNodeId = null,
         int dispatchNestingDepth = 0,
-        string tenantId = "tenant-42")
+        string tenantId = "tenant-42",
+        WorkflowRunKind runKind = WorkflowRunKind.PublishedRun,
+        WorkflowTestScope? testScope = null)
     {
         var identity = NewIdentity();
         var source = childSource ?? (parentExecutable is null
@@ -345,11 +374,12 @@ public sealed class ChildStartExecutorTests
             "correlation-handler",
             tenantId,
             new WorkflowExecutionPartition("partition-eu"),
-            WorkflowRunKind.PublishedRun,
+            runKind,
             new WorkflowExecutionAuthoritySnapshot("parent-handler", "root-initiator"),
             parentExecutable,
             dispatchNodeId,
-            dispatchNestingDepth);
+            dispatchNestingDepth,
+            testScope: testScope);
         var intent = new RuntimePostCommitIntent(
             identity.StartIntentId,
             "parent-handler",
@@ -366,7 +396,9 @@ public sealed class ChildStartExecutorTests
             availableAt: DispatchWorkflowRuntimeTestFixture.Now);
     }
 
-    private static WorkflowDispatchRecord NewDispatchRecord()
+    private static WorkflowDispatchRecord NewDispatchRecord(
+        WorkflowRunKind runKind = WorkflowRunKind.PublishedRun,
+        WorkflowTestScope? testScope = null)
     {
         var identity = NewIdentity();
         return new WorkflowDispatchRecord(
@@ -381,12 +413,21 @@ public sealed class ChildStartExecutorTests
             "correlation-handler",
             "tenant-42",
             new WorkflowExecutionPartition("partition-eu"),
-            WorkflowRunKind.PublishedRun,
+            runKind,
             new WorkflowExecutionAuthoritySnapshot("parent-handler", "root-initiator"),
             [new WorkflowDispatchInputDescriptor("message", "System.String")],
             DispatchWorkflowRuntimeTestFixture.Now,
-            DispatchWorkflowRuntimeTestFixture.Now);
+            DispatchWorkflowRuntimeTestFixture.Now,
+            metadata: null,
+            testScope: testScope);
     }
+
+    private static WorkflowTestScope NewTestScope() =>
+        new(
+            "scope-child",
+            DispatchWorkflowRuntimeTestFixture.Now.AddHours(1),
+            "tenant-42",
+            new WorkflowExecutionPartition("partition-eu"));
 
     private static WorkflowDispatchIdentity NewIdentity() => new("parent-handler", "activity-handler");
 

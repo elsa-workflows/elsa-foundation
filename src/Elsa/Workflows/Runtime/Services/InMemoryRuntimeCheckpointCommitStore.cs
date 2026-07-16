@@ -15,6 +15,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, WorkflowTestScopeRecord> WorkflowTestScopes { get; } = new(StringComparer.Ordinal);
 }
 
 public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
@@ -213,6 +214,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
         ValidatePendingOutboxItems(pendingOutboxItems);
         ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+        await ValidateWorkflowTestScopesAsync(commit, cancellationToken);
         ValidateSchedulerStateChange(commit);
         ValidateActivityExecutionStateChanges(commit);
         ValidateActivityExecutionInspectionChanges(commit);
@@ -859,6 +861,43 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.WorkflowExecutionId))
             throw new InvalidOperationException("Workflow execution state change StateId must match WorkflowExecutionState.WorkflowExecutionId.");
+    }
+
+    private async ValueTask ValidateWorkflowTestScopesAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        var execution = commit.StateChanges.WorkflowExecution?.State;
+        var existingExecution = execution is { TestScope: not null, ParentWorkflowExecutionId: null } &&
+                                _workflowExecutionStateStore is not null
+            ? await _workflowExecutionStateStore.FindAsync(execution.WorkflowExecutionId, cancellationToken)
+            : null;
+        lock (_state.SyncRoot)
+        {
+            if (execution is { TestScope: { } rootScope, ParentWorkflowExecutionId: null } &&
+                existingExecution is null)
+            {
+                AssertOpenScope(rootScope, commit.Checkpoint.OccurredAt);
+            }
+
+            foreach (var change in commit.StateChanges.WorkflowDispatches)
+            {
+                var dispatch = change.State;
+                if (dispatch.TestScope is { } scope && !_state.WorkflowDispatches.ContainsKey(dispatch.DispatchId))
+                    AssertOpenScope(scope, commit.Checkpoint.OccurredAt);
+            }
+        }
+    }
+
+    private void AssertOpenScope(WorkflowTestScope scope, DateTimeOffset observedAt)
+    {
+        if (!_state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var record) ||
+            record.State != WorkflowTestScopeState.Open ||
+            record.Scope.IsExpired(observedAt) ||
+            !WorkflowTestScope.ContextEquals(record.Scope, scope))
+        {
+            throw new InvalidOperationException("The workflow test scope is not open in the current persistence context.");
+        }
     }
 
     private void ValidateSchedulerStateChange(RuntimeCheckpointCommit commit)

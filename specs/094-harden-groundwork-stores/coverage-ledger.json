@@ -523,10 +523,10 @@
     {
       "id": "runtime-post-commit-outbox",
       "family": "runtime",
-      "contract": "IRuntimePostCommitOutboxStore; IPostCommitOutboxLookupStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore; IWorkflowDispatchAdmissionStore; IWorkflowDispatchCancellationStore; IWorkflowDispatchRedriveStore",
+      "contract": "IRuntimePostCommitOutboxStore; IPostCommitOutboxLookupStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore; IWorkflowDispatchAdmissionStore; IWorkflowDispatchCancellationStore; IWorkflowDispatchRedriveStore; IWorkflowTestScopeStore; IWorkflowTestScopeAdmissionStore; IWorkflowTestScopeCleanupStore",
       "outcome": "operational-store",
       "scope": "tenant-scoped",
-      "authority": "#681",
+      "authority": "#682",
       "status": "planned",
       "initialGap": "Deliverable reads do not claim atomically and completion has no stale-ack token.",
       "performanceWorkload": "outbox-drain",
@@ -536,6 +536,9 @@
         "find-by-outbox-id",
         "find-dispatch-by-id",
         "list-dispatch-by-parent-child-status-bounded",
+        "find-test-scope-by-id",
+        "list-expired-or-closing-test-scopes-bounded",
+        "list-dispatch-by-exact-test-scope-bounded",
         "redrive-dispatch-and-linked-failed-final-outbox-by-id"
       ],
       "concurrencySemantics": [
@@ -545,10 +548,12 @@
         "stale-acknowledgement-rejection",
         "conditional-retry",
         "dispatch-identity-and-lifecycle-cas",
+        "test-scope-lifecycle-and-admission-fence",
+        "detached-scope-cleanup-and-cancel-outbox-atomicity",
         "checkpoint-bundle-write",
         "generation-and-fence-advancing-redrive"
       ],
-      "atomicBoundary": "The #678 claim, fencing, and inspection foundation is extended by #681: pending outbox and dispatch records join checkpoint commit atomically; claimed final child-start failure checks deterministic child-execution visibility, completes the outbox, projects DispatchFailed only when durable child materialization or terminal evidence is absent, and optionally creates wait-resume work in one cross-unit transaction; authorized detached redrive reopens the same dispatch/outbox identities in one cross-unit transaction.",
+      "atomicBoundary": "The #678 claim/fencing foundation and #681 recovery boundary are extended by #682: pending outbox, dispatch, and test-scope state join checkpoint commit atomically; child-start admission is fenced against scope closure; detached cleanup marks or cancels the dispatch and commits deterministic child-cancel responsibility in one cross-unit transaction; #681 failure projection and authorized redrive retain their existing atomic boundaries.",
       "failureWindows": [
         "before-provider-decision",
         "during-provider-decision",
@@ -573,6 +578,7 @@
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchCancellationTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchRedriveTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTestScopeTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/DispatchWorkflowDeliveryRecoveryCrashTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDispatchCancellationCheckpointTests.cs",

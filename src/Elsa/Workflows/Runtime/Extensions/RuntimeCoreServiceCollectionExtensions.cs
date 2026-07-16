@@ -37,6 +37,7 @@ public static class RuntimeCoreServiceCollectionExtensions
     public static IServiceCollection AddWorkflowRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
         services.AddPersistenceCore();
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
 
@@ -97,6 +98,13 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
+        services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();
+        services.TryAddSingleton<IWorkflowTestScopeStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
+        services.TryAddSingleton<IWorkflowTestScopeAdmissionStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
+        services.TryAddSingleton<IWorkflowTestScopeCleanupStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
         services.TryAddSingleton<IWorkflowDispatchStore, InMemoryWorkflowDispatchStore>();
         services.TryAddSingleton<IWorkflowDispatchQueryStore>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchQueryStore ??

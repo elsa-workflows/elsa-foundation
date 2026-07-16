@@ -193,6 +193,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             Equals(dispatch.Partition, request.Partition) &&
             dispatch.RunKind == request.RunKind &&
             dispatch.DispatchNestingDepth == request.DispatchNestingDepth &&
+            WorkflowTestScope.ContextEquals(dispatch.TestScope, request.TestScope) &&
             AuthorityEquals(request.Authority, dispatch.Authority));
         if (committedDispatch is null)
         {
@@ -220,6 +221,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (!Equals(dispatch.Partition, request.Partition)) mismatches.Add(nameof(request.Partition));
         if (dispatch.RunKind != request.RunKind) mismatches.Add(nameof(request.RunKind));
         if (dispatch.DispatchNestingDepth != request.DispatchNestingDepth) mismatches.Add(nameof(request.DispatchNestingDepth));
+        if (!WorkflowTestScope.ContextEquals(dispatch.TestScope, request.TestScope)) mismatches.Add(nameof(request.TestScope));
         if (!AuthorityEquals(request.Authority, dispatch.Authority)) mismatches.Add(nameof(request.Authority));
         return mismatches.Count == 0 ? "none (multiple candidates)" : string.Join(", ", mismatches);
     }
@@ -356,7 +358,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             partition: partition,
             authority: request.Authority,
             startAuthority: request.StartAuthority,
-            dispatchNestingDepth: request.DispatchNestingDepth));
+            dispatchNestingDepth: request.DispatchNestingDepth,
+            testScope: request.TestScope));
 
         var command = new WorkflowExecutionCommand(
             CommandId: retainedDispatch is null
@@ -450,6 +453,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             Equals(existing.Partition, dispatch.Partition) &&
             existing.RunKind == dispatch.RunKind &&
             existing.DispatchNestingDepth == dispatchNestingDepth &&
+            WorkflowTestScope.ContextEquals(existing.TestScope, dispatch.TestScope) &&
             AuthorityEquals(existing.Authority, dispatch.Authority);
         if (!exact)
             throw new InvalidOperationException($"Workflow execution '{existing.WorkflowExecutionId}' already exists with conflicting dispatch identity or context.");

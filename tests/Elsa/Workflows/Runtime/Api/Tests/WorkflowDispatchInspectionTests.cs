@@ -168,6 +168,7 @@ public sealed class WorkflowDispatchInspectionTests
         Assert.Null(typeof(WorkflowDispatchView).GetProperty("Authority", BindingFlags.Public | BindingFlags.Instance));
         Assert.Null(typeof(WorkflowDispatchView).GetProperty("Metadata", BindingFlags.Public | BindingFlags.Instance));
         Assert.Null(typeof(WorkflowDispatchView).GetProperty("RequestId", BindingFlags.Public | BindingFlags.Instance));
+        Assert.Null(typeof(WorkflowDispatchView).GetProperty("TestScope", BindingFlags.Public | BindingFlags.Instance));
 
         var untrustedDiagnostic = WorkflowDispatchView.From(NewRecord(
             "parent-secret-2",
@@ -180,6 +181,24 @@ public sealed class WorkflowDispatchInspectionTests
             }));
         Assert.Null(untrustedDiagnostic.DiagnosticCode);
         Assert.Null(untrustedDiagnostic.DiagnosticCategory);
+    }
+
+    [Theory]
+    [InlineData(WorkflowRunKind.Unknown)]
+    [InlineData(WorkflowRunKind.PublishedRun)]
+    [InlineData(WorkflowRunKind.TestRun)]
+    [InlineData(WorkflowRunKind.BackgroundWeaverRun)]
+    public void Safe_view_exposes_the_exact_inherited_run_kind(WorkflowRunKind runKind)
+    {
+        var record = NewRecord(
+            "parent-run-kind",
+            "activity-run-kind",
+            WorkflowDispatchStatus.Pending,
+            runKind: runKind);
+
+        var view = WorkflowDispatchView.From(record);
+
+        Assert.Equal(runKind, view.RunKind);
     }
 
     [Fact]
@@ -281,7 +300,8 @@ public sealed class WorkflowDispatchInspectionTests
         string parentExecutionId,
         string activityExecutionId,
         WorkflowDispatchStatus status,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        WorkflowRunKind runKind = WorkflowRunKind.PublishedRun)
     {
         var identity = new WorkflowDispatchIdentity(parentExecutionId, activityExecutionId);
         return new(
@@ -298,7 +318,7 @@ public sealed class WorkflowDispatchInspectionTests
             "correlation-secret",
             "tenant-secret",
             new WorkflowExecutionPartition("partition-secret"),
-            WorkflowRunKind.PublishedRun,
+            runKind,
             new WorkflowExecutionAuthoritySnapshot("authority-secret", "initiator-secret"),
             [new WorkflowDispatchInputDescriptor("message", "System.String")],
             Now,

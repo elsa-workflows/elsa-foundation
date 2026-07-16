@@ -99,7 +99,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         string? parentDefinitionId = null,
         Func<ValueTask>? beforeStart = null,
         bool waitForCompletion = false,
-        bool? cancelChildOnParentCancellation = null)
+        bool? cancelChildOnParentCancellation = null,
+        WorkflowRunKind runKind = WorkflowRunKind.BackgroundWeaverRun,
+        WorkflowTestScope? testScope = null)
     {
         var parentExecutable = NewParentExecutable(
             caseId,
@@ -115,6 +117,12 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             slotId: $"slot-parent-{caseId}");
         await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(parentExecutable);
         await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(parentReference);
+        if (testScope is not null)
+        {
+            await _provider.GetRequiredService<IWorkflowTestScopeStore>().CreateAsync(
+                testScope,
+                Now.AddMinutes(-1));
+        }
         if (beforeStart is not null)
             await beforeStart();
 
@@ -134,7 +142,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 inputs: null,
                 stimulusInput: null,
                 triggerNodeId: null,
-                runKind: WorkflowRunKind.BackgroundWeaverRun,
+                runKind: runKind,
                 sourceSelection: new WorkflowExecutableSourceSelection(parentReference.SourceReferenceId),
                 provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
                 parentWorkflowExecutionId: null,
@@ -143,7 +151,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 partition: new WorkflowExecutionPartition("partition-eu"),
                 authority: authority,
                 startAuthority: null,
-                dispatchNestingDepth: dispatchNestingDepth));
+                dispatchNestingDepth: dispatchNestingDepth,
+                testScope: testScope));
 
         var activityState = AssertSingle(await _provider.GetRequiredService<IActivityExecutionStateStore>()
             .ListAsync(parentWorkflowExecutionId));

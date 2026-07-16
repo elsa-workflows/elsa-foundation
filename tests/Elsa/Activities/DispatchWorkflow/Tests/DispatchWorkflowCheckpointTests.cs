@@ -18,6 +18,35 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 public sealed class DispatchWorkflowCheckpointTests
 {
     [Fact]
+    public async Task Test_run_stages_scope_and_exact_run_kind_in_record_and_start_payload()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var testScope = new WorkflowTestScope(
+            "scope-dispatch",
+            DispatchWorkflowRuntimeTestFixture.Now.AddHours(1),
+            "tenant-42",
+            new WorkflowExecutionPartition("partition-eu"));
+
+        var run = await fixture.StartParentAsync(
+            caseId: "test-scope",
+            parentWorkflowExecutionId: "parent-test-scope",
+            parentCorrelationId: "correlation-parent",
+            runKind: WorkflowRunKind.TestRun,
+            testScope: testScope);
+
+        Assert.Equal(WorkflowRunKind.TestRun, run.Dispatch.RunKind);
+        AssertScopeEqual(testScope, run.Dispatch.TestScope);
+        var startIntent = Assert.Single(
+            run.CompletionCommit.PostCommitIntents,
+            intent => intent.Kind == DispatchWorkflowConstants.StartChildIntentKind);
+        var payload = startIntent.Payload!.Value.Deserialize<WorkflowDispatchStartPayload>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(payload);
+        Assert.Equal(WorkflowRunKind.TestRun, payload.RunKind);
+        AssertScopeEqual(testScope, payload.TestScope);
+    }
+
+    [Fact]
     public async Task Wait_mode_atomically_commits_suspension_bookmark_dispatch_and_start_responsibility()
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
@@ -331,5 +360,14 @@ public sealed class DispatchWorkflowCheckpointTests
 
         return context.WorkflowDispatchRequest
             ?? throw new InvalidOperationException("DispatchWorkflow did not stage a checkpoint request.");
+    }
+
+    private static void AssertScopeEqual(WorkflowTestScope expected, WorkflowTestScope? actual)
+    {
+        Assert.NotNull(actual);
+        Assert.Equal(expected.ScopeId, actual.ScopeId);
+        Assert.Equal(expected.ExpiresAt, actual.ExpiresAt);
+        Assert.Equal(expected.TenantId, actual.TenantId);
+        Assert.Equal(expected.Partition.Value, actual.Partition.Value);
     }
 }

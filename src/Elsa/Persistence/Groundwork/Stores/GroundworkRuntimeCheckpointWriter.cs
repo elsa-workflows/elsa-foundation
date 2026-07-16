@@ -195,6 +195,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 var transactionalStore = new GroundworkDocumentUnitOfWorkStore(_commitLedger, unitOfWork);
                 await ValidateAndTouchExpectedFenceAsync(transactionalStore, commit, cancellationToken);
                 var stores = GroundworkApplyStores.Create(transactionalStore, _serializer, _accessContextAccessor);
+                await ValidateAndTouchTestScopesAsync(stores, commit, cancellationToken);
                 await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
                 await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
                 await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
@@ -260,6 +261,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     private static DocumentCommitScope RuntimeCheckpointCommitScope() =>
         DocumentCommitScope.Of(
             ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+            ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind,
             ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
             ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
@@ -273,6 +275,31 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
             ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
             ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
+
+    private static async ValueTask ValidateAndTouchTestScopesAsync(
+        GroundworkApplyStores stores,
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        var execution = commit.StateChanges.WorkflowExecution?.State;
+        if (execution is { TestScope: { } rootScope, ParentWorkflowExecutionId: null })
+        {
+            var existing = await stores.WorkflowExecutionStateStore.FindAsync(
+                execution.WorkflowExecutionId,
+                cancellationToken);
+            if (existing is null)
+                await stores.WorkflowTestScopeStore.AssertOpenAsync(rootScope, commit.Checkpoint.OccurredAt, cancellationToken);
+        }
+
+        foreach (var change in commit.StateChanges.WorkflowDispatches)
+        {
+            if (change.State.TestScope is not { } scope)
+                continue;
+            var existing = await stores.WorkflowDispatchStore.FindAsync(change.State.DispatchId, cancellationToken);
+            if (existing is null)
+                await stores.WorkflowTestScopeStore.AssertOpenAsync(scope, commit.Checkpoint.OccurredAt, cancellationToken);
+        }
+    }
 
     private async ValueTask ValidateAndTouchExpectedFenceAsync(
         IDocumentStore store,
@@ -769,6 +796,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IDurableValueStateStore DurableValueStateStore,
         IIncidentStateStore IncidentStateStore,
         IExecutionLivenessStateStore ExecutionLivenessStateStore,
+        GroundworkWorkflowTestScopeStore WorkflowTestScopeStore,
         GroundworkWorkflowDispatchStore WorkflowDispatchStore,
         GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore,
         IDurableTimerStore DurableTimerStore,
@@ -788,6 +816,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 new GroundworkDurableValueStateStore(store, serializer),
                 new GroundworkIncidentStateStore(store, serializer),
                 new GroundworkExecutionLivenessStateStore(store, serializer),
+                new GroundworkWorkflowTestScopeStore(store, serializer, accessContextAccessor),
                 new GroundworkWorkflowDispatchStore(store, serializer, accessContextAccessor),
                 new GroundworkRuntimePostCommitOutboxStore(store, serializer),
                 new GroundworkDurableTimerStore(store, serializer),

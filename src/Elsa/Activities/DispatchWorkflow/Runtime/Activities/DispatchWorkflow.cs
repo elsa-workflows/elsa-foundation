@@ -165,7 +165,8 @@ public sealed class DispatchWorkflow : CodeActivity
             createdAt: now,
             updatedAt: now,
             metadata: dispatchMetadata,
-            dispatchNestingDepth: childNestingDepth);
+            dispatchNestingDepth: childNestingDepth,
+            testScope: parent.TestScope);
         var startPayload = new WorkflowDispatchStartPayload(
             identity.DispatchId,
             runtimeContext.WorkflowExecutionId,
@@ -181,7 +182,8 @@ public sealed class DispatchWorkflow : CodeActivity
             childAuthority,
             hasRetainedEdge ? parent.PinnedExecutable : null,
             hasRetainedEdge ? dispatchNodeId : null,
-            childNestingDepth);
+            childNestingDepth,
+            parent.TestScope);
         var startIntent = new RuntimePostCommitIntent(
             intentId: identity.StartIntentId,
             workflowExecutionId: runtimeContext.WorkflowExecutionId,

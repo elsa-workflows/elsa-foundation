@@ -145,6 +145,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         var partition = durableDispatch?.Partition ?? payload.Partition;
         var runKind = durableDispatch?.RunKind ?? payload.RunKind;
         var retainedStart = payload.ParentExecutable is not null;
+        var testScope = durableDispatch?.TestScope ?? payload.TestScope;
         WorkflowExecutionStartDispatchResult result;
         try
         {
@@ -177,7 +178,8 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                             payload.ParentExecutable.ArtifactHash,
                             payload.DispatchNodeId!)
                         : null,
-                    dispatchNestingDepth: payload.DispatchNestingDepth),
+                    dispatchNestingDepth: payload.DispatchNestingDepth,
+                    testScope: testScope),
                 WorkflowExecutableReferenceScope.Published,
                 cancellationToken: cancellationToken);
         }
@@ -279,6 +281,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             payload.Partition != dispatch.Partition ||
             payload.RunKind != dispatch.RunKind ||
             payload.DispatchNestingDepth != dispatch.DispatchNestingDepth ||
+            !WorkflowTestScope.ContextEquals(payload.TestScope, dispatch.TestScope) ||
             !AuthorityEquals(payload.Authority, dispatch.Authority) ||
             !payloadInputNames.SequenceEqual(durableInputNames, StringComparer.Ordinal))
         {

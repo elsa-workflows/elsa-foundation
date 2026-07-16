@@ -49,8 +49,10 @@
     "runKind": 2,
     "status": 0,
     "tenantId": null,
+    "testScope": null,
     "updatedAt": "1970-01-01T00:00:00\u002B00:00"
   },
   "status": "Pending",
-  "tenantId": null
+  "tenantId": null,
+  "testScopeId": null
 }

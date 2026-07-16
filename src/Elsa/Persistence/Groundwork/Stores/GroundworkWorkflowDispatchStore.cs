@@ -1,9 +1,13 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -24,17 +28,24 @@ public sealed class GroundworkWorkflowDispatchStore :
     private readonly IGroundworkRuntimeDocumentSerializer _serializer;
     private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
     private readonly IBoundedDocumentStore? _boundedStore;
+    private readonly IWorkflowTestScopeAdmissionStore? _testScopeAdmissionStore;
+
+    internal IDocumentStore DocumentStore => _store;
+    internal IGroundworkRuntimeDocumentSerializer Serializer => _serializer;
+    internal IPersistenceAccessContextAccessor AccessContextAccessor => _accessContextAccessor;
 
     public GroundworkWorkflowDispatchStore(
         IDocumentStore store,
         IGroundworkRuntimeDocumentSerializer serializer,
         IPersistenceAccessContextAccessor accessContextAccessor,
-        IBoundedDocumentStore? boundedStore = null)
+        IBoundedDocumentStore? boundedStore = null,
+        IWorkflowTestScopeAdmissionStore? testScopeAdmissionStore = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         _accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
         _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
+        _testScopeAdmissionStore = testScopeAdmissionStore;
     }
 
     private IBoundedDocumentStore BoundedStore => _boundedStore ?? throw new InvalidOperationException(
@@ -123,6 +134,12 @@ public sealed class GroundworkWorkflowDispatchStore :
             throw new ArgumentOutOfRangeException(nameof(admittedAt), "Child admission requires a recorded timestamp.");
         cancellationToken.ThrowIfCancellationRequested();
 
+        var initial = await LoadAsync(dispatchId, cancellationToken)
+            ?? throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found for child admission.");
+        _accessContextAccessor.Current.EnsureTenantScope(initial.Record.TenantId);
+        if (initial.Record.TestScope is not null && initial.Record.Mode == WorkflowDispatchMode.FireAndForget)
+            return await TryAdmitTestScopedAsync(dispatchId, admittedAt, cancellationToken);
+
         while (true)
         {
             var loaded = await LoadAsync(dispatchId, cancellationToken)
@@ -145,6 +162,72 @@ public sealed class GroundworkWorkflowDispatchStore :
             if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
                 throw new InvalidOperationException($"Groundwork rejected workflow dispatch admission '{dispatchId}' with status '{result.Status}'.");
         }
+    }
+
+    private async ValueTask<WorkflowDispatchAdmissionResult> TryAdmitTestScopedAsync(
+        string dispatchId,
+        DateTimeOffset admittedAt,
+        CancellationToken cancellationToken)
+    {
+        if (_store.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
+        {
+            throw new InvalidOperationException(
+                "Groundwork cannot atomically admit a test-scoped workflow dispatch because the active document store does not support cross-unit transactions.");
+        }
+        if (_testScopeAdmissionStore is not GroundworkWorkflowTestScopeStore providerScopeStore ||
+            !ReferenceEquals(providerScopeStore.DocumentStore, _store))
+        {
+            throw new InvalidOperationException(
+                "Scoped child admission requires the Groundwork workflow test-scope provider on the same document store.");
+        }
+
+        await using var unitOfWork = await _store.BeginAsync(
+            DocumentCommitScope.Of(
+                ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind,
+                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind),
+            cancellationToken);
+        var transactionalStore = new GroundworkDocumentUnitOfWorkStore(_store, unitOfWork);
+        var transactionalScope = new GroundworkWorkflowTestScopeStore(
+            transactionalStore,
+            _serializer,
+            _accessContextAccessor);
+        var transactionalDispatch = new GroundworkWorkflowDispatchStore(
+            transactionalStore,
+            _serializer,
+            _accessContextAccessor);
+        var record = await transactionalDispatch.FindAsync(dispatchId, cancellationToken)
+            ?? throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found for child admission.");
+        _accessContextAccessor.Current.EnsureTenantScope(record.TenantId);
+
+        if (record.Status == WorkflowDispatchStatus.Started)
+            return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.AlreadyAdmitted, record);
+        if (WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(record))
+            return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission, record);
+        if (record.Status != WorkflowDispatchStatus.Pending)
+            return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.Terminal, record);
+
+        var testScope = record.TestScope!;
+        WorkflowDispatchRecord candidate;
+        WorkflowDispatchAdmissionDisposition disposition;
+        try
+        {
+            // AssertOpenAsync performs a same-value CAS touch. The scope touch and Pending -> Started
+            // transition therefore commit together and serialize with scope close/cleanup.
+            await transactionalScope.AssertOpenAsync(testScope, admittedAt, cancellationToken);
+            var effectiveAdmittedAt = admittedAt > record.UpdatedAt ? admittedAt : record.UpdatedAt;
+            candidate = record.TransitionTo(WorkflowDispatchStatus.Started, effectiveAdmittedAt);
+            disposition = WorkflowDispatchAdmissionDisposition.Admitted;
+        }
+        catch (TestScopeAdmissionException)
+        {
+            var effectiveAdmittedAt = admittedAt > record.UpdatedAt ? admittedAt : record.UpdatedAt;
+            candidate = WorkflowDispatchLifecycle.CancelTestScopeBeforeAdmission(record, effectiveAdmittedAt);
+            disposition = WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission;
+        }
+
+        await transactionalDispatch.SaveAsync(candidate, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        return new WorkflowDispatchAdmissionResult(disposition, candidate);
     }
 
     public async ValueTask<WorkflowDispatchCancellationResult> ApplyCancellationAsync(
@@ -214,7 +297,7 @@ public sealed class GroundworkWorkflowDispatchStore :
         // Every provider read is bounded. Continue through declared offset pages so predicates not carried by
         // the selected index are still applied before the public Take, while retaining only the best bounded
         // result set in memory.
-        var selected = new List<WorkflowDispatchRecord>(query.Take + CandidatePageSize);
+        var selected = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
         var skip = 0;
         while (true)
         {
@@ -232,16 +315,23 @@ public sealed class GroundworkWorkflowDispatchStore :
                          .Select(document => document.Record)
                          .Where(record => Matches(record, query)))
             {
-                selected.Add(record);
+                if (selected.TryGetValue(record.DispatchId, out var duplicate) &&
+                    !WorkflowDispatchLifecycle.RecordsEqual(duplicate, record))
+                {
+                    throw new InvalidOperationException(
+                        $"Groundwork returned conflicting workflow dispatch documents for '{record.DispatchId}'.");
+                }
+
+                selected[record.DispatchId] = record;
             }
 
             if (selected.Count > query.Take)
             {
-                selected = selected
+                selected = selected.Values
                     .OrderBy(record => record.CreatedAt)
                     .ThenBy(record => record.DispatchId, StringComparer.Ordinal)
                     .Take(query.Take)
-                    .ToList();
+                    .ToDictionary(record => record.DispatchId, StringComparer.Ordinal);
             }
 
             if (documents.Count < CandidatePageSize)
@@ -249,7 +339,7 @@ public sealed class GroundworkWorkflowDispatchStore :
             skip += documents.Count;
         }
 
-        var records = selected
+        var records = selected.Values
             .OrderBy(record => record.CreatedAt)
             .ThenBy(record => record.DispatchId, StringComparer.Ordinal)
             .Take(query.Take)
@@ -402,6 +492,12 @@ public sealed class GroundworkWorkflowDispatchStore :
                     ]);
         }
 
+        if (query.TestScopeId is { } testScopeId)
+        {
+            return (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery,
+                [Equal(ElsaRuntimeStorageManifest.TestScopeIdField, testScopeId)]);
+        }
+
         return (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByStatusQuery,
             [Equal(ElsaRuntimeStorageManifest.StatusField, status!)]);
     }
@@ -415,6 +511,7 @@ public sealed class GroundworkWorkflowDispatchStore :
         (query.ChildWorkflowExecutionId is null ||
          StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, query.ChildWorkflowExecutionId)) &&
         (query.Status is null || record.Status == query.Status) &&
+        (query.TestScopeId is null || StringComparer.Ordinal.Equals(record.TestScope?.ScopeId, query.TestScopeId)) &&
         (query.AfterCreatedAt is null ||
          record.CreatedAt > query.AfterCreatedAt ||
          record.CreatedAt == query.AfterCreatedAt &&
@@ -428,6 +525,7 @@ internal sealed record WorkflowDispatchDocument(
     string ParentWorkflowExecutionId,
     string ChildWorkflowExecutionId,
     string Status,
+    string? TestScopeId,
     string? TenantId,
     WorkflowDispatchRecord Record)
 {
@@ -436,6 +534,7 @@ internal sealed record WorkflowDispatchDocument(
         record.ParentWorkflowExecutionId,
         record.ChildWorkflowExecutionId,
         record.Status.ToString(),
+        record.TestScope?.ScopeId,
         record.TenantId,
         record);
 }

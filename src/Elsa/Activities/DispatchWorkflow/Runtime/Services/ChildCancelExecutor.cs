@@ -116,8 +116,10 @@ public sealed class ChildCancelExecutor(
             !StringComparer.Ordinal.Equals(dispatch.ParentWorkflowExecutionId, payload.ParentWorkflowExecutionId) ||
             !StringComparer.Ordinal.Equals(dispatch.ParentActivityExecutionId, payload.ParentActivityExecutionId) ||
             !StringComparer.Ordinal.Equals(dispatch.ChildWorkflowExecutionId, payload.ChildWorkflowExecutionId) ||
-            dispatch.Mode != WorkflowDispatchMode.WaitForCompletion ||
-            !WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(dispatch))
+            !((dispatch.Mode == WorkflowDispatchMode.WaitForCompletion &&
+               WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(dispatch)) ||
+              (dispatch.Mode == WorkflowDispatchMode.FireAndForget &&
+               WorkflowDispatchLifecycle.IsTestScopeCancellationRequested(dispatch))))
         {
             throw new InvalidOperationException($"Workflow dispatch '{payload.DispatchId}' conflicts with child-cancel responsibility.");
         }

@@ -18,8 +18,9 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
-            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ElsaRuntimeStorageManifest.Create()));
+        var manifest = TestScopeStoragePhysicalizer.AddCompositeRoutes(
+            WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ElsaRuntimeStorageManifest.Create())));
 
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,
@@ -32,6 +33,9 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IActivityExecutionInspectionStore),
                 typeof(IActivityExecutionInspectionWriter),
                 typeof(IWorkflowExecutionStateStore),
+                typeof(IWorkflowTestScopeStore),
+                typeof(IWorkflowTestScopeAdmissionStore),
+                typeof(IWorkflowTestScopeCleanupStore),
                 typeof(IDurableValueStateStore),
                 typeof(ISchedulerStateStore),
                 typeof(IExecutionLivenessStateStore),

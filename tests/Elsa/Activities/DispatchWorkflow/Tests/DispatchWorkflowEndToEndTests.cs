@@ -17,6 +17,67 @@ public sealed class DispatchWorkflowEndToEndTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    [Fact]
+    public async Task Detached_test_child_survives_parent_completion_until_scope_teardown()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var testScope = NewTestScope("scope-detached-parent-complete");
+        var run = await fixture.StartParentAsync(
+            caseId: "test-detached-parent-complete",
+            parentWorkflowExecutionId: "parent-test-detached-parent-complete",
+            parentCorrelationId: "correlation-parent",
+            runKind: WorkflowRunKind.TestRun,
+            testScope: testScope);
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
+        Assert.Equal(WorkflowDispatchStatus.Pending, run.Dispatch.Status);
+
+        await using (var scope = fixture.Services.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowTestScopeCleaner>().CloseAsync(
+                testScope.ScopeId,
+                WorkflowTestScopeCloseReason.ExplicitTeardown,
+                DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1));
+            Assert.Equal(1, result.CancelledBeforeAdmission);
+        }
+
+        Assert.Equal(WorkflowDispatchStatus.Cancelled, Assert.Single(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId)).Status);
+        Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
+        Assert.Equal(1, (await fixture.SweepAsync()).OutboxDeliveredCount);
+        Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task Waited_test_child_preserves_production_success_and_is_not_direct_scope_cleanup_target()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var testScope = NewTestScope("scope-waited-parity");
+        var run = await fixture.StartParentAsync(
+            caseId: "test-waited-parity",
+            parentWorkflowExecutionId: "parent-test-waited-parity",
+            parentCorrelationId: "correlation-parent",
+            waitForCompletion: true,
+            runKind: WorkflowRunKind.TestRun,
+            testScope: testScope);
+
+        await using (var scope = fixture.Services.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowTestScopeCleaner>().CloseAsync(
+                testScope.ScopeId,
+                WorkflowTestScopeCloseReason.ExplicitTeardown,
+                DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1));
+            Assert.Equal(0, result.CancelledBeforeAdmission);
+            Assert.Equal(0, result.CancellationQueued);
+        }
+
+        Assert.Equal(WorkflowDispatchStatus.Pending, Assert.Single(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId)).Status);
+        Assert.Equal(1, (await fixture.SweepAsync()).OutboxDeliveredCount);
+        Assert.Equal(1, (await fixture.SweepAsync()).OutboxDeliveredCount);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId))?.Status);
+        Assert.Equal(WorkflowDispatchStatus.Completed, Assert.Single(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId)).Status);
+    }
+
     [Theory]
     [InlineData(true, null, true)]
     [InlineData(true, true, true)]
@@ -780,6 +841,13 @@ public sealed class DispatchWorkflowEndToEndTests
             fixture.Actors.Activations,
             activation => activation.WorkflowExecutionId == "parent-after-retirement");
     }
+
+    private static WorkflowTestScope NewTestScope(string scopeId) =>
+        new(
+            scopeId,
+            DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(30),
+            "tenant-42",
+            new WorkflowExecutionPartition("partition-eu"));
 
     private static ValueTask AddDistractorChildSourceAsync(IServiceProvider services) =>
         services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(

@@ -103,6 +103,8 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
             {
                 await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
                 {
+                    if (operationScope.ServiceProvider.GetService<IWorkflowTestScopeCleaner>() is { } scopeCleaner)
+                        await scopeCleaner.SweepAsync(now, operationCancellationToken);
                     await SweepAsync(
                         persistenceScope,
                         operationScope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>(),

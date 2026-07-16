@@ -249,6 +249,41 @@ public sealed class DispatchWorkflowDesignTests
     }
 
     [Fact]
+    public async Task Test_run_parent_pins_the_live_published_child_and_ignores_test_run_child_source()
+    {
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var publishedChild = Executable("published-child-artifact", "child-definition", DispatchNode("published-root", "unused"));
+        var testRunChild = Executable("test-run-child-artifact", "child-definition", DispatchNode("test-run-root", "unused"));
+        var publishedSource = Source("published-child-source", "child-definition", publishedChild.Identity.ArtifactId, WorkflowExecutableReferenceScope.Published);
+        var testRunSource = Source("test-run-child-source", "child-definition", testRunChild.Identity.ArtifactId, WorkflowExecutableReferenceScope.TestRun);
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await executables.SaveAsync(publishedChild);
+        await executables.SaveAsync(testRunChild);
+        await references.SaveAsync(publishedSource);
+        await references.SaveAsync(testRunSource);
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var context = Context(node) with
+        {
+            Request = new WorkflowExecutableCompileRequest(
+                "parent-version",
+                WorkflowExecutableReferenceScope.TestRun,
+                Now,
+                Now,
+                Now.AddMinutes(5),
+                "artifact-")
+        };
+
+        var contribution = await pinSource.GetContributionAsync(
+            new ExecutableCompilationContext(context.Request, context.Source, context.RootActivity));
+        var dependency = Assert.Single(contribution.Dependencies);
+
+        Assert.Equal(publishedChild.Identity.ArtifactId, dependency.ArtifactId);
+        Assert.Equal(publishedChild.Identity.ArtifactHash, dependency.ArtifactHash);
+        Assert.NotEqual(testRunChild.Identity.ArtifactId, dependency.ArtifactId);
+    }
+
+    [Fact]
     public async Task Pin_contribution_rejects_missing_and_inconsistent_executables()
     {
         var node = DispatchNode("dispatch-node", "child-definition");

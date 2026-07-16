@@ -127,6 +127,44 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     }
 
     [Fact]
+    public void AddWorkflowRuntime_ClaimsTheInMemoryTestScopeProviderIdempotently()
+    {
+        var services = new ServiceCollection();
+
+        services.AddWorkflowRuntime();
+        services.AddWorkflowRuntime();
+
+        var registration = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(WorkflowTestScopeProviderRegistration));
+        var claim = Assert.IsType<WorkflowTestScopeProviderRegistration>(registration.ImplementationInstance);
+        Assert.Equal(typeof(InMemoryWorkflowTestScopeStore), claim.ProviderType);
+        Assert.True(claim.IsInMemoryDefault);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeAdmissionStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+    }
+
+    [Fact]
+    public void TestScopeProviderGuard_RejectsConflictingDurableProvidersInEitherOrder()
+    {
+        AssertConflict(typeof(FakeFirstTestScopeProvider), typeof(FakeSecondTestScopeProvider));
+        AssertConflict(typeof(FakeSecondTestScopeProvider), typeof(FakeFirstTestScopeProvider));
+
+        static void AssertConflict(Type first, Type second)
+        {
+            var services = new ServiceCollection();
+            services.ClaimWorkflowTestScopeProvider(first);
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => services.ClaimWorkflowTestScopeProvider(second));
+
+            Assert.Contains(first.FullName!, exception.Message, StringComparison.Ordinal);
+            Assert.Contains(second.FullName!, exception.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void AddWorkflowRuntime_ValidatesWithScopedPersistence()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
@@ -290,6 +328,10 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         public ConcurrentQueue<Guid> Disposed { get; } = new();
         public ConcurrentQueue<string> Partitions { get; } = new();
     }
+
+    private sealed class FakeFirstTestScopeProvider;
+
+    private sealed class FakeSecondTestScopeProvider;
 
     private sealed class ScopeTrackingSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IDisposable
     {

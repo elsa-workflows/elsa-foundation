@@ -36,6 +36,8 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
     private const int CandidatePageSize = 100;
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
 
+    internal IDocumentStore DocumentStore => store;
+
     private IBoundedDocumentStore BoundedStore => _boundedStore
         ?? throw new InvalidOperationException("Post-commit outbox queries require an admitted bounded document-store runtime.");
 

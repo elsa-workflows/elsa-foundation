@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
@@ -36,7 +37,10 @@ public sealed class ActivityDraftTestRunPublisher(
     IWorkflowExecutableStore workflowExecutables,
     IWorkflowStartDispatcher startDispatcher,
     IIdentityGenerator identityGenerator,
-    TimeProvider timeProvider) : IActivityDraftTestRunPublisher
+    TimeProvider timeProvider,
+    IWorkflowTestScopeStore? testScopeStore = null,
+    IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
+    IPersistenceAccessContextAccessor? accessContextAccessor = null) : IActivityDraftTestRunPublisher
 {
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
     private static readonly IReadOnlyDictionary<string, RuntimeOutputCapture> NoOutputCaptures =
@@ -157,16 +161,48 @@ public sealed class ActivityDraftTestRunPublisher(
         };
         if (!string.IsNullOrWhiteSpace(request.CorrelationId))
             metadata["runtime.correlationId"] = request.CorrelationId;
-        var dispatch = await startDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(
-                artifactId,
-                "activity-designer-test-run",
-                metadata: metadata,
-                inputs: inputValues,
-                runKind: WorkflowRunKind.TestRun,
-                sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: wrapperReference.SourceReferenceId)),
-            WorkflowExecutableReferenceScope.TestRun,
-            cancellationToken: cancellationToken);
+        var partition = partitionAccessor?.Current ??
+                        new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+        var tenantId = accessContextAccessor?.Current.Scope?.Value;
+        var testScope = new WorkflowTestScope(testRunId, expiresAt, tenantId, partition);
+        var runtimeScopeStore = testScopeStore ?? TestRunCompatibilityScope.Store;
+        await runtimeScopeStore.CreateAsync(testScope, now, cancellationToken);
+
+        WorkflowExecutionStartDispatchResult dispatch;
+        try
+        {
+            dispatch = await startDispatcher.DispatchAsync(
+                new WorkflowExecutionStartDispatchRequest(
+                    artifactId: artifactId,
+                    requestedBy: "activity-designer-test-run",
+                    workflowExecutionId: null,
+                    idempotencyKey: null,
+                    metadata: metadata,
+                    variables: null,
+                    inputs: inputValues,
+                    stimulusInput: null,
+                    triggerNodeId: null,
+                    runKind: WorkflowRunKind.TestRun,
+                    sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: wrapperReference.SourceReferenceId),
+                    provenanceRequirement: WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+                    parentWorkflowExecutionId: null,
+                    correlationId: request.CorrelationId,
+                    tenantId: tenantId,
+                    partition: partition,
+                    authority: null,
+                    startAuthority: null,
+                    dispatchNestingDepth: 0,
+                    testScope: testScope),
+                WorkflowExecutableReferenceScope.TestRun,
+                cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            await runtimeScopeStore.CloseAsync(
+                new WorkflowTestScopeCloseRequest(testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow()),
+                CancellationToken.None);
+            throw;
+        }
 
         return new(
             testRunId,

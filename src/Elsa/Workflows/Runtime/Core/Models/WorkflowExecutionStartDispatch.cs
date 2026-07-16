@@ -117,7 +117,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
             partition,
             authority,
             startAuthority,
-            dispatchNestingDepth: 0)
+            dispatchNestingDepth: 0,
+            testScope: null)
     {
     }
 
@@ -141,7 +142,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority,
         WorkflowExecutableStartAuthority? startAuthority,
-        int dispatchNestingDepth)
+        int dispatchNestingDepth,
+        WorkflowTestScope? testScope = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -159,6 +161,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         ValidateOptional(tenantId, nameof(tenantId));
         ValidateStartAuthority(startAuthority, sourceSelection, provenanceRequirement);
         ValidateDispatchNestingDepth(dispatchNestingDepth);
+        ValidateTestScope(runKind, parentWorkflowExecutionId, tenantId, partition, testScope);
 
         authority ??= WorkflowExecutionAuthoritySnapshot.CreateRoot(requestedBy);
         if (!StringComparer.Ordinal.Equals(requestedBy, authority.SystemIdentity))
@@ -183,6 +186,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         Authority = authority;
         StartAuthority = startAuthority;
         DispatchNestingDepth = dispatchNestingDepth;
+        TestScope = testScope;
     }
 
     public string ArtifactId { get; }
@@ -262,6 +266,9 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// <summary>Cross-workflow dispatch depth. Root and legacy requests default to zero.</summary>
     public int DispatchNestingDepth { get; }
 
+    /// <summary>Authoritative finite test-run scope. Null for non-test and legacy starts.</summary>
+    public WorkflowTestScope? TestScope { get; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 
@@ -294,6 +301,27 @@ public sealed class WorkflowExecutionStartDispatchRequest
     {
         if (value < 0)
             throw new ArgumentOutOfRangeException(nameof(value), value, "Dispatch nesting depth cannot be negative.");
+    }
+
+    private static void ValidateTestScope(
+        WorkflowRunKind runKind,
+        string? parentWorkflowExecutionId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowTestScope? testScope)
+    {
+        if (testScope is null)
+        {
+            if (runKind == WorkflowRunKind.TestRun && parentWorkflowExecutionId is null)
+                throw new ArgumentException("A new root TestRun start requires an authoritative workflow test scope.", nameof(testScope));
+            return;
+        }
+        if (runKind != WorkflowRunKind.TestRun)
+            throw new ArgumentException("A workflow test scope requires TestRun run kind.", nameof(testScope));
+        if (!StringComparer.Ordinal.Equals(tenantId, testScope.TenantId))
+            throw new ArgumentException("The workflow test scope tenant must match the start tenant.", nameof(testScope));
+        if (partition is not null && !Equals(partition, testScope.Partition))
+            throw new ArgumentException("The workflow test scope partition must match the start partition.", nameof(testScope));
     }
 }
 
@@ -497,7 +525,8 @@ public sealed class WorkflowExecutionStartCommandPayload
             partition,
             authority,
             startAuthority,
-            dispatchNestingDepth: 0)
+            dispatchNestingDepth: 0,
+            testScope: null)
     {
     }
 
@@ -517,7 +546,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority,
         WorkflowExecutableStartAuthority? startAuthority,
-        int dispatchNestingDepth)
+        int dispatchNestingDepth,
+        WorkflowTestScope? testScope = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
@@ -527,6 +557,15 @@ public sealed class WorkflowExecutionStartCommandPayload
         ValidateStartAuthority(startAuthority, pinnedSource);
         if (dispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(dispatchNestingDepth), dispatchNestingDepth, "Dispatch nesting depth cannot be negative.");
+        if (testScope is not null)
+        {
+            if (runKind != WorkflowRunKind.TestRun)
+                throw new ArgumentException("A workflow test scope requires TestRun run kind.", nameof(testScope));
+            if (!StringComparer.Ordinal.Equals(tenantId, testScope.TenantId))
+                throw new ArgumentException("The workflow test scope tenant must match the command tenant.", nameof(testScope));
+            if (partition is not null && !Equals(partition, testScope.Partition))
+                throw new ArgumentException("The workflow test scope partition must match the command partition.", nameof(testScope));
+        }
 
         PinnedExecutable = pinnedExecutable;
         RequestedArtifactId = requestedArtifactId;
@@ -543,6 +582,7 @@ public sealed class WorkflowExecutionStartCommandPayload
         Authority = authority;
         StartAuthority = startAuthority;
         DispatchNestingDepth = dispatchNestingDepth;
+        TestScope = testScope;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -594,6 +634,9 @@ public sealed class WorkflowExecutionStartCommandPayload
 
     /// <summary>Durable cross-workflow dispatch depth. Missing legacy values default to zero.</summary>
     public int DispatchNestingDepth { get; }
+
+    /// <summary>Authoritative finite test-run scope. Null for non-test and legacy commands.</summary>
+    public WorkflowTestScope? TestScope { get; }
 
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(

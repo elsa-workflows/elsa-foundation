@@ -39,6 +39,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
         ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
@@ -129,6 +130,12 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind:
                 await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.AccessContext("tenant-1")).SaveAsync(WorkflowState());
                 break;
+            case ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind:
+                await new GroundworkWorkflowTestScopeStore(
+                    store,
+                    Serializer,
+                    GroundworkTestAccess.DefaultAccessContextAccessor).CreateAsync(TestScope(), DateTimeOffset.UnixEpoch);
+                break;
             case ElsaRuntimeStorageManifest.DurableValueStateDocumentKind:
                 await new GroundworkDurableValueStateStore(store, Serializer).SaveAsync(DurableValue());
                 break;
@@ -197,6 +204,11 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 .FindBoundaryAsync(Wf, "ae-1"))?.DefinitionVersionId,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind =>
             (await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(Wf))?.Status,
+        ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind =>
+            (await new GroundworkWorkflowTestScopeStore(
+                store,
+                Serializer,
+                GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync("test-scope-1"))?.State,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind =>
             (await new GroundworkDurableValueStateStore(store, Serializer).FindAsync(Wf, "dv-1"))?.ValueId,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind =>
@@ -249,6 +261,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind => "ae-1",
         ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind => "activity-ver-1",
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind => WorkflowExecutionStatus.Completed,
+        ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind => WorkflowTestScopeState.Open,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind => "value-dv-1",
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind => 7L,
         ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind => "op-1",
@@ -289,6 +302,12 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
 
     private const string CommitId = "commit-1";
     private const string ProjectionStateId = "triggerBindings:13:publication-1";
+
+    private static WorkflowTestScope TestScope() => new(
+        "test-scope-1",
+        DateTimeOffset.UnixEpoch.AddHours(1),
+        tenantId: null,
+        new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue));
 
     private static WorkflowTriggerBinding TriggerBinding() => new(
         TriggerBindingId: WorkflowTriggerBinding.BuildId("publication-1", "artifact-1", "node-trigger", "hash-order-approved"),

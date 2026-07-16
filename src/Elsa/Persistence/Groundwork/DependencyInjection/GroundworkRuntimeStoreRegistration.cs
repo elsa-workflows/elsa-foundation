@@ -6,6 +6,7 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
 using Groundwork.Core.Transactions;
@@ -23,6 +24,7 @@ public static class GroundworkRuntimeStoreRegistration
 {
     public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services)
     {
+        services.ClaimWorkflowTestScopeProvider(typeof(GroundworkWorkflowTestScopeStore));
         services.AddPersistenceCore();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, RuntimeGroundworkStorageManifestSource>());
@@ -60,6 +62,13 @@ public static class GroundworkRuntimeStoreRegistration
             serviceProvider.GetService<IBoundedDocumentStore>()
             ?? serviceProvider.GetRequiredService<IDocumentStore>() as IBoundedDocumentStore
             ?? throw new InvalidOperationException("Workflow-execution queries require an admitted bounded document-store runtime.")));
+        services.RemoveAll<IWorkflowTestScopeStore>();
+        services.RemoveAll<IWorkflowTestScopeAdmissionStore>();
+        services.RemoveAll<IWorkflowTestScopeCleanupStore>();
+        services.RemoveAll<GroundworkWorkflowTestScopeStore>();
+        services.AddScoped<GroundworkWorkflowTestScopeStore>();
+        services.AddScoped<IWorkflowTestScopeStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowTestScopeStore>());
+        services.AddScoped<IWorkflowTestScopeAdmissionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowTestScopeStore>());
         services.RemoveAll<IDurableValueStateStore>();
         services.AddScoped<IDurableValueStateStore, GroundworkDurableValueStateStore>();
         services.RemoveAll<ISchedulerStateStore>();
@@ -102,12 +111,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<IRuntimePostCommitOutboxClaimStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
         services.AddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
         services.AddScoped<IWorkflowDispatchRedriveStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
+        services.AddScoped<IWorkflowTestScopeCleanupStore, GroundworkTestScopeCleanupStore>();
 
         // Versioned document serialization: every bridge store routes its content JSON through the
         // serializer, which stamps per-kind schema versions on write and enforces each current-only pre-GA
         // boundary on read. TryAdd keeps host-supplied serializer replacements intact.
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
-
         // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the
         // process-local in-memory queue, and a crash after checkpoint commit loses the continuation
         // even though state and outbox items were stored durably.
