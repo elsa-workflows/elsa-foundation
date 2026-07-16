@@ -33,4 +33,15 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Adds a singleton contributor to the post-redaction ingestion pipeline without replacing contributors
+    /// registered by other features. Re-registering the same implementation type is idempotent.
+    /// </summary>
+    public static IServiceCollection AddOpenTelemetryIngestionContributor<TContributor>(this IServiceCollection services)
+        where TContributor : class, IOpenTelemetryIngestionContributor
+    {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IOpenTelemetryIngestionContributor, TContributor>());
+        return services;
+    }
 }

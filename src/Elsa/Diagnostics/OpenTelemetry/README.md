@@ -8,7 +8,8 @@ SQLite persistence feature name: **`DiagnosticsOpenTelemetryPersistenceEFCoreSql
 ## What this feature provides
 
 - **Decomposed roles** behind separate contracts (all registered with `TryAdd*` so a persistence/transport feature can replace just one):
-  - **`OpenTelemetryIngestor`** → `IOpenTelemetryIngestor` — the write path: redacts the batch, writes it to the store, then publishes it to the live feed.
+  - **`OpenTelemetryIngestor`** → `IOpenTelemetryIngestor` — the write path: redacts the batch, awaits every additive ingestion contributor, writes it to the store, then publishes it to the live feed.
+  - **`IOpenTelemetryIngestionContributor`** — additive post-redaction processing for independently composed features. Contributors are awaited sequentially in registration order before storage and live publication; register one with `AddOpenTelemetryIngestionContributor<TContributor>()`.
   - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). On every write it also marks the batch's resource as seen in the source registry (so resource and storage views stay populated). Registered with `TryAddSingleton` so a persistence feature can override it — **any override must also populate `IOpenTelemetrySourceRegistry`**, or the resources/storage views go empty.
   - **`EfCoreOpenTelemetryStore`** → `IOpenTelemetryStore` (via `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite`) — durable EF Core-backed history for resources, traces, spans, metric instruments, metric points, and logs. It uses the same non-blocking write pattern as Structured Logs persistence: ingestion enqueues batches onto a bounded channel, a startup task starts the async drain loop after migrations, and retention pruning keeps high-volume tables bounded by the configured capacities. It also marks resources seen synchronously before enqueueing.
   - **`InMemoryOpenTelemetryLiveFeed`** → `IOpenTelemetryLiveFeed` — an independent bounded channel per live subscriber (in-process fan-out) with the same backpressure/drop model as the Structured Logs feed; a slow consumer's overflow is dropped and surfaced in-band as a `dropped` signal.
@@ -64,6 +65,14 @@ Unlike the Structured Logs stream, OpenTelemetry stream items carry **no monoton
 
 Both lists are surfaced through options so a host can extend or replace them.
 
+## Post-redaction contributions and acknowledgement
+
+`IOpenTelemetryIngestionContributor` is the additive handoff seam for features that need an ingested batch without replacing the collector, redactor, diagnostics store, or live feed. Every contributor receives the same redacted `OpenTelemetryBatch` instance and must treat it as read-only. `OpenTelemetryIngestor` invokes contributors sequentially in registration order after redaction and before either diagnostics destination.
+
+Contributor completion participates in OTLP ingestion acknowledgement. A contributor that promises durable handoff must return only after its own durable store has accepted the batch. If a contributor throws or observes cancellation, later contributors are not called, the diagnostics store and live feed are not updated, and the exception reaches the ingestion endpoint; therefore the endpoint does not report the batch as accepted. Once a durable contributor has accepted a batch, its independent background processing can be unavailable without requiring the original sender to resubmit it.
+
+The contribution contract itself does not provide persistence, retries, de-duplication, or an outbox. Those semantics belong to each contributor. In particular, `IOpenTelemetryLiveFeed` remains a volatile UI tail, and the EF Core diagnostics store's bounded channel is diagnostics retention rather than a durable downstream-delivery guarantee.
+
 ## EFCore SQLite persistence
 
 Enable `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsOpenTelemetry` to replace the default in-memory store with durable SQLite-backed history. The persistence feature:
@@ -92,7 +101,7 @@ This domain was ported from `Elsa.Diagnostics.OpenTelemetry` in elsa-core. Two d
 
 ## Replacing the defaults
 
-All store/feed/ingestor/redactor/registry/provider contracts are overridable — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped extension is replacing `IOpenTelemetryStore` with `EfCoreOpenTelemetryStore` while leaving ingestion, redaction, transport, and the UI unchanged.
+All store/feed/ingestor/redactor/registry/provider contracts are overridable, while `IOpenTelemetryIngestionContributor` is additive — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped extension is replacing `IOpenTelemetryStore` with `EfCoreOpenTelemetryStore` while leaving ingestion, redaction, transport, and the UI unchanged.
 
 ## Owned exception surface
 

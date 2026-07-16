@@ -1,6 +1,7 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Endpoints;
+using Elsa.Diagnostics.OpenTelemetry.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -49,5 +50,35 @@ public sealed class OpenTelemetryFeatureTests
         Assert.Equal(123, options.TraceCapacity);
         Assert.Equal("secret", options.ApiKey);
         Assert.False(options.AllowUnauthenticatedLoopback);
+    }
+
+    [Fact]
+    public void ContributorRegistrationsAreAdditiveAndDuplicateSafe()
+    {
+        var services = new ServiceCollection();
+
+        services
+            .AddOpenTelemetryIngestionContributor<FirstContributor>()
+            .AddOpenTelemetryIngestionContributor<SecondContributor>()
+            .AddOpenTelemetryIngestionContributor<FirstContributor>();
+        new OpenTelemetryFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var contributors = provider.GetServices<IOpenTelemetryIngestionContributor>().ToArray();
+
+        Assert.Collection(
+            contributors,
+            contributor => Assert.IsType<FirstContributor>(contributor),
+            contributor => Assert.IsType<SecondContributor>(contributor));
+    }
+
+    private sealed class FirstContributor : IOpenTelemetryIngestionContributor
+    {
+        public ValueTask ContributeAsync(Core.Models.OpenTelemetryBatch redactedBatch, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
+    private sealed class SecondContributor : IOpenTelemetryIngestionContributor
+    {
+        public ValueTask ContributeAsync(Core.Models.OpenTelemetryBatch redactedBatch, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 }
