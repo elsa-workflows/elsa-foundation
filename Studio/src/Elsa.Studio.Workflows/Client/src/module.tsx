@@ -86,7 +86,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail",
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => <WorkflowLazyBoundary label="workflow run"><WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} navigate={navigate} /></WorkflowLazyBoundary>
+        component: ({ navigate }) => <WorkflowLazyBoundary label="workflow run"><WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} expressionEditors={api.expressionEditors.list()} navigate={navigate} /></WorkflowLazyBoundary>
       },
       {
         id: "workflows-activity-availability",

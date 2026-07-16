@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getActivityExecutionInspection } from "../api/runtime";
 import {
@@ -20,6 +20,7 @@ import type {
   WorkflowDefinitionVersionDetails,
   WorkflowInstanceDetails
 } from "../workflowTypes";
+import type { ExecutableGraphNodeFacts } from "../executableGraph";
 import { flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
 vi.mock("../api/runtime", async importOriginal => ({
@@ -212,7 +213,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       .find(section => section.querySelector("h4")?.textContent?.includes("Inputs"));
     expect(inputSection?.querySelectorAll("[role=listitem]")).toHaveLength(1);
     expect(inputSection?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("1");
-    expect(inputSection?.querySelector(".wf-runtime-capture-mode")?.textContent).toBe("Diagnostic Snapshot");
+    expect(inputSection?.querySelector(".wf-runtime-capture-mode")?.textContent).toBe("Paired evidence");
     expect(inputSection?.querySelector(".wf-runtime-input .wf-runtime-capture-mode")).toBeNull();
   });
 
@@ -239,12 +240,124 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.textContent).not.toContain("null");
   });
 
+  it("pairs runtime evidence with pinned authored source and structured compiled behavior", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([
+      {
+        name: "Message",
+        subject: "ActivityInput",
+        inputKey: "message-key",
+        evaluationId: "invoke-1",
+        phase: "invoke",
+        sequence: 1,
+        captureMode: "DiagnosticSnapshot",
+        state: "captured",
+        type: { typeName: "System.String" },
+        capturedAt: "2026-07-09T10:00:01Z",
+        snapshot: { kind: "string", preview: "Hello at runtime", length: 16, truncated: false },
+        captureReason: "Diagnostic snapshot captured.",
+        isSensitive: false,
+        access: "visible",
+        metadata: {}
+      }
+    ]));
+    const executableNodeFacts: ExecutableGraphNodeFacts = {
+      executableNodeId: "node-1",
+      authoredActivityId: "write-line",
+      activityType: activity.activityType,
+      activityTypeVersion: activity.activityTypeVersion,
+      structureKind: null,
+      available: true,
+      authoredInputsAccess: "visible",
+      authoredInputs: [{ executableNodeId: "node-1", inputKey: "message-key", expressionType: "JavaScript", value: "variables.message" }],
+      inputBindings: [{
+        inputKey: "message-key",
+        inputName: "Message",
+        source: "Expression",
+        expression: { language: "JavaScript", expression: "variables.message" },
+        summary: "legacy summary must not render"
+      }]
+    };
+    const expressionEditor: StudioExpressionEditorContribution = {
+      id: "test.javascript",
+      supports: context => context.syntax === "JavaScript",
+      surfaces: {},
+      sourceRenderer: {
+        compact: ({ context }) => <strong>{String(context.value)}</strong>,
+        expanded: ({ context }) => <strong>JavaScript source: {String(context.value)}</strong>
+      }
+    };
+    const pairedCatalog: ActivityCatalogItem[] = [{
+      ...catalog[0]!,
+      inputs: [{ referenceKey: "message-key", name: "Message", displayName: "Message", typeName: "System.String" }]
+    }];
+
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={pairedCatalog}
+        executableNodeFacts={executableNodeFacts}
+        expressionEditors={[expressionEditor]}
+      />
+    );
+
+    await waitFor(() => expect(container.textContent).toContain("Hello at runtime"));
+    expect(container.textContent).toContain("Evaluated at runtime");
+    expect(container.textContent).toContain("JavaScript source: variables.message");
+    expect(container.textContent).toContain("Compiled binding (Expression)");
+    expect(container.textContent).not.toContain("legacy summary must not render");
+    expect([...container.querySelectorAll(".wf-instance-section > h4, .wf-instance-section > header h4")].map(item => item.textContent?.replace(/\d+$/, "")))
+      .toEqual(expect.arrayContaining(["Inputs", "Outputs"]));
+  });
+
+  it("keeps authored source hidden when source access is denied while runtime evidence remains visible", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([{
+      name: "Message",
+      subject: "ActivityInput",
+      inputKey: "message-key",
+      evaluationId: "invoke-1",
+      phase: "invoke",
+      sequence: 1,
+      captureMode: "DiagnosticSnapshot",
+      state: "captured",
+      type: { typeName: "System.String" },
+      capturedAt: "2026-07-09T10:00:01Z",
+      snapshot: { kind: "string", preview: "Allowed runtime evidence", length: 24, truncated: false },
+      captureReason: "Captured.",
+      isSensitive: false,
+      access: "visible",
+      metadata: {}
+    }]));
+
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }] }]}
+        executableNodeFacts={{
+          executableNodeId: "node-1",
+          authoredActivityId: "write-line",
+          activityType: activity.activityType,
+          activityTypeVersion: activity.activityTypeVersion,
+          structureKind: null,
+          available: true,
+          authoredInputsAccess: "permissionHidden",
+          authoredInputs: [],
+          inputBindings: []
+        }}
+      />
+    );
+
+    await waitFor(() => expect(container.textContent).toContain("Allowed runtime evidence"));
+    expect(container.textContent).toContain("Authored source is hidden by source permissions.");
+  });
+
   it("shows an empty state when no input snapshots exist", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
-    await waitFor(() => expect(container.textContent).toContain("No runtime input snapshots were recorded for this execution."));
+    await waitFor(() => expect(container.textContent).toContain("No declared inputs, pinned bindings, or runtime input evidence are available for this execution."));
     expect(container.textContent).toContain("No runtime output snapshots were recorded for this execution.");
   });
 
@@ -258,10 +371,10 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     expect(overview.querySelector("h4")?.textContent).toBe("Write Line");
     expect(overview.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
-    expect(overview.querySelector(".wf-activity-execution-details")?.hasAttribute("open")).toBe(false);
-    expect(overview.querySelectorAll(".wf-copy-button")).toHaveLength(10);
+    expect(container.querySelector(".wf-activity-execution-details")?.hasAttribute("open")).toBe(false);
+    expect(container.querySelectorAll(".wf-copy-button")).toHaveLength(10);
 
-    const executionIdCopy = overview.querySelector<HTMLButtonElement>("[aria-label='Copy activity execution ID']")!;
+    const executionIdCopy = container.querySelector<HTMLButtonElement>("[aria-label='Copy activity execution ID']")!;
     executionIdCopy.click();
 
     await waitFor(() => {

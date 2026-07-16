@@ -13,6 +13,7 @@ declare module "@elsa-workflows/studio-sdk" {
     uiHint?: string | null;
     defaultSyntax?: string | null;
     isReadOnly?: boolean | null;
+    referenceKey?: string | null;
   }
 
   export interface StudioExpressionDescriptor {
@@ -49,6 +50,24 @@ declare module "@elsa-workflows/studio-sdk" {
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
     createDefaultValue?(context: StudioExpressionEditorContext): unknown;
+    sourceRenderer?: StudioExpressionSourceRenderer;
+  }
+
+  export interface StudioExpressionSourceRendererContext {
+    expressionType: string;
+    value: unknown;
+    metadata: Readonly<Record<string, unknown>>;
+    isSensitive: boolean;
+    surface: "compact" | "expanded";
+  }
+
+  export interface StudioExpressionSourceRendererProps {
+    context: StudioExpressionSourceRendererContext;
+  }
+
+  export interface StudioExpressionSourceRenderer {
+    compact: ComponentType<StudioExpressionSourceRendererProps>;
+    expanded: ComponentType<StudioExpressionSourceRendererProps>;
   }
 
   export interface ElsaStudioModuleApi {

@@ -760,6 +760,21 @@ textarea:focus {
   overflow: hidden;
 }
 
+/* Run detail is a route-owned workbench. Keep list pages on the normal padded/scrolling
+   surface while this one consumes the shell cell left above the bottom panel. */
+.content:has(> .wf-page--run-workbench) {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.content > .wf-page--run-workbench {
+  min-height: 0;
+  flex: 1;
+}
+
 /* The Extension Builder workspace is a full-bleed IDE: drop the content padding so the
    shell fills the whole area (the home view keeps the normal padded layout). */
 .content:has(> .extension-builder-page-workspace) {

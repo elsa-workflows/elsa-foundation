@@ -497,6 +497,35 @@ export interface WorkflowExecutableReference {
   deletedReason?: string | null;
   publicationId?: string | null;
   slotId?: string | null;
+  authoredInputs?: WorkflowExecutableAuthoredInput[] | null;
+  authoredInputsAccess?: string | null;
+}
+
+export interface WorkflowExecutableAuthoredInput {
+  executableNodeId: string;
+  inputKey: string;
+  expressionType?: string | null;
+  value?: unknown;
+  isSensitive?: boolean;
+  accessState?: string | null;
+  access?: string | null;
+}
+
+export interface WorkflowExecutableCompiledInput {
+  executableNodeId: string;
+  binding: WorkflowExecutableInputBinding;
+  accessState?: string | null;
+  access?: string | null;
+}
+
+export interface WorkflowExecutableInputSources {
+  artifactId: string;
+  sourceReferenceId: string;
+  accessState?: string | null;
+  /** Compatibility alias emitted by early Foundation previews. */
+  access?: string | null;
+  authoredInputs: WorkflowExecutableAuthoredInput[];
+  compiledInputs: WorkflowExecutableCompiledInput[];
 }
 
 // Compact flowchart wiring projected with an executable node. Endpoints refer to authored node ids;
@@ -532,8 +561,24 @@ export interface WorkflowExecutableChildSlot {
 
 export interface WorkflowExecutableInputBinding {
   inputName: string;
+  inputKey?: string | null;
   source: string;
+  isSensitive?: boolean;
+  literalValue?: unknown;
+  expression?: WorkflowExecutableExpressionBinding | null;
+  activityOutput?: Record<string, unknown> | null;
+  durableValue?: Record<string, unknown> | null;
+  reference?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   summary?: string | null;
+  [key: string]: unknown;
+}
+
+export interface WorkflowExecutableExpressionBinding extends Record<string, unknown> {
+  language: string;
+  expression: string;
+  resultType?: unknown;
+  metadata?: Record<string, unknown> | null;
 }
 
 // The reference the detail endpoint rendered the Layout Sidecar from, and how it was chosen:
@@ -542,6 +587,8 @@ export interface WorkflowExecutableChosenReference {
   sourceReferenceId: string;
   selection: string;
   layout: DesignMetadataRecord[];
+  authoredInputs?: WorkflowExecutableAuthoredInput[] | null;
+  authoredInputsAccess?: string | null;
 }
 
 // The executable detail response (plan §3): identity block, Execution Material node tree, the chosen
@@ -673,6 +720,22 @@ export interface ActivityExecutionInspectionValueSnapshot {
   captureReason: string;
   isSensitive: boolean;
   metadata: Record<string, string>;
+  inputKey?: string | null;
+  evaluationId?: string | null;
+  evaluationPhase?: string | null;
+  evaluationSequence?: number | null;
+  /** Compatibility aliases emitted by early Foundation previews. */
+  phase?: string | null;
+  sequence?: number | null;
+  accessState?: string | null;
+  access?: string | null;
+  failure?: ActivityInputEvaluationFailure | null;
+}
+
+export interface ActivityInputEvaluationFailure {
+  code?: string | null;
+  message?: string | null;
+  incidentId?: string | null;
 }
 
 export type DiagnosticSnapshotNode =

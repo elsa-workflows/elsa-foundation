@@ -233,13 +233,15 @@ describe("studio registry", () => {
       id: "javascript.inline",
       order: 10,
       supports: context => context.syntax === "JavaScript",
-      surfaces: { inline: () => null }
+      surfaces: { inline: () => null },
+      sourceRenderer: { compact: () => null, expanded: () => null }
     };
 
     api.expressionEditors.add(expandedEditor);
     api.expressionEditors.add(inlineEditor);
 
     expect(api.expressionEditors.list()).toEqual([inlineEditor, expandedEditor]);
+    expect(api.expressionEditors.list()[0]?.sourceRenderer).toBe(inlineEditor.sourceRenderer);
   });
 
   it("preserves navigation icon colors", () => {

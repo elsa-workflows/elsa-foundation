@@ -434,6 +434,8 @@ export interface StudioActivityInputUISpecifications extends Record<string, unkn
 }
 
 export interface StudioActivityInputDescriptor extends StudioActivityPropertyDescriptor {
+  /** Stable identity used to correlate authored bindings and runtime input evidence. */
+  referenceKey?: string | null;
   isWrapped?: boolean;
   uiHint?: string | null;
   defaultValue?: unknown;
@@ -629,6 +631,26 @@ export interface StudioExpressionEditorMetadata {
   packageId?: string;
 }
 
+export type StudioExpressionSourceRendererSurface = "compact" | "expanded";
+
+/** Authorized, read-only authored expression source supplied by the owning feature module. */
+export interface StudioExpressionSourceRendererContext {
+  expressionType: string;
+  value: unknown;
+  metadata: Readonly<Record<string, unknown>>;
+  isSensitive: boolean;
+  surface: StudioExpressionSourceRendererSurface;
+}
+
+export interface StudioExpressionSourceRendererProps {
+  context: StudioExpressionSourceRendererContext;
+}
+
+export interface StudioExpressionSourceRenderer {
+  compact: ComponentType<StudioExpressionSourceRendererProps>;
+  expanded: ComponentType<StudioExpressionSourceRendererProps>;
+}
+
 export interface StudioExpressionEditorContribution {
   id: string;
   order?: number;
@@ -638,6 +660,8 @@ export interface StudioExpressionEditorContribution {
   createDefaultValue?(context: StudioExpressionEditorContext): unknown;
   diagnostics?(context: StudioExpressionEditorContext, value: unknown): StudioExpressionEditorDiagnostic[];
   metadata?: StudioExpressionEditorMetadata;
+  /** Optional semantic rendering for authorized authored source, selected through this contribution's supports policy. */
+  sourceRenderer?: StudioExpressionSourceRenderer;
 }
 
 export type StudioAgentMode = "explain" | "build" | "troubleshoot" | "operate" | "administer";

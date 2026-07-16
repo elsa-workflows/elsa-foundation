@@ -137,9 +137,10 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai, navigate }: {
+export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], navigate }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
+  expressionEditors?: StudioExpressionEditorContribution[];
   navigate(path: string): void;
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
@@ -147,6 +148,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, navigate }: {
   return (
     <WorkflowsPageFrame
       title="Run"
+      workbench
       context={workflowExecutionId ? (
         <div className="wf-page-context">
           <span>Workflow Instance ID</span>
@@ -155,15 +157,20 @@ export function WorkflowInstanceDetailsPage({ context, ai, navigate }: {
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
 }
 
-function WorkflowsPageFrame({ title, context, children }: { title: string; context?: React.ReactNode; children: React.ReactNode }) {
+function WorkflowsPageFrame({ title, context, workbench = false, children }: {
+  title: string;
+  context?: React.ReactNode;
+  workbench?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="wf-page">
+    <section className={workbench ? "wf-page wf-page--run-workbench" : "wf-page"}>
       <div className="wf-page-header">
         <div>
           <span className="wf-kicker">Workflow management</span>

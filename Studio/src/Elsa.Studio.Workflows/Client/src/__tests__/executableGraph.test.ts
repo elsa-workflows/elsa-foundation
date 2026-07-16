@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildExecutableActivityGraph, ghostNodeLabel, isGhostFact } from "../executableGraph";
+import { buildExecutableActivityGraph, findExecutableNodeFacts, ghostNodeLabel, isGhostFact } from "../executableGraph";
 import { buildExecutableInspectorCanvas } from "../workflow-editor/WorkflowExecutableInspector";
 import { getChildSlots } from "../workflowAdapter";
 import type { ActivityNode, WorkflowExecutableNode } from "../workflowTypes";
@@ -95,6 +95,18 @@ describe("buildExecutableActivityGraph", () => {
     const ghost = (graph.root.structure?.payload.activities as ActivityNode[])[0];
     expect(ghost.activityVersionId).toBe("executable-missing:Elsa.Activities.Email.SendEmail@1.0.0");
     expect(ghostNodeLabel("Elsa.Activities.Email.SendEmail")).toBe("SendEmail");
+  });
+
+  it("attaches only the pinned authored sidecar records for each executable node", () => {
+    const graph = buildExecutableActivityGraph(sequenceRoot([executableNode()]), catalog, [
+      { executableNodeId: "exec-1", inputKey: "text-key", expressionType: "Liquid", value: "{{ customer.name }}" },
+      { executableNodeId: "other-node", inputKey: "other-key", expressionType: "Literal", value: "Other" }
+    ], [], "visible");
+
+    expect(findExecutableNodeFacts(graph, { executableNodeId: "exec-1" })).toMatchObject({
+      authoredInputsAccess: "visible",
+      authoredInputs: [{ inputKey: "text-key", expressionType: "Liquid", value: "{{ customer.name }}" }]
+    });
   });
 
   it("falls back to generic slots when the catalog cannot supply a structure facet", () => {

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
-import { getActivityExecutionInspection, getExecutable, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
+import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
@@ -20,7 +20,8 @@ import {
   type WorkflowEdgeData,
   type WorkflowNodeData
 } from "../workflowAdapter";
-import { buildExecutableActivityGraph } from "../executableGraph";
+import { buildInputInspectionRows, evaluationPhase, evaluationSequence, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
+import { buildExecutableActivityGraph, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
 import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
@@ -37,8 +38,7 @@ import {
   formatRunKind,
   formatWorkflowRunLoadError
 } from "./editorHelpers";
-import { useSidePanelLayout } from "./useSidePanelLayout";
-import { maxInspectorWidth, minInspectorWidth } from "./constants";
+import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 
 const runHistoryPageSizes = [10, 25, 50, 100] as const;
@@ -355,28 +355,41 @@ function toUtcIso(value: string) {
   return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
 }
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId, navigate }: {
+interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
+  executableGraph: ExecutableActivityGraph | null;
+}
+
+export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, navigate }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
+  expressionEditors?: StudioExpressionEditorContribution[];
   workflowExecutionId: string;
   navigate(path: string): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
-  const [data, setData] = useState<WorkflowInstanceInspectionData | null>(null);
+  const [data, setData] = useState<WorkflowInstanceWorkbenchData | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
+  const selectedActivity = findSelectedActivityExecution(data?.details.activities ?? [], selectedEvidenceId);
   const {
+    containerRef,
+    mode,
     inspectorWidth,
+    inspectorMaxWidth,
     inspectorCollapsed,
-    maximizedSidePanel,
+    inspectorMaximized,
     inspectorExpanded,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  } = useSidePanelLayout();
+    canResizeInspector,
+    mediumDrawerOpen,
+    workbenchClassName,
+    workbenchStyle,
+    closeInspector,
+    toggleInspectorCollapsed,
+    toggleInspectorMaximized,
+    startInspectorResize,
+    handleInspectorResizeKeyDown
+  } = useRunDetailLayout({ selectedActivityId: selectedActivity?.activityExecutionId });
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
 
   const load = useCallback(async () => {
@@ -390,21 +403,35 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
     setError("");
     try {
       const details = await getWorkflowInstance(context, workflowExecutionId);
-      const [executableResult, activityCatalog] = await Promise.all([
+      const [executableResult, activityCatalog, sourceResult] = await Promise.all([
         getExecutable(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
           executable => ({ executable, error: "" }),
           error => ({ executable: null, error: error instanceof Error ? error.message : String(error) })
         ),
-        listActivities(context)
+        listActivities(context),
+        details.instance.sourceReferenceId
+          ? getExecutableInputSources(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
+              sources => ({ sources, access: sources.accessState || sources.access || "allowed" }),
+              error => ({ sources: null, access: sourceAccessFromError(error) }))
+          : Promise.resolve({ sources: null, access: "unavailable" })
       ]);
       const catalog = activityCatalog.activities;
+      const executableGraph = executableResult.executable
+        ? buildExecutableActivityGraph(
+            executableResult.executable.rootActivity,
+            catalog,
+            sourceResult.sources?.authoredInputs ?? [],
+            sourceResult.sources?.compiledInputs ?? [],
+            sourceResult.access)
+        : null;
       setData({
         details,
         definitionVersion: executableResult.executable
-          ? projectPinnedExecutable(executableResult.executable, details, catalog)
+          ? projectPinnedExecutable(executableResult.executable, details, catalog, executableGraph ?? undefined)
           : null,
         definitionVersionError: executableResult.error,
-        activityCatalog: catalog
+        activityCatalog: catalog,
+        executableGraph
       });
       setSelectedEvidenceId(null);
       setFrames([]);
@@ -430,11 +457,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
 
     navigate(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
   };
-  const detailWorkbenchClassName = [
-    "wf-instance-detail-workbench",
-    inspectorCollapsed ? "inspector-collapsed" : "",
-    maximizedSidePanel === "inspector" ? "inspector-maximized" : ""
-  ].filter(Boolean).join(" ");
+  const closeResponsiveInspector = () => {
+    closeInspector();
+    requestAnimationFrame(() => focusSelectedCanvasActivity(selectedEvidenceId));
+  };
 
   return (
     <>
@@ -453,7 +479,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && data ? (
-        <div className={detailWorkbenchClassName} style={editorBodyStyle}>
+        <div ref={containerRef} className={workbenchClassName} style={workbenchStyle}>
           <WorkflowInstanceCanvas
             definitionVersion={data.definitionVersion}
             definitionVersionError={data.definitionVersionError}
@@ -463,19 +489,23 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
             onSelectEvidence={setSelectedEvidenceId}
             frames={frames}
             onNavigateToScope={setFrames}
+            inactive={mode === "medium" && mediumDrawerOpen}
           />
-          {inspectorExpanded && !maximizedSidePanel ? (
+          {mediumDrawerOpen ? (
+            <button type="button" className="wf-run-inspector-backdrop" aria-label="Close run details" onClick={closeResponsiveInspector} />
+          ) : null}
+          {canResizeInspector ? (
             <div
               className="wf-side-resize-handle right"
               role="separator"
               aria-label="Resize run details panel"
               aria-orientation="vertical"
-              aria-valuemin={minInspectorWidth}
-              aria-valuemax={maxInspectorWidth}
+              aria-valuemin={runDetailMinInspectorWidth}
+              aria-valuemax={inspectorMaxWidth}
               aria-valuenow={inspectorWidth}
               tabIndex={0}
-              onPointerDown={event => startSidePanelResize("inspector", event)}
-              onKeyDown={event => handleSidePanelResizeKeyDown("inspector", event)}
+              onPointerDown={startInspectorResize}
+              onKeyDown={handleInspectorResizeKeyDown}
             />
           ) : <div className="wf-side-resize-spacer" />}
           <WorkflowInstanceInspector
@@ -487,13 +517,18 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
             selectedEvidenceId={selectedEvidenceId}
             onSelectEvidence={setSelectedEvidenceId}
             activityCatalog={data.activityCatalog}
+            executableGraph={data.executableGraph}
+            expressionEditors={expressionEditors}
             graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
             rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
             collapsed={inspectorCollapsed}
             expanded={inspectorExpanded}
-            maximized={maximizedSidePanel === "inspector"}
-            onToggleCollapsed={() => toggleSidePanelCollapsed("inspector")}
-            onToggleMaximized={() => toggleSidePanelMaximized("inspector")}
+            maximized={inspectorMaximized}
+            layoutMode={mode}
+            responsiveOpen={mode === "medium" ? mediumDrawerOpen : mode === "narrow" && inspectorExpanded}
+            onCloseResponsive={closeResponsiveInspector}
+            onToggleCollapsed={toggleInspectorCollapsed}
+            onToggleMaximized={toggleInspectorMaximized}
           />
         </div>
       ) : null}
@@ -504,7 +539,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
 export function projectPinnedExecutable(
   executable: WorkflowExecutableDetails,
   details: WorkflowInstanceDetails,
-  catalog: ActivityCatalogItem[]
+  catalog: ActivityCatalogItem[],
+  executableGraph?: ExecutableActivityGraph
 ): WorkflowDefinitionVersionDetails {
   const timestamp = executable.createdAt ?? details.instance.createdAt;
   return {
@@ -517,9 +553,19 @@ export function projectPinnedExecutable(
       createdAt: timestamp,
       lastModifiedAt: timestamp
     },
-    state: { rootActivity: buildExecutableActivityGraph(executable.rootActivity, catalog).root },
+    state: { rootActivity: (executableGraph ?? buildExecutableActivityGraph(executable.rootActivity, catalog)).root },
     layout: executable.chosenReference?.layout ?? []
   };
+}
+
+function sourceAccessFromError(error: unknown) {
+  const status = typeof error === "object" && error !== null && "status" in error
+    ? Number((error as { status?: unknown }).status)
+    : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+  return status === 401 || status === 403 || /forbidden|permission|unauthori[sz]ed/i.test(message)
+    ? "permissionHidden"
+    : "unavailable";
 }
 
 function WorkflowInstanceCanvas({
@@ -530,7 +576,8 @@ function WorkflowInstanceCanvas({
   selectedEvidenceId,
   onSelectEvidence,
   frames,
-  onNavigateToScope
+  onNavigateToScope,
+  inactive = false
 }: {
   definitionVersion: WorkflowDefinitionVersionDetails | null;
   definitionVersionError: string;
@@ -540,6 +587,7 @@ function WorkflowInstanceCanvas({
   onSelectEvidence(evidenceId: string | null): void;
   frames: ScopeFrame[];
   onNavigateToScope(frames: ScopeFrame[]): void;
+  inactive?: boolean;
 }) {
   const scopeKey = getInstanceScopeKey(frames);
   const canvas = useMemo(
@@ -548,7 +596,7 @@ function WorkflowInstanceCanvas({
   );
 
   return (
-    <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas">
+    <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas" aria-hidden={inactive || undefined} inert={inactive || undefined}>
       <header>
         <div>
           <span>Pinned Runtime executable</span>
@@ -670,9 +718,14 @@ function WorkflowInstanceInspector({
   graphNodeIds,
   rootNodeId,
   activityCatalog = [],
+  executableGraph,
+  expressionEditors = [],
   collapsed = false,
   expanded = true,
   maximized = false,
+  layoutMode = "desktop",
+  responsiveOpen = false,
+  onCloseResponsive,
   onToggleCollapsed,
   onToggleMaximized
 }: {
@@ -686,13 +739,26 @@ function WorkflowInstanceInspector({
   graphNodeIds?: Set<string>;
   rootNodeId?: string | null;
   activityCatalog?: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
+  expressionEditors?: StudioExpressionEditorContribution[];
   collapsed?: boolean;
   expanded?: boolean;
   maximized?: boolean;
+  layoutMode?: RunDetailLayoutMode;
+  responsiveOpen?: boolean;
+  onCloseResponsive?(): void;
   onToggleCollapsed?(): void;
   onToggleMaximized?(): void;
 }) {
   const [activeTab, setActiveTab] = useState<InstanceInspectorTab>("timeline");
+  const inspectorRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!responsiveOpen) return;
+    const inspector = inspectorRef.current;
+    const firstControl = inspector?.querySelector<HTMLElement>("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])");
+    requestAnimationFrame(() => (firstControl ?? inspector)?.focus());
+  }, [responsiveOpen]);
 
   if (!summary) {
     return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow run to inspect its timeline.</div></aside>;
@@ -712,10 +778,36 @@ function WorkflowInstanceInspector({
   ];
 
   return (
-    <aside className="wf-instance-inspector" aria-label="Run details panel">
+    <aside
+      ref={inspectorRef}
+      className="wf-instance-inspector"
+      aria-label="Run details panel"
+      role={layoutMode === "medium" ? "dialog" : undefined}
+      aria-modal={layoutMode === "medium" ? true : undefined}
+      tabIndex={layoutMode === "medium" ? -1 : undefined}
+      onKeyDown={event => {
+        if (layoutMode === "medium" && event.key === "Escape") {
+          event.preventDefault();
+          onCloseResponsive?.();
+        }
+        if (layoutMode === "medium" && event.key === "Tab") trapFocusWithin(event, inspectorRef.current);
+      }}
+    >
       <div className="wf-panel-title wf-instance-panel-title">
         <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => setActiveTab(tabId as InstanceInspectorTab)} />
         <span className="wf-panel-actions">
+          {layoutMode !== "desktop" ? (
+            <button
+              type="button"
+              className="wf-panel-action-button"
+              aria-label={layoutMode === "narrow" ? "Back to workflow run canvas" : "Close run details panel"}
+              title={layoutMode === "narrow" ? "Back to canvas" : "Close"}
+              onClick={onCloseResponsive}
+            >
+              <ChevronLeft size={14} />
+            </button>
+          ) : null}
+          {layoutMode === "desktop" ? (
           <button
             type="button"
             className="wf-panel-action-button"
@@ -725,7 +817,8 @@ function WorkflowInstanceInspector({
           >
             {collapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
           </button>
-          {!collapsed ? (
+          ) : null}
+          {layoutMode === "desktop" && !collapsed ? (
             <button
               type="button"
               className="wf-panel-action-button"
@@ -752,7 +845,13 @@ function WorkflowInstanceInspector({
                   onSelectEvidence={openActivityEvidence}
                 />
               ) : activeTab === "activity" ? (
-                <WorkflowActivityExecutionDetails context={context} activity={selectedActivity} activityCatalog={activityCatalog} />
+                <WorkflowActivityExecutionDetails
+                  context={context}
+                  activity={selectedActivity}
+                  activityCatalog={activityCatalog}
+                  executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}
+                  expressionEditors={expressionEditors}
+                />
               ) : activeTab === "issues" ? (
                 <>
                   <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
@@ -798,6 +897,35 @@ function findSelectedActivityExecution(activities: ActivityExecutionStateSummary
   return nodeActivities.length > 0 ? latestActivityExecution(nodeActivities) : null;
 }
 
+function focusSelectedCanvasActivity(selectedEvidenceId: string | null) {
+  if (!selectedEvidenceId) return;
+  const node = [...document.querySelectorAll<HTMLElement>(".wf-instance-canvas [data-id]")]
+    .find(element => element.dataset.id === selectedEvidenceId);
+  node?.focus();
+}
+
+function trapFocusWithin(event: ReactKeyboardEvent<HTMLElement>, container: HTMLElement | null) {
+  if (!container) return;
+  const controls = [...container.querySelectorAll<HTMLElement>(
+    "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+  )].filter(element => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+  if (controls.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = controls[0]!;
+  const last = controls.at(-1)!;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 type ActivityExecutionInspectionState = {
   activityExecutionId: string | null;
   status: "idle" | "loading" | "ready" | "failed";
@@ -805,10 +933,18 @@ type ActivityExecutionInspectionState = {
   error: string;
 };
 
-export function WorkflowActivityExecutionDetails({ context, activity, activityCatalog }: {
+export function WorkflowActivityExecutionDetails({
+  context,
+  activity,
+  activityCatalog,
+  executableNodeFacts,
+  expressionEditors = []
+}: {
   context: StudioEndpointContext;
   activity: ActivityExecutionStateSummary | null;
   activityCatalog: ActivityCatalogItem[];
+  executableNodeFacts?: ExecutableGraphNodeFacts;
+  expressionEditors?: StudioExpressionEditorContribution[];
 }) {
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
@@ -862,6 +998,7 @@ export function WorkflowActivityExecutionDetails({ context, activity, activityCa
   }
 
   const catalogItem = activityCatalog.find(item => item.activityTypeKey === activity.activityType);
+  const declaredInputs = readDeclaredActivityInputs(catalogItem?.inputs);
   const activityLabel = catalogItem?.displayName || shortTypeName(activity.activityType) || activity.activityType;
   const activityTypeLabel = shortTypeName(activity.activityType) ?? activity.activityType;
   const statusLabel = [activity.status, activity.subStatus].filter(Boolean).join(" · ");
@@ -921,6 +1058,23 @@ export function WorkflowActivityExecutionDetails({ context, activity, activityCa
           <ActivityMetadataValue label="Incidents" value={String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
         </dl>
 
+        {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
+      </section>
+      <WorkflowActivityInputEvidence
+        state={inspectionState}
+        declarations={declaredInputs}
+        executableNodeFacts={executableNodeFacts}
+        expressionEditors={expressionEditors}
+      />
+      <WorkflowActivityValueEvidence
+        state={inspectionState}
+        subject="ActivityOutput"
+        title="Outputs"
+        loadingText="Loading runtime output evidence..."
+        failureText="Runtime output evidence is unavailable."
+        emptyText="No runtime output snapshots were recorded for this execution."
+      />
+      <section className="wf-instance-section">
         <details className="wf-activity-execution-details">
           <summary>
             <span>Execution details</span>
@@ -933,26 +1087,17 @@ export function WorkflowActivityExecutionDetails({ context, activity, activityCa
             <ActivityMetadataValue label="Bookmarks" value={String(bookmarkCount)} copiedLabel="bookmark count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           </dl>
         </details>
-        {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
-      <WorkflowActivityValueEvidence
-        state={inspectionState}
-        subject="ActivityInput"
-        title="Inputs"
-        loadingText="Loading runtime input evidence..."
-        failureText="Runtime input evidence is unavailable."
-        emptyText="No runtime input snapshots were recorded for this execution."
-      />
-      <WorkflowActivityValueEvidence
-        state={inspectionState}
-        subject="ActivityOutput"
-        title="Outputs"
-        loadingText="Loading runtime output evidence..."
-        failureText="Runtime output evidence is unavailable."
-        emptyText="No runtime output snapshots were recorded for this execution."
-      />
     </>
   );
+}
+
+function readDeclaredActivityInputs(inputs: unknown[] | undefined): StudioActivityInputDescriptor[] {
+  return (inputs ?? []).filter((input): input is StudioActivityInputDescriptor => {
+    if (!input || typeof input !== "object") return false;
+    const record = input as Record<string, unknown>;
+    return typeof record.name === "string" && typeof record.typeName === "string";
+  });
 }
 
 function ActivityMetadataValue({
@@ -987,6 +1132,289 @@ function ActivityMetadataValue({
       </dd>
     </div>
   );
+}
+
+function WorkflowActivityInputEvidence({
+  state,
+  declarations,
+  executableNodeFacts,
+  expressionEditors
+}: {
+  state: ActivityExecutionInspectionState;
+  declarations: StudioActivityInputDescriptor[];
+  executableNodeFacts?: ExecutableGraphNodeFacts;
+  expressionEditors: StudioExpressionEditorContribution[];
+}) {
+  if (state.status === "idle") return null;
+
+  const evaluations = state.status === "ready"
+    ? (state.inspection?.valueSnapshots ?? []).filter(snapshot => snapshot.subject === "ActivityInput")
+    : [];
+  const rows = buildInputInspectionRows({
+    declarations,
+    authoredSources: executableNodeFacts?.authoredInputs ?? [],
+    compiledBindings: executableNodeFacts?.inputBindings ?? [],
+    evaluations,
+    authoredSourceAccess: executableNodeFacts?.authoredInputsAccess
+  });
+
+  return (
+    <section className="wf-instance-section">
+      <header className="wf-runtime-evidence-heading">
+        <h4>
+          Inputs
+          {rows.length > 0 ? <span className="wf-runtime-evidence-count" aria-label={`${rows.length} inputs`}>{rows.length}</span> : null}
+        </h4>
+        <span className="wf-runtime-capture-mode">Paired evidence</span>
+      </header>
+      {state.status === "loading" ? <p>Loading runtime input evidence...</p> : null}
+      {state.status === "failed" ? (
+        <>
+          <p>Runtime input evidence is unavailable. Authored source remains independently inspectable where permitted.</p>
+          {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
+        </>
+      ) : null}
+      {rows.length === 0 && state.status === "ready" ? <p>No declared inputs, pinned bindings, or runtime input evidence are available for this execution.</p> : null}
+      {rows.length > 0 ? (
+        <div className="wf-runtime-input-list" role="list">
+          {rows.map(row => (
+            <InputInspectionRowCard
+              key={row.rowKey}
+              row={row}
+              sourceAccess={executableNodeFacts?.authoredInputsAccess}
+              expressionEditors={expressionEditors}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function InputInspectionRowCard({
+  row,
+  sourceAccess,
+  expressionEditors
+}: {
+  row: InputInspectionRow;
+  sourceAccess?: string | null;
+  expressionEditors: StudioExpressionEditorContribution[];
+}) {
+  const latest = row.latestEvaluation;
+  const sourceKind = row.authoredSource?.expressionType || row.compiledBinding?.source || "No source";
+  const sourceProtected = isProtectedSourceAccess(sourceAccess) || isProtectedSourceAccess(row.authoredSource?.accessState ?? row.authoredSource?.access) || !!row.authoredSource?.isSensitive || !!row.compiledBinding?.isSensitive || !!latest?.isSensitive;
+  const regionId = `input-inspection-${safeDomId(row.rowKey)}`;
+
+  return (
+    <details className="wf-runtime-input" role="listitem">
+      <summary aria-controls={regionId}>
+        <span>
+          <strong>{row.name}</strong>
+          <small>{row.declaredType || "Unknown type"}</small>
+        </span>
+        <span>
+          <small>Evaluated at runtime</small>
+          <code>{runtimeEvidencePreview(latest)}</code>
+        </span>
+        <span>
+          <small>{sourceKind}</small>
+          <code>{sourcePreview(row, sourceProtected, sourceAccess)}</code>
+        </span>
+      </summary>
+      <div id={regionId} className="wf-runtime-input-content">
+        {row.states.length > 0 ? (
+          <p className="wf-instance-note">{row.states.map(formatInputInspectionState).join(" · ")}</p>
+        ) : null}
+        <section aria-label={`${row.name} runtime evidence`}>
+          <h5>Evaluated at runtime</h5>
+          {latest ? <RuntimeValueEvidenceCard snapshot={latest} listItem={false} /> : <p>No runtime evaluation was recorded.</p>}
+          {row.evaluations.length > 1 ? <InputEvaluationHistory evaluations={row.evaluations} /> : null}
+        </section>
+        <section aria-label={`${row.name} authored source`}>
+          <h5>Authored source</h5>
+          <AuthoredInputSource
+            row={row}
+            sourceAccess={sourceAccess}
+            protectedSource={sourceProtected}
+            expressionEditors={expressionEditors}
+          />
+        </section>
+      </div>
+    </details>
+  );
+}
+
+function InputEvaluationHistory({ evaluations }: { evaluations: ActivityExecutionInspectionValueSnapshot[] }) {
+  return (
+    <details>
+      <summary>Evaluation history ({evaluations.length})</summary>
+      <ol>
+        {evaluations.map((evaluation, index) => (
+          <li key={evaluation.evaluationId || `${evaluation.capturedAt}:${index}`}>
+            <strong>{evaluationPhase(evaluation) ? formatCaptureMode(evaluationPhase(evaluation)!) : "Unknown phase"}</strong>
+            {typeof evaluationSequence(evaluation) === "number" ? ` · sequence ${evaluationSequence(evaluation)}` : " · legacy sequence"}
+            {` · ${formatDate(evaluation.capturedAt)}`}
+            {evaluation.failure?.code ? ` · ${evaluation.failure.code}` : ""}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
+function AuthoredInputSource({
+  row,
+  sourceAccess,
+  protectedSource,
+  expressionEditors
+}: {
+  row: InputInspectionRow;
+  sourceAccess?: string | null;
+  protectedSource: boolean;
+  expressionEditors: StudioExpressionEditorContribution[];
+}) {
+  if (protectedSource) {
+    return <p>{isProtectedSourceAccess(sourceAccess) ? "Authored source is hidden by source permissions." : "Authored source is protected because this input is sensitive."}</p>;
+  }
+
+  const source = row.authoredSource;
+  const expressionType = source?.expressionType || "Unknown";
+  const fallback = source ? <GenericExpressionSource expressionType={expressionType} value={source.value} expanded /> : null;
+  const renderer = source ? resolveExpressionSourceRenderer(expressionEditors, row, expressionType) : undefined;
+  const Renderer = renderer?.sourceRenderer?.expanded;
+  const rendererContext: StudioExpressionSourceRendererContext | undefined = source ? {
+    expressionType,
+    value: source.value,
+    metadata: {},
+    isSensitive: !!source.isSensitive,
+    surface: "expanded"
+  } : undefined;
+
+  return (
+    <>
+      {source && Renderer && rendererContext ? (
+        <ExpressionSourceRendererBoundary fallback={fallback}>
+          <Renderer context={rendererContext} />
+        </ExpressionSourceRendererBoundary>
+      ) : fallback ?? <p>No authored source is available for this pinned Source Reference.</p>}
+      {row.compiledBinding ? (
+        <details>
+          <summary>Compiled binding ({row.compiledBinding.source || "Unknown"})</summary>
+          <GenericExpressionSource expressionType={row.compiledBinding.source || "Unknown"} value={compiledBindingDetails(row.compiledBinding)} expanded />
+        </details>
+      ) : <p className="wf-instance-note">No compiled binding is available.</p>}
+    </>
+  );
+}
+
+class ExpressionSourceRendererBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+function resolveExpressionSourceRenderer(
+  expressionEditors: StudioExpressionEditorContribution[],
+  row: InputInspectionRow,
+  expressionType: string
+) {
+  const descriptor = row.declaration ?? {
+    name: row.name,
+    displayName: row.name,
+    typeName: row.declaredType || "System.Object",
+    referenceKey: row.inputKey
+  };
+  const context = {
+    syntax: expressionType,
+    surface: "expanded" as const,
+    descriptor,
+    activity: null,
+    expressionDescriptors: [],
+    readOnly: true
+  };
+
+  return expressionEditors.find(editor => {
+    if (!editor.sourceRenderer) return false;
+    try {
+      return editor.supports(context);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function GenericExpressionSource({ expressionType, value, expanded = false }: { expressionType: string; value: unknown; expanded?: boolean }) {
+  const text = formatSnapshotPayload(value);
+  const bounded = text.length > 4_000 ? `${text.slice(0, 3_997)}...` : text;
+  return (
+    <div>
+      <small>{expressionType || "Unknown expression"}</small>
+      {expanded && (bounded.includes("\n") || bounded.length > 160) ? <pre>{bounded}</pre> : <code>{bounded}</code>}
+    </div>
+  );
+}
+
+function compiledBindingDetails(binding: ExecutableGraphNodeFacts["inputBindings"][number]) {
+  const { inputName: _inputName, inputKey: _inputKey, summary: _summary, ...details } = binding;
+  return details;
+}
+
+function runtimeEvidencePreview(snapshot: ActivityExecutionInspectionValueSnapshot | undefined) {
+  if (!snapshot) return "Not evaluated";
+  if (snapshot.failure) return snapshot.failure.code || "Evaluation failed";
+  const access = snapshot.accessState ?? snapshot.access;
+  if (access && access.toLowerCase() !== "visible" && access.toLowerCase() !== "allowed") return formatCaptureMode(access);
+  if (snapshot.isSensitive) return "Protected value";
+  const node = snapshot.snapshot;
+  if (node && isKnownSnapshotNode(node) && node.kind === "string") return previewSnapshotPayload(node.preview ?? "");
+  if (node && isKnownSnapshotNode(node) && (node.kind === "scalar" || node.kind === "number")) return previewSnapshotPayload(formatSnapshotPayload(node.value));
+  if (node) return formatSnapshotKind(node.kind);
+  if (snapshot.captureMode === "Payload" && snapshot.payload !== undefined) return previewSnapshotPayload(formatSnapshotPayload(snapshot.payload));
+  return snapshot.captureReason || formatCaptureMode(snapshot.state || snapshot.captureMode);
+}
+
+function sourcePreview(row: InputInspectionRow, protectedSource: boolean, sourceAccess?: string | null) {
+  if (protectedSource) return isProtectedSourceAccess(sourceAccess) ? "Source hidden" : "Protected source";
+  if (!row.authoredSource) return row.compiledBinding ? "Compiled source only" : "Source unavailable";
+  return previewSnapshotPayload(formatSnapshotPayload(row.authoredSource.value));
+}
+
+function isProtectedSourceAccess(access: string | null | undefined) {
+  if (!access) return false;
+  const normalized = access.toLowerCase();
+  return normalized !== "visible" && normalized !== "allowed";
+}
+
+function safeDomId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function formatInputInspectionState(state: InputInspectionState) {
+  const labels: Record<InputInspectionState, string> = {
+    missingDeclaration: "Declaration unavailable",
+    missingAuthoredSource: "Authored source unavailable",
+    missingCompiledBinding: "Compiled binding unavailable",
+    noEvaluation: "Not evaluated",
+    orphanEvidence: "Orphan runtime evidence",
+    compiledOnly: "Compiled source only",
+    sourceUnavailable: "Source unavailable",
+    duplicateKey: "Duplicate input key",
+    legacyIdentity: "Legacy name-only identity",
+    redacted: "Redacted",
+    permissionHidden: "Permission hidden",
+    metadataOnly: "Metadata only",
+    unavailable: "Unavailable",
+    unsupported: "Unsupported snapshot",
+    truncated: "Truncated snapshot",
+    failedEvaluation: "Evaluation failed"
+  };
+  return labels[state];
 }
 
 function WorkflowActivityValueEvidence({
@@ -1058,21 +1486,26 @@ function WorkflowActivityValueEvidence({
   );
 }
 
-function RuntimeValueEvidenceCard({ snapshot }: { snapshot: ActivityExecutionInspectionValueSnapshot }) {
+function RuntimeValueEvidenceCard({ snapshot, listItem = true }: { snapshot: ActivityExecutionInspectionValueSnapshot; listItem?: boolean }) {
   const typeName = snapshot.type?.displayName || snapshot.type?.typeName || snapshot.type?.alias || "Unknown";
   const diagnosticSnapshot = snapshot.snapshot ?? (snapshot.captureMode === "DiagnosticSnapshot" ? snapshot.payload : null);
   const hasPayload = snapshot.captureMode === "Payload" && snapshot.payload !== undefined;
 
   return (
-    <article className="wf-runtime-input" role="listitem">
+    <article className="wf-runtime-input" role={listItem ? "listitem" : undefined}>
       <header>
         <span>
           <strong>{snapshot.name}</strong>
           <small>{typeName}</small>
         </span>
+        <small>{formatCaptureMode(snapshot.captureMode)}</small>
       </header>
       <div className="wf-runtime-input-content">
-        {isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
+        {snapshot.isSensitive && !isProtectedDiagnosticSnapshot(diagnosticSnapshot) ? (
+          <p>Runtime value is protected because this input is sensitive.</p>
+        ) : snapshot.failure ? (
+          <p>{snapshot.failure.message || snapshot.failure.code || "The input could not be evaluated."}{snapshot.failure.incidentId ? ` Incident ${snapshot.failure.incidentId}.` : ""}</p>
+        ) : isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
           <DiagnosticSnapshotTree node={diagnosticSnapshot} />
         ) : hasPayload ? (
           <RuntimeInputPayload payload={snapshot.payload} />
@@ -1218,10 +1651,18 @@ function formatSnapshotKind(kind: string) {
 }
 
 function formatEvidenceMessage(snapshot: ActivityExecutionInspectionValueSnapshot) {
+  const access = snapshot.accessState ?? snapshot.access;
+  if (access === "redacted") return "Runtime value evidence is redacted.";
+  if (access === "unavailable") return "Runtime value evidence is unavailable.";
+  if (access === "permissionHidden" || access === "permission-hidden") return "Runtime value evidence is hidden by permissions.";
   if (snapshot.state === "permissionHidden") return "Runtime value evidence is hidden by permissions.";
   if (snapshot.state === "metadataOnly") return snapshot.captureReason || "Runtime value evidence is metadata-only.";
   if (snapshot.state === "notCaptured") return snapshot.captureReason || "Runtime value evidence was not captured.";
   return snapshot.captureReason || "The runtime capture policy did not include this value.";
+}
+
+function isProtectedDiagnosticSnapshot(value: unknown) {
+  return isDiagnosticSnapshotNode(value) && (value.kind === "redacted" || value.kind === "permissionHidden");
 }
 
 function isDiagnosticSnapshotNode(value: unknown): value is DiagnosticSnapshotNode {

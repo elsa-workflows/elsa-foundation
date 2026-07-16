@@ -4,7 +4,7 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { listDefinitions } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { preflightPublication, preflightPublicationSnapshot, startWorkflowDraftTestRun } from "../api/publishing";
-import { getExecutable, listExecutables, runExecutable } from "../api/runtime";
+import { getExecutable, getExecutableInputSources, listExecutables, runExecutable } from "../api/runtime";
 import { parseWorkflowRunInputs } from "../workflowRunInputs";
 import type { WorkflowInput } from "../workflowTypes";
 
@@ -37,6 +37,7 @@ const capabilities = {
       links: [
         { rel: "workflow-executables", href: "runtime/workflows/executables" },
         { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
+        { rel: "workflow-executable-input-sources", href: "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true },
         { rel: "workflow-execute", href: "runtime/workflows/executables/{artifactId}/execute", templated: true }
       ]
     }
@@ -198,6 +199,17 @@ describe("canonical domain clients", () => {
 
     expect(getJson).toHaveBeenLastCalledWith(
       "/runtime/workflows/executables/artifact%2F1?ref=reference%2Fold"
+    );
+  });
+
+  it("requests pinned authored and compiled input source through its separately protected relation", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+
+    await getExecutableInputSources(context, "artifact/1", "reference/old");
+
+    expect(getJson).toHaveBeenLastCalledWith(
+      "/runtime/workflows/executables/artifact%2F1/source-references/reference%2Fold/input-sources"
     );
   });
 });

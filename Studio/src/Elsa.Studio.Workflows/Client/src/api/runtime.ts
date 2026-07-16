@@ -7,6 +7,7 @@ import type {
   RuntimeDiagnosticsSubjectOverrides,
   SaveRuntimeDiagnosticsSettingsRequest,
   WorkflowExecutableDetails,
+  WorkflowExecutableInputSources,
   WorkflowExecutableListScope,
   WorkflowExecutableRunResponse,
   WorkflowExecutableSummary,
@@ -96,6 +97,19 @@ export async function getExecutable(
     { artifactId });
   const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
   return context.http.getJson<WorkflowExecutableDetails>(`${path}${query}`);
+}
+
+export async function getExecutableInputSources(
+  context: StudioEndpointContext,
+  artifactId: string,
+  sourceReferenceId: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "workflow-executable-input-sources",
+    { artifactId, sourceReferenceId });
+  return context.http.getJson<WorkflowExecutableInputSources>(path);
 }
 
 export async function getExecutableProvenance(context: StudioEndpointContext, artifactId: string) {
