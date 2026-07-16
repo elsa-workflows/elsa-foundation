@@ -57,16 +57,16 @@ public sealed class While : ActivityBase, IActivityChildCompletionHandler
     public const string StructureSchemaVersion = "1.0.0";
 
     /// <summary>The boolean condition evaluated before each pass; the body runs while it holds.</summary>
-    public InputArgument<bool> Condition { get; set; } = null!;
+    [ActivityInput(Key = nameof(Condition))]
+    public bool Condition { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
         var navigator = WhileNavigator.From(runtimeContext.ExecutableNode);
-        var condition = context.Get(Condition);
 
         // First condition evaluation: false on entry means the body never runs.
-        ContinueOrComplete(runtimeContext, navigator, condition, completedChildActivityExecutionId: null);
+        ContinueOrComplete(runtimeContext, navigator, Condition, completedChildActivityExecutionId: null);
     }
 
     public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
@@ -93,9 +93,7 @@ public sealed class While : ActivityBase, IActivityChildCompletionHandler
         // The runtime re-materializes this composite's inputs for every child-completion evaluation, so
         // this read reflects any state the body mutated this pass: the condition is re-evaluated before
         // the next pass.
-        var condition = context.ParentContext.Get(Condition);
-
-        ContinueOrComplete(runtimeContext, navigator, condition, context.CompletedChildActivityExecutionId);
+        ContinueOrComplete(runtimeContext, navigator, Condition, context.CompletedChildActivityExecutionId);
         return ValueTask.CompletedTask;
     }
 

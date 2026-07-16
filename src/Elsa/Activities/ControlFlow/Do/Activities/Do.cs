@@ -67,7 +67,8 @@ public sealed class Do : ActivityBase, IActivityChildCompletionHandler
     public const string BreakOutcome = ActivityOutcomes.Break;
 
     /// <summary>The boolean condition evaluated after each pass; the body repeats while it holds.</summary>
-    public InputArgument<bool> Condition { get; set; } = null!;
+    [ActivityInput(Key = nameof(Condition))]
+    public bool Condition { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
@@ -108,9 +109,7 @@ public sealed class Do : ActivityBase, IActivityChildCompletionHandler
         // The runtime re-materializes this composite's inputs for every child-completion evaluation, so
         // this read reflects any state the body mutated this pass: the condition is re-evaluated after the
         // just-completed pass and the body repeats while it holds.
-        var condition = context.ParentContext.Get(Condition);
-
-        if (!condition || navigator.Body is not { } body)
+        if (!Condition || navigator.Body is not { } body)
         {
             runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
             return ValueTask.CompletedTask;

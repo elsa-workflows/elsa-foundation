@@ -294,7 +294,8 @@ public sealed record ActivityTriggerRegistration
         ValueTypeDescriptor payloadType,
         string stimulusType,
         string stimulusHash,
-        ActivityTriggerDeduplicationPolicy deduplicationPolicy)
+        ActivityTriggerDeduplicationPolicy deduplicationPolicy,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(registrationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
@@ -310,6 +311,7 @@ public sealed record ActivityTriggerRegistration
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
         DeduplicationPolicy = deduplicationPolicy;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
     public string RegistrationId { get; }
@@ -319,6 +321,7 @@ public sealed record ActivityTriggerRegistration
     public string StimulusType { get; }
     public string StimulusHash { get; }
     public ActivityTriggerDeduplicationPolicy DeduplicationPolicy { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
 }
 
 public enum ActivityTriggerDeduplicationPolicy

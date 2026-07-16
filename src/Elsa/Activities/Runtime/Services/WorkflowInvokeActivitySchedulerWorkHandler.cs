@@ -261,6 +261,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
                     ActivityOutputPublisher.BuildOutputArguments(executableNode),
                     cancellationToken);
+                serviceProvider.GetRequiredService<ActivityInputHydrator>().Hydrate(activity, inputs);
             }
 
             activity.NodeId = executableNode.ExecutableNodeId;
@@ -820,7 +821,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 registration.RegistrationId,
                 registration.ResumeTargetKey,
                 registration.StimulusType,
-                registration.StimulusHash))
+                registration.StimulusHash,
+                metadata: registration.Metadata))
             .ToArray();
         var bookmarkWorkItems = NewBookmarkCreationWorkItems(
                 invokeWorkItem,

@@ -550,7 +550,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 payload: null,
                 expiresAt: null,
                 reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
-                metadata: null,
+                metadata: registration.Metadata,
                 valueSnapshots: [],
                 durableValueChanges: []);
 

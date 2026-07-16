@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -142,6 +144,75 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
 }
 
 /// <summary>
+/// Author-facing stateful trigger base that exposes a validated typed start payload and routing semantics without
+/// leaking the engine's raw JSON carrier or trigger-node identity.
+/// </summary>
+public abstract class StatefulTriggerActivity<TResult, TState, TTrigger> :
+    StatefulActivity<TResult, TState, TTrigger>
+{
+    protected sealed override ValueTask<ActivityTransition<TResult, TState>> ExecuteAsync(ActivityExecutionContext context) =>
+        ExecuteAsync(ActivityStartContext<TTrigger>.Create(context));
+
+    /// <summary>Runs the initial attempt with an optional validated typed trigger delivery.</summary>
+    protected abstract ValueTask<ActivityTransition<TResult, TState>> ExecuteAsync(ActivityStartContext<TTrigger> context);
+}
+
+/// <summary>Frozen identity and typed trigger input for an initial trigger-activity attempt.</summary>
+public sealed class ActivityStartContext<TTrigger>
+{
+    private readonly TTrigger? _trigger;
+
+    private ActivityStartContext(ActivityExecutionContext attempt, bool hasTrigger, TTrigger? trigger)
+    {
+        WorkflowExecutionId = attempt.WorkflowExecutionId;
+        InvocationId = attempt.InvocationId;
+        AttemptId = attempt.AttemptId;
+        ExecutableNodeId = attempt.ExecutableNodeId;
+        CancellationToken = attempt.CancellationToken;
+        IsDirectInvocation = attempt.TriggerNodeId is null;
+        IsTriggerDelivery = StringComparer.Ordinal.Equals(attempt.TriggerNodeId, attempt.ExecutableNodeId);
+        HasTrigger = hasTrigger;
+        _trigger = trigger;
+    }
+
+    public string WorkflowExecutionId { get; }
+    public string InvocationId { get; }
+    public string AttemptId { get; }
+    public string ExecutableNodeId { get; }
+    public CancellationToken CancellationToken { get; }
+    public bool IsDirectInvocation { get; }
+    public bool IsTriggerDelivery { get; }
+    public bool HasTrigger { get; }
+
+    public bool TryGetTrigger([MaybeNullWhen(false)] out TTrigger trigger)
+    {
+        trigger = _trigger;
+        return HasTrigger;
+    }
+
+    internal static ActivityStartContext<TTrigger> Create(ActivityExecutionContext attempt)
+    {
+        if (!StringComparer.Ordinal.Equals(attempt.TriggerNodeId, attempt.ExecutableNodeId))
+            return new ActivityStartContext<TTrigger>(attempt, false, default);
+
+        if (attempt.TriggerPayload is not { } payload || payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return new ActivityStartContext<TTrigger>(attempt, false, default);
+
+        try
+        {
+            var trigger = payload.Deserialize<TTrigger>();
+            return trigger is null
+                ? new ActivityStartContext<TTrigger>(attempt, false, default)
+                : new ActivityStartContext<TTrigger>(attempt, true, PersistableActivityValue.SnapshotAndMaterialize(trigger, "start trigger"));
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        {
+            return new ActivityStartContext<TTrigger>(attempt, false, default);
+        }
+    }
+}
+
+/// <summary>
 /// Frozen, engine-owned input to one stateful resume attempt. It contains no services, mutable
 /// workflow values, or runtime persistence records.
 /// </summary>
@@ -232,7 +303,8 @@ public sealed record ActivityTriggerRegistration<TTrigger> : IActivityTriggerReg
         string stimulusType,
         string stimulusHash,
         ActivityTriggerDeduplicationMode deduplicationMode = ActivityTriggerDeduplicationMode.Once,
-        int payloadSchemaVersion = 1)
+        int payloadSchemaVersion = 1,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resumeTargetKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
@@ -244,6 +316,8 @@ public sealed record ActivityTriggerRegistration<TTrigger> : IActivityTriggerReg
         StimulusHash = stimulusHash;
         DeduplicationMode = deduplicationMode;
         PayloadType = PersistableActivityValue.Descriptor(typeof(TTrigger), payloadSchemaVersion);
+        Metadata = new ReadOnlyDictionary<string, string>(
+            new Dictionary<string, string>(metadata ?? new Dictionary<string, string>(), StringComparer.Ordinal));
     }
 
     public string ResumeTargetKey { get; }
@@ -251,6 +325,7 @@ public sealed record ActivityTriggerRegistration<TTrigger> : IActivityTriggerReg
     public string StimulusHash { get; }
     public ActivityTriggerDeduplicationMode DeduplicationMode { get; }
     public ValueTypeDescriptor PayloadType { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
     public Type TriggerType => typeof(TTrigger);
 }
 
@@ -262,6 +337,7 @@ public interface IActivityTriggerRegistration
     string StimulusHash { get; }
     ActivityTriggerDeduplicationMode DeduplicationMode { get; }
     ValueTypeDescriptor PayloadType { get; }
+    IReadOnlyDictionary<string, string> Metadata { get; }
     Type TriggerType { get; }
 }
 

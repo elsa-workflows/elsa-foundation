@@ -231,7 +231,11 @@ public sealed class HttpEndpointMiddleware(
             mode: StimulusRoutingMode.StartAndResume,
             requestedBy: RequestedBy,
             matchedTriggerBindings: claimants,
-            dispatchOptions: sync ? new WorkflowExecutionCommandDispatchOptions(context.RequestServices) : null);
+            dispatchOptions: sync ? new WorkflowExecutionCommandDispatchOptions(context.RequestServices) : null,
+            payloadType: new Elsa.Primitives.Models.ValueTypeDescriptor(
+                Elsa.Primitives.Models.TypeAliasConvention.CanonicalAlias(typeof(HttpRequestModel)),
+                schemaVersion: 1),
+            providerId: HttpEndpoint.ActivityType);
 
         // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
         // genuinely take time); faults map to statuses via the endpoint fault handler seam (FR-013/FR-014).

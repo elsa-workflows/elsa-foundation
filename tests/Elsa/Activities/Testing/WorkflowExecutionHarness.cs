@@ -152,7 +152,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         string resumeTargetId,
         string stimulusType,
         string stimulusHash,
-        JsonElement? input = null)
+        JsonElement? input = null,
+        RuntimeTypedTriggerDeliveryMetadata? triggerDelivery = null)
     {
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
@@ -166,7 +167,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             stimulusType: stimulusType,
             stimulusHash: stimulusHash,
             input: input,
-            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason);
+            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason,
+            triggerDelivery: triggerDelivery);
 
         var command = new WorkflowExecutionCommand(
             CommandId: "command-resume",

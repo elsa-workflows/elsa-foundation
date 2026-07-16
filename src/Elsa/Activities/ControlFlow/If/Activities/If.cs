@@ -32,18 +32,18 @@ public sealed class If : ActivityBase, IActivityChildCompletionHandler
     public const string StructureSchemaVersion = "1.0.0";
 
     /// <summary>The boolean condition that selects the branch to run.</summary>
-    public InputArgument<bool> Condition { get; set; } = null!;
+    [ActivityInput(Key = nameof(Condition))]
+    public bool Condition { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
-        var condition = context.Get(Condition);
         var navigator = IfNavigator.From(runtimeContext.ExecutableNode);
-        var branch = navigator.Select(condition);
+        var branch = navigator.Select(Condition);
 
         if (branch is null)
         {
-            runtimeContext.CompleteCompositeActivity([Outcome(condition)]);
+            runtimeContext.CompleteCompositeActivity([Outcome(Condition)]);
             return;
         }
 

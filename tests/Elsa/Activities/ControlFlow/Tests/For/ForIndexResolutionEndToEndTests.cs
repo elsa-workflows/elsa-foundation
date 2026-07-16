@@ -145,20 +145,7 @@ public sealed class ForIndexResolutionEndToEndTests
             IDictionary<string, InputArgument>? inputs,
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken)
-        {
-            var activity = new ForActivity();
-            if (inputs is not null)
-            {
-                if (inputs.TryGetValue("Start", out var start))
-                    activity.Start = (InputArgument<int>)start;
-                if (inputs.TryGetValue("End", out var end))
-                    activity.End = (InputArgument<int>)end;
-                if (inputs.TryGetValue("Step", out var step))
-                    activity.Step = (InputArgument<int>)step;
-            }
-
-            return new(activity);
-        }
+            => new(new ForActivity());
     }
 
     private sealed record ForDescriptor;

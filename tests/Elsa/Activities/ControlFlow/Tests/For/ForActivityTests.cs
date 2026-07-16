@@ -68,7 +68,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 3, step: 1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-0", "node-body", [ActivityOutcomes.Done], completedChildIterationId: "0"));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
@@ -82,7 +82,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 3, step: 1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-2", "node-body", [ActivityOutcomes.Done], completedChildIterationId: "2"));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
@@ -95,7 +95,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 10, step: 1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-0", "node-body", [ForActivity.BreakOutcome], completedChildIterationId: "0"));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
@@ -108,7 +108,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 5, end: 0, step: -1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-5", "node-body", [ActivityOutcomes.Done], completedChildIterationId: "5"));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
@@ -148,16 +148,13 @@ public sealed class ForActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(int start, int end, int step, bool includeBody = true)
     {
-        var startInput = new InputArgument<int>(new Variable("Start", start));
-        var endInput = new InputArgument<int>(new Variable("End", end));
-        var stepInput = new InputArgument<int>(new Variable("Step", step));
         var activity = new ForActivity
         {
             Id = "actexec-for",
             NodeId = "node-for",
-            Start = startInput,
-            End = endInput,
-            Step = stepInput
+            Start = start,
+            End = end,
+            Step = step
         };
 
         var context = new SimpleActivityExecutionContext(
@@ -169,9 +166,6 @@ public sealed class ForActivityTests : IDisposable
             NewWorkItem(),
             NewForNode(includeBody),
             NewRunningState());
-        context.Set(startInput.MemoryBlockReference(), start);
-        context.Set(endInput.MemoryBlockReference(), end);
-        context.Set(stepInput.MemoryBlockReference(), step);
         return context;
     }
 

@@ -38,6 +38,7 @@ public class ActivitiesRuntimeFeature : IShellFeature
         // Dispatch factory.
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IActivityFactory, ActivityFactory>();
+        services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddSingleton<ActivityCompletionProjector>();
         services.TryAddSingleton<ActivityFaultIncidentRecorder>();

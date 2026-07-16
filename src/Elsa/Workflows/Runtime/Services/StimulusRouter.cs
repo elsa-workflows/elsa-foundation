@@ -186,7 +186,9 @@ public sealed class StimulusRouter : IStimulusRouter
                 input: request.Input,
                 idempotencyKey: request.IdempotencyKey is null ? null : $"{request.IdempotencyKey}:resume:{workflowExecutionId}",
                 requestedBy: request.RequestedBy,
-                metadata: dispatchMetadata);
+                metadata: dispatchMetadata,
+                payloadType: request.PayloadType,
+                providerId: request.ProviderId);
 
             // Same request scope serves every outcome of one HTTP request (spec 089 FR-019 / scenario 5.5): a resume
             // driven by a synchronous-mode endpoint gets the caller's ambient services so its subsequent live write

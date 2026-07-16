@@ -1,5 +1,6 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
+using System.Text.Json;
 
 namespace Elsa.Activities.Runtime.Core.Models;
 
@@ -15,6 +16,18 @@ public sealed record ActivityExecutionContext
         string attemptId,
         string executableNodeId,
         CancellationToken cancellationToken)
+        : this(workflowExecutionId, invocationId, attemptId, executableNodeId, cancellationToken, null, null)
+    {
+    }
+
+    internal ActivityExecutionContext(
+        string workflowExecutionId,
+        string invocationId,
+        string attemptId,
+        string executableNodeId,
+        CancellationToken cancellationToken,
+        JsonElement? triggerPayload = null,
+        string? triggerNodeId = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
@@ -26,6 +39,8 @@ public sealed record ActivityExecutionContext
         AttemptId = attemptId;
         ExecutableNodeId = executableNodeId;
         CancellationToken = cancellationToken;
+        TriggerPayload = triggerPayload?.Clone();
+        TriggerNodeId = string.IsNullOrWhiteSpace(triggerNodeId) ? null : triggerNodeId;
     }
 
     public string WorkflowExecutionId { get; }
@@ -33,6 +48,8 @@ public sealed record ActivityExecutionContext
     public string AttemptId { get; }
     public string ExecutableNodeId { get; }
     public CancellationToken CancellationToken { get; }
+    internal JsonElement? TriggerPayload { get; }
+    internal string? TriggerNodeId { get; }
 
     internal static ActivityExecutionContext FromLegacy(IActivityExecutionContext context)
     {
@@ -42,7 +59,9 @@ public sealed record ActivityExecutionContext
             invocationId: identity?.InvocationId ?? context.Activity.Id,
             attemptId: identity?.AttemptId ?? string.Empty,
             executableNodeId: identity?.ExecutableNodeId ?? context.Activity.NodeId,
-            context.CancellationToken);
+            context.CancellationToken,
+            identity?.TriggerPayload,
+            identity?.TriggerNodeId);
     }
 }
 
@@ -53,6 +72,8 @@ public interface IActivityInvocationIdentity
     string InvocationId { get; }
     string AttemptId { get; }
     string ExecutableNodeId { get; }
+    JsonElement? TriggerPayload { get; }
+    string? TriggerNodeId { get; }
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>

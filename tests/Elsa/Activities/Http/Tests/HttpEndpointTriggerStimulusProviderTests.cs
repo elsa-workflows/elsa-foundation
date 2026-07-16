@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Http.Core;
+using Elsa.Http.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -56,7 +57,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_StableActivityIdentity_RecognizesOnlyHttpEndpoint()
     {
-        var activity = new HttpEndpoint();
+        var activity = new HttpEndpoint(new HttpRequestBodyParser());
         var endpointNode = EndpointNode(path: "hello-world", activityType: activity.Type);
         var otherClrNode = EndpointNode(path: "hello-world", activityType: typeof(WriteHttpResponse).FullName!);
 

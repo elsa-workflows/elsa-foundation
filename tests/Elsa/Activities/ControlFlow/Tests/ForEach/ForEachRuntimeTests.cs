@@ -200,7 +200,7 @@ public sealed class ForEachRuntimeTests
             "1.0.0",
             typeof(ClrActivityDescriptor).FullName!,
             descriptor,
-            [new ActivityInputContract("text", nameof(WriteLine.Text), new ValueTypeDescriptor("Elsa.Any"), true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("text", nameof(WriteLine.Text), new ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             [ActivityOutcomes.Done],
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(typeof(WriteLine))));
@@ -214,10 +214,14 @@ public sealed class ForEachRuntimeTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["text"] = new RuntimeInputBinding(
-                    inputName: "text",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(text),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" })
+                    "text",
+                    new ValueTypeDescriptor("String"),
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        new ValueTypeDescriptor("String"),
+                        JsonSerializer.SerializeToElement(text),
+                        ValueProtectionPolicy.InstanceInline))
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -262,12 +266,7 @@ public sealed class ForEachRuntimeTests
             IDictionary<string, InputArgument>? inputs,
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken)
-        {
-            var activity = new ForEachActivity();
-            if (inputs is not null && inputs.TryGetValue("Collection", out var collectionInput))
-                activity.Collection = (InputArgument<object>)collectionInput;
-            return new(activity);
-        }
+            => new(new ForEachActivity());
     }
 
     private sealed record ForEachDescriptor;

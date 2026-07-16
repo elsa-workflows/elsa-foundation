@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activation;
-using Elsa.Activities.Primitives.Binding;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;

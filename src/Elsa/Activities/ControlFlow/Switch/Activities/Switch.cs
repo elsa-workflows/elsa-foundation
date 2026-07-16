@@ -45,18 +45,18 @@ public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
     public static string CaseSlotName(string match) => $"{CaseSlotPrefix}{match}{CaseSlotSuffix}";
 
     /// <summary>The value matched against each case's declared match value to select the branch to run.</summary>
-    public InputArgument<string> Value { get; set; } = null!;
+    [ActivityInput(Key = nameof(Value))]
+    public string? Value { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
-        var value = context.Get(Value);
         var navigator = SwitchNavigator.From(runtimeContext.ExecutableNode);
-        var branch = navigator.Select(value);
+        var branch = navigator.Select(Value);
 
         if (branch is null)
         {
-            runtimeContext.CompleteCompositeActivity([navigator.OutcomeForValue(value)]);
+            runtimeContext.CompleteCompositeActivity([navigator.OutcomeForValue(Value)]);
             return;
         }
 

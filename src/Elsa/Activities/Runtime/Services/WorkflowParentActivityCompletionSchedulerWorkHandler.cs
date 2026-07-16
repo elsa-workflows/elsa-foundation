@@ -409,6 +409,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
             ActivityOutputPublisher.BuildOutputArguments(executableNode),
             cancellationToken);
+        serviceProvider.GetRequiredService<ActivityInputHydrator>().Hydrate(activity, inputs);
 
         return new ConstructedActivity(activity, inputs, projections, null, null);
     }

@@ -162,8 +162,7 @@ public sealed class WhileActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, bool condition)
     {
-        var conditionInput = new InputArgument<bool>(new Variable("Condition", condition));
-        var activity = new WhileActivity { Id = "actexec-while", NodeId = "node-while", Condition = conditionInput };
+        var activity = new WhileActivity { Id = "actexec-while", NodeId = "node-while", Condition = condition };
         var context = new SimpleActivityExecutionContext(
             _serviceProvider,
             activity,
@@ -173,7 +172,6 @@ public sealed class WhileActivityTests : IDisposable
             NewWorkItem(),
             executableNode,
             NewRunningState());
-        context.Set(conditionInput.MemoryBlockReference(), condition);
         return context;
     }
 

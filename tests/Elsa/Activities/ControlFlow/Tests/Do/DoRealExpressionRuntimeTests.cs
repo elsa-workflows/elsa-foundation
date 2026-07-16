@@ -346,12 +346,7 @@ public sealed class DoRealExpressionRuntimeTests
             IDictionary<string, InputArgument>? inputs,
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken)
-        {
-            var activity = new DoActivity();
-            if (inputs is not null && inputs.TryGetValue("Condition", out var conditionInput))
-                activity.Condition = (InputArgument<bool>)conditionInput;
-            return new(activity);
-        }
+            => new(new DoActivity());
     }
 
     private sealed record DoDescriptor;

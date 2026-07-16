@@ -148,12 +148,7 @@ public sealed class SwitchRuntimeTests
             IDictionary<string, InputArgument>? inputs,
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken)
-        {
-            var activity = new SwitchActivity();
-            if (inputs is not null && inputs.TryGetValue("Value", out var valueInput))
-                activity.Value = (InputArgument<string>)valueInput;
-            return new(activity);
-        }
+            => new(new SwitchActivity());
     }
 
     private sealed record SwitchDescriptor;

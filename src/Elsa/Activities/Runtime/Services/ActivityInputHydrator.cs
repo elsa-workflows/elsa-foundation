@@ -6,9 +6,13 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Activities.Primitives.Binding;
+namespace Elsa.Activities.Runtime.Services;
 
-/// <summary>Hydrates annotated plain CLR properties once, by stable contract key, from a pinned snapshot.</summary>
+/// <summary>
+/// Hydrates annotated plain CLR properties exactly once. Canonical invocations hydrate from the
+/// committed input snapshot; the value-list overload exists only while legacy executable artifacts
+/// still enter through the constructor adapter.
+/// </summary>
 public sealed class ActivityInputHydrator
 {
     private readonly ConditionalWeakTable<IActivity, object> _hydrated = new();
@@ -19,9 +23,7 @@ public sealed class ActivityInputHydrator
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(snapshot);
-
-        if (!_hydrated.TryAdd(activity, new object()))
-            throw new InvalidOperationException($"Activity instance '{activity.GetType().FullName}' has already been hydrated.");
+        BeginHydration(activity);
 
         if (!StringComparer.Ordinal.Equals(contract.SchemaFingerprint, snapshot.ContractFingerprint))
             throw new InvalidOperationException("The pinned activity input snapshot does not match the activation contract fingerprint.");
@@ -42,12 +44,48 @@ public sealed class ActivityInputHydrator
                 continue;
             }
 
-            var value = Materialize(property, envelope, input.Key);
-            property.SetValue(activity, value);
+            property.SetValue(activity, Materialize(property, envelope, input.Key));
         }
     }
 
-    private Dictionary<string, PropertyInfo> DiscoverProperties(Type activityType)
+    /// <summary>
+    /// Transitional adapter for pre-value-flow executable artifacts. It applies already-materialized
+    /// values directly to plain annotated properties and never exposes an argument or memory address to
+    /// activity code.
+    /// </summary>
+    public void Hydrate(IActivity activity, IReadOnlyCollection<RuntimeMaterializedActivityInput> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentNullException.ThrowIfNull(inputs);
+
+        var properties = DiscoverProperties(activity.GetType());
+        if (properties.Count == 0)
+            return;
+
+        BeginHydration(activity);
+        foreach (var input in inputs)
+        {
+            if (!properties.TryGetValue(input.Name, out var property))
+                continue;
+
+            if (input.Value is null &&
+                (property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) is null ||
+                 _nullability.Create(property).WriteState == NullabilityState.NotNull))
+            {
+                throw new InvalidOperationException($"Activity input '{input.Name}' does not accept null.");
+            }
+
+            property.SetValue(activity, input.Value);
+        }
+    }
+
+    private void BeginHydration(IActivity activity)
+    {
+        if (!_hydrated.TryAdd(activity, new object()))
+            throw new InvalidOperationException($"Activity instance '{activity.GetType().FullName}' has already been hydrated.");
+    }
+
+    private static Dictionary<string, PropertyInfo> DiscoverProperties(Type activityType)
     {
         var result = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
         foreach (var property in activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))

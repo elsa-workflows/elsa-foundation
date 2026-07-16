@@ -1,7 +1,7 @@
-using Elsa.Activities.Primitives.Binding;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Exceptions;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;

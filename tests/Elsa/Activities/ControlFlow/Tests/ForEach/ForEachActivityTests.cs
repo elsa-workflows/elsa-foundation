@@ -182,8 +182,7 @@ public sealed class ForEachActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(object? collection)
     {
-        var collectionInput = new InputArgument<object>(new Variable("Collection", collection));
-        var activity = new ForEachActivity { Id = ForEachExecutionId, NodeId = ForEachNodeId, Collection = collectionInput };
+        var activity = new ForEachActivity { Id = ForEachExecutionId, NodeId = ForEachNodeId, Collection = collection };
         var context = new SimpleActivityExecutionContext(
             _serviceProvider,
             activity,
@@ -193,7 +192,6 @@ public sealed class ForEachActivityTests : IDisposable
             NewWorkItem(),
             NewForEachNode(),
             NewRunningState());
-        context.Set(collectionInput.MemoryBlockReference(), collection);
         return context;
     }
 

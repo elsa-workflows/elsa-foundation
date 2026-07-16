@@ -104,6 +104,12 @@ public sealed class SimpleActivityExecutionContext(
     public string InvocationId => activityExecutionState?.InvocationId ?? Activity.Id;
     public string AttemptId => activityExecutionState?.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId ?? string.Empty;
     public string ExecutableNodeId => executableNode?.ExecutableNodeId ?? Activity.NodeId;
+    public JsonElement? TriggerPayload => StimulusInput switch
+    {
+        null => null,
+        JsonElement json => json.Clone(),
+        _ => JsonSerializer.SerializeToElement(StimulusInput, StimulusInput.GetType())
+    };
     public WorkflowExecutableIdentity PinnedExecutable => pinnedExecutable ?? throw MissingRuntimeValue(nameof(PinnedExecutable));
     public RuntimeSchedulerWorkItem SchedulerWorkItem => schedulerWorkItem ?? throw MissingRuntimeValue(nameof(SchedulerWorkItem));
     public ExecutableNode ExecutableNode => executableNode ?? throw MissingRuntimeValue(nameof(ExecutableNode));

@@ -31,7 +31,6 @@ public class ActivitiesPrimitivesFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<ActivityArgumentBinder>();
-        services.AddSingleton<ActivityInputHydrator>();
         services.AddSingleton<IActivityActivator, ClrActivityActivator>();
         services.AddSingleton<IActivityConstructor, ClrActivityConstructor>();
 

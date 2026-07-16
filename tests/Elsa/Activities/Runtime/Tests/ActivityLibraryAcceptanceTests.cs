@@ -426,13 +426,8 @@ public sealed class ActivityLibraryAcceptanceTests
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new ForEachDescriptor(), inputs, outputs, cancellationToken);
 
-        public ValueTask<IActivity> Construct(ForEachDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
-        {
-            var activity = new ForEachActivity();
-            if (inputs is not null && inputs.TryGetValue("Collection", out var collectionInput))
-                activity.Collection = (InputArgument<object>)collectionInput;
-            return new(activity);
-        }
+        public ValueTask<IActivity> Construct(ForEachDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
+            new(new ForEachActivity());
     }
 
     private sealed record IfDescriptor;
@@ -445,13 +440,8 @@ public sealed class ActivityLibraryAcceptanceTests
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new IfDescriptor(), inputs, outputs, cancellationToken);
 
-        public ValueTask<IActivity> Construct(IfDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
-        {
-            var activity = new IfActivity();
-            if (inputs is not null && inputs.TryGetValue("Condition", out var conditionInput))
-                activity.Condition = (InputArgument<bool>)conditionInput;
-            return new(activity);
-        }
+        public ValueTask<IActivity> Construct(IfDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
+            new(new IfActivity());
     }
 
     private sealed record SequenceDescriptor;

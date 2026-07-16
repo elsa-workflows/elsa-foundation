@@ -57,25 +57,25 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
     public const string IndexVariableName = "index";
 
     /// <summary>The first index (inclusive). Defaults to <c>0</c> when unbound.</summary>
-    [ActivityInput(Order = 0)]
-    public InputArgument<int> Start { get; set; } = null!;
+    [ActivityInput(Key = nameof(Start), Order = 0)]
+    public int Start { get; set; }
 
     /// <summary>The end index. Exclusive unless <see cref="EndInclusive"/> is set. Defaults to <c>0</c> when unbound.</summary>
-    [ActivityInput(Order = 10)]
-    public InputArgument<int> End { get; set; } = null!;
+    [ActivityInput(Key = nameof(End), Order = 10)]
+    public int End { get; set; }
 
     /// <summary>The amount each pass advances the index by. Defaults to <c>1</c> when unbound; must be non-zero.</summary>
-    [ActivityInput(Order = 20, DefaultValue = "1", DefaultSyntax = "Literal")]
-    public InputArgument<int> Step { get; set; } = null!;
+    [ActivityInput(Key = nameof(Step), Order = 20, DefaultValue = "1", DefaultSyntax = "Literal")]
+    public int Step { get; set; } = 1;
 
     /// <summary>When true the range is closed (<c>[Start, End]</c>); otherwise half-open (<c>[Start, End)</c>).</summary>
-    [ActivityInput(Order = 30)]
-    public InputArgument<bool> EndInclusive { get; set; } = null!;
+    [ActivityInput(Key = nameof(EndInclusive), Order = 30)]
+    public bool EndInclusive { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
-        var range = ResolveRange(context);
+        var range = ResolveRange();
         var navigator = ForNavigator.From(runtimeContext.ExecutableNode);
 
         if (!range.HasFirst || navigator.Body is null)
@@ -103,7 +103,7 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
             return ValueTask.CompletedTask;
         }
 
-        var range = ResolveRange(context.ParentContext);
+        var range = ResolveRange();
         var completedIndex = ReadIterationIndex(context);
         var nextIndex = range.Next(completedIndex);
 
@@ -156,24 +156,7 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
             schedulingProvenance: provenance);
     }
 
-    private static ForRange ResolveRange(IActivityExecutionContext context)
-    {
-        var start = context.Get(((For)context.Activity).Start);
-        var end = context.Get(((For)context.Activity).End);
-        var step = ResolveStep(context);
-        var endInclusive = context.Get(((For)context.Activity).EndInclusive);
-        return ForRange.Create(start, end, step, endInclusive);
-    }
-
-    private static int ResolveStep(IActivityExecutionContext context)
-    {
-        var stepArgument = ((For)context.Activity).Step;
-
-        // A Step that is not wired up at all (null argument) defaults to the conventional 1. A Step that
-        // IS wired but evaluates to 0 is a deliberate configuration error and flows through to
-        // ForRange.Create, which faults the activity (a zero step can never reach the end).
-        return stepArgument is null ? 1 : context.Get(stepArgument);
-    }
+    private ForRange ResolveRange() => ForRange.Create(Start, End, Step, EndInclusive);
 
     private static string FormatIterationId(int index) => index.ToString(CultureInfo.InvariantCulture);
 

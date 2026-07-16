@@ -176,8 +176,7 @@ public sealed class DoActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, bool condition)
     {
-        var conditionInput = new InputArgument<bool>(new Variable("Condition", condition));
-        var activity = new DoActivity { Id = "actexec-do", NodeId = "node-do", Condition = conditionInput };
+        var activity = new DoActivity { Id = "actexec-do", NodeId = "node-do", Condition = condition };
         var context = new SimpleActivityExecutionContext(
             _serviceProvider,
             activity,
@@ -187,7 +186,6 @@ public sealed class DoActivityTests : IDisposable
             NewWorkItem(),
             executableNode,
             NewRunningState());
-        context.Set(conditionInput.MemoryBlockReference(), condition);
         return context;
     }
 

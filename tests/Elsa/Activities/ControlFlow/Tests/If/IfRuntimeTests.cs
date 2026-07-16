@@ -130,12 +130,7 @@ public sealed class IfRuntimeTests
             IDictionary<string, InputArgument>? inputs,
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken)
-        {
-            var activity = new IfActivity();
-            if (inputs is not null && inputs.TryGetValue("Condition", out var conditionInput))
-                activity.Condition = (InputArgument<bool>)conditionInput;
-            return new(activity);
-        }
+            => new(new IfActivity());
     }
 
     private sealed record IfDescriptor;

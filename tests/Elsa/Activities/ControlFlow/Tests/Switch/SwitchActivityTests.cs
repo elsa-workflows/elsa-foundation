@@ -192,8 +192,7 @@ public sealed class SwitchActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, string value)
     {
-        var valueInput = new InputArgument<string>(new Variable("Value", value));
-        var activity = new SwitchActivity { Id = "actexec-switch", NodeId = "node-switch", Value = valueInput };
+        var activity = new SwitchActivity { Id = "actexec-switch", NodeId = "node-switch", Value = value };
         var context = new SimpleActivityExecutionContext(
             _serviceProvider,
             activity,
@@ -203,7 +202,6 @@ public sealed class SwitchActivityTests : IDisposable
             NewWorkItem(),
             executableNode,
             NewRunningState());
-        context.Set(valueInput.MemoryBlockReference(), value);
         return context;
     }
 

@@ -48,7 +48,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         // The started run's durable state reflects the LIVE request, not the authored-route fallback: the
         // fallback would carry method "*" (no SupportedMethods authored) and no body/header/query.
         var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = captured.Deserialize<HttpRequestModel>()!;
+        var model = HttpEndpointHostFixture.DeserializeRequest(captured);
 
         Assert.Equal("POST", model.Method);
         Assert.Equal(Path, model.Path);
@@ -88,7 +88,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
 
         var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = captured.Deserialize<HttpRequestModel>()!;
+        var model = HttpEndpointHostFixture.DeserializeRequest(captured);
         Assert.Equal("GET", model.Method);
         Assert.Equal("42", Assert.Contains("id", model.RouteData!));
     }
@@ -173,7 +173,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
 
         // The Result carries the raw body; ParsedContent is no longer persisted on it (spec 089 efficiency #9).
         var capturedResult = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = capturedResult.Deserialize<HttpRequestModel>()!;
+        var model = HttpEndpointHostFixture.DeserializeRequest(capturedResult);
         Assert.Equal("""{"orderId":7,"customer":"acme"}""", model.Body);
 
         // The activity derived ParsedContent from Body via the deterministic parser seam, onto its own output.

@@ -70,7 +70,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>The status code the out-of-base-path sentinel terminal middleware returns (proves pass-through).</summary>
     public const int SentinelStatusCode = StatusCodes.Status418ImATeapot;
 
-    /// <summary>The durable value id the published workflow captures the <see cref="HttpEndpoint.ParsedContent"/> output under.</summary>
+    /// <summary>The durable value id the published workflow captures the <see cref="HttpEndpointResult.ParsedContent"/> projection under.</summary>
     public const string ParsedContentOutputName = "EndpointParsedContent";
 
     private readonly IHost _host;
@@ -769,6 +769,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         return captured.InlineValue!.Value;
     }
 
+    public static HttpRequestModel DeserializeRequest(JsonElement value) =>
+        value.Deserialize<HttpRequestModel>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        ?? throw new InvalidOperationException("Captured HTTP request resolved to null.");
+
     public async ValueTask DisposeAsync()
     {
         await _host.StopAsync();
@@ -822,82 +826,54 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
-            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), path, "System.String")
+            [nameof(HttpEndpoint.Path)] = TypedLiteralBinding(nameof(HttpEndpoint.Path), path, typeof(string)),
+            [nameof(HttpEndpoint.SupportedMethods)] = TypedLiteralBinding(nameof(HttpEndpoint.SupportedMethods), methods, typeof(ICollection<string>)),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = TypedLiteralBinding(nameof(HttpEndpoint.CanStartWorkflow), canStartWorkflow ?? false, typeof(bool)),
+            [nameof(HttpEndpoint.Authorize)] = TypedLiteralBinding(nameof(HttpEndpoint.Authorize), authorize ?? false, typeof(bool)),
+            [nameof(HttpEndpoint.Policy)] = TypedLiteralBinding(nameof(HttpEndpoint.Policy), policy, typeof(string)),
+            [nameof(HttpEndpoint.RequestTimeout)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestTimeout), requestTimeout, typeof(TimeSpan)),
+            [nameof(HttpEndpoint.RequestSizeLimit)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), requestSizeLimit, typeof(long)),
+            [nameof(HttpEndpoint.ResponseMode)] = TypedLiteralBinding(nameof(HttpEndpoint.ResponseMode), responseMode ?? ResponseMode.Async, typeof(ResponseMode))
         };
-
-        // SupportedMethods is routing-significant (spec 089 B). Authored as a literal string array; unauthored
-        // would default to GET, so a POST endpoint must author ["POST"] or the request 404s under the GET default.
-        if (methods.Length > 0)
-            inputBindings[nameof(HttpEndpoint.SupportedMethods)] =
-                LiteralBinding(nameof(HttpEndpoint.SupportedMethods), methods, "System.Collections.Generic.ICollection`1[[System.String]]");
-
-        // D-D1: author the CanStartWorkflow literal when supplied (false = the node never starts a workflow, is not
-        // indexed, and always suspends).
-        if (canStartWorkflow is { } canStart)
-            inputBindings[nameof(HttpEndpoint.CanStartWorkflow)] =
-                LiteralBinding(nameof(HttpEndpoint.CanStartWorkflow), canStart, "System.Boolean");
-
-        // Spec 089 C endpoint-option literals (mirrors how SupportedMethods is authored). The trigger provider
-        // reads these at publish time and stamps them on the binding metadata the middleware enforces.
-        if (authorize is { } authorizeValue)
-            inputBindings[nameof(HttpEndpoint.Authorize)] =
-                LiteralBinding(nameof(HttpEndpoint.Authorize), authorizeValue, "System.Boolean");
-        if (policy is not null)
-            inputBindings[nameof(HttpEndpoint.Policy)] =
-                LiteralBinding(nameof(HttpEndpoint.Policy), policy, "System.String");
-        if (requestSizeLimit is { } sizeLimit)
-            inputBindings[nameof(HttpEndpoint.RequestSizeLimit)] =
-                LiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), sizeLimit, "System.Int64");
-
-        // Spec 089 E: the per-endpoint RequestTimeout literal (scenario 5.3 arms a short timeout so a stalling run
-        // trips 408). Authored as an ISO-8601 duration string, exactly the shape the trigger provider decodes.
-        if (requestTimeout is { } timeout)
-            inputBindings[nameof(HttpEndpoint.RequestTimeout)] =
-                LiteralBinding(nameof(HttpEndpoint.RequestTimeout), timeout.ToString("c"), "System.TimeSpan");
-
-        // Spec 089 E (E-D1): the ResponseMode literal. Authored as the underlying numeric value with the enum's CLR
-        // type name so it materializes at execution time (the activity's InputArgument<ResponseMode>) AND is decoded
-        // by the trigger provider's ReadLiteralEnum (which accepts a defined numeric) at publish/index time — one
-        // authoring shape serving both the start-trigger binding metadata and the mid-flow bookmark metadata.
-        if (responseMode is { } mode)
-            inputBindings[nameof(HttpEndpoint.ResponseMode)] =
-                LiteralBinding(nameof(HttpEndpoint.ResponseMode), (int)mode, typeof(ResponseMode).FullName!);
 
         var metadata = isTriggerNode
             ? new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType }
             : new Dictionary<string, string>();
 
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(HttpEndpoint));
+        var contract = HttpEndpointContract(descriptorPayload);
         return new ExecutableNode(
             executableNodeId: nodeId ?? "node-http-endpoint",
             authoredActivityId: $"authored-{nodeId ?? "node-http-endpoint"}",
             activityType: HttpEndpoint.ActivityType,
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(HttpEndpoint)),
+            descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>
             {
                 // Promote the endpoint's Result output (the live HttpRequestModel) into a durable, readable value.
                 // The capture dictionary is keyed by the activity's output name; the durable value id carries the
                 // caller-chosen id used to read the capture back.
-                [nameof(HttpEndpoint.Result)] = new RuntimeOutputCapture(
-                    outputName: nameof(HttpEndpoint.Result),
+                ["Request"] = new RuntimeOutputCapture(
+                    outputName: "Request",
                     valueId: resultOutputName,
-                    type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
+                    type: RuntimeCaptureType(typeof(HttpRequestModel)),
                     lifecycle: DurableValueLifecycle.Instance,
                     storage: DurableValueStorage.Inline,
                     captureOnSuccessfulCompletion: true),
                 // Also promote the ParsedContent output — since spec 089 efficiency #9 the parsed body is derived at
                 // the activity from Body (not persisted on the wire model), so tests read it from this output.
-                [nameof(HttpEndpoint.ParsedContent)] = new RuntimeOutputCapture(
-                    outputName: nameof(HttpEndpoint.ParsedContent),
+                ["ParsedContent"] = new RuntimeOutputCapture(
+                    outputName: "ParsedContent",
                     valueId: ParsedContentOutputName,
-                    type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
+                    type: RuntimeCaptureType(typeof(JsonElement)),
                     lifecycle: DurableValueLifecycle.Instance,
                     storage: DurableValueStorage.Inline,
                     captureOnSuccessfulCompletion: true)
             },
-            metadata: metadata);
+            metadata: metadata,
+            activityContract: contract);
     }
 
     /// <summary>The stable resume-target map the publish compiler emits for an HttpEndpoint node (mirrors Delay).</summary>
@@ -907,12 +883,51 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             [HttpEndpoint.ResumeTargetId] = new(
                 ResumeTargetId: HttpEndpoint.ResumeTargetId,
                 ExecutableNodeId: nodeId,
-                HandlerKey: "OnRequestReceived",
+                HandlerKey: "ResumeAsync",
                 Metadata: new Dictionary<string, string>())
         };
 
     private static WorkflowExecutableIdentity NewIdentity(string artifactId) =>
         new(artifactId, $"definition-{artifactId}", $"version-{artifactId}", "1.0.0", $"sha256:{artifactId}");
+
+    private static ActivityContract HttpEndpointContract(JsonElement descriptorPayload) =>
+        new(
+            HttpEndpoint.ActivityType,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            new[]
+            {
+                HttpEndpointInputContract(nameof(HttpEndpoint.Path), typeof(string), isRequired: true),
+                HttpEndpointInputContract(nameof(HttpEndpoint.SupportedMethods), typeof(ICollection<string>)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.CanStartWorkflow), typeof(bool)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.Authorize), typeof(bool)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.Policy), typeof(string)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.RequestTimeout), typeof(TimeSpan)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.RequestSizeLimit), typeof(long)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.ResponseMode), typeof(ResponseMode))
+            },
+            new ActivityResultContract(
+                RuntimeValueType(typeof(HttpEndpointResult)),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                new[]
+                {
+                    HttpEndpointProjection("Request", "request", typeof(HttpRequestModel), isRequired: true),
+                    HttpEndpointProjection("RouteData", "routeData", typeof(IReadOnlyDictionary<string, string>), isRequired: true),
+                    HttpEndpointProjection("ParsedContent", "parsedContent", typeof(JsonElement), isRequired: false)
+                }),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(HttpEndpoint))));
+
+    private static ActivityInputContract HttpEndpointInputContract(string key, Type type, bool isRequired = false) =>
+        new(key, key, RuntimeValueType(type), isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
+
+    private static ActivityResultProjectionContract HttpEndpointProjection(string key, string path, Type type, bool isRequired) =>
+        new(key, path, RuntimeValueType(type), isRequired, ActivityValuePolicy.Default);
+
+    private static RuntimeValueTypeDescriptor RuntimeCaptureType(Type type) =>
+        new("clr", RuntimeValueType(type).Alias, null);
 
     private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
         new(

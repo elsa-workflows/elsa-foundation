@@ -59,7 +59,8 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
     public const string CurrentIndexVariableName = "currentIndex";
 
     /// <summary>The collection iterated over; each item is exposed to the body for one pass.</summary>
-    public InputArgument<object> Collection { get; set; } = null!;
+    [ActivityInput(Key = nameof(Collection))]
+    public object? Collection { get; set; }
 
     /// <summary>When <c>true</c>, the zero-based iteration index is exposed to the body alongside the current item.</summary>
     public bool ExposeIndex { get; set; } = true;
@@ -68,7 +69,7 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
     {
         var runtimeContext = RequireRuntimeContext(context);
         var navigator = ForEachNavigator.From(runtimeContext.ExecutableNode);
-        var items = ForEachCollection.Resolve(context.Get(Collection));
+        var items = ForEachCollection.Resolve(Collection);
 
         // Empty/null collection or empty body short-circuits without scheduling a pass.
         if (items.Count == 0 || navigator.Body is null)
@@ -100,7 +101,7 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
         }
 
         var completedIndex = ResolveCompletedIndex(runtimeContext, context.CompletedChildIterationId);
-        var items = ForEachCollection.Resolve(context.ParentContext.Get(Collection));
+        var items = ForEachCollection.Resolve(Collection);
         var nextIndex = completedIndex + 1;
 
         if (nextIndex >= items.Count)

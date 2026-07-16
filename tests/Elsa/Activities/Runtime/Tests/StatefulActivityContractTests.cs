@@ -75,6 +75,20 @@ public sealed class StatefulActivityContractTests
     }
 
     [Fact]
+    public void Trigger_registration_metadata_is_a_read_only_defensive_snapshot()
+    {
+        var metadata = new Dictionary<string, string> { ["method"] = "get" };
+        var registration = new ActivityTriggerRegistration<ApprovalReceived>(
+            "approval", "Approval", "approval:42", metadata: metadata);
+
+        metadata["method"] = "post";
+
+        Assert.Equal("get", registration.Metadata["method"]);
+        Assert.Throws<NotSupportedException>(() =>
+            ((IDictionary<string, string>)registration.Metadata)["method"] = "delete");
+    }
+
+    [Fact]
     public async Task Stateful_transition_requires_registrations_of_the_declared_trigger_type()
     {
         var activity = new WrongTriggerActivity();

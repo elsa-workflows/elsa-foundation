@@ -87,8 +87,8 @@ projections, two outcomes, and disposable dependencies; verify one-time hydratio
 - [ ] T028 [US1] Replace runtime memory seeding and mutable output publication with snapshot hydration and an atomic completion projector in `src/Elsa/Activities/Runtime/Services/ActivityCompletionProjector.cs`
 - [ ] T029 [US1] Migrate invoke and parent-completion handlers to activation leases and returned transitions in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs` and `WorkflowParentActivityCompletionSchedulerWorkHandler.cs`
 - [ ] T030 [P] [US1] Migrate primitive and scheduling activities to plain inputs/results in `src/Elsa/Activities/Primitives/` and `src/Elsa/Activities/Scheduling/`
-- [ ] T031 [P] [US1] Migrate HTTP and scripting activities to plain inputs/atomic result records in `src/Elsa/Activities/Http/` and `src/Elsa/Activities/Scripting/`
-- [ ] T032 [P] [US1] Migrate sequence, composition, flowchart, and control-flow CLR activities that remain non-intrinsic in `src/Elsa/Activities/Sequence/`, `Composition/`, `Flowchart/`, and `ControlFlow/`
+- [X] T031 [P] [US1] Migrate HTTP and scripting activities to plain inputs/atomic result records in `src/Elsa/Activities/Http/` and `src/Elsa/Activities/Scripting/`
+- [X] T032 [P] [US1] Migrate sequence, composition, flowchart, and control-flow CLR activities that remain non-intrinsic in `src/Elsa/Activities/Sequence/`, `Composition/`, `Flowchart/`, and `ControlFlow/`
 - [X] T033 [US1] Update CLR discovery and registration to scan plain annotated inputs and result projections in `src/Elsa/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`
 - [ ] T034 [US1] Run US1 runtime, design scanner, activity-library, HTTP, scheduling, scripting, control-flow, and sequence test projects and mark corresponding ledger rows implemented/passing
 
@@ -231,7 +231,7 @@ fresh resume attempt and one committed completion.
 - [X] T084 [US6] Persist immutable private state and typed trigger registrations atomically in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
 - [x] T085 [US6] Validate/deduplicate typed trigger delivery before fresh activation in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`
 - [x] T086 [US6] Preserve existing start-authority/provider-recognition ordering while adding typed resume metadata in `src/Elsa/Workflows/Runtime/Resumption/`
-- [ ] T087 [US6] Migrate scheduling, HTTP, event, timer, and bookmark-producing activities to typed state/trigger transitions in `src/Elsa/Activities/`
+- [X] T087 [US6] Migrate scheduling, HTTP, event, timer, and bookmark-producing activities to typed state/trigger transitions in `src/Elsa/Activities/`
 - [ ] T088 [US6] Run resumption, scheduling, HTTP, runtime, Groundwork, and disposal tests and mark US6 ledger rows implemented/passing
 
 ---
