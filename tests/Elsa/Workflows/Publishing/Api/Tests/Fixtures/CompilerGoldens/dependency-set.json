@@ -1,0 +1,126 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [
+    {
+      "artifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifactId": "child-a",
+      "dispatchNodeIds": [
+        "dispatch-a"
+      ]
+    },
+    {
+      "artifactHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "artifactId": "child-b",
+      "dispatchNodeIds": [
+        "dispatch-b"
+      ]
+    }
+  ],
+  "identity": {
+    "artifactHash": "sha256:f39caae60bb64bc6c76a22afbab4dbf293fecca1ce284694938b86873927150d",
+    "artifactId": "artifact-f39caae60bb6",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
+  },
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Elsa.Activities.Sequence.Activities.Sequence",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "dependency-root",
+    "childSlots": [
+      {
+        "activities": [
+          {
+            "activityType": "Test.WriteLine",
+            "activityTypeVersion": "1.0.0",
+            "authoredActivityId": "dispatch-b",
+            "childSlots": [],
+            "descriptor": {
+              "consumerKey": "elsa.clr-activity",
+              "payload": {
+                "TypeAlias": "Object"
+              },
+              "schemaVersion": "1"
+            },
+            "executableNodeId": "dispatch-b",
+            "inputBindings": [],
+            "metadata": [
+              {
+                "Key": "authoredNodeId",
+                "Value": "dispatch-b"
+              },
+              {
+                "Key": "executionType",
+                "Value": "Action"
+              }
+            ],
+            "structure": null
+          },
+          {
+            "activityType": "Test.WriteLine",
+            "activityTypeVersion": "1.0.0",
+            "authoredActivityId": "dispatch-a",
+            "childSlots": [],
+            "descriptor": {
+              "consumerKey": "elsa.clr-activity",
+              "payload": {
+                "TypeAlias": "Object"
+              },
+              "schemaVersion": "1"
+            },
+            "executableNodeId": "dispatch-a",
+            "inputBindings": [],
+            "metadata": [
+              {
+                "Key": "authoredNodeId",
+                "Value": "dispatch-a"
+              },
+              {
+                "Key": "executionType",
+                "Value": "Action"
+              }
+            ],
+            "structure": null
+          }
+        ],
+        "name": "Sequence.Activities"
+      }
+    ],
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Object"
+      },
+      "schemaVersion": "1"
+    },
+    "executableNodeId": "dependency-root",
+    "inputBindings": [],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "dependency-root"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": {
+      "kind": "elsa.sequence.structure",
+      "payload": {
+        "activities": [
+          "dispatch-b",
+          "dispatch-a"
+        ],
+        "variables": []
+      },
+      "schemaVersion": "1.0.0"
+    }
+  }
+}

@@ -2,6 +2,8 @@
 
 Status: accepted (2026-07-10; ratified in the same grilling session as ADR 0038)
 Amended: 2026-07-13 by spec 092 to include retained workflow-execution roots and race-safe GC
+Amended: 2026-07-16 by spec 097 to make retention transitive across immutable executable dependencies
+and to fence closure-root creation against collection
 Plan of record: `docs/plans/content-addressed-executables-and-inspector.md` and
 `specs/092-domain-owned-apis/`
 
@@ -31,7 +33,8 @@ test run, restore, or execution checkpoint and remove an artifact while it is be
 Unify on a single artifact store and move scope and expiry to the Source Reference. A Test Run creates
 an expiring reference (source: the draft snapshot) instead of a transient artifact.
 
-Artifact lifetime is derived from the union of two durable root sets:
+Artifact lifetime is derived from the transitive executable-dependency closure of the union of two
+durable root sets:
 
 1. artifact IDs named by live Source References; and
 2. artifact IDs pinned by retained workflow-execution records.
@@ -39,7 +42,9 @@ Artifact lifetime is derived from the union of two durable root sets:
 The workflow-execution record itself is the retention root. Elsa does not create a duplicate execution
 Source Reference. The root applies for every retained execution status, including pending, running,
 suspended, completed, canceled, and faulted. Completion does not release the root; removal under the
-workflow-execution retention policy does.
+workflow-execution retention policy does. A reachable parent artifact retains every exact child
+artifact named by its immutable dependency edges, recursively. Shared and diamond-shaped dependencies
+are retained once by full artifact ID/hash identity and remain protected while any root reaches them.
 
 Runtime persistence must expose a provider-efficient distinct pinned-artifact query. Loading every full
 workflow-execution record into application memory during each sweep is not an acceptable implementation
@@ -51,8 +56,16 @@ points to the artifact.
 
 GC must additionally protect artifacts inside a configurable creation/staging grace period and close the
 check-then-delete race with a final conditional root check, provider transaction, or equivalent deletion
-guard. A root created concurrently with a sweep must win over deletion. Expired or retired reference
-records may be pruned independently; trigger projections do not count as artifact-retention roots.
+guard. A root created concurrently with a sweep must win over deletion. Before a publication or
+execution establishes a durable root, it acquires root-write leases for the root's complete validated
+dependency closure in deterministic artifact-ID order; partial acquisition releases already-acquired
+leases. Collection repeats transitive reachability while holding each deletion guard before removing an
+artifact. Expired or retired reference records may be pruned independently; trigger projections do not
+count as artifact-retention roots.
+
+Closure traversal validates every edge using the full child artifact ID/hash identity and fails closed
+for missing artifacts, hash mismatches, conflicting identities, or exact-identity cycles. A traversal or
+root-query failure retains artifacts for a later sweep rather than risking deletion of reachable code.
 
 ## Considered Options
 
@@ -77,7 +90,12 @@ from the reference they dispatch through.
 
 GC is no longer correctly described as a reference-only two-query sweep. It may still prune references
 and artifacts in separate phases, but artifact eligibility is computed from live references, retained
-execution pins, and creation grace, followed by a race-safe final deletion check.
+execution pins, their transitive executable-dependency closures, and creation grace, followed by a
+race-safe final closure check.
+
+Root writers and durable persistence providers must support closure-wide lease fencing. The additive
+root-identity lease operation preserves compatibility with older providers, while providers that persist
+dependency-bearing artifacts must implement full-closure acquisition to provide the race guarantee.
 
 `IWorkflowExecutionStateStore` (or a narrower Runtime-owned query seam) must support distinct retained
 artifact IDs without materializing every execution. Persistence implementations must keep that query

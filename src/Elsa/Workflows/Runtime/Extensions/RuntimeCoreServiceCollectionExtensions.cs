@@ -164,6 +164,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
         services.TryAddScoped<RuntimeCheckpointCommitter>();
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
+        services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
+        services.TryAddSingleton<IWorkflowExecutableStartPolicy, AllowWorkflowExecutableStartPolicy>();
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
@@ -183,7 +185,24 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
         services.TryAddSingleton<IWorkflowExecutionActorProvider, InProcessWorkflowExecutionActorProvider>();
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
-        services.TryAddScoped<IWorkflowStartDispatcher, WorkflowStartDispatcher>();
+        services.TryAddScoped<IWorkflowStartDispatcher>(serviceProvider =>
+        {
+            var policies = serviceProvider.GetServices<IWorkflowExecutableStartPolicy>().ToArray();
+            if (policies.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Runtime composition requires exactly one {nameof(IWorkflowExecutableStartPolicy)} registration, but found {policies.Length}.");
+            }
+
+            return new WorkflowStartDispatcher(
+                serviceProvider.GetRequiredService<IWorkflowExecutableStore>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionActorProvider>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>(),
+                serviceProvider.GetRequiredService<TimeProvider>(),
+                serviceProvider.GetService<IWorkflowExecutionPartitionAccessor>(),
+                policies[0]);
+        });
 
         // Reference GC (ADR 0040): retained execution roots and creation grace are runtime safety policy. A host may
         // configure the policy and schedule the collector through the separate sweeper feature.

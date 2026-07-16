@@ -12,7 +12,8 @@ namespace Elsa.Activities.DispatchWorkflow.Design.Services;
 public sealed class DispatchPinSource(
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowExecutableStore executableStore,
-    TimeProvider timeProvider) : IExecutableNodeMetadataSource
+    IWorkflowExecutableInputValidator inputValidator,
+    TimeProvider timeProvider) : IExecutableCompilationSource, IExecutableNodeMetadataSource
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -20,12 +21,27 @@ public sealed class DispatchPinSource(
         ExecutableNodeMetadataContext context,
         CancellationToken cancellationToken = default)
     {
+        var contribution = await GetContributionAsync(
+            new ExecutableCompilationContext(context.Request, context.Source, context.RootActivity),
+            cancellationToken);
+        return contribution.NodeMetadata
+            .Select(claim => new ExecutableNodeMetadataContribution(
+                claim.ExecutableNodeId,
+                claim.Key,
+                claim.Value))
+            .ToArray();
+    }
+
+    public async ValueTask<ExecutableCompilationContribution> GetContributionAsync(
+        ExecutableCompilationContext context,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(context);
         var dispatchNodes = Flatten(context.RootActivity)
             .Where(node => StringComparer.Ordinal.Equals(node.ActivityType, DispatchWorkflowConstants.ActivityType))
             .ToArray();
         if (dispatchNodes.Length == 0)
-            return [];
+            return new ExecutableCompilationContribution();
 
         var references = await sourceReferenceStore.ListAsync(
             WorkflowExecutableReferenceScope.Published,
@@ -33,30 +49,66 @@ public sealed class DispatchPinSource(
             now: timeProvider.GetUtcNow(),
             cancellationToken);
         var referencesByDefinition = references
+            .Where(reference => StringComparer.Ordinal.Equals(reference.TenantId, context.TenantId))
             .GroupBy(reference => reference.DefinitionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        var contributions = new List<ExecutableNodeMetadataContribution>(dispatchNodes.Length);
+        var metadata = new List<ExecutableNodeMetadataClaim>(dispatchNodes.Length);
+        var dependencies = new List<ExecutableDependencyClaim>(dispatchNodes.Length);
 
         foreach (var node in dispatchNodes.OrderBy(item => item.ExecutableNodeId, StringComparer.Ordinal))
         {
             var definitionId = ReadDefinitionId(node);
-            if (!referencesByDefinition.TryGetValue(definitionId, out var candidates) || candidates.Length != 1)
-                throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' must resolve to exactly one live Published source reference.");
+            if (!referencesByDefinition.TryGetValue(definitionId, out var candidates))
+                throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' must resolve to exactly one accessible live Published artifact.");
 
-            var source = candidates[0];
-            var executable = await executableStore.FindAsync(source.ArtifactId, cancellationToken)
-                ?? throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' references missing executable '{source.ArtifactId}'.");
-            if (!StringComparer.Ordinal.Equals(executable.Identity.ArtifactId, source.ArtifactId))
+            var artifactIds = candidates
+                .Select(candidate => candidate.ArtifactId)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (artifactIds.Length != 1)
+                throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' must resolve to exactly one accessible live Published artifact.");
+
+            var artifactId = artifactIds[0];
+            var source = candidates
+                .Where(candidate => StringComparer.Ordinal.Equals(candidate.ArtifactId, artifactId))
+                .OrderByDescending(candidate => candidate.PublishedAt)
+                .ThenBy(candidate => candidate.SourceReferenceId, StringComparer.Ordinal)
+                .First();
+            var executable = await executableStore.FindAsync(artifactId, cancellationToken)
+                ?? throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' references missing executable '{artifactId}'.");
+            if (!StringComparer.Ordinal.Equals(executable.Identity.ArtifactId, artifactId))
                 throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' resolved inconsistent executable/source identity.");
+            if (executable.InputContract is null ||
+                executable.InputContract.Version != WorkflowExecutableInputContract.CurrentVersion)
+            {
+                throw new ArgumentException(
+                    $"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' resolves a legacy executable that must be recompiled and republished.");
+            }
+
+            var (literalInputs, isComplete) = ReadInputs(node);
+            var validation = isComplete
+                ? inputValidator.Validate(executable.InputContract, literalInputs)
+                : inputValidator.ValidateKnownInputs(executable.InputContract, literalInputs);
+            if (!validation.IsValid)
+            {
+                throw new ArgumentException(
+                    $"DispatchWorkflow node '{node.ExecutableNodeId}' target '{definitionId}' has invalid child inputs: " +
+                    string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+            }
 
             var pin = new DispatchWorkflowPin(executable.Identity, WorkflowExecutableSourceProvenance.From(source));
-            contributions.Add(new ExecutableNodeMetadataContribution(
+            metadata.Add(new ExecutableNodeMetadataClaim(
                 node.ExecutableNodeId,
                 DispatchWorkflowConstants.PinnedTargetMetadataKey,
                 JsonSerializer.Serialize(pin, SerializerOptions)));
+            dependencies.Add(new ExecutableDependencyClaim(
+                node.ExecutableNodeId,
+                executable.Identity.ArtifactId,
+                executable.Identity.ArtifactHash));
         }
 
-        return contributions;
+        return new ExecutableCompilationContribution(metadata, dependencies);
     }
 
     private static string ReadDefinitionId(ExecutableNode node)
@@ -68,6 +120,27 @@ public sealed class DispatchPinSource(
             throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' requires a literal nonblank WorkflowDefinitionId.");
 
         return literal.GetString()!.Trim();
+    }
+
+    private static (IReadOnlyCollection<KeyValuePair<string, JsonElement>> Inputs, bool IsComplete) ReadInputs(
+        ExecutableNode node)
+    {
+        if (!node.InputBindings.TryGetValue("Inputs", out var binding))
+            return (Array.Empty<KeyValuePair<string, JsonElement>>(), true);
+
+        if (binding.Source != RuntimeInputBindingSource.Literal)
+            return (Array.Empty<KeyValuePair<string, JsonElement>>(), false);
+
+        if (binding.LiteralValue is not { } literal || literal.ValueKind == JsonValueKind.Null)
+            return (Array.Empty<KeyValuePair<string, JsonElement>>(), true);
+        if (literal.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' literal Inputs value must be a JSON object.");
+
+        return (
+            literal.EnumerateObject()
+                .Select(property => new KeyValuePair<string, JsonElement>(property.Name, property.Value.Clone()))
+                .ToArray(),
+            true);
     }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)

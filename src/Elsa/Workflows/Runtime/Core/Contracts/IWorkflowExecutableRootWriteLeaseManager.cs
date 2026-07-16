@@ -16,4 +16,16 @@ public interface IWorkflowExecutableRootWriteLeaseManager
         string leaseId,
         Func<CancellationToken, ValueTask> write,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a durable retention-root write while holding renewable leases for the exact root artifact and its
+    /// complete dependency closure. The default preserves compatibility for custom managers compiled against the
+    /// original single-artifact contract; the built-in manager provides closure-wide behavior.
+    /// </summary>
+    ValueTask ExecuteAsync(
+        Models.WorkflowExecutableIdentity root,
+        string leaseId,
+        Func<CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(root.ArtifactId, leaseId, write, cancellationToken);
 }

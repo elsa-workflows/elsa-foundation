@@ -34,9 +34,9 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Theory]
     [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind)]
     [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
-    public void StableDescriptorAndLayoutKinds_Keep_The_CleanBreak_Floor_While_Advancing_To_Version_3(string kind)
+    public void StableDescriptorAndLayoutKinds_Keep_The_CleanBreak_Floor_While_Advancing_To_Version_4(string kind)
     {
-        Assert.Equal(3, ElsaRuntimeDocumentVersions.CurrentFor(kind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.CurrentFor(kind));
         Assert.Equal(2, ElsaRuntimeDocumentVersions.MinimumReadableFor(kind));
     }
 
@@ -333,6 +333,38 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Empty(Assert.IsType<JsonArray>(result["reference"]!["authoredInputs"]));
     }
 
+    [Fact]
+    public void WorkflowExecutableV3ToV4Upcaster_AddsLegacyInputAndDependencyDefaults()
+    {
+        var content = JsonNode.Parse("""{"collection":"workflowExecutable","executable":{"identity":{"artifactId":"artifact-1"}}}""")!.AsObject();
+
+        var result = new WorkflowExecutableDocumentV3ToV4Upcaster().Upcast(content);
+
+        var executable = Assert.IsType<JsonObject>(result["executable"]);
+        Assert.Null(executable["inputContract"]);
+        Assert.Empty(Assert.IsType<JsonArray>(executable["dependencies"]));
+    }
+
+    [Fact]
+    public void WorkflowExecutableSourceReferenceV3ToV4Upcaster_AddsNeutralTenantScope()
+    {
+        var content = JsonNode.Parse("""{"collection":"workflowExecutableSourceReference","reference":{"sourceReferenceId":"ref-1"}}""")!.AsObject();
+
+        var result = new WorkflowExecutableSourceReferenceDocumentV3ToV4Upcaster().Upcast(content);
+
+        Assert.Null(Assert.IsType<JsonObject>(result["reference"])["tenantId"]);
+    }
+
+    [Fact]
+    public void WorkflowExecutionStateV3ToV4Upcaster_AddsRootDispatchDepth()
+    {
+        var content = JsonNode.Parse("""{"collection":"workflowExecutionState","state":{"workflowExecutionId":"wf-1"}}""")!.AsObject();
+
+        var result = new WorkflowExecutionStateDocumentV3ToV4Upcaster().Upcast(content);
+
+        Assert.Equal(0, Assert.IsType<JsonObject>(result["state"])["dispatchNestingDepth"]!.GetValue<int>());
+    }
+
     private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
         params IGroundworkRuntimeDocumentUpcaster[] additional) =>
         new(
@@ -341,9 +373,12 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind),
             new ExecutionScopeAttemptDocumentUpcaster(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind),
             new WorkflowExecutableDocumentV2ToV3Upcaster(),
+            new WorkflowExecutableDocumentV3ToV4Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
+            new WorkflowExecutionStateDocumentV3ToV4Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster(),
+            new WorkflowExecutableSourceReferenceDocumentV3ToV4Upcaster(),
             new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
             new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),
             .. additional

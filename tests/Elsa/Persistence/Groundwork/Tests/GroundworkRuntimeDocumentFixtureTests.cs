@@ -19,17 +19,39 @@ namespace Elsa.Persistence.Groundwork.Tests;
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
     [Fact]
-    public void Workflow_execution_state_shape_is_explicitly_versioned_at_v3() =>
+    public void Workflow_execution_state_shape_is_explicitly_versioned_at_v3()
+    {
+        Assert.NotEmpty(ReadCommittedFixture(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, 3));
+        Assert.True(
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind) >= 3);
+    }
+
+    [Fact]
+    public void Dispatch_dependency_shapes_are_explicitly_versioned()
+    {
         Assert.Equal(
-            3,
+            4,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+        Assert.Equal(
+            4,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(
+            4,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+    }
 
     [Theory]
     [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind)]
     [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
-    public void Input_evidence_shapes_are_explicitly_versioned_at_v3(string documentKind) =>
-        Assert.Equal(3, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(documentKind));
+    public void Input_evidence_shapes_have_committed_v3_history(string documentKind)
+    {
+        Assert.NotEmpty(ReadCommittedFixture(documentKind, 3));
+        Assert.True(Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(documentKind) >= 3);
+    }
 
     // Set GROUNDWORK_FIXTURE_REGEN=1 and run this project to (re)write the committed fixtures into the
     // source tree after an intentional version bump. Off by default so a normal run only compares.

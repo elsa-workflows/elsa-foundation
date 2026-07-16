@@ -98,7 +98,7 @@ public sealed class RestorePublicationSlotRequestHandler(
             .ThenByDescending(publication => publication.PublicationId, StringComparer.Ordinal)
             .FirstOrDefault()
             ?? throw new InvalidOperationException($"Publication slot '{request.SlotName}' has no retired publication to restore.");
-        _ = await executableStore.FindAsync(prior.ArtifactId, cancellationToken)
+        var executable = await executableStore.FindAsync(prior.ArtifactId, cancellationToken)
             ?? throw new InvalidOperationException($"Executable artifact '{prior.ArtifactId}' is unavailable for restore.");
 
         var priorReference = prior.SourceReferenceId is { } priorReferenceId
@@ -133,7 +133,7 @@ public sealed class RestorePublicationSlotRequestHandler(
 
         PublicationActivationResult? activation = null;
         await rootWriteLeaseManager.ExecuteAsync(
-            prior.ArtifactId,
+            executable.Identity,
             $"restore:{publicationId}",
             async ct =>
             {

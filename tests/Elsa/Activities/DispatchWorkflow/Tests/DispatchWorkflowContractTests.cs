@@ -1,6 +1,7 @@
 using System.Reflection;
 using Elsa.Activities.DispatchWorkflow.Design;
 using Elsa.Activities.DispatchWorkflow.Runtime;
+using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Runtime.Core;
@@ -12,7 +13,9 @@ using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 using Activity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 
@@ -25,6 +28,28 @@ public sealed class DispatchWorkflowContractTests
     {
         AssertFeatureCanBeSpecialized(typeof(DispatchWorkflowRuntimeFeature));
         AssertFeatureCanBeSpecialized(typeof(DispatchWorkflowDesignFeature));
+    }
+
+    [Fact]
+    public void Runtime_feature_exposes_default_and_custom_positive_maximum_nesting_depth()
+    {
+        Assert.Equal(32, new DispatchWorkflowOptions().MaxNestingDepth);
+        var services = new ServiceCollection();
+
+        new DispatchWorkflowRuntimeFeature { MaxNestingDepth = 7 }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(7, provider.GetRequiredService<IOptions<DispatchWorkflowOptions>>().Value.MaxNestingDepth);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Runtime_feature_rejects_nonpositive_maximum_nesting_depth(int maximum)
+    {
+        var feature = new DispatchWorkflowRuntimeFeature { MaxNestingDepth = maximum };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => feature.ConfigureServices(new ServiceCollection()));
     }
 
     [Fact]
@@ -103,6 +128,45 @@ public sealed class DispatchWorkflowContractTests
             await ((IActivity)activity).ExecuteAsync(context));
 
         Assert.Contains("#679", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Realized_dynamic_inputs_are_rejected_before_dispatch_without_exposing_raw_values()
+    {
+        const string rejectedValue = "runtime-secret";
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.StartParentAsync(
+                "invalid-input",
+                "parent-invalid-input",
+                "correlation-parent",
+                dispatchInputs: new Dictionary<string, object?> { ["unknown"] = rejectedValue }));
+
+        Assert.Contains("not declared", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(rejectedValue, exception.Message, StringComparison.Ordinal);
+        Assert.Empty(await fixture.ListDispatchesAsync("parent-invalid-input"));
+    }
+
+    [Fact]
+    public async Task Attempted_depth_33_is_rejected_before_dispatch_staging_or_child_materialization()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.StartParentAsync(
+                "over-depth",
+                "parent-over-depth",
+                "correlation-parent",
+                dispatchNestingDepth: 32));
+
+        Assert.Contains("nesting depth 33", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("maximum of 32", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(await fixture.ListDispatchesAsync("parent-over-depth"));
+        Assert.Empty(fixture.ChildProbe.Observations);
+        Assert.DoesNotContain(
+            fixture.Actors.Activations,
+            activation => activation.WorkflowExecutionId.Contains(":dispatch:", StringComparison.Ordinal));
     }
 
     [Fact]

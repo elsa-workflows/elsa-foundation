@@ -8,7 +8,6 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 public sealed class WorkflowExecutableDocumentV2ToV3Upcaster : IGroundworkRuntimeDocumentUpcaster
 {
     public string DocumentKind => ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind;
-
     public int FromVersion => 2;
 
     public JsonObject Upcast(JsonObject content)

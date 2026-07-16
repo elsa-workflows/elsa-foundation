@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime;
+using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Runtime;
@@ -7,7 +8,9 @@ using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
+using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -35,12 +38,17 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     internal RecordingWorkflowExecutionActorProvider Actors => _provider.GetRequiredService<RecordingWorkflowExecutionActorProvider>();
     internal ChildExecutionProbe ChildProbe => _provider.GetRequiredService<ChildExecutionProbe>();
 
-    internal static async ValueTask<DispatchWorkflowRuntimeTestFixture> CreateAsync()
+    internal static async ValueTask<DispatchWorkflowRuntimeTestFixture> CreateAsync(
+        int maxNestingDepth = DispatchWorkflowOptions.DefaultMaxNestingDepth)
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         services.AddSingleton<CheckpointRecorder>();
         services.AddSingleton<ChildExecutionProbe>();
+        var typeRegistry = new WellKnownTypeRegistry();
+        typeRegistry.RegisterType(typeof(string), "String");
+        typeRegistry.RegisterType(typeof(int), "Int32");
+        services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
         services.AddSingleton<IActivityConstructor, DispatchActivityConstructor>();
         services.AddSingleton<IActivityConstructor, ChildProbeActivityConstructor>();
 
@@ -48,7 +56,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
-        new DispatchWorkflowRuntimeFeature().ConfigureServices(services);
+        new DispatchWorkflowRuntimeFeature { MaxNestingDepth = maxNestingDepth }.ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Singleton<IWellKnownTypeRegistry>(typeRegistry));
 
         services.AddSingleton<InProcessWorkflowExecutionActorProvider>(serviceProvider =>
             new InProcessWorkflowExecutionActorProvider(serviceProvider.GetRequiredService<IWorkflowExecutionCommandExecutor>()));
@@ -72,9 +81,12 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         string caseId,
         string parentWorkflowExecutionId,
         string parentCorrelationId,
-        string? correlationOverride = null)
+        string? correlationOverride = null,
+        IReadOnlyDictionary<string, object?>? dispatchInputs = null,
+        int dispatchNestingDepth = 0,
+        string? parentDefinitionId = null)
     {
-        var parentExecutable = NewParentExecutable(caseId, correlationOverride);
+        var parentExecutable = NewParentExecutable(caseId, correlationOverride, dispatchInputs, parentDefinitionId);
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
@@ -106,7 +118,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 correlationId: parentCorrelationId,
                 tenantId: "tenant-42",
                 partition: new WorkflowExecutionPartition("partition-eu"),
-                authority: authority));
+                authority: authority,
+                startAuthority: null,
+                dispatchNestingDepth: dispatchNestingDepth));
 
         var activityState = AssertSingle(await _provider.GetRequiredService<IActivityExecutionStateStore>()
             .ListAsync(parentWorkflowExecutionId));
@@ -147,6 +161,27 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     internal async ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListDispatchesAsync(string parentWorkflowExecutionId) =>
         await _provider.GetRequiredService<IWorkflowDispatchStore>().ListAsync(parentWorkflowExecutionId);
 
+    internal async ValueTask ReplaceOrUnpublishChildAsync(bool replace)
+    {
+        var references = _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+        await references.RetireAsync("source-child", Now.AddMinutes(1), replace ? "replaced" : "unpublished");
+        if (!replace)
+            return;
+
+        var replacementIdentity = new WorkflowExecutableIdentity(
+            "artifact-child-replacement",
+            ChildIdentity.DefinitionId,
+            "version-child-replacement",
+            "4.0.0",
+            "sha256:child-replacement");
+        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewChildExecutable(replacementIdentity));
+        await references.SaveAsync(NewSourceReference(
+            "source-child-replacement",
+            replacementIdentity,
+            "publication-child-replacement",
+            "slot-child"));
+    }
+
     public ValueTask DisposeAsync() => _provider.DisposeAsync();
 
     private async ValueTask SeedChildAsync()
@@ -158,9 +193,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     internal static WorkflowExecutableSourceReference ChildSourceReference() =>
         NewSourceReference("source-child", ChildIdentity, "publication-child", "slot-child");
 
-    private static WorkflowExecutable NewChildExecutable() =>
+    private static WorkflowExecutable NewChildExecutable(WorkflowExecutableIdentity? identity = null) =>
         new(
-            identity: ChildIdentity,
+            identity: identity ?? ChildIdentity,
             rootActivity: NewNode(
                 executableNodeId: "node-child-probe",
                 activityType: "test/dispatch-child-probe",
@@ -168,10 +203,33 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 descriptorPayload: JsonSerializer.SerializeToElement(new ChildProbeDescriptor())),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: new WorkflowExecutableInputContract(
+                WorkflowExecutableInputContract.CurrentVersion,
+                [
+                    new WorkflowDeclaredInput("message", new Elsa.Primitives.Models.TypeReference("String"), true),
+                    new WorkflowDeclaredInput("count", new Elsa.Primitives.Models.TypeReference("Int32"), true),
+                    new WorkflowDeclaredInput("tenant", new Elsa.Primitives.Models.TypeReference("String"), false),
+                    new WorkflowDeclaredInput(
+                        "defaulted",
+                        new Elsa.Primitives.Models.TypeReference("String"),
+                        false,
+                        JsonSerializer.SerializeToElement("from-default"))
+                ]),
+            dependencies: []);
 
-    private static WorkflowExecutable NewParentExecutable(string caseId, string? correlationOverride)
+    private static WorkflowExecutable NewParentExecutable(
+        string caseId,
+        string? correlationOverride,
+        IReadOnlyDictionary<string, object?>? dispatchInputs,
+        string? parentDefinitionId)
     {
+        dispatchInputs ??= new Dictionary<string, object?>
+        {
+            ["message"] = "hello child",
+            ["count"] = 7,
+            ["tenant"] = "workflow-input-tenant"
+        };
         var inputs = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
         {
             [nameof(DispatchWorkflowActivity.WorkflowDefinitionId)] = LiteralBinding(
@@ -180,11 +238,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 typeof(string)),
             [nameof(DispatchWorkflowActivity.Inputs)] = LiteralBinding(
                 nameof(DispatchWorkflowActivity.Inputs),
-                new Dictionary<string, object?>
-                {
-                    ["message"] = "hello child",
-                    ["count"] = 7
-                },
+                dispatchInputs,
                 typeof(IReadOnlyDictionary<string, object?>))
         };
         if (correlationOverride is not null)
@@ -221,14 +275,22 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         return new WorkflowExecutable(
             identity: new WorkflowExecutableIdentity(
                 $"artifact-parent-{caseId}",
-                $"definition-parent-{caseId}",
+                parentDefinitionId ?? $"definition-parent-{caseId}",
                 $"version-parent-{caseId}",
                 "1.0.0",
                 $"sha256:parent-{caseId}"),
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies:
+            [
+                new WorkflowExecutableDependency(
+                    ChildIdentity.ArtifactId,
+                    ChildIdentity.ArtifactHash,
+                    [node.ExecutableNodeId])
+            ]);
     }
 
     private static RuntimeInputBinding LiteralBinding(string name, object value, Type type) =>

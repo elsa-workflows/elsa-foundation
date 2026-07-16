@@ -3,7 +3,10 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Core.Contracts;
 
-/// <summary>Returns runtime-owned metadata claims for compiled executable nodes.</summary>
+/// <summary>
+/// Compatibility source retained while DispatchWorkflow moves to <see cref="IExecutableCompilationSource"/>.
+/// New contributors register the generalized compilation source.
+/// </summary>
 public interface IExecutableNodeMetadataSource
 {
     ValueTask<IReadOnlyCollection<ExecutableNodeMetadataContribution>> GetMetadataAsync(
@@ -19,4 +22,15 @@ public interface IExecutableNodeMetadataEnricher
         WorkflowExecutableCompileSource source,
         ExecutableNode rootActivity,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies the generalized compile fan-in and returns both enriched nodes and exact dependency claims.
+    /// Existing implementations remain source/binary compatible through this default adapter.
+    /// </summary>
+    async ValueTask<ExecutableCompilationEnrichment> EnrichCompilationAsync(
+        WorkflowExecutableCompileRequest request,
+        WorkflowExecutableCompileSource source,
+        ExecutableNode rootActivity,
+        CancellationToken cancellationToken = default) =>
+        new(await EnrichAsync(request, source, rootActivity, cancellationToken));
 }

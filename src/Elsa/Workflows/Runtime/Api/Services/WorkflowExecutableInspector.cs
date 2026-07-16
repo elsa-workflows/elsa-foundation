@@ -93,7 +93,17 @@ public sealed class WorkflowExecutableInspector(
                     chosen.SourceReferenceId,
                     requested is null ? chosen.IsLive(now) ? "newest-live" : "newest" : "requested",
                     chosen.Layout),
-            ordered.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray());
+            ordered.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray())
+        {
+            InputContract = InputContract(executable.InputContract),
+            Dependencies = executable.Dependencies
+                .OrderBy(dependency => dependency.ArtifactId, StringComparer.Ordinal)
+                .Select(dependency => new WorkflowExecutableDependencyView(
+                    dependency.ArtifactId,
+                    dependency.ArtifactHash,
+                    dependency.DispatchNodeIds.Order(StringComparer.Ordinal).ToArray()))
+                .ToArray()
+        };
     }
 
     public async ValueTask<WorkflowExecutableInputSourcesView?> GetInputSourcesAsync(
@@ -261,6 +271,20 @@ public sealed class WorkflowExecutableInspector(
             includeSourceDetails ? binding.DurableValue : null,
             includeSourceDetails ? binding.Reference : null,
             includeSourceDetails ? binding.Metadata : null);
+
+    private static WorkflowExecutableInputContractView? InputContract(WorkflowExecutableInputContract? contract) =>
+        contract is null
+            ? null
+            : new WorkflowExecutableInputContractView(
+                contract.Version,
+                contract.Inputs
+                    .OrderBy(input => input.Name, StringComparer.Ordinal)
+                    .Select(input => new WorkflowExecutableDeclaredInputView(
+                        input.Name,
+                        input.Type,
+                        input.IsRequired,
+                        input.DefaultValue?.Clone()))
+                    .ToArray());
 
     private static string? Preview(RuntimeInputBinding binding)
     {

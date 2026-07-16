@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
@@ -232,6 +233,21 @@ public sealed record WorkflowExecutableInputSourcesView(
 
 public sealed record WorkflowExecutableChildSlotView(string Name, IReadOnlyCollection<WorkflowExecutableNodeView> Activities);
 
+public sealed record WorkflowExecutableInputContractView(
+    int Version,
+    IReadOnlyCollection<WorkflowExecutableDeclaredInputView> Inputs);
+
+public sealed record WorkflowExecutableDeclaredInputView(
+    string Name,
+    TypeReference Type,
+    bool IsRequired,
+    JsonElement? DefaultValue);
+
+public sealed record WorkflowExecutableDependencyView(
+    string ArtifactId,
+    string ArtifactHash,
+    IReadOnlyCollection<string> DispatchNodeIds);
+
 public sealed record WorkflowExecutableDetailsView(
     string ArtifactId,
     string ArtifactHash,
@@ -245,7 +261,14 @@ public sealed record WorkflowExecutableDetailsView(
     WorkflowExecutableNodeView RootActivity,
     IReadOnlyDictionary<string, string> Metadata,
     WorkflowExecutableChosenReferenceView? ChosenReference,
-    IReadOnlyCollection<ExecutableSourceReferenceView> References);
+    IReadOnlyCollection<ExecutableSourceReferenceView> References)
+{
+    /// <summary>The immutable versioned workflow-input contract, or <see langword="null"/> for a legacy artifact.</summary>
+    public WorkflowExecutableInputContractView? InputContract { get; init; }
+
+    /// <summary>Canonical immutable direct executable dependencies; publication/source facts are excluded.</summary>
+    public IReadOnlyCollection<WorkflowExecutableDependencyView> Dependencies { get; init; } = [];
+}
 
 public sealed record WorkflowExecutableChosenReferenceView(
     string SourceReferenceId,

@@ -20,7 +20,6 @@ public sealed record WorkflowDispatchInputDescriptor
 
 public sealed class WorkflowDispatchRecord
 {
-    [JsonConstructor]
     public WorkflowDispatchRecord(
         string dispatchId,
         string parentWorkflowExecutionId,
@@ -39,6 +38,48 @@ public sealed class WorkflowDispatchRecord
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
         IReadOnlyDictionary<string, string>? metadata = null)
+        : this(
+            dispatchId,
+            parentWorkflowExecutionId,
+            parentActivityExecutionId,
+            childWorkflowExecutionId,
+            childExecutable,
+            childSource,
+            mode,
+            status,
+            correlationId,
+            tenantId,
+            partition,
+            runKind,
+            authority,
+            inputDescriptors,
+            createdAt,
+            updatedAt,
+            metadata,
+            dispatchNestingDepth: 0)
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowDispatchRecord(
+        string dispatchId,
+        string parentWorkflowExecutionId,
+        string parentActivityExecutionId,
+        string childWorkflowExecutionId,
+        WorkflowExecutableIdentity childExecutable,
+        WorkflowExecutableSourceProvenance childSource,
+        WorkflowDispatchMode mode,
+        WorkflowDispatchStatus status,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition partition,
+        WorkflowRunKind runKind,
+        WorkflowExecutionAuthoritySnapshot authority,
+        IReadOnlyCollection<WorkflowDispatchInputDescriptor>? inputDescriptors,
+        DateTimeOffset createdAt,
+        DateTimeOffset updatedAt,
+        IReadOnlyDictionary<string, string>? metadata,
+        int dispatchNestingDepth)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         ArgumentException.ThrowIfNullOrWhiteSpace(parentWorkflowExecutionId);
@@ -50,6 +91,8 @@ public sealed class WorkflowDispatchRecord
         ArgumentNullException.ThrowIfNull(authority);
         ValidateOptional(correlationId, nameof(correlationId));
         ValidateOptional(tenantId, nameof(tenantId));
+        if (dispatchNestingDepth < 0)
+            throw new ArgumentOutOfRangeException(nameof(dispatchNestingDepth), dispatchNestingDepth, "Dispatch nesting depth cannot be negative.");
         var identity = new WorkflowDispatchIdentity(parentWorkflowExecutionId, parentActivityExecutionId);
         if (!StringComparer.Ordinal.Equals(dispatchId, identity.DispatchId))
             throw new ArgumentException("DispatchId must match the deterministic parent/activity identity.", nameof(dispatchId));
@@ -85,6 +128,7 @@ public sealed class WorkflowDispatchRecord
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        DispatchNestingDepth = dispatchNestingDepth;
     }
 
     public string DispatchId { get; }
@@ -104,6 +148,7 @@ public sealed class WorkflowDispatchRecord
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public int DispatchNestingDepth { get; }
 
     private static void ValidateOptional(string? value, string parameterName)
     {
@@ -144,7 +189,6 @@ public sealed class WorkflowDispatchCheckpointRequest
 
 public sealed class WorkflowDispatchStartPayload
 {
-    [JsonConstructor]
     public WorkflowDispatchStartPayload(
         string dispatchId,
         string parentWorkflowExecutionId,
@@ -158,17 +202,92 @@ public sealed class WorkflowDispatchStartPayload
         WorkflowExecutionPartition partition,
         WorkflowRunKind runKind,
         WorkflowExecutionAuthoritySnapshot authority)
+        : this(
+            dispatchId,
+            parentWorkflowExecutionId,
+            parentActivityExecutionId,
+            childWorkflowExecutionId,
+            childExecutable,
+            childSource,
+            inputs,
+            correlationId,
+            tenantId,
+            partition,
+            runKind,
+            authority,
+            parentExecutable: null,
+            dispatchNodeId: null)
+    {
+    }
+
+    public WorkflowDispatchStartPayload(
+        string dispatchId,
+        string parentWorkflowExecutionId,
+        string parentActivityExecutionId,
+        string childWorkflowExecutionId,
+        WorkflowExecutableIdentity childExecutable,
+        WorkflowExecutableSourceProvenance? childSource,
+        IReadOnlyDictionary<string, JsonElement>? inputs,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition partition,
+        WorkflowRunKind runKind,
+        WorkflowExecutionAuthoritySnapshot authority,
+        WorkflowExecutableIdentity? parentExecutable,
+        string? dispatchNodeId)
+        : this(
+            dispatchId,
+            parentWorkflowExecutionId,
+            parentActivityExecutionId,
+            childWorkflowExecutionId,
+            childExecutable,
+            childSource,
+            inputs,
+            correlationId,
+            tenantId,
+            partition,
+            runKind,
+            authority,
+            parentExecutable,
+            dispatchNodeId,
+            dispatchNestingDepth: 0)
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowDispatchStartPayload(
+        string dispatchId,
+        string parentWorkflowExecutionId,
+        string parentActivityExecutionId,
+        string childWorkflowExecutionId,
+        WorkflowExecutableIdentity childExecutable,
+        WorkflowExecutableSourceProvenance? childSource,
+        IReadOnlyDictionary<string, JsonElement>? inputs,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition partition,
+        WorkflowRunKind runKind,
+        WorkflowExecutionAuthoritySnapshot authority,
+        WorkflowExecutableIdentity? parentExecutable,
+        string? dispatchNodeId,
+        int dispatchNestingDepth)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         ArgumentException.ThrowIfNullOrWhiteSpace(parentWorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(parentActivityExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(childWorkflowExecutionId);
         ArgumentNullException.ThrowIfNull(childExecutable);
-        ArgumentNullException.ThrowIfNull(childSource);
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(authority);
         ValidateOptional(correlationId, nameof(correlationId));
         ValidateOptional(tenantId, nameof(tenantId));
+        ValidateOptional(dispatchNodeId, nameof(dispatchNodeId));
+        if (dispatchNestingDepth < 0)
+            throw new ArgumentOutOfRangeException(nameof(dispatchNestingDepth), dispatchNestingDepth, "Dispatch nesting depth cannot be negative.");
+        if ((parentExecutable is null) != (dispatchNodeId is null))
+            throw new ArgumentException("Retained child starts require both parent executable identity and dispatch node ID.", nameof(parentExecutable));
+        if (parentExecutable is null && childSource is null)
+            throw new ArgumentException("Legacy child starts require historical child source provenance.", nameof(childSource));
 
         DispatchId = dispatchId;
         ParentWorkflowExecutionId = parentWorkflowExecutionId;
@@ -183,6 +302,9 @@ public sealed class WorkflowDispatchStartPayload
         Partition = partition;
         RunKind = runKind;
         Authority = authority;
+        ParentExecutable = parentExecutable;
+        DispatchNodeId = dispatchNodeId;
+        DispatchNestingDepth = dispatchNestingDepth;
     }
 
     public string DispatchId { get; }
@@ -190,13 +312,19 @@ public sealed class WorkflowDispatchStartPayload
     public string ParentActivityExecutionId { get; }
     public string ChildWorkflowExecutionId { get; }
     public WorkflowExecutableIdentity ChildExecutable { get; }
-    public WorkflowExecutableSourceProvenance ChildSource { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutableSourceProvenance? ChildSource { get; }
     public IReadOnlyDictionary<string, JsonElement> Inputs { get; }
     public string? CorrelationId { get; }
     public string? TenantId { get; }
     public WorkflowExecutionPartition Partition { get; }
     public WorkflowRunKind RunKind { get; }
     public WorkflowExecutionAuthoritySnapshot Authority { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutableIdentity? ParentExecutable { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DispatchNodeId { get; }
+    public int DispatchNestingDepth { get; }
 
     private static void ValidateOptional(string? value, string parameterName)
     {

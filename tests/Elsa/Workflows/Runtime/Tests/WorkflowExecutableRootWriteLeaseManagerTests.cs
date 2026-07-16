@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Configuration;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
@@ -52,9 +54,65 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
         Assert.NotNull(guardAfterWrite);
     }
 
-    private static WorkflowExecutable Executable(string artifactId) =>
+    [Fact]
+    public async Task ExecuteAsync_LeasesTheDistinctDependencyClosureInOrdinalArtifactOrder()
+    {
+        var inner = new InMemoryWorkflowExecutableStore();
+        var child = Executable("artifact-a");
+        var root = Executable("artifact-z", child);
+        await inner.SaveAsync(child);
+        await inner.SaveAsync(root);
+        var store = new RecordingExecutableStore(inner);
+        var now = DateTimeOffset.UtcNow;
+        var manager = NewManager(store);
+
+        await manager.ExecuteAsync(root.Identity, "writer", async _ =>
+        {
+            Assert.Null(await store.TryBeginDeletionAsync("artifact-a", "gc-a", now.AddMinutes(1), now));
+            Assert.Null(await store.TryBeginDeletionAsync("artifact-z", "gc-z", now.AddMinutes(1), now));
+        });
+
+        Assert.Equal(["artifact-a", "artifact-z"], store.AcquiredArtifactIds);
+        Assert.NotNull(await store.TryBeginDeletionAsync("artifact-a", "gc-a", now.AddMinutes(1), now));
+        Assert.NotNull(await store.TryBeginDeletionAsync("artifact-z", "gc-z", now.AddMinutes(1), now));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ReleasesAlreadyAcquiredClosureLeasesWhenALaterArtifactCannotBeLeased()
+    {
+        var inner = new InMemoryWorkflowExecutableStore();
+        var child = Executable("artifact-a");
+        var root = Executable("artifact-z", child);
+        await inner.SaveAsync(child);
+        await inner.SaveAsync(root);
+        var now = DateTimeOffset.UtcNow;
+        var blockingGuard = await inner.TryBeginDeletionAsync("artifact-z", "gc-z", now.AddMinutes(1), now);
+        var store = new RecordingExecutableStore(inner);
+        var manager = NewManager(store);
+        var wrote = false;
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() =>
+            manager.ExecuteAsync(root.Identity, "writer", _ =>
+            {
+                wrote = true;
+                return ValueTask.CompletedTask;
+            }).AsTask());
+
+        Assert.NotNull(blockingGuard);
+        Assert.False(wrote);
+        Assert.Equal(["artifact-a", "artifact-z"], store.AcquiredArtifactIds);
+        Assert.NotNull(await inner.TryBeginDeletionAsync("artifact-a", "gc-a", now.AddMinutes(1), now));
+    }
+
+    private static WorkflowExecutableRootWriteLeaseManager NewManager(IWorkflowExecutableStore store) =>
         new(
-            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            store,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
+            TimeProvider.System);
+
+    private static WorkflowExecutable Executable(string artifactId, params WorkflowExecutable[] dependencies) =>
+        new(
+            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", Hash(artifactId)),
             rootActivity: new ExecutableNode(
                 executableNodeId: "node-root",
                 authoredActivityId: "activity-root",
@@ -69,5 +127,64 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: dependencies.Select(dependency => new WorkflowExecutableDependency(
+                dependency.Identity.ArtifactId,
+                dependency.Identity.ArtifactHash,
+                ["node-root"])).ToArray());
+
+    private static string Hash(string artifactId) => $"sha256:{artifactId}";
+
+    private sealed class RecordingExecutableStore(IWorkflowExecutableStore inner) : IWorkflowExecutableStore
+    {
+        public List<string> AcquiredArtifactIds { get; } = [];
+
+        public ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(executable, cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(artifactId, cancellationToken);
+
+        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
+            string artifactId,
+            string leaseId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default)
+        {
+            AcquiredArtifactIds.Add(artifactId);
+            return inner.TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now, cancellationToken);
+        }
+
+        public ValueTask<bool> RenewRootWriteLeaseAsync(
+            WorkflowExecutableRootWriteLease lease,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            inner.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken);
+
+        public ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default) =>
+            inner.ReleaseRootWriteLeaseAsync(lease, cancellationToken);
+
+        public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(
+            string artifactId,
+            string operationId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            inner.TryBeginDeletionAsync(artifactId, operationId, expiresAt, now, cancellationToken);
+
+        public ValueTask<bool> CancelDeletionAsync(WorkflowExecutableDeletionGuard guard, CancellationToken cancellationToken = default) =>
+            inner.CancelDeletionAsync(guard, cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(WorkflowExecutableDeletionGuard guard, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(guard, now, cancellationToken);
+
+        public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(artifactId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default) =>
+            inner.ListAsync(cancellationToken);
+    }
 }

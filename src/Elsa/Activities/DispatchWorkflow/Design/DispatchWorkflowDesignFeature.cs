@@ -21,6 +21,6 @@ public class DispatchWorkflowDesignFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityInputOptionsProvider, WorkflowDefinitionOptionsProvider>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableNodeMetadataSource, DispatchPinSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, DispatchPinSource>());
     }
 }

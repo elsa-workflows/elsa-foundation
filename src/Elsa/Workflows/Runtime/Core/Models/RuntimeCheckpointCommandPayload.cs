@@ -43,7 +43,6 @@ public sealed class RuntimeCheckpointCommandPayload
     {
     }
 
-    [JsonConstructor]
     public RuntimeCheckpointCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string checkpointName,
@@ -61,6 +60,46 @@ public sealed class RuntimeCheckpointCommandPayload
         string? tenantId,
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority)
+        : this(
+            pinnedExecutable,
+            checkpointName,
+            activityExecutionIds,
+            reason,
+            postCommitIntents,
+            seedVariables,
+            seedInputs,
+            seedStimulusInput,
+            seedTriggerNodeId,
+            runKind,
+            pinnedSource,
+            parentWorkflowExecutionId,
+            correlationId,
+            tenantId,
+            partition,
+            authority,
+            dispatchNestingDepth: 0)
+    {
+    }
+
+    [JsonConstructor]
+    public RuntimeCheckpointCommandPayload(
+        WorkflowExecutableIdentity pinnedExecutable,
+        string checkpointName,
+        IReadOnlyCollection<string>? activityExecutionIds,
+        string reason,
+        IReadOnlyCollection<RuntimePostCommitIntent>? postCommitIntents,
+        IReadOnlyDictionary<string, JsonElement>? seedVariables,
+        IReadOnlyDictionary<string, JsonElement>? seedInputs,
+        JsonElement? seedStimulusInput,
+        string? seedTriggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceProvenance? pinnedSource,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority,
+        int dispatchNestingDepth)
     {
         if (pinnedExecutable is null)
             throw new RuntimeCheckpointCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
@@ -73,6 +112,8 @@ public sealed class RuntimeCheckpointCommandPayload
         ValidateOptional(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
         ValidateOptional(correlationId, nameof(correlationId));
         ValidateOptional(tenantId, nameof(tenantId));
+        if (dispatchNestingDepth < 0)
+            throw new RuntimeCheckpointCommandPayloadValidationException("Dispatch nesting depth cannot be negative.", nameof(dispatchNestingDepth));
 
         var activityExecutionIdSnapshot = (activityExecutionIds ?? []).ToArray();
         if (activityExecutionIdSnapshot.Any(string.IsNullOrWhiteSpace))
@@ -107,6 +148,7 @@ public sealed class RuntimeCheckpointCommandPayload
         TenantId = tenantId;
         Partition = partition;
         Authority = authority;
+        DispatchNestingDepth = dispatchNestingDepth;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -154,6 +196,9 @@ public sealed class RuntimeCheckpointCommandPayload
     public string? TenantId { get; }
     public WorkflowExecutionPartition? Partition { get; }
     public WorkflowExecutionAuthoritySnapshot? Authority { get; }
+
+    /// <summary>Durable cross-workflow dispatch depth. Missing legacy values default to zero.</summary>
+    public int DispatchNestingDepth { get; }
 
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);

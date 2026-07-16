@@ -134,10 +134,25 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     {
         var executables = (await _executableStore.ListAsync(cancellationToken)).ToArray();
         var templates = (await _activityTemplateStore.ListAsync(cancellationToken)).ToArray();
-        var executionRoots = (await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken))
-            .ToHashSet(StringComparer.Ordinal);
+        HashSet<string> protectedArtifactIds;
+        HashSet<string> executionProtectedArtifactIds;
+        try
+        {
+            protectedArtifactIds = await LoadProtectedClosureAsync(executables, templates, now, cancellationToken);
+            var executionRootIds = await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+            executionProtectedArtifactIds = ResolveProtectedClosure(executables, executionRootIds);
+        }
+        catch (Exception exception)
+        {
+            if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                throw;
+
+            _logger.LogWarning(exception, "Reference GC retained all executable material because protected dependency reachability could not be established");
+            return new WorkflowExecutableReferenceSweepResult(0, 0, 0);
+        }
+
         var retainedTemplateHashes = executables
-            .Where(executable => executionRoots.Contains(executable.Identity.ArtifactId))
+            .Where(executable => executionProtectedArtifactIds.Contains(executable.Identity.ArtifactId))
             .Select(executable => executable.CompatibilityMetadata.GetValueOrDefault("activity.templateHash"))
             .Where(hash => !string.IsNullOrWhiteSpace(hash))
             .ToHashSet(StringComparer.Ordinal);
@@ -145,7 +160,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             .Where(template => retainedTemplateHashes.Contains(template.TemplateHash))
             .Select(template => template.TemplateId)
             .ToHashSet(StringComparer.Ordinal);
-        var retainedMaterialIds = executionRoots
+        var retainedMaterialIds = executionProtectedArtifactIds
             .Concat(retainedTemplateIds)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -162,13 +177,14 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                 deletedReferenceIds.Add(reference.SourceReferenceId);
         }
 
-        // Query 2 — form candidates outside the staging grace that no retained execution pins. The grace closes
-        // the expected gap between saving an immutable artifact and committing its first durable source root.
+        // Query 2 — form candidates outside the staging grace that no live root's complete dependency closure
+        // protects. The grace closes the expected gap between saving an immutable artifact and committing its first
+        // durable source root. Any graph/query uncertainty retains every artifact for this sweep.
         var creationCutoff = now - _artifactCreationGracePeriod;
         var artifactIds = executables
             .Where(executable => executable.CreatedAt <= creationCutoff)
             .Select(executable => executable.Identity.ArtifactId)
-            .Where(artifactId => !executionRoots.Contains(artifactId))
+            .Where(artifactId => !protectedArtifactIds.Contains(artifactId))
             .ToArray();
         var unreferencedArtifactIds = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync(artifactIds, now, cancellationToken);
 
@@ -197,8 +213,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                     continue;
                 }
 
-                var currentExecutionRoots = await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
-                if (currentExecutionRoots.Contains(artifactId, StringComparer.Ordinal))
+                var currentExecutables = await _executableStore.ListAsync(cancellationToken);
+                var currentTemplates = await _activityTemplateStore.ListAsync(cancellationToken);
+                var currentProtectedArtifactIds = await LoadProtectedClosureAsync(currentExecutables, currentTemplates, now, cancellationToken);
+                if (currentProtectedArtifactIds.Contains(artifactId))
                 {
                     await CancelDeletionConservativelyAsync(deletionGuard);
                     continue;
@@ -262,5 +280,67 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                 guard.OperationId,
                 guard.ArtifactId);
         }
+    }
+
+    private async ValueTask<HashSet<string>> LoadProtectedClosureAsync(
+        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<ExecutableActivityTemplate> templates,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var sourceRoots = await _sourceReferenceStore.ListAsync(liveOnly: true, now: now, cancellationToken: cancellationToken);
+        var executionRootIds = await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+        var executableIds = executables.Select(executable => executable.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal);
+        var templateIds = templates.Select(template => template.TemplateId).ToHashSet(StringComparer.Ordinal);
+        var sourceRootIds = sourceRoots
+            .Select(reference => reference.ArtifactId)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        foreach (var sourceRootId in sourceRootIds)
+        {
+            if (!executableIds.Contains(sourceRootId) && !templateIds.Contains(sourceRootId))
+            {
+                throw new WorkflowExecutableDependencyGraphException(
+                    WorkflowExecutableDependencyGraphFailureKind.MissingArtifact,
+                    $"Retention root '{sourceRootId}' points to missing executable material.");
+            }
+        }
+
+        var rootIds = sourceRootIds
+            .Where(executableIds.Contains)
+            .Concat(executionRootIds)
+            .ToArray();
+        return ResolveProtectedClosure(executables, rootIds);
+    }
+
+    private static HashSet<string> ResolveProtectedClosure(
+        IReadOnlyCollection<WorkflowExecutable> executables,
+        IEnumerable<string> rootArtifactIds)
+    {
+        var identitiesById = executables.ToDictionary(executable => executable.Identity.ArtifactId, StringComparer.Ordinal);
+        var rootIds = rootArtifactIds
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (rootIds.Length == 0)
+            return new HashSet<string>(StringComparer.Ordinal);
+
+        var roots = new List<WorkflowExecutableIdentity>(rootIds.Length);
+        foreach (var rootId in rootIds)
+        {
+            if (!identitiesById.TryGetValue(rootId, out var executable))
+            {
+                throw new WorkflowExecutableDependencyGraphException(
+                    WorkflowExecutableDependencyGraphFailureKind.MissingArtifact,
+                    $"Retention root '{rootId}' points to a missing executable artifact.");
+            }
+
+            roots.Add(executable.Identity);
+        }
+
+        return WorkflowExecutableDependencyGraph.ResolveClosure(roots, executables)
+            .Select(executable => executable.Identity.ArtifactId)
+            .ToHashSet(StringComparer.Ordinal);
     }
 }
