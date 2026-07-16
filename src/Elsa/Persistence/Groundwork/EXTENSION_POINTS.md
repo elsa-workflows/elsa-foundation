@@ -71,8 +71,7 @@ reviewed longer-lived registrations.
 
 | Contract | Default implementation | Responsibility |
 |---|---|---|
-| `IGroundworkRuntimeDocumentSerializer` | `GroundworkRuntimeDocumentSerializer` | Owns the frozen bridge `JsonSerializerOptions`; stamps each document with its kind's current schema version on write and enforces the stamp on read (deserialize current, upcast older, fail loudly on unknown/future). The single sanctioned serialization surface for runtime documents — stores must not call `System.Text.Json` directly. |
-| `IGroundworkRuntimeDocumentUpcasterRegistry` | `GroundworkRuntimeDocumentUpcasterRegistry` | Indexes contributed upcasters per kind and applies them one version at a time; validates the chain **eagerly at construction** (duplicate step, chain gap, step at/beyond a kind's current version, or an incomplete known-kind chain all fail at startup). |
+| `IGroundworkRuntimeDocumentSerializer` | `GroundworkRuntimeDocumentSerializer` | Elsa facade over Groundwork's `VersionedJsonDocumentCodec`. Owns the frozen bridge `JsonSerializerOptions` and Elsa's per-kind policies; Groundwork stamps and enforces versions and rejects below-minimum/unknown/future versions. This is the single sanctioned serialization surface for Runtime stores. |
 | `IGroundworkStoreSessionFactory` | `GroundworkStoreSessionFactory` | Maps the current provider-neutral context to one immutable access-bound session. `ExecutePrivilegedAcrossScopesAsync` rejects every non-across-scope context before provider acquisition, records acquisition, disposes the provider lease, then records exactly one terminal outcome. |
 | `IGroundworkPrivilegedAccessEmitter` | Scoped `GroundworkPrivilegedAccessRecorder` writing to the singleton bounded `GroundworkPrivilegedAccessSink` | Emits correlated, sanitized acquisition/outcome records. Scoped tenant identities are represented by a stable SHA-256 reference; raw tenants and exception messages never become metric labels or retained event fields. |
 
@@ -81,17 +80,17 @@ already hold a named `PersistenceAccessContext.PrivilegedAcrossScopes` context, 
 the admitted bounded collection route. Ordinary and privileged-but-scoped contexts fail before provider
 resources are opened.
 
-## Extend — contribution (fan-in)
+## Schema migration contributions
 
-| Interface | Kind | What to register |
-|---|---|---|
-| `IGroundworkRuntimeDocumentUpcaster` | Source (per-version migration step) | One implementation per `(DocumentKind, FromVersion)` step. Register any number in the service collection; the registry discovers them all via `IEnumerable<IGroundworkRuntimeDocumentUpcaster>`. Each rewrites content JSON from `FromVersion` to `FromVersion + 1`. |
-
-Adding an upcaster never removes another. When bumping a kind's current version in `ElsaRuntimeDocumentVersions`, register an upcaster for the previous version in the same change (see the evolution checklist in `docs/serialization.md`).
+There is no Elsa-owned upcaster contribution surface before GA. Every Runtime document kind admits only its
+current fixture, so any older persisted generation requires the documented complete persistence reset. After a
+released shape exists, a compatible in-place or rolling upgrade may add explicit Groundwork
+`IDocumentJsonUpcaster` contributions and retain every supported historical fixture; that future change must
+also extend serializer composition deliberately rather than reintroducing an Elsa-specific codec or registry.
 
 ## Schema-version model
 
-Versions live in the Groundwork **envelope** `SchemaVersion` field (already persisted per document), not inside content JSON and not on the domain state records. Per-kind current versions are integers declared in `ElsaRuntimeDocumentVersions`; `workflowExecutable`, `workflowExecutableSourceReference`, and `workflowExecutionState` are version `3` with complete production upcaster chains, `workflowTriggerBinding` and `recurringTriggerSchedule` are version `2`, and unchanged kinds remain at version `1`. The legacy manifest-wide stamp `"1.0.0"` parses as version `1` for every kind. Committed versioned golden fixtures make any unversioned change to a persisted state-record shape a test failure.
+Versions live in the Groundwork **envelope** `SchemaVersion` field (already persisted per document), not inside content JSON and not on the domain state records. Elsa declares per-kind current/minimum-readable policy in `ElsaRuntimeDocumentVersions`; Groundwork's `VersionedJsonDocumentCodec` owns the generic parser/formatter lifecycle, chain validation, upcasting capability, and structured `DocumentSchemaVersionException`. Before GA, minimum-readable equals current for every kind, only positive-integer document stamps are accepted, and the codec receives an empty `IDocumentJsonUpcaster` set. `workflowExecutable`, `workflowExecutableSourceReference`, and `workflowExecutionState` are version `4`; activity-execution state and inspection documents, scheduler work items, workflow trigger bindings, and recurring schedules are version `2`; unchanged kinds remain at version `1`. Each kind has only its current golden fixture, making any unversioned persisted-shape change a test failure.
 
 ## Cross-references
 

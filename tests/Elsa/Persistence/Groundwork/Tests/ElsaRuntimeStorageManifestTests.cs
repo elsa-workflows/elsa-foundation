@@ -57,13 +57,11 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
-    public void SchemaVersion_Stays_The_Frozen_Legacy_Stamp_Despite_The_Additive_Index()
+    public void SchemaVersion_Stays_The_Frozen_Storage_Manifest_Version_Despite_The_Additive_Index()
     {
-        // Adding an index must NOT change this constant. It is the frozen legacy stamp that
-        // ElsaRuntimeDocumentVersions.Parse recognizes (only a positive integer or "1.0.0" is accepted); documents/tests
-        // stamp with it, so any other value makes Parse reject every kind. Added-index backfill (Condition 7) triggers on
-        // the physicalized index-set change, not on this string — the pre-existing bookmarkState by-stimulus index added
-        // an index without bumping it too.
+        // Adding an index must NOT change this storage-manifest version. Per-kind document versions are independent;
+        // added-index backfill (Condition 7) triggers on the physicalized index-set change, not on this string — the
+        // pre-existing bookmarkState by-stimulus index added an index without bumping it too.
         Assert.Equal("1.0.0", ElsaRuntimeStorageManifest.SchemaVersion);
     }
 

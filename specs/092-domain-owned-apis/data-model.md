@@ -303,9 +303,14 @@ publication are reconciled independently and never count as artifact-retention r
   Providers without that boundary use the durable projection-intent protocol and keep the old slot authoritative
   until the candidate is fully prepared.
 - Existing Runtime Groundwork documents need publication identity on source references, trigger bindings, and
-  recurring schedules, plus publication-scoped indexes. Persisted-shape changes require the corresponding
-  per-kind version bump, upcaster, current golden fixture, and retained historical fixtures. Adding an index over
-  an already persisted nested field alone does not require a schema-version bump.
+  recurring schedules, plus publication-scoped indexes. Before GA, every persisted-shape change advances that
+  kind's current and minimum-readable version together, replaces its golden fixture, and requires a complete
+  dependent Runtime/Publishing persistence reset; there are no Elsa upcasters or historical fixtures.
+  Executable v4 includes the reusable-activity input contract and direct dependency snapshot; source-reference
+  v4 includes tenant scope; workflow-execution v4 includes dispatch nesting depth. After a released shape
+  exists, a compatible in-place or rolling upgrade may instead add Groundwork `IDocumentJsonUpcaster`
+  contributions and retain supported historical fixtures. Adding an index over an already persisted nested
+  field alone does not require a bump.
 - The current workflow-execution document has only a collection index and nests the pinned identity under state.
   FR-066 therefore requires a provider-side distinct/index projection or an equivalent lightweight root query
   maintained atomically with execution-state persistence. Loading `IWorkflowExecutionStateStore.ListAsync()` and

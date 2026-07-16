@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Serialization;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Xunit;
@@ -176,14 +177,17 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
                 DocumentId.Compose("wf-1", "ae-1"),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                ElsaRuntimeDocumentVersions.Stamp(ElsaRuntimeDocumentVersions.CurrentFor(
+                    ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind)),
                 "{"));
         var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.FindAsync("wf-1", "ae-1").AsTask());
 
-        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
+        var versionException = Assert.IsType<DocumentSchemaVersionException>(exception.InnerException);
+        Assert.Equal(DocumentSchemaVersionFailure.InvalidContent, versionException.Failure);
+        Assert.IsAssignableFrom<JsonException>(versionException.InnerException);
         Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
         Assert.Contains("ae-1", exception.Message, StringComparison.Ordinal);
     }

@@ -37,12 +37,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\Tests\Fixtures\v2\workflowExecutionState.json"
-          Link="Fixtures\v2\workflowExecutionState.json"
-          CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="..\..\UnifiedHost\Tests\GroundworkProviderRegistrationAssertions.cs"
              Link="GroundworkProviderRegistrationAssertions.cs" />
     <Compile Include="..\..\Tests\WorkflowExecutionHistoryProviderConformance.cs"
