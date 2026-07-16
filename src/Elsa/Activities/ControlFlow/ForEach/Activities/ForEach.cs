@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Activities.ControlFlow.Results;
 using Elsa.Activities.ForEach.Exceptions;
 using Elsa.Activities.ForEach.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -120,7 +121,7 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
     {
         var ownerNodeId = runtimeContext.ExecutableNode.ExecutableNodeId;
         var parentActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
-        var iterationId = IterationId(parentActivityExecutionId, index);
+        var iterationId = StructuredExecutionIdentity.Iteration(parentActivityExecutionId, index);
 
         // ADR 0028 / #259: publish this pass's iteration variables in the body child's scheduling
         // provenance metadata, using the merged loop-scope keys (#296). The runtime
@@ -171,21 +172,11 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
             throw new ForEachExecutionException("ForEach cannot advance: the completed body child carries no iteration identity.");
 
         var parentActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
-        var prefix = IterationIdPrefix(parentActivityExecutionId);
-
-        if (!completedChildIterationId.StartsWith(prefix, StringComparison.Ordinal) ||
-            !int.TryParse(completedChildIterationId[prefix.Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ||
-            index < 0)
+        if (!StructuredExecutionIdentity.TryReadIteration(parentActivityExecutionId, completedChildIterationId, out var index))
             throw new ForEachExecutionException($"ForEach cannot advance: completed body iteration id '{completedChildIterationId}' is not a ForEach iteration of '{parentActivityExecutionId}'.");
 
         return index;
     }
-
-    private static string IterationId(string parentActivityExecutionId, int index) =>
-        $"{IterationIdPrefix(parentActivityExecutionId)}{index.ToString(CultureInfo.InvariantCulture)}";
-
-    private static string IterationIdPrefix(string parentActivityExecutionId) =>
-        $"{parentActivityExecutionId}:foreach-iteration:";
 
     /// <summary>
     /// Indexed view over the ForEach <see cref="Collection"/> input that resolves <b>only the item the

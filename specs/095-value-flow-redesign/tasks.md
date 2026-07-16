@@ -170,7 +170,7 @@ explicit boundary transfer, concurrent-write rejection, and stable collection or
 
 - [X] T059 [P] [US4] Replace direct memory variable tests with root/container/iteration frame conformance in `tests/Elsa/Activities/Runtime/Tests/VariableFrameRuntimeTests.cs`
 - [X] T060 [P] [US4] Add concurrent-write, unavailable-producer, explicit-scope-return, and cyclic-back-edge validation tests in `tests/Elsa/Workflows/Design/Tests/ValueFlowValidatorTests.cs`
-- [ ] T061 [P] [US4] Add stable branch/iteration collection ordering tests across repeated randomized completion orders in `tests/Elsa/Activities/ControlFlow/Tests/DeterministicCollectionTests.cs`
+- [X] T061 [P] [US4] Add stable branch/iteration collection ordering tests across repeated randomized completion orders in `tests/Elsa/Activities/ControlFlow/Tests/DeterministicCollectionTests.cs`
 - [X] T062 [US4] Replace SetVariable durability/write-back tests with intrinsic Set checkpoint/recovery tests in `tests/Elsa/Activities/Runtime/Tests/SetVariableDurabilityExecutionTests.cs`
 
 ### Implementation

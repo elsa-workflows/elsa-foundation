@@ -1,3 +1,4 @@
+using Elsa.Activities.ControlFlow.Results;
 using Elsa.Activities.Parallel.Exceptions;
 using Elsa.Activities.Parallel.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -164,7 +165,7 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         string compositeExecutionId,
         ExecutableNode branch)
     {
-        var branchId = $"{compositeExecutionId}:parallel-branch:{branch.ExecutableNodeId}";
+        var branchId = StructuredExecutionIdentity.Branch(compositeExecutionId, branch.ExecutableNodeId);
 
         runtimeContext.ScheduleChildActivity(
             branch.ExecutableNodeId,
