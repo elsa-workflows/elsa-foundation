@@ -10,6 +10,19 @@ namespace Elsa.Workflows.Design.Core.Authoring;
 public abstract class WorkflowValue<T>
 {
     internal abstract ArgumentValue Lower();
+    internal virtual WorkflowValueScope Scope => WorkflowValueScope.Unscoped;
+}
+
+internal enum WorkflowValueScopeKind
+{
+    Unscoped,
+    Variable,
+    ActivityResult
+}
+
+internal readonly record struct WorkflowValueScope(WorkflowValueScopeKind Kind, string? ScopeId)
+{
+    public static WorkflowValueScope Unscoped { get; } = new(WorkflowValueScopeKind.Unscoped, null);
 }
 
 public sealed class WorkflowRequestMember<T> : WorkflowValue<T>
@@ -40,6 +53,8 @@ public sealed class VariableRead<T> : WorkflowValue<T>
     public string ReferenceKey { get; }
     public string DeclaringScopeId { get; }
 
+    internal override WorkflowValueScope Scope => new(WorkflowValueScopeKind.Variable, DeclaringScopeId);
+
     internal override ArgumentValue Lower() => new(
         JsonSerializer.SerializeToElement(new { referenceKey = ReferenceKey, declaringScopeId = DeclaringScopeId }),
         AuthoringExpressionTypes.Variable);
@@ -57,6 +72,8 @@ public sealed class ActivityResultSource<T> : WorkflowValue<T>
     public string ProducerNodeId { get; }
     public string ProjectionKey { get; }
     public string ProducerScopeId { get; }
+
+    internal override WorkflowValueScope Scope => new(WorkflowValueScopeKind.ActivityResult, ProducerScopeId);
 
     internal override ArgumentValue Lower() => new(
         JsonSerializer.SerializeToElement(new
