@@ -157,3 +157,7 @@ New work should move toward this rule:
 - Skills: executable workflows.
 - Maps/catalogs: navigation and generated facts.
 - Reports: current findings and unfinished work.
+
+<!-- SPECKIT START -->
+Current feature plan: [specs/097-dispatch-dependency-hardening/plan.md](specs/097-dispatch-dependency-hardening/plan.md)
+<!-- SPECKIT END -->

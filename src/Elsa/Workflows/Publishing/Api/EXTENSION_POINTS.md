@@ -6,8 +6,8 @@ invariants are owned by [ADR 0043](../../../../../docs/adr/0043-publication-slot
 shared terms remain in the [Elsa glossary](../../../../../docs/glossary/elsa.md) and
 [root glossary](../../../../../docs/glossary/root.md).
 
-Most contracts below are on the **override** axis: one implementation owns the responsibility. Executable-node
-metadata enrichment is the documented contributor exception. Runtime's trigger validators and observers are
+Most contracts below are on the **override** axis: one implementation owns the responsibility. Executable
+compilation enrichment is the documented contributor exception. Runtime's trigger validators and observers are
 separate add-don't-replace seams; see the Runtime catalog linked below.
 
 ## Overridable contracts
@@ -77,14 +77,16 @@ A new Publishing persistence package should:
 6. Keep Runtime executable/reference/trigger/schedule stores in their owning Runtime persistence module; do not
    move those contracts into Publishing merely because the publish flow consumes them.
 
-## Executable-node metadata fan-in
+## Executable compilation fan-in
 
-### `IExecutableNodeMetadataSource`
+### `IExecutableCompilationSource`
 
-- **Kind:** Source. Each implementation asynchronously returns runtime-owned metadata claims for compiled executable nodes through `GetMetadataAsync(ExecutableNodeMetadataContext, CancellationToken)`.
-- **Composition:** `ExecutableNodeMetadataEnricher` publishes the named `OnExecutableNodeMetadataCollecting` inline event. Publishing owns the single `CollectExecutableNodeMetadata` handler, which resolves every registered source in stable type-identity order, stamps source ownership, and appends its claims to the event.
-- **Conflict rule:** Publishing sorts collected claims by source/node/key. Equal duplicate values are idempotent; unequal owners fail deterministically. Unknown nodes, blank claims, and unstamped claims are rejected.
-- **Boundary:** Enrichment occurs after node compilation and before executable assembly. DispatchWorkflow registers `DispatchPinSource` to pin publication provenance without introducing activity-specific logic into the compiler. Behavioral dependency hashing remains owned by #677.
+- **Kind:** Source. Each implementation asynchronously returns one immutable `ExecutableCompilationContribution` from `GetContributionAsync(ExecutableCompilationContext, CancellationToken)` without mutating the compiled tree.
+- **Context:** The source sees the resolved compile source, compiled root, request, and explicit optional tenant scope. It may return deterministic node-metadata claims and exact child artifact/node dependency claims.
+- **Composition:** `ExecutableNodeMetadataEnricher` publishes the named Sequential `OnExecutableCompilationCollecting` inline event. Publishing owns the single active `CollectExecutableCompilation` handler, which resolves sources in stable type-identity order, stamps source ownership, validates the complete claim set, and appends it to the event for read-back.
+- **Conflict rule:** Equal metadata or dependency duplicates are idempotent. Unequal node metadata, multiple child identities for one node, or multiple hashes for one child artifact fail with deterministically ordered owner identities. Unknown nodes, blank claims, null results, and unstamped contributions are rejected before the event result is exposed.
+- **Known implementation:** `DispatchPinSource` *(cross-domain — DispatchWorkflow Design)* contributes exact pinned child metadata and dependency claims after tenant/liveness/input-contract validation. The metadata-only source adapter is retained for compatibility and is not the extension seam for new implementations.
+- **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable child graph by full artifact ID/hash before publication can activate the candidate.
 
 ## Cross-domain seams consumed by Publishing
 

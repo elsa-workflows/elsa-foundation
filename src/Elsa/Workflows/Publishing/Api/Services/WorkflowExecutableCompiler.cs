@@ -10,6 +10,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -33,9 +34,45 @@ public sealed class WorkflowExecutableCompiler(
     ActivityTreeProjector activityTreeProjector,
     ExecutableNodeCompiler executableNodeCompiler,
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
-    IExecutableNodeMetadataEnricher? metadataEnricher = null)
+    IExecutableNodeMetadataEnricher? metadataEnricher = null,
+    IWorkflowExecutableStore? executableStore = null)
     : IWorkflowExecutableCompiler
 {
+    private readonly IWorkflowExecutableStore? _executableStore = executableStore;
+
+    /// <summary>Preserves current main's pre-dependency-store primary-constructor signature.</summary>
+    public WorkflowExecutableCompiler(
+        IWorkflowDefinitionVersionStore workflowVersions,
+        IActivityDefinitionVersionStore activityVersions,
+        IActivityDefinitionVersionPublicationStore activityPublications,
+        IExecutableActivityTemplateReader activityTemplates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences,
+        ActivityTemplatePlacer templatePlacer,
+        RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler,
+        WorkflowExecutableHasher hasher,
+        ActivityTreeProjector activityTreeProjector,
+        ExecutableNodeCompiler executableNodeCompiler,
+        WorkflowExecutablePlacementSidecarContext? placementSidecars,
+        IExecutableNodeMetadataEnricher? metadataEnricher)
+        : this(
+            workflowVersions,
+            activityVersions,
+            activityPublications,
+            activityTemplates,
+            sourceReferences,
+            templatePlacer,
+            inputBindingCompiler,
+            outputCaptureCompiler,
+            hasher,
+            activityTreeProjector,
+            executableNodeCompiler,
+            placementSidecars,
+            metadataEnricher,
+            executableStore: null)
+    {
+    }
+
     public WorkflowExecutableCompiler(
         IWorkflowDefinitionVersionStore workflowVersions,
         IActivityDefinitionVersionStore activityVersions,
@@ -143,10 +180,19 @@ public sealed class WorkflowExecutableCompiler(
             }
 
             var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities);
+            IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)
-                compiledRoot = await metadataEnricher.EnrichAsync(request, source, compiledRoot, cancellationToken);
-            var artifactHash = hasher.ComputeHash(compiledRoot);
+            {
+                var enrichment = await metadataEnricher.EnrichCompilationAsync(request, source, compiledRoot, cancellationToken);
+                compiledRoot = enrichment.RootActivity;
+                dependencyClaims = enrichment.Dependencies;
+            }
+
+            var inputContract = BuildInputContract(state.Inputs);
+            var dependencies = BuildDependencies(dependencyClaims);
+            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
+            await ValidateDependencyGraphAsync(artifactId, artifactHash, dependencies, cancellationToken);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
                 .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 
@@ -182,13 +228,15 @@ public sealed class WorkflowExecutableCompiler(
                 createdAt: request.CreatedAt,
                 compatibilityMetadata: metadata,
                 runtimeRequirements: runtimeRequirements,
-                storageDriverRequirements: storageDriverRequirements);
+                storageDriverRequirements: storageDriverRequirements,
+                inputContract: inputContract,
+                dependencies: dependencies);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
             return executable;
         }
         catch (Exception exception) when (
             exception is not WorkflowExecutableCompilationException &&
-            exception is ArgumentException or InvalidOperationException)
+            (exception is WorkflowExecutableDependencyGraphException or ArgumentException or InvalidOperationException))
         {
             throw new WorkflowExecutableCompilationException(source?.DefinitionId, source?.DefinitionVersionId, exception.Message, exception);
         }
@@ -253,6 +301,149 @@ public sealed class WorkflowExecutableCompiler(
             foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
                 stack.Push(child);
         }
+    }
+
+    private async ValueTask ValidateDependencyGraphAsync(
+        string candidateArtifactId,
+        string candidateArtifactHash,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
+        CancellationToken cancellationToken)
+    {
+        if (dependencies.Count == 0 || _executableStore is null)
+            return;
+
+        var storedExecutables = await _executableStore.ListAsync(cancellationToken);
+        var roots = dependencies
+            .Select(dependency => new WorkflowExecutableIdentity(
+                dependency.ArtifactId,
+                DefinitionId: string.Empty,
+                DefinitionVersionId: string.Empty,
+                ArtifactVersion: string.Empty,
+                dependency.ArtifactHash))
+            .ToArray();
+        var closure = WorkflowExecutableDependencyGraph.ResolveClosure(roots, storedExecutables);
+        var recurrencePath = FindDependencyPath(roots, closure, candidateArtifactId, candidateArtifactHash);
+        if (recurrencePath is not null)
+        {
+            var renderedPath = string.Join(
+                " -> ",
+                recurrencePath.Select(identity => $"{identity.ArtifactId}@{identity.ArtifactHash}"));
+            throw new ArgumentException(
+                $"Candidate executable recurs in its dependency closure: {candidateArtifactId}@{candidateArtifactHash} -> {renderedPath}.",
+                nameof(dependencies));
+        }
+    }
+
+    private static IReadOnlyCollection<WorkflowExecutableIdentity>? FindDependencyPath(
+        IReadOnlyCollection<WorkflowExecutableIdentity> roots,
+        IReadOnlyCollection<WorkflowExecutable> closure,
+        string targetArtifactId,
+        string targetArtifactHash)
+    {
+        var byArtifactId = closure.ToDictionary(executable => executable.Identity.ArtifactId, StringComparer.Ordinal);
+        var visited = new HashSet<(string ArtifactId, string ArtifactHash)>();
+        var path = new List<WorkflowExecutableIdentity>();
+        foreach (var root in roots
+                     .OrderBy(identity => identity.ArtifactId, StringComparer.Ordinal)
+                     .ThenBy(identity => identity.ArtifactHash, StringComparer.Ordinal))
+        {
+            if (Visit(root))
+                return Array.AsReadOnly(path.ToArray());
+        }
+
+        return null;
+
+        bool Visit(WorkflowExecutableIdentity expected)
+        {
+            if (!visited.Add((expected.ArtifactId, expected.ArtifactHash)))
+                return false;
+
+            var executable = byArtifactId[expected.ArtifactId];
+            path.Add(executable.Identity);
+            if (StringComparer.Ordinal.Equals(executable.Identity.ArtifactId, targetArtifactId) &&
+                StringComparer.Ordinal.Equals(executable.Identity.ArtifactHash, targetArtifactHash))
+            {
+                return true;
+            }
+
+            foreach (var dependency in executable.Dependencies
+                         .OrderBy(item => item.ArtifactId, StringComparer.Ordinal)
+                         .ThenBy(item => item.ArtifactHash, StringComparer.Ordinal))
+            {
+                if (Visit(new WorkflowExecutableIdentity(
+                        dependency.ArtifactId,
+                        DefinitionId: string.Empty,
+                        DefinitionVersionId: string.Empty,
+                        ArtifactVersion: string.Empty,
+                        dependency.ArtifactHash)))
+                {
+                    return true;
+                }
+            }
+
+            path.RemoveAt(path.Count - 1);
+            return false;
+        }
+    }
+
+    private static WorkflowExecutableInputContract BuildInputContract(IEnumerable<InputDefinition> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        var declarations = inputs.Select(input =>
+        {
+            ArgumentNullException.ThrowIfNull(input);
+            if (!string.IsNullOrWhiteSpace(input.DefaultSyntax) &&
+                !StringComparer.Ordinal.Equals(input.DefaultSyntax, "Literal"))
+            {
+                throw new ArgumentException(
+                    $"Workflow input '{input.Name}' uses unsupported default syntax '{input.DefaultSyntax}'. Only literal defaults can be compiled.");
+            }
+
+            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue);
+        }).ToArray();
+
+        return new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, declarations);
+    }
+
+    private static IReadOnlyCollection<WorkflowExecutableDependency> BuildDependencies(
+        IReadOnlyCollection<ExecutableDependencyClaim> claims)
+    {
+        ArgumentNullException.ThrowIfNull(claims);
+        var snapshot = claims.ToArray();
+        foreach (var claim in snapshot)
+        {
+            ArgumentNullException.ThrowIfNull(claim);
+            ArgumentException.ThrowIfNullOrWhiteSpace(claim.ExecutableNodeId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(claim.ArtifactId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(claim.ArtifactHash);
+        }
+
+        var conflictingNode = snapshot
+            .GroupBy(claim => claim.ExecutableNodeId, StringComparer.Ordinal)
+            .FirstOrDefault(group => group
+                .Select(claim => (claim.ArtifactId, claim.ArtifactHash))
+                .Distinct()
+                .Skip(1)
+                .Any());
+        if (conflictingNode is not null)
+            throw new ArgumentException($"Executable node '{conflictingNode.Key}' has conflicting dependency claims.");
+
+        var dependencies = new List<WorkflowExecutableDependency>();
+        foreach (var artifactGroup in snapshot
+                     .GroupBy(claim => claim.ArtifactId, StringComparer.Ordinal)
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            var hashes = artifactGroup.Select(claim => claim.ArtifactHash).Distinct(StringComparer.Ordinal).ToArray();
+            if (hashes.Length != 1)
+                throw new ArgumentException($"Executable dependency artifact '{artifactGroup.Key}' has conflicting hashes.");
+
+            dependencies.Add(new WorkflowExecutableDependency(
+                artifactGroup.Key,
+                hashes[0],
+                artifactGroup.Select(claim => claim.ExecutableNodeId).ToArray()));
+        }
+
+        return Array.AsReadOnly(dependencies.ToArray());
     }
 
     private async Task<WorkflowExecutableCompileSource> GetVersionSourceAsync(

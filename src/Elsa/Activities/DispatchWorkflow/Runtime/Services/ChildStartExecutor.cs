@@ -1,16 +1,36 @@
 using System.Text.Json;
+using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
 /// <summary>Delivers a committed child-start intent through the existing workflow start dispatcher.</summary>
-public sealed class ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher) : IRuntimePostCommitIntentHandler
+public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
 {
     private const string DistributedOwningNodeMetadataKey = "runtime.distributed.owningNode";
     private const string DistributedTransportItemIdMetadataKey = "runtime.distributed.transportItemId";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IWorkflowStartDispatcher _workflowStartDispatcher;
+    private readonly int _maxNestingDepth;
+
+    public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher)
+        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()))
+    {
+    }
+
+    public ChildStartExecutor(
+        IWorkflowStartDispatcher workflowStartDispatcher,
+        IOptions<DispatchWorkflowOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(workflowStartDispatcher);
+        ArgumentNullException.ThrowIfNull(options);
+        DispatchWorkflowOptions.ValidateMaxNestingDepth(options.Value.MaxNestingDepth, nameof(DispatchWorkflowOptions.MaxNestingDepth));
+        _workflowStartDispatcher = workflowStartDispatcher;
+        _maxNestingDepth = options.Value.MaxNestingDepth;
+    }
 
     public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
     {
@@ -22,6 +42,11 @@ public sealed class ChildStartExecutor(IWorkflowStartDispatcher workflowStartDis
 
         var payload = payloadElement.Deserialize<WorkflowDispatchStartPayload>(SerializerOptions)
             ?? throw new InvalidOperationException($"DispatchWorkflow child-start intent '{intent.IntentId}' has an invalid payload.");
+        if (payload.DispatchNestingDepth > _maxNestingDepth)
+        {
+            throw new InvalidOperationException(
+                $"DispatchWorkflow child-start intent '{intent.IntentId}' carries nesting depth {payload.DispatchNestingDepth}, which exceeds the configured maximum of {_maxNestingDepth}.");
+        }
         var identity = new WorkflowDispatchIdentity(payload.ParentWorkflowExecutionId, payload.ParentActivityExecutionId);
         if (!StringComparer.Ordinal.Equals(intent.IntentId, identity.StartIntentId) ||
             !StringComparer.Ordinal.Equals(payload.DispatchId, identity.DispatchId) ||
@@ -30,7 +55,8 @@ public sealed class ChildStartExecutor(IWorkflowStartDispatcher workflowStartDis
             throw new InvalidOperationException($"DispatchWorkflow child-start intent '{intent.IntentId}' does not match its deterministic dispatch identity.");
         }
 
-        var result = await workflowStartDispatcher.DispatchAsync(
+        var retainedStart = payload.ParentExecutable is not null;
+        var result = await _workflowStartDispatcher.DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(
                 artifactId: payload.ChildExecutable.ArtifactId,
                 requestedBy: payload.Authority.SystemIdentity,
@@ -42,13 +68,24 @@ public sealed class ChildStartExecutor(IWorkflowStartDispatcher workflowStartDis
                 stimulusInput: null,
                 triggerNodeId: null,
                 runKind: payload.RunKind,
-                sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: payload.ChildSource.SourceReferenceId),
-                provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                sourceSelection: retainedStart
+                    ? null
+                    : new WorkflowExecutableSourceSelection(sourceReferenceId: payload.ChildSource!.SourceReferenceId),
+                provenanceRequirement: retainedStart
+                    ? WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy
+                    : WorkflowExecutableProvenanceRequirement.RequireLiveReference,
                 parentWorkflowExecutionId: payload.ParentWorkflowExecutionId,
                 correlationId: payload.CorrelationId,
                 tenantId: payload.TenantId,
                 partition: payload.Partition,
-                authority: payload.Authority),
+                authority: payload.Authority,
+                startAuthority: retainedStart
+                    ? WorkflowExecutableStartAuthority.FromRetainedDependency(
+                        payload.ParentExecutable!.ArtifactId,
+                        payload.ParentExecutable.ArtifactHash,
+                        payload.DispatchNodeId!)
+                    : null,
+                dispatchNestingDepth: payload.DispatchNestingDepth),
             WorkflowExecutableReferenceScope.Published,
             cancellationToken: cancellationToken);
 

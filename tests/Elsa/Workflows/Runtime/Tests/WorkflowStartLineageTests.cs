@@ -82,7 +82,9 @@ public sealed class WorkflowStartLineageTests
             correlationId: "correlation-override",
             tenantId: "tenant-1",
             partition: new WorkflowExecutionPartition("partition-1"),
-            authority: authority));
+            authority: authority,
+            startAuthority: null,
+            dispatchNestingDepth: 7));
 
         var activation = Assert.Single(actorProvider.Activations);
         var envelope = Assert.Single(actorProvider.Actor.Envelopes);
@@ -96,6 +98,7 @@ public sealed class WorkflowStartLineageTests
         Assert.Equal(WorkflowRunKind.PublishedRun, payload.RunKind);
         Assert.Equal("parent-1", payload.Authority!.SystemIdentity);
         Assert.Equal("initiator-1", payload.Authority.RootInitiator);
+        Assert.Equal(7, payload.DispatchNestingDepth);
         Assert.Equal("hello", payload.Inputs["message"].GetString());
         Assert.DoesNotContain("ParentWorkflowExecutionId", payload.Inputs.Keys, StringComparer.Ordinal);
         Assert.DoesNotContain("Authority", payload.Inputs.Keys, StringComparer.Ordinal);
@@ -139,7 +142,9 @@ public sealed class WorkflowStartLineageTests
             correlationId: "correlation-1",
             tenantId: "tenant-1",
             partition: new WorkflowExecutionPartition("partition-1"),
-            authority: authority);
+            authority: authority,
+            startAuthority: null,
+            dispatchNestingDepth: 7);
 
         await startHandler.HandleAsync(NewStartWorkItem(payload));
         var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("child-1")));
@@ -154,6 +159,14 @@ public sealed class WorkflowStartLineageTests
         Assert.Equal(WorkflowRunKind.PublishedRun, state.RunKind);
         Assert.Equal("parent-1", state.Authority!.SystemIdentity);
         Assert.Equal("initiator-1", state.Authority.RootInitiator);
+        Assert.Equal(7, state.DispatchNestingDepth);
+    }
+
+    [Fact]
+    public void Root_and_legacy_start_contracts_begin_at_depth_zero()
+    {
+        Assert.Equal(0, new WorkflowExecutionStartDispatchRequest("artifact-1", "caller").DispatchNestingDepth);
+        Assert.Equal(0, new WorkflowExecutionStartCommandPayload(NewExecutable().Identity, "artifact-1").DispatchNestingDepth);
     }
 
     private static RuntimeSchedulerWorkItem NewStartWorkItem(WorkflowExecutionStartCommandPayload payload) =>

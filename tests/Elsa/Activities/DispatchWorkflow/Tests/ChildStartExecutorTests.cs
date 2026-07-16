@@ -1,9 +1,11 @@
 using System.Text.Json;
+using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -56,6 +58,87 @@ public sealed class ChildStartExecutorTests
         Assert.Equal(NewIdentity().StartIdempotencyKey, request.IdempotencyKey);
     }
 
+    [Fact]
+    public async Task RetainedChildStart_UsesTypedParentEdgeAuthorityWithoutHistoricalChildSource()
+    {
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+        var parent = new WorkflowExecutableIdentity(
+            "parent-artifact",
+            "parent-definition",
+            "parent-version",
+            "1.0.0",
+            "sha256:parent");
+        var store = new RecordingOutboxStore(NewOutboxItem(
+            childSource: null,
+            parentExecutable: parent,
+            dispatchNodeId: "dispatch-node"));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new HandlerIntentDispatcher(new ChildStartExecutor(startDispatcher)),
+            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
+
+        Assert.Equal(1, result.DeliveredCount);
+        var request = Assert.Single(startDispatcher.Requests);
+        Assert.Null(request.SourceSelection);
+        Assert.Equal(WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy, request.ProvenanceRequirement);
+        var retained = Assert.IsType<WorkflowExecutableRetainedDependencyAuthority>(request.StartAuthority!.RetainedDependency);
+        Assert.Equal(parent.ArtifactId, retained.ParentArtifactId);
+        Assert.Equal(parent.ArtifactHash, retained.ParentArtifactHash);
+        Assert.Equal("dispatch-node", retained.DispatchNodeId);
+    }
+
+    [Fact]
+    public async Task Delivery_reuses_stored_depth_without_incrementing_on_redelivery()
+    {
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+        var handler = new ChildStartExecutor(
+            startDispatcher,
+            Options.Create(new DispatchWorkflowOptions { MaxNestingDepth = 12 }));
+        var intent = NewOutboxItem(dispatchNestingDepth: 12).Intent;
+
+        await handler.HandleAsync(intent);
+        await handler.HandleAsync(intent);
+
+        Assert.Equal(2, startDispatcher.Requests.Count);
+        Assert.All(startDispatcher.Requests, request => Assert.Equal(12, request.DispatchNestingDepth));
+    }
+
+    [Fact]
+    public async Task Over_limit_stored_depth_is_rejected_before_start_dispatch()
+    {
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+        var handler = new ChildStartExecutor(
+            startDispatcher,
+            Options.Create(new DispatchWorkflowOptions { MaxNestingDepth = 4 }));
+        var intent = NewOutboxItem(
+            parentExecutable: new WorkflowExecutableIdentity(
+                "parent-artifact",
+                "parent-definition",
+                "parent-version",
+                "1.0.0",
+                "sha256:parent"),
+            dispatchNodeId: "dispatch-node",
+            dispatchNestingDepth: 5).Intent;
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await handler.HandleAsync(intent));
+
+        Assert.Contains("nesting depth 5", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("maximum of 4", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(startDispatcher.Requests);
+    }
+
+    [Fact]
+    public void Executor_rejects_invalid_host_maximum()
+    {
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ChildStartExecutor(
+            startDispatcher,
+            Options.Create(new DispatchWorkflowOptions { MaxNestingDepth = 0 })));
+    }
+
     [Theory]
     [InlineData(null, null)]
     [InlineData("node-b", null)]
@@ -87,10 +170,16 @@ public sealed class ChildStartExecutorTests
         Assert.Single(startDispatcher.Requests);
     }
 
-    private static RuntimePostCommitOutboxItem NewOutboxItem()
+    private static RuntimePostCommitOutboxItem NewOutboxItem(
+        WorkflowExecutableSourceProvenance? childSource = null,
+        WorkflowExecutableIdentity? parentExecutable = null,
+        string? dispatchNodeId = null,
+        int dispatchNestingDepth = 0)
     {
         var identity = NewIdentity();
-        var source = WorkflowExecutableSourceProvenance.From(DispatchWorkflowRuntimeTestFixture.ChildSourceReference());
+        var source = childSource ?? (parentExecutable is null
+            ? WorkflowExecutableSourceProvenance.From(DispatchWorkflowRuntimeTestFixture.ChildSourceReference())
+            : null);
         var payload = new WorkflowDispatchStartPayload(
             identity.DispatchId,
             "parent-handler",
@@ -103,7 +192,10 @@ public sealed class ChildStartExecutorTests
             "tenant-42",
             new WorkflowExecutionPartition("partition-eu"),
             WorkflowRunKind.PublishedRun,
-            new WorkflowExecutionAuthoritySnapshot("parent-handler", "root-initiator"));
+            new WorkflowExecutionAuthoritySnapshot("parent-handler", "root-initiator"),
+            parentExecutable,
+            dispatchNodeId,
+            dispatchNestingDepth);
         var intent = new RuntimePostCommitIntent(
             identity.StartIntentId,
             "parent-handler",

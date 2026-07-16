@@ -13,56 +13,49 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
         WorkflowExecutableCompileRequest request,
         WorkflowExecutableCompileSource source,
         ExecutableNode rootActivity,
+        CancellationToken cancellationToken = default) =>
+        (await EnrichCompilationAsync(request, source, rootActivity, cancellationToken)).RootActivity;
+
+    public async ValueTask<ExecutableCompilationEnrichment> EnrichCompilationAsync(
+        WorkflowExecutableCompileRequest request,
+        WorkflowExecutableCompileSource source,
+        ExecutableNode rootActivity,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(rootActivity);
 
-        var nodes = Flatten(rootActivity).ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
-        var ownership = nodes.ToDictionary(
-            item => item.Key,
-            item => item.Value.Metadata.ToDictionary(
-                entry => entry.Key,
-                entry => new OwnedMetadata(entry.Value, $"compiled:{item.Key}"),
-                StringComparer.Ordinal),
+        var metadata = Flatten(rootActivity).ToDictionary(
+            node => node.ExecutableNodeId,
+            node => node.Metadata.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal),
             StringComparer.Ordinal);
-        var context = new ExecutableNodeMetadataContext(request, source, rootActivity);
-        var collecting = new OnExecutableNodeMetadataCollecting(context);
+        var context = new ExecutableCompilationContext(request, source, rootActivity);
+        var collecting = new OnExecutableCompilationCollecting(context);
         await eventPublisher.Publish(collecting, cancellationToken);
 
-        foreach (var contribution in collecting.Contributions
-                     .OrderBy(item => item.SourceIdentity, StringComparer.Ordinal)
-                     .ThenBy(item => item.ExecutableNodeId, StringComparer.Ordinal)
-                     .ThenBy(item => item.Key, StringComparer.Ordinal))
+        foreach (var contribution in collecting.Contributions.OrderBy(item => item.SourceIdentity, StringComparer.Ordinal))
         {
-            ArgumentNullException.ThrowIfNull(contribution);
-            ArgumentException.ThrowIfNullOrWhiteSpace(contribution.ExecutableNodeId);
-            ArgumentException.ThrowIfNullOrWhiteSpace(contribution.Key);
-            ArgumentException.ThrowIfNullOrWhiteSpace(contribution.Value);
             ArgumentException.ThrowIfNullOrWhiteSpace(contribution.SourceIdentity);
-            var sourceIdentity = contribution.SourceIdentity!;
-
-            if (!ownership.TryGetValue(contribution.ExecutableNodeId, out var nodeMetadata))
-                throw new ArgumentException($"Executable metadata contribution targets unknown node '{contribution.ExecutableNodeId}'.");
-            if (nodeMetadata.TryGetValue(contribution.Key, out var existing))
+            foreach (var claim in contribution.NodeMetadata
+                         .OrderBy(item => item.ExecutableNodeId, StringComparer.Ordinal)
+                         .ThenBy(item => item.Key, StringComparer.Ordinal))
             {
-                if (StringComparer.Ordinal.Equals(existing.Value, contribution.Value))
-                    continue;
-
-                var owners = new[] { existing.Owner, sourceIdentity }.Order(StringComparer.Ordinal).ToArray();
-                throw new ArgumentException(
-                    $"Executable node '{contribution.ExecutableNodeId}' metadata key '{contribution.Key}' has unequal values from owners '{owners[0]}' and '{owners[1]}'.");
+                if (!metadata.TryGetValue(claim.ExecutableNodeId, out var nodeMetadata))
+                    throw new ArgumentException($"Executable metadata contribution targets unknown node '{claim.ExecutableNodeId}'.");
+                nodeMetadata[claim.Key] = claim.Value;
             }
-
-            nodeMetadata.Add(contribution.Key, new OwnedMetadata(contribution.Value, sourceIdentity));
         }
 
-        var metadata = ownership.ToDictionary(
-            item => item.Key,
-            item => item.Value.ToDictionary(entry => entry.Key, entry => entry.Value.Value, StringComparer.Ordinal),
-            StringComparer.Ordinal);
-        return Rebuild(rootActivity, metadata);
+        var dependencies = collecting.Contributions
+            .OrderBy(item => item.SourceIdentity, StringComparer.Ordinal)
+            .SelectMany(item => item.Dependencies)
+            .OrderBy(item => item.ArtifactId, StringComparer.Ordinal)
+            .ThenBy(item => item.ArtifactHash, StringComparer.Ordinal)
+            .ThenBy(item => item.ExecutableNodeId, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ExecutableCompilationEnrichment(Rebuild(rootActivity, metadata), dependencies);
     }
 
     private static ExecutableNode Rebuild(
@@ -96,6 +89,4 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
                 stack.Push(child);
         }
     }
-
-    private sealed record OwnedMetadata(string Value, string Owner);
 }

@@ -28,8 +28,8 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -144,7 +144,7 @@ public sealed class WorkflowExecutableCompilerTests
         var compiler = TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
                 new ActivityNode("use-reusable", publication.DefinitionVersionId, [], [outputTarget]),
-                [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
+                variables: [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
             new FakeActivityVersionStore([]),
             _activityStructureService,
             TestWellKnownTypeRegistry.Create(),
@@ -275,6 +275,362 @@ public sealed class WorkflowExecutableCompilerTests
         var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
         Assert.Equal("pinned-value", executable.RootActivity.Metadata["runtime.pin"]);
+    }
+
+    [Fact]
+    public async Task Compiler_projects_canonical_versioned_workflow_input_contract_into_behavioral_hash()
+    {
+        var first = WorkflowVersion(
+            Node("write-one", Text("hello")),
+            [
+                WorkflowInput("zeta", new TypeReference("String"), isRequired: false),
+                WorkflowInput(
+                    "alpha",
+                    new TypeReference("Object"),
+                    isRequired: true,
+                    JsonSerializer.SerializeToElement(new { b = 2, a = 1 }),
+                    "Literal")
+            ]);
+        var reordered = WorkflowVersion(
+            Node("write-one", Text("hello")),
+            [
+                WorkflowInput(
+                    "alpha",
+                    new TypeReference("Object"),
+                    isRequired: true,
+                    JsonSerializer.SerializeToElement(new { a = 1, b = 2 }),
+                    "Literal"),
+                WorkflowInput("zeta", new TypeReference("String"), isRequired: false)
+            ]);
+        var changed = WorkflowVersion(
+            Node("write-one", Text("hello")),
+            [WorkflowInput("zeta", new TypeReference("Int32"), isRequired: false)]);
+
+        var firstExecutable = await Compiler(first).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var reorderedExecutable = await Compiler(reordered).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var changedExecutable = await Compiler(changed).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(WorkflowExecutableInputContract.CurrentVersion, firstExecutable.InputContract!.Version);
+        Assert.Equal(["alpha", "zeta"], firstExecutable.InputContract.Inputs.Select(input => input.Name));
+        Assert.Equal(firstExecutable.Identity.ArtifactHash, reorderedExecutable.Identity.ArtifactHash);
+        Assert.NotEqual(firstExecutable.Identity.ArtifactHash, changedExecutable.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Structured_behavioral_hash_distinguishes_values_that_contain_legacy_delimiters()
+    {
+        var executable = await Compiler(WorkflowVersion(Node("write-one", Text("hello"))))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var hasher = new WorkflowExecutableHasher();
+        var singleEncodedInput = new WorkflowExecutableInputContract(
+            WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput("a:String:Single:False:<none>|b", new TypeReference("String"), false)]);
+        var separateInputs = new WorkflowExecutableInputContract(
+            WorkflowExecutableInputContract.CurrentVersion,
+            [
+                new WorkflowDeclaredInput("a", new TypeReference("String"), false),
+                new WorkflowDeclaredInput("b", new TypeReference("String"), false)
+            ]);
+        var singleEncodedNode = new WorkflowExecutableDependency("child", "sha256:child", ["a,b"]);
+        var separateNodes = new WorkflowExecutableDependency("child", "sha256:child", ["a", "b"]);
+
+        var singleInputHash = hasher.ComputeHash(executable.RootActivity, singleEncodedInput, []);
+        var separateInputHash = hasher.ComputeHash(executable.RootActivity, separateInputs, []);
+        var singleNodeHash = hasher.ComputeHash(executable.RootActivity, executable.InputContract!, [singleEncodedNode]);
+        var separateNodeHash = hasher.ComputeHash(executable.RootActivity, executable.InputContract!, [separateNodes]);
+
+        Assert.NotEqual(singleInputHash, separateInputHash);
+        Assert.NotEqual(singleNodeHash, separateNodeHash);
+    }
+
+    [Fact]
+    public async Task Structured_behavioral_hash_distinguishes_absent_default_from_explicit_json_null()
+    {
+        var executable = await Compiler(WorkflowVersion(Node("write-one", Text("hello"))))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var hasher = new WorkflowExecutableHasher();
+        var absentDefault = new WorkflowExecutableInputContract(
+            WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput("value", new TypeReference("Object"), false)]);
+        var explicitNullDefault = new WorkflowExecutableInputContract(
+            WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput("value", new TypeReference("Object"), false, JsonSerializer.SerializeToElement<object?>(null))]);
+
+        var absentHash = hasher.ComputeHash(executable.RootActivity, absentDefault, []);
+        var explicitNullHash = hasher.ComputeHash(executable.RootActivity, explicitNullDefault, []);
+
+        Assert.NotEqual(absentHash, explicitNullHash);
+    }
+
+    [Fact]
+    public async Task Compiler_assembles_canonical_direct_dependencies_and_hashes_child_behavior()
+    {
+        var workflow = WorkflowVersion(SequenceNode("sequence", [Node("dispatch-b"), Node("dispatch-a")]));
+        var first = TestCompiler.Create(
+            new FakeVersionStore(workflow),
+            new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: MetadataEnricher(new FixedDependencySource(
+            [
+                new ExecutableDependencyClaim("dispatch-b", "child", "sha256:one"),
+                new ExecutableDependencyClaim("dispatch-a", "child", "sha256:one")
+            ])));
+        var reordered = TestCompiler.Create(
+            new FakeVersionStore(workflow),
+            new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: MetadataEnricher(new FixedDependencySource(
+            [
+                new ExecutableDependencyClaim("dispatch-a", "child", "sha256:one"),
+                new ExecutableDependencyClaim("dispatch-b", "child", "sha256:one")
+            ])));
+        var changed = TestCompiler.Create(
+            new FakeVersionStore(workflow),
+            new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: MetadataEnricher(new FixedDependencySource(
+                [new ExecutableDependencyClaim("dispatch-a", "child", "sha256:two")])));
+
+        var firstExecutable = await first.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var reorderedExecutable = await reordered.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var changedExecutable = await changed.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var dependency = Assert.Single(firstExecutable.Dependencies);
+        Assert.Equal("child", dependency.ArtifactId);
+        Assert.Equal("sha256:one", dependency.ArtifactHash);
+        Assert.Equal(["dispatch-a", "dispatch-b"], dependency.DispatchNodeIds);
+        Assert.Equal(firstExecutable.Identity.ArtifactHash, reorderedExecutable.Identity.ArtifactHash);
+        Assert.NotEqual(firstExecutable.Identity.ArtifactHash, changedExecutable.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Compiler_canonicalizes_duplicate_exact_node_dependency_claims()
+    {
+        var workflow = WorkflowVersion(SequenceNode("sequence", [Node("dispatch-b"), Node("dispatch-a")]));
+        var unique = await CompileWithDependenciesAsync(
+            workflow,
+            [
+                new ExecutableDependencyClaim("dispatch-a", "child", "sha256:child"),
+                new ExecutableDependencyClaim("dispatch-b", "child", "sha256:child")
+            ]);
+        var duplicated = await CompileWithDependenciesAsync(
+            workflow,
+            [
+                new ExecutableDependencyClaim("dispatch-b", "child", "sha256:child"),
+                new ExecutableDependencyClaim("dispatch-a", "child", "sha256:child"),
+                new ExecutableDependencyClaim("dispatch-a", "child", "sha256:child"),
+                new ExecutableDependencyClaim("dispatch-b", "child", "sha256:child")
+            ]);
+
+        var dependency = Assert.Single(duplicated.Dependencies);
+        Assert.Equal(["dispatch-a", "dispatch-b"], dependency.DispatchNodeIds);
+        Assert.Equal(unique.Identity.ArtifactHash, duplicated.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Compiler_produces_same_parent_hash_for_equivalent_shared_diamond_orders()
+    {
+        var shared = await Compiler(WorkflowVersion(Node("shared", Text("shared behavior"))))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var left = await CompileWithDependenciesAsync(
+            WorkflowVersion(Node("left", Text("left behavior"))),
+            [new ExecutableDependencyClaim("left", shared.Identity.ArtifactId, shared.Identity.ArtifactHash)]);
+        var right = await CompileWithDependenciesAsync(
+            WorkflowVersion(Node("right", Text("right behavior"))),
+            [new ExecutableDependencyClaim("right", shared.Identity.ArtifactId, shared.Identity.ArtifactHash)]);
+        var parentWorkflow = WorkflowVersion(SequenceNode(
+            "parent",
+            [Node("dispatch-left"), Node("dispatch-right")]));
+
+        var leftFirst = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [
+                new ExecutableDependencyClaim("dispatch-left", left.Identity.ArtifactId, left.Identity.ArtifactHash),
+                new ExecutableDependencyClaim("dispatch-right", right.Identity.ArtifactId, right.Identity.ArtifactHash)
+            ]);
+        var rightFirst = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [
+                new ExecutableDependencyClaim("dispatch-right", right.Identity.ArtifactId, right.Identity.ArtifactHash),
+                new ExecutableDependencyClaim("dispatch-left", left.Identity.ArtifactId, left.Identity.ArtifactHash)
+            ]);
+
+        Assert.Equal(2, leftFirst.Dependencies.Count);
+        Assert.Equal(leftFirst.Identity.ArtifactHash, rightFirst.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Grandchild_behavior_change_propagates_through_child_hash_into_parent_hash()
+    {
+        var firstGrandchild = await Compiler(WorkflowVersion(Node("grandchild", Text("first behavior"))))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var changedGrandchild = await Compiler(WorkflowVersion(Node("grandchild", Text("changed behavior"))))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var childWorkflow = WorkflowVersion(Node("dispatch-grandchild"));
+        var firstChild = await CompileWithDependenciesAsync(
+            childWorkflow,
+            [new ExecutableDependencyClaim(
+                "dispatch-grandchild",
+                firstGrandchild.Identity.ArtifactId,
+                firstGrandchild.Identity.ArtifactHash)]);
+        var changedChild = await CompileWithDependenciesAsync(
+            childWorkflow,
+            [new ExecutableDependencyClaim(
+                "dispatch-grandchild",
+                changedGrandchild.Identity.ArtifactId,
+                changedGrandchild.Identity.ArtifactHash)]);
+        var parentWorkflow = WorkflowVersion(Node("dispatch-child"));
+        var firstParent = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [new ExecutableDependencyClaim(
+                "dispatch-child",
+                firstChild.Identity.ArtifactId,
+                firstChild.Identity.ArtifactHash)]);
+        var changedParent = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [new ExecutableDependencyClaim(
+                "dispatch-child",
+                changedChild.Identity.ArtifactId,
+                changedChild.Identity.ArtifactHash)]);
+
+        Assert.NotEqual(firstGrandchild.Identity.ArtifactHash, changedGrandchild.Identity.ArtifactHash);
+        Assert.NotEqual(firstChild.Identity.ArtifactHash, changedChild.Identity.ArtifactHash);
+        Assert.NotEqual(firstParent.Identity.ArtifactHash, changedParent.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Compiler_rejects_a_malformed_stored_exact_artifact_cycle_with_a_deterministic_full_identity_path()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var firstIdentity = StoredIdentity("artifact-a", "sha256:a");
+        var secondIdentity = StoredIdentity("artifact-b", "sha256:b");
+        await store.SaveAsync(StoredExecutable(
+            firstIdentity,
+            new WorkflowExecutableDependency(secondIdentity.ArtifactId, secondIdentity.ArtifactHash, ["node-root"])));
+        await store.SaveAsync(StoredExecutable(
+            secondIdentity,
+            new WorkflowExecutableDependency(firstIdentity.ArtifactId, firstIdentity.ArtifactHash, ["node-root"])));
+        var compiler = ValidatedDependencyCompiler(
+            WorkflowVersion(Node("dispatch-child")),
+            [new ExecutableDependencyClaim("dispatch-child", firstIdentity.ArtifactId, firstIdentity.ArtifactHash)],
+            store);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        var graphFailure = Assert.IsType<WorkflowExecutableDependencyGraphException>(exception.InnerException);
+        Assert.Equal(WorkflowExecutableDependencyGraphFailureKind.Cycle, graphFailure.Kind);
+        Assert.Contains("artifact-a@sha256:a -> artifact-b@sha256:b -> artifact-a@sha256:a", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compiler_rejects_candidate_full_identity_recurrence_in_a_stored_child_closure()
+    {
+        var childIdentity = StoredIdentity("artifact-child", "sha256:child");
+        var workflow = WorkflowVersion(Node("dispatch-child"));
+        var claims = new[] { new ExecutableDependencyClaim("dispatch-child", childIdentity.ArtifactId, childIdentity.ArtifactHash) };
+        var candidate = await CompileWithDependenciesAsync(workflow, claims);
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(StoredExecutable(candidate.Identity));
+        await store.SaveAsync(StoredExecutable(
+            childIdentity,
+            new WorkflowExecutableDependency(
+                candidate.Identity.ArtifactId,
+                candidate.Identity.ArtifactHash,
+                ["node-root"])));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            ValidatedDependencyCompiler(workflow, claims, store)
+                .CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains(candidate.Identity.ArtifactId, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(candidate.Identity.ArtifactHash, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("recurs", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            $"artifact-child@sha256:child -> {candidate.Identity.ArtifactId}@{candidate.Identity.ArtifactHash}",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compiler_rejects_a_truncated_dependency_artifact_id_instead_of_prefix_matching()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var childIdentity = StoredIdentity("artifact-abcdef", "sha256:child-full");
+        await store.SaveAsync(StoredExecutable(childIdentity));
+        var compiler = ValidatedDependencyCompiler(
+            WorkflowVersion(Node("dispatch-child")),
+            [new ExecutableDependencyClaim("dispatch-child", "artifact-abc", childIdentity.ArtifactHash)],
+            store);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        var graphFailure = Assert.IsType<WorkflowExecutableDependencyGraphException>(exception.InnerException);
+        Assert.Equal(WorkflowExecutableDependencyGraphFailureKind.MissingArtifact, graphFailure.Kind);
+        Assert.Contains("artifact-abc@sha256:child-full", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compiler_rejects_a_dependency_hash_mismatch_without_truncated_hash_matching()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var childIdentity = StoredIdentity("artifact-child", "sha256:child-full-hash");
+        await store.SaveAsync(StoredExecutable(childIdentity));
+        var compiler = ValidatedDependencyCompiler(
+            WorkflowVersion(Node("dispatch-child")),
+            [new ExecutableDependencyClaim("dispatch-child", childIdentity.ArtifactId, "sha256:child")],
+            store);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        var graphFailure = Assert.IsType<WorkflowExecutableDependencyGraphException>(exception.InnerException);
+        Assert.Equal(WorkflowExecutableDependencyGraphFailureKind.HashMismatch, graphFailure.Kind);
+        Assert.Contains("sha256:child-full-hash", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compiler_allows_same_definition_dependency_when_the_full_artifact_identity_is_different()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var olderIdentity = StoredIdentity(
+            "artifact-older",
+            "sha256:older",
+            definitionId: "definition-1",
+            definitionVersionId: "version-older");
+        await store.SaveAsync(StoredExecutable(olderIdentity));
+        var compiler = ValidatedDependencyCompiler(
+            WorkflowVersion(Node("dispatch-older")),
+            [new ExecutableDependencyClaim("dispatch-older", olderIdentity.ArtifactId, olderIdentity.ArtifactHash)],
+            store);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("definition-1", executable.Identity.DefinitionId);
+        Assert.NotEqual(olderIdentity.ArtifactId, executable.Identity.ArtifactId);
+        Assert.Equal(olderIdentity.ArtifactId, Assert.Single(executable.Dependencies).ArtifactId);
+    }
+
+    [Fact]
+    public async Task Compiler_rejects_non_literal_workflow_input_defaults()
+    {
+        var workflow = WorkflowVersion(
+            Node("write-one"),
+            [WorkflowInput(
+                "message",
+                new TypeReference("String"),
+                isRequired: false,
+                JsonSerializer.SerializeToElement("expression"),
+                "JavaScript")]);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Compiler(workflow).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("unsupported default syntax", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -884,6 +1240,63 @@ public sealed class WorkflowExecutableCompilerTests
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-");
 
+    private async Task<WorkflowExecutable> CompileWithDependenciesAsync(
+        WorkflowDefinitionVersion workflow,
+        IReadOnlyCollection<ExecutableDependencyClaim> dependencies)
+    {
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(workflow),
+            new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: MetadataEnricher(new FixedDependencySource(dependencies)));
+
+        return await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+    }
+
+    private WorkflowExecutableCompiler ValidatedDependencyCompiler(
+        WorkflowDefinitionVersion workflow,
+        IReadOnlyCollection<ExecutableDependencyClaim> dependencies,
+        IWorkflowExecutableStore executableStore)
+    {
+        var publications = new EmptyActivityPublicationStore();
+        var templates = new EmptyActivityTemplateReader();
+        var references = new EmptySourceReferenceReader();
+        var registry = TestWellKnownTypeRegistry.Create();
+        var inputCompiler = new RuntimeInputBindingCompiler(registry);
+        return new WorkflowExecutableCompiler(
+            new FakeVersionStore(workflow),
+            new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
+            publications,
+            templates,
+            references,
+            new ActivityTemplatePlacer(publications, templates, references, new Sha256ActivityPlacementHasher()),
+            inputCompiler,
+            new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry(
+                [new JsonRuntimeDurableValueStorageDriver()])),
+            new WorkflowExecutableHasher(),
+            new ActivityTreeProjector(_activityStructureService),
+            new ExecutableNodeCompiler(
+                _activityStructureService,
+                registry,
+                inputCompiler),
+            placementSidecars: null,
+            metadataEnricher: MetadataEnricher(new FixedDependencySource(dependencies)),
+            executableStore: executableStore);
+    }
+
+    private WorkflowExecutable StoredExecutable(
+        WorkflowExecutableIdentity identity,
+        params WorkflowExecutableDependency[] dependencies) =>
+        TestExecutable.Create(identity, dependencies);
+
+    private static WorkflowExecutableIdentity StoredIdentity(
+        string artifactId,
+        string artifactHash,
+        string definitionId = "definition-child",
+        string definitionVersionId = "version-child") =>
+        TestExecutable.Identity(artifactId, artifactHash, definitionId, definitionVersionId);
+
     private WorkflowExecutableCompiler ResumeCompiler(WorkflowDefinitionVersion workflowVersion, params ActivityDefinitionVersion[] activities)
     {
         var registry = TestWellKnownTypeRegistry.Create();
@@ -922,13 +1335,31 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static WorkflowDefinitionVersion WorkflowVersion(
         ActivityNode? rootActivity,
+        IReadOnlyCollection<InputDefinition>? inputs = null,
         IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
         new("definition-1", "1.0.0")
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState(variables ?? [], rootActivity, [], [], null)
+            State = new WorkflowDefinitionState(variables ?? [], rootActivity, inputs ?? [], [], null)
         };
+
+    private static InputDefinition WorkflowInput(
+        string name,
+        TypeReference type,
+        bool isRequired,
+        JsonElement? defaultValue = null,
+        string? defaultSyntax = null) =>
+        new(
+            ReferenceKey: $"input-{name}",
+            Name: name,
+            Type: type,
+            StorageDriverType: null,
+            DisplayName: name,
+            Category: null,
+            IsRequired: isRequired,
+            DefaultValue: defaultValue,
+            DefaultSyntax: defaultSyntax);
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
         new(nodeId, "activity-write-line", inputs, Outputs: []);
@@ -1048,6 +1479,39 @@ public sealed class WorkflowExecutableCompilerTests
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
+    private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore
+    {
+        public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ActivityDefinitionVersionPublication?>(null);
+
+        public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>([]);
+    }
+
+    private sealed class EmptyActivityTemplateReader : IExecutableActivityTemplateReader
+    {
+        public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+
+        public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+    }
+
+    private sealed class EmptySourceReferenceReader : IWorkflowExecutableSourceReferenceReader
+    {
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutableSourceReference?>(null);
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+    }
+
     private sealed class ReusablePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
     {
         public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) => Task.FromResult(definitionVersionId == publication.DefinitionVersionId ? publication : null);
@@ -1068,23 +1532,31 @@ public sealed class WorkflowExecutableCompilerTests
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
     }
 
-    private static ExecutableNodeMetadataEnricher MetadataEnricher(params IExecutableNodeMetadataSource[] sources) =>
+    private static ExecutableNodeMetadataEnricher MetadataEnricher(params IExecutableCompilationSource[] sources) =>
         new(new CollectingInlineEventPublisher(sources));
 
-    private sealed class FixedMetadataSource(string nodeId, string key, string value) : IExecutableNodeMetadataSource
+    private sealed class FixedMetadataSource(string nodeId, string key, string value) : IExecutableCompilationSource
     {
-        public ValueTask<IReadOnlyCollection<ExecutableNodeMetadataContribution>> GetMetadataAsync(
-            ExecutableNodeMetadataContext context,
+        public ValueTask<ExecutableCompilationContribution> GetContributionAsync(
+            ExecutableCompilationContext context,
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<ExecutableNodeMetadataContribution>>(
-                [new ExecutableNodeMetadataContribution(nodeId, key, value)]);
+            ValueTask.FromResult(new ExecutableCompilationContribution(
+                nodeMetadata: [new ExecutableNodeMetadataClaim(nodeId, key, value)]));
     }
 
-    private sealed class CollectingInlineEventPublisher(IEnumerable<IExecutableNodeMetadataSource> sources) : IInlineEventPublisher
+    private sealed class FixedDependencySource(IReadOnlyCollection<ExecutableDependencyClaim> claims) : IExecutableCompilationSource
     {
-        private readonly CollectExecutableNodeMetadata _handler = new(sources);
+        public ValueTask<ExecutableCompilationContribution> GetContributionAsync(
+            ExecutableCompilationContext context,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ExecutableCompilationContribution(dependencies: claims));
+    }
+
+    private sealed class CollectingInlineEventPublisher(IEnumerable<IExecutableCompilationSource> sources) : IInlineEventPublisher
+    {
+        private readonly CollectExecutableCompilation _handler = new(sources);
 
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
-            _handler.Handle(Assert.IsType<OnExecutableNodeMetadataCollecting>(@event), cancellationToken);
+            _handler.Handle(Assert.IsType<OnExecutableCompilationCollecting>(@event), cancellationToken);
     }
 }

@@ -353,9 +353,20 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointDoesNotWriteExecutionRootWhileDeletionGuardOwnsArtifact()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
-        await executableStore.SaveAsync(Executable());
+        var childIdentity = new WorkflowExecutableIdentity(
+            "artifact-child",
+            "definition-child",
+            "definition-version-child",
+            "1.0.0",
+            "sha256:child");
+        var child = Executable(childIdentity);
+        var root = Executable(
+            _executableIdentity,
+            new WorkflowExecutableDependency(childIdentity.ArtifactId, childIdentity.ArtifactHash, ["node-root"]));
+        await executableStore.SaveAsync(child);
+        await executableStore.SaveAsync(root);
         var now = DateTimeOffset.UtcNow;
-        var deletionGuard = await executableStore.TryBeginDeletionAsync(_executableIdentity.ArtifactId, "gc-test", now.AddMinutes(1), now);
+        var deletionGuard = await executableStore.TryBeginDeletionAsync(childIdentity.ArtifactId, "gc-test", now.AddMinutes(1), now);
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var rootWriteLeaseManager = new WorkflowExecutableRootWriteLeaseManager(
             executableStore,
@@ -1617,9 +1628,13 @@ public sealed class RuntimeCheckpointCommitTests
         return document.RootElement.Clone();
     }
 
-    private WorkflowExecutable Executable() =>
+    private WorkflowExecutable Executable() => Executable(_executableIdentity);
+
+    private WorkflowExecutable Executable(
+        WorkflowExecutableIdentity identity,
+        params WorkflowExecutableDependency[] dependencies) =>
         new(
-            _executableIdentity,
+            identity,
             new ExecutableNode(
                 executableNodeId: "node-root",
                 authoredActivityId: "activity-root",
@@ -1634,7 +1649,9 @@ public sealed class RuntimeCheckpointCommitTests
                 metadata: new Dictionary<string, string>()),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             _now,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: dependencies);
 
     private sealed class FixedPolicy(RuntimeCheckpointPersistenceMode mode) : IRuntimeCheckpointPersistencePolicy
     {

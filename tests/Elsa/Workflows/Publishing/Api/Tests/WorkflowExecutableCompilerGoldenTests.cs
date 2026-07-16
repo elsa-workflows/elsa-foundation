@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,8 +58,50 @@ public sealed class WorkflowExecutableCompilerGoldenTests
 
         var executable = await compiler.CompileAsync(definition.Request);
 
+        AssertMatchesGolden(corpusName, executable);
+    }
+
+    [Fact]
+    public async Task LegacyExecutableWithoutAdditiveBehavioralMembersMatchesCompatibilityGolden()
+    {
+        var definition = Corpus["literal-input"];
+        var compiled = await definition.BuildCompiler(_activityStructureService).CompileAsync(definition.Request);
+        var legacyHasher = new WorkflowExecutableHasher();
+        var legacyHash = legacyHasher.ComputeHash(compiled.RootActivity);
+        var legacy = new WorkflowExecutable(
+            compiled.Identity with
+            {
+                ArtifactHash = legacyHash,
+                ArtifactId = legacyHasher.CreateArtifactId("artifact-", legacyHash)
+            },
+            compiled.RootActivity,
+            compiled.ResumeTargets,
+            compiled.CreatedAt,
+            compiled.CompatibilityMetadata);
+        var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var legacyJson = JsonSerializer.SerializeToNode(legacy, serializerOptions)!.AsObject();
+        legacyJson.Remove("inputContract");
+        legacyJson.Remove("dependencies");
+
+        var restored = legacyJson.Deserialize<WorkflowExecutable>(serializerOptions)!;
+
+        Assert.Null(restored.InputContract);
+        Assert.Empty(restored.Dependencies);
+        AssertMatchesGolden("legacy-null-compatibility", restored);
+    }
+
+    private static void AssertMatchesGolden(string corpusName, WorkflowExecutable executable)
+    {
         var actualJson = CanonicalJson(executable);
         var goldenPath = GoldenPath(corpusName);
+
+        if (StringComparer.Ordinal.Equals(
+                Environment.GetEnvironmentVariable("UPDATE_COMPILER_GOLDENS"),
+                "1"))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(goldenPath)!);
+            File.WriteAllText(goldenPath, actualJson);
+        }
 
         if (!File.Exists(goldenPath))
         {
@@ -177,6 +220,33 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             },
             createdAt = executable.CreatedAt,
             compatibilityMetadata = Ordered(executable.CompatibilityMetadata),
+            inputContract = executable.InputContract is null
+                ? null
+                : new
+                {
+                    version = executable.InputContract.Version,
+                    inputs = executable.InputContract.Inputs
+                        .OrderBy(input => input.Name, StringComparer.Ordinal)
+                        .Select(input => new
+                        {
+                            name = input.Name,
+                            type = new
+                            {
+                                alias = input.Type.Alias,
+                                collectionKind = input.Type.CollectionKind.ToString()
+                            },
+                            isRequired = input.IsRequired,
+                            defaultValue = input.DefaultValue
+                        })
+                },
+            dependencies = executable.Dependencies
+                .OrderBy(dependency => dependency.ArtifactId, StringComparer.Ordinal)
+                .Select(dependency => new
+                {
+                    artifactId = dependency.ArtifactId,
+                    artifactHash = dependency.ArtifactHash,
+                    dispatchNodeIds = dependency.DispatchNodeIds.Order(StringComparer.Ordinal)
+                }),
             resumeTargets = executable.ResumeTargets
                 .OrderBy(t => t.Key, StringComparer.Ordinal)
                 .Select(t => new
@@ -294,6 +364,34 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         return new Dictionary<string, CorpusEntry>(StringComparer.Ordinal)
         {
             ["literal-input"] = Standard(WorkflowVersion(Node("write-one", Text("Hello World!"))), standardActivities),
+            ["declared-input-contract"] = Standard(
+                WorkflowVersion(
+                    Node("write-inputs", Text("Hello World!")),
+                    [
+                        WorkflowInput("zeta", new TypeReference("String"), isRequired: false),
+                        WorkflowInput(
+                            "alpha",
+                            new TypeReference("Object"),
+                            isRequired: true,
+                            JsonSerializer.SerializeToElement(new { b = 2, a = 1 }),
+                            "Literal")
+                    ]),
+                standardActivities),
+            ["dependency-set"] = Standard(
+                WorkflowVersion(SequenceNode(
+                    "dependency-root",
+                    [Node("dispatch-b"), Node("dispatch-a")])),
+                standardActivities,
+                [
+                    new ExecutableDependencyClaim(
+                        "dispatch-b",
+                        "child-b",
+                        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+                    new ExecutableDependencyClaim(
+                        "dispatch-a",
+                        "child-a",
+                        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                ]),
             ["javascript-expression"] = Standard(WorkflowVersion(Node("write-js", JavaScriptText("\"Hello \" + \"World\""))), standardActivities),
             ["structured-variable-ref"] = Standard(WorkflowVersion(Node("write-var", VariableText(variableReference))), standardActivities),
             ["bare-variable-ref"] = Standard(WorkflowVersion(Node("write-var", VariableText(JsonSerializer.SerializeToElement("var-counter")))), standardActivities),
@@ -310,13 +408,17 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         };
     }
 
-    private static CorpusEntry Standard(WorkflowDefinitionVersion version, ActivityDefinitionVersion[] activities) =>
-        new(version, activities, RegisterResumeTypes: false);
+    private static CorpusEntry Standard(
+        WorkflowDefinitionVersion version,
+        ActivityDefinitionVersion[] activities,
+        IReadOnlyCollection<ExecutableDependencyClaim>? dependencies = null) =>
+        new(version, activities, RegisterResumeTypes: false, dependencies);
 
     private sealed record CorpusEntry(
         WorkflowDefinitionVersion Version,
         ActivityDefinitionVersion[] Activities,
-        bool RegisterResumeTypes)
+        bool RegisterResumeTypes,
+        IReadOnlyCollection<ExecutableDependencyClaim>? Dependencies = null)
     {
         public WorkflowExecutableCompileRequest Request => new(
             VersionId: "version-1",
@@ -352,8 +454,27 @@ public sealed class WorkflowExecutableCompilerGoldenTests
                 new FakeVersionStore(Version),
                 new FakeActivityVersionStore([.. Activities]),
                 structureService,
-                registry);
+                registry,
+                metadataEnricher: Dependencies is null ? null : new FixedCompilationEnricher(Dependencies));
         }
+    }
+
+    private sealed class FixedCompilationEnricher(IReadOnlyCollection<ExecutableDependencyClaim> dependencies)
+        : IExecutableNodeMetadataEnricher
+    {
+        public ValueTask<ExecutableNode> EnrichAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(rootActivity);
+
+        public ValueTask<ExecutableCompilationEnrichment> EnrichCompilationAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ExecutableCompilationEnrichment(rootActivity, dependencies));
     }
 
     private sealed class ResumeProbeActivity
@@ -364,13 +485,32 @@ public sealed class WorkflowExecutableCompilerGoldenTests
 
     // ---- Builders (mirror WorkflowExecutableCompilerTests) --------------------------------------------
 
-    private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
+    private static WorkflowDefinitionVersion WorkflowVersion(
+        ActivityNode? rootActivity,
+        IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new("definition-1", "1.0.0")
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
+            State = new WorkflowDefinitionState([], rootActivity, inputs ?? [], [], null)
         };
+
+    private static InputDefinition WorkflowInput(
+        string name,
+        TypeReference type,
+        bool isRequired,
+        JsonElement? defaultValue = null,
+        string? defaultSyntax = null) =>
+        new(
+            ReferenceKey: $"input-{name}",
+            Name: name,
+            Type: type,
+            StorageDriverType: null,
+            DisplayName: name,
+            Category: null,
+            IsRequired: isRequired,
+            DefaultValue: defaultValue,
+            DefaultSyntax: defaultSyntax);
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
         new(nodeId, "activity-write-line", inputs, Outputs: []);

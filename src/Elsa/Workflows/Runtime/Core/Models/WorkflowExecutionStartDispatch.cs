@@ -57,6 +57,91 @@ public sealed class WorkflowExecutionStartDispatchRequest
         string? tenantId,
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority)
+        : this(
+            artifactId,
+            requestedBy,
+            workflowExecutionId,
+            idempotencyKey,
+            metadata,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            sourceSelection,
+            provenanceRequirement,
+            parentWorkflowExecutionId,
+            correlationId,
+            tenantId,
+            partition,
+            authority,
+            null)
+    {
+    }
+
+    public WorkflowExecutionStartDispatchRequest(
+        string artifactId,
+        string requestedBy,
+        string? workflowExecutionId,
+        string? idempotencyKey,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyDictionary<string, object?>? variables,
+        IReadOnlyDictionary<string, object?>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceSelection? sourceSelection,
+        WorkflowExecutableProvenanceRequirement provenanceRequirement,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority,
+        WorkflowExecutableStartAuthority? startAuthority)
+        : this(
+            artifactId,
+            requestedBy,
+            workflowExecutionId,
+            idempotencyKey,
+            metadata,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            sourceSelection,
+            provenanceRequirement,
+            parentWorkflowExecutionId,
+            correlationId,
+            tenantId,
+            partition,
+            authority,
+            startAuthority,
+            dispatchNestingDepth: 0)
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowExecutionStartDispatchRequest(
+        string artifactId,
+        string requestedBy,
+        string? workflowExecutionId,
+        string? idempotencyKey,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyDictionary<string, object?>? variables,
+        IReadOnlyDictionary<string, object?>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceSelection? sourceSelection,
+        WorkflowExecutableProvenanceRequirement provenanceRequirement,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority,
+        WorkflowExecutableStartAuthority? startAuthority,
+        int dispatchNestingDepth)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -72,6 +157,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         ValidateOptional(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
         ValidateOptional(correlationId, nameof(correlationId));
         ValidateOptional(tenantId, nameof(tenantId));
+        ValidateStartAuthority(startAuthority, sourceSelection, provenanceRequirement);
+        ValidateDispatchNestingDepth(dispatchNestingDepth);
 
         authority ??= WorkflowExecutionAuthoritySnapshot.CreateRoot(requestedBy);
         if (!StringComparer.Ordinal.Equals(requestedBy, authority.SystemIdentity))
@@ -94,6 +181,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         TenantId = tenantId;
         Partition = partition;
         Authority = authority;
+        StartAuthority = startAuthority;
+        DispatchNestingDepth = dispatchNestingDepth;
     }
 
     public string ArtifactId { get; }
@@ -161,13 +250,50 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// <summary>Typed runtime-owned authority and root-initiator attribution.</summary>
     public WorkflowExecutionAuthoritySnapshot Authority { get; }
 
+    /// <summary>
+    /// Optional typed authority for selecting an executable. Null preserves the legacy live-reference or
+    /// reference-less compatibility paths represented by <see cref="SourceSelection"/> and
+    /// <see cref="ProvenanceRequirement"/>. Internal dispatch may instead carry exact retained-dependency
+    /// provenance; public execution endpoints must not accept that authority from callers.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutableStartAuthority? StartAuthority { get; }
+
+    /// <summary>Cross-workflow dispatch depth. Root and legacy requests default to zero.</summary>
+    public int DispatchNestingDepth { get; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+
+    private static void ValidateStartAuthority(
+        WorkflowExecutableStartAuthority? startAuthority,
+        WorkflowExecutableSourceSelection? sourceSelection,
+        WorkflowExecutableProvenanceRequirement provenanceRequirement)
+    {
+        if (startAuthority is null)
+            return;
+
+        if (startAuthority.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency)
+        {
+            if (sourceSelection is not null || provenanceRequirement != WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
+                throw new ArgumentException("Retained-dependency authority cannot be combined with live-source selection or requirements.", nameof(startAuthority));
+            return;
+        }
+
+        if (sourceSelection is null || provenanceRequirement != WorkflowExecutableProvenanceRequirement.RequireLiveReference)
+            throw new ArgumentException("Explicit live-reference authority requires a live source selection and provenance requirement.", nameof(startAuthority));
+    }
 
     private static void ValidateOptional(string? value, string parameterName)
     {
         if (value is not null && string.IsNullOrWhiteSpace(value))
             throw new ArgumentException("Optional workflow start context values cannot be blank.", parameterName);
+    }
+
+    private static void ValidateDispatchNestingDepth(int value)
+    {
+        if (value < 0)
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Dispatch nesting depth cannot be negative.");
     }
 }
 
@@ -175,6 +301,77 @@ public enum WorkflowExecutableProvenanceRequirement
 {
     AllowReferenceLessLegacy,
     RequireLiveReference
+}
+
+/// <summary>Identifies the authoritative route by which an executable may be selected for a new start.</summary>
+public enum WorkflowExecutableStartAuthorityKind
+{
+    LiveReference = 0,
+    RetainedDependency = 1
+}
+
+/// <summary>
+/// Typed executable-selection authority. A live-reference start continues to use the existing validated source
+/// selection fields. A retained-dependency start is authorized only by the exact immutable parent artifact edge
+/// identified by <see cref="RetainedDependency"/>.
+/// </summary>
+public sealed class WorkflowExecutableStartAuthority
+{
+    [JsonConstructor]
+    public WorkflowExecutableStartAuthority(
+        WorkflowExecutableStartAuthorityKind kind,
+        WorkflowExecutableRetainedDependencyAuthority? retainedDependency = null)
+    {
+        if (kind == WorkflowExecutableStartAuthorityKind.LiveReference && retainedDependency is not null)
+            throw new ArgumentException("Live-reference start authority cannot carry retained-dependency provenance.", nameof(retainedDependency));
+        if (kind == WorkflowExecutableStartAuthorityKind.RetainedDependency && retainedDependency is null)
+            throw new ArgumentException("Retained-dependency start authority requires exact parent provenance.", nameof(retainedDependency));
+        if (!Enum.IsDefined(kind))
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown executable start authority kind.");
+
+        Kind = kind;
+        RetainedDependency = retainedDependency;
+    }
+
+    public WorkflowExecutableStartAuthorityKind Kind { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutableRetainedDependencyAuthority? RetainedDependency { get; }
+
+    public static WorkflowExecutableStartAuthority LiveReference { get; } = new(WorkflowExecutableStartAuthorityKind.LiveReference);
+
+    public static WorkflowExecutableStartAuthority FromRetainedDependency(
+        string parentArtifactId,
+        string parentArtifactHash,
+        string dispatchNodeId) =>
+        new(
+            WorkflowExecutableStartAuthorityKind.RetainedDependency,
+            new WorkflowExecutableRetainedDependencyAuthority(parentArtifactId, parentArtifactHash, dispatchNodeId));
+}
+
+/// <summary>
+/// Immutable provenance for a child start authorized by one exact dispatch edge on a retained parent artifact.
+/// The requested child must match the artifact ID and full hash bound to this dispatch node on the loaded parent.
+/// </summary>
+public sealed class WorkflowExecutableRetainedDependencyAuthority
+{
+    [JsonConstructor]
+    public WorkflowExecutableRetainedDependencyAuthority(
+        string parentArtifactId,
+        string parentArtifactHash,
+        string dispatchNodeId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(parentArtifactId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(parentArtifactHash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(dispatchNodeId);
+
+        ParentArtifactId = parentArtifactId;
+        ParentArtifactHash = parentArtifactHash;
+        DispatchNodeId = dispatchNodeId;
+    }
+
+    public string ParentArtifactId { get; }
+    public string ParentArtifactHash { get; }
+    public string DispatchNodeId { get; }
 }
 
 /// <summary>
@@ -238,7 +435,6 @@ public sealed class WorkflowExecutionStartCommandPayload
     {
     }
 
-    [JsonConstructor]
     public WorkflowExecutionStartCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string requestedArtifactId,
@@ -253,12 +449,84 @@ public sealed class WorkflowExecutionStartCommandPayload
         string? tenantId,
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority)
+        : this(
+            pinnedExecutable,
+            requestedArtifactId,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            pinnedSource,
+            parentWorkflowExecutionId,
+            correlationId,
+            tenantId,
+            partition,
+            authority,
+            null)
+    {
+    }
+
+    public WorkflowExecutionStartCommandPayload(
+        WorkflowExecutableIdentity pinnedExecutable,
+        string requestedArtifactId,
+        IReadOnlyDictionary<string, JsonElement>? variables,
+        IReadOnlyDictionary<string, JsonElement>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceProvenance? pinnedSource,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority,
+        WorkflowExecutableStartAuthority? startAuthority)
+        : this(
+            pinnedExecutable,
+            requestedArtifactId,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            pinnedSource,
+            parentWorkflowExecutionId,
+            correlationId,
+            tenantId,
+            partition,
+            authority,
+            startAuthority,
+            dispatchNestingDepth: 0)
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowExecutionStartCommandPayload(
+        WorkflowExecutableIdentity pinnedExecutable,
+        string requestedArtifactId,
+        IReadOnlyDictionary<string, JsonElement>? variables,
+        IReadOnlyDictionary<string, JsonElement>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceProvenance? pinnedSource,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority,
+        WorkflowExecutableStartAuthority? startAuthority,
+        int dispatchNestingDepth)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
         ValidateOptional(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
         ValidateOptional(correlationId, nameof(correlationId));
         ValidateOptional(tenantId, nameof(tenantId));
+        ValidateStartAuthority(startAuthority, pinnedSource);
+        if (dispatchNestingDepth < 0)
+            throw new ArgumentOutOfRangeException(nameof(dispatchNestingDepth), dispatchNestingDepth, "Dispatch nesting depth cannot be negative.");
 
         PinnedExecutable = pinnedExecutable;
         RequestedArtifactId = requestedArtifactId;
@@ -273,6 +541,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         TenantId = tenantId;
         Partition = partition;
         Authority = authority;
+        StartAuthority = startAuthority;
+        DispatchNestingDepth = dispatchNestingDepth;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -319,6 +589,11 @@ public sealed class WorkflowExecutionStartCommandPayload
     public string? TenantId { get; }
     public WorkflowExecutionPartition? Partition { get; }
     public WorkflowExecutionAuthoritySnapshot? Authority { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutableStartAuthority? StartAuthority { get; }
+
+    /// <summary>Durable cross-workflow dispatch depth. Missing legacy values default to zero.</summary>
+    public int DispatchNestingDepth { get; }
 
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(
@@ -328,6 +603,24 @@ public sealed class WorkflowExecutionStartCommandPayload
 
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);
+
+    private static void ValidateStartAuthority(
+        WorkflowExecutableStartAuthority? startAuthority,
+        WorkflowExecutableSourceProvenance? pinnedSource)
+    {
+        if (startAuthority is null)
+            return;
+
+        if (startAuthority.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency)
+        {
+            if (pinnedSource is not null)
+                throw new ArgumentException("Retained-dependency authority cannot carry historical child source provenance.", nameof(startAuthority));
+            return;
+        }
+
+        if (pinnedSource is null)
+            throw new ArgumentException("Explicit live-reference authority requires validated source provenance.", nameof(startAuthority));
+    }
 
     private static void ValidateOptional(string? value, string parameterName)
     {

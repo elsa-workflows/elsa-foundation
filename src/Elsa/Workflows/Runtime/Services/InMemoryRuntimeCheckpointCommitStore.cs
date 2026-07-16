@@ -294,7 +294,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             throw new InvalidOperationException("A workflow executable root-write lease manager is required before workflow execution state can be persisted.");
 
         await _rootWriteLeaseManager.ExecuteAsync(
-            workflowExecutionChange.State.PinnedExecutable.ArtifactId,
+            workflowExecutionChange.State.PinnedExecutable,
             $"checkpoint:{commit.CommitId}",
             write,
             cancellationToken);
@@ -835,6 +835,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         StringComparer.Ordinal.Equals(left.TenantId, right.TenantId) &&
         Equals(left.Partition, right.Partition) &&
         left.RunKind == right.RunKind &&
+        left.DispatchNestingDepth == right.DispatchNestingDepth &&
         AuthorityEquals(left.Authority, right.Authority) &&
         left.InputDescriptors.SequenceEqual(right.InputDescriptors) &&
         left.CreatedAt == right.CreatedAt &&

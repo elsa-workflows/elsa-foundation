@@ -167,6 +167,106 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.Equal(1, collectedSweep.DeletedActivityTemplateCount);
         Assert.Null(await _sourceReferenceStore.FindAsync("wrapper-ref"));
         Assert.Null(await _sourceReferenceStore.FindAsync("template-ref"));
+        Assert.Null(await templates.FindAsync(template.TemplateId));
+    }
+
+    [Fact]
+    public async Task Sweep_ProtectsDirectAndTransitiveDependencyClosureUntilFinalRootIsRemoved()
+    {
+        var grandchild = Executable("artifact-grandchild");
+        var child = Executable("artifact-child", grandchild);
+        var parent = Executable("artifact-parent", child);
+        await SaveAsync(grandchild, child, parent, Executable("artifact-orphan"));
+        await _sourceReferenceStore.SaveAsync(Reference("ref-parent", parent.Identity.ArtifactId, WorkflowExecutableReferenceScope.Published));
+
+        var protectedSweep = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(1, protectedSweep.DeletedArtifactCount);
+        Assert.NotNull(await _executableStore.FindAsync(grandchild.Identity.ArtifactId));
+        Assert.NotNull(await _executableStore.FindAsync(child.Identity.ArtifactId));
+        Assert.NotNull(await _executableStore.FindAsync(parent.Identity.ArtifactId));
+        Assert.Null(await _executableStore.FindAsync("artifact-orphan"));
+
+        await _sourceReferenceStore.RetireAsync("ref-parent", _now, "final-root-removed");
+        var finalSweep = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(3, finalSweep.DeletedArtifactCount);
+        Assert.Null(await _executableStore.FindAsync(grandchild.Identity.ArtifactId));
+        Assert.Null(await _executableStore.FindAsync(child.Identity.ArtifactId));
+        Assert.Null(await _executableStore.FindAsync(parent.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task Sweep_DeduplicatesSharedDiamondClosureAndKeepsSharedChildWhileAnyRootRemains()
+    {
+        var leaf = Executable("artifact-leaf");
+        var left = Executable("artifact-left", leaf);
+        var right = Executable("artifact-right", leaf);
+        var firstRoot = Executable("artifact-root-1", left, right);
+        var secondRoot = Executable("artifact-root-2", right);
+        await SaveAsync(leaf, left, right, firstRoot, secondRoot);
+        await _sourceReferenceStore.SaveAsync(Reference("ref-root-1", firstRoot.Identity.ArtifactId, WorkflowExecutableReferenceScope.Published));
+        await _sourceReferenceStore.SaveAsync(Reference("ref-root-2", secondRoot.Identity.ArtifactId, WorkflowExecutableReferenceScope.Published));
+
+        Assert.Equal(0, (await NewGarbageCollector().SweepAsync(_now)).DeletedArtifactCount);
+
+        await _sourceReferenceStore.RetireAsync("ref-root-1", _now, "root-removed");
+        var oneRootSweep = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(2, oneRootSweep.DeletedArtifactCount);
+        Assert.Null(await _executableStore.FindAsync(firstRoot.Identity.ArtifactId));
+        Assert.Null(await _executableStore.FindAsync(left.Identity.ArtifactId));
+        Assert.NotNull(await _executableStore.FindAsync(leaf.Identity.ArtifactId));
+        Assert.NotNull(await _executableStore.FindAsync(right.Identity.ArtifactId));
+
+        await _sourceReferenceStore.RetireAsync("ref-root-2", _now, "final-root-removed");
+        Assert.Equal(3, (await NewGarbageCollector().SweepAsync(_now)).DeletedArtifactCount);
+    }
+
+    [Fact]
+    public async Task Sweep_FailsClosedWhenARootedDependencyIsMissingOrHasTheWrongHash()
+    {
+        var malformedParent = ExecutableFromEdges(
+            "artifact-parent",
+            new WorkflowExecutableDependency("artifact-child", "sha256:wrong", ["node-root"]));
+        await SaveAsync(malformedParent, Executable("artifact-child"), Executable("artifact-orphan"));
+        await _sourceReferenceStore.SaveAsync(Reference("ref-parent", malformedParent.Identity.ArtifactId, WorkflowExecutableReferenceScope.Published));
+
+        var result = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(0, result.DeletedArtifactCount);
+        Assert.NotNull(await _executableStore.FindAsync("artifact-orphan"));
+    }
+
+    [Fact]
+    public void DependencyGraph_RejectsExactCyclesWithADeterministicFullIdentityPath()
+    {
+        var first = ExecutableFromEdges(
+            "artifact-a",
+            new WorkflowExecutableDependency("artifact-b", Hash("artifact-b"), ["node-root"]));
+        var second = ExecutableFromEdges(
+            "artifact-b",
+            new WorkflowExecutableDependency("artifact-a", Hash("artifact-a"), ["node-root"]));
+
+        var exception = Assert.Throws<WorkflowExecutableDependencyGraphException>(() =>
+            WorkflowExecutableDependencyGraph.ResolveClosure([first.Identity], [second, first]));
+
+        Assert.Equal(WorkflowExecutableDependencyGraphFailureKind.Cycle, exception.Kind);
+        Assert.Contains("artifact-a@sha256:artifact-a -> artifact-b@sha256:artifact-b -> artifact-a@sha256:artifact-a", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DependencyGraph_RejectsAMissingArtifactWithTheExpectedFullIdentity()
+    {
+        var parent = ExecutableFromEdges(
+            "artifact-parent",
+            new WorkflowExecutableDependency("artifact-missing", "sha256:missing", ["node-root"]));
+
+        var exception = Assert.Throws<WorkflowExecutableDependencyGraphException>(() =>
+            WorkflowExecutableDependencyGraph.ResolveClosure([parent.Identity], [parent]));
+
+        Assert.Equal(WorkflowExecutableDependencyGraphFailureKind.MissingArtifact, exception.Kind);
+        Assert.Contains("artifact-missing@sha256:missing", exception.Message, StringComparison.Ordinal);
     }
 
     private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector() =>
@@ -184,7 +284,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         WorkflowExecutionStatus status) =>
         new(
             WorkflowExecutionId: workflowExecutionId,
-            PinnedExecutable: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            PinnedExecutable: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", Hash(artifactId)),
             Status: status,
             SubStatus: null,
             CreatedAt: _now,
@@ -215,9 +315,17 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
             Scope: scope,
             ExpiresAt: expiresAt);
 
-    private WorkflowExecutable Executable(string artifactId) =>
+    private WorkflowExecutable Executable(string artifactId, params WorkflowExecutable[] dependencies) =>
+        ExecutableFromEdges(
+            artifactId,
+            dependencies.Select(dependency => new WorkflowExecutableDependency(
+                dependency.Identity.ArtifactId,
+                dependency.Identity.ArtifactHash,
+                ["node-root"])).ToArray());
+
+    private WorkflowExecutable ExecutableFromEdges(string artifactId, params WorkflowExecutableDependency[] dependencies) =>
         new(
-            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", Hash(artifactId)),
             rootActivity: new ExecutableNode(
                 executableNodeId: "node-root",
                 authoredActivityId: "authored-root",
@@ -232,5 +340,15 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: dependencies);
+
+    private async Task SaveAsync(params WorkflowExecutable[] executables)
+    {
+        foreach (var executable in executables)
+            await _executableStore.SaveAsync(executable);
+    }
+
+    private static string Hash(string artifactId) => $"sha256:{artifactId}";
 }

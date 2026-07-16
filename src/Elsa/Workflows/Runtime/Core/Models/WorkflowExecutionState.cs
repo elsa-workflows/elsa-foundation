@@ -19,6 +19,8 @@ public sealed record WorkflowExecutionState(
     string? TenantId,
     IReadOnlyDictionary<string, string> SystemMetadata)
 {
+    private int _dispatchNestingDepth;
+
     /// <summary>
     /// The durable classification pinned when this execution starts. States written before run-kind tracking
     /// deserialize to <see cref="WorkflowRunKind.Unknown"/> and remain distinguishable as legacy history.
@@ -37,6 +39,20 @@ public sealed record WorkflowExecutionState(
     /// <summary>Immutable runtime-owned authority and root-initiator attribution. Null only for legacy state.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowExecutionAuthoritySnapshot? Authority { get; init; }
+
+    /// <summary>
+    /// Number of cross-workflow dispatch edges from the root execution. Root and legacy states default to zero.
+    /// </summary>
+    public int DispatchNestingDepth
+    {
+        get => _dispatchNestingDepth;
+        init
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Dispatch nesting depth cannot be negative.");
+            _dispatchNestingDepth = value;
+        }
+    }
 }
 
 public enum WorkflowRunKind

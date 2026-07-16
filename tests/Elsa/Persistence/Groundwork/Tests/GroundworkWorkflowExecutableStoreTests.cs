@@ -26,8 +26,9 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         await using var fixture = CreateStore(provider);
         IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
-        await store.SaveAsync(Executable("artifact-1"));
-        await store.SaveAsync(Executable("artifact-2"));
+        var dependency = Executable("artifact-2");
+        await store.SaveAsync(Executable("artifact-1", dependencies: [dependency]));
+        await store.SaveAsync(dependency);
 
         var found = await store.FindAsync("artifact-1");
         Assert.NotNull(found);
@@ -60,6 +61,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             ["Elsa.Activities.SendEmailDescriptor", "Elsa.Activities.SequenceDescriptor"],
             found.RuntimeRequirements.Select(x => x.ConsumerKey).Order(StringComparer.Ordinal));
         Assert.Equal("sample.external", Assert.Single(found.StorageDriverRequirements).DriverKey);
+        var retainedDependency = Assert.Single(found.Dependencies);
+        Assert.Equal("artifact-2", retainedDependency.ArtifactId);
+        Assert.Equal("hash-artifact-2", retainedDependency.ArtifactHash);
+        Assert.Equal("root", Assert.Single(retainedDependency.DispatchNodeIds));
 
         var all = await store.ListAsync();
         Assert.Equal(2, all.Count);
@@ -398,7 +403,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         }
     }
 
-    private static WorkflowExecutable Executable(string artifactId, string artifactVersion = "1")
+    private static WorkflowExecutable Executable(
+        string artifactId,
+        string artifactVersion = "1",
+        IReadOnlyCollection<WorkflowExecutable>? dependencies = null)
     {
         var child = new ExecutableNode(
             executableNodeId: "child",
@@ -441,6 +449,12 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             },
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
+            inputContract: null,
+            dependencies: dependencies?.Select(dependency => new WorkflowExecutableDependency(
+                dependency.Identity.ArtifactId,
+                dependency.Identity.ArtifactHash,
+                ["root"])).ToArray(),
+            runtimeRequirements: null,
             storageDriverRequirements: [new RuntimeStorageDriverRequirement("sample.external")]);
     }
 
