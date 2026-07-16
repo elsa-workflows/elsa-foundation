@@ -5,11 +5,13 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 using Xunit;
 
@@ -109,18 +111,154 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     }
 
     [Fact]
-    public async Task Commit_Rejects_WorkflowDispatch_State_Until_Provider_Capability_Lands()
+    public async Task Commit_Persists_WorkflowDispatch_And_Outbox_In_The_Checkpoint_Boundary()
     {
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var writer = CreateWriter(store);
+        var commit = BuildCommit("commit-dispatch", includeDispatch: true);
+        var outbox = PendingDispatchOutbox("commit-dispatch", "wf-1");
+        commit = commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(
+            [
+                Change(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox)
+            ])
+        };
 
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-            await writer.CommitAsync(BuildCommit("commit-dispatch", includeDispatch: true), Decision));
+        var result = await writer.CommitAsync(commit, Decision);
 
-        Assert.Contains("workflow-dispatch checkpoint state", exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#678", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, store.LoadCount);
-        Assert.Equal(0, store.BeginCount);
+        var dispatch = await new GroundworkWorkflowDispatchStore(
+            store,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(DispatchIdentity("wf-1").DispatchId);
+        Assert.NotNull(dispatch);
+        Assert.Equal([outbox.OutboxItemId], result.PendingPostCommitWorkIds);
+        Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, outbox.OutboxItemId));
+        Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-dispatch"));
+    }
+
+    [Fact]
+    public async Task Committed_Dispatch_Is_Materialized_Once_After_Runtime_Recreation_Before_Delivery()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-dispatch-before-delivery-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        try
+        {
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+                await CommitDispatchAsync(fixture, "commit-before-delivery");
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                var services = DispatchServices.Create(fixture);
+                await NewProcessor(services, DateTimeOffset.UnixEpoch.AddSeconds(1))
+                    .ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+                await AssertConvergedAsync(services, "commit-before-delivery");
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task Expired_Claim_Is_Resumed_Once_After_Runtime_Recreation()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-dispatch-expired-claim-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        try
+        {
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                await CommitDispatchAsync(fixture, "commit-expired-claim");
+                var services = DispatchServices.Create(fixture);
+                Assert.Single(await services.Outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                    "crashed-owner",
+                    DateTimeOffset.UnixEpoch.AddSeconds(1),
+                    TimeSpan.FromMinutes(1),
+                    1)));
+            }
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                var services = DispatchServices.Create(fixture);
+                await NewProcessor(services, DateTimeOffset.UnixEpoch.AddMinutes(2))
+                    .ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+                await AssertConvergedAsync(services, "commit-expired-claim");
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task Materialized_Child_Is_Repaired_Without_A_Second_Logical_Child_After_Runtime_Recreation()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-dispatch-after-materialization-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        try
+        {
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                await CommitDispatchAsync(fixture, "commit-after-materialization");
+                var services = DispatchServices.Create(fixture, crashAfterMaterialization: true);
+
+                await Assert.ThrowsAsync<WorkflowDispatchAdmissionProjectionException>(() =>
+                    NewProcessor(services, DateTimeOffset.UnixEpoch.AddSeconds(1))
+                        .ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10)).AsTask());
+
+                var dispatch = (await services.Dispatches.FindAsync(DispatchIdentity("wf-1").DispatchId))!;
+                Assert.NotNull(await services.Executions.FindAsync(dispatch.ChildWorkflowExecutionId));
+                Assert.Equal(WorkflowDispatchStatus.Pending, dispatch.Status);
+            }
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                var services = DispatchServices.Create(fixture);
+                await NewProcessor(services, DateTimeOffset.UnixEpoch.AddMinutes(2))
+                    .ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+                await AssertConvergedAsync(services, "commit-after-materialization");
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task Dispatch_Retention_Remains_Until_Both_Linked_Executions_Are_Absent_In_Sqlite()
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create("sqlite");
+        var services = DispatchServices.Create(fixture);
+        var pending = Dispatch("wf-1");
+        var terminal = pending
+            .TransitionTo(WorkflowDispatchStatus.Started, DateTimeOffset.UnixEpoch.AddSeconds(1))
+            .TransitionTo(WorkflowDispatchStatus.Completed, DateTimeOffset.UnixEpoch.AddSeconds(2));
+        await services.Dispatches.SaveAsync(pending);
+        await services.Dispatches.SaveAsync(terminal);
+        await services.Executions.SaveAsync(WorkflowState(pending.ParentWorkflowExecutionId, null));
+        await services.Executions.SaveAsync(ChildState(pending));
+        var collector = new WorkflowDispatchRetentionCollector(
+            services.Dispatches,
+            services.Dispatches,
+            services.Executions,
+            NullLogger<WorkflowDispatchRetentionCollector>.Instance);
+
+        Assert.Equal(1, (await collector.SweepAsync()).RetainedCount);
+        Assert.True(await services.Executions.DeleteAsync(pending.ParentWorkflowExecutionId));
+        Assert.Equal(1, (await collector.SweepAsync()).RetainedCount);
+        Assert.True(await services.Executions.DeleteAsync(pending.ChildWorkflowExecutionId));
+        Assert.Equal(1, (await collector.SweepAsync()).DeletedCount);
+        Assert.Null(await services.Dispatches.FindAsync(pending.DispatchId));
     }
 
     [Fact]
@@ -273,6 +411,51 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             timeProvider);
     }
 
+    private static async Task CommitDispatchAsync(
+        GroundworkDocumentStoreFixture fixture,
+        string commitId)
+    {
+        var commit = BuildCommit(commitId, includeDispatch: true);
+        var outbox = PendingDispatchOutbox(commitId, "wf-1");
+        commit = commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(
+            [
+                Change(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox)
+            ])
+        };
+        await CreateWriter(fixture.DocumentStore).CommitAsync(commit, Decision);
+    }
+
+    private static RuntimePostCommitOutboxProcessor NewProcessor(
+        DispatchServices services,
+        DateTimeOffset now) =>
+        new(
+            services.Outbox,
+            services.Dispatcher,
+            new FixedTimeProvider(now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            services.Dispatches);
+
+    private static async Task AssertConvergedAsync(DispatchServices services, string commitId)
+    {
+        var dispatch = (await services.Dispatches.FindAsync(DispatchIdentity("wf-1").DispatchId))!;
+        Assert.Equal(WorkflowDispatchStatus.Started, dispatch.Status);
+        Assert.Equal(
+            new[] { dispatch.ParentWorkflowExecutionId, dispatch.ChildWorkflowExecutionId }.Order(StringComparer.Ordinal),
+            (await services.Executions.ListAsync())
+            .Select(execution => execution.WorkflowExecutionId)
+            .Order(StringComparer.Ordinal));
+        Assert.Empty(await services.Outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "completion-audit",
+            DateTimeOffset.UnixEpoch.AddYears(1),
+            TimeSpan.FromMinutes(1),
+            10)));
+        Assert.NotNull(await services.OutboxDocumentAsync(RuntimePostCommitOutboxItems.OutboxItemId(
+            commitId,
+            PendingDispatchOutbox(commitId, "wf-1").Intent)));
+    }
+
     private static RuntimeCheckpointCommit BuildCommit(
         string commitId,
         string bookmarkNode = "node-bm-1",
@@ -343,6 +526,25 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
 
     private static WorkflowDispatchIdentity DispatchIdentity(string workflowExecutionId) => new(workflowExecutionId, "ae-1");
 
+    private static RuntimePostCommitOutboxItem PendingDispatchOutbox(string commitId, string workflowExecutionId)
+    {
+        var identity = DispatchIdentity(workflowExecutionId);
+        var intent = new RuntimePostCommitIntent(
+            identity.StartIntentId,
+            workflowExecutionId,
+            "elsa.dispatch-workflow.start-child.v1",
+            DateTimeOffset.UnixEpoch,
+            "ae-1",
+            identity.StartIdempotencyKey,
+            JsonSerializer.SerializeToElement(new { dispatchId = identity.DispatchId }));
+        return new RuntimePostCommitOutboxItem(
+            RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent),
+            intent,
+            RuntimePostCommitOutboxStatus.Pending,
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch);
+    }
+
     private static WorkflowDispatchRecord Dispatch(string workflowExecutionId) => new(
         dispatchId: DispatchIdentity(workflowExecutionId).DispatchId,
         parentWorkflowExecutionId: workflowExecutionId,
@@ -376,6 +578,27 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         ParentWorkflowExecutionId: null,
         TenantId: tenantId,
         SystemMetadata: new Dictionary<string, string>());
+
+    private static WorkflowExecutionState ChildState(WorkflowDispatchRecord dispatch) => new(
+        dispatch.ChildWorkflowExecutionId,
+        dispatch.ChildExecutable,
+        WorkflowExecutionStatus.Running,
+        SubStatus: null,
+        CreatedAt: dispatch.CreatedAt,
+        StartedAt: dispatch.CreatedAt,
+        UpdatedAt: dispatch.CreatedAt,
+        CompletedAt: null,
+        dispatch.CorrelationId,
+        dispatch.ParentWorkflowExecutionId,
+        dispatch.TenantId,
+        SystemMetadata: new Dictionary<string, string>())
+    {
+        PinnedSource = dispatch.ChildSource,
+        Partition = dispatch.Partition,
+        Authority = dispatch.Authority,
+        RunKind = dispatch.RunKind,
+        DispatchNestingDepth = dispatch.DispatchNestingDepth
+    };
 
     private static SchedulerState Scheduler(string workflowExecutionId, long version) => new(
         workflowExecutionId,
@@ -463,6 +686,91 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    private sealed class DispatchServices
+    {
+        private DispatchServices(
+            GroundworkDocumentStoreFixture fixture,
+            bool crashAfterMaterialization)
+        {
+            Fixture = fixture;
+            Dispatches = new GroundworkWorkflowDispatchStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                GroundworkTestAccess.DefaultAccessContextAccessor,
+                fixture.BoundedDocumentStore);
+            Executions = new GroundworkWorkflowExecutionStateStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                GroundworkTestAccess.DefaultAccessContextAccessor);
+            Outbox = new GroundworkRuntimePostCommitOutboxStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                fixture.BoundedDocumentStore,
+                GroundworkTestAccess.DefaultAccessContextAccessor);
+            Dispatcher = new MaterializingDispatchIntentDispatcher(
+                Dispatches,
+                Executions,
+                crashAfterMaterialization);
+        }
+
+        public GroundworkDocumentStoreFixture Fixture { get; }
+        public GroundworkWorkflowDispatchStore Dispatches { get; }
+        public GroundworkWorkflowExecutionStateStore Executions { get; }
+        public GroundworkRuntimePostCommitOutboxStore Outbox { get; }
+        public IRuntimePostCommitIntentDispatcher Dispatcher { get; }
+
+        public static DispatchServices Create(
+            GroundworkDocumentStoreFixture fixture,
+            bool crashAfterMaterialization = false) =>
+            new(fixture, crashAfterMaterialization);
+
+        public Task<DocumentEnvelope?> OutboxDocumentAsync(string outboxItemId) =>
+            Fixture.DocumentStore.LoadAsync(
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+                outboxItemId);
+    }
+
+    private sealed class MaterializingDispatchIntentDispatcher(
+        GroundworkWorkflowDispatchStore dispatches,
+        GroundworkWorkflowExecutionStateStore executions,
+        bool crashAfterMaterialization) : IRuntimePostCommitIntentDispatcher
+    {
+        private int _crashPending = crashAfterMaterialization ? 1 : 0;
+
+        public async ValueTask DispatchAsync(
+            RuntimePostCommitIntent intent,
+            CancellationToken cancellationToken = default)
+        {
+            var dispatchId = intent.Payload!.Value.GetProperty("dispatchId").GetString()!;
+            var dispatch = await dispatches.FindAsync(dispatchId, cancellationToken)
+                ?? throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found.");
+            var existing = await executions.FindAsync(dispatch.ChildWorkflowExecutionId, cancellationToken);
+            if (existing is null)
+                await executions.SaveAsync(ChildState(dispatch), cancellationToken);
+
+            if (Interlocked.Exchange(ref _crashPending, 0) == 1)
+            {
+                throw new WorkflowDispatchAdmissionProjectionException(
+                    dispatch.DispatchId,
+                    new InvalidOperationException("simulated process loss after child materialization"));
+            }
+
+            var latest = await dispatches.FindAsync(dispatch.DispatchId, cancellationToken)
+                ?? throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found.");
+            if (latest.Status == WorkflowDispatchStatus.Pending)
+            {
+                await dispatches.SaveAsync(
+                    latest.TransitionTo(WorkflowDispatchStatus.Started, DateTimeOffset.UnixEpoch.AddSeconds(2)),
+                    cancellationToken);
+            }
+        }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class UncertainAfterCommitDocumentStore(

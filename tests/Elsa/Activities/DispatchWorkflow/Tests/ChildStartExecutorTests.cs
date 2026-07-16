@@ -12,6 +12,53 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 
 public sealed class ChildStartExecutorTests
 {
+    [Theory]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Accepted)]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted)]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Duplicate)]
+    public async Task MaterializedStart_AdvancesPendingDispatchToStarted(
+        WorkflowExecutionCommandDispatchStatus status)
+    {
+        var startDispatcher = new StubStartDispatcher(status);
+        var dispatchStore = new InMemoryWorkflowDispatchStore();
+        var pending = NewDispatchRecord();
+        await dispatchStore.SaveAsync(pending);
+        var executor = new ChildStartExecutor(
+            startDispatcher,
+            dispatchStore,
+            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+
+        await executor.HandleAsync(NewOutboxItem().Intent);
+
+        var saved = await dispatchStore.FindAsync(pending.DispatchId);
+        Assert.NotNull(saved);
+        Assert.Equal(WorkflowDispatchStatus.Started, saved.Status);
+        Assert.Equal(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1), saved.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task SynchronousTerminalCheckpoint_SupersedesLaterStartedObservation()
+    {
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+        var dispatchStore = new InMemoryWorkflowDispatchStore();
+        var terminal = NewDispatchRecord().TransitionTo(
+            WorkflowDispatchStatus.Completed,
+            DispatchWorkflowRuntimeTestFixture.Now.AddSeconds(30));
+        await dispatchStore.SaveAsync(NewDispatchRecord());
+        await dispatchStore.SaveAsync(terminal);
+        var executor = new ChildStartExecutor(
+            startDispatcher,
+            dispatchStore,
+            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+
+        await executor.HandleAsync(NewOutboxItem().Intent);
+
+        var saved = await dispatchStore.FindAsync(terminal.DispatchId);
+        Assert.NotNull(saved);
+        Assert.Equal(WorkflowDispatchStatus.Completed, saved.Status);
+        Assert.Equal(terminal.UpdatedAt, saved.UpdatedAt);
+    }
+
     [Fact]
     public async Task RejectedStart_RemainsAnOutboxFailure_InsteadOfBeingAcknowledged()
     {
@@ -212,6 +259,28 @@ public sealed class ChildStartExecutorTests
             availableAt: DispatchWorkflowRuntimeTestFixture.Now);
     }
 
+    private static WorkflowDispatchRecord NewDispatchRecord()
+    {
+        var identity = NewIdentity();
+        return new WorkflowDispatchRecord(
+            identity.DispatchId,
+            "parent-handler",
+            "activity-handler",
+            identity.ChildWorkflowExecutionId,
+            DispatchWorkflowRuntimeTestFixture.ChildIdentity,
+            WorkflowExecutableSourceProvenance.From(DispatchWorkflowRuntimeTestFixture.ChildSourceReference()),
+            WorkflowDispatchMode.FireAndForget,
+            WorkflowDispatchStatus.Pending,
+            "correlation-handler",
+            "tenant-42",
+            new WorkflowExecutionPartition("partition-eu"),
+            WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot("parent-handler", "root-initiator"),
+            [new WorkflowDispatchInputDescriptor("message", "System.String")],
+            DispatchWorkflowRuntimeTestFixture.Now,
+            DispatchWorkflowRuntimeTestFixture.Now);
+    }
+
     private static WorkflowDispatchIdentity NewIdentity() => new("parent-handler", "activity-handler");
 
     private sealed class HandlerIntentDispatcher(ChildStartExecutor handler) : IRuntimePostCommitIntentDispatcher
@@ -234,7 +303,9 @@ public sealed class ChildStartExecutorTests
         {
             Requests.Add(request);
             var workflowExecutionId = request.WorkflowExecutionId!;
-            var reason = status is WorkflowExecutionCommandDispatchStatus.Rejected or WorkflowExecutionCommandDispatchStatus.Deferred
+            var reason = status is WorkflowExecutionCommandDispatchStatus.Rejected or
+                WorkflowExecutionCommandDispatchStatus.Deferred or
+                WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted
                 ? "set by test"
                 : null;
             return ValueTask.FromResult(new WorkflowExecutionStartDispatchResult(

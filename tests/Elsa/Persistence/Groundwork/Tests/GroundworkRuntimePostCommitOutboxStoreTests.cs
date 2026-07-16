@@ -190,6 +190,23 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
+    public async Task GetDeliverable_SelectsEarliestCandidateAcrossBoundedProviderPages()
+    {
+        await using var fixture = CreateStore("memory");
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        for (var index = 0; index < 100; index++)
+            await store.SavePendingAsync(PendingAt($"a-{index:D3}", Now.AddHours(1)));
+        await store.SavePendingAsync(PendingAt("z-earliest", Now));
+
+        var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now.AddHours(2), 1));
+
+        Assert.Equal("z-earliest", Assert.Single(deliverable).OutboxItemId);
+    }
+
+    [Fact]
     public async Task Pending_Item_Survives_Restart()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"gw-outbox-{Guid.NewGuid():N}.db");
@@ -216,6 +233,134 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         }
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Expired_claim_is_reclaimed_with_a_higher_fencing_token_and_stale_owner_is_rejected(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        await store.SavePendingAsync(Pending("item-1", "wf-1"));
+
+        var first = Assert.Single(await store.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest("owner-1", Now, TimeSpan.FromMinutes(1), 1)));
+        var second = Assert.Single(await store.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest("owner-2", Now.AddMinutes(2), TimeSpan.FromMinutes(1), 1)));
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, second.Item.Status);
+        Assert.Equal(first.FencingToken + 1, second.FencingToken);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.RecordDeliveryResultAsync(
+                first,
+                new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now.AddMinutes(2))));
+
+        await store.RecordDeliveryResultAsync(
+            second,
+            new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now.AddMinutes(2)));
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now.AddHours(1), 10)));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Final_child_start_failure_atomically_completes_claim_and_projects_dispatch_failed(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var access = GroundworkTestAccess.DefaultAccessContextAccessor;
+        var outbox = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore,
+            access);
+        var dispatches = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            access,
+            fixture.BoundedDocumentStore);
+        var pendingDispatch = GroundworkWorkflowDispatchStoreTests.Pending("parent-1", "activity-1");
+        await dispatches.SaveAsync(pendingDispatch);
+        await outbox.SavePendingAsync(PendingDispatch("item-1", pendingDispatch));
+        var claim = Assert.Single(await outbox.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest("owner-1", Now, TimeSpan.FromMinutes(1), 1)));
+        var failure = new RuntimePostCommitOutboxDeliveryResult(
+            "item-1",
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            Now.AddSeconds(1),
+            "classified-child-start-failure");
+
+        await outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+            claim,
+            failure,
+            pendingDispatch.TransitionToDispatchFailed(Now.AddSeconds(1))));
+
+        Assert.Equal(
+            WorkflowDispatchStatus.DispatchFailed,
+            (await dispatches.FindAsync(pendingDispatch.DispatchId))!.Status);
+        Assert.Empty(await outbox.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now.AddHours(1), 10)));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Invalid_dispatch_projection_rolls_back_outbox_completion(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var access = GroundworkTestAccess.DefaultAccessContextAccessor;
+        var outbox = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore,
+            access);
+        var dispatches = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            access,
+            fixture.BoundedDocumentStore);
+        var pendingDispatch = GroundworkWorkflowDispatchStoreTests.Pending("parent-1", "activity-1");
+        await dispatches.SaveAsync(pendingDispatch);
+        await outbox.SavePendingAsync(PendingDispatch("item-1", pendingDispatch));
+        var claim = Assert.Single(await outbox.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest("owner-1", Now, TimeSpan.FromMinutes(1), 1)));
+        var safeFailure = pendingDispatch.TransitionToDispatchFailed(Now.AddSeconds(1));
+        var invalidProjection = new WorkflowDispatchRecord(
+            pendingDispatch.DispatchId,
+            pendingDispatch.ParentWorkflowExecutionId,
+            pendingDispatch.ParentActivityExecutionId,
+            pendingDispatch.ChildWorkflowExecutionId,
+            pendingDispatch.ChildExecutable,
+            pendingDispatch.ChildSource,
+            pendingDispatch.Mode,
+            WorkflowDispatchStatus.DispatchFailed,
+            "conflicting-correlation",
+            pendingDispatch.TenantId,
+            pendingDispatch.Partition,
+            pendingDispatch.RunKind,
+            pendingDispatch.Authority,
+            pendingDispatch.InputDescriptors,
+            pendingDispatch.CreatedAt,
+            Now.AddSeconds(1),
+            safeFailure.Metadata);
+        var failure = new RuntimePostCommitOutboxDeliveryResult(
+            "item-1",
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            Now.AddSeconds(1),
+            "classified-child-start-failure");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+                claim,
+                failure,
+                invalidProjection)));
+
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatches.FindAsync(pendingDispatch.DispatchId))!.Status);
+        await outbox.RecordDeliveryResultAsync(
+            claim,
+            new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(2)));
+    }
+
     private static RuntimePostCommitOutboxItem Pending(
         string outboxItemId,
         string workflowExecutionId,
@@ -234,6 +379,38 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         recordedAt: Now,
         availableAt: Now,
         retryPolicy: retryPolicy);
+
+    private static RuntimePostCommitOutboxItem PendingAt(string outboxItemId, DateTimeOffset recordedAt) => new(
+        outboxItemId,
+        new RuntimePostCommitIntent(
+            $"intent-{outboxItemId}",
+            "wf-paged",
+            "publish",
+            recordedAt,
+            activityExecutionId: null,
+            idempotencyKey: null,
+            payload: null),
+        RuntimePostCommitOutboxStatus.Pending,
+        recordedAt,
+        Now);
+
+    private static RuntimePostCommitOutboxItem PendingDispatch(
+        string outboxItemId,
+        WorkflowDispatchRecord dispatch) => new(
+        outboxItemId,
+        new RuntimePostCommitIntent(
+            new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId).StartIntentId,
+            dispatch.ParentWorkflowExecutionId,
+            "elsa.dispatch-workflow.start-child.v1",
+            Now,
+            dispatch.ParentActivityExecutionId,
+            new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId).StartIdempotencyKey,
+            payload: null,
+            metadata: new Dictionary<string, string> { ["runtime.dispatchId"] = dispatch.DispatchId }),
+        RuntimePostCommitOutboxStatus.Pending,
+        Now,
+        Now,
+        RuntimePostCommitRetryPolicy.None);
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);

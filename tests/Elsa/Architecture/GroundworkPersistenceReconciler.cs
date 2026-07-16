@@ -360,6 +360,12 @@ internal sealed class GroundworkPersistenceReconciler
         Map("runtime", "IRuntimeCheckpointCommitStore", "runtime-checkpoint-commit", "CheckpointCommitDocumentKind"),
         Map("runtime", "IRuntimeDiagnosticsSettingsStore", "runtime-diagnostics-settings", "RuntimeDiagnosticsSettingsDocumentKind"),
         Map("runtime", "IRuntimePostCommitOutboxStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IRuntimePostCommitOutboxClaimStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IRuntimePostCommitOutboxClaimCompletionStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IWorkflowDispatchStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchQueryStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchDeleteStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchRetentionRootStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
         Map("runtime", "ISchedulerStateStore", "runtime-scheduler-state", "SchedulerStateDocumentKind"),
         Map("runtime", "IWorkflowExecutableSourceReferenceStore", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),
         Map("runtime", "IWorkflowExecutableSourceReferenceWriter", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),
@@ -404,12 +410,7 @@ internal sealed class GroundworkPersistenceReconciler
         Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind")
     ];
 
-    private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts =
-    [
-        // #676 introduces the in-memory projection and rejects non-empty Groundwork checkpoint changes.
-        // #678 owns the provider-backed storage unit, restart convergence, and permanent ledger row.
-        new("IWorkflowDispatchStore", "#678")
-    ];
+    private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts = [];
 
     private static GroundworkPersistenceRowMapping Map(
         string owner,

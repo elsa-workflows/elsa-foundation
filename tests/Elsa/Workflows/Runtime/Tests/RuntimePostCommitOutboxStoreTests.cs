@@ -63,6 +63,58 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
+    public async Task ClaimAsync_AtomicallyAssignsOwnerTokenAndVisibility()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+
+        var claim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "worker-1", _now, TimeSpan.FromMinutes(1), 10)));
+
+        Assert.Equal("worker-1", claim.OwnerId);
+        Assert.Equal(1, claim.FencingToken);
+        Assert.Equal(_now.AddMinutes(1), claim.VisibleAfter);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, claim.Item.Status);
+        Assert.Equal(claim.FencingToken, claim.Item.DeliveryFencingToken);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, 10)));
+    }
+
+    [Fact]
+    public async Task ExpiredClaim_IsReclaimedWithHigherFenceAndRejectsStaleAcknowledgement()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+        var first = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "worker-1", _now, TimeSpan.FromSeconds(10), 10)));
+        var second = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "worker-2", _now.AddSeconds(11), TimeSpan.FromSeconds(10), 10)));
+        var delivered = new RuntimePostCommitOutboxDeliveryResult(
+            "outbox-1", RuntimePostCommitOutboxStatus.Delivered, _now.AddSeconds(12));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.RecordDeliveryResultAsync(first, delivered).AsTask());
+        await store.RecordDeliveryResultAsync(second, delivered);
+
+        Assert.Equal(2, second.FencingToken);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(1), 10)));
+    }
+
+    [Fact]
+    public async Task ClaimedItem_RejectsLegacyResultWithoutOwnerAndFence()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+        await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "worker-1", _now, TimeSpan.FromMinutes(1), 10));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+                "outbox-1", RuntimePostCommitOutboxStatus.Delivered, _now.AddSeconds(1))).AsTask());
+
+        Assert.Contains("owner and fencing token", exception.Message);
+    }
+
+    [Fact]
     public async Task InMemoryRuntimeCheckpointCommitStore_RejectsNonPendingSaveAndConflictingDuplicate()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();

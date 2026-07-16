@@ -149,9 +149,13 @@ public sealed class WorkflowDispatchStateTests
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: $"checkpoint:{commitId}",
                 Name: "ActivityCompleted",
-                WorkflowExecutionId: record.ParentWorkflowExecutionId,
+                WorkflowExecutionId: record.Status == WorkflowDispatchStatus.Pending
+                    ? record.ParentWorkflowExecutionId
+                    : record.ChildWorkflowExecutionId,
                 OccurredAt: Now,
-                ActivityExecutionIds: [record.ParentActivityExecutionId],
+                ActivityExecutionIds: record.Status == WorkflowDispatchStatus.Pending
+                    ? [record.ParentActivityExecutionId]
+                    : [],
                 Metadata: new Dictionary<string, string>()),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,

@@ -54,10 +54,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
-        var now = _timeProvider.GetUtcNow();
+        var dispatchId = workItem.CommandMetadata.GetValueOrDefault(RuntimeMetadataKeys.WorkflowDispatchId);
+        var now = dispatchId is null ? _timeProvider.GetUtcNow() : workItem.EnqueuedAt;
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
-        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, now, commandMetadata);
+        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
@@ -92,16 +93,20 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             "requestedArtifactId" or
             "parentWorkflowExecutionId" or
             "correlationId" or
-            "tenantId";
+            "tenantId" or
+            "dispatchNestingDepth";
 
     private RuntimeSchedulerWorkItem NewRootActivityWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
         WorkflowExecutableIdentity pinnedExecutable,
         string rootActivityId,
+        string? dispatchId,
         DateTimeOffset now,
         IReadOnlyDictionary<string, string> commandMetadata)
     {
-        var activityExecutionId = _idGenerator.NewActivityExecutionId();
+        var activityExecutionId = dispatchId is null
+            ? _idGenerator.NewActivityExecutionId()
+            : $"{dispatchId}:activity:root";
         var attempt = new ActivityExecutionAttemptLineage(1, activityExecutionId, null);
         var provenance = ActivitySchedulingProvenance.From(
             startWorkItem.WorkflowExecutionId,

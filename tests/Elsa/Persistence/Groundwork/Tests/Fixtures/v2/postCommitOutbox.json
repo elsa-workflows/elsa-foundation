@@ -5,7 +5,9 @@
     "deliveredAt": null,
     "deliveringOwnerId": null,
     "deliveryAttemptCount": 0,
+    "deliveryFencingToken": 0,
     "deliveryStartedAt": null,
+    "deliveryVisibleAfter": null,
     "intent": {
       "activityExecutionId": null,
       "dependsOnWaitRegistrationId": null,

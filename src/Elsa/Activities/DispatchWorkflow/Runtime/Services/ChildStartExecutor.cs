@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Options;
 
@@ -15,21 +16,43 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IWorkflowStartDispatcher _workflowStartDispatcher;
     private readonly int _maxNestingDepth;
+    private readonly IWorkflowDispatchStore? _workflowDispatchStore;
+    private readonly TimeProvider _timeProvider;
 
     public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher)
-        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()))
+        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), null, TimeProvider.System)
     {
     }
 
     public ChildStartExecutor(
         IWorkflowStartDispatcher workflowStartDispatcher,
         IOptions<DispatchWorkflowOptions> options)
+        : this(workflowStartDispatcher, options, null, TimeProvider.System)
+    {
+    }
+
+    public ChildStartExecutor(
+        IWorkflowStartDispatcher workflowStartDispatcher,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        TimeProvider timeProvider)
+        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), workflowDispatchStore, timeProvider)
+    {
+    }
+
+    public ChildStartExecutor(
+        IWorkflowStartDispatcher workflowStartDispatcher,
+        IOptions<DispatchWorkflowOptions> options,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workflowStartDispatcher);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         DispatchWorkflowOptions.ValidateMaxNestingDepth(options.Value.MaxNestingDepth, nameof(DispatchWorkflowOptions.MaxNestingDepth));
         _workflowStartDispatcher = workflowStartDispatcher;
         _maxNestingDepth = options.Value.MaxNestingDepth;
+        _workflowDispatchStore = workflowDispatchStore;
+        _timeProvider = timeProvider;
     }
 
     public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
@@ -101,7 +124,59 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             throw new InvalidOperationException(
                 $"DispatchWorkflow child-start intent '{intent.IntentId}' was deferred without durable distributed-forwarding evidence: {result.CommandDispatch.Reason ?? "no reason supplied"}.");
         }
+
+        if (result.CommandDispatch.Status is
+            WorkflowExecutionCommandDispatchStatus.Accepted or
+            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted or
+            WorkflowExecutionCommandDispatchStatus.Duplicate)
+        {
+            try
+            {
+                await MarkStartedAsync(payload.DispatchId, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new WorkflowDispatchAdmissionProjectionException(payload.DispatchId, exception);
+            }
+        }
     }
+
+    private async ValueTask MarkStartedAsync(string dispatchId, CancellationToken cancellationToken)
+    {
+        if (_workflowDispatchStore is null)
+            return;
+
+        var current = await _workflowDispatchStore.FindAsync(dispatchId, cancellationToken)
+            ?? throw new InvalidOperationException($"Committed workflow dispatch '{dispatchId}' was not found after child admission.");
+        if (IsTerminal(current.Status) || current.Status == WorkflowDispatchStatus.Started)
+            return;
+
+        try
+        {
+            await _workflowDispatchStore.SaveAsync(
+                current.TransitionTo(WorkflowDispatchStatus.Started, _timeProvider.GetUtcNow()),
+                cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            // A child can finish synchronously while admission is returning. Its terminal checkpoint owns the
+            // stronger state and must supersede this best-effort Started observation.
+            var latest = await _workflowDispatchStore.FindAsync(dispatchId, cancellationToken);
+            if (latest is not null && (latest.Status == WorkflowDispatchStatus.Started || IsTerminal(latest.Status)))
+                return;
+            throw;
+        }
+    }
+
+    private static bool IsTerminal(WorkflowDispatchStatus status) => status is
+        WorkflowDispatchStatus.Completed or
+        WorkflowDispatchStatus.Faulted or
+        WorkflowDispatchStatus.Cancelled or
+        WorkflowDispatchStatus.DispatchFailed;
 
     private static bool HasDurableDistributedForwardingEvidence(IReadOnlyDictionary<string, string> metadata) =>
         metadata.TryGetValue(DistributedOwningNodeMetadataKey, out var owningNode) &&

@@ -46,6 +46,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
@@ -143,6 +144,12 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind:
                 await new GroundworkRuntimePostCommitOutboxStore(store, Serializer).SavePendingAsync(OutboxItem());
                 break;
+            case ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind:
+                await new GroundworkWorkflowDispatchStore(
+                    store,
+                    Serializer,
+                    GroundworkTestAccess.DefaultAccessContextAccessor).SaveAsync(Dispatch());
+                break;
             case ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind:
                 await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer).EnqueueAsync(WorkItem());
                 break;
@@ -201,6 +208,11 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkRuntimePostCommitOutboxStore(store, Serializer)
                 .GetDeliverableAsync(new RuntimePostCommitOutboxQuery(DateTimeOffset.UnixEpoch, 10)))
                 .SingleOrDefault()?.OutboxItemId,
+        ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind =>
+            (await new GroundworkWorkflowDispatchStore(
+                store,
+                Serializer,
+                GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(Dispatch().DispatchId))?.Status,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind =>
             (await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer)
                 .ListAsync(new RuntimeSchedulerWorkQuery(Wf)))
@@ -240,6 +252,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind => Wf,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind => IncidentStatus.Open,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => "item-1",
+        ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind => WorkflowDispatchStatus.Pending,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind => "work-1",
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind => "timer-hash-1",
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind => "Event",
@@ -577,6 +590,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         recordedAt: DateTimeOffset.UnixEpoch,
         availableAt: DateTimeOffset.UnixEpoch,
         retryPolicy: null);
+
+    private static WorkflowDispatchRecord Dispatch() =>
+        GroundworkWorkflowDispatchStoreTests.Pending(Wf, "ae-dispatch");
 
     private static RuntimeSchedulerWorkItem WorkItem() => new(
         workItemId: "work-1",

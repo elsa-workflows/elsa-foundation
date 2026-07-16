@@ -16,7 +16,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
 }
 
-public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore
+public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
@@ -39,6 +39,34 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     /// constructions and the DI activation (which injects every registered backing store, unchanged) resolve to the same
     /// shape — W9's coalescing decorators keep wrapping this registration without modification.
     /// </summary>
+    public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore,
+        IIncidentStateStore? incidentStateStore,
+        IExecutionLivenessStateStore? operationalStateStore,
+        ISchedulerStateStore? schedulerStateStore,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager,
+        InMemoryRuntimeCheckpointStoreState? state,
+        TimeProvider? timeProvider)
+        : this(
+            workflowExecutionStateStore,
+            activityExecutionStateStore,
+            bookmarkStateStore,
+            durableValueStateStore,
+            incidentStateStore,
+            operationalStateStore,
+            schedulerStateStore,
+            activityExecutionInspectionWriter,
+            rootWriteLeaseManager,
+            state,
+            timeProvider,
+            workflowDispatchStore: null)
+    {
+    }
+
     public InMemoryRuntimeCheckpointCommitStore(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
@@ -356,6 +384,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             if (existing.IsTerminal)
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
+            if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
+                throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
             var deliveryAttemptCount = existing.DeliveryAttemptCount + 1;
             var status = NormalizeDeliveryStatus(existing, result.Status, deliveryAttemptCount);
@@ -375,7 +405,87 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 deliveryStartedAt: null,
                 deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
                 lastFailureMessage: result.FailureMessage,
-                metadata: existing.Metadata);
+                metadata: existing.Metadata,
+                deliveryFencingToken: existing.DeliveryFencingToken);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
+        RuntimePostCommitOutboxClaimRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            var claimable = _state.OutboxItems.Values
+                .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+                .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
+                .ThenBy(item => item.RecordedAt)
+                .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
+                .Take(request.Limit)
+                .ToArray();
+            var claims = new RuntimePostCommitOutboxClaim[claimable.Length];
+            for (var index = 0; index < claimable.Length; index++)
+            {
+                var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], request);
+                _state.OutboxItems[claim.OutboxItemId] = claim.Item;
+                claims[index] = claim;
+            }
+
+            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>>(claims);
+        }
+    }
+
+    public ValueTask RecordDeliveryResultAsync(
+        RuntimePostCommitOutboxClaim claim,
+        RuntimePostCommitOutboxDeliveryResult result,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        ArgumentNullException.ThrowIfNull(result);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.OutboxItems.TryGetValue(claim.OutboxItemId, out var existing))
+                throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found.");
+
+            _state.OutboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask CompleteClaimAsync(
+        RuntimePostCommitOutboxClaimCompletion completion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.OutboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
+                throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
+
+            var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+                existingOutbox,
+                completion.Claim,
+                completion.DeliveryResult);
+            if (completion.WorkflowDispatch is { } dispatch)
+            {
+                if (!_state.WorkflowDispatches.TryGetValue(dispatch.DispatchId, out var existingDispatch))
+                    throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the atomic checkpoint store.");
+                WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
+            }
+
+            _state.OutboxItems[completion.Claim.OutboxItemId] = completedOutbox;
+            if (completion.WorkflowDispatch is { } workflowDispatch)
+                _state.WorkflowDispatches[workflowDispatch.DispatchId] = workflowDispatch;
         }
 
         return ValueTask.CompletedTask;
@@ -784,72 +894,19 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
                 throw new InvalidOperationException($"The in-memory checkpoint commit store can only project workflow dispatch '{RuntimeStateChangeOperation.Upsert}' changes.");
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.ParentWorkflowExecutionId))
-                throw new InvalidOperationException("Workflow dispatch parent execution ID must match the checkpoint workflow execution ID.");
+            WorkflowDispatchLifecycle.ValidateCheckpointOwnership(commit.WorkflowExecutionId, stateChange.State);
 
-            if (seen.TryGetValue(stateChange.StateId, out var duplicate) && !DispatchRecordsEqual(duplicate, stateChange.State))
+            if (seen.TryGetValue(stateChange.StateId, out var duplicate) && !WorkflowDispatchLifecycle.RecordsEqual(duplicate, stateChange.State))
                 throw new InvalidOperationException($"Workflow dispatch '{stateChange.StateId}' occurs more than once with conflicting state in the same checkpoint.");
             seen[stateChange.StateId] = stateChange.State;
 
             var existing = await _workflowDispatchStore.FindAsync(stateChange.StateId, cancellationToken);
             if (existing is not null)
-                ValidateDispatchTransition(existing, stateChange.State);
+                WorkflowDispatchLifecycle.ValidateTransition(existing, stateChange.State);
+            else
+                WorkflowDispatchLifecycle.ValidateNew(stateChange.State);
         }
     }
-
-    private static void ValidateDispatchTransition(WorkflowDispatchRecord existing, WorkflowDispatchRecord candidate)
-    {
-        if (DispatchRecordsEqual(existing, candidate))
-            return;
-        if (!DispatchIdentityEquals(existing, candidate))
-            throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' already exists with conflicting immutable identity or context.");
-        if (candidate.UpdatedAt < existing.UpdatedAt)
-            throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' cannot move its update timestamp backwards.");
-
-        var validTransition = existing.Status switch
-        {
-            WorkflowDispatchStatus.Pending => candidate.Status is
-                WorkflowDispatchStatus.Started or
-                WorkflowDispatchStatus.Cancelled or
-                WorkflowDispatchStatus.DispatchFailed,
-            WorkflowDispatchStatus.Started => candidate.Status is
-                WorkflowDispatchStatus.Completed or
-                WorkflowDispatchStatus.Faulted or
-                WorkflowDispatchStatus.Cancelled or
-                WorkflowDispatchStatus.DispatchFailed,
-            _ => false
-        };
-        if (!validTransition)
-            throw new InvalidOperationException($"Workflow dispatch '{candidate.DispatchId}' cannot transition from '{existing.Status}' to '{candidate.Status}'.");
-    }
-
-    private static bool DispatchIdentityEquals(WorkflowDispatchRecord left, WorkflowDispatchRecord right) =>
-        StringComparer.Ordinal.Equals(left.DispatchId, right.DispatchId) &&
-        StringComparer.Ordinal.Equals(left.ParentWorkflowExecutionId, right.ParentWorkflowExecutionId) &&
-        StringComparer.Ordinal.Equals(left.ParentActivityExecutionId, right.ParentActivityExecutionId) &&
-        StringComparer.Ordinal.Equals(left.ChildWorkflowExecutionId, right.ChildWorkflowExecutionId) &&
-        Equals(left.ChildExecutable, right.ChildExecutable) &&
-        Equals(left.ChildSource, right.ChildSource) &&
-        left.Mode == right.Mode &&
-        StringComparer.Ordinal.Equals(left.CorrelationId, right.CorrelationId) &&
-        StringComparer.Ordinal.Equals(left.TenantId, right.TenantId) &&
-        Equals(left.Partition, right.Partition) &&
-        left.RunKind == right.RunKind &&
-        left.DispatchNestingDepth == right.DispatchNestingDepth &&
-        AuthorityEquals(left.Authority, right.Authority) &&
-        left.InputDescriptors.SequenceEqual(right.InputDescriptors) &&
-        left.CreatedAt == right.CreatedAt &&
-        MetadataEquals(left.Metadata, right.Metadata);
-
-    private static bool DispatchRecordsEqual(WorkflowDispatchRecord left, WorkflowDispatchRecord right) =>
-        DispatchIdentityEquals(left, right) &&
-        left.Status == right.Status &&
-        left.UpdatedAt == right.UpdatedAt;
-
-    private static bool AuthorityEquals(WorkflowExecutionAuthoritySnapshot left, WorkflowExecutionAuthoritySnapshot right) =>
-        StringComparer.Ordinal.Equals(left.SystemIdentity, right.SystemIdentity) &&
-        StringComparer.Ordinal.Equals(left.RootInitiator, right.RootInitiator) &&
-        MetadataEquals(left.Metadata, right.Metadata);
 
     private static bool IsSamePendingIntent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
         existing.Status == RuntimePostCommitOutboxStatus.Pending

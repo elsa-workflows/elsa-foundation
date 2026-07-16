@@ -97,9 +97,20 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
         services.TryAddSingleton<IWorkflowDispatchStore, InMemoryWorkflowDispatchStore>();
+        services.TryAddSingleton<IWorkflowDispatchQueryStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchQueryStore ??
+            throw new InvalidOperationException("The configured workflow dispatch store does not provide bounded query support."));
+        services.TryAddSingleton<IWorkflowDispatchDeleteStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchDeleteStore ??
+            throw new InvalidOperationException("The configured workflow dispatch store does not provide dispatch deletion support."));
+        services.TryAddSingleton<IWorkflowDispatchRetentionRootStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchRetentionRootStore ??
+            throw new InvalidOperationException("The configured workflow dispatch store does not provide executable retention-root projection."));
         services.TryAddScoped<InMemoryRuntimeCheckpointCommitStore>();
         services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddScoped<IRuntimePostCommitOutboxClaimStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
@@ -163,6 +174,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
         services.TryAddScoped<RuntimeCheckpointCommitter>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
         services.TryAddSingleton<IWorkflowExecutableStartPolicy, AllowWorkflowExecutableStartPolicy>();
@@ -201,8 +213,17 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetService<IWorkflowExecutionPartitionAccessor>(),
-                policies[0]);
+                policies[0],
+                serviceProvider.GetService<IWorkflowDispatchStore>(),
+                serviceProvider.GetService<IWorkflowExecutionStateStore>());
         });
+        services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
+        services.TryAddSingleton<WorkflowDispatchRetentionCursor>();
+        services.TryAddScoped<IWorkflowDispatchReadinessAssessor, WorkflowDispatchReadinessAssessor>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalCheckpointEvidence>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalDispatchStoreEvidence>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalOutboxEvidence>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalSchedulerEvidence>());
 
         // Reference GC (ADR 0040): retained execution roots and creation grace are runtime safety policy. A host may
         // configure the policy and schedule the collector through the separate sweeper feature.

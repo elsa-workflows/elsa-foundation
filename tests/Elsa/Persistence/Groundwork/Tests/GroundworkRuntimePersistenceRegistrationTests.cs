@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using CShells.Lifecycle;
 using Groundwork.Documents.Serialization;
 using Groundwork.Documents.Store;
+using Groundwork.Core.Transactions;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -48,6 +49,14 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         typeof(IIncidentStateStore),
         typeof(IRuntimeCheckpointCommitStore),
         typeof(IRuntimePostCommitOutboxStore),
+        typeof(GroundworkRuntimePostCommitOutboxStore),
+        typeof(IRuntimePostCommitOutboxClaimStore),
+        typeof(IRuntimePostCommitOutboxClaimCompletionStore),
+        typeof(GroundworkWorkflowDispatchStore),
+        typeof(IWorkflowDispatchStore),
+        typeof(IWorkflowDispatchQueryStore),
+        typeof(IWorkflowDispatchDeleteStore),
+        typeof(IWorkflowDispatchRetentionRootStore),
         typeof(IWorkflowSchedulerWorkQueue),
         typeof(IDurableTimerStore),
         typeof(IWorkflowTriggerBindingStore),
@@ -67,6 +76,49 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
             var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
             Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
         });
+    }
+
+    [Fact]
+    public void AddGroundworkRuntimeStores_Contributes_Durable_Dispatch_Readiness_Evidence()
+    {
+        var services = new ServiceCollection();
+        var sessionSource = new GroundworkStoreSessionSource();
+        Assert.True(sessionSource.TrySetAdmitted(
+            (_, _) => throw new InvalidOperationException("Readiness must not open a provider session."),
+            TransactionBoundary.CrossUnitAtomic));
+        services.AddSingleton(sessionSource);
+
+        services.AddGroundworkRuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var evidence = provider.GetServices<IWorkflowDispatchDurabilityEvidence>()
+            .ToDictionary(item => item.Component, item => item.Level, StringComparer.Ordinal);
+
+        Assert.Equal(4, evidence.Count);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.Checkpoint]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.DispatchStore]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.Outbox]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.Scheduler]);
+    }
+
+    [Fact]
+    public void AddGroundworkRuntimeStores_DoesNotClaimDurableCheckpointWithoutAdmittedAtomicBoundary()
+    {
+        var services = new ServiceCollection();
+        var sessionSource = new GroundworkStoreSessionSource();
+        Assert.True(sessionSource.TrySetAdmitted(
+            (_, _) => throw new InvalidOperationException("Readiness must not open a provider session."),
+            TransactionBoundary.PerOperation));
+        services.AddSingleton(sessionSource);
+        services.AddGroundworkRuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var evidence = provider.GetServices<IWorkflowDispatchDurabilityEvidence>()
+            .ToDictionary(item => item.Component, item => item.Level, StringComparer.Ordinal);
+
+        Assert.Equal(
+            WorkflowDispatchDurabilityLevel.ProcessLocal,
+            evidence[WorkflowDispatchDurabilityComponents.Checkpoint]);
     }
 
     [Fact]
@@ -145,6 +197,16 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        Assert.Same(
+            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            provider.GetRequiredService<IRuntimePostCommitOutboxClaimStore>());
+        Assert.Same(
+            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            provider.GetRequiredService<IRuntimePostCommitOutboxClaimCompletionStore>());
+        Assert.IsType<GroundworkWorkflowDispatchStore>(provider.GetRequiredService<IWorkflowDispatchStore>());
+        Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchQueryStore>());
+        Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchDeleteStore>());
+        Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchRetentionRootStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
     }
 
@@ -212,6 +274,20 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+
+        var dispatchStore = provider.GetRequiredService<IWorkflowDispatchStore>();
+        var dispatchQueryStore = provider.GetRequiredService<IWorkflowDispatchQueryStore>();
+        var first = GroundworkWorkflowDispatchStoreTests.Pending("parent-physical", "activity-1");
+        var second = GroundworkWorkflowDispatchStoreTests.Pending("parent-physical", "activity-2");
+        await dispatchStore.SaveAsync(first);
+        await dispatchStore.SaveAsync(second);
+        await dispatchStore.SaveAsync(second.TransitionTo(WorkflowDispatchStatus.Started, DateTimeOffset.UnixEpoch.AddSeconds(1)));
+
+        Assert.Equal(
+            second.DispatchId,
+            Assert.Single(await dispatchQueryStore.QueryAsync(new WorkflowDispatchQuery(
+                parentWorkflowExecutionId: "parent-physical",
+                status: WorkflowDispatchStatus.Started))).DispatchId);
     }
 
     [Fact] // Resolution is side-effect free before startup; the first provider operation is rejected until

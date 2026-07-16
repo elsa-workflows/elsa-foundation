@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Indexing;
+using Groundwork.Core.PhysicalStorage;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -78,5 +79,41 @@ public sealed class ElsaRuntimeStorageManifestTests
                 Assert.Equal(IndexPhysicalizationPolicy.Optimized, index.Physicalization);
             }
         }
+    }
+
+    [Fact]
+    public async Task WorkflowDispatch_declares_single_and_composite_bounded_query_routes()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind);
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
+
+        Assert.Equal(
+            [
+                ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex,
+                ElsaRuntimeStorageManifest.ByCollectionIndex,
+                ElsaRuntimeStorageManifest.ByParentWorkflowExecutionIndex,
+                ElsaRuntimeStorageManifest.ByStatusIndex
+            ],
+            unit.Indexes.Select(index => index.Identity).Order(StringComparer.Ordinal));
+        Assert.Contains(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.ByParentWorkflowExecutionAndStatusIndex && index.Fields.Count == 2);
+        Assert.Contains(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.ByChildWorkflowExecutionAndStatusIndex && index.Fields.Count == 2);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentAndStatusQuery && query.PredicateFields.Count == 2);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildAndStatusQuery && query.PredicateFields.Count == 2);
+        Assert.Contains(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByParentWorkflowExecutionAndStatusIndex && index.Columns.Count == 3);
+        Assert.Contains(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByChildWorkflowExecutionAndStatusIndex && index.Columns.Count == 3);
     }
 }

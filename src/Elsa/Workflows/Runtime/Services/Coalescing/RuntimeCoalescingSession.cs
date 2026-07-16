@@ -32,6 +32,7 @@ public sealed class RuntimeCoalescingSession
     private readonly Dictionary<string, DurableValueState> _durableValueUpserts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durableValueTombstones = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityExecutionInspectionProjection> _inspectionUpserts = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, WorkflowDispatchRecord> _workflowDispatchUpserts = new(StringComparer.Ordinal);
 
     private readonly List<string> _outboxOrder = [];
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
@@ -122,6 +123,9 @@ public sealed class RuntimeCoalescingSession
 
         foreach (var change in changes.ActivityExecutionInspections)
             _inspectionUpserts[change.StateId] = change.State;
+
+        foreach (var change in changes.WorkflowDispatches)
+            _workflowDispatchUpserts[change.StateId] = change.State;
 
         foreach (var change in changes.PostCommitOutbox)
             RecordOutboxItem(change.State);
@@ -276,12 +280,37 @@ public sealed class RuntimeCoalescingSession
 
     public bool OwnsOutboxItem(string outboxItemId) => _outboxItems.ContainsKey(outboxItemId);
 
+    public IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var claimable = _outboxOrder
+            .Select(id => _outboxItems[id])
+            .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+            .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
+            .ThenBy(item => item.RecordedAt)
+            .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
+            .Take(request.Limit)
+            .ToArray();
+        var claims = new RuntimePostCommitOutboxClaim[claimable.Length];
+        for (var index = 0; index < claimable.Length; index++)
+        {
+            var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], request);
+            _outboxItems[claim.OutboxItemId] = claim.Item;
+            claims[index] = claim;
+        }
+
+        return claims;
+    }
+
     public void RecordOutboxDelivery(RuntimePostCommitOutboxDeliveryResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
 
         if (!_outboxItems.TryGetValue(result.OutboxItemId, out var existing))
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found in the coalescing session.");
+        if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
+            throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
         _outboxItems[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
             outboxItemId: existing.OutboxItemId,
@@ -295,7 +324,41 @@ public sealed class RuntimeCoalescingSession
             deliveryStartedAt: null,
             deliveredAt: result.Status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             lastFailureMessage: result.FailureMessage,
-            metadata: existing.Metadata);
+            metadata: existing.Metadata,
+            deliveryFencingToken: existing.DeliveryFencingToken);
+    }
+
+    public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (!_outboxItems.TryGetValue(claim.OutboxItemId, out var existing))
+            throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found in the coalescing session.");
+
+        _outboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+    }
+
+    public void CompleteOutboxClaim(RuntimePostCommitOutboxClaimCompletion completion)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        if (!_outboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
+            throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found in the coalescing session.");
+
+        var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+            existingOutbox,
+            completion.Claim,
+            completion.DeliveryResult);
+        if (completion.WorkflowDispatch is { } dispatch)
+        {
+            if (!_workflowDispatchUpserts.TryGetValue(dispatch.DispatchId, out var existingDispatch))
+                throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the coalescing session.");
+            WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
+        }
+
+        _outboxItems[completion.Claim.OutboxItemId] = completedOutbox;
+        if (completion.WorkflowDispatch is { } workflowDispatch)
+            _workflowDispatchUpserts[workflowDispatch.DispatchId] = workflowDispatch;
     }
 
     // ---- Queue overlay ---------------------------------------------------------------------------------------------
@@ -337,13 +400,32 @@ public sealed class RuntimeCoalescingSession
     // ---- Flush -----------------------------------------------------------------------------------------------------
 
     /// <summary>Folds the buffered change-sets (state only) into one change-set. Callers set the outbox separately.</summary>
-    public RuntimeCheckpointStateChangeSet FoldBufferedStateChanges() => RuntimeCheckpointFold.Fold(_bufferedChangeSets);
+    public RuntimeCheckpointStateChangeSet FoldBufferedStateChanges() =>
+        WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold(_bufferedChangeSets));
 
     /// <summary>Folds the buffered change-sets with a trailing boundary change-set applied last (state only).</summary>
     public RuntimeCheckpointStateChangeSet FoldBufferedStateChangesWith(RuntimeCheckpointStateChangeSet trailing)
     {
         ArgumentNullException.ThrowIfNull(trailing);
-        return RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]);
+        return WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]));
+    }
+
+    private RuntimeCheckpointStateChangeSet WithWorkflowDispatchOverlay(RuntimeCheckpointStateChangeSet folded)
+    {
+        if (_workflowDispatchUpserts.Count == 0)
+            return folded;
+
+        var merged = folded.WorkflowDispatches.ToDictionary(change => change.StateId, StringComparer.Ordinal);
+        foreach (var record in _workflowDispatchUpserts.Values)
+        {
+            merged[record.DispatchId] = new RuntimeStateChange<WorkflowDispatchRecord>(
+                record.DispatchId,
+                RuntimeStateChangeOperation.Upsert,
+                record,
+                new Dictionary<string, string>());
+        }
+
+        return folded.WithWorkflowDispatches(merged.Values.ToArray());
     }
 
     /// <summary>The still-undelivered outbox items, as change-set entries, to persist atomically in the flush commit.</summary>

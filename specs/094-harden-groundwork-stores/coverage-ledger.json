@@ -523,26 +523,30 @@
     {
       "id": "runtime-post-commit-outbox",
       "family": "runtime",
-      "contract": "IRuntimePostCommitOutboxStore",
+      "contract": "IRuntimePostCommitOutboxStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore",
       "outcome": "operational-store",
       "scope": "tenant-scoped",
-      "authority": "#645",
+      "authority": "#678",
       "status": "planned",
       "initialGap": "Deliverable reads do not claim atomically and completion has no stale-ack token.",
       "performanceWorkload": "outbox-drain",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "claim-deliverable-bounded-by-due-order",
-        "find-by-outbox-id"
+        "find-by-outbox-id",
+        "find-dispatch-by-id",
+        "list-dispatch-by-parent-child-status-bounded"
       ],
       "concurrencySemantics": [
         "create-only-intent",
         "expected-version-claim",
         "claim-token-completion",
         "stale-acknowledgement-rejection",
-        "conditional-retry"
+        "conditional-retry",
+        "dispatch-identity-and-lifecycle-cas",
+        "checkpoint-bundle-write"
       ],
-      "atomicBoundary": "Each claim/completion/retry is one expected-version transition; pending items join checkpoint commit atomically.",
+      "atomicBoundary": "Pending outbox and dispatch records join checkpoint commit atomically; claimed final child-start failure completes the outbox and projects DispatchFailed in one cross-unit transaction.",
       "failureWindows": [
         "before-provider-decision",
         "during-provider-decision",
@@ -564,6 +568,8 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxContinuityTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
       ]
     },

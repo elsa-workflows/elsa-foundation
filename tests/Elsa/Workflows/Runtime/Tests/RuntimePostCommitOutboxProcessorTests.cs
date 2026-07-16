@@ -101,6 +101,34 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     }
 
     [Fact]
+    public async Task Processor_AtomicallyProjectsDispatchFailedWhenChildStartFailureBecomesFinal()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var dispatchStore = new InMemoryWorkflowDispatchStore(state);
+        var store = new InMemoryRuntimeCheckpointCommitStore(state: state, workflowDispatchStore: dispatchStore);
+        var dispatch = NewDispatchRecord();
+        var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
+        await dispatchStore.SaveAsync(dispatch);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-dispatch",
+            identity.StartIntentId,
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.None,
+            metadata: new Dictionary<string, string> { ["runtime.dispatchId"] = dispatch.DispatchId }));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new RecordingDispatcher(identity.StartIntentId, new InvalidOperationException("start rejected")),
+            new FixedTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            dispatchStore);
+
+        await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal(WorkflowDispatchStatus.DispatchFailed, (await dispatchStore.FindAsync(dispatch.DispatchId))!.Status);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), 10)));
+    }
+
+    [Fact]
     public async Task Processor_UsesWorkflowExecutionFilterAndLimit()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
@@ -228,28 +256,61 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         string workflowExecutionId,
         DateTimeOffset? availableAt = null,
         RuntimePostCommitRetryPolicy? retryPolicy = null,
-        string kind = "DispatchSignal") =>
+        string kind = "DispatchSignal",
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             outboxItemId: outboxItemId,
-            intent: NewIntent(intentId, workflowExecutionId, kind),
+            intent: NewIntent(intentId, workflowExecutionId, kind, metadata),
             status: RuntimePostCommitOutboxStatus.Pending,
             recordedAt: _now,
             availableAt: availableAt ?? _now,
             retryPolicy: retryPolicy ?? new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)));
 
-    private RuntimePostCommitIntent NewIntent(string intentId, string workflowExecutionId, string kind)
+    private RuntimePostCommitIntent NewIntent(
+        string intentId,
+        string workflowExecutionId,
+        string kind,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         using var document = JsonDocument.Parse("""{"signal":"sent"}""");
 
+        var isWorkflowDispatch = metadata?.ContainsKey("runtime.dispatchId") == true;
+        var dispatchIdentity = isWorkflowDispatch
+            ? new WorkflowDispatchIdentity(workflowExecutionId, "actexec-1")
+            : null;
         return new RuntimePostCommitIntent(
             intentId: intentId,
             workflowExecutionId: workflowExecutionId,
             kind: kind,
             recordedAt: _now,
             activityExecutionId: "actexec-1",
-            idempotencyKey: $"checkpoint-1:{intentId}",
+            idempotencyKey: dispatchIdentity?.StartIdempotencyKey ?? $"checkpoint-1:{intentId}",
             payload: document.RootElement.Clone(),
-            metadata: new Dictionary<string, string>());
+            metadata: metadata ?? new Dictionary<string, string>());
+    }
+
+    private WorkflowDispatchRecord NewDispatchRecord()
+    {
+        var identity = new WorkflowDispatchIdentity("wfexec-1", "actexec-1");
+        return new WorkflowDispatchRecord(
+            identity.DispatchId,
+            "wfexec-1",
+            "actexec-1",
+            identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity("artifact-child", "definition-child", "version-child", "1.0.0", "sha256:child"),
+            new WorkflowExecutableSourceProvenance(
+                "source-child", "WorkflowDefinitionVersion", "version-child", "1.0.0",
+                "definition-child", "version-child", "1.0.0", "publication-child", "slot-child"),
+            WorkflowDispatchMode.FireAndForget,
+            WorkflowDispatchStatus.Pending,
+            null,
+            null,
+            new WorkflowExecutionPartition("partition-1"),
+            WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot("wfexec-1", "initiator-1"),
+            [],
+            _now,
+            _now);
     }
 
     private sealed class RecordingDispatcher(

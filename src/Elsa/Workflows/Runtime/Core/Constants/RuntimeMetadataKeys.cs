@@ -43,6 +43,7 @@ public static class RuntimeMetadataKeys
     /// engine owning a correlation subsystem. Absent when no correlation was supplied.
     /// </summary>
     public const string CorrelationId = "runtime.correlationId";
+    public const string WorkflowDispatchId = "runtime.workflowDispatchId";
 
     /// <summary>
     /// Operational-state metadata key carrying the highest execution-ownership fencing token ever issued for a

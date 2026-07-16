@@ -127,6 +127,21 @@ public sealed class RuntimeCheckpointStateChangeSet
             postCommitOutbox,
             ActivityScopeCleanups);
 
+    /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
+    public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> workflowDispatches) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            workflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox);
+
     private static void ValidateStateIdMatches<TState>(
         IReadOnlyCollection<RuntimeStateChange<TState>> changes,
         Func<TState, string> stateIdSelector,

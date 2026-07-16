@@ -30,6 +30,11 @@ public static class ElsaRuntimeStorageManifest
     public const string ByExecutionScopeIndex = "by-execution-scope";
     public const string ByPublicationIndex = "by-publication";
     public const string ByParentActivityExecutionIndex = "by-parent-activity-execution";
+    public const string ByParentWorkflowExecutionIndex = "by-parent-workflow-execution";
+    public const string ByChildWorkflowExecutionIndex = "by-child-workflow-execution";
+    public const string ByStatusIndex = "by-status";
+    public const string ByParentWorkflowExecutionAndStatusIndex = "by-parent-workflow-execution-and-status";
+    public const string ByChildWorkflowExecutionAndStatusIndex = "by-child-workflow-execution-and-status";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
@@ -47,6 +52,9 @@ public static class ElsaRuntimeStorageManifest
     // field without changing the document shape. Groundwork index fields are dot-paths resolved by walking
     // nested JSON (relational RelationalPhysicalizationValues.TryGetPropertyPath, Mongo content.<path> BSON key).
     public const string ParentActivityExecutionIdField = "state.parentActivityExecutionId";
+    public const string ParentWorkflowExecutionIdField = "parentWorkflowExecutionId";
+    public const string ChildWorkflowExecutionIdField = "childWorkflowExecutionId";
+    public const string StatusField = "status";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
@@ -145,6 +153,17 @@ public static class ElsaRuntimeStorageManifest
     public const string ListCheckpointCommitsQuery = ListAllQuery;
 
     public const string PostCommitOutboxDocumentKind = "postCommitOutbox";
+
+    // Durable detached-dispatch lifecycle. The collection route supports bounded internal retention
+    // enumeration; parent/child/status and their common intersections serve operational inspection.
+    public const string WorkflowDispatchDocumentKind = "workflowDispatch";
+    public const string WorkflowDispatchCollection = "workflowDispatch";
+    public const string ListWorkflowDispatchesByParentQuery = "list-by-parent-workflow-execution";
+    public const string ListWorkflowDispatchesByChildQuery = "list-by-child-workflow-execution";
+    public const string ListWorkflowDispatchesByStatusQuery = "list-by-status";
+    public const string ListWorkflowDispatchesByParentAndStatusQuery = "list-by-parent-workflow-execution-and-status";
+    public const string ListWorkflowDispatchesByChildAndStatusQuery = "list-by-child-workflow-execution-and-status";
+    public const string ListWorkflowDispatchesQuery = ListAllQuery;
 
     // Durable scheduler work queue. Each queued work item is a document so the queue survives process
     // restarts; the by-collection partition supports the system-wide pending-executions sweep.
@@ -330,6 +349,21 @@ public static class ElsaRuntimeStorageManifest
                     Query("list-all", ByCollectionIndex)
                 ]),
             Unit(
+                WorkflowDispatchDocumentKind,
+                "Workflow dispatch",
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(ByParentWorkflowExecutionIndex, ParentWorkflowExecutionIdField),
+                    Keyword(ByChildWorkflowExecutionIndex, ChildWorkflowExecutionIdField),
+                    Keyword(ByStatusIndex, StatusField)
+                ],
+                [
+                    Query(ListWorkflowDispatchesQuery, ByCollectionIndex),
+                    Query(ListWorkflowDispatchesByParentQuery, ByParentWorkflowExecutionIndex),
+                    Query(ListWorkflowDispatchesByChildQuery, ByChildWorkflowExecutionIndex),
+                    Query(ListWorkflowDispatchesByStatusQuery, ByStatusIndex)
+                ]),
+            Unit(
                 SchedulerWorkItemDocumentKind,
                 "Scheduler work queue item",
                 [
@@ -413,4 +447,5 @@ public static class ElsaRuntimeStorageManifest
         MissingValueBehavior.Excluded,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         IndexPhysicalizationPolicy.Optimized);
+
 }
