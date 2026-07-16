@@ -176,8 +176,8 @@ Content-Type: application/json
     }
   ],
   "roots": [
-    { "kind": "WorkflowDraft", "draftId": "workflow-draft-checkout" },
-    { "kind": "ActivityDraft", "draftId": "activity-draft-invoice" }
+    { "kind": "WorkflowDraft", "id": "workflow-draft-checkout" },
+    { "kind": "ActivityDraft", "id": "activity-draft-invoice" }
   ],
   "includeTransitiveDependents": true,
   "createDraftsForPublishedDependents": true
@@ -187,6 +187,7 @@ Content-Type: application/json
 Rules:
 
 - Replacements are exact from/to version pairs. There is no “upgrade to latest” server interpretation.
+- A root uses the provider-neutral `{kind,id}` identity shape; `id` is a draft or immutable version id according to `kind`.
 - Roots are explicit authorization/scope boundaries. Discovery APIs can help users choose them, but the plan request names the approved roots.
 - `createDraftsForPublishedDependents=true` means the plan may propose a new draft cloned from an immutable dependent version; it does not modify that version.
 - Planning verifies tenant rules, lifecycle, cycles, compatibility diffs, and provider schema readability.

@@ -108,8 +108,10 @@ public sealed class ActivityUpgradePlanner(
             throw new ArgumentException("Replacement identities must be non-empty and different.", nameof(request));
         if (request.Replacements.GroupBy(x => x.FromVersionId, StringComparer.Ordinal).Any(x => x.Count() != 1))
             throw new ArgumentException("A source version may have only one exact replacement.", nameof(request));
-        if (request.Roots.Any(x => x.Kind is not ("ActivityDraft" or "WorkflowDraft" or "ActivityVersion" or "WorkflowVersion") || string.IsNullOrWhiteSpace(x.DraftId)))
+        if (request.Roots.Any(x => x.Kind is not ("ActivityDraft" or "WorkflowDraft" or "ActivityVersion" or "WorkflowVersion") || string.IsNullOrWhiteSpace(x.Id)))
             throw new ArgumentException("Every root must use a supported kind and exact identity.", nameof(request));
+        if (request.Roots.GroupBy(x => (x.Kind, x.Id)).Any(x => x.Count() != 1))
+            throw new ArgumentException("Every upgrade root kind and identity pair must be unique.", nameof(request));
     }
 
     private static IReadOnlyList<string> FindPrerequisites(

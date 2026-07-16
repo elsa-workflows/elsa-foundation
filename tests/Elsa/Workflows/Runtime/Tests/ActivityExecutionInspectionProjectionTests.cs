@@ -17,20 +17,34 @@ public class ActivityExecutionInspectionProjectionTests
     [Fact]
     public void Detail_Projects_Attempt_Boundary_Aggregate_And_Explicit_Value_Redaction()
     {
-        var root = Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true) with
+        var baseRoot = Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true);
+        var executionMetadata = baseRoot.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+        executionMetadata["secret"] = "protected-execution-metadata";
+        var root = baseRoot with
         {
             Attempt = new(2, "outer-first", "outer-first"),
             ValueSnapshots =
             [
                 new("secret", ActivityExecutionInspectionValueSubject.ActivityOutput, RuntimePayloadCaptureMode.Payload,
                     null, DateTimeOffset.UnixEpoch, JsonSerializer.SerializeToElement("protected"), "captured", true,
-                    new Dictionary<string, string>())
+                    new Dictionary<string, string> { ["secret"] = "protected-value-metadata" })
             ],
             Bookmarks =
             [
                 new("bookmark", "resume", "test", "hash", DateTimeOffset.UnixEpoch, null,
-                    new Dictionary<string, string>(), JsonSerializer.SerializeToElement("protected-bookmark"))
-            ]
+                    new Dictionary<string, string> { ["secret"] = "protected-bookmark-metadata" }, JsonSerializer.SerializeToElement("protected-bookmark"))
+            ],
+            Incidents =
+            [
+                new("incident", IncidentSeverity.Error, IncidentStatus.Blocking, IncidentResolutionAction.Retry,
+                    "TestFailure", "protected-incident", DateTimeOffset.UnixEpoch, null, true,
+                    new Dictionary<string, string> { ["secret"] = "protected-incident-metadata" })
+            ],
+            Metadata = executionMetadata,
+            Provenance = baseRoot.Provenance with
+            {
+                Metadata = new Dictionary<string, string> { ["secret"] = "protected-provenance-metadata" }
+            }
         };
         var child = Projection("child", "outer", "outer", 2, ActivityExecutionStatus.Completed);
         var records = new[]
@@ -50,7 +64,15 @@ public class ActivityExecutionInspectionProjectionTests
         Assert.Equal("redacted", value.State);
         Assert.Null(value.Payload);
         Assert.Null(value.Snapshot);
-        Assert.Null(Assert.Single(view.Bookmarks).Payload);
+        Assert.Empty(value.Metadata);
+        var bookmark = Assert.Single(view.Bookmarks);
+        Assert.Null(bookmark.Payload);
+        Assert.Empty(bookmark.Metadata);
+        var incident = Assert.Single(view.Incidents);
+        Assert.Equal("Incident details are redacted.", incident.Message);
+        Assert.Empty(incident.Metadata);
+        Assert.Empty(view.Metadata);
+        Assert.Empty(view.Provenance.Metadata);
     }
 
     [Fact]

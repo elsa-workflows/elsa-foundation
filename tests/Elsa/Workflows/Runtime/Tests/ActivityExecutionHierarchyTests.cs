@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Api.Models;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -94,6 +95,23 @@ public class ActivityExecutionHierarchyTests
 
         var nestedPage = await store.ReadPageAsync(new("wf", "nested", null, 100, new HashSet<ActivityExecutionHierarchyInclude>(), "structure", "tenant:a"));
         Assert.Equal("nested-child", Assert.Single(nestedPage!.Items).ActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task Hierarchy_View_Never_Exposes_Execution_Metadata()
+    {
+        var store = Store();
+        await store.SaveAsync(Record(ActivityExecutionInspectionProjectionTests.Projection("outer", "outer", null, 1, ActivityExecutionStatus.Running, boundary: true)));
+        var child = ActivityExecutionInspectionProjectionTests.Projection("child", "outer", "outer", 2, ActivityExecutionStatus.Completed) with
+        {
+            Metadata = new Dictionary<string, string> { ["runtime.scopedVariableValues"] = "secret" }
+        };
+        await store.SaveAsync(Record(child));
+
+        var page = await store.ReadPageAsync(Query(limit: 100));
+        var view = ActivityExecutionHierarchyPageView.From(page!);
+
+        Assert.Empty(Assert.Single(view.Items).Metadata);
     }
 
     private static RuntimeInMemoryActivityExecutionHierarchyStore Store() =>

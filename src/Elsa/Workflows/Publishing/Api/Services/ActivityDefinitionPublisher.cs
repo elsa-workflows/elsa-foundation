@@ -97,7 +97,7 @@ public sealed class ActivityDefinitionPublisher(
             throw Reject("activity.publication.invalid", "Activity publication was rejected by validation.", validation.Diagnostics);
 
         if (!SemVer.TryParse(request.Version, out var requestedVersion))
-            throw Reject("activity.version.invalid", $"Version '{request.Version}' is not valid SemVer 2.0.0.", [Diagnostic(
+            throw Reject("activity.request.invalid", $"Version '{request.Version}' is not valid SemVer 2.0.0.", [Diagnostic(
                 "activity.version.invalid",
                 $"Version '{request.Version}' is not valid SemVer 2.0.0.",
                 draft)]);
@@ -399,20 +399,20 @@ public sealed class ActivityDefinitionPublisher(
         string version,
         ExecutableActivityTemplate template,
         DateTimeOffset now) => new(version, definition.Id)
-    {
-        Id = versionId,
-        TenantId = definition.TenantId,
-        ProviderKey = draft.State.Provider.ProviderKey,
-        ProviderSchemaVersion = draft.State.Provider.SchemaVersion,
-        ConsumerKey = template.Root.Descriptor.ConsumerKey,
-        ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
-        DescriptorPayload = template.Root.Descriptor.Payload,
-        SourceKind = "ActivityDefinitionDraft",
-        SourceId = draft.Id,
-        Hash = template.TemplateHash,
-        CreatedAt = now,
-        LastModifiedAt = now
-    };
+        {
+            Id = versionId,
+            TenantId = definition.TenantId,
+            ProviderKey = draft.State.Provider.ProviderKey,
+            ProviderSchemaVersion = draft.State.Provider.SchemaVersion,
+            ConsumerKey = template.Root.Descriptor.ConsumerKey,
+            ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
+            DescriptorPayload = template.Root.Descriptor.Payload,
+            SourceKind = "ActivityDefinitionDraft",
+            SourceId = draft.Id,
+            Hash = template.TemplateHash,
+            CreatedAt = now,
+            LastModifiedAt = now
+        };
 
     private static ActivityDefinitionVersionPublication CreatePublication(
         ActivityDefinition definition,
@@ -424,31 +424,31 @@ public sealed class ActivityDefinitionPublisher(
         ExecutableActivityTemplate template,
         ActivityResourceMeasurements measurements,
         DateTimeOffset now) => new()
-    {
-        Id = versionId,
-        TenantId = definition.TenantId,
-        DefinitionVersionId = versionId,
-        DefinitionId = definition.Id,
-        Version = version,
-        ActivityTypeKey = definition.ActivityTypeKey,
-        SourceDraftId = draft.Id,
-        SourceVersionId = draft.SourceVersionId,
-        Contract = draft.State.Contract,
-        Provider = draft.State.Provider,
-        TemplateId = template.TemplateId,
-        TemplateHash = template.TemplateHash,
-        SourceReferenceId = sourceReferenceId,
-        ProviderFingerprint = providerFingerprint,
-        DirectDependencyCount = template.DirectDependencies.Count,
-        ClosedTemplateCount = template.ClosedTemplates.Count,
-        RuntimeRequirements = template.RuntimeRequirements.Select(x => new ActivityRuntimeRequirementDeclaration(x.ConsumerKey, x.SchemaVersion)).ToArray(),
-        ResourceMeasurements = measurements,
-        ResumeTargetCount = template.ResumeTargets.Count,
-        Lifecycle = ActivityDefinitionVersionLifecycle.Active,
-        PublishedAt = now,
-        CreatedAt = now,
-        LastModifiedAt = now
-    };
+        {
+            Id = versionId,
+            TenantId = definition.TenantId,
+            DefinitionVersionId = versionId,
+            DefinitionId = definition.Id,
+            Version = version,
+            ActivityTypeKey = definition.ActivityTypeKey,
+            SourceDraftId = draft.Id,
+            SourceVersionId = draft.SourceVersionId,
+            Contract = draft.State.Contract,
+            Provider = draft.State.Provider,
+            TemplateId = template.TemplateId,
+            TemplateHash = template.TemplateHash,
+            SourceReferenceId = sourceReferenceId,
+            ProviderFingerprint = providerFingerprint,
+            DirectDependencyCount = template.DirectDependencies.Count,
+            ClosedTemplateCount = template.ClosedTemplates.Count,
+            RuntimeRequirements = template.RuntimeRequirements.Select(x => new ActivityRuntimeRequirementDeclaration(x.ConsumerKey, x.SchemaVersion)).ToArray(),
+            ResourceMeasurements = measurements,
+            ResumeTargetCount = template.ResumeTargets.Count,
+            Lifecycle = ActivityDefinitionVersionLifecycle.Active,
+            PublishedAt = now,
+            CreatedAt = now,
+            LastModifiedAt = now
+        };
 
     private static WorkflowExecutableSourceReference CreateSourceReference(
         string sourceReferenceId,

@@ -289,6 +289,25 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task Negative_provider_resource_measurements_are_rejected_before_admission()
+    {
+        var provider = new PureBehaviorCompiler(new(-1, 0, 0, 0, 0, 0, 0));
+        var compiler = new ActivityTemplateCompiler(
+            new ActivityTemplateProviderCompilerRegistry([provider]),
+            new ActivityTemplateDependencyDiscovererRegistry([provider]),
+            new EmptyPublicationStore(),
+            new EmptyTemplateReader(),
+            new AcceptAdmissionPolicy(),
+            TimeProvider.System);
+
+        var result = await compiler.CompileAsync(CompileRequest("definition", "type", "draft", "version", "1.0.0"));
+
+        Assert.Null(result.Template);
+        var diagnostic = Assert.Single(result.Diagnostics, x => x.Code == "activity.provider.resource-measurements-invalid");
+        Assert.Contains(nameof(ActivityResourceMeasurements.LocalNodeCount), diagnostic.Metadata!["invalidMeasurements"], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Atomic_commit_finds_authoring_by_definition_when_document_id_differs()
     {
         var harness = await Harness.CreateAsync();
@@ -376,51 +395,51 @@ public sealed class ActivityDefinitionPublicationTests
         ActivityDefinitionVersionPublication source,
         string version,
         string? templateHash = null) => new()
-    {
-        Id = source.Id,
-        DefinitionId = source.DefinitionId,
-        DefinitionVersionId = source.DefinitionVersionId,
-        Version = version,
-        ActivityTypeKey = source.ActivityTypeKey,
-        Contract = source.Contract,
-        Provider = source.Provider,
-        TemplateId = source.TemplateId,
-        TemplateHash = templateHash ?? source.TemplateHash,
-        SourceReferenceId = source.SourceReferenceId,
-        ProviderFingerprint = source.ProviderFingerprint,
-        DirectDependencyCount = source.DirectDependencyCount,
-        ClosedTemplateCount = source.ClosedTemplateCount,
-        RuntimeRequirements = source.RuntimeRequirements,
-        Lifecycle = source.Lifecycle
-    };
+        {
+            Id = source.Id,
+            DefinitionId = source.DefinitionId,
+            DefinitionVersionId = source.DefinitionVersionId,
+            Version = version,
+            ActivityTypeKey = source.ActivityTypeKey,
+            Contract = source.Contract,
+            Provider = source.Provider,
+            TemplateId = source.TemplateId,
+            TemplateHash = templateHash ?? source.TemplateHash,
+            SourceReferenceId = source.SourceReferenceId,
+            ProviderFingerprint = source.ProviderFingerprint,
+            DirectDependencyCount = source.DirectDependencyCount,
+            ClosedTemplateCount = source.ClosedTemplateCount,
+            RuntimeRequirements = source.RuntimeRequirements,
+            Lifecycle = source.Lifecycle
+        };
 
     private static ActivityDefinitionVersionPublication Publication(
         string definitionId,
         string versionId,
         string activityTypeKey,
         ExecutableActivityTemplate template) => new()
-    {
-        Id = versionId,
-        DefinitionId = definitionId,
-        DefinitionVersionId = versionId,
-        Version = "1.0.0",
-        ActivityTypeKey = activityTypeKey,
-        Contract = Contract(),
-        Provider = Provider(),
-        TemplateId = template.TemplateId,
-        TemplateHash = template.TemplateHash,
-        SourceReferenceId = $"source-{versionId}",
-        ProviderFingerprint = "fingerprint",
-        DirectDependencyCount = template.DirectDependencies.Count,
-        ClosedTemplateCount = template.ClosedTemplates.Count,
-        RuntimeRequirements = [],
-        Lifecycle = ActivityDefinitionVersionLifecycle.Active
-    };
+        {
+            Id = versionId,
+            DefinitionId = definitionId,
+            DefinitionVersionId = versionId,
+            Version = "1.0.0",
+            ActivityTypeKey = activityTypeKey,
+            Contract = Contract(),
+            Provider = Provider(),
+            TemplateId = template.TemplateId,
+            TemplateHash = template.TemplateHash,
+            SourceReferenceId = $"source-{versionId}",
+            ProviderFingerprint = "fingerprint",
+            DirectDependencyCount = template.DirectDependencies.Count,
+            ClosedTemplateCount = template.ClosedTemplates.Count,
+            RuntimeRequirements = [],
+            Lifecycle = ActivityDefinitionVersionLifecycle.Active
+        };
 
     private static TEntity DeserializeDesign<TEntity>(DocumentEnvelope envelope) where TEntity : Entity =>
         JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, GroundworkActivitiesDesignJson.Options)!.Entity;
 
-    private sealed class PureBehaviorCompiler : IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+    private sealed class PureBehaviorCompiler(ActivityResourceMeasurements? measurements = null) : IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
     {
         public string ProviderKey => "test.provider";
         public string CompilerFingerprint => "test.provider/compiler/1";
@@ -443,7 +462,7 @@ public sealed class ActivityDefinitionPublicationTests
                 [],
                 [new RuntimeRequirement("test.consumer", "1")],
                 [],
-                new(1, 1, 0, 1, 10, 0, 0),
+                measurements ?? new(1, 1, 0, 1, 10, 0, 0),
                 request.ProviderFingerprint,
                 [],
                 []));

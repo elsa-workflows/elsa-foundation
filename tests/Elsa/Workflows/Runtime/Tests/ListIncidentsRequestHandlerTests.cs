@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -22,7 +23,7 @@ public sealed class ListIncidentsRequestHandlerTests
         await workflowStore.SaveAsync(NewWorkflowState());
         await incidentStore.TryAddAsync(NewIncident("incident-open", IncidentStatus.Open));
         await incidentStore.TryAddAsync(NewIncident("incident-blocking", IncidentStatus.Blocking));
-        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore);
+        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
 
         var response = await handler.Handle(new ListIncidents("wfexec-1"), CancellationToken.None);
 
@@ -38,7 +39,7 @@ public sealed class ListIncidentsRequestHandlerTests
         await workflowStore.SaveAsync(NewWorkflowState());
         await incidentStore.TryAddAsync(NewIncident("incident-open", IncidentStatus.Open));
         await incidentStore.TryAddAsync(NewIncident("incident-blocking", IncidentStatus.Blocking));
-        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore);
+        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
 
         var response = await handler.Handle(new ListIncidents("wfexec-1", BlockingOnly: true), CancellationToken.None);
 
@@ -51,12 +52,53 @@ public sealed class ListIncidentsRequestHandlerTests
     [Fact]
     public async Task Handle_ForMissingWorkflow_ReportsWorkflowDoesNotExist()
     {
-        var handler = new ListIncidentsRequestHandler(new InMemoryWorkflowExecutionStateStore(), new InMemoryIncidentStateStore());
+        var handler = new ListIncidentsRequestHandler(
+            new InMemoryWorkflowExecutionStateStore(),
+            new InMemoryIncidentStateStore(),
+            new AllowAllActivityExecutionInspectionAuthorizationContext());
 
         var response = await handler.Handle(new ListIncidents("missing"), CancellationToken.None);
 
         Assert.False(response.WorkflowExists);
         Assert.Empty(response.Incidents);
+    }
+
+    [Fact]
+    public async Task Handle_HidesUnauthorizedWorkflowExistence()
+    {
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowStore.SaveAsync(NewWorkflowState());
+        var handler = new ListIncidentsRequestHandler(
+            workflowStore,
+            new InMemoryIncidentStateStore(),
+            new TestAuthorization(canInspectStructure: false, canInspectSensitiveValues: true));
+
+        var response = await handler.Handle(new ListIncidents("wfexec-1"), CancellationToken.None);
+
+        Assert.False(response.WorkflowExists);
+        Assert.Empty(response.Incidents);
+    }
+
+    [Fact]
+    public async Task Handle_RedactsIncidentDetailsWithoutValuePermission()
+    {
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        await workflowStore.SaveAsync(NewWorkflowState());
+        await incidentStore.TryAddAsync(NewIncident(
+            "incident-blocking",
+            IncidentStatus.Blocking,
+            new Dictionary<string, string> { ["runtime.faultStackTrace"] = "secret-stack" }));
+        var handler = new ListIncidentsRequestHandler(
+            workflowStore,
+            incidentStore,
+            new TestAuthorization(canInspectStructure: true, canInspectSensitiveValues: false));
+
+        var response = await handler.Handle(new ListIncidents("wfexec-1"), CancellationToken.None);
+
+        var incident = Assert.Single(response.Incidents);
+        Assert.Equal("Incident details are redacted.", incident.Message);
+        Assert.Empty(incident.Metadata);
     }
 
     private WorkflowExecutionState NewWorkflowState() =>
@@ -74,7 +116,10 @@ public sealed class ListIncidentsRequestHandlerTests
             TenantId: null,
             SystemMetadata: new Dictionary<string, string>());
 
-    private IncidentState NewIncident(string incidentId, IncidentStatus status) =>
+    private IncidentState NewIncident(
+        string incidentId,
+        IncidentStatus status,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             incidentId: incidentId,
             workflowExecutionId: "wfexec-1",
@@ -86,5 +131,15 @@ public sealed class ListIncidentsRequestHandlerTests
             failureType: "System.InvalidOperationException",
             message: "boom",
             createdAt: _now,
-            resolvedAt: null);
+            resolvedAt: null,
+            metadata: metadata);
+
+    private sealed class TestAuthorization(bool canInspectStructure, bool canInspectSensitiveValues)
+        : IActivityExecutionInspectionAuthorizationContext
+    {
+        public string TenantScope => "test";
+        public string AuthorizationProfile => "test";
+        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => canInspectStructure;
+        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => canInspectSensitiveValues;
+    }
 }

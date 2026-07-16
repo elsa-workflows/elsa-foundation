@@ -139,6 +139,31 @@ public sealed class ActivityVersionDiffTests
     }
 
     [Fact]
+    public async Task Multiple_schema_versions_for_one_runtime_consumer_are_compared_as_a_set()
+    {
+        var additiveRequest = Request(Contract(), Contract()) with
+        {
+            FromImplementation = new(RuntimeRequirements: [new("shared-consumer", "1")]),
+            ToImplementation = new(RuntimeRequirements: [new("shared-consumer", "1"), new("shared-consumer", "2")])
+        };
+        var breakingRequest = additiveRequest with
+        {
+            FromImplementation = additiveRequest.ToImplementation,
+            ToImplementation = additiveRequest.FromImplementation
+        };
+
+        var additive = await new ActivityVersionDiffer().DiffAsync(additiveRequest);
+        var breaking = await new ActivityVersionDiffer().DiffAsync(breakingRequest);
+
+        var additiveChange = Assert.Single(additive.Changes, x => x.Kind == "RuntimeRequirementSchemaSetChanged");
+        Assert.Equal(ActivityVersionChangeImpact.Additive, additiveChange.Impact);
+        Assert.Equal(ActivityVersionBump.Minor, additive.RequiredBump);
+        var breakingChange = Assert.Single(breaking.Changes, x => x.Kind == "RuntimeRequirementSchemaSetChanged");
+        Assert.Equal(ActivityVersionChangeImpact.Breaking, breakingChange.Impact);
+        Assert.Equal(ActivityVersionBump.Major, breaking.RequiredBump);
+    }
+
+    [Fact]
     public async Task Layout_only_change_is_patch_nonbehavioral()
     {
         var request = Request(Contract(), Contract()) with

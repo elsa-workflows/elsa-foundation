@@ -173,6 +173,7 @@ Provider and behavior:
 - `RuntimeRequirementAdded`
 - `RuntimeRequirementRemoved`
 - `RuntimeRequirementSchemaChanged`
+- `RuntimeRequirementSchemaSetChanged`
 
 Dependencies:
 
@@ -201,6 +202,7 @@ Providers may add namespaced kinds (for example `acme.script.ExportSignatureChan
 - outcomes: name and emitted state;
 - provider: key and schema version only;
 - implementation: template hash, provider fingerprint, node/resume-target counts;
+- runtime requirements: consumer key and its deterministic set of supported schema versions;
 - dependency: exact version/template identity plus occurrence id;
 - presentation: public presentation values;
 - layout: layout hash/count only, not the full layout.

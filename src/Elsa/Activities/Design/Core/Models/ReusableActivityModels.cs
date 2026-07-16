@@ -387,7 +387,7 @@ public sealed record ActivityDependencyProjectionSlice(
 
 public sealed record ActivityVersionReplacement(string FromVersionId, string ToVersionId);
 
-public sealed record ActivityUpgradeRoot(string Kind, string DraftId);
+public sealed record ActivityUpgradeRoot(string Kind, string Id);
 
 public sealed record ActivityUpgradePlanRequest(
     IReadOnlyList<ActivityVersionReplacement> Replacements,

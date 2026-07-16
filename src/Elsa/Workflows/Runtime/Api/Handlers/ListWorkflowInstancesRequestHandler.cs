@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -9,7 +10,8 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 public sealed class ListWorkflowInstancesRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
-    IIncidentStateStore incidentStateStore)
+    IIncidentStateStore incidentStateStore,
+    IActivityExecutionInspectionAuthorizationContext authorization)
     : IRequestHandler<ListWorkflowInstances, IReadOnlyCollection<WorkflowInstanceSummaryView>>
 {
     private const int DefaultTake = 100;
@@ -18,7 +20,7 @@ public sealed class ListWorkflowInstancesRequestHandler(
     public async Task<IReadOnlyCollection<WorkflowInstanceSummaryView>> Handle(ListWorkflowInstances request, CancellationToken cancellationToken)
     {
         var states = await workflowExecutionStateStore.ListAsync(cancellationToken);
-        var query = states.AsEnumerable();
+        var query = states.Where(authorization.CanInspectStructure);
 
         if (!string.IsNullOrWhiteSpace(request.Status))
             query = query.Where(state => string.Equals(state.Status.ToString(), request.Status, StringComparison.OrdinalIgnoreCase));
@@ -27,7 +29,9 @@ public sealed class ListWorkflowInstancesRequestHandler(
             query = query.Where(state => string.Equals(state.PinnedExecutable.DefinitionId, request.DefinitionId, StringComparison.Ordinal));
 
         if (!string.IsNullOrWhiteSpace(request.CorrelationId))
-            query = query.Where(state => string.Equals(state.CorrelationId, request.CorrelationId, StringComparison.Ordinal));
+            query = query.Where(state =>
+                authorization.CanInspectSensitiveValues(state) &&
+                string.Equals(state.CorrelationId, request.CorrelationId, StringComparison.Ordinal));
 
         var take = Math.Clamp(request.Take ?? DefaultTake, 1, MaxTake);
         var orderedStates = query
@@ -40,7 +44,11 @@ public sealed class ListWorkflowInstancesRequestHandler(
         {
             var activityCount = (await activityExecutionStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
             var incidentCount = (await incidentStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
-            return WorkflowInstanceSummaryView.From(state, activityCount, incidentCount);
+            return WorkflowInstanceSummaryView.From(
+                state,
+                activityCount,
+                incidentCount,
+                authorization.CanInspectSensitiveValues(state));
         });
         return await Task.WhenAll(summaryTasks);
     }

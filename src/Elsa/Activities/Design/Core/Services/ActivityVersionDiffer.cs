@@ -307,21 +307,46 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         IReadOnlyList<ActivityRuntimeRequirementDeclaration> after,
         IDictionary<string, ActivityVersionChange> changes)
     {
-        var oldByKey = before.ToDictionary(x => x.ConsumerKey, StringComparer.Ordinal);
-        var newByKey = after.ToDictionary(x => x.ConsumerKey, StringComparer.Ordinal);
+        var oldByKey = GroupRequirements(before);
+        var newByKey = GroupRequirements(after);
         foreach (var key in oldByKey.Keys.Union(newByKey.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal))
         {
             var idKey = IdSegment(key);
-            if (!oldByKey.TryGetValue(key, out var oldRequirement))
+            if (!oldByKey.TryGetValue(key, out var oldSchemas))
                 Add(changes, SimpleChange($"implementation:runtime-requirement:{idKey}:added", ActivityVersionChangeArea.Implementation, "RuntimeRequirementAdded", null,
-                    Element(newByKey[key]), ActivityVersionChangeImpact.Additive, ActivityVersionBump.Minor, $"Runtime requirement '{key}' was added."));
-            else if (!newByKey.TryGetValue(key, out var newRequirement))
+                    RequirementProjection(key, newByKey[key]), ActivityVersionChangeImpact.Additive, ActivityVersionBump.Minor, $"Runtime requirement '{key}' was added."));
+            else if (!newByKey.TryGetValue(key, out var newSchemas))
                 Add(changes, SimpleChange($"implementation:runtime-requirement:{idKey}:removed", ActivityVersionChangeArea.Implementation, "RuntimeRequirementRemoved",
-                    Element(oldRequirement), null, ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major, $"Runtime requirement '{key}' was removed."));
-            else if (!StringComparer.Ordinal.Equals(oldRequirement.SchemaVersion, newRequirement.SchemaVersion))
+                    RequirementProjection(key, oldSchemas), null, ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major, $"Runtime requirement '{key}' was removed."));
+            else if (oldSchemas.Length == 1 && newSchemas.Length == 1 && !StringComparer.Ordinal.Equals(oldSchemas[0], newSchemas[0]))
                 Add(changes, SimpleChange($"implementation:runtime-requirement:{idKey}:schema-changed", ActivityVersionChangeArea.Implementation, "RuntimeRequirementSchemaChanged",
-                    Element(oldRequirement), Element(newRequirement), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major, $"Runtime requirement '{key}' changed schema."));
+                    RequirementProjection(key, oldSchemas), RequirementProjection(key, newSchemas), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major, $"Runtime requirement '{key}' changed schema."));
+            else if (!oldSchemas.SequenceEqual(newSchemas, StringComparer.Ordinal))
+            {
+                var removedSchemas = oldSchemas.Except(newSchemas, StringComparer.Ordinal).ToArray();
+                var breaking = removedSchemas.Length > 0;
+                Add(changes, SimpleChange(
+                    $"implementation:runtime-requirement:{idKey}:schema-set-changed",
+                    ActivityVersionChangeArea.Implementation,
+                    "RuntimeRequirementSchemaSetChanged",
+                    RequirementProjection(key, oldSchemas),
+                    RequirementProjection(key, newSchemas),
+                    breaking ? ActivityVersionChangeImpact.Breaking : ActivityVersionChangeImpact.Additive,
+                    breaking ? ActivityVersionBump.Major : ActivityVersionBump.Minor,
+                    $"Runtime requirement '{key}' changed its supported schema set."));
+            }
         }
+
+        static Dictionary<string, string[]> GroupRequirements(IReadOnlyList<ActivityRuntimeRequirementDeclaration> requirements) =>
+            requirements
+                .GroupBy(x => x.ConsumerKey, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(x => x.SchemaVersion).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                    StringComparer.Ordinal);
+
+        static JsonElement RequirementProjection(string consumerKey, IReadOnlyList<string> schemas) =>
+            Element(new { consumerKey, schemaVersions = schemas });
     }
 
     private static void CompareDependencies(

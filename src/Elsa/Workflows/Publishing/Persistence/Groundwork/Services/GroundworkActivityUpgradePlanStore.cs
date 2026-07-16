@@ -99,7 +99,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
             var matching = candidateItems.Where(x => scopedReferences.Contains(ReferenceKey(x.Owner))).ToArray();
             if (matching.Length == 0)
             {
-                diagnostics.Add(Diagnostic("activity.upgrade.root-not-affected", "The selected root does not depend on any requested source version.", root.Kind, root.DraftId));
+                diagnostics.Add(Diagnostic("activity.upgrade.root-not-affected", "The selected root does not depend on any requested source version.", root.Kind, root.Id));
                 continue;
             }
 
@@ -250,61 +250,61 @@ public sealed class GroundworkActivityUpgradePlanStore(
         switch (owner.Kind)
         {
             case "ActivityDraft":
-            {
-                var draft = await activityDrafts.FindAsync(owner.DraftId!, cancellationToken);
-                if (draft is null || draft.Status != ActivityDefinitionDraftStatus.Active)
-                    return null;
-                var authoring = await activityAuthoring.FindAsync(draft.DefinitionId, cancellationToken);
-                var layout = await activityLayouts.FindDraftLayoutAsync(draft.Id, cancellationToken);
-                if (authoring is null || layout is null)
-                    return null;
-                var candidate = blocked || direct.Count == 0
-                    ? null
-                    : new ActivityDraftDiffCandidateRequest(
-                        draft.DefinitionId,
-                        draft.Id,
-                        draft.Revision + 1,
-                        draft.State with { Provider = await RewriteActivityAsync(draft.State.Provider, direct, cancellationToken) },
-                        layout.Records.ToArray(),
-                        authoring.HeadVersionId);
-                return new(owner with { Revision = draft.Revision, TenantId = draft.TenantId }, authoring.HeadVersionId, draft.SourceVersionId, direct, path, blocked, DiffCandidate: candidate);
-            }
+                {
+                    var draft = await activityDrafts.FindAsync(owner.DraftId!, cancellationToken);
+                    if (draft is null || draft.Status != ActivityDefinitionDraftStatus.Active)
+                        return null;
+                    var authoring = await activityAuthoring.FindAsync(draft.DefinitionId, cancellationToken);
+                    var layout = await activityLayouts.FindDraftLayoutAsync(draft.Id, cancellationToken);
+                    if (authoring is null || layout is null)
+                        return null;
+                    var candidate = blocked || direct.Count == 0
+                        ? null
+                        : new ActivityDraftDiffCandidateRequest(
+                            draft.DefinitionId,
+                            draft.Id,
+                            draft.Revision + 1,
+                            draft.State with { Provider = await RewriteActivityAsync(draft.State.Provider, direct, cancellationToken) },
+                            layout.Records.ToArray(),
+                            authoring.HeadVersionId);
+                    return new(owner with { Revision = draft.Revision, TenantId = draft.TenantId }, authoring.HeadVersionId, draft.SourceVersionId, direct, path, blocked, DiffCandidate: candidate);
+                }
             case "ActivityVersion" when allowClone:
-            {
-                var version = await activityVersions.FindAsync(owner.VersionId!, cancellationToken);
-                if (version is null)
-                    return null;
-                var authoring = await activityAuthoring.FindAsync(version.DefinitionId, cancellationToken);
-                if (authoring?.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
-                    return null;
-                var layout = await activityLayouts.FindVersionLayoutAsync(version.DefinitionVersionId, cancellationToken);
-                var candidate = blocked || direct.Count == 0
-                    ? null
-                    : new ActivityDraftDiffCandidateRequest(
-                        version.DefinitionId,
-                        $"upgrade-preview:{version.DefinitionVersionId}",
-                        1,
-                        new(version.Contract, await RewriteActivityAsync(version.Provider, direct, cancellationToken), new Dictionary<string, string>()),
-                        layout?.Records.ToArray() ?? [],
-                        version.DefinitionVersionId);
-                return new(owner with { TenantId = version.TenantId }, authoring.HeadVersionId, version.DefinitionVersionId, direct, path, blocked, DiffCandidate: candidate);
-            }
+                {
+                    var version = await activityVersions.FindAsync(owner.VersionId!, cancellationToken);
+                    if (version is null)
+                        return null;
+                    var authoring = await activityAuthoring.FindAsync(version.DefinitionId, cancellationToken);
+                    if (authoring?.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
+                        return null;
+                    var layout = await activityLayouts.FindVersionLayoutAsync(version.DefinitionVersionId, cancellationToken);
+                    var candidate = blocked || direct.Count == 0
+                        ? null
+                        : new ActivityDraftDiffCandidateRequest(
+                            version.DefinitionId,
+                            $"upgrade-preview:{version.DefinitionVersionId}",
+                            1,
+                            new(version.Contract, await RewriteActivityAsync(version.Provider, direct, cancellationToken), new Dictionary<string, string>()),
+                            layout?.Records.ToArray() ?? [],
+                            version.DefinitionVersionId);
+                    return new(owner with { TenantId = version.TenantId }, authoring.HeadVersionId, version.DefinitionVersionId, direct, path, blocked, DiffCandidate: candidate);
+                }
             case "WorkflowDraft":
-            {
-                var envelope = await store.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, owner.DraftId!, cancellationToken);
-                if (envelope is null)
-                    return null;
-                var document = DeserializeWorkflowDraft(envelope);
-                var head = await FindWorkflowHeadAsync(document.Entity.WorkflowDefinitionId, cancellationToken);
-                return new(owner with { DefinitionId = document.Entity.WorkflowDefinitionId, Revision = envelope.Version, TenantId = document.Entity.TenantId }, head, document.Entity.SourceVersionId, direct, path, blocked);
-            }
+                {
+                    var envelope = await store.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, owner.DraftId!, cancellationToken);
+                    if (envelope is null)
+                        return null;
+                    var document = DeserializeWorkflowDraft(envelope);
+                    var head = await FindWorkflowHeadAsync(document.Entity.WorkflowDefinitionId, cancellationToken);
+                    return new(owner with { DefinitionId = document.Entity.WorkflowDefinitionId, Revision = envelope.Version, TenantId = document.Entity.TenantId }, head, document.Entity.SourceVersionId, direct, path, blocked);
+                }
             case "WorkflowVersion" when allowClone:
-            {
-                var version = await workflowVersions.FindByIdAsync(owner.VersionId!, cancellationToken);
-                if (version is null)
-                    return null;
-                return new(owner with { DefinitionId = version.DefinitionId, TenantId = version.TenantId }, await FindWorkflowHeadAsync(version.DefinitionId, cancellationToken), version.Id, direct, path, blocked);
-            }
+                {
+                    var version = await workflowVersions.FindByIdAsync(owner.VersionId!, cancellationToken);
+                    if (version is null)
+                        return null;
+                    return new(owner with { DefinitionId = version.DefinitionId, TenantId = version.TenantId }, await FindWorkflowHeadAsync(version.DefinitionId, cancellationToken), version.Id, direct, path, blocked);
+                }
             default:
                 return null;
         }
@@ -490,7 +490,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
 
     private static bool MatchesRoot(ActivityDefinitionReference reference, ActivityUpgradeRoot root) =>
         StringComparer.Ordinal.Equals(reference.Kind, root.Kind) &&
-        StringComparer.Ordinal.Equals(reference.DraftId ?? reference.VersionId, root.DraftId);
+        StringComparer.Ordinal.Equals(reference.DraftId ?? reference.VersionId, root.Id);
     private static string ReferenceKey(ActivityDefinitionReference reference) => $"{reference.Kind}\u001f{reference.DraftId ?? reference.VersionId}";
 
     private async Task<DocumentEnvelope> RequiredAsync(string kind, string id, CancellationToken cancellationToken) =>

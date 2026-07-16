@@ -47,6 +47,36 @@ public sealed class ActivityUpgradePlanTests
     }
 
     [Fact]
+    public async Task Planner_accepts_exact_version_roots_without_mislabeling_the_identity_as_a_draft()
+    {
+        var owner = new ActivityUpgradeOwnerSnapshot(
+            Reference("ActivityVersion", "activity-child", version: "version-child"),
+            "head-activity-child",
+            null,
+            [new("occurrence-activity-child", "old", "new")],
+            Path(
+                Reference("ActivityVersion", "activity-child", version: "version-child"),
+                Reference("ActivityVersion", "dependency", version: "old")));
+        var request = Request() with { Roots = [new("ActivityVersion", "version-child")] };
+
+        var plan = await Planner(new([owner], []), new PlanStore()).PlanAsync(request);
+
+        Assert.Single(plan.Steps);
+    }
+
+    [Fact]
+    public async Task Planner_rejects_duplicate_root_identities()
+    {
+        var request = Request() with
+        {
+            Roots = [new("WorkflowDraft", "draft-parent"), new("WorkflowDraft", "draft-parent")]
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await Planner(new([], []), new PlanStore()).PlanAsync(request));
+    }
+
+    [Fact]
     public async Task Planner_blocks_parent_handoff_until_child_has_an_exact_published_version()
     {
         var parent = Owner("WorkflowDraft", "workflow-parent", "draft-parent", 11, Path(
@@ -131,8 +161,13 @@ public sealed class ActivityUpgradePlanTests
             publications,
             new DependencyStore(new ActivityDependencyEdge
             {
-                Id = "edge", OwnerVersionId = "base", OwnerTemplateHash = "hash-base", DependencyVersionId = "old",
-                DependencyTemplateHash = "hash-old", OccurrenceId = "node", NodeOrigin = []
+                Id = "edge",
+                OwnerVersionId = "base",
+                OwnerTemplateHash = "hash-base",
+                DependencyVersionId = "old",
+                DependencyTemplateHash = "hash-old",
+                OccurrenceId = "node",
+                NodeOrigin = []
             }),
             new LayoutStore());
 

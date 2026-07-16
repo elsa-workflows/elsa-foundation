@@ -57,7 +57,7 @@ public sealed record ActivityExecutionHierarchyItemView(
         item.ScheduledAt, item.StartedAt, item.CompletedAt, item.ParentActivityExecutionId,
         item.SchedulingActivityExecutionId, item.RelativeDepth, item.BranchId, item.IterationId, item.OutcomeNames,
         item.BookmarkCount, item.IncidentCount, item.BlockingIncidentCount, ActivityExecutionAttemptView.From(item.Attempt),
-        ActivityExecutionBoundaryView.From(item.Boundary), item.Metadata);
+        ActivityExecutionBoundaryView.From(item.Boundary), ActivityExecutionInspectionDisclosure.EmptyMetadata);
 }
 
 public sealed record ActivityExecutionLayoutView(

@@ -272,6 +272,22 @@ public sealed class ActivityTemplateCompiler(
             }
         }
 
+        var invalidMeasurements = InvalidMeasurementNames(compilation.ResourceMeasurements);
+        if (invalidMeasurements.Length > 0)
+        {
+            diagnostics.Add(new(
+                "activity.provider.resource-measurements-invalid",
+                ActivityDiagnosticSeverity.Error,
+                "The activity provider returned one or more negative resource measurements.",
+                subject,
+                new(request.Draft.State.Provider.ProviderKey),
+                "Return non-negative resource measurements for admission-policy evaluation.",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["invalidMeasurements"] = string.Join(',', invalidMeasurements)
+                }));
+        }
+
         if (diagnostics.Any(IsError) || compilation.ExecutableRoot is null)
             return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
 
@@ -314,7 +330,23 @@ public sealed class ActivityTemplateCompiler(
         var compatibilityMetadata = compilation.ProviderCompatibilityChanges
             .OrderBy(x => x.ChangeId, StringComparer.Ordinal)
             .ToDictionary(x => $"provider.change.{x.ChangeId}", x => $"{x.Impact}:{x.RequiredBump}", StringComparer.Ordinal);
-        var measurements = CloseMeasurements(compilation.ResourceMeasurements, closure.Values, request.LayoutBytes);
+        ActivityResourceMeasurements measurements;
+        try
+        {
+            measurements = CloseMeasurements(compilation.ResourceMeasurements, closure.Values, request.LayoutBytes);
+        }
+        catch (OverflowException)
+        {
+            diagnostics.Add(new(
+                "activity.provider.resource-measurements-invalid",
+                ActivityDiagnosticSeverity.Error,
+                "The closed activity resource measurements exceed the supported numeric range.",
+                subject,
+                new(request.Draft.State.Provider.ProviderKey),
+                "Return bounded local measurements and review the compiled dependency closure.",
+                new Dictionary<string, string>(StringComparer.Ordinal)));
+            return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
+        }
         var admission = await admissionPolicy.EvaluateAsync(
             measurements,
             new(request.Definition.TenantId, "PublishActivityDefinition"),
@@ -523,12 +555,28 @@ public sealed class ActivityTemplateCompiler(
         long layoutBytes)
     {
         var closed = closure.ToArray();
-        return local with
+        checked
         {
-            ClosedNodeCount = local.LocalNodeCount + closed.Sum(x => (long)x.NodesById.Count),
-            DescriptorBytes = local.DescriptorBytes + closed.Sum(x => x.NodesById.Values.Sum(node => (long)JsonSerializer.SerializeToUtf8Bytes(node.Descriptor).Length)),
-            LayoutBytes = layoutBytes
-        };
+            return local with
+            {
+                ClosedNodeCount = local.LocalNodeCount + closed.Sum(x => (long)x.NodesById.Count),
+                DescriptorBytes = local.DescriptorBytes + closed.Sum(x => x.NodesById.Values.Sum(node => (long)JsonSerializer.SerializeToUtf8Bytes(node.Descriptor).Length)),
+                LayoutBytes = layoutBytes
+            };
+        }
+    }
+
+    private static string[] InvalidMeasurementNames(ActivityResourceMeasurements measurements)
+    {
+        var invalid = new List<string>(7);
+        if (measurements.LocalNodeCount < 0) invalid.Add(nameof(measurements.LocalNodeCount));
+        if (measurements.ClosedNodeCount < 0) invalid.Add(nameof(measurements.ClosedNodeCount));
+        if (measurements.DependencyCount < 0) invalid.Add(nameof(measurements.DependencyCount));
+        if (measurements.MaximumObservedAuthoredDepth < 0) invalid.Add(nameof(measurements.MaximumObservedAuthoredDepth));
+        if (measurements.DescriptorBytes < 0) invalid.Add(nameof(measurements.DescriptorBytes));
+        if (measurements.LayoutBytes < 0) invalid.Add(nameof(measurements.LayoutBytes));
+        if (measurements.EstimatedDurableBoundarySlots < 0) invalid.Add(nameof(measurements.EstimatedDurableBoundarySlots));
+        return invalid.ToArray();
     }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
