@@ -157,6 +157,50 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
     }
 
     [Fact]
+    public async Task ScopeCancellation_CleansResourcesAndTerminalizesBoundaryInOneDurableCommit()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-scope-cancel-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        try
+        {
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                var store = fixture.DocumentStore;
+                await new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer)
+                    .SaveAsync(ActivityState("wf-1", "ae-1"));
+                await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer)
+                    .SaveAsync(Bookmark("wf-1", "bm-1", "node-bm-1"));
+                await new GroundworkDurableTimerStore(store, GroundworkTestSerialization.Serializer)
+                    .SaveAsync(new DurableTimer("timer-1", "wf-1", "delivery-status", "sha256:stimulus", DateTimeOffset.UnixEpoch.AddHours(1), DateTimeOffset.UnixEpoch));
+                await new GroundworkWorkflowSchedulerWorkQueue(store, GroundworkTestSerialization.Serializer)
+                    .EnqueueAsync(new RuntimeSchedulerWorkItem(
+                        "work-1", "wf-1", "command-1", WorkflowExecutionCommandKind.ResumeBookmark,
+                        "envelope-1", "key-1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
+                        executionScopeId: "ae-1"));
+
+                await CreateWriter(store).CommitAsync(BuildScopeCancellationCommit(), Decision);
+            }
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                var store = fixture.DocumentStore;
+                Assert.Equal(ActivityExecutionStatus.Cancelled,
+                    (await new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "ae-1"))!.Status);
+                Assert.Null(await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1"));
+                Assert.Null(await new GroundworkDurableTimerStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "timer-1"));
+                Assert.Empty(await new GroundworkWorkflowSchedulerWorkQueue(store, GroundworkTestSerialization.Serializer)
+                    .ListAsync(new RuntimeSchedulerWorkQuery("wf-1")));
+                Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-scope-cancel"));
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task UncertainCommit_ReconcilesMarker_AfterCallerTokenIsCanceled()
     {
         using var callerCancellation = new CancellationTokenSource();
@@ -243,6 +287,36 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             stateChanges,
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
+    }
+
+    private static RuntimeCheckpointCommit BuildScopeCancellationCommit()
+    {
+        var cancelled = ActivityState("wf-1", "ae-1") with
+        {
+            Status = ActivityExecutionStatus.Cancelled,
+            SubStatus = "ScopeCancelled",
+            CompletedAt = DateTimeOffset.UnixEpoch
+        };
+        return new RuntimeCheckpointCommit(
+            "commit-scope-cancel",
+            new RuntimeCheckpoint(
+                "checkpoint-scope-cancel", "ActivityCancelled", "wf-1", DateTimeOffset.UnixEpoch,
+                ["ae-1"], new Dictionary<string, string>()),
+            new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [Change("ae-1", RuntimeStateChangeOperation.Upsert, cancelled)],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: [],
+                activityScopeCleanups:
+                [
+                    new ActivityScopeCleanupRequest(
+                        "wf-1", "ae-1", ["ae-1"], ["bm-1"], ["timer-1"], ["work-1"])
+                ]),
+            [],
+            new Dictionary<string, string>());
     }
 
     private static RuntimeStateChange<T> Change<T>(string stateId, RuntimeStateChangeOperation operation, T state) =>

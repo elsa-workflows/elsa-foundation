@@ -8,8 +8,8 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// <see cref="IGroundworkRuntimeDocumentUpcaster"/> steps per document kind and applies them one
 /// version at a time. The chain is validated <b>eagerly at construction</b>, never on first read:
 /// a duplicate step, a gap between the lowest and highest registered step of a kind, a step at or
-/// beyond a known kind's current version, or a known kind whose full chain to its current version is
-/// incomplete all fail loudly at startup. A document that cannot be brought to the current version
+/// beyond a known kind's supported range, or a known kind whose full chain from its minimum-readable
+/// version to its current version is incomplete all fail loudly at startup. A document that cannot be brought to the current version
 /// must never be deserialized against a mismatched shape.
 /// </summary>
 public sealed class GroundworkRuntimeDocumentUpcasterRegistry : IGroundworkRuntimeDocumentUpcasterRegistry
@@ -35,14 +35,25 @@ public sealed class GroundworkRuntimeDocumentUpcasterRegistry : IGroundworkRunti
                     "version steps start at 1.");
             }
 
-            // A known kind at version N can only be reached from versions 1..N-1; a step at or beyond N
-            // means the kind's current version was not bumped when the step was added.
-            if (ElsaRuntimeDocumentVersions.All.TryGetValue(documentKind, out var currentVersion) && upcaster.FromVersion >= currentVersion)
+            // A known kind at version N can only be reached from supported historical versions below N.
+            // A clean-break kind intentionally has no steps below its minimum-readable floor.
+            if (ElsaRuntimeDocumentVersions.All.TryGetValue(documentKind, out var currentVersion))
             {
-                throw new GroundworkRuntimeDocumentVersionException(
-                    $"Upcaster '{upcaster.GetType().FullName}' for document kind '{documentKind}' declares FromVersion {upcaster.FromVersion}, " +
-                    $"but the current version of that kind is {currentVersion}. Upcasters may only move a version below the current one forward; " +
-                    "bump the kind's current version in ElsaRuntimeDocumentVersions when adding a step.");
+                var minimumReadableVersion = ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind);
+                if (upcaster.FromVersion < minimumReadableVersion)
+                {
+                    throw new GroundworkRuntimeDocumentVersionException(
+                        $"Upcaster '{upcaster.GetType().FullName}' for document kind '{documentKind}' declares FromVersion {upcaster.FromVersion}, " +
+                        $"below the clean-break minimum readable version {minimumReadableVersion}. Compatibility with that retired wire format is not permitted.");
+                }
+
+                if (upcaster.FromVersion >= currentVersion)
+                {
+                    throw new GroundworkRuntimeDocumentVersionException(
+                        $"Upcaster '{upcaster.GetType().FullName}' for document kind '{documentKind}' declares FromVersion {upcaster.FromVersion}, " +
+                        $"but the current version of that kind is {currentVersion}. Upcasters may only move a supported version below the current one forward; " +
+                        "bump the kind's current version in ElsaRuntimeDocumentVersions when adding a step.");
+                }
             }
 
             var key = (documentKind, upcaster.FromVersion);
@@ -117,20 +128,20 @@ public sealed class GroundworkRuntimeDocumentUpcasterRegistry : IGroundworkRunti
         }
     }
 
-    // Every known kind whose current version is greater than 1 must have a contiguous chain from
-    // version 1 to its current version, so any historical document can be read. Missing steps fail
-    // here at startup rather than the first time an old document is loaded.
+    // Every known kind must have a contiguous chain from its minimum readable version to its current
+    // version. Clean-break versions below that floor intentionally have no upcaster.
     private void ValidateKnownKindChainsReachCurrent()
     {
         foreach (var (documentKind, currentVersion) in ElsaRuntimeDocumentVersions.All)
         {
-            for (var version = 1; version < currentVersion; version++)
+            var minimumReadableVersion = ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind);
+            for (var version = minimumReadableVersion; version < currentVersion; version++)
             {
                 if (!_steps.ContainsKey((documentKind, version)))
                 {
                     throw new GroundworkRuntimeDocumentVersionException(
                         $"Document kind '{documentKind}' is at version {currentVersion} but has no upcaster from version {version} to {version + 1}. " +
-                        "Every version step from 1 to the current version must have exactly one upcaster so historical documents remain readable. " +
+                        $"Every version step from the minimum readable version {minimumReadableVersion} to the current version must have exactly one upcaster. " +
                         $"Register an {nameof(IGroundworkRuntimeDocumentUpcaster)} for the missing step.");
                 }
             }

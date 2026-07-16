@@ -81,7 +81,7 @@
     {
       "id": "runtime-activity-execution-inspection",
       "family": "runtime",
-      "contract": "IActivityExecutionInspectionStore; IActivityExecutionInspectionWriter",
+      "contract": "IActivityExecutionInspectionStore; IActivityExecutionInspectionWriter; IActivityExecutionHierarchyStore; IActivityExecutionHierarchyWriter",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
@@ -91,7 +91,8 @@
       "accessPolicy": "ordinary",
       "queryShapes": [
         "find-by-workflow-and-activity",
-        "list-summaries-by-workflow-bounded"
+        "list-summaries-by-workflow-bounded",
+        "list-descendants-by-parent-bounded"
       ],
       "concurrencySemantics": [
         "expected-version-save",
@@ -118,13 +119,14 @@
       "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkActivityExecutionInspectionStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkActivityExecutionHierarchyStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
       ]
     },
     {
       "id": "runtime-activity-execution-state",
       "family": "runtime",
-      "contract": "IActivityExecutionStateStore",
+      "contract": "IActivityExecutionStateStore; IActivityScopeCleanupStore",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
@@ -611,7 +613,7 @@
     {
       "id": "runtime-executable-source-reference",
       "family": "runtime",
-      "contract": "IWorkflowExecutableSourceReferenceStore",
+      "contract": "IWorkflowExecutableSourceReferenceStore; IWorkflowExecutableSourceReferenceWriter",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
@@ -658,7 +660,7 @@
     {
       "id": "runtime-workflow-executable",
       "family": "runtime",
-      "contract": "IWorkflowExecutableStore",
+      "contract": "IWorkflowExecutableStore; IExecutableActivityTemplateStore; IExecutableActivityTemplateWriter",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
@@ -668,7 +670,8 @@
       "accessPolicy": "ordinary",
       "queryShapes": [
         "find-by-artifact",
-        "list-bounded"
+        "list-bounded",
+        "find-template-by-hash"
       ],
       "concurrencySemantics": [
         "create-only-artifact",
@@ -697,6 +700,7 @@
       "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutableStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkExecutableActivityTemplateStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointRootWriteLeaseTests.cs"
       ]
     },

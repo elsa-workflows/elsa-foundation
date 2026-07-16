@@ -59,6 +59,17 @@ public sealed class WorkflowExecutableHasher
         return $"{input.Key}={payload}[{metadata}]{sensitivity}";
     }
 
+    private static string FormatOutputCapture(KeyValuePair<string, RuntimeOutputCapture> output)
+    {
+        var capture = output.Value;
+        var metadata = string.Join(',', capture.Metadata
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
+        var schema = capture.Type.Schema?.GetRawText() ?? string.Empty;
+        return $"{output.Key}={capture.OutputName}:{capture.ValueId}:{capture.Type.Kind}:{capture.Type.Id}:{schema}:" +
+               $"{capture.Lifecycle}:{capture.Storage}:{capture.StorageDriverKey}:{capture.CaptureOnSuccessfulCompletion}[{metadata}]";
+    }
+
     private static string FormatNode(ExecutableNode node)
     {
         var childSlots = string.Join(',', node.ChildSlots
@@ -71,7 +82,11 @@ public sealed class WorkflowExecutableHasher
         var structure = node.Structure is null
             ? string.Empty
             : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{node.Structure.Payload.GetRawText()}";
-        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
+        var outputCaptures = string.Join(',', node.OutputCaptures
+            .OrderBy(output => output.Key, StringComparer.Ordinal)
+            .Select(FormatOutputCapture));
+        var outputCapturePayload = outputCaptures.Length == 0 ? string.Empty : $":outputs={outputCaptures}";
+        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{node.Descriptor.Payload.GetRawText()}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}";
     }
 
     private static IEnumerable<ExecutableNode> FlattenExecutableActivities(ExecutableNode rootActivity)

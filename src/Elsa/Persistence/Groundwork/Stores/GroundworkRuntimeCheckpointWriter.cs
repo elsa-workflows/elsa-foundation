@@ -121,6 +121,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ValidateDurableValueStateChanges(commit);
         ValidateIncidentStateChanges(commit);
         ValidateOperationalStateChanges(commit);
+        ValidateActivityScopeCleanups(commit);
 
         return await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
             commit,
@@ -194,10 +195,12 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
                 await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
                 await ApplyActivityExecutionInspectionChangesAsync(stores.ActivityExecutionInspectionWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+                await ApplyActivityExecutionHierarchyChangesAsync(stores.ActivityExecutionHierarchyWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
                 await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
                 await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
                 await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
                 await ApplyOperationalStateChangesAsync(stores.ExecutionLivenessStateStore, commit.StateChanges.Operational, cancellationToken);
+                await ApplyActivityScopeCleanupsAsync(stores, commit.StateChanges.ActivityScopeCleanups, cancellationToken);
                 await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
                 await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
                 await unitOfWork.CommitAsync(cancellationToken);
@@ -254,11 +257,14 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
             ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
+            ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind,
             ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
             ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
             ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
             ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
             ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
 
     private async ValueTask ValidateAndTouchExpectedFenceAsync(
@@ -454,6 +460,19 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             await writer.SaveAsync(stateChange.State, cancellationToken);
     }
 
+    private static async ValueTask ApplyActivityExecutionHierarchyChangesAsync(
+        IActivityExecutionHierarchyWriter writer,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        foreach (var stateChange in stateChanges)
+        {
+            var projection = stateChange.State;
+            if (!string.IsNullOrWhiteSpace(projection.ExecutionScopeId ?? projection.Provenance.ExecutionScopeId))
+                await writer.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection), cancellationToken);
+        }
+    }
+
     private static async ValueTask ApplyBookmarkStateChangesAsync(
         IBookmarkStateStore store,
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> stateChanges,
@@ -517,6 +536,22 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             await store.SaveAsync(stateChange.State, cancellationToken);
     }
 
+    private static async ValueTask ApplyActivityScopeCleanupsAsync(
+        GroundworkApplyStores stores,
+        IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups,
+        CancellationToken cancellationToken)
+    {
+        foreach (var cleanup in cleanups)
+        {
+            foreach (var bookmarkId in cleanup.BookmarkIds)
+                await stores.BookmarkStateStore.DeleteAsync(cleanup.WorkflowExecutionId, bookmarkId, cancellationToken);
+            foreach (var timerId in cleanup.TimerIds)
+                await stores.DurableTimerStore.DeleteAsync(cleanup.WorkflowExecutionId, timerId, cancellationToken);
+            foreach (var workItemId in cleanup.SchedulerWorkItemIds)
+                await stores.SchedulerWorkQueue.DeleteAsync(cleanup.WorkflowExecutionId, workItemId, cancellationToken);
+        }
+    }
+
     private static void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
     {
         if (stateChange is null)
@@ -550,6 +585,14 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 throw new InvalidOperationException("Activity execution state change StateId must match ActivityExecution.ActivityExecutionId.");
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.Execution.WorkflowExecutionId))
                 throw new InvalidOperationException("Activity execution state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            if (stateChange.State.ExecutionScopeId is not null &&
+                stateChange.State.Provenance.ExecutionScopeId is not null &&
+                !StringComparer.Ordinal.Equals(stateChange.State.ExecutionScopeId, stateChange.State.Provenance.ExecutionScopeId))
+                throw new InvalidOperationException("Activity execution state ExecutionScopeId must match ActivitySchedulingProvenance.ExecutionScopeId when both are present.");
+            if (stateChange.State.Attempt is not null &&
+                stateChange.State.Provenance.Attempt is not null &&
+                stateChange.State.Attempt != stateChange.State.Provenance.Attempt)
+                throw new InvalidOperationException("Activity execution state Attempt must match ActivitySchedulingProvenance.Attempt when both are present.");
         }
     }
 
@@ -563,6 +606,14 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 throw new InvalidOperationException("Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.");
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Activity execution inspection WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            if (stateChange.State.ExecutionScopeId is not null &&
+                stateChange.State.Provenance.ExecutionScopeId is not null &&
+                !StringComparer.Ordinal.Equals(stateChange.State.ExecutionScopeId, stateChange.State.Provenance.ExecutionScopeId))
+                throw new InvalidOperationException("Activity execution inspection ExecutionScopeId must match ActivitySchedulingProvenance.ExecutionScopeId when both are present.");
+            if (stateChange.State.Attempt is not null &&
+                stateChange.State.Provenance.Attempt is not null &&
+                stateChange.State.Attempt != stateChange.State.Provenance.Attempt)
+                throw new InvalidOperationException("Activity execution inspection Attempt must match ActivitySchedulingProvenance.Attempt when both are present.");
         }
     }
 
@@ -621,6 +672,17 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         }
     }
 
+    private static void ValidateActivityScopeCleanups(RuntimeCheckpointCommit commit)
+    {
+        foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
+        {
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, cleanup.WorkflowExecutionId))
+                throw new InvalidOperationException("Activity scope cleanup WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            if (!cleanup.ActivityExecutionIds.Contains(cleanup.ExecutionScopeId, StringComparer.Ordinal))
+                throw new InvalidOperationException("Activity scope cleanup must include its outer execution scope ID.");
+        }
+    }
+
     private sealed record CheckpointCommitMarker(
         string CommitId,
         string WorkflowExecutionId,
@@ -642,11 +704,14 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ISchedulerStateStore SchedulerStateStore,
         IActivityExecutionStateStore ActivityExecutionStateStore,
         IActivityExecutionInspectionWriter ActivityExecutionInspectionWriter,
+        IActivityExecutionHierarchyWriter ActivityExecutionHierarchyWriter,
         IBookmarkStateStore BookmarkStateStore,
         IDurableValueStateStore DurableValueStateStore,
         IIncidentStateStore IncidentStateStore,
         IExecutionLivenessStateStore ExecutionLivenessStateStore,
-        GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore)
+        GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore,
+        IDurableTimerStore DurableTimerStore,
+        IWorkflowSchedulerWorkQueue SchedulerWorkQueue)
     {
         public static GroundworkApplyStores Create(
             IDocumentStore store,
@@ -657,11 +722,14 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 new GroundworkSchedulerStateStore(store, serializer),
                 new GroundworkActivityExecutionStateStore(store, serializer),
                 new GroundworkActivityExecutionInspectionStore(store, serializer),
+                new GroundworkActivityExecutionHierarchyStore(store, serializer),
                 new GroundworkBookmarkStateStore(store, serializer),
                 new GroundworkDurableValueStateStore(store, serializer),
                 new GroundworkIncidentStateStore(store, serializer),
                 new GroundworkExecutionLivenessStateStore(store, serializer),
-                new GroundworkRuntimePostCommitOutboxStore(store, serializer));
+                new GroundworkRuntimePostCommitOutboxStore(store, serializer),
+                new GroundworkDurableTimerStore(store, serializer),
+                new GroundworkWorkflowSchedulerWorkQueue(store, serializer));
     }
 
     private sealed class DocumentUnitOfWorkStore(

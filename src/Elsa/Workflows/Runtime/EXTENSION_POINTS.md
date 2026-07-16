@@ -478,6 +478,26 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** stores and retrieves runtime-owned `WorkflowExecutable` artifacts. Publishing writes artifacts through this contract; Runtime execution reads artifacts through this contract and does not load Design-owned workflow state.
 - **Default implementation:** `InMemoryWorkflowExecutableStore` *(intra-domain demo default for the vertical slice; durable persistence remains future provider work)*.
 
+### `IExecutableActivityTemplateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns immutable, content-addressed executable templates for reusable activity versions).
+- **Signature:** find by template id or behavior hash, list, save, and delete unreferenced templates.
+- **Usage:** Publishing compiles provider-neutral activity versions into `ExecutableActivityTemplate` artifacts. Workflow artifacts pin exact template identities and closed dependency sets; Runtime loads only these artifacts and never falls back to Design state. Equal canonical behavior can share a template even when source version labels differ.
+- **Default implementation:** `InMemoryExecutableActivityTemplateStore`; Groundwork replaces it for durable hosts.
+
+### `IWorkflowExecutableSourceReferenceStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns source/version/publication references to content-addressed workflow and activity artifacts).
+- **Signature:** find/list by source reference or artifact, save, retire/delete, and discover unreferenced artifacts.
+- **Usage:** keeps mutable lifecycle, retention, expiry, and layout sidecars outside immutable behavior artifacts. Source-owned CLR reconciliation creates a distinct source reference per definition version even when versions share one template hash. Runtime start pins the exact referenced artifact; garbage collection follows live references.
+- **Default implementation:** `InMemoryWorkflowExecutableSourceReferenceStore`; Groundwork replaces it for durable hosts.
+
+### `IActivityExecutionHierarchyStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement read/write surface for checkpoint-committed activity execution hierarchy and composite-boundary layout.
+- **Signature:** write `ActivityExecutionHierarchyRecord`; read cursor-paged descendants, boundary metadata, and execution layout by workflow/activity execution identity.
+- **Usage:** preserves one workflow execution while making reusable composite boundaries navigable. Inspection clients can click through a graph activity into its full descendant execution graph and layout without loading authored Design documents. Records are checkpoint-gated and use ordinary activity execution identities/scopes; there is no special “custom activity” scope and no child workflow identity.
+- **Default implementation:** `RuntimeInMemoryActivityExecutionHierarchyStore`; Groundwork replaces it for durable hosts. Opaque page cursors are encoded by `IActivityExecutionHierarchyCursorCodec`.
+
+`ExecuteWorkflow` remains a separate explicit operation for starting another workflow. It does not use the reusable activity template/hierarchy boundary to disguise a child workflow as an activity.
+
 ## Implementable contributor interfaces
 
 ### `IWorkflowRuntimeMiddleware` *(Core — `Elsa.Workflows.Runtime.Core`)*

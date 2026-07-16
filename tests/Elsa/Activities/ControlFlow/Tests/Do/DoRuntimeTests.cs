@@ -124,8 +124,7 @@ public sealed class DoRuntimeTests
             authoredActivityId: "authored-do",
             activityType: typeof(DoActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: DoActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new DoDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(DoActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new DoDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Condition"] = new RuntimeInputBinding(
@@ -173,8 +172,8 @@ public sealed class DoRuntimeTests
 
     private sealed class DoActivityConstructor : IActivityConstructor<DoDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(DoDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(DoDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

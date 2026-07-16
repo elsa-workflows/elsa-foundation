@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -106,7 +107,9 @@ public sealed class FlowchartRuntimeTests
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
 
-        return services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider();
+        await ActivityConstructorTestHost.InitializeAsync(provider);
+        return provider;
     }
 
     private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)
@@ -130,8 +133,7 @@ public sealed class FlowchartRuntimeTests
             authoredActivityId: "authored-flowchart",
             activityType: typeof(FlowchartActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: FlowchartActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(FlowchartActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new FlowchartDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -160,8 +162,7 @@ public sealed class FlowchartRuntimeTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ProbeDescriptor(outcomes ?? [ActivityOutcomes.Done])),
+            descriptor: new RuntimeActivityDescriptor(ProbeActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ProbeDescriptor(outcomes ?? [ActivityOutcomes.Done]))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -204,8 +205,8 @@ public sealed class FlowchartRuntimeTests
 
     private sealed class FlowchartActivityConstructor : IActivityConstructor<FlowchartDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(FlowchartDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(FlowchartDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,
@@ -226,8 +227,8 @@ public sealed class FlowchartRuntimeTests
 
     private sealed class ProbeActivityConstructor : IActivityConstructor<ProbeDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ProbeDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ProbeDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

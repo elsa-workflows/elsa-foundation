@@ -95,8 +95,7 @@ public sealed class RunJavaScriptExecutionTests
             authoredActivityId: "authored-runjs",
             activityType: typeof(RunJavaScript).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: RunJavaScriptConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new RunJavaScriptDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(RunJavaScriptConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new RunJavaScriptDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Script"] = LiteralString("Script", script)
@@ -166,8 +165,8 @@ public sealed class RunJavaScriptExecutionTests
 
     private sealed class RunJavaScriptConstructor : IActivityConstructor<RunJavaScriptDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(RunJavaScriptDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(RunJavaScriptDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

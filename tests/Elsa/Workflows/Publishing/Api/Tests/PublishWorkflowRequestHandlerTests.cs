@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Persistence.Core;
@@ -628,7 +629,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         {
             Id = versionId,
             Definition = new WorkflowDefinition { Id = definitionId, Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
@@ -692,7 +693,10 @@ public sealed class PublishWorkflowRequestHandlerTests
                 ActivityTypeKey = activityTypeKey,
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = inputs
         };

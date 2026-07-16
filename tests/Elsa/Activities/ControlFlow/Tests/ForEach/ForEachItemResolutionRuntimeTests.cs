@@ -101,8 +101,7 @@ public sealed class ForEachItemResolutionRuntimeTests
             authoredActivityId: "authored-body",
             activityType: "test/capture",
             activityTypeVersion: "1.0.0",
-            descriptorType: CaptureActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new CaptureDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(CaptureActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new CaptureDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Value"] = new RuntimeInputBinding(
@@ -126,8 +125,7 @@ public sealed class ForEachItemResolutionRuntimeTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForEachActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(ForEachActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForEachDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Collection"] = new RuntimeInputBinding(
@@ -149,8 +147,8 @@ public sealed class ForEachItemResolutionRuntimeTests
 
     private sealed class ForEachActivityConstructor : IActivityConstructor<ForEachDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ForEachDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ForEachDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new ForEachDescriptor(), inputs, outputs, cancellationToken);
@@ -168,8 +166,8 @@ public sealed class ForEachItemResolutionRuntimeTests
 
     private sealed class CaptureActivityConstructor : IActivityConstructor<CaptureDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(CaptureDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(CaptureDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             new(new CaptureActivity(ResolveValueInput(inputs)));

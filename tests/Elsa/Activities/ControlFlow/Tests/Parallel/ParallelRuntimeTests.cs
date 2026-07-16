@@ -220,8 +220,7 @@ public sealed class ParallelRuntimeTests
             authoredActivityId: "authored-finish",
             activityType: typeof(Finish).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: FinishDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new FinishDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(FinishDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new FinishDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -246,8 +245,7 @@ public sealed class ParallelRuntimeTests
             authoredActivityId: "authored-parallel",
             activityType: typeof(ParallelActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ParallelConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ParallelDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(ParallelConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ParallelDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -265,8 +263,8 @@ public sealed class ParallelRuntimeTests
 
     private sealed class ParallelConstructor : IActivityConstructor<ParallelDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ParallelDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ParallelDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             new(new ParallelActivity());
@@ -277,12 +275,12 @@ public sealed class ParallelRuntimeTests
 
     private sealed record FinishDescriptor
     {
-        public static string DescriptorTypeKey => typeof(FinishDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(FinishDescriptor).FullName!;
     }
 
     private sealed class FinishConstructor : IActivityConstructor<FinishDescriptor>
     {
-        public string DescriptorType => FinishDescriptor.DescriptorTypeKey;
+        public string ConsumerKey => FinishDescriptor.ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             new(new Finish());

@@ -46,7 +46,6 @@ public sealed class CloneDraftFromVersion(
             RootActivity: sourceState.RootActivity,
             Inputs: [.. sourceState.Inputs],
             Outputs: [.. sourceState.Outputs],
-            WorkflowActivityOptions: sourceState.WorkflowActivityOptions,
             StrategyOptions: sourceState.StrategyOptions
         );
 

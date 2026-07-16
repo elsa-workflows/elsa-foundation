@@ -62,7 +62,6 @@ public sealed class CreateDraft(
             RootActivity: null,
             Inputs: [],
             Outputs: [],
-            WorkflowActivityOptions: null,
             StrategyOptions: null
         );
 

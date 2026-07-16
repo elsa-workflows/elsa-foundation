@@ -92,8 +92,7 @@ public sealed class WriteHttpResponseExecutionTests
             authoredActivityId: "authored-write-http-response",
             activityType: typeof(WriteHttpResponse).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, typeof(WriteHttpResponse)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, typeof(WriteHttpResponse))),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

@@ -1,12 +1,16 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Persistence.Groundwork.Tests;
 
@@ -22,14 +26,18 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate);
 
-    // The 14 runtime document kinds, each paired with the deterministic ids a spot-check reads back by.
+    // Runtime document kinds that already have concrete Groundwork stores, each paired with the
+    // deterministic ids a spot-check reads back by. Manifest-only future-store kinds join here when
+    // their adapters land.
     public static readonly IReadOnlyList<string> AllKinds =
     [
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+        ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
@@ -70,8 +78,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     }
 
     // Seeds an in-memory store with the committed fixture content under the LEGACY schema stamp, at the
-    // exact composite id the bridge assigns. Proves a pre-versioning document loads through the real read
-    // path. Driving the real save first lets us discover the id without re-implementing id composition.
+    // exact composite id the bridge assigns. Tests then prove the historical document either loads through
+    // the real read path or is rejected by an explicit clean-break floor. Driving the real save first lets
+    // us discover the id without re-implementing id composition.
     public static async Task<InMemoryDocumentStore> SeedLegacyFixtureAsync(string kind, string fixtureContent)
     {
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
@@ -99,6 +108,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind:
                 await new GroundworkWorkflowExecutableStore(store, Serializer).SaveAsync(Executable());
                 break;
+            case ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind:
+                await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).SaveAsync(ActivityTemplate());
+                break;
             case ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind:
                 await new GroundworkWorkflowExecutableSourceReferenceStore(store, Serializer).SaveAsync(Reference());
                 break;
@@ -107,6 +119,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 break;
             case ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind:
                 await new GroundworkActivityExecutionInspectionStore(store, Serializer).SaveAsync(Projection());
+                break;
+            case ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind:
+                await new GroundworkActivityExecutionHierarchyStore(store, Serializer).SaveAsync(HierarchyRecord());
                 break;
             case ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind:
                 await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.AccessContext("tenant-1")).SaveAsync(WorkflowState());
@@ -161,12 +176,17 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkBookmarkStateStore(store, Serializer).FindAsync(Wf, "bm-1"))?.StimulusType,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind =>
             (await new GroundworkWorkflowExecutableStore(store, Serializer).FindAsync("artifact-1"))?.Identity.DefinitionId,
+        ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind =>
+            (await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).FindAsync("template-1"))?.TemplateHash,
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind =>
             (await new GroundworkWorkflowExecutableSourceReferenceStore(store, Serializer).FindAsync("sourceref-1"))?.ArtifactId,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind =>
             (await new GroundworkActivityExecutionStateStore(store, Serializer).FindAsync(Wf, "ae-1"))?.Status,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind =>
             (await new GroundworkActivityExecutionInspectionStore(store, Serializer).FindAsync(Wf, "ae-1"))?.ActivityExecutionId,
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind =>
+            (await new GroundworkActivityExecutionHierarchyStore(store, Serializer, CursorCodec())
+                .FindBoundaryAsync(Wf, "ae-1"))?.DefinitionVersionId,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind =>
             (await new GroundworkWorkflowExecutionStateStore(store, Serializer, GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(Wf))?.Status,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind =>
@@ -210,9 +230,11 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     {
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind => "Http",
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind => "definition-1",
+        ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => "hash-template-1",
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => "artifact-1",
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind => ActivityExecutionStatus.Running,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind => "ae-1",
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind => "activity-ver-1",
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind => WorkflowExecutionStatus.Completed,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind => "value-dv-1",
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind => 7L,
@@ -290,8 +312,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             authoredActivityId: "authored-child",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SendEmailDescriptor",
-            descriptorPayload: Json("""{ "kind": "Send" }"""),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SendEmailDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
@@ -307,8 +328,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             authoredActivityId: "authored-root",
             activityType: "Elsa.Sequence",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SequenceDescriptor",
-            descriptorPayload: Json("""{ "kind": "Send" }"""),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SequenceDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -324,10 +344,38 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
             {
-                ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" })
+                ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" }, "local-resume-1")
             },
             createdAt: DateTimeOffset.UnixEpoch,
             compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
+    }
+
+    private static ExecutableActivityTemplate ActivityTemplate()
+    {
+        var root = new ExecutableNode(
+            executableNodeId: "template-root",
+            authoredActivityId: "authored-template-root",
+            activityType: "Elsa.Sequence",
+            activityTypeVersion: "1.0.0",
+            descriptor: new RuntimeActivityDescriptor(
+                "Elsa.Activities.Sequence",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                Json("""{ "kind": "Sequence" }""")),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string> { ["role"] = "template-root" });
+
+        return new ExecutableActivityTemplate(
+            "template-1",
+            "hash-template-1",
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            [],
+            [new ExecutableActivityTemplateIdentity("template-1", "hash-template-1")],
+            [new RuntimeRequirement("Elsa.Activities.Sequence", RuntimeActivityDescriptor.InitialSchemaVersion)],
+            "provider/1",
+            new Dictionary<string, string> { ["wire"] = "stable-descriptor" },
+            DateTimeOffset.UnixEpoch);
     }
 
     private static WorkflowExecutableSourceReference Reference() => new(
@@ -368,14 +416,17 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             branchId: null,
             iterationId: null,
             executionPathId: null,
-            executionScopeId: null,
-            schedulingCause: "test"),
+            executionScopeId: "scope-1",
+            schedulingCause: "test",
+            attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null)),
         CallStackDepth: 0,
         BookmarkIds: [],
         IncidentIds: [],
         FaultCount: 0,
         AggregateFaultCount: 0,
-        Metadata: new Dictionary<string, string> { ["tag"] = "v1" });
+        Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
+        ExecutionScopeId: "scope-1",
+        Attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null));
 
     private static ActivityExecutionInspectionProjection Projection() => new(
         ActivityExecutionId: "ae-1",
@@ -400,13 +451,38 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             branchId: null,
             iterationId: null,
             executionPathId: null,
-            executionScopeId: null,
-            schedulingCause: "test"),
+            executionScopeId: "scope-1",
+            schedulingCause: "test",
+            attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null)),
         OutcomeNames: ["Done"],
         Bookmarks: [],
         Incidents: [],
         ValueSnapshots: [],
-        Metadata: new Dictionary<string, string>());
+        Metadata: new Dictionary<string, string>(),
+        ExecutionScopeId: "scope-1",
+        Attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null));
+
+    private static ActivityExecutionHierarchyRecord HierarchyRecord() =>
+        ActivityExecutionHierarchyProjector.FromInspection(Projection() with
+        {
+            ExecutionScopeId = "ae-1",
+            Provenance = ActivitySchedulingProvenance.From(
+                Wf, null, null, null, null, null, "ae-1", "test",
+                attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null)),
+            Metadata = new Dictionary<string, string>
+            {
+                ["activity.definitionId"] = "activity-def-1",
+                ["activity.definitionVersionId"] = "activity-ver-1",
+                ["activity.version"] = "1.0.0",
+                ["activity.templateHash"] = "template-hash-1"
+            }
+        });
+
+    private static HmacActivityExecutionHierarchyCursorCodec CursorCodec() => new(
+        Options.Create(new ActivityExecutionHierarchyCursorOptions
+        {
+            SigningKey = "fixture-signing-key-that-is-at-least-thirty-two-bytes"
+        }));
 
     private static WorkflowExecutionState WorkflowState() => new(
         Wf,
@@ -516,7 +592,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         sequence: 1,
         payload: JsonSerializer.SerializeToElement(new { command = "resume" }),
         commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
-        envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+        envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" },
+        executionScopeId: "scope-1",
+        attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null));
 
     private static DurableTimer Timer() => new(
         TimerId: "timer-1",
@@ -604,7 +682,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             throw new NotSupportedException("The capturing store only records saves.");
 
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("The capturing store only records saves.");
+            // Immutable content-addressed stores probe a secondary unique index before their first save.
+            // The capture boundary represents an empty store, so that probe has no matches.
+            Task.FromResult<IReadOnlyList<DocumentEnvelope>>([]);
 
         public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The capturing store only records saves.");

@@ -23,7 +23,7 @@ Configure **exactly one** of:
 - `FilePath` — the one-file shorthand for the common case; or
 - `Files` — an ordered set, each tagged with an `Order`. The source reads them in ascending `Order` and
   concatenates the results, so an author can stage dependencies first: e.g. put the plain activities
-  authors depend on in `Order: 1` and the `Workflow`-kind activities that reference those versions in
+  authors depend on in `Order: 1` and provider-defined composites that reference those versions in
   `Order: 2`, and the earlier file is reconciled into the catalog before the later one.
 
 The feature validates this at registration: it throws if **both** are set, if **neither** is set, or if
@@ -47,17 +47,13 @@ identity from), and validation lives in the feature — not in a property getter
 
 ## How the descriptor is handled
 
-Each entry carries an opaque `(descriptorType, descriptor)` pair. `descriptorType` is the descriptor
-type's `FullName` (the runtime construction registry's key — e.g.
-`Elsa.Primitives.Models.ClrActivityDescriptor`, `Elsa.Workflows.Primitives.Models.WorkflowIdentity`);
-`descriptor` is arbitrary JSON. The model's `Descriptor` is typed `object`, so the serializer binds it
-to a raw `JsonElement` rather than a concrete descriptor type. The JSON source does **not** know about
-any descriptor type — it just preserves the element and the `descriptorType` string. The reconciliation
-feature's universal `CollectActivityVersions` handler then persists that opaque payload verbatim
-together with `descriptorType`; it never resolves the type or deserializes the payload. Only the
-runtime feature that owns the descriptor type materializes it, at construction time. So a
-`Elsa.Primitives.Models.ClrActivityDescriptor` descriptor in the JSON is catalogued exactly as if it
-had come from the CLR scanner — no design-side kind registry, no `Kind` validation.
+Each entry carries explicit stable `providerKey`/`providerSchemaVersion` and
+`consumerKey`/`consumerSchemaVersion` pairs plus arbitrary JSON `descriptor` payload. The model's
+`Descriptor` is typed `object`, so the serializer binds it to a raw `JsonElement` rather than a concrete
+CLR descriptor type. Reconciliation preserves the identity fields and payload verbatim; only the
+runtime consumer registered for the key/schema materializes it. For example, a JSON entry targeting
+`elsa.clr-activity` schema `1` is catalogued with the same provider-neutral runtime identity as CLR
+scanning, without persisting a CLR `FullName` as universal dispatch identity.
 
 ## Registration
 
@@ -104,7 +100,10 @@ shell.AddFeature(new JsonActivityReconciliationFeature
     "displayName": "Send Email",
     "category": "Communication",
     "description": "Sends an email to a recipient.",
-    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "providerKey": "elsa.clr-activity",
+    "providerSchemaVersion": "1",
+    "consumerKey": "elsa.clr-activity",
+    "consumerSchemaVersion": "1",
     "descriptor": {
       "typeAlias": "Acme.Activities.SendEmail"
     },

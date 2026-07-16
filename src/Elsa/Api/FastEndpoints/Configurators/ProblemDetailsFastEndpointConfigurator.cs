@@ -8,7 +8,8 @@ namespace Elsa.Api.FastEndpoints.Configurators;
 /// the shared <see cref="FastEndpointsFeatureBase"/> level so the whole API surface — including endpoints contributed by
 /// other feature packages — returns a single, consistent machine-readable error shape instead of the default plain
 /// error DTO. The endpoint base classes map their known failures onto the right status code (e.g. a not-found lookup to
-/// 404, an invalid argument to 400); this configurator only fixes the wire <em>shape</em> those statuses are rendered in.
+/// 404, an invalid argument to 400); this configurator fixes the default wire shape while domain endpoints may
+/// add stable extensions such as <c>errorCode</c>, <c>traceId</c>, and ordered safe diagnostics.
 /// </summary>
 internal sealed class ProblemDetailsFastEndpointConfigurator : IFastEndpointsConfigurator
 {

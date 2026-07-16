@@ -39,8 +39,7 @@ public sealed class WriteLineBoundInputExecutionTests
 
         var textArgument = new InputArgument<string>(new MemoryBlockReference("write-hello:Text"));
         var activity = await factory.Create(
-            ClrConstruction.DescriptorType,
-            ClrConstruction.Payload(serializer, typeof(WriteLine)),
+            ClrConstruction.Descriptor(serializer, typeof(WriteLine)),
             new Dictionary<string, InputArgument> { ["Text"] = textArgument },
             outputs: null);
 

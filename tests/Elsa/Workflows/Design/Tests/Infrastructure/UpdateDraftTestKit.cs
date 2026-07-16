@@ -83,7 +83,6 @@ internal static class UpdateDraftTestKit
             RootActivity: RootActivity(activities),
             Inputs: inputs ?? [],
             Outputs: outputs ?? [],
-            WorkflowActivityOptions: null,
             StrategyOptions: null);
 
     public static ActivityNode Node(

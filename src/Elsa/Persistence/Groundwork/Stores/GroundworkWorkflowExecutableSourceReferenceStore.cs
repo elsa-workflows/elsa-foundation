@@ -75,6 +75,14 @@ public sealed class GroundworkWorkflowExecutableSourceReferenceStore(
         return true;
     }
 
+    public async ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
+
+        var result = await DeleteDocumentAsync(sourceReferenceId, cancellationToken);
+        return result.Status == DocumentStoreWriteStatus.Deleted;
+    }
+
     public async ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         var doomed = (await ListAllAsync(cancellationToken))

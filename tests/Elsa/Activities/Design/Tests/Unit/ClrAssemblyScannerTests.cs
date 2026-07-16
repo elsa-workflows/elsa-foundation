@@ -76,8 +76,8 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
-        { typeof(HttpEndpoint), "89251E344255527968493DC31C6F5CF7207A2836B53165DE73915260E469C12A" }
+        { typeof(TriggerFixtureActivity), "45A2C289FF070C8D4DFBB6D3384979D246479B44318D885844E00D24941F2E95" },
+        { typeof(HttpEndpoint), "4B6DFC1C15098EE0492EE6FE8F3F82BA5930F2E3CA65A17A9B9C88322F296F86" }
     };
 
     [Theory]
@@ -97,7 +97,10 @@ public sealed class ClrAssemblyScannerTests
         var version = new ActivityDefinitionVersionFactory(identityGenerator, new DefaultActivityDefinitionHasher()).Create(
             definition,
             model.Version,
-            model.DescriptorType,
+            model.ProviderKey,
+            model.ProviderSchemaVersion,
+            model.ConsumerKey,
+            model.ConsumerSchemaVersion,
             descriptorPayload,
             "CLR",
             activityType.Assembly.GetName().Name!,

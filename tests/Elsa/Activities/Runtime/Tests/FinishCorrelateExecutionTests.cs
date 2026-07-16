@@ -93,8 +93,7 @@ public sealed class FinishCorrelateExecutionTests
             authoredActivityId: "authored-finish",
             activityType: typeof(Finish).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: TestDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new TestDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(TestDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new TestDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -108,8 +107,7 @@ public sealed class FinishCorrelateExecutionTests
             authoredActivityId: "authored-sequence",
             activityType: sequenceType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SequenceConstructor.SequenceDescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SequenceConstructor.SequenceConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SequenceDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -140,8 +138,7 @@ public sealed class FinishCorrelateExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: TestDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new TestDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(TestDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new TestDescriptor())),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
@@ -151,12 +148,12 @@ public sealed class FinishCorrelateExecutionTests
 
     private sealed record TestDescriptor
     {
-        public static string DescriptorTypeKey => typeof(TestDescriptor).FullName!;
+        public static string ConsumerKeyValue => typeof(TestDescriptor).FullName!;
     }
 
     private sealed class FinishConstructor : IActivityConstructor<TestDescriptor>
     {
-        public string DescriptorType => TestDescriptor.DescriptorTypeKey;
+        public string ConsumerKey => TestDescriptor.ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new TestDescriptor(), inputs, outputs, cancellationToken);
@@ -172,7 +169,7 @@ public sealed class FinishCorrelateExecutionTests
 
     private sealed class CorrelateConstructor : IActivityConstructor<TestDescriptor>
     {
-        public string DescriptorType => TestDescriptor.DescriptorTypeKey;
+        public string ConsumerKey => TestDescriptor.ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             Construct(new TestDescriptor(), inputs, outputs, cancellationToken);
@@ -190,8 +187,8 @@ public sealed class FinishCorrelateExecutionTests
 
     private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
     {
-        public static string SequenceDescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => SequenceDescriptorTypeKey;
+        public static string SequenceConsumerKey => typeof(SequenceDescriptor).FullName!;
+        public string ConsumerKey => SequenceConsumerKey;
 
         public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
             new(new Elsa.Activities.Sequence.Activities.Sequence());

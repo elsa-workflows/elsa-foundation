@@ -99,7 +99,7 @@ public sealed class DiscardDraftTests
         ctx.WorkflowDefinitionVersions.Add(new WorkflowDefinitionVersion(definitionId, "1.0.0")
         {
             Id = versionId,
-            State = new WorkflowDefinitionState([], null, [], [], null, null),
+            State = new WorkflowDefinitionState([], null, [], [], null),
         });
 
         await ctx.SaveChangesAsync();

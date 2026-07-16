@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Persistence.Groundwork.Exceptions;
+using Elsa.Persistence.Groundwork.Serialization;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -11,8 +13,8 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// <remarks>
 /// The drift test freezes the serialized shape of every runtime document kind: it compares the JSON the
 /// real store bridge writes today against the fixture for that kind's current version and fails when a
-/// shape changes without a version bump. The compatibility test proves every v1 fixture still loads
-/// through the real read path under the legacy pre-versioning schema stamp and its production upcaster chain.
+/// shape changes without a version bump. Historical fixtures either load through the real read path or,
+/// for an explicit clean break, are retained as evidence that the retired wire format is rejected.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
@@ -49,7 +51,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         var (schemaVersion, contentJson) = await GroundworkRuntimeDocumentFixtureFactory.CaptureAsync(kind);
         var currentVersion = Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(kind);
 
-        Assert.Equal(currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), schemaVersion);
+        Assert.Equal(ElsaRuntimeDocumentVersions.Stamp(currentVersion), schemaVersion);
 
         if (Regenerate)
         {
@@ -63,7 +65,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
 
     [Theory]
     [MemberData(nameof(Kinds))]
-    public async Task Committed_Fixture_Loads_Through_The_Bridge_Under_The_Legacy_Stamp(string kind)
+    public async Task Historical_V1_Fixture_Is_Loaded_Or_Explicitly_Rejected_At_A_CleanBreak(string kind)
     {
         if (Regenerate)
             return;
@@ -74,10 +76,19 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         // before per-kind versioning would carry it, then read it back through the real store bridge.
         var store = await GroundworkRuntimeDocumentFixtureFactory.SeedLegacyFixtureAsync(kind, fixtureContent);
 
-        var spot = await GroundworkRuntimeDocumentFixtureFactory.ReadSpotCheckAsync(kind, store);
+        if (ElsaRuntimeDocumentVersions.MinimumReadableFor(kind) == 1)
+        {
+            var spot = await GroundworkRuntimeDocumentFixtureFactory.ReadSpotCheckAsync(kind, store);
+            Assert.NotNull(spot);
+            Assert.Equal(GroundworkRuntimeDocumentFixtureFactory.ExpectedSpotValue(kind), spot);
+            return;
+        }
 
-        Assert.NotNull(spot);
-        Assert.Equal(GroundworkRuntimeDocumentFixtureFactory.ExpectedSpotValue(kind), spot);
+        var exception = await Assert.ThrowsAsync<GroundworkRuntimeDocumentVersionException>(async () =>
+            await GroundworkRuntimeDocumentFixtureFactory.ReadSpotCheckAsync(kind, store));
+        Assert.Contains("clean-break", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("version 1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("minimum readable version is 2", exception.Message, StringComparison.Ordinal);
     }
 
     // --- Semantic JSON comparison ---
@@ -102,9 +113,9 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
             $"(Fixtures/v{version}/{kind}.json).\n\n" +
             "A state record shape changed. To evolve a runtime document shape you must, in the same change:\n" +
             "  1. bump that kind's version in ElsaRuntimeDocumentVersions,\n" +
-            "  2. register an IGroundworkRuntimeDocumentUpcaster for the previous version,\n" +
-            "  3. add a new golden fixture for the new version (run with GROUNDWORK_FIXTURE_REGEN=1), and\n" +
-            "  4. keep the old fixture so historical documents still load.\n\n" +
+            "  2. register an IGroundworkRuntimeDocumentUpcaster for each supported historical step, or explicitly advance the clean-break floor,\n" +
+            "  3. add a golden fixture for the new version (run with GROUNDWORK_FIXTURE_REGEN=1), and\n" +
+            "  4. retain historical fixtures as load or rejection evidence.\n\n" +
             $"Expected (committed fixture, canonical):\n{expectedCanonical}\n\n" +
             $"Actual (written by the bridge today, canonical):\n{actualCanonical}");
     }

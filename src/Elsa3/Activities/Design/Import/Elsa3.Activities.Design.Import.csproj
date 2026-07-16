@@ -7,16 +7,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Persistence/**/*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Models\Elsa3.Models.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
   </ItemGroup>
 
 </Project>

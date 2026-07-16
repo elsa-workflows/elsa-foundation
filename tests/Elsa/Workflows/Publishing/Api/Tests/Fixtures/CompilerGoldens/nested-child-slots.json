@@ -2,8 +2,8 @@
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "identity": {
-    "artifactHash": "sha256:c31df3b981172c5f741d82020a383854f8047b8e7eb3561eae248fb6bf4dfb27",
-    "artifactId": "artifact-c31df3b98117",
+    "artifactHash": "sha256:a082d53d9caf1fef6a34489d135cae9a9fa837c7bcd8e40633f7a03be71c2d07",
+    "artifactId": "artifact-a082d53d9caf",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -21,10 +21,13 @@
             "activityTypeVersion": "1.0.0",
             "authoredActivityId": "write-one",
             "childSlots": [],
-            "descriptorPayload": {
-              "TypeAlias": "Object"
+            "descriptor": {
+              "consumerKey": "elsa.clr-activity",
+              "payload": {
+                "TypeAlias": "Object"
+              },
+              "schemaVersion": "1"
             },
-            "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
             "executableNodeId": "write-one",
             "inputBindings": [
               {
@@ -62,10 +65,13 @@
             "activityTypeVersion": "1.0.0",
             "authoredActivityId": "write-two",
             "childSlots": [],
-            "descriptorPayload": {
-              "TypeAlias": "Object"
+            "descriptor": {
+              "consumerKey": "elsa.clr-activity",
+              "payload": {
+                "TypeAlias": "Object"
+              },
+              "schemaVersion": "1"
             },
-            "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
             "executableNodeId": "write-two",
             "inputBindings": [
               {
@@ -102,10 +108,13 @@
         "name": "Sequence.Activities"
       }
     ],
-    "descriptorPayload": {
-      "TypeAlias": "Object"
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Object"
+      },
+      "schemaVersion": "1"
     },
-    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
     "executableNodeId": "sequence",
     "inputBindings": [],
     "metadata": [

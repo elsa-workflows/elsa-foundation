@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -116,6 +117,58 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.Null(await _executableStore.FindAsync("artifact-1"));
     }
 
+    [Fact]
+    public async Task Sweep_RetainsReusableActivityTemplateUntilItsFinalExecutionRootIsRemoved()
+    {
+        var templates = new InMemoryExecutableActivityTemplateStore();
+        var template = new ExecutableActivityTemplate(
+            "template-1", "hash-template-1", Executable("unused").RootActivity,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], "test/1",
+            new Dictionary<string, string>(), _now);
+        await templates.SaveAsync(template);
+        var baseExecutable = Executable("artifact-1");
+        var executable = new WorkflowExecutable(
+            baseExecutable.Identity,
+            baseExecutable.RootActivity,
+            baseExecutable.ResumeTargets,
+            baseExecutable.CreatedAt,
+            new Dictionary<string, string> { ["activity.templateHash"] = template.TemplateHash });
+        await _executableStore.SaveAsync(executable);
+        await _sourceReferenceStore.SaveAsync(Reference("wrapper-ref", executable.Identity.ArtifactId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _sourceReferenceStore.SaveAsync(Reference("template-ref", template.TemplateId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-1", executable.Identity.ArtifactId, WorkflowExecutionStatus.Running));
+        var collector = new WorkflowExecutableReferenceGarbageCollector(
+            _executableStore,
+            _sourceReferenceStore,
+            templates,
+            _workflowExecutionStateStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
+            TimeProvider.System,
+            NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+
+        var liveSweep = await collector.SweepAsync(_now);
+
+        Assert.Equal(0, liveSweep.DeletedReferenceCount);
+        Assert.NotNull(await _executableStore.FindAsync(executable.Identity.ArtifactId));
+        Assert.NotNull(await templates.FindAsync(template.TemplateId));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("wrapper-ref"));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("template-ref"));
+
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-1", executable.Identity.ArtifactId, WorkflowExecutionStatus.Completed));
+        var terminalSweep = await collector.SweepAsync(_now);
+        Assert.Equal(0, terminalSweep.DeletedArtifactCount);
+        Assert.Equal(0, terminalSweep.DeletedActivityTemplateCount);
+
+        Assert.True(await _workflowExecutionStateStore.DeleteAsync("execution-1"));
+        var collectedSweep = await collector.SweepAsync(_now);
+
+        Assert.Equal(2, collectedSweep.DeletedReferenceCount);
+        Assert.Equal(1, collectedSweep.DeletedArtifactCount);
+        Assert.Equal(1, collectedSweep.DeletedActivityTemplateCount);
+        Assert.Null(await _sourceReferenceStore.FindAsync("wrapper-ref"));
+        Assert.Null(await _sourceReferenceStore.FindAsync("template-ref"));
+    }
+
     private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector() =>
         new(
             _executableStore,
@@ -170,8 +223,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
                 authoredActivityId: "authored-root",
                 activityType: "test/activity",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "test",
-                descriptorPayload: JsonSerializer.SerializeToElement(new { type = "test" }),
+                descriptor: new RuntimeActivityDescriptor(
+                    "test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { type = "test" })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),

@@ -2,8 +2,8 @@
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "identity": {
-    "artifactHash": "sha256:947fe99c3c6e0132cc86cffa05af4f3d543f42224322a4703393ee7aefe8fd18",
-    "artifactId": "artifact-947fe99c3c6e",
+    "artifactHash": "sha256:75565fdff1eb6489c2da9cbd39e4817f6953ec37b2d422e243843a27878c30ed",
+    "artifactId": "artifact-75565fdff1eb",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -14,10 +14,13 @@
     "activityTypeVersion": "1.0.0",
     "authoredActivityId": "write-one",
     "childSlots": [],
-    "descriptorPayload": {
-      "TypeAlias": "Object"
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Object"
+      },
+      "schemaVersion": "1"
     },
-    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
     "executableNodeId": "write-one",
     "inputBindings": [
       {

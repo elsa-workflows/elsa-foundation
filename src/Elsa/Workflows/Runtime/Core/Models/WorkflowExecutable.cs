@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -15,7 +16,9 @@ public sealed class WorkflowExecutable
         ExecutableNode rootActivity,
         IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
         DateTimeOffset createdAt,
-        IReadOnlyDictionary<string, string> compatibilityMetadata)
+        IReadOnlyDictionary<string, string> compatibilityMetadata,
+        IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements = null,
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
@@ -31,6 +34,20 @@ public sealed class WorkflowExecutable
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
         CreatedAt = createdAt;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        RuntimeRequirements = Array.AsReadOnly((runtimeRequirements ?? [])
+            .Concat(nodeSnapshot.Select(node => new RuntimeRequirement(
+                node.Descriptor.ConsumerKey,
+                node.Descriptor.SchemaVersion)))
+            .Distinct()
+            .OrderBy(item => item.ConsumerKey, StringComparer.Ordinal)
+            .ThenBy(item => item.SchemaVersion, StringComparer.Ordinal)
+            .ToArray());
+        StorageDriverRequirements = Array.AsReadOnly((storageDriverRequirements ?? [])
+            .Concat(nodeSnapshot.SelectMany(node => node.OutputCaptures.Values)
+                .Select(capture => new RuntimeStorageDriverRequirement(capture.StorageDriverKey)))
+            .Distinct()
+            .OrderBy(item => item.DriverKey, StringComparer.Ordinal)
+            .ToArray());
     }
 
     public WorkflowExecutableIdentity Identity { get; }
@@ -40,6 +57,8 @@ public sealed class WorkflowExecutable
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
     public DateTimeOffset CreatedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
+    public IReadOnlyCollection<RuntimeRequirement> RuntimeRequirements { get; }
+    public IReadOnlyCollection<RuntimeStorageDriverRequirement> StorageDriverRequirements { get; }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
     {

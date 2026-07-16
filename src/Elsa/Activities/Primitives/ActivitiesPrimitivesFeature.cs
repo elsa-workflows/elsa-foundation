@@ -11,8 +11,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Activities.Primitives;
 
 /// <summary>
-/// Primitive activities + the CLR activity constructor (descriptor type
-/// <c>Elsa.Primitives.Models.ClrActivityDescriptor</c>). A runtime feature — references no
+/// Primitive activities + the CLR activity constructor (Runtime consumer
+/// <c>elsa.clr-activity</c>, schema 1). A runtime feature — references no
 /// <c>Elsa.*.Design.*</c> project (Elsa §E2.2). Contributes its constructor to the runtime
 /// constructor registry via DI; the runtime feature's startup task aggregates it.
 /// </summary>

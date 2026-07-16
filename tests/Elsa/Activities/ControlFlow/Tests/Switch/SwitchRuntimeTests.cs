@@ -106,8 +106,7 @@ public sealed class SwitchRuntimeTests
             authoredActivityId: "authored-switch",
             activityType: typeof(SwitchActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: SwitchActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SwitchDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(SwitchActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SwitchDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Value"] = new RuntimeInputBinding(
@@ -133,8 +132,8 @@ public sealed class SwitchRuntimeTests
 
     private sealed class SwitchActivityConstructor : IActivityConstructor<SwitchDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(SwitchDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(SwitchDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

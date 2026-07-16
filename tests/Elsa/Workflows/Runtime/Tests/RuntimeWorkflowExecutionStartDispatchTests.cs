@@ -571,8 +571,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "test" }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

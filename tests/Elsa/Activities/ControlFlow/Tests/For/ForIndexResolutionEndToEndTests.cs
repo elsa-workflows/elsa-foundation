@@ -75,8 +75,7 @@ public sealed class ForIndexResolutionEndToEndTests
             authoredActivityId: "authored-for",
             activityType: typeof(ForActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ForActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ForDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(ForActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Start"] = IntLiteral("Start", start),
@@ -100,8 +99,7 @@ public sealed class ForIndexResolutionEndToEndTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: IndexCaptureActivity.ActivityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: IndexCaptureActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new IndexCaptureDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(IndexCaptureActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new IndexCaptureDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 // Bind Value to a Variable expression referencing the loop's `index` declared by node-for.
@@ -130,8 +128,8 @@ public sealed class ForIndexResolutionEndToEndTests
 
     private sealed class ForActivityConstructor : IActivityConstructor<ForDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(ForDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(ForDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

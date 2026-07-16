@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
@@ -62,7 +63,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         await DraftSnapshotHandler(draftDispatcher).Handle(new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: "snapshot-1",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)), CancellationToken.None);
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null)), CancellationToken.None);
 
         var versionRequest = Assert.Single(versionDispatcher.Requests);
         var draftRequest = Assert.Single(draftDispatcher.Requests);
@@ -90,7 +91,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var view = await handler.Handle(new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: "snapshot-1",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)), CancellationToken.None);
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null)), CancellationToken.None);
 
         Assert.Equal("DispatchAccepted", view.Status);
         Assert.Equal("Accepted", view.CommandDispatchStatus);
@@ -123,7 +124,6 @@ public sealed class WorkflowTestRunRequestHandlerTests
                 false)),
             [],
             [],
-            null,
             null);
 
         var view = await DraftSnapshotHandler().Handle(new StartWorkflowDraftTestRun(
@@ -166,7 +166,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var view = await handler.Handle(new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: "snapshot-1",
-            State: new WorkflowDefinitionState([], RootActivity: null, [], [], null, null)), CancellationToken.None);
+            State: new WorkflowDefinitionState([], RootActivity: null, [], [], null)), CancellationToken.None);
 
         Assert.Equal("Rejected", view.Status);
         Assert.Equal("definition-1", view.DefinitionId);
@@ -185,7 +185,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var exception = Assert.Throws<ArgumentException>(() => new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: " ",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)));
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null)));
 
         Assert.Equal("SnapshotId", exception.ParamName);
     }
@@ -306,7 +306,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             .Handle(new StartWorkflowDraftTestRun(
                 DefinitionId: "definition-1",
                 SnapshotId: "snapshot-1",
-                State: new WorkflowDefinitionState([], identicalRoot, [], [], null, null)), CancellationToken.None);
+                State: new WorkflowDefinitionState([], identicalRoot, [], [], null)), CancellationToken.None);
 
         Assert.NotNull(versionView.ArtifactId);
         Assert.Equal(versionView.ArtifactId, draftView.ArtifactId);
@@ -437,7 +437,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             DefinitionId: "definition-1",
             DefinitionVersionId: definitionVersionId,
             ArtifactVersion: "draft",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null),
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null),
             RequestedAt: expiresAt?.AddMinutes(-30) ?? DateTimeOffset.UtcNow,
             ExpiresAt: expiresAt);
 
@@ -494,7 +494,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
@@ -513,7 +513,10 @@ public sealed class WorkflowTestRunRequestHandlerTests
                 ActivityTypeKey = "Test.WriteLine",
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]
         };

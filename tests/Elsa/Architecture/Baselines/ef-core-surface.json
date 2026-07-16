@@ -66,7 +66,6 @@
     ],
     "SharedBuildPackageReferences": [],
     "DirectEfProjectReferences": [
-      "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
@@ -105,8 +104,6 @@
       "tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj -\u003E src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj"
     ],
     "TransitiveEfProjectConsumers": [
-      "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
-      "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj",
@@ -147,8 +144,6 @@
       "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj -\u003E src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj",
       "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj -\u003E src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj",
       "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj -\u003E src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
-      "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
-      "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj",
       "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj",
       "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj",
       "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj",

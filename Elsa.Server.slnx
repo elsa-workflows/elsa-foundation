@@ -23,9 +23,9 @@
     <Project Path="src/Elsa/Activities/Scripting/Elsa.Activities.Scripting.csproj" />
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Activities/Composition/">
-    <Project Path="src/Elsa/Activities/Composition/Design/Elsa.Activities.Composition.Design.csproj" />
-    <Project Path="src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj" />
+  <Folder Name="/src/Elsa/Activities/Graph/">
+    <Project Path="src/Elsa/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
+    <Project Path="src/Elsa/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/">
     <Project Path="src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
@@ -262,8 +262,11 @@
     <Project Path="src/Elsa3/Models/Elsa3.Models.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/Activities/" />
-  <Folder Name="/src/Elsa3/Activities/Design/">
+  <Folder Name="/src/Elsa3/Activities/Design/Import/">
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa3/Activities/Design/Import/Persistence/">
+    <Project Path="src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/Mapping/" />
   <Folder Name="/tests/" />
@@ -271,14 +274,14 @@
   <Folder Name="/tests/Elsa/Activities/">
     <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Activities/Composition/">
-    <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
-  </Folder>
   <Folder Name="/tests/Elsa/Activities/ControlFlow/">
     <Project Path="tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Flowchart/">
     <Project Path="tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/Graph/">
+    <Project Path="tests/Elsa/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Sequence/">
     <Project Path="tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj" />

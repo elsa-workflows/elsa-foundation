@@ -21,7 +21,9 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
             WorkflowExecutionCommandKind.StartActivity or
             WorkflowExecutionCommandKind.InvokeActivity or
             WorkflowExecutionCommandKind.ResumeBookmark or
-            WorkflowExecutionCommandKind.CreateBookmark => RuntimePipelineKind.Activity,
+            WorkflowExecutionCommandKind.CreateBookmark or
+            WorkflowExecutionCommandKind.CancelActivityScope or
+            WorkflowExecutionCommandKind.RetryActivityBoundary => RuntimePipelineKind.Activity,
 
             // CompleteActivity is claimed by two handlers; the parent-completion evaluation step is the activity one.
             WorkflowExecutionCommandKind.CompleteActivity => SelectCompleteActivityPipeline(workItem),

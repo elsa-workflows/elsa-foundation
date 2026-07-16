@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
+using System.Text.Json.Serialization;
+using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -8,13 +9,13 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class ExecutableNode
 {
+    [JsonConstructor]
     public ExecutableNode(
         string executableNodeId,
         string authoredActivityId,
         string activityType,
         string activityTypeVersion,
-        string descriptorType,
-        JsonElement descriptorPayload,
+        RuntimeActivityDescriptor descriptor,
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
         IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
         IReadOnlyDictionary<string, string> metadata,
@@ -25,7 +26,7 @@ public sealed class ExecutableNode
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityType);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeVersion);
-        ArgumentException.ThrowIfNullOrWhiteSpace(descriptorType);
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(inputBindings);
         ArgumentNullException.ThrowIfNull(outputCaptures);
         ArgumentNullException.ThrowIfNull(metadata);
@@ -49,8 +50,7 @@ public sealed class ExecutableNode
         AuthoredActivityId = authoredActivityId;
         ActivityType = activityType;
         ActivityTypeVersion = activityTypeVersion;
-        DescriptorType = descriptorType;
-        DescriptorPayload = descriptorPayload.Clone();
+        Descriptor = descriptor;
         InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindingSnapshot);
         OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
@@ -62,8 +62,7 @@ public sealed class ExecutableNode
     public string AuthoredActivityId { get; }
     public string ActivityType { get; }
     public string ActivityTypeVersion { get; }
-    public string DescriptorType { get; }
-    public JsonElement DescriptorPayload { get; }
+    public RuntimeActivityDescriptor Descriptor { get; }
     public IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings { get; }
     public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }

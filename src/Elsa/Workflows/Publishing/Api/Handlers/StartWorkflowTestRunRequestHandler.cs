@@ -32,7 +32,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
     TimeProvider timeProvider,
     IWorkflowDefinitionVersionStore? workflowVersionStore = null,
-    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null)
+    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null,
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
 {
@@ -277,6 +278,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             Scope: WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt: expiresAt,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
             AuthoredInputs: authoredInputs);
     }
 

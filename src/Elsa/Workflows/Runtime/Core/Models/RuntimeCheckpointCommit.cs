@@ -34,10 +34,12 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
         IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> operational,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null,
-        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null)
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null,
+        IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups = null)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
+        activityScopeCleanups ??= [];
         ValidateStateIdMatches(activityExecutions, state => state.Execution.ActivityExecutionId, "Activity execution state change StateId must match ActivityExecutionState.Execution.ActivityExecutionId.", nameof(activityExecutions));
         ValidateStateIdMatches(bookmarks, state => state.BookmarkId, "Bookmark state change StateId must match BookmarkState.BookmarkId.", nameof(bookmarks));
         ValidateStateIdMatches(activityExecutionInspections, state => state.ActivityExecutionId, "Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", nameof(activityExecutionInspections));
@@ -55,6 +57,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         Incidents = incidents;
         Operational = operational;
         PostCommitOutbox = postCommitOutbox;
+        ActivityScopeCleanups = activityScopeCleanups;
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -65,6 +68,7 @@ public sealed class RuntimeCheckpointStateChangeSet
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValues { get; }
     public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents { get; }
     public IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> Operational { get; }
+    public IReadOnlyCollection<ActivityScopeCleanupRequest> ActivityScopeCleanups { get; }
 
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
@@ -86,7 +90,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             Incidents,
             Operational,
             ActivityExecutionInspections,
-            postCommitOutbox);
+            postCommitOutbox,
+            ActivityScopeCleanups);
 
     private static void ValidateStateIdMatches<TState>(
         IReadOnlyCollection<RuntimeStateChange<TState>> changes,

@@ -26,6 +26,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IIncidentStateStore? _incidentStateStore;
     private readonly IExecutionLivenessStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
+    private readonly IActivityScopeCleanupStore? _activityScopeCleanupStore;
+    private readonly IActivityExecutionHierarchyWriter? _activityExecutionHierarchyWriter;
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
     private readonly TimeProvider _timeProvider;
 
@@ -46,7 +48,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
         IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
         InMemoryRuntimeCheckpointStoreState? state = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IActivityScopeCleanupStore? activityScopeCleanupStore = null,
+        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter = null)
     {
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
         _workflowExecutionStateStore = workflowExecutionStateStore;
@@ -57,8 +61,38 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _incidentStateStore = incidentStateStore;
         _operationalStateStore = operationalStateStore;
         _schedulerStateStore = schedulerStateStore;
+        _activityScopeCleanupStore = activityScopeCleanupStore;
+        _activityExecutionHierarchyWriter = activityExecutionHierarchyWriter;
         _rootWriteLeaseManager = rootWriteLeaseManager;
         _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore,
+        IIncidentStateStore? incidentStateStore,
+        IExecutionLivenessStateStore? operationalStateStore,
+        ISchedulerStateStore? schedulerStateStore,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
+        IActivityScopeCleanupStore? activityScopeCleanupStore,
+        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter)
+        : this(
+            workflowExecutionStateStore,
+            activityExecutionStateStore,
+            bookmarkStateStore,
+            durableValueStateStore,
+            incidentStateStore,
+            operationalStateStore,
+            schedulerStateStore,
+            activityExecutionInspectionWriter,
+            rootWriteLeaseManager: null,
+            state: null,
+            timeProvider: null,
+            activityScopeCleanupStore: activityScopeCleanupStore,
+            activityExecutionHierarchyWriter: activityExecutionHierarchyWriter)
+    {
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -127,10 +161,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
             await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
+            await ApplyActivityExecutionHierarchyChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
             await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
             await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
             await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
             await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+            await ApplyActivityScopeCleanupsAsync(commit.StateChanges.ActivityScopeCleanups, ct);
 
             try
             {
@@ -404,6 +440,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    private async ValueTask ApplyActivityExecutionHierarchyChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (_activityExecutionHierarchyWriter is null)
+            return;
+        foreach (var stateChange in stateChanges)
+        {
+            var projection = stateChange.State;
+            if (!string.IsNullOrWhiteSpace(projection.ExecutionScopeId ?? projection.Provenance.ExecutionScopeId))
+                await _activityExecutionHierarchyWriter.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection), cancellationToken);
+        }
+    }
+
     private async ValueTask ApplyBookmarkStateChangesAsync(
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> stateChanges,
         CancellationToken cancellationToken)
@@ -505,6 +555,21 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             throw new InvalidOperationException($"Unexpected operational state change operation '{stateChange.Operation}' reached apply phase.");
         }
+    }
+
+    private async ValueTask ApplyActivityScopeCleanupsAsync(
+        IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups,
+        CancellationToken cancellationToken)
+    {
+        if (_activityScopeCleanupStore is null)
+        {
+            if (cleanups.Count != 0)
+                throw new InvalidOperationException("The checkpoint contains activity-scope cleanup but no cleanup store is configured.");
+            return;
+        }
+
+        foreach (var cleanup in cleanups)
+            await _activityScopeCleanupStore.ApplyAsync(cleanup, cancellationToken);
     }
 
     private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)

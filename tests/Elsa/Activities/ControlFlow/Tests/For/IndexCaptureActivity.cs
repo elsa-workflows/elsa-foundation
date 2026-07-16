@@ -38,8 +38,8 @@ public sealed record IndexCaptureDescriptor;
 /// <summary>Constructs <see cref="IndexCaptureActivity"/> instances, wiring the resolved <c>Value</c> input.</summary>
 public sealed class IndexCaptureActivityConstructor : IActivityConstructor<IndexCaptureDescriptor>
 {
-    public static string DescriptorTypeKey => typeof(IndexCaptureDescriptor).FullName!;
-    public string DescriptorType => DescriptorTypeKey;
+    public static string ConsumerKeyValue => typeof(IndexCaptureDescriptor).FullName!;
+    public string ConsumerKey => ConsumerKeyValue;
 
     public ValueTask<IActivity> Construct(
         JsonElement payload,

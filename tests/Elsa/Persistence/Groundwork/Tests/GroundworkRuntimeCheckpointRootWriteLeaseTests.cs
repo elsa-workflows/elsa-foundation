@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -100,8 +101,10 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
                 authoredActivityId: "activity-root",
                 activityType: "Test.Root",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "Test",
-                descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                descriptor: new RuntimeActivityDescriptor(
+                    "Test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),

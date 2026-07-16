@@ -29,13 +29,21 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
 
     public string DefinitionId { get; init; } = definitionId;
 
+    public string ProviderKey { get; set; } = null!;
+
+    public string ProviderSchemaVersion { get; set; } = null!;
+
+    public string ConsumerKey { get; set; } = null!;
+
+    public string ConsumerSchemaVersion { get; set; } = null!;
+
     /// <summary>
-    /// The descriptor type's <c>FullName</c> — the runtime construction registry's lookup key.
-    /// Set by the reconciler (or the design API) from the descriptor it produced. The design domain
-    /// never resolves it to a CLR type. Write-once — immutability enforced via
-    /// <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
+    /// Compile-only compatibility property for the retired EF schema. It is deliberately absent from
+    /// every domain/read contract and is never populated by current reconciliation or publishing.
+    /// Groundwork is the supported persistence path for stable provider/consumer identities.
     /// </summary>
-    public string DescriptorType { get; set; } = null!;
+    [Obsolete("Legacy EF column only. Do not use for Runtime dispatch.")]
+    public string DescriptorType { get; set; } = string.Empty;
 
     /// <summary>
     /// Serialized JSON form of <see cref="DescriptorPayload"/>. A real string property on the entity
@@ -106,7 +114,10 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
         new(source.Version, definitionId ?? source.DefinitionId, executionType: source.ExecutionType)
         {
             Id = source.Id,
-            DescriptorType = source.DescriptorType,
+            ProviderKey = source.ProviderKey,
+            ProviderSchemaVersion = source.ProviderSchemaVersion,
+            ConsumerKey = source.ConsumerKey,
+            ConsumerSchemaVersion = source.ConsumerSchemaVersion,
             DescriptorPayload = source.DescriptorPayload,
             Inputs = source.Inputs,
             Outputs = source.Outputs,

@@ -16,7 +16,7 @@ namespace Elsa.Activities.Runtime;
 
 /// <summary>
 /// Runtime-side feature for activity construction. Registers the dispatch factory, the
-/// descriptor-type → constructor registry, and the Registry + StartUp Task wiring that populates
+/// consumer/schema → constructor registry, and the Registry + StartUp Task wiring that populates
 /// the registry from every contributed <see cref="IActivityConstructor"/>. Carries no Design
 /// dependency (Elsa §E2.2).
 /// </summary>
@@ -26,7 +26,7 @@ namespace Elsa.Activities.Runtime;
 [ShellFeature(
     name: "ActivitiesRuntime",
     DisplayName = "Activities Runtime",
-    Description = "Activity construction factory and descriptor-type-driven constructor registry."
+    Description = "Activity construction factory and stable consumer/schema constructor registry."
 )]
 public class ActivitiesRuntimeFeature : IShellFeature
 {

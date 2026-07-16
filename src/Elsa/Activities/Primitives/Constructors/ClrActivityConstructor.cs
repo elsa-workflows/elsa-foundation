@@ -34,28 +34,32 @@ public sealed class ClrActivityConstructor(
     ActivityArgumentBinder binder,
     IPayloadSerializer payloadSerializer,
     IWellKnownTypeRegistry typeRegistry)
-    : IActivityConstructor<ClrActivityDescriptor>
+    : IActivityConstructor
 {
-    public string DescriptorType => typeof(ClrActivityDescriptor).FullName!;
+    public string ConsumerKey => WellKnownRuntimeActivityConsumers.ClrActivity;
+    public IReadOnlySet<string> SupportedSchemaVersions { get; } = new HashSet<string>(StringComparer.Ordinal) { RuntimeActivityDescriptor.InitialSchemaVersion };
 
-    ValueTask<IActivity> IActivityConstructor.Construct(
-        JsonElement payload,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+    public ValueTask<IActivity> ConstructAsync(
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, InputArgument> inputs,
+        IReadOnlyDictionary<string, OutputArgument> outputs,
         CancellationToken cancellationToken)
-        => Construct(payloadSerializer.Deserialize<ClrActivityDescriptor>(payload), inputs, outputs, cancellationToken);
+        => Construct(payloadSerializer.Deserialize<ClrActivityDescriptor>(descriptor.Payload), inputs, outputs, cancellationToken);
 
     public ValueTask<IActivity> Construct(
         ClrActivityDescriptor descriptor,
-        IDictionary<string, InputArgument>? inputs,
-        IDictionary<string, OutputArgument>? outputs,
+        IReadOnlyDictionary<string, InputArgument>? inputs,
+        IReadOnlyDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken)
     {
         if (!typeRegistry.TryGetTypeOrDefault(descriptor.TypeAlias, out var type))
             throw new UnknownActivityTypeException(descriptor.TypeAlias);
 
         var activity = (IActivity)ActivatorUtilities.CreateInstance(serviceProvider, type);
-        binder.Bind(activity, inputs, outputs);
+        binder.Bind(
+            activity,
+            inputs as IDictionary<string, InputArgument> ?? inputs?.ToDictionary(),
+            outputs as IDictionary<string, OutputArgument> ?? outputs?.ToDictionary());
         return new(activity);
     }
 }

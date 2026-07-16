@@ -17,6 +17,7 @@
       "resume-1": {
         "executableNodeId": "node-child",
         "handlerKey": "Bookmark",
+        "localResumeTargetId": "local-resume-1",
         "metadata": {
           "stimulus": "Http"
         },
@@ -35,10 +36,13 @@
               "activityTypeVersion": "1.0.0",
               "authoredActivityId": "authored-child",
               "childSlots": [],
-              "descriptorPayload": {
-                "kind": "Send"
+              "descriptor": {
+                "consumerKey": "Elsa.Activities.SendEmailDescriptor",
+                "payload": {
+                  "kind": "Send"
+                },
+                "schemaVersion": "1"
               },
-              "descriptorType": "Elsa.Activities.SendEmailDescriptor",
               "executableNodeId": "child",
               "inputBindings": {
                 "to": {
@@ -66,16 +70,30 @@
           "name": "Body"
         }
       ],
-      "descriptorPayload": {
-        "kind": "Send"
+      "descriptor": {
+        "consumerKey": "Elsa.Activities.SequenceDescriptor",
+        "payload": {
+          "kind": "Send"
+        },
+        "schemaVersion": "1"
       },
-      "descriptorType": "Elsa.Activities.SequenceDescriptor",
       "executableNodeId": "root",
       "inputBindings": {},
       "metadata": {},
       "outputCaptures": {},
       "structure": null
-    }
+    },
+    "runtimeRequirements": [
+      {
+        "consumerKey": "Elsa.Activities.SendEmailDescriptor",
+        "schemaVersion": "1"
+      },
+      {
+        "consumerKey": "Elsa.Activities.SequenceDescriptor",
+        "schemaVersion": "1"
+      }
+    ],
+    "storageDriverRequirements": []
   },
   "rootWriteLeases": {}
 }

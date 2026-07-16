@@ -174,7 +174,7 @@ public class UnifiedGroundworkHostTests
         {
             Id = "workflow-draft-1",
             WorkflowDefinitionId = workflowDefinition.Id,
-            State = new WorkflowDefinitionState([], null, [], [], null, null),
+            State = WorkflowDefinitionState.Empty,
         };
         var activityDefinition = new ActivityDefinition
         {
@@ -398,7 +398,7 @@ public class UnifiedGroundworkHostTests
         {
             Id = "draft-write",
             WorkflowDefinitionId = "wf-write",
-            State = new WorkflowDefinitionState([], null, [], [], null, null),
+            State = new WorkflowDefinitionState([], null, [], [], null),
         };
 
         // Write through the neutral command; it is backed by the single host-selected Groundwork store.

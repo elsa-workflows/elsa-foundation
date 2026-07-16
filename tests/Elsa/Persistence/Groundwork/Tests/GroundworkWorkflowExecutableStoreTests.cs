@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -48,13 +49,17 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal("customerEmail", binding.DurableValue!.ValueId);
 
         // Raw descriptor payload survives as JSON.
-        Assert.Equal("Send", found.RootActivity.DescriptorPayload.GetProperty("kind").GetString());
+        Assert.Equal("Send", found.RootActivity.Descriptor.Payload.GetProperty("kind").GetString());
 
         // Resume targets and recomputed projections survive.
         Assert.Equal("node-child", found.ResumeTargets["resume-1"].ExecutableNodeId);
         Assert.Equal(2, found.Nodes.Count);
         Assert.True(found.NodesById.ContainsKey("child"));
         Assert.Equal("slice-1", found.CompatibilityMetadata["slice"]);
+        Assert.Equal(
+            ["Elsa.Activities.SendEmailDescriptor", "Elsa.Activities.SequenceDescriptor"],
+            found.RuntimeRequirements.Select(x => x.ConsumerKey).Order(StringComparer.Ordinal));
+        Assert.Equal("sample.external", Assert.Single(found.StorageDriverRequirements).DriverKey);
 
         var all = await store.ListAsync();
         Assert.Equal(2, all.Count);
@@ -400,8 +405,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             authoredActivityId: "authored-child",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SendEmailDescriptor",
-            descriptorPayload: Json("""{ "kind": "Send" }"""),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SendEmailDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
@@ -417,8 +421,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             authoredActivityId: "authored-root",
             activityType: "Elsa.Sequence",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SequenceDescriptor",
-            descriptorPayload: Json("""{ "kind": "Send" }"""),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SequenceDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -437,7 +440,8 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" })
             },
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
+            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
+            storageDriverRequirements: [new RuntimeStorageDriverRequirement("sample.external")]);
     }
 
     private static WorkflowExecutableSourceReference Reference(

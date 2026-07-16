@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -216,14 +217,16 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
 
-        var list = await new ListWorkflowInstancesRequestHandler(workflowStore, activityStore, incidentStore)
+        var authorization = new AllowAllActivityExecutionInspectionAuthorizationContext();
+        var list = await new ListWorkflowInstancesRequestHandler(workflowStore, activityStore, incidentStore, authorization)
             .Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
         var detail = await new GetWorkflowInstanceRequestHandler(
                 workflowStore,
                 inspectionStore,
                 incidentStore,
                 durableValueStore,
-                new DefaultRuntimePayloadCapturePolicy())
+                new DefaultRuntimePayloadCapturePolicy(),
+                authorization)
             .Handle(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
         var summary = Assert.Single(list.Items);
         Assert.Equal("version-2", summary.DefinitionVersionId);
@@ -451,8 +454,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
             outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
@@ -473,8 +475,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

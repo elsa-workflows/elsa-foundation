@@ -88,8 +88,7 @@ public sealed class IfRuntimeTests
             authoredActivityId: "authored-if",
             activityType: typeof(IfActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: IfActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new IfDescriptor()),
+            descriptor: new RuntimeActivityDescriptor(IfActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new IfDescriptor())),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Condition"] = new RuntimeInputBinding(
@@ -115,8 +114,8 @@ public sealed class IfRuntimeTests
 
     private sealed class IfActivityConstructor : IActivityConstructor<IfDescriptor>
     {
-        public static string DescriptorTypeKey => typeof(IfDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
+        public static string ConsumerKeyValue => typeof(IfDescriptor).FullName!;
+        public string ConsumerKey => ConsumerKeyValue;
 
         public ValueTask<IActivity> Construct(
             JsonElement payload,

@@ -30,7 +30,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
             Id = "draft-1",
             WorkflowDefinitionId = "def-1",
             TenantId = "tenant-b",
-            State = new WorkflowDefinitionState([], null, [], [], null, null)
+            State = WorkflowDefinitionState.Empty
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -53,7 +53,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         {
             Id = "version-1",
             TenantId = "tenant-b",
-            State = new WorkflowDefinitionState([], null, [], [], null, null)
+            State = WorkflowDefinitionState.Empty
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => command.Add(version));
@@ -77,7 +77,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         {
             Id = "draft-1",
             WorkflowDefinitionId = "def-1",
-            State = new WorkflowDefinitionState([], null, [], [], null, null),
+            State = new WorkflowDefinitionState([], null, [], [], null),
         };
 
         var layout = new[] { new DesignMetadataRecord("node-1", 10, 20, 100, 80) };

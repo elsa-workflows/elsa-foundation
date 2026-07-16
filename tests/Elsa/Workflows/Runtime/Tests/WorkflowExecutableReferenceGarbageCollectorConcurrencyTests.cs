@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -235,8 +236,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
                 authoredActivityId: "authored-root",
                 activityType: "test/activity",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "test",
-                descriptorPayload: JsonSerializer.SerializeToElement(new { type = "test" }),
+                descriptor: new RuntimeActivityDescriptor(
+                    "test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { type = "test" })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),

@@ -7,17 +7,19 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 ## Summary
 
 - Domains in domain map: 24
-- Source extension catalogs discovered: 57
-- Source extension catalogs indexed from root: 57
-- Discovered source catalogs not linked from root index: 0
+- Source extension catalogs discovered: 60
+- Source extension catalogs indexed from root: 58
+- Discovered source catalogs not linked from root index: 2
 - Root-indexed catalogs missing on disk: 0
 - Runtime-to-design direct reference signals: 1
-- Design-to-runtime direct reference signals: 1
-- Bridge-like direct reference shapes: 8
+- Design-to-runtime direct reference signals: 3
+- Bridge-like direct reference shapes: 15
 
 ## Reference Signals
 
 - Elsa.Activities.Design.Reconciliation.Clr -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Activities.Graph.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Activities.Graph.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Workflows.Runtime.JavaScript -> Elsa.Workflows.Design.Core (runtime-to-design): review signal.
 
 ## Next Map Work

@@ -298,7 +298,7 @@ public sealed class ArchitectureGuardTests
                 "Elsa.Activities.Runtime",
                 "Elsa.Activities.Runtime.Core",
                 "Elsa.Activities.Primitives",
-                "Elsa.Activities.Composition.Runtime",
+                "Elsa.Activities.Graph.Runtime",
             ],
             IsDesignReference);
 
@@ -308,8 +308,8 @@ public sealed class ArchitectureGuardTests
         string[] featureProjects =
         [
             "Elsa.Activities.Primitives",
-            "Elsa.Activities.Composition.Runtime",
-            "Elsa.Activities.Composition.Design",
+            "Elsa.Activities.Graph.Runtime",
+            "Elsa.Activities.Graph.Design",
             "Elsa.Activities.Design.Reconciliation.Clr",
         ];
         var featureSet = featureProjects.ToHashSet(StringComparer.Ordinal);
@@ -412,8 +412,8 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Fact] // spec 006 T051 (SC-004) — construction + reconciliation dispatch on the DescriptorType key alone; no per-kind branch.
-    public void Construction_and_reconciliation_contain_no_per_descriptor_type_branch()
+    [Fact] // spec 006 T051 (SC-004) — construction + reconciliation dispatch on stable keys; no per-provider branch.
+    public void Construction_and_reconciliation_contain_no_per_provider_or_consumer_branch()
     {
         string[] relativePaths =
         [
@@ -423,9 +423,9 @@ public sealed class ArchitectureGuardTests
             "src/Elsa/Activities/Design/Reconciliation/Handlers/CollectActivityVersions.cs",
         ];
 
-        // A per-kind branch would surface as a switch, an equality test against the descriptor-type/kind
+        // A per-provider branch would surface as a switch, an equality test against the key/kind
         // string, or a reference to a concrete descriptor type / the deleted kind discriminator. These three
-        // dispatchers key purely on the DescriptorType string (registry lookup), never branch on its value.
+        // dispatchers use provider-neutral contracts and the runtime registry, never branch on a provider value.
         // NB: a lexical scan can't catch every conceivable rewrite (e.g. `.Equals(...)` or a lookup table
         // keyed on kind); it pins the common forms and the concrete-type references.
         string[] forbiddenTokens =
@@ -474,7 +474,8 @@ public sealed class ArchitectureGuardTests
         project.Name == "Elsa.Workflows.Runtime"
         || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
         || project.Name == "Elsa.Activities.Runtime"
-        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal);
+        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal)
+        || project.Name == "Elsa.Activities.Graph.Runtime";
 
     [Fact]
     public void Source_scan_strips_interpolated_string_text_but_preserves_interpolation_code()

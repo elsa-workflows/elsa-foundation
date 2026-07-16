@@ -55,18 +55,18 @@ The domain splits into two co-equal sub-domains, each with its own seam:
 
 | Sub-domain | Concern | Seam (the `.Core` surface) |
 |---|---|---|
-| **Design** | author & persist what an activity/workflow *is* | `IActivityDefinitionVersion` (`DescriptorType`, opaque `DescriptorPayload`, `InputDefinition`/`OutputDefinition` keyed by `ReferenceKey`); `ActivityNode` + `ArgumentState` (author-filled values) |
+| **Design** | author & persist what an activity/workflow *is* | `IActivityDefinitionVersion` (stable provider and consumer key/schema pairs, opaque `DescriptorPayload`, `InputDefinition`/`OutputDefinition` keyed by `ReferenceKey`); `ActivityNode` + `ArgumentState` (author-filled values) |
 | **Runtime** | construct & execute a live object | `IActivityFactory` → `IActivityConstructor` → `IActivityConstructorRegistry`; the payload stays **opaque** until the owning constructor deserializes it |
 
 ```mermaid
 flowchart TB
     subgraph Design["Design seam — Elsa.Activities.Design.Core"]
-        ADV["IActivityDefinitionVersion<br/>DescriptorType : string<br/>DescriptorPayload : JsonElement (opaque)<br/>Inputs/Outputs : *Definition (ReferenceKey)"]
+        ADV["IActivityDefinitionVersion<br/>ProviderKey + ProviderSchemaVersion<br/>ConsumerKey + ConsumerSchemaVersion<br/>DescriptorPayload : JsonElement (opaque)<br/>Inputs/Outputs : *Definition (ReferenceKey)"]
         NODE["ActivityNode + ArgumentState<br/>(author-filled values, by ReferenceKey)"]
     end
     subgraph Runtime["Runtime seam — Elsa.Activities.Runtime.Core"]
-        FAC["IActivityFactory.Create(descriptorType, payload, inputs, outputs)"]
-        CON["IActivityConstructor&lt;TDescriptor&gt;<br/>(one per descriptor type)"]
+        FAC["IActivityFactory.Create(runtime descriptor, inputs, outputs)"]
+        CON["IActivityConstructor&lt;TDescriptor&gt;<br/>(one claim per consumer key/schema)"]
         ACT["IActivity (a live object)"]
         FAC --> CON --> ACT
     end
@@ -74,10 +74,13 @@ flowchart TB
     class ADV,NODE,FAC,CON,ACT seam;
 ```
 
-A row's `DescriptorType` is the registry key that decides *which* constructor builds it:
+A compiled runtime descriptor's stable `(ConsumerKey, SchemaVersion)` decides which constructor builds it:
 
-- `Elsa.Primitives.Models.ClrActivityDescriptor` → the **CLR** kind (`ClrActivityConstructor`)
-- `Elsa.Workflows.Primitives.Models.WorkflowIdentity` → the **Workflow** kind (`WorkflowActivityConstructor`)
+- `elsa.clr-activity`, schema `1` → the CLR consumer (`ClrActivityConstructor`)
+- `elsa.graph-activity`, schema `1` → the inline graph-composite consumer (`GraphActivityConstructor`)
+
+There is no workflow-definition constructor. `ExecuteWorkflow` is an explicit separate-workflow operation;
+reusable graph activities execute inside the current workflow execution.
 
 ---
 
@@ -89,7 +92,7 @@ Its `construct/{activityId}` endpoint reads a persisted catalog row and produces
 ```mermaid
 flowchart LR
     subgraph DesignSeam["Design seam (read)"]
-        ROW["ActivityDefinitionVersion<br/>DescriptorType + payload<br/>+ Input/OutputDefinitions"]
+        ROW["ActivityDefinitionVersion<br/>provider + consumer key/schema<br/>+ opaque payload + I/O definitions"]
         STATE["ArgumentState<br/>(author values, by ReferenceKey)"]
     end
     MAP["MAP<br/>join ArgumentState.ReferenceKey<br/>→ *Definition.ReferenceKey<br/>→ typed InputArgument/OutputArgument"]
@@ -110,12 +113,12 @@ flowchart LR
 
 The bridge does three things, each touching exactly one seam:
 
-1. **Read** the persisted version — the Design seam hands over `(DescriptorType, opaque payload)` plus
+1. **Read** the persisted version — the Design seam hands over stable provider/consumer identities and
+   opaque payload plus
    the argument definitions. The bridge never deserializes the payload itself.
 2. **Map** — join author `ArgumentState`s onto argument definitions by `ReferenceKey`, producing the
-   typed runtime argument bags. *(Today's construct-only slice leaves the value bags empty; mapping
-   author **values** is exactly where this bridge grows — see §5.)*
-3. **Drive** `IActivityFactory.Create(...)` — the Runtime seam dispatches on `DescriptorType` to the
+   typed runtime argument bags.
+3. **Drive** `IActivityFactory.Create(...)` — the Runtime seam dispatches on consumer key/schema to the
    owning constructor and returns a whole `IActivity`.
 
 **Why this is legal.** `Elsa.Workflows.Publishing.Api` references only `Elsa.Activities.Design(.Persistence).Core`

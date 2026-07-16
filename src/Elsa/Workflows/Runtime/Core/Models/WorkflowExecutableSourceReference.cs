@@ -33,10 +33,14 @@ public sealed record WorkflowExecutableSourceReference(
     IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null,
     string? PublicationId = null,
     string? SlotId = null,
+    ExecutableLayoutSidecar? LayoutSidecar = null,
     IReadOnlyList<WorkflowExecutableAuthoredInputRecord>? AuthoredInputs = null)
 {
     /// <summary>The publish-time layout sidecar copied from the definition version's layout store; may be empty.</summary>
     public IReadOnlyList<WorkflowExecutableLayoutRecord> Layout { get; init; } = Layout ?? [];
+
+    /// <summary>Boundary-scoped historical layout used for reusable-activity click-through inspection.</summary>
+    public ExecutableLayoutSidecar LayoutSidecar { get; init; } = LayoutSidecar ?? ExecutableLayoutSidecar.Empty;
 
     /// <summary>
     /// Publish-time authored input sources. These are source provenance, not execution material, and therefore

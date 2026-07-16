@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -28,19 +29,23 @@ public sealed class ExecutableNodeCompiler(
     public ExecutableNode CompileRoot(
         ActivityNode rootActivity,
         ActivityTreeProjection projection,
-        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows) =>
-        CompileNode(rootActivity, projection, activityRows);
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
+        IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null) =>
+        CompileNode(rootActivity, projection, activityRows, placedActivities ?? new Dictionary<string, ExecutableNode>());
 
     private ExecutableNode CompileNode(
         ActivityNode activity,
         ActivityTreeProjection projection,
-        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
     {
+        if (placedActivities.TryGetValue(activity.NodeId, out var placed))
+            return placed;
         var activityVersion = activityRows[activity.ActivityVersionId];
 
         var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows);
+        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities);
 
         foreach (var inputState in activity.Inputs)
         {
@@ -52,7 +57,11 @@ public sealed class ExecutableNodeCompiler(
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");
-        var clrActivityType = ResolveClrActivityType(activityVersion.DescriptorType, activityVersion.DescriptorPayload);
+        var descriptor = new RuntimeActivityDescriptor(
+            activityVersion.ConsumerKey,
+            activityVersion.ConsumerSchemaVersion,
+            activityVersion.DescriptorPayload);
+        var clrActivityType = ResolveClrActivityType(descriptor);
         var activityType = clrActivityType is null
             ? catalogActivityType
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
@@ -65,8 +74,7 @@ public sealed class ExecutableNodeCompiler(
             authoredActivityId: activity.NodeId,
             activityType: activityType,
             activityTypeVersion: activityVersion.Version,
-            descriptorType: activityVersion.DescriptorType,
-            descriptorPayload: activityVersion.DescriptorPayload,
+            descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>
@@ -81,12 +89,13 @@ public sealed class ExecutableNodeCompiler(
     private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
         IEnumerable<ActivityChildProjection> childSlots,
         ActivityTreeProjection projection,
-        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
     {
         return childSlots
             .Select(slot => new ExecutableChildSlot(
                 slot.Name,
-                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows)).ToArray()))
+                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities)).ToArray()))
             .ToArray();
     }
 
@@ -95,7 +104,9 @@ public sealed class ExecutableNodeCompiler(
             ? null
             : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
 
-    public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(ExecutableNode root)
+    public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(
+        ExecutableNode root,
+        IReadOnlySet<string>? precompiledNodeIds = null)
     {
         // Index [ResumeTarget] handlers declared by each node's activity CLR type into the executable's
         // resume-target map. Suspending activities (e.g. Delay) create a durable bookmark against a resume
@@ -106,7 +117,9 @@ public sealed class ExecutableNodeCompiler(
 
         foreach (var node in FlattenExecutableNodes(root))
         {
-            var activityType = ResolveClrActivityType(node.DescriptorType, node.DescriptorPayload);
+            if (precompiledNodeIds?.Contains(node.ExecutableNodeId) == true)
+                continue;
+            var activityType = ResolveClrActivityType(node.Descriptor);
             if (activityType is null &&
                 wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var registeredActivityType) &&
                 registeredActivityType != typeof(object))
@@ -138,14 +151,14 @@ public sealed class ExecutableNodeCompiler(
         return resumeTargets;
     }
 
-    private Type? ResolveClrActivityType(string descriptorType, JsonElement descriptorPayload)
+    private Type? ResolveClrActivityType(RuntimeActivityDescriptor descriptor)
     {
-        if (!StringComparer.Ordinal.Equals(descriptorType, typeof(ClrActivityDescriptor).FullName))
+        if (!StringComparer.Ordinal.Equals(descriptor.ConsumerKey, WellKnownRuntimeActivityConsumers.ClrActivity))
             return null;
 
-        var descriptor = descriptorPayload.Deserialize<ClrActivityDescriptor>(DescriptorSerializerOptions);
-        return descriptor is not null &&
-               wellKnownTypeRegistry.TryGetTypeOrDefault(descriptor.TypeAlias, out var activityType) &&
+        var clrDescriptor = descriptor.Payload.Deserialize<ClrActivityDescriptor>(DescriptorSerializerOptions);
+        return clrDescriptor is not null &&
+               wellKnownTypeRegistry.TryGetTypeOrDefault(clrDescriptor.TypeAlias, out var activityType) &&
                activityType != typeof(object)
             ? activityType
             : null;
@@ -169,11 +182,13 @@ public sealed class ExecutableNodeCompiler(
 
     private static IEnumerable<ExecutableNode> FlattenExecutableNodes(ExecutableNode root)
     {
-        yield return root;
-
-        foreach (var slot in root.ChildSlots)
-            foreach (var child in slot.Activities)
-                foreach (var descendant in FlattenExecutableNodes(child))
-                    yield return descendant;
+        var stack = new Stack<ExecutableNode>();
+        stack.Push(root);
+        while (stack.TryPop(out var node))
+        {
+            yield return node;
+            foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
+                stack.Push(child);
+        }
     }
 }

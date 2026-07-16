@@ -30,6 +30,7 @@ public sealed class PublishWorkflowRequestHandler(
     WorkflowPublicationPreflightReader? publicationPreflightReader = null,
     IWorkflowDefinitionVersionStore? workflowVersionStore = null,
     PublicationSnapshotReviewService? snapshotReviews = null,
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
     WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
@@ -194,6 +195,7 @@ public sealed class PublishWorkflowRequestHandler(
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             PublicationId: publicationId,
             SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
             AuthoredInputs: authoredInputs);
     }
 

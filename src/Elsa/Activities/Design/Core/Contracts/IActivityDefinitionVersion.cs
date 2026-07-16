@@ -11,19 +11,22 @@ public interface IActivityDefinitionVersion
 
     string DefinitionId { get; }
 
-    /// <summary>
-    /// The descriptor type's <c>FullName</c> (e.g. <c>Elsa.Primitives.Models.ClrActivityDescriptor</c>,
-    /// <c>Elsa.Workflows.Primitives.Models.WorkflowIdentity</c>). The runtime construction registry's
-    /// lookup key. The design domain treats this purely as an opaque string — it never resolves it to
-    /// a CLR type.
-    /// </summary>
-    string DescriptorType { get; }
+    /// <summary>Stable Design provider identity; never a CLR type name.</summary>
+    string ProviderKey { get; }
+
+    /// <summary>Schema understood by the Design provider that owns the source manifest.</summary>
+    string ProviderSchemaVersion { get; }
+
+    /// <summary>Stable Runtime consumer identity; never a CLR type name.</summary>
+    string ConsumerKey { get; }
+
+    /// <summary>Schema understood by the matching Runtime consumer.</summary>
+    string ConsumerSchemaVersion { get; }
 
     /// <summary>
     /// The descriptor payload as opaque JSON. The design domain serializes/round-trips this without
-    /// ever deserializing it into a concrete descriptor type; only the runtime feature that owns the
-    /// descriptor type materializes it. A <see cref="JsonElement"/> (a BCL type) keeps the descriptor
-    /// opaque and introduces no descriptor-type dependency (Elsa §E2.2).
+    /// ever deserializing it into a concrete runtime type; only the Runtime consumer identified above
+    /// materializes it. A <see cref="JsonElement"/> keeps the descriptor opaque across the seam.
     /// </summary>
     JsonElement DescriptorPayload { get; }
 

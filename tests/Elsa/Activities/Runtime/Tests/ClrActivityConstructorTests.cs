@@ -35,7 +35,10 @@ public class ClrActivityConstructorTests
         };
 
         // Act
-        var activity = await factory.Create(ClrConstruction.DescriptorType, payload, inputs, null);
+        var activity = await factory.Create(
+            new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, payload),
+            inputs,
+            null);
 
         // Assert
         var writeLine = Assert.IsType<WriteLine>(activity);
@@ -43,12 +46,13 @@ public class ClrActivityConstructorTests
     }
 
     [Fact] // descriptor type is derived from typeof(TDescriptor) — never hand-authored
-    public void ClrConstructor_DescriptorType_IsClrActivityDescriptorFullName()
+    public void ClrConstructor_UsesStableConsumerKeyAndSchema()
     {
         var serviceProvider = new ServiceCollection().BuildServiceProvider();
         var constructor = ClrConstruction.Constructor(serviceProvider, Serializer());
 
-        Assert.Equal("Elsa.Primitives.Models.ClrActivityDescriptor", constructor.DescriptorType);
+        Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, constructor.ConsumerKey);
+        Assert.Contains(RuntimeActivityDescriptor.InitialSchemaVersion, constructor.SupportedSchemaVersions);
     }
 
     [Fact] // an alias that resolves to no registered CLR type is a loud failure, not a silent object
@@ -62,6 +66,6 @@ public class ClrActivityConstructorTests
         var factory = new ActivityFactory(registry);
 
         await Assert.ThrowsAsync<UnknownActivityTypeException>(() =>
-            factory.Create(ClrConstruction.DescriptorType, ClrConstruction.Payload(serializer, typeof(WriteLine)), null, null).AsTask());
+            factory.Create(ClrConstruction.Descriptor(serializer, typeof(WriteLine)), null, null).AsTask());
     }
 }

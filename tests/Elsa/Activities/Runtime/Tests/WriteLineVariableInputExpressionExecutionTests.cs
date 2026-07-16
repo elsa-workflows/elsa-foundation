@@ -89,8 +89,7 @@ public sealed class WriteLineVariableInputExpressionExecutionTests
         var factory = new ActivityFactory(registry);
 
         var activity = await factory.Create(
-            ClrConstruction.DescriptorType,
-            ClrConstruction.Payload(serializer, typeof(WriteLine)),
+            ClrConstruction.Descriptor(serializer, typeof(WriteLine)),
             new Dictionary<string, InputArgument> { ["Text"] = textArgument },
             outputs: null);
 
@@ -123,8 +122,7 @@ public sealed class WriteLineVariableInputExpressionExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "Test.WriteLine",
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()), typeof(WriteLine)),
+            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()), typeof(WriteLine))),
             inputBindings: new Dictionary<string, RuntimeInputBinding> { ["Text"] = textBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

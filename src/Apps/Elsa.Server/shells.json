@@ -10,6 +10,7 @@
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
+          "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesSequence": {},
           "ApiCapabilities": {},
@@ -145,6 +146,7 @@
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
           "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {

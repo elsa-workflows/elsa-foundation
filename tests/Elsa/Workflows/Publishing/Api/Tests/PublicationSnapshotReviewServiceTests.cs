@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class PublicationSnapshotReviewServiceTests
 {
     private readonly PublicationSnapshotReviewService _service = new(TimeProvider.System, new InMemoryPublicationSnapshotReviewStore());
-    private readonly WorkflowDefinitionState _state = new([], null, [], [], null, null);
+    private readonly WorkflowDefinitionState _state = WorkflowDefinitionState.Empty;
 
     [Fact]
     public void Candidate_hash_is_stable_across_opaque_layout_property_order()

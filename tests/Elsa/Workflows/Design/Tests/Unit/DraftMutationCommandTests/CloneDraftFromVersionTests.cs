@@ -173,7 +173,6 @@ public sealed class CloneDraftFromVersionTests
             Structure: TestActivityStructureHandler.CreateStructure(activities, activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId)),
         Inputs: [],
         Outputs: [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null);
 
     private static ActivityNode Node(string nodeId, bool isStart = false) => new(

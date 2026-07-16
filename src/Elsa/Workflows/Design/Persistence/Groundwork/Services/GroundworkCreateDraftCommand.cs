@@ -75,6 +75,5 @@ public sealed class GroundworkCreateDraftCommand(
         RootActivity: null,
         Inputs: [],
         Outputs: [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null);
 }

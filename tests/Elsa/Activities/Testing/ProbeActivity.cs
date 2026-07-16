@@ -27,8 +27,8 @@ public sealed record ProbeDescriptor(IReadOnlyCollection<string> Outcomes);
 /// <summary>Constructs <see cref="ProbeActivity"/> instances from their descriptor.</summary>
 public sealed class ProbeActivityConstructor : IActivityConstructor<ProbeDescriptor>
 {
-    public static string DescriptorTypeKey => typeof(ProbeDescriptor).FullName!;
-    public string DescriptorType => DescriptorTypeKey;
+    public static string ConsumerKeyValue => typeof(ProbeDescriptor).FullName!;
+    public string ConsumerKey => ConsumerKeyValue;
 
     public ValueTask<IActivity> Construct(
         JsonElement payload,

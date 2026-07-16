@@ -3,25 +3,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Persistence.Groundwork.Serialization;
 
-/// <summary>Adds neutral publication provenance to legacy source references.</summary>
-public sealed class WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster : IGroundworkRuntimeDocumentUpcaster
-{
-    public string DocumentKind => ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind;
-    public int FromVersion => 1;
-
-    public JsonObject Upcast(JsonObject content)
-    {
-        var reference = RequireObject(content, "reference");
-        reference["publicationId"] = null;
-        reference["slotId"] = null;
-        return content;
-    }
-
-    private static JsonObject RequireObject(JsonObject content, string propertyName) =>
-        content[propertyName] as JsonObject
-        ?? throw new InvalidOperationException($"Legacy source-reference document has no '{propertyName}' object.");
-}
-
 /// <summary>Adds the neutral authored-input source collection to existing source references.</summary>
 public sealed class WorkflowExecutableSourceReferenceDocumentV2ToV3Upcaster : IGroundworkRuntimeDocumentUpcaster
 {
