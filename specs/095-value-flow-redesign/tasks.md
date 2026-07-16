@@ -223,7 +223,7 @@ fresh resume attempt and one committed completion.
 
 - [X] T080 [P] [US6] Add typed stateful activity initial/resume contract tests in `tests/Elsa/Activities/Runtime/Tests/StatefulActivityContractTests.cs`
 - [ ] T081 [P] [US6] Add state-plus-registration atomic checkpoint and wrong/duplicate trigger tests in `tests/Elsa/Workflows/Runtime/Resumption/Tests/TypedTriggerDeliveryTests.cs`
-- [ ] T082 [US6] Add Groundwork mixed-worker suspend/resume/disposal/recovery tests in `tests/Elsa/Persistence/Groundwork/Tests/TypedActivityStateRecoveryTests.cs`
+- [x] T082 [US6] Add Groundwork mixed-worker suspend/resume/disposal/recovery tests in `tests/Elsa/Persistence/Groundwork/Tests/TypedActivityStateRecoveryTests.cs`
 
 ### Implementation
 

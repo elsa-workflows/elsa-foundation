@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Runtime.Core.Models;
@@ -11,6 +12,23 @@ namespace Elsa.Activities.Runtime.Core.Models;
 /// </summary>
 public sealed class ActivityContract
 {
+    [JsonConstructor]
+    internal ActivityContract(
+        string activityTypeKey,
+        string contractVersion,
+        string schemaFingerprint,
+        string descriptorKind,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, ActivityInputContract> inputs,
+        ActivityResultContract result,
+        IReadOnlyCollection<string> outcomes,
+        ActivityActivationRequirement activation)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation)
+    {
+        if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
+            throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
+    }
+
     public ActivityContract(
         string activityTypeKey,
         string contractVersion,
@@ -165,6 +183,16 @@ public sealed class ActivityInputContract
 
 public sealed class ActivityResultContract
 {
+    [JsonConstructor]
+    internal ActivityResultContract(
+        ValueTypeDescriptor type,
+        bool isRequired,
+        ActivityValuePolicy policy,
+        IReadOnlyDictionary<string, ActivityResultProjectionContract> projections)
+        : this(type, isRequired, policy, projections.Values)
+    {
+    }
+
     public ActivityResultContract(
         ValueTypeDescriptor type,
         bool isRequired,
