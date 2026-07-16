@@ -77,7 +77,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var activator = new RecordingTypedActivator();
         await _executableStore.SaveAsync(NewTypedExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(legacyFactory, activityActivator: activator);
+        await using var provider = NewProvider(legacyFactory, includeInspection: true, activityActivator: activator);
         var handler = NewHandler(provider);
 
         await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
@@ -96,6 +96,31 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var projected = (await _durableValueStateStore.ListAsync("wfexec-1"))
             .Single(value => value.Metadata.TryGetValue(RuntimeMetadataKeys.OutputName, out var name) && name == "length");
         Assert.Equal(5, projected.InlineValue!.Value.GetInt32());
+        await AssertCompletionWorkAsync();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReplayedTypedInvocation_UsesCommittedCompletionWithoutReactivation()
+    {
+        var legacyFactory = new RecordingActivityFactory(new RecordingActivity());
+        var activator = new RecordingTypedActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(legacyFactory, includeInspection: true, activityActivator: activator);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(workItem);
+        var committed = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+
+        Assert.NotNull(committed?.Completion);
+        await handler.HandleAsync(workItem);
+
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(0, legacyFactory.CreateCalls);
+        var recovered = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(committed, recovered);
+        Assert.Single(_checkpointWriter.ListCommits());
         await AssertCompletionWorkAsync();
     }
 

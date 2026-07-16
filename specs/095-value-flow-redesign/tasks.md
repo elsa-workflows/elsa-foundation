@@ -108,7 +108,7 @@ and then recover after completion without reevaluation or reactivation.
 
 - [ ] T035 [P] [US3] Add ActivityStarted checkpoint crash-window and all-or-nothing snapshot tests in `tests/Elsa/Workflows/Runtime/Tests/ActivityInputSnapshotCheckpointTests.cs`
 - [ ] T036 [P] [US3] Add retry/resume pinned-input and fresh-attempt identity tests in `tests/Elsa/Activities/Runtime/Tests/PinnedInputRetryResumeTests.cs`
-- [ ] T037 [P] [US3] Add post-completion crash recovery/no-reinvoke tests in `tests/Elsa/Persistence/Groundwork/Tests/CommittedActivityCompletionRecoveryTests.cs`
+- [X] T037 [P] [US3] Add post-completion crash recovery/no-reinvoke tests in `tests/Elsa/Persistence/Groundwork/Tests/CommittedActivityCompletionRecoveryTests.cs`
 - [ ] T038 [P] [US3] Add persistable/transient value-policy and sensitivity non-downgrade tests in `tests/Elsa/Workflows/Runtime/Tests/ValueDurabilityPolicyTests.cs`
 - [ ] T039 [US3] Add structural-frame/causal-lineage result selection and ambiguity tests in `tests/Elsa/Workflows/Runtime/Tests/CausalActivityResultResolverTests.cs`
 
@@ -117,7 +117,7 @@ and then recover after completion without reevaluation or reactivation.
 - [ ] T040 [US3] Move complete input materialization into the Scheduled→Running checkpoint in `src/Elsa/Workflows/Runtime/Services/WorkflowStartActivitySchedulerWorkHandler.cs`
 - [ ] T041 [US3] Make `RuntimeActivityInputMaterializer` produce wrapper-free immutable snapshots with persistability/policy validation in `src/Elsa/Workflows/Runtime/Services/RuntimeActivityInputMaterializer.cs`
 - [ ] T042 [US3] Make retry, resume, and parent completion hydrate only from the committed snapshot in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs` and related handlers
-- [ ] T043 [US3] Commit result/outcome/status/inspection/continuation intent atomically and short-circuit already-completed invocations in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
+- [X] T043 [US3] Commit result/outcome/status/inspection/continuation intent atomically and short-circuit already-completed invocations in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
 - [ ] T044 [US3] Replace active/latest-output semantics with structural-frame and causal-lineage result resolution in `src/Elsa/Workflows/Runtime/Services/CausalActivityResultResolver.cs`
 - [ ] T045 [US3] Propagate effective persistence, external-payload, encryption, sensitivity, and redaction policy through materialization and projection in `src/Elsa/Workflows/Runtime/Services/`
 - [ ] T046 [US3] Run focused runtime, Groundwork, distributed recovery, and publishing tests and mark US3 ledger successors implemented/passing
