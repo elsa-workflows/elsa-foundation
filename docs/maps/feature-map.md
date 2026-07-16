@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 91
+- Discovered feature classes: 93
 
 ## Features
 
@@ -33,6 +33,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ApiSecurityFeature | direct IShellFeature | Elsa.Api.FastEndpoints | IShellFeature | [ApiSecurityFeature.cs](../../src/Elsa/Api/FastEndpoints/ApiSecurityFeature.cs) |
 | AspNetCoreIdentityEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore | IShellFeature | [AspNetCoreIdentityEntityFrameworkCoreFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/AspNetCoreIdentityEntityFrameworkCoreFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
+| DispatchWorkflowDesignFeature | direct IShellFeature | Elsa.Activities.DispatchWorkflow.Design | IShellFeature | [DispatchWorkflowDesignFeature.cs](../../src/Elsa/Activities/DispatchWorkflow/Design/DispatchWorkflowDesignFeature.cs) |
+| DispatchWorkflowRuntimeFeature | direct IShellFeature | Elsa.Activities.DispatchWorkflow.Runtime | IShellFeature | [DispatchWorkflowRuntimeFeature.cs](../../src/Elsa/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs) |
 | Elsa3ImportActivitiesFeature | direct IShellFeature | Elsa3.Activities.Design.Import | IShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
 | Elsa3ImportActivitiesGroundworkFeature | direct IShellFeature | Elsa3.Activities.Design.Import.Persistence.Groundwork | IShellFeature | [Elsa3ImportActivitiesGroundworkFeature.cs](../../src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3ImportActivitiesGroundworkFeature.cs) |
 | Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |
