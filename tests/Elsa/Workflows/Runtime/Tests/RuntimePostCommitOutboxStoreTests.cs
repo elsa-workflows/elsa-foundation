@@ -239,6 +239,50 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
+    public async Task RetryUntilAcknowledged_RemainsRetryableAndSaturatesAttemptCount()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var policy = RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(10));
+        var pending = NewOutboxItem("outbox-unbounded", "intent-unbounded", "wfexec-1", retryPolicy: policy);
+        var saturated = new RuntimePostCommitOutboxItem(
+            pending.OutboxItemId,
+            pending.Intent,
+            pending.Status,
+            pending.RecordedAt,
+            pending.AvailableAt,
+            pending.RetryPolicy,
+            deliveryAttemptCount: int.MaxValue,
+            metadata: pending.Metadata);
+        await store.AddPendingForTestingAsync(saturated);
+
+        await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            saturated.OutboxItemId,
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            _now,
+            "still waiting"));
+
+        var retry = Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(10), 10)));
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, retry.Status);
+        Assert.Equal(int.MaxValue, retry.DeliveryAttemptCount);
+        Assert.Equal(_now.AddSeconds(10), retry.AvailableAt);
+    }
+
+    [Fact]
+    public async Task Lookup_ReturnsItemsInEveryStatusAndMissingAsNull()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-lookup", "intent-lookup", "wfexec-1"));
+        await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            "outbox-lookup", RuntimePostCommitOutboxStatus.Delivered, _now));
+
+        var delivered = await store.FindAsync("outbox-lookup");
+
+        Assert.NotNull(delivered);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+        Assert.Null(await store.FindAsync("missing"));
+    }
+
+    [Fact]
     public async Task InMemoryRuntimeCheckpointCommitStore_RejectsDeliveryResultForMissingOrTerminalItem()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();

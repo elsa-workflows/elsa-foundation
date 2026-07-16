@@ -73,6 +73,28 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
+    public async Task DelayedStart_RecordsDirectCheckpointFollowUpAfterTheSourceQueueItem()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var handler = NewHandler(store, queue);
+        var delayedRecordedAt = _now.AddMinutes(2);
+
+        await handler.HandleAsync(NewStartWorkItem(executable.Identity, recordedAt: delayedRecordedAt));
+
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(_now, checkpointWork.EnqueuedAt);
+        Assert.Equal(delayedRecordedAt, checkpointWork.RecordedAt);
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var rootWork = Assert.Single(checkpointPayload.PostCommitIntents).Payload!.Value
+            .Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(_now, rootWork.EnqueuedAt);
+        Assert.Equal(delayedRecordedAt, rootWork.RecordedAt);
+    }
+
+    [Fact]
     public async Task HandleAsync_RejectsPinnedExecutableMismatchBeforeScheduling()
     {
         var store = new InMemoryWorkflowExecutableStore();
@@ -400,7 +422,8 @@ public sealed class RuntimeStartCommandSchedulingTests
         WorkflowExecutableIdentity? pinnedExecutable = null,
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.Start,
         JsonElement? payload = null,
-        bool includePayload = true)
+        bool includePayload = true,
+        DateTimeOffset? recordedAt = null)
     {
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
@@ -416,7 +439,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             envelopeId: "envelope-1",
             idempotencyKey: "wfexec-1:start:artifact-1",
             enqueuedAt: _now,
-            recordedAt: _now,
+            recordedAt: recordedAt ?? _now,
             sequence: 10,
             payload: resolvedPayload,
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },

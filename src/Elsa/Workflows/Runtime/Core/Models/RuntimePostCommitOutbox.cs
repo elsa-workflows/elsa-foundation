@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Constants;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -195,7 +198,8 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
         {
             var becomesFinal = deliveryResult.Status == RuntimePostCommitOutboxStatus.FailedFinal ||
                 deliveryResult.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
-                claim.Item.DeliveryAttemptCount + 1 >= claim.Item.RetryPolicy.MaxAttempts;
+                claim.Item.RetryPolicy.IsExhaustedAfterAttempt(
+                    RuntimePostCommitRetryPolicy.SaturatingIncrement(claim.Item.DeliveryAttemptCount));
             if (!becomesFinal ||
                 workflowDispatch.Status != WorkflowDispatchStatus.DispatchFailed)
             {
@@ -209,7 +213,7 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
                 StringComparer.Ordinal.Equals(claim.Item.Intent.ActivityExecutionId, workflowDispatch.ParentActivityExecutionId) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.IntentId, identity.StartIntentId) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.IdempotencyKey, identity.StartIdempotencyKey) &&
-                claim.Item.Intent.Metadata.TryGetValue("runtime.dispatchId", out var dispatchId) &&
+                claim.Item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId) &&
                 StringComparer.Ordinal.Equals(dispatchId, workflowDispatch.DispatchId) &&
                 StringComparer.Ordinal.Equals(workflowDispatch.DispatchId, identity.DispatchId) &&
                 WorkflowDispatchLifecycle.ReadSafeDiagnosticCode(workflowDispatch) is not null &&
@@ -248,8 +252,7 @@ public static class RuntimePostCommitOutboxClaimTransitions
         if (item.Status == RuntimePostCommitOutboxStatus.Pending)
             return true;
         return item.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
-               item.RetryPolicy.MaxAttempts > 0 &&
-               item.DeliveryAttemptCount < item.RetryPolicy.MaxAttempts;
+               !item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount);
     }
 
     public static RuntimePostCommitOutboxClaim Claim(
@@ -293,9 +296,9 @@ public static class RuntimePostCommitOutboxClaimTransitions
             throw new InvalidOperationException($"Post-commit outbox claim for '{claim.OutboxItemId}' is stale or not owned by this claimant.");
         }
 
-        var attemptCount = current.DeliveryAttemptCount + 1;
+        var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(current.DeliveryAttemptCount);
         var status = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
-                     attemptCount >= current.RetryPolicy.MaxAttempts
+                     current.RetryPolicy.IsExhaustedAfterAttempt(attemptCount)
             ? RuntimePostCommitOutboxStatus.FailedFinal
             : result.Status;
         DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
@@ -348,14 +351,27 @@ public sealed class RuntimePostCommitRetryPolicy
         int maxAttempts,
         TimeSpan? delay,
         IReadOnlyDictionary<string, string>? metadata = null)
+        : this(maxAttempts, delay, retryUntilAcknowledged: false, metadata)
+    {
+    }
+
+    [JsonConstructor]
+    public RuntimePostCommitRetryPolicy(
+        int maxAttempts,
+        TimeSpan? delay,
+        bool retryUntilAcknowledged,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         if (maxAttempts < 0)
             throw new ArgumentOutOfRangeException(nameof(maxAttempts), "Maximum delivery attempts cannot be negative.");
 
-        if (maxAttempts == 0 && delay is not null)
+        if (retryUntilAcknowledged && maxAttempts != 0)
+            throw new ArgumentException("A retry-until-acknowledged policy cannot carry a finite maximum attempt count.", nameof(maxAttempts));
+
+        if (!retryUntilAcknowledged && maxAttempts == 0 && delay is not null)
             throw new ArgumentException("A retry policy with no attempts cannot carry a retry delay.", nameof(delay));
 
-        if (maxAttempts > 0 && delay is null)
+        if ((maxAttempts > 0 || retryUntilAcknowledged) && delay is null)
             throw new ArgumentException("A retry policy with attempts requires a retry delay.", nameof(delay));
 
         if (delay <= TimeSpan.Zero)
@@ -363,14 +379,45 @@ public sealed class RuntimePostCommitRetryPolicy
 
         MaxAttempts = maxAttempts;
         Delay = delay;
+        RetryUntilAcknowledged = retryUntilAcknowledged;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
     public static RuntimePostCommitRetryPolicy None { get; } = new(0, null);
 
+    public static RuntimePostCommitRetryPolicy UntilAcknowledged(
+        TimeSpan delay,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
+        new(0, delay, retryUntilAcknowledged: true, metadata: metadata);
+
     public int MaxAttempts { get; }
     public TimeSpan? Delay { get; }
+    public bool RetryUntilAcknowledged { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+
+    public bool IsExhaustedAfterAttempt(int attemptCount)
+    {
+        if (attemptCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(attemptCount));
+
+        return !RetryUntilAcknowledged && attemptCount >= MaxAttempts;
+    }
+
+    public bool IsEquivalentTo(RuntimePostCommitRetryPolicy? other) =>
+        other is not null &&
+        MaxAttempts == other.MaxAttempts &&
+        Delay == other.Delay &&
+        RetryUntilAcknowledged == other.RetryUntilAcknowledged &&
+        Metadata.Count == other.Metadata.Count &&
+        Metadata.All(pair => other.Metadata.TryGetValue(pair.Key, out var value) && StringComparer.Ordinal.Equals(pair.Value, value));
+
+    public static int SaturatingIncrement(int attemptCount)
+    {
+        if (attemptCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(attemptCount));
+
+        return attemptCount == int.MaxValue ? int.MaxValue : attemptCount + 1;
+    }
 }
 
 public sealed class RuntimePostCommitOutboxQuery

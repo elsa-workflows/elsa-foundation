@@ -33,12 +33,40 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<CoalescingWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<CoalescingRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        Assert.Same(
+            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            provider.GetRequiredService<IPostCommitOutboxLookupStore>());
         Assert.IsType<CoalescingWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<CoalescingActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<CoalescingDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<CoalescingSchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
+    }
+
+    [Fact]
+    public async Task CoalescingOutboxLookup_ConsultsActiveOverlayBeforeDurableInner()
+    {
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var store = new CoalescingRuntimePostCommitOutboxStore(
+            new CoalescingInner<IRuntimePostCommitOutboxStore>(inner),
+            accessor);
+        var session = new RuntimeCoalescingSession(
+            "parent-dispatch",
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var commit = NewDispatchBoundaryCommit();
+        session.BufferDeferred(commit);
+        var expected = Assert.Single(commit.StateChanges.PostCommitOutbox).State;
+
+        using (accessor.Push(session))
+        {
+            var found = await store.FindAsync(expected.OutboxItemId);
+            Assert.Same(expected, found);
+        }
+
+        Assert.Null(await store.FindAsync(expected.OutboxItemId));
     }
 
     [Fact]

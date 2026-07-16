@@ -523,7 +523,7 @@
     {
       "id": "runtime-post-commit-outbox",
       "family": "runtime",
-      "contract": "IRuntimePostCommitOutboxStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore",
+      "contract": "IRuntimePostCommitOutboxStore; IPostCommitOutboxLookupStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore",
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#678",

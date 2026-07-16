@@ -9,8 +9,6 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowCreateBookmarkSchedulerWorkHandler);
-    private const string SuspendedSubStatus = "BookmarkWaiting";
-
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
@@ -120,8 +118,9 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (state.Status is not ActivityExecutionStatus.Running and not ActivityExecutionStatus.Suspended)
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' cannot create a durable bookmark for activity execution '{payload.ActivityExecutionId}' while it is '{state.Status}'.");
 
-        var bookmark = NewBookmark(workItem, payload);
-        var suspendedState = SuspendActivity(workItem, payload, state);
+        var suspension = BookmarkSuspension.Build(workItem, payload, state, _timeProvider.GetUtcNow());
+        var bookmark = suspension.Bookmark;
+        var suspendedState = suspension.ActivityExecution;
         return await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
     }
 
@@ -245,55 +244,6 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     ]),
             PostCommitIntents: [],
             Metadata: metadata);
-    }
-
-    private BookmarkState NewBookmark(RuntimeSchedulerWorkItem workItem, RuntimeCreateBookmarkCommandPayload payload) =>
-        new(
-            BookmarkId: payload.BookmarkId,
-            WorkflowExecutionId: workItem.WorkflowExecutionId,
-            ActivityExecutionId: payload.ActivityExecutionId,
-            ExecutableNodeId: payload.ExecutableNodeId,
-            ResumeTargetId: payload.ResumeTargetId,
-            StimulusType: payload.StimulusType,
-            StimulusHash: payload.StimulusHash,
-            Payload: payload.Payload,
-            Metadata: MergeBookmarkMetadata(workItem, payload),
-            CreatedAt: _timeProvider.GetUtcNow(),
-            ExpiresAt: payload.ExpiresAt);
-
-    private static IReadOnlyDictionary<string, string> MergeBookmarkMetadata(
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeCreateBookmarkCommandPayload payload)
-    {
-        var metadata = payload.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
-        metadata[RuntimeMetadataKeys.CommandId] = workItem.CommandId;
-        metadata[RuntimeMetadataKeys.Reason] = payload.Reason;
-        return RuntimeModelMetadata.Snapshot(metadata);
-    }
-
-    private ActivityExecutionState SuspendActivity(
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeCreateBookmarkCommandPayload payload,
-        ActivityExecutionState state)
-    {
-        var bookmarkIds = state.BookmarkIds
-            .Append(payload.BookmarkId)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[RuntimeMetadataKeys.BookmarkId] = payload.BookmarkId;
-        metadata[RuntimeMetadataKeys.ResumeTargetId] = payload.ResumeTargetId;
-        metadata[RuntimeMetadataKeys.SuspendReason] = payload.Reason;
-        metadata[RuntimeMetadataKeys.CreateBookmarkSchedulerWorkItemId] = workItem.WorkItemId;
-
-        return state with
-        {
-            Status = ActivityExecutionStatus.Suspended,
-            SubStatus = SuspendedSubStatus,
-            BookmarkIds = bookmarkIds,
-            Metadata = metadata
-        };
     }
 
     private static RuntimeCreateBookmarkCommandPayload DeserializePayload(RuntimeSchedulerWorkItem workItem) =>

@@ -183,9 +183,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         }
 
         var committedDispatches = await _workflowDispatchStore.ListAsync(request.ParentWorkflowExecutionId, cancellationToken);
-        var committedDispatch = committedDispatches.SingleOrDefault(dispatch =>
+        var identityCandidates = committedDispatches.Where(dispatch =>
             StringComparer.Ordinal.Equals(dispatch.ChildWorkflowExecutionId, request.WorkflowExecutionId) &&
-            WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dispatch.ChildExecutable, child.Identity) &&
+            WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dispatch.ChildExecutable, child.Identity))
+            .ToArray();
+        var committedDispatch = identityCandidates.SingleOrDefault(dispatch =>
             StringComparer.Ordinal.Equals(dispatch.CorrelationId, request.CorrelationId) &&
             StringComparer.Ordinal.Equals(dispatch.TenantId, request.TenantId) &&
             Equals(dispatch.Partition, request.Partition) &&
@@ -194,12 +196,32 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             AuthorityEquals(request.Authority, dispatch.Authority));
         if (committedDispatch is null)
         {
+            var mismatch = identityCandidates.Length == 1
+                ? $" Context mismatches: {DescribeDispatchContextMismatch(identityCandidates[0], request)}."
+                : $" Matching identity candidates: {identityCandidates.Length}.";
             throw AuthorityRejected(
                 "retained-dependency-dispatch-not-found",
-                "No committed dispatch authorizes this retained dependency start.");
+                "No committed dispatch authorizes this retained dependency start." + mismatch);
         }
 
-        return new(child.Identity, committedDispatch.ChildSource, committedDispatch);
+        // Retained-dependency authority is the immutable provenance for this start. Historical source
+        // provenance remains on the dispatch record for inspection, but must not be copied into the start
+        // command because the canonical payload deliberately makes those authority modes mutually exclusive.
+        return new(child.Identity, null, committedDispatch);
+    }
+
+    private static string DescribeDispatchContextMismatch(
+        WorkflowDispatchRecord dispatch,
+        WorkflowExecutionStartDispatchRequest request)
+    {
+        var mismatches = new List<string>();
+        if (!StringComparer.Ordinal.Equals(dispatch.CorrelationId, request.CorrelationId)) mismatches.Add(nameof(request.CorrelationId));
+        if (!StringComparer.Ordinal.Equals(dispatch.TenantId, request.TenantId)) mismatches.Add(nameof(request.TenantId));
+        if (!Equals(dispatch.Partition, request.Partition)) mismatches.Add(nameof(request.Partition));
+        if (dispatch.RunKind != request.RunKind) mismatches.Add(nameof(request.RunKind));
+        if (dispatch.DispatchNestingDepth != request.DispatchNestingDepth) mismatches.Add(nameof(request.DispatchNestingDepth));
+        if (!AuthorityEquals(request.Authority, dispatch.Authority)) mismatches.Add(nameof(request.Authority));
+        return mismatches.Count == 0 ? "none (multiple candidates)" : string.Join(", ", mismatches);
     }
 
     private async ValueTask EnforceStartPolicyAsync(

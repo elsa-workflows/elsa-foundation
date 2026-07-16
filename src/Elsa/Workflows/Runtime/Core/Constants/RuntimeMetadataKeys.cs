@@ -18,6 +18,8 @@ public static class RuntimeMetadataKeys
     public const string CommandId = "runtime.commandId";
     public const string CommandKind = "runtime.commandKind";
     public const string CompletedChildActivityExecutionId = "runtime.completedChildActivityExecutionId";
+    public const string DispatchId = "runtime.dispatchId";
+    public const string ChildWorkflowExecutionId = "runtime.childWorkflowExecutionId";
     public const string CreateBookmarkSchedulerWorkItemId = "runtime.createBookmarkSchedulerWorkItemId";
     public const string ExecutableArtifactHash = "runtime.executableArtifactHash";
     public const string ExecutableArtifactId = "runtime.executableArtifactId";

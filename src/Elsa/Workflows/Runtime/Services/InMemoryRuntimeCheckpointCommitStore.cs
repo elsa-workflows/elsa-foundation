@@ -16,7 +16,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
 }
 
-public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
@@ -372,6 +372,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
+        string outboxItemId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            return new ValueTask<RuntimePostCommitOutboxItem?>(
+                _state.OutboxItems.TryGetValue(outboxItemId, out var item) ? item : null);
+        }
+    }
+
     public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -387,7 +401,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
-            var deliveryAttemptCount = existing.DeliveryAttemptCount + 1;
+            var deliveryAttemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
             var status = NormalizeDeliveryStatus(existing, result.Status, deliveryAttemptCount);
             DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? NextRetryAvailableAt(existing, result.RecordedAt)
@@ -951,7 +965,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             return true;
 
         if (item.Status == RuntimePostCommitOutboxStatus.FailedRetryable)
-            return item.RetryPolicy.MaxAttempts > 0 && item.DeliveryAttemptCount < item.RetryPolicy.MaxAttempts;
+            return !item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount);
 
         return false;
     }
@@ -964,7 +978,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (status != RuntimePostCommitOutboxStatus.FailedRetryable)
             return status;
 
-        return deliveryAttemptCount >= existing.RetryPolicy.MaxAttempts
+        return existing.RetryPolicy.IsExhaustedAfterAttempt(deliveryAttemptCount)
             ? RuntimePostCommitOutboxStatus.FailedFinal
             : RuntimePostCommitOutboxStatus.FailedRetryable;
     }

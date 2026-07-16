@@ -360,6 +360,7 @@ internal sealed class GroundworkPersistenceReconciler
         Map("runtime", "IRuntimeCheckpointCommitStore", "runtime-checkpoint-commit", "CheckpointCommitDocumentKind"),
         Map("runtime", "IRuntimeDiagnosticsSettingsStore", "runtime-diagnostics-settings", "RuntimeDiagnosticsSettingsDocumentKind"),
         Map("runtime", "IRuntimePostCommitOutboxStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IPostCommitOutboxLookupStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
         Map("runtime", "IRuntimePostCommitOutboxClaimStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
         Map("runtime", "IRuntimePostCommitOutboxClaimCompletionStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
         Map("runtime", "IWorkflowDispatchStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),

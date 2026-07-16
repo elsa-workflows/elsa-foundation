@@ -269,6 +269,10 @@ public sealed class RuntimeCoalescingSession
         if (item.Status is not (RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.FailedRetryable))
             return false;
 
+        if (item.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
+            item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount))
+            return false;
+
         if (query.WorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, query.WorkflowExecutionId))
             return false;
 
@@ -279,6 +283,12 @@ public sealed class RuntimeCoalescingSession
     }
 
     public bool OwnsOutboxItem(string outboxItemId) => _outboxItems.ContainsKey(outboxItemId);
+
+    public bool TryFindOutboxItem(string outboxItemId, out RuntimePostCommitOutboxItem? item)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        return _outboxItems.TryGetValue(outboxItemId, out item);
+    }
 
     public IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request)
     {
@@ -312,17 +322,24 @@ public sealed class RuntimeCoalescingSession
         if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
+        var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
+        var status = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
+                     existing.RetryPolicy.IsExhaustedAfterAttempt(attemptCount)
+            ? RuntimePostCommitOutboxStatus.FailedFinal
+            : result.Status;
         _outboxItems[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
             outboxItemId: existing.OutboxItemId,
             intent: existing.Intent,
-            status: result.Status,
+            status: status,
             recordedAt: existing.RecordedAt,
-            availableAt: result.Status == RuntimePostCommitOutboxStatus.FailedRetryable ? result.RecordedAt : existing.AvailableAt,
+            availableAt: status == RuntimePostCommitOutboxStatus.FailedRetryable
+                ? result.RecordedAt.Add(existing.RetryPolicy.Delay ?? TimeSpan.Zero)
+                : null,
             retryPolicy: existing.RetryPolicy,
-            deliveryAttemptCount: existing.DeliveryAttemptCount + 1,
+            deliveryAttemptCount: attemptCount,
             deliveringOwnerId: null,
             deliveryStartedAt: null,
-            deliveredAt: result.Status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
+            deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             lastFailureMessage: result.FailureMessage,
             metadata: existing.Metadata,
             deliveryFencingToken: existing.DeliveryFencingToken);

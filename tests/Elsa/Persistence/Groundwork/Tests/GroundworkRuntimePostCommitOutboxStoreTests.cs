@@ -76,6 +76,24 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     }
 
     [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Exact_lookup_uses_the_scoped_physical_identity_mapping(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var outboxItemId = new string('x', 451);
+        await store.SavePendingAsync(Pending(outboxItemId, "wf-lookup"));
+
+        var found = await ((IPostCommitOutboxLookupStore)store).FindAsync(outboxItemId);
+
+        Assert.NotNull(found);
+        Assert.Equal(outboxItemId, found.OutboxItemId);
+        Assert.Equal("wf-lookup", found.Intent.WorkflowExecutionId);
+        Assert.Null(await ((IPostCommitOutboxLookupStore)store).FindAsync("missing"));
+    }
+
+    [Theory]
     [InlineData(450)]
     [InlineData(451)]
     public async Task Portable_identity_boundary_round_trips(int identityLength)

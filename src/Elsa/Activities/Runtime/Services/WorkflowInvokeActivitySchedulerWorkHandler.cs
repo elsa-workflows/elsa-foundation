@@ -294,6 +294,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> boundaryEntryChanges = [];
         ActivityExecutionState? boundaryEntryState = null;
         WorkflowDispatchCheckpointRequest? workflowDispatchRequest = null;
+        (WorkflowDispatchCheckpointRequest Request, IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValueChanges)? pendingWorkflowDispatchWait = null;
         try
         {
             if (!await activity.CanExecuteAsync(context))
@@ -372,7 +373,42 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 if (boundaryEntryChanges.Count > 0)
                     suspendDurableValueChanges = suspendDurableValueChanges.Concat(boundaryEntryChanges).ToArray();
 
-                if (bookmarkRequests.Count > 0)
+                if (workflowDispatchRequest?.WaitBookmark is not null)
+                {
+                    ValidateWorkflowDispatchWait(workItem, invokePayload, executable, workflowDispatchRequest);
+                    // This path owns a deterministic direct checkpoint that may be reconstructed after an
+                    // uncertain acknowledgement. Re-evaluate its input evidence against the durable invoke time;
+                    // ordinary activity checkpoints retain their processing-time capture semantics.
+                    valueSnapshots.Clear();
+                    valueSnapshots.AddRange(ActivityOutputPublisher.BuildInputValueSnapshots(
+                        payloadCapturePolicy,
+                        workItem,
+                        invokePayload,
+                        inputs,
+                        workItem.RecordedAt));
+                    var activityOutputChanges = await CaptureActivityOutputsAsync(
+                        activityOutputRegister,
+                        payloadCapturePolicy,
+                        context,
+                        workItem,
+                        invokePayload,
+                        executableNode,
+                        valueSnapshots,
+                        workItem.RecordedAt,
+                        serviceProvider.GetService<IRuntimeDurableValueStorageDriverRegistry>() ??
+                        new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
+                        cancellationToken);
+                    pendingWorkflowDispatchWait = (
+                        workflowDispatchRequest,
+                        CombineDurableValueChanges(suspendDurableValueChanges, activityOutputChanges));
+                }
+
+                if (pendingWorkflowDispatchWait is not null)
+                {
+                    // The direct wait checkpoint is committed after the activity-execution catch boundary below.
+                    // This avoids translating an uncertain commit acknowledgement into an activity-fault checkpoint.
+                }
+                else if (bookmarkRequests.Count > 0)
                 {
                     // A suspending activity does not reach the completion checkpoint; carry any write-back on the
                     // bookmark work item so the downstream WorkflowCreateBookmarkSchedulerWorkHandler commits it
@@ -401,7 +437,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     pendingChildSchedulingDurableValueChanges = suspendDurableValueChanges;
                     pendingChildScheduling = (idGenerator, childScheduleRequests);
                 }
-                else
+                else if (pendingWorkflowDispatchWait is null)
                 {
                     var recordedOutputs = context.GetRecordedOutputs();
                     if (recordedOutputs.Count > 0)
@@ -452,6 +488,22 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         {
             valueSnapshots.AddRange(ActivityOutputPublisher.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, exception, "ActivityFaulted", valueSnapshots, cancellationToken);
+            return;
+        }
+
+        if (pendingWorkflowDispatchWait is { } workflowDispatchWait)
+        {
+            await CommitWorkflowDispatchWaitAsync(
+                checkpointCommitter,
+                inspectionAccumulator!,
+                serviceProvider.GetService<BookmarkLifecycleNotifier>(),
+                workItem,
+                invokePayload,
+                state,
+                workflowDispatchWait.Request,
+                valueSnapshots,
+                workflowDispatchWait.DurableValueChanges,
+                cancellationToken);
             return;
         }
 
@@ -546,6 +598,64 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             return outputChanges;
 
         return variableWriteBackChanges.Concat(outputChanges).ToArray();
+    }
+
+    private async ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> CaptureActivityOutputsAsync(
+        IRuntimeActivityOutputRegister activityOutputRegister,
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
+        SimpleActivityExecutionContext context,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ExecutableNode executableNode,
+        ICollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        DateTimeOffset capturedAt,
+        IRuntimeDurableValueStorageDriverRegistry storageDriverRegistry,
+        CancellationToken cancellationToken)
+    {
+        var recordedOutputs = context.GetRecordedOutputs();
+        if (recordedOutputs.Count == 0)
+            return [];
+
+        var recordedAt = capturedAt;
+        ActivityOutputPublisher.PublishActivityOutputs(activityOutputRegister, workItem, invokePayload, executableNode, recordedOutputs, recordedAt);
+        foreach (var snapshot in ActivityOutputPublisher.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, recordedOutputs, recordedAt))
+            valueSnapshots.Add(snapshot);
+
+        return await ActivityOutputPublisher.BuildDurableOutputChangesAsync(
+            workItem,
+            invokePayload,
+            executableNode,
+            recordedOutputs,
+            recordedAt,
+            storageDriverRegistry,
+            cancellationToken);
+    }
+
+    private static void ValidateWorkflowDispatchWait(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        WorkflowExecutable executable,
+        WorkflowDispatchCheckpointRequest request)
+    {
+        var bookmark = request.WaitBookmark
+            ?? throw new InvalidOperationException("A wait-mode workflow dispatch requires a bookmark.");
+        if (request.Record.Mode != WorkflowDispatchMode.WaitForCompletion)
+            throw new InvalidOperationException("A workflow dispatch carrying a bookmark must use WaitForCompletion mode.");
+        if (!StringComparer.Ordinal.Equals(request.Record.ParentWorkflowExecutionId, workItem.WorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(request.Record.ParentActivityExecutionId, invokePayload.ActivityExecutionId))
+        {
+            throw new InvalidOperationException("The staged workflow dispatch wait does not belong to the invoked activity execution.");
+        }
+        if (!StringComparer.Ordinal.Equals(bookmark.ResumeTargetId, request.ExpectedWaitResumeTargetId) ||
+            !StringComparer.Ordinal.Equals(bookmark.StimulusType, request.ExpectedWaitStimulusType))
+        {
+            throw new InvalidOperationException("The staged workflow dispatch wait does not match its canonical completion route.");
+        }
+
+        if (!executable.ResumeTargets.TryGetValue(bookmark.ResumeTargetId, out var resumeTarget))
+            throw new InvalidOperationException($"The staged workflow dispatch wait references missing resume target '{bookmark.ResumeTargetId}'.");
+        if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, invokePayload.ExecutableNodeId))
+            throw new InvalidOperationException("The staged workflow dispatch wait resume target belongs to a different executable node.");
     }
 
     // Records a blocking fault incident for the activity and commits it. Each fault arm in InvokeActivityAsync
@@ -895,6 +1005,119 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
     {
         var workItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState);
         await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    }
+
+    private async ValueTask CommitWorkflowDispatchWaitAsync(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
+        BookmarkLifecycleNotifier? bookmarkLifecycleNotifier,
+        RuntimeSchedulerWorkItem invokeWorkItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ActivityExecutionState activityExecution,
+        WorkflowDispatchCheckpointRequest dispatchRequest,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        CancellationToken cancellationToken)
+    {
+        var request = dispatchRequest.WaitBookmark
+            ?? throw new InvalidOperationException("A wait-mode workflow dispatch requires a bookmark.");
+        var occurredAt = invokeWorkItem.RecordedAt;
+        var bookmarkPayload = new RuntimeCreateBookmarkCommandPayload(
+            pinnedExecutable: invokePayload.PinnedExecutable,
+            bookmarkId: request.BookmarkId,
+            activityExecutionId: invokePayload.ActivityExecutionId,
+            executableNodeId: invokePayload.ExecutableNodeId,
+            resumeTargetId: request.ResumeTargetId,
+            stimulusType: request.StimulusType,
+            stimulusHash: request.StimulusHash,
+            payload: request.Payload,
+            expiresAt: request.ExpiresAt,
+            reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
+            metadata: request.Metadata,
+            valueSnapshots: valueSnapshots,
+            durableValueChanges: durableValueChanges);
+        var suspension = BookmarkSuspension.Build(invokeWorkItem, bookmarkPayload, activityExecution, occurredAt);
+        var bookmark = suspension.Bookmark;
+        var suspendedActivity = suspension.ActivityExecution;
+        var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:dispatch-wait:{request.BookmarkId}";
+        var metadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = invokeWorkItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = invokeWorkItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = "WorkflowDispatchWait",
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = invokePayload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = invokePayload.ExecutableNodeId,
+            [RuntimeMetadataKeys.BookmarkId] = request.BookmarkId,
+            [RuntimeMetadataKeys.ResumeTargetId] = request.ResumeTargetId,
+            [RuntimeMetadataKeys.StimulusType] = request.StimulusType,
+            [RuntimeMetadataKeys.StimulusHash] = request.StimulusHash,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = invokePayload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = invokePayload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = invokePayload.PinnedExecutable.ArtifactHash,
+            [RuntimeMetadataKeys.DispatchId] = dispatchRequest.Record.DispatchId
+        });
+        var inspection = await inspectionAccumulator.BuildProjectionAsync(
+            suspendedActivity,
+            checkpointId,
+            occurredAt,
+            bookmarks: [ActivityExecutionBookmarkSummary.From(bookmark)],
+            valueSnapshots: valueSnapshots,
+            metadata: metadata,
+            cancellationToken: cancellationToken);
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: $"commit:{invokeWorkItem.WorkItemId}:dispatch-wait:{request.BookmarkId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: checkpointId,
+                Name: RuntimeCheckpointNames.BookmarkCreated,
+                WorkflowExecutionId: invokeWorkItem.WorkflowExecutionId,
+                OccurredAt: occurredAt,
+                ActivityExecutionIds: [invokePayload.ActivityExecutionId],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: invokePayload.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: suspendedActivity,
+                        Metadata: metadata)
+                ],
+                bookmarks:
+                [
+                    new RuntimeStateChange<BookmarkState>(
+                        StateId: bookmark.BookmarkId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: bookmark,
+                        Metadata: metadata)
+                ],
+                durableValues: durableValueChanges,
+                incidents: [],
+                operational: [],
+                activityExecutionInspections:
+                [
+                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                        StateId: invokePayload.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: inspection,
+                        Metadata: metadata)
+                ],
+                workflowDispatches:
+                [
+                    new RuntimeStateChange<WorkflowDispatchRecord>(
+                        StateId: dispatchRequest.Record.DispatchId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: dispatchRequest.Record,
+                        Metadata: metadata)
+                ]),
+            PostCommitIntents: [dispatchRequest.StartIntent],
+            Metadata: metadata);
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        if (bookmarkLifecycleNotifier is not null)
+            await bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, cancellationToken);
     }
 
     private async ValueTask CommitCompletedActivityAsync(

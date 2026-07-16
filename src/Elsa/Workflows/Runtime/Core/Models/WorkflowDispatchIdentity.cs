@@ -19,12 +19,26 @@ public sealed class WorkflowDispatchIdentity
         ChildWorkflowExecutionId = $"wfexec:dispatch:{Version}:{digest}";
         StartIntentId = $"intent:dispatch-start:{Version}:{digest}";
         StartIdempotencyKey = $"dispatch-start:{Version}:{digest}";
+        WaitBookmarkId = $"bookmark:dispatch-wait:{Version}:{digest}";
+        WaitStimulusHash = $"stimulus:dispatch-wait:{Version}:{digest}";
+        ParentResumeIntentId = $"intent:dispatch-resume:{Version}:{digest}";
+        ParentResumeIdempotencyKey = $"dispatch-resume:{Version}:{digest}";
     }
 
     public string DispatchId { get; }
     public string ChildWorkflowExecutionId { get; }
     public string StartIntentId { get; }
     public string StartIdempotencyKey { get; }
+    public string WaitBookmarkId { get; }
+    public string WaitStimulusHash { get; }
+    public string ParentResumeIntentId { get; }
+    public string ParentResumeIdempotencyKey { get; }
+
+    public string ParentResumeOutboxItemId(string commitId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        return $"{commitId}:{ParentResumeIntentId}";
+    }
 
     private static string ComputeDigest(string parentWorkflowExecutionId, string parentActivityExecutionId)
     {

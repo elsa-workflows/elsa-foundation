@@ -4,8 +4,11 @@ using CShells.Lifecycle;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime;
 
@@ -31,6 +34,11 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         DispatchWorkflowOptions.ValidateMaxNestingDepth(MaxNestingDepth, nameof(MaxNestingDepth));
         services.Configure<DispatchWorkflowOptions>(options => options.MaxNestingDepth = MaxNestingDepth);
         services.AddRuntimePostCommitIntentHandler<ChildStartExecutor>(DispatchWorkflowConstants.StartChildIntentKind);
+        services.AddRuntimePostCommitIntentHandler<ParentResumeExecutor>(
+            DispatchWorkflowConstants.ResumeParentIntentKind,
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCompletionEnricher>());
         services.AddSingleton<IShellInitializer, WorkflowDispatchReadinessInitializer>();
     }
 }

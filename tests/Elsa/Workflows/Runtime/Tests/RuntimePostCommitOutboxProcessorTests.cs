@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -70,6 +71,56 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, processed.RequestedDeliveryResultStatus);
         Assert.Equal(1, result.FailedCount);
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(11), limit: 10)));
+    }
+
+    [Fact]
+    public async Task Processor_LogsPayloadSafeStructuredWarningForRecordedUnboundedRetry()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var dispatcher = new RecordingDispatcher(
+            failOnIntentId: "intent-resume",
+            failure: new InvalidOperationException("exception-secret stack-secret"));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            dispatcher,
+            new FixedTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-resume",
+            "intent-resume",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(15)),
+            kind: "Elsa.Activities.DispatchWorkflow.ResumeParent",
+            metadata: new Dictionary<string, string> { ["runtime.dispatchId"] = "dispatch-safe" }));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        const string safeFailureMessage = "Runtime post-commit intent delivery deferred pending acknowledgement.";
+        var processed = Assert.Single(result.Items);
+        Assert.Equal(safeFailureMessage, processed.FailureMessage);
+        var persisted = Assert.Single(await store.GetDeliverableAsync(
+            new RuntimePostCommitOutboxQuery(_now.AddSeconds(15), 10)));
+        Assert.Equal(safeFailureMessage, persisted.LastFailureMessage);
+        Assert.DoesNotContain("exception-secret", persisted.LastFailureMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stack-secret", persisted.LastFailureMessage, StringComparison.OrdinalIgnoreCase);
+
+        var warning = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Null(warning.Exception);
+        Assert.Equal("outbox-resume", warning.Fields["OutboxItemId"]);
+        Assert.Equal("intent-resume", warning.Fields["IntentId"]);
+        Assert.Equal("Elsa.Activities.DispatchWorkflow.ResumeParent", warning.Fields["IntentKind"]);
+        Assert.Equal("dispatch-safe", warning.Fields["DispatchId"]);
+        Assert.Equal(1, warning.Fields["DeliveryAttemptCount"]);
+        Assert.Equal(_now.AddSeconds(15), warning.Fields["NextAvailableAt"]);
+        var serializedWarning = string.Join(" ", warning.Fields.Select(pair => $"{pair.Key}={pair.Value}"));
+        Assert.DoesNotContain("signal", serializedWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sent", serializedWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exception-secret", serializedWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stack-secret", serializedWarning, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -346,5 +397,41 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => NoopDisposable.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var fields = state is IEnumerable<KeyValuePair<string, object?>> structured
+                ? structured.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                : new Dictionary<string, object?> { ["Message"] = formatter(state, exception) };
+            Entries.Add(new LogEntry(logLevel, eventId, fields, exception));
+        }
+    }
+
+    private sealed record LogEntry(
+        LogLevel Level,
+        EventId EventId,
+        IReadOnlyDictionary<string, object?> Fields,
+        Exception? Exception);
+
+    private sealed class NoopDisposable : IDisposable
+    {
+        public static NoopDisposable Instance { get; } = new();
+        public void Dispose()
+        {
+        }
     }
 }

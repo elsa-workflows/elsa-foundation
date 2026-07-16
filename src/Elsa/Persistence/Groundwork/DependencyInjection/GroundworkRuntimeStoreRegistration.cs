@@ -87,11 +87,13 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<IRuntimeCheckpointCommitStore, GroundworkRuntimeCheckpointWriter>();
 
         services.RemoveAll<IRuntimePostCommitOutboxStore>();
+        services.RemoveAll<IPostCommitOutboxLookupStore>();
         services.RemoveAll<IRuntimePostCommitOutboxClaimStore>();
         services.RemoveAll<IRuntimePostCommitOutboxClaimCompletionStore>();
         services.RemoveAll<GroundworkRuntimePostCommitOutboxStore>();
         services.AddScoped<GroundworkRuntimePostCommitOutboxStore>();
         services.AddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
+        services.AddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
         services.AddScoped<IRuntimePostCommitOutboxClaimStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
         services.AddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
 

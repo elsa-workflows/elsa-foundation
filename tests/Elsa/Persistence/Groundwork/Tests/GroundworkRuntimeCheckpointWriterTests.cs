@@ -2,6 +2,7 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -135,6 +136,62 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         Assert.Equal([outbox.OutboxItemId], result.PendingPostCommitWorkIds);
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, outbox.OutboxItemId));
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-dispatch"));
+    }
+
+    [Fact]
+    public async Task Wait_Checkpoint_Persists_Suspension_Bookmark_Dispatch_And_Start_Outbox_Across_Restart_And_Replay()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-dispatch-wait-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        var commit = BuildWaitCommit("commit-dispatch-wait");
+        var identity = DispatchIdentity("wf-1");
+        try
+        {
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+                await CreateWriter(fixture.DocumentStore).CommitAsync(commit, Decision);
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                var writer = CreateWriter(fixture.DocumentStore);
+                var replay = await writer.CommitAsync(commit, Decision);
+                Assert.Single(replay.PendingPostCommitWorkIds);
+
+                var activity = await new GroundworkActivityExecutionStateStore(
+                    fixture.DocumentStore,
+                    GroundworkTestSerialization.Serializer).FindAsync("wf-1", "ae-1");
+                Assert.NotNull(activity);
+                Assert.Equal(ActivityExecutionStatus.Suspended, activity.Status);
+                Assert.Equal([identity.WaitBookmarkId], activity.BookmarkIds);
+
+                var bookmark = await new GroundworkBookmarkStateStore(
+                    fixture.DocumentStore,
+                    GroundworkTestSerialization.Serializer).FindAsync("wf-1", identity.WaitBookmarkId);
+                Assert.NotNull(bookmark);
+                Assert.Null(bookmark.ExpiresAt);
+                Assert.Equal(identity.WaitStimulusHash, bookmark.StimulusHash);
+
+                var dispatch = await new GroundworkWorkflowDispatchStore(
+                    fixture.DocumentStore,
+                    GroundworkTestSerialization.Serializer,
+                    GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(identity.DispatchId);
+                Assert.NotNull(dispatch);
+                Assert.Equal(WorkflowDispatchMode.WaitForCompletion, dispatch.Mode);
+                Assert.NotNull(await fixture.DocumentStore.LoadAsync(
+                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+                    RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, PendingDispatchOutbox(commit.CommitId, "wf-1").Intent)));
+
+                var conflict = BuildWaitCommit("commit-dispatch-wait", bookmarkNode: "node-conflict");
+                await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => writer.CommitAsync(conflict, Decision).AsTask());
+                Assert.Equal("node-ae-1", (await new GroundworkBookmarkStateStore(
+                    fixture.DocumentStore,
+                    GroundworkTestSerialization.Serializer).FindAsync("wf-1", identity.WaitBookmarkId))!.ExecutableNodeId);
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
     }
 
     [Fact]
@@ -521,6 +578,50 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             new Dictionary<string, string>());
     }
 
+    private static RuntimeCheckpointCommit BuildWaitCommit(string commitId, string bookmarkNode = "node-ae-1")
+    {
+        const string workflowExecutionId = "wf-1";
+        var identity = DispatchIdentity(workflowExecutionId);
+        var activity = ActivityState(workflowExecutionId, "ae-1") with
+        {
+            Status = ActivityExecutionStatus.Suspended,
+            SubStatus = BookmarkSuspension.SuspendedSubStatus,
+            BookmarkIds = [identity.WaitBookmarkId]
+        };
+        var bookmark = Bookmark(workflowExecutionId, identity.WaitBookmarkId, bookmarkNode) with
+        {
+            StimulusHash = identity.WaitStimulusHash,
+            ExpiresAt = null
+        };
+        var dispatch = Dispatch(workflowExecutionId, WorkflowDispatchMode.WaitForCompletion);
+        var outbox = PendingDispatchOutbox(commitId, workflowExecutionId);
+        var metadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory
+        };
+        return new RuntimeCheckpointCommit(
+            CommitId: commitId,
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: $"checkpoint:{commitId}",
+                Name: RuntimeCheckpointNames.BookmarkCreated,
+                WorkflowExecutionId: workflowExecutionId,
+                OccurredAt: DateTimeOffset.UnixEpoch,
+                ActivityExecutionIds: ["ae-1"],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [Change("ae-1", RuntimeStateChangeOperation.Upsert, activity)],
+                bookmarks: [Change(identity.WaitBookmarkId, RuntimeStateChangeOperation.Upsert, bookmark)],
+                durableValues: [Change("dv-1", RuntimeStateChangeOperation.Upsert, DurableValue(workflowExecutionId, "dv-1"))],
+                incidents: [],
+                operational: [],
+                workflowDispatches: [Change(identity.DispatchId, RuntimeStateChangeOperation.Upsert, dispatch)],
+                postCommitOutbox: [Change(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox)]),
+            PostCommitIntents: [],
+            Metadata: metadata);
+    }
+
     private static RuntimeStateChange<T> Change<T>(string stateId, RuntimeStateChangeOperation operation, T state) =>
         new(stateId, operation, state, new Dictionary<string, string>());
 
@@ -545,7 +646,9 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             DateTimeOffset.UnixEpoch);
     }
 
-    private static WorkflowDispatchRecord Dispatch(string workflowExecutionId) => new(
+    private static WorkflowDispatchRecord Dispatch(
+        string workflowExecutionId,
+        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget) => new(
         dispatchId: DispatchIdentity(workflowExecutionId).DispatchId,
         parentWorkflowExecutionId: workflowExecutionId,
         parentActivityExecutionId: "ae-1",
@@ -554,7 +657,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         childSource: new WorkflowExecutableSourceProvenance(
             "source-child", "WorkflowDefinitionVersion", "version-child", "1",
             "definition-child", "version-child", "1", "publication-child", "slot-child"),
-        mode: WorkflowDispatchMode.FireAndForget,
+        mode: mode,
         status: WorkflowDispatchStatus.Pending,
         correlationId: null,
         tenantId: null,

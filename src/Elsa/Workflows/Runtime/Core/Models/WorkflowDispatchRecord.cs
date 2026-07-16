@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -168,6 +169,16 @@ public sealed class WorkflowDispatchRecord
 public sealed class WorkflowDispatchCheckpointRequest
 {
     public WorkflowDispatchCheckpointRequest(WorkflowDispatchRecord record, RuntimePostCommitIntent startIntent)
+        : this(record, startIntent, waitBookmark: null, expectedWaitResumeTargetId: null, expectedWaitStimulusType: null)
+    {
+    }
+
+    public WorkflowDispatchCheckpointRequest(
+        WorkflowDispatchRecord record,
+        RuntimePostCommitIntent startIntent,
+        ActivityBookmarkRequest? waitBookmark,
+        string? expectedWaitResumeTargetId,
+        string? expectedWaitStimulusType)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(startIntent);
@@ -187,12 +198,41 @@ public sealed class WorkflowDispatchCheckpointRequest
             throw new ArgumentException("The start intent does not match the dispatch record's deterministic identity.", nameof(startIntent));
         }
 
+        if (record.Mode == WorkflowDispatchMode.FireAndForget && waitBookmark is not null)
+            throw new ArgumentException("A fire-and-forget dispatch cannot carry a wait bookmark.", nameof(waitBookmark));
+        if (record.Mode == WorkflowDispatchMode.WaitForCompletion && waitBookmark is null)
+            throw new ArgumentNullException(nameof(waitBookmark), "A wait-for-completion dispatch requires a bookmark.");
+        if (waitBookmark is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(expectedWaitResumeTargetId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(expectedWaitStimulusType);
+            if (!StringComparer.Ordinal.Equals(waitBookmark.BookmarkId, identity.WaitBookmarkId) ||
+                !StringComparer.Ordinal.Equals(waitBookmark.StimulusHash, identity.WaitStimulusHash))
+            {
+                throw new ArgumentException("The wait bookmark does not match the dispatch record's deterministic identity.", nameof(waitBookmark));
+            }
+            if (!StringComparer.Ordinal.Equals(waitBookmark.ResumeTargetId, expectedWaitResumeTargetId) ||
+                !StringComparer.Ordinal.Equals(waitBookmark.StimulusType, expectedWaitStimulusType))
+            {
+                throw new ArgumentException("The wait bookmark does not match the dispatch activity's canonical completion route.", nameof(waitBookmark));
+            }
+
+            if (waitBookmark.ExpiresAt is not null)
+                throw new ArgumentException("A DispatchWorkflow wait bookmark cannot expire.", nameof(waitBookmark));
+        }
+
         Record = record;
         StartIntent = startIntent;
+        WaitBookmark = waitBookmark;
+        ExpectedWaitResumeTargetId = expectedWaitResumeTargetId;
+        ExpectedWaitStimulusType = expectedWaitStimulusType;
     }
 
     public WorkflowDispatchRecord Record { get; }
     public RuntimePostCommitIntent StartIntent { get; }
+    public ActivityBookmarkRequest? WaitBookmark { get; }
+    public string? ExpectedWaitResumeTargetId { get; }
+    public string? ExpectedWaitStimulusType { get; }
 }
 
 public sealed class WorkflowDispatchStartPayload
@@ -434,7 +474,8 @@ public static class WorkflowDispatchLifecycle
             record.InputDescriptors,
             record.CreatedAt,
             updatedAt,
-            record.Metadata);
+            record.Metadata,
+            record.DispatchNestingDepth);
         ValidateTransition(record, candidate);
         return candidate;
     }
@@ -464,7 +505,8 @@ public static class WorkflowDispatchLifecycle
             record.InputDescriptors,
             record.CreatedAt,
             updatedAt,
-            metadata);
+            metadata,
+            record.DispatchNestingDepth);
         ValidateTransition(record, candidate);
         return candidate;
     }
@@ -540,6 +582,7 @@ public static class WorkflowDispatchLifecycle
         left.RunKind == right.RunKind &&
         AuthorityEquals(left.Authority, right.Authority) &&
         left.InputDescriptors.SequenceEqual(right.InputDescriptors) &&
+        left.DispatchNestingDepth == right.DispatchNestingDepth &&
         left.CreatedAt == right.CreatedAt &&
         ImmutableMetadataEquals(left.Metadata, right.Metadata);
 

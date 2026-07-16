@@ -13,6 +13,7 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IWorkflowEngineTracer _tracer;
     private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
+    private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
@@ -36,16 +37,34 @@ public sealed class RuntimeCheckpointCommitter
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
         IWorkflowEngineTracer? tracer,
         IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, enrichers, [])
+    {
+    }
+
+    public RuntimeCheckpointCommitter(
+        IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IWorkflowEngineTracer? tracer,
+        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
         ArgumentNullException.ThrowIfNull(enrichers);
+        ArgumentNullException.ThrowIfNull(intentHandlerContributions);
 
         _persistencePolicy = persistencePolicy;
         _checkpointCommitStore = checkpointCommitStore;
         _ownershipContextAccessor = ownershipContextAccessor;
         _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
-        _enrichers = enrichers.ToArray();
+        _enrichers = enrichers
+            .Select((enricher, index) => new { Enricher = enricher, Index = index })
+            .OrderBy(item => item.Enricher.Order)
+            .ThenBy(item => item.Index)
+            .Select(item => item.Enricher)
+            .ToArray();
+        _intentHandlerContributions = intentHandlerContributions.ToArray();
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -94,7 +113,7 @@ public sealed class RuntimeCheckpointCommitter
 
         // Fold post-commit intents into the applied change set so the provider persists them atomically with
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
-        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit);
+        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
         var commitToPersist = postCommitOutbox.Count == 0
             ? commit
             : commit with { StateChanges = commit.StateChanges.WithPostCommitOutbox(postCommitOutbox) };

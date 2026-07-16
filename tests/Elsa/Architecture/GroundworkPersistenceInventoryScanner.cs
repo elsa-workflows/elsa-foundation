@@ -60,6 +60,7 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IIncidentStateStore"] = ["IncidentStateDocumentKind"],
             ["IRuntimeCheckpointCommitStore"] = ["CheckpointCommitDocumentKind"],
             ["IRuntimePostCommitOutboxStore"] = ["PostCommitOutboxDocumentKind"],
+            ["IPostCommitOutboxLookupStore"] = ["PostCommitOutboxDocumentKind"],
             ["IRuntimePostCommitOutboxClaimStore"] = ["PostCommitOutboxDocumentKind"],
             ["IRuntimePostCommitOutboxClaimCompletionStore"] = ["PostCommitOutboxDocumentKind"],
             ["IWorkflowDispatchStore"] = ["WorkflowDispatchDocumentKind"],

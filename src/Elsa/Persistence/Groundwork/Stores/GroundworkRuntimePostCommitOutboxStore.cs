@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
@@ -27,6 +28,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
     IBoundedDocumentStore? boundedStore = null,
     IPersistenceAccessContextAccessor? accessContextAccessor = null) :
     IRuntimePostCommitOutboxStore,
+    IPostCommitOutboxLookupStore,
     IRuntimePostCommitOutboxClaimStore,
     IRuntimePostCommitOutboxClaimCompletionStore
 {
@@ -73,6 +75,15 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         return await QueryCandidatesAsync(query, includeExpiredClaims: false, query.Limit, cancellationToken);
     }
 
+    public async ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
+        string outboxItemId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return (await LoadAsync(outboxItemId, cancellationToken))?.Item;
+    }
+
     public async ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -86,7 +97,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         if (existing.Item.Status == RuntimePostCommitOutboxStatus.Delivering || existing.Item.DeliveryFencingToken > 0)
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
-        var deliveryAttemptCount = existing.Item.DeliveryAttemptCount + 1;
+        var deliveryAttemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.Item.DeliveryAttemptCount);
         var status = NormalizeDeliveryStatus(existing.Item, result.Status, deliveryAttemptCount);
         DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
             ? NextRetryAvailableAt(existing.Item, result.RecordedAt)
@@ -234,7 +245,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
                 throw new InvalidOperationException(
                     "An atomic workflow-dispatch projection is valid only for a final outbox failure and DispatchFailed lifecycle state.");
             }
-            if (!completion.Claim.Item.Intent.Metadata.TryGetValue("runtime.dispatchId", out var dispatchId) ||
+            if (!completion.Claim.Item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId) ||
                 !StringComparer.Ordinal.Equals(dispatchId, workflowDispatch.DispatchId))
             {
                 throw new InvalidOperationException(
@@ -362,7 +373,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         if (item.Status == RuntimePostCommitOutboxStatus.Pending)
             return true;
         if (item.Status == RuntimePostCommitOutboxStatus.FailedRetryable)
-            return item.RetryPolicy.MaxAttempts > 0 && item.DeliveryAttemptCount < item.RetryPolicy.MaxAttempts;
+            return !item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount);
         return false;
     }
 
@@ -385,7 +396,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
     {
         if (status != RuntimePostCommitOutboxStatus.FailedRetryable)
             return status;
-        return deliveryAttemptCount >= existing.RetryPolicy.MaxAttempts
+        return existing.RetryPolicy.IsExhaustedAfterAttempt(deliveryAttemptCount)
             ? RuntimePostCommitOutboxStatus.FailedFinal
             : RuntimePostCommitOutboxStatus.FailedRetryable;
     }

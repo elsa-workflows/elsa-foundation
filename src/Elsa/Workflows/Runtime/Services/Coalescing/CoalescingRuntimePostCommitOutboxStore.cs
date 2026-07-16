@@ -11,11 +11,12 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// </summary>
 public sealed class CoalescingRuntimePostCommitOutboxStore(
     CoalescingInner<IRuntimePostCommitOutboxStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimePostCommitOutboxStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
     private readonly IRuntimePostCommitOutboxStore _inner = inner.Value;
     private readonly IRuntimePostCommitOutboxClaimStore? _innerClaimStore = inner.Value as IRuntimePostCommitOutboxClaimStore;
     private readonly IRuntimePostCommitOutboxClaimCompletionStore? _innerCompletionStore = inner.Value as IRuntimePostCommitOutboxClaimCompletionStore;
+    private readonly IPostCommitOutboxLookupStore? _innerLookupStore = inner.Value as IPostCommitOutboxLookupStore;
 
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default)
     {
@@ -39,6 +40,24 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
         }
 
         return _inner.RecordDeliveryResultAsync(result, cancellationToken);
+    }
+
+    public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
+        string outboxItemId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (sessionAccessor.Current is { IsActive: true } session &&
+            session.TryFindOutboxItem(outboxItemId, out var overlayItem))
+        {
+            return new ValueTask<RuntimePostCommitOutboxItem?>(overlayItem);
+        }
+
+        return (_innerLookupStore ?? throw new InvalidOperationException(
+            "The configured post-commit outbox store does not provide exact-item lookup support."))
+            .FindAsync(outboxItemId, cancellationToken);
     }
 
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(

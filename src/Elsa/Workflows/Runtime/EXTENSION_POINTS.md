@@ -91,6 +91,12 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 - **Usage:** implemented by runtime persistence providers to commit the checkpoint boundary and its atomic state-change envelope.
 - **Default implementation:** `InMemoryRuntimeCheckpointWriter` *(single-node in-memory default for the current runtime slice; durable providers replace this)*.
 
+### `IRuntimeCheckpointCommitEnricher` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (zero or more deterministic enrichment phases run before checkpoint fingerprinting and persistence).
+- **Signature:** `Order` plus `EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)`.
+- **Registration and ordering:** register contributors as `IEnumerable<IRuntimeCheckpointCommitEnricher>`. Lower `Order` values run first; equal values retain registration order. Existing contributors that do not override `Order` remain in the default phase (`0`). Later phases may depend only on state established by documented earlier phases.
+- **Default implementations and dependents:** `WorkflowDispatchCheckpointEnricher` projects generic child terminal lifecycle in phase `0`; DispatchWorkflow's successful-result enricher runs later to consume that projection. Replacements must be replay-deterministic and must fail closed on conflicting state.
+
 ### `IRuntimePostCommitIntentDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one dispatcher owns delivery of committed outbound runtime intents for a composition).
 - **Signature:** `DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)`.
@@ -110,6 +116,18 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 - **Signature:** `SavePendingAsync(RuntimePostCommitOutboxItem item, ...)`, `GetDeliverableAsync(RuntimePostCommitOutboxQuery query, ...)`, `RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, ...)`.
 - **Usage:** stores delivery state for post-commit intents so providers can preserve record, commit, deliver, and mark-delivered ordering.
 - **Default implementation:** `InMemoryRuntimePostCommitOutboxStore` *(single-node in-memory default for the current runtime slice; durable providers replace this)*.
+
+### `IPostCommitOutboxLookupStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement read capability (one provider resolves an exact already-committed post-commit outbox item without widening the base outbox store).
+- **Signature:** `FindAsync(string outboxItemId, CancellationToken cancellationToken = default)`.
+- **Usage and dependents:** successful DispatchWorkflow terminal enrichment uses the exact committed item to preserve replay identity after uncertain acknowledgement. The in-memory checkpoint store, coalescing overlay, and Groundwork outbox provider implement the capability alongside their write store.
+- **Default implementation and override guidance:** `InMemoryRuntimeCheckpointCommitStore` supplies the process-local default. Durable providers that replace `IRuntimePostCommitOutboxStore` must also register a matching lookup implementation when a feature depends on committed-intent replay; the lookup must share the same physical records and access scope as the writer.
+
+### `IWorkflowOutputSource` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement projection (one source exposes policy-safe terminal workflow outputs to runtime features).
+- **Signature:** `ReadAsync(string workflowExecutionId, IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null, CancellationToken cancellationToken = default)`.
+- **Usage and dependents:** DispatchWorkflow successful completion reads the child execution's durable workflow-output channel and overlays the current terminal checkpoint changes before recording a parent result. Redacted entries retain name/type metadata but never expose their value.
+- **Default implementation and override guidance:** `WorkflowOutputSource` projects `IDurableValueStateStore` through `IRuntimePayloadCapturePolicy`. Replacements must preserve execution scoping, terminal-change overlay semantics, ordinal output ordering, declared types, and explicit value-free redaction.
 
 ### `IRuntimeRecoveryScanner` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one scanner identifies interrupted workflow executions for a runtime composition).

@@ -84,7 +84,7 @@ The job is container-free and does not create provider or restart evidence. SQLi
 | `runtime-recurring-trigger-schedule` | `IRecurringTriggerScheduleStore` | Operational store | Scoped | #645 | Client filtering / schedule race | `recurring-schedule-selection` |
 | `runtime-checkpoint-commit` | `IRuntimeCheckpointCommitStore` | Specialized primitive | Scoped | #645 | Fence TOCTOU / process-local locks | `checkpoint-commit` |
 | `runtime-diagnostics-settings` | `IRuntimeDiagnosticsSettingsStore` | External authority adapter | Classified by #660 | #660 | Draft PR not landed | Diagnostics workload owned by #660/#646 |
-| `runtime-post-commit-outbox` | `IRuntimePostCommitOutboxStore` | Operational store | Scoped | #645 | No atomic claim/stale-ack token | `outbox-drain` |
+| `runtime-post-commit-outbox` | `IRuntimePostCommitOutboxStore`, `IPostCommitOutboxLookupStore` | Operational store | Scoped | #645 | No atomic claim/stale-ack token | `outbox-drain` |
 | `runtime-scheduler-state` | `ISchedulerStateStore` | Operational store | Scoped | #645 | Provider/restart/OCC evidence | Recovery representative |
 | `runtime-executable-source-reference` | `IWorkflowExecutableSourceReferenceStore` | Ordinary document + bounded route | Scoped | #645 | Client filtering / matrix | Trigger/bookmark representative |
 | `runtime-workflow-executable` | `IWorkflowExecutableStore` | Ordinary document | Scoped | #645 | Provider/restart/OCC evidence | Checkpoint representative |

@@ -1,11 +1,17 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
 {
+    private const string RetryUntilAcknowledgedFailureMessage =
+        "Runtime post-commit intent delivery deferred pending acknowledgement.";
+
     private readonly IRuntimePostCommitOutboxStore _outboxStore;
     private readonly IRuntimePostCommitIntentDispatcher _intentDispatcher;
     private readonly TimeProvider _timeProvider;
@@ -13,6 +19,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly IRuntimePostCommitOutboxClaimStore? _claimStore;
     private readonly IRuntimePostCommitOutboxClaimCompletionStore? _claimCompletionStore;
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
+    private readonly ILogger<RuntimePostCommitOutboxProcessor> _logger;
     private readonly string _claimOwnerId = $"runtime-outbox-{Guid.NewGuid():N}";
     private static readonly TimeSpan ClaimVisibilityTimeout = TimeSpan.FromMinutes(1);
 
@@ -46,6 +53,17 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         TimeProvider timeProvider,
         IRuntimeFaultCapturePolicy faultCapturePolicy,
         IWorkflowDispatchStore? workflowDispatchStore)
+        : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, logger: null)
+    {
+    }
+
+    public RuntimePostCommitOutboxProcessor(
+        IRuntimePostCommitOutboxStore outboxStore,
+        IRuntimePostCommitIntentDispatcher intentDispatcher,
+        TimeProvider timeProvider,
+        IRuntimeFaultCapturePolicy faultCapturePolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        ILogger<RuntimePostCommitOutboxProcessor>? logger)
     {
         ArgumentNullException.ThrowIfNull(outboxStore);
         ArgumentNullException.ThrowIfNull(intentDispatcher);
@@ -59,6 +77,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _claimStore = outboxStore as IRuntimePostCommitOutboxClaimStore;
         _claimCompletionStore = outboxStore as IRuntimePostCommitOutboxClaimCompletionStore;
         _workflowDispatchStore = workflowDispatchStore;
+        _logger = logger ?? NullLogger<RuntimePostCommitOutboxProcessor>.Instance;
     }
 
     public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
@@ -120,16 +139,22 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         catch (Exception exception)
         {
-            var failureMessage = _faultCapturePolicy.Capture(exception).ToSummaryString();
+            var failureMessage = item.RetryPolicy.RetryUntilAcknowledged
+                ? RetryUntilAcknowledgedFailureMessage
+                : _faultCapturePolicy.Capture(exception).ToSummaryString();
+            var recordedAt = _timeProvider.GetUtcNow();
             var recordingException = await TryRecordDeliveryResultAsync(
                 item,
                 claim,
                 RuntimePostCommitOutboxStatus.FailedRetryable,
                 failureMessage,
+                recordedAt,
                 cancellationToken);
 
             if (recordingException is not null)
                 throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
+
+            LogRetryUntilAcknowledged(item, recordedAt);
 
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
@@ -138,7 +163,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 failureMessage);
         }
 
-        await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, cancellationToken);
+        await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, cancellationToken);
 
         return new RuntimePostCommitOutboxProcessedItem(
             item.OutboxItemId,
@@ -152,11 +177,12 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxClaim? claim,
         RuntimePostCommitOutboxStatus status,
         string? failureMessage,
+        DateTimeOffset recordedAt,
         CancellationToken cancellationToken)
     {
         try
         {
-            await RecordDeliveryResultAsync(item, claim, status, failureMessage, cancellationToken);
+            await RecordDeliveryResultAsync(item, claim, status, failureMessage, recordedAt, cancellationToken);
             return null;
         }
         catch (OperationCanceledException)
@@ -174,12 +200,13 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxClaim? claim,
         RuntimePostCommitOutboxStatus status,
         string? failureMessage,
+        DateTimeOffset? recordedAt,
         CancellationToken cancellationToken)
     {
         var result = new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: item.OutboxItemId,
             status: status,
-            recordedAt: _timeProvider.GetUtcNow(),
+            recordedAt: recordedAt ?? _timeProvider.GetUtcNow(),
             failureMessage: failureMessage);
         if (claim is not null)
         {
@@ -208,7 +235,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         CancellationToken cancellationToken)
     {
         if (!WillBecomeFinalFailure(item, result) ||
-            !item.Intent.Metadata.TryGetValue("runtime.dispatchId", out var dispatchId))
+            !item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId))
             return null;
         if (_workflowDispatchStore is null)
             throw new InvalidOperationException("A workflow dispatch store is required to project final child-start delivery failure.");
@@ -225,5 +252,25 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxDeliveryResult result) =>
         result.Status == RuntimePostCommitOutboxStatus.FailedFinal ||
         result.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
-        item.DeliveryAttemptCount + 1 >= item.RetryPolicy.MaxAttempts;
+        item.RetryPolicy.IsExhaustedAfterAttempt(
+            RuntimePostCommitRetryPolicy.SaturatingIncrement(item.DeliveryAttemptCount));
+
+    private void LogRetryUntilAcknowledged(RuntimePostCommitOutboxItem item, DateTimeOffset recordedAt)
+    {
+        if (!item.RetryPolicy.RetryUntilAcknowledged)
+            return;
+
+        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(item.DeliveryAttemptCount);
+        var nextAvailableAt = recordedAt.Add(item.RetryPolicy.Delay!.Value);
+        _logger.LogWarning(
+            new EventId(67901, "RuntimePostCommitRetryDeferred"),
+            "Runtime post-commit intent retry deferred. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} NextAvailableAt={NextAvailableAt}",
+            item.OutboxItemId,
+            item.Intent.IntentId,
+            item.Intent.Kind,
+            dispatchId,
+            attemptCount,
+            nextAvailableAt);
+    }
 }

@@ -56,6 +56,13 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind));
     }
 
+    [Fact]
+    public void Post_commit_outbox_shape_is_explicitly_versioned_at_v3() =>
+        Assert.Equal(
+            3,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind));
+
     // Set GROUNDWORK_FIXTURE_REGEN=1 and run this project to (re)write the committed fixtures into the
     // source tree after an intentional version bump. Off by default so a normal run only compares.
     private static readonly bool Regenerate =
@@ -177,11 +184,14 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     // --- Fixture file access ---
 
     private static string ReadCommittedFixture(string kind, int version)
+        => ReadCommittedFixtureFile(kind, version);
+
+    private static string ReadCommittedFixtureFile(string fixtureName, int version)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", kind + ".json");
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", fixtureName + ".json");
         Assert.True(
             File.Exists(path),
-            $"Missing committed golden fixture for kind '{kind}' at '{path}'. " +
+            $"Missing committed golden fixture '{fixtureName}' at '{path}'. " +
             "Run this project with GROUNDWORK_FIXTURE_REGEN=1 to generate it.");
         return File.ReadAllText(path);
     }

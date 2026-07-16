@@ -98,6 +98,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         return store;
     }
 
+    public static async Task<RuntimePostCommitOutboxItem?> ReadOutboxItemAsync(IDocumentStore store) =>
+        await new GroundworkRuntimePostCommitOutboxStore(store, Serializer).FindAsync("item-1");
+
     private static async Task DriveSaveAsync(string kind, IDocumentStore store)
     {
         switch (kind)
@@ -579,17 +582,17 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private static RuntimePostCommitOutboxItem OutboxItem() => new(
         outboxItemId: "item-1",
         intent: new RuntimePostCommitIntent(
-            intentId: "intent-item-1",
+            intentId: "intent:dispatch-resume:v1:fixture",
             workflowExecutionId: Wf,
-            kind: "publish",
+            kind: "Elsa.Activities.DispatchWorkflow.ResumeParent",
             recordedAt: DateTimeOffset.UnixEpoch,
-            activityExecutionId: null,
-            idempotencyKey: null,
+            activityExecutionId: "activity-1",
+            idempotencyKey: "dispatch-resume:v1:fixture",
             payload: null),
         status: RuntimePostCommitOutboxStatus.Pending,
         recordedAt: DateTimeOffset.UnixEpoch,
         availableAt: DateTimeOffset.UnixEpoch,
-        retryPolicy: null);
+        retryPolicy: RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)));
 
     private static WorkflowDispatchRecord Dispatch() =>
         GroundworkWorkflowDispatchStoreTests.Pending(Wf, "ae-dispatch");

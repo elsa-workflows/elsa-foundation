@@ -4,6 +4,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
+using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -13,6 +14,7 @@ using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -50,6 +52,28 @@ public sealed class DispatchWorkflowContractTests
         var feature = new DispatchWorkflowRuntimeFeature { MaxNestingDepth = maximum };
 
         Assert.Throws<ArgumentOutOfRangeException>(() => feature.ConfigureServices(new ServiceCollection()));
+    }
+
+    [Fact]
+    public async Task Runtime_feature_registers_resolvable_handlers_enricher_and_retry_policy()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        await using var scope = fixture.Services.CreateAsyncScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChildStartExecutor>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>());
+        Assert.Contains(
+            scope.ServiceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
+            enricher => enricher is WorkflowDispatchCompletionEnricher);
+
+        var contributions = fixture.Services
+            .GetServices<RuntimePostCommitIntentHandlerContribution>()
+            .ToDictionary(contribution => contribution.IntentKind, StringComparer.Ordinal);
+        Assert.Equal(typeof(ChildStartExecutor), contributions[DispatchWorkflowConstants.StartChildIntentKind].HandlerType);
+        Assert.Same(RuntimePostCommitRetryPolicy.None, contributions[DispatchWorkflowConstants.StartChildIntentKind].RetryPolicy);
+        Assert.Equal(typeof(ParentResumeExecutor), contributions[DispatchWorkflowConstants.ResumeParentIntentKind].HandlerType);
+        Assert.True(contributions[DispatchWorkflowConstants.ResumeParentIntentKind].RetryPolicy.RetryUntilAcknowledged);
+        Assert.Equal(TimeSpan.FromSeconds(1), contributions[DispatchWorkflowConstants.ResumeParentIntentKind].RetryPolicy.Delay);
     }
 
     [Fact]
@@ -116,18 +140,14 @@ public sealed class DispatchWorkflowContractTests
     }
 
     [Fact]
-    public async Task Wait_for_completion_true_is_rejected_in_this_slice()
+    public void Wait_mode_uses_stable_nonexpiring_bookmark_contract()
     {
-        var activity = new Activity
-        {
-            WaitForCompletion = new InputArgument<bool>(new MemoryBlockReference("wait"))
-        };
-        var context = new StubExecutionContext(activity, new Dictionary<string, object?> { ["wait"] = true });
+        Assert.Equal("Elsa.Activities.DispatchWorkflow.ChildCompleted", DispatchWorkflowConstants.WaitStimulusType);
+        Assert.Equal("resume-target:dispatch-workflow-completed", DispatchWorkflowConstants.CompletionResumeTargetId);
 
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-            await ((IActivity)activity).ExecuteAsync(context));
-
-        Assert.Contains("#679", exception.Message, StringComparison.Ordinal);
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        Assert.StartsWith("bookmark:dispatch-wait:v1:", identity.WaitBookmarkId, StringComparison.Ordinal);
+        Assert.StartsWith("stimulus:dispatch-wait:v1:", identity.WaitStimulusHash, StringComparison.Ordinal);
     }
 
     [Fact]

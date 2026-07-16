@@ -133,7 +133,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             envelopeId: startWorkItem.EnvelopeId,
             idempotencyKey: $"{startWorkItem.IdempotencyKey}:schedule:{rootActivityId}",
             enqueuedAt: now,
-            recordedAt: now,
+            recordedAt: startWorkItem.RecordedAt,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 2 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: commandMetadata,
@@ -198,7 +198,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             envelopeId: startWorkItem.EnvelopeId,
             idempotencyKey: $"{startWorkItem.IdempotencyKey}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
             enqueuedAt: now,
-            recordedAt: now,
+            // The checkpoint is causally after the currently dispatched start item. A delayed outbox
+            // redelivery may preserve an older semantic start time in `now`; using the source item's
+            // durable queue-recorded time prevents the follow-up from sorting ahead of the item whose
+            // handler is still awaiting its ack-delete.
+            recordedAt: startWorkItem.RecordedAt,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: commandMetadata,

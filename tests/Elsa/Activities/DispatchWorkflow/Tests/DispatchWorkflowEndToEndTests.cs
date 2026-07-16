@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
+using Elsa.Activities.DispatchWorkflow.Runtime.Models;
+using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -10,6 +12,133 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 
 public sealed class DispatchWorkflowEndToEndTests
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    [Fact]
+    public async Task Wait_mode_starts_child_then_resumes_parent_once_with_completed_result()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var run = await fixture.StartParentAsync(
+            caseId: "wait-success",
+            parentWorkflowExecutionId: "parent-wait-success",
+            parentCorrelationId: "correlation-parent",
+            waitForCompletion: true);
+
+        Assert.Equal(ActivityExecutionStatus.Suspended, run.Activity.Status);
+        Assert.NotNull(await fixture.FindBookmarkAsync(run.Start.WorkflowExecutionId, run.Identity.WaitBookmarkId));
+        Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
+
+        var childSweep = await fixture.SweepAsync();
+        Assert.Equal(1, childSweep.OutboxDeliveredCount);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId))?.Status);
+        Assert.Equal(WorkflowDispatchStatus.Completed, Assert.Single(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId)).Status);
+
+        var resumeSweep = await fixture.SweepAsync();
+        Assert.Equal(1, resumeSweep.OutboxDeliveredCount);
+        Assert.Null(await fixture.FindBookmarkAsync(run.Start.WorkflowExecutionId, run.Identity.WaitBookmarkId));
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
+        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
+
+        var values = await fixture.ListDurableValuesAsync(run.Start.WorkflowExecutionId);
+        var resultValue = Assert.Single(values, value => value.DurableValueId.Contains("dispatch-result-wait-success", StringComparison.Ordinal));
+        var result = resultValue.InlineValue!.Value.Deserialize<DispatchWorkflowResult>(SerializerOptions);
+        Assert.NotNull(result);
+        Assert.Equal(run.Identity.ChildWorkflowExecutionId, result.ChildWorkflowExecutionId);
+        Assert.Equal(WorkflowDispatchStatus.Completed, result.Status);
+        Assert.Empty(result.Outputs);
+
+        var duplicateSweep = await fixture.SweepAsync();
+        Assert.Equal(0, duplicateSweep.OutboxAttemptedCount);
+        Assert.Single(fixture.Actors.Envelopes, envelope =>
+            envelope.WorkflowExecutionId == run.Start.WorkflowExecutionId &&
+            envelope.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark);
+    }
+
+    [Fact]
+    public async Task In_memory_wait_converges_in_process_but_process_recreation_has_no_durable_state()
+    {
+        const string parentWorkflowExecutionId = "parent-process-local";
+        string bookmarkId;
+
+        await using (var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync())
+        {
+            var run = await fixture.StartParentAsync(
+                caseId: "process-local",
+                parentWorkflowExecutionId: parentWorkflowExecutionId,
+                parentCorrelationId: "correlation-parent",
+                waitForCompletion: true);
+            bookmarkId = run.Identity.WaitBookmarkId;
+
+            await fixture.SweepAsync();
+            await fixture.SweepAsync();
+
+            Assert.Equal(
+                WorkflowExecutionStatus.Completed,
+                (await fixture.FindWorkflowAsync(parentWorkflowExecutionId))?.Status);
+            Assert.Null(await fixture.FindBookmarkAsync(parentWorkflowExecutionId, bookmarkId));
+        }
+
+        await using var recreated = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        Assert.Null(await recreated.FindWorkflowAsync(parentWorkflowExecutionId));
+        Assert.Null(await recreated.FindBookmarkAsync(parentWorkflowExecutionId, bookmarkId));
+        Assert.Empty(await recreated.ListDispatchesAsync(parentWorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task Threefold_wait_start_terminal_and_resume_replays_converge_once()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var run = await fixture.StartParentAsync(
+            caseId: "triple-replay",
+            parentWorkflowExecutionId: "parent-triple-replay",
+            parentCorrelationId: "correlation-parent",
+            waitForCompletion: true);
+
+        for (var attempt = 0; attempt < 3; attempt++)
+            await fixture.ReplayAsync(run.CompletionCommit);
+
+        var startIntent = Assert.Single(
+            run.CompletionCommit.PostCommitIntents,
+            intent => intent.Kind == DispatchWorkflowConstants.StartChildIntentKind);
+        await using (var scope = fixture.Services.CreateAsyncScope())
+        {
+            var childStart = scope.ServiceProvider.GetRequiredService<ChildStartExecutor>();
+            for (var attempt = 0; attempt < 3; attempt++)
+                await childStart.HandleAsync(startIntent);
+        }
+
+        var terminalCommit = fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind);
+        for (var attempt = 0; attempt < 3; attempt++)
+            await fixture.ReplayAsync(terminalCommit);
+
+        var resumeIntent = Assert.Single(
+            terminalCommit.PostCommitIntents,
+            intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
+        await using (var scope = fixture.Services.CreateAsyncScope())
+        {
+            var parentResume = scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>();
+            for (var attempt = 0; attempt < 3; attempt++)
+                await parentResume.HandleAsync(resumeIntent);
+        }
+
+        var acknowledgementSweep = await fixture.SweepAsync();
+        Assert.True(acknowledgementSweep.OutboxDeliveredCount >= 2);
+        for (var attempt = 0; attempt < 3; attempt++)
+            Assert.Equal(0, (await fixture.SweepAsync()).OutboxAttemptedCount);
+
+        Assert.Single(fixture.ChildProbe.Observations);
+        Assert.Null(await fixture.FindBookmarkAsync(run.Start.WorkflowExecutionId, run.Identity.WaitBookmarkId));
+        Assert.Equal(
+            WorkflowExecutionStatus.Completed,
+            (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
+        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
+        Assert.Equal(
+            WorkflowDispatchStatus.Completed,
+            Assert.Single(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId)).Status);
+    }
+
     [Theory]
     [InlineData(null, "correlation-parent")]
     [InlineData("correlation-override", "correlation-override")]

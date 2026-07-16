@@ -39,6 +39,7 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IIncidentStateStore),
                 typeof(IRuntimeCheckpointCommitStore),
                 typeof(IRuntimePostCommitOutboxStore),
+                typeof(IPostCommitOutboxLookupStore),
                 typeof(IRuntimePostCommitOutboxClaimStore),
                 typeof(IRuntimePostCommitOutboxClaimCompletionStore),
                 typeof(IWorkflowDispatchStore),
