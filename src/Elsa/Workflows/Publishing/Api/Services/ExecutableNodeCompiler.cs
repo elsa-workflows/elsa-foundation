@@ -47,7 +47,7 @@ public sealed class ExecutableNodeCompiler(
             if (!inputDefinitionsByReferenceKey.TryGetValue(inputState.ReferenceKey, out var inputDefinition))
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
 
-            inputBindings[inputDefinition.Name] = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState.Value);
+            inputBindings[inputDefinition.Name] = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState);
         }
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey

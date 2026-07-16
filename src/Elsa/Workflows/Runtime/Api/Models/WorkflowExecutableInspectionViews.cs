@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -196,7 +197,38 @@ public sealed record WorkflowExecutableConnectionView(
     WorkflowExecutableConnectionEndpointView Source,
     WorkflowExecutableConnectionEndpointView Target);
 
-public sealed record WorkflowExecutableInputBindingView(string InputName, string Source, string? Summary);
+public sealed record WorkflowExecutableInputBindingView(
+    string InputName,
+    string Source,
+    string? Summary,
+    string? InputKey = null,
+    bool IsSensitive = false,
+    JsonElement? LiteralValue = null,
+    RuntimeExpressionBinding? Expression = null,
+    RuntimeActivityOutputReference? ActivityOutput = null,
+    RuntimeDurableValueReference? DurableValue = null,
+    RuntimeReferenceValue? Reference = null,
+    IReadOnlyDictionary<string, string>? Metadata = null);
+
+public sealed record WorkflowExecutableAuthoredInputView(
+    string ExecutableNodeId,
+    string InputKey,
+    string? ExpressionType,
+    JsonElement? Value,
+    bool IsSensitive,
+    string AccessState);
+
+public sealed record WorkflowExecutableCompiledInputView(
+    string ExecutableNodeId,
+    WorkflowExecutableInputBindingView Binding,
+    string AccessState);
+
+public sealed record WorkflowExecutableInputSourcesView(
+    string ArtifactId,
+    string SourceReferenceId,
+    string AccessState,
+    IReadOnlyCollection<WorkflowExecutableAuthoredInputView> AuthoredInputs,
+    IReadOnlyCollection<WorkflowExecutableCompiledInputView> CompiledInputs);
 
 public sealed record WorkflowExecutableChildSlotView(string Name, IReadOnlyCollection<WorkflowExecutableNodeView> Activities);
 

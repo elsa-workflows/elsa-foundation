@@ -224,7 +224,13 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     object? Snapshot,
     string CaptureReason,
     bool IsSensitive,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? InputKey = null,
+    string? EvaluationId = null,
+    string? EvaluationPhase = null,
+    long? EvaluationSequence = null,
+    string? AccessState = null,
+    RuntimeInputEvaluationFailure? Failure = null)
 {
     public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot) =>
         new(
@@ -238,7 +244,13 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
             snapshot.CaptureReason,
             snapshot.IsSensitive,
-            snapshot.Metadata);
+            snapshot.Metadata,
+            snapshot.InputKey,
+            snapshot.EvaluationId,
+            snapshot.Phase,
+            snapshot.Sequence,
+            "allowed",
+            snapshot.Failure);
 
     private static string SnapshotState(ActivityExecutionInspectionValueSnapshot snapshot) =>
         snapshot.CaptureMode switch

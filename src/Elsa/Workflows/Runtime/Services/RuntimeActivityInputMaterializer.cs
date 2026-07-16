@@ -27,11 +27,23 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _inputBindingResolver = inputBindingResolver;
     }
 
-    public ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
+    public async ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
         ExecutableNode node,
         IServiceProvider? serviceProvider = null,
         CancellationToken cancellationToken = default) =>
-        MaterializeInputsAsync(
+        (await MaterializeInputResultsAsync(node, serviceProvider, cancellationToken)).RequireAllInputs();
+
+    public async ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
+        ExecutableNode node,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken = default) =>
+        (await MaterializeInputResultsAsync(node, resolutionContext, cancellationToken)).RequireAllInputs();
+
+    public ValueTask<RuntimeActivityInputMaterializationBatch> MaterializeInputResultsAsync(
+        ExecutableNode node,
+        IServiceProvider? serviceProvider = null,
+        CancellationToken cancellationToken = default) =>
+        MaterializeInputResultsAsync(
             node,
             new RuntimeInputBindingResolutionContext(
                 workflowExecutionId: "literal-only",
@@ -41,7 +53,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 serviceProvider: serviceProvider),
             cancellationToken);
 
-    public async ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
+    public async ValueTask<RuntimeActivityInputMaterializationBatch> MaterializeInputResultsAsync(
         ExecutableNode node,
         RuntimeInputBindingResolutionContext resolutionContext,
         CancellationToken cancellationToken = default)
@@ -49,26 +61,49 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(resolutionContext);
 
-        var inputs = new List<RuntimeMaterializedActivityInput>();
+        var results = new List<RuntimeActivityInputMaterializationResult>();
 
         foreach (var (inputName, binding) in node.InputBindings)
         {
-            var type = ResolveInputType(binding, node.ExecutableNodeId, inputName);
-            var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
+            try
+            {
+                var type = ResolveInputType(binding, node.ExecutableNodeId, inputName);
+                var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
 
-            object? value;
-            if (resolved.Source == RuntimeInputBindingSource.Expression)
-                value = CoerceToType(await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
-            else if (resolved.Value.HasValue)
-                value = JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
-            else
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported materialized value binding.");
+                object? value;
+                if (resolved.Source == RuntimeInputBindingSource.Expression)
+                    value = CoerceToType(await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
+                else if (resolved.Value.HasValue)
+                    value = JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
+                else
+                    throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported materialized value binding.");
 
-            inputs.Add(BuildInput(node.ExecutableNodeId, inputName, type, value));
+                results.Add(RuntimeActivityInputMaterializationResult.Success(BuildInput(node.ExecutableNodeId, inputName, type, value, binding)));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                results.Add(RuntimeActivityInputMaterializationResult.Failed(
+                    inputName,
+                    binding.InputKey ?? inputName,
+                    binding.IsSensitive,
+                    SafeFailure(exception),
+                    exception));
+            }
         }
 
-        return inputs;
+        return new RuntimeActivityInputMaterializationBatch(results);
     }
+
+    private static RuntimeInputEvaluationFailure SafeFailure(Exception exception) =>
+        new(
+            "InputMaterializationFailed",
+            exception is InvalidOperationException
+                ? "The input could not be resolved or evaluated with its declared binding."
+                : "The input could not be materialized.");
 
     private static async ValueTask<object?> EvaluateExpressionAsync(
         RuntimeResolvedInput resolved,
@@ -158,12 +193,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             : JsonSerializer.Deserialize(element.GetRawText(), type);
     }
 
-    private static RuntimeMaterializedActivityInput BuildInput(string nodeId, string inputName, Type type, object? value)
+    private static RuntimeMaterializedActivityInput BuildInput(string nodeId, string inputName, Type type, object? value, RuntimeInputBinding binding)
     {
         var memoryReference = new LiteralMemoryBlockReference($"{nodeId}:{inputName}");
         var argumentType = typeof(InputArgument<>).MakeGenericType(type);
         var argument = (InputArgument)Activator.CreateInstance(argumentType, memoryReference)!;
-        return new RuntimeMaterializedActivityInput(inputName, argument, value);
+        return new RuntimeMaterializedActivityInput(inputName, argument, value, binding.InputKey, binding.IsSensitive);
     }
 
     private static Type ResolveInputType(RuntimeInputBinding binding, string nodeId, string inputName)

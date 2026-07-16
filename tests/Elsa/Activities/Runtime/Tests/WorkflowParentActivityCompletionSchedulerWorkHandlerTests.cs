@@ -123,6 +123,58 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_RecordsSuccessfulAndFailedParentInputEvidenceBeforeFaulting()
+    {
+        var stringType = typeof(string).AssemblyQualifiedName!;
+        await _executableStore.SaveAsync(NewExecutable(new Dictionary<string, RuntimeInputBinding>
+        {
+            ["Good"] = new(
+                "Good",
+                RuntimeInputBindingSource.Literal,
+                literalValue: JsonSerializer.SerializeToElement("available"),
+                metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = stringType },
+                inputKey: "good-key"),
+            ["Bad"] = new(
+                "Bad",
+                RuntimeInputBindingSource.Literal,
+                literalValue: JsonSerializer.SerializeToElement("must-not-leak"),
+                inputKey: "bad-key",
+                isSensitive: true)
+        }));
+        await _activityStateStore.SaveAsync(NewState("actexec-parent", "node-parent", ActivityExecutionStatus.Running));
+        await _activityStateStore.SaveAsync(NewState("actexec-child", "node-child", ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
+        var factory = new RecordingActivityFactory(new CompletingCompositeActivity(["Approved"]));
+        await using var provider = NewProvider(factory);
+
+        await NewHandler(provider).HandleAsync(NewParentCompletionWorkItem());
+
+        Assert.Equal(0, factory.CreateCalls);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-parent");
+        Assert.NotNull(state);
+        Assert.Equal("InputMaterializationFailed", state.SubStatus);
+        Assert.DoesNotContain("must-not-leak", JsonSerializer.Serialize(state), StringComparison.Ordinal);
+        Assert.DoesNotContain("must-not-leak", JsonSerializer.Serialize(Assert.Single(await _incidentStateStore.ListAsync("wfexec-1"))), StringComparison.Ordinal);
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-parent");
+        Assert.NotNull(projection);
+        Assert.Collection(
+            projection.ValueSnapshots,
+            good =>
+            {
+                Assert.Equal("good-key", good.InputKey);
+                Assert.Null(good.Failure);
+                Assert.Equal("ParentCompletion", good.Phase);
+            },
+            bad =>
+            {
+                Assert.Equal("bad-key", bad.InputKey);
+                Assert.True(bad.IsSensitive);
+                Assert.Equal("InputMaterializationFailed", bad.Failure?.Code);
+                Assert.Equal("incident:parent-work:actexec-parent:InputMaterializationFailed", bad.Failure?.IncidentId);
+                Assert.DoesNotContain("must-not-leak", bad.Failure?.Message ?? "", StringComparison.Ordinal);
+            });
+    }
+
+    [Fact]
     public async Task HandleAsync_PropagatesChildFaultToGrandparentWhenParentCompletionHandlerThrows()
     {
         await _executableStore.SaveAsync(NewExecutable());
@@ -254,11 +306,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
 
-    private static WorkflowExecutable NewExecutable()
+    private static WorkflowExecutable NewExecutable(IReadOnlyDictionary<string, RuntimeInputBinding>? parentInputBindings = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var child = NewNode("node-child", document.RootElement);
-        var parent = WithChildren(NewNode("node-parent", document.RootElement), [child]);
+        var parent = WithChildren(NewNode("node-parent", document.RootElement, parentInputBindings), [child]);
 
         return new(
             identity: NewIdentity(),
@@ -284,7 +336,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
                 new ExecutableChildSlot("children", children)
             ]);
 
-    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>
+    private static ExecutableNode NewNode(
+        string nodeId,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -292,7 +347,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: descriptorPayload.Clone(),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            inputBindings: inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
@@ -301,13 +356,18 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
 
     private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
     {
+        public int CreateCalls { get; private set; }
+
         public ValueTask<IActivity> Create(
             string descriptorType,
             JsonElement payload,
             IDictionary<string, InputArgument>? inputs,
             IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(activity);
+            CancellationToken cancellationToken = default)
+        {
+            CreateCalls++;
+            return ValueTask.FromResult(activity);
+        }
     }
 
     private sealed class CompletingCompositeActivity(IReadOnlyCollection<string> outcomeNames) : IActivity, IActivityChildCompletionHandler

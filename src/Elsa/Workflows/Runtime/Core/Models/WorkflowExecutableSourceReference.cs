@@ -32,10 +32,17 @@ public sealed record WorkflowExecutableSourceReference(
     string? DeletedReason = null,
     IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null,
     string? PublicationId = null,
-    string? SlotId = null)
+    string? SlotId = null,
+    IReadOnlyList<WorkflowExecutableAuthoredInputRecord>? AuthoredInputs = null)
 {
     /// <summary>The publish-time layout sidecar copied from the definition version's layout store; may be empty.</summary>
     public IReadOnlyList<WorkflowExecutableLayoutRecord> Layout { get; init; } = Layout ?? [];
+
+    /// <summary>
+    /// Publish-time authored input sources. These are source provenance, not execution material, and therefore
+    /// live on this per-publish reference and never contribute to the content-addressed artifact hash.
+    /// </summary>
+    public IReadOnlyList<WorkflowExecutableAuthoredInputRecord> AuthoredInputs { get; init; } = AuthoredInputs ?? [];
 
     /// <summary>True while the reference is neither retired nor past its expiry at <paramref name="now"/>.</summary>
     public bool IsLive(DateTimeOffset now) => DeletedAt is null && !IsExpired(now);
@@ -75,3 +82,14 @@ public sealed record WorkflowExecutableLayoutRecord(
     double? Width = null,
     double? Height = null,
     JsonElement? AdditionalProperties = null);
+
+/// <summary>
+/// One opaque authored input source captured for a source reference. <see cref="Value"/> is copied as JSON so
+/// future expression kinds can round-trip without the runtime model interpreting or normalizing their payload.
+/// </summary>
+public sealed record WorkflowExecutableAuthoredInputRecord(
+    string ExecutableNodeId,
+    string InputKey,
+    string? ExpressionType,
+    JsonElement Value,
+    bool IsSensitive = false);

@@ -5,4 +5,6 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed record RuntimeMaterializedActivityInput(
     string Name,
     InputArgument Argument,
-    object? Value);
+    object? Value,
+    string? InputKey = null,
+    bool IsSensitive = false);

@@ -30,7 +30,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowTestRunStore testRunStore,
     IWorkflowStartDispatcher startDispatcher,
     IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IWorkflowDefinitionVersionStore? workflowVersionStore = null,
+    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
 {
@@ -254,6 +256,12 @@ public sealed class StartWorkflowTestRunRequestHandler(
     {
         var identity = executable.Identity;
         var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
+        var sourceState = source?.State ?? (workflowVersionStore is null
+            ? null
+            : (await workflowVersionStore.GetWithDefinitionAsync(identity.DefinitionVersionId, cancellationToken)).State);
+        var authoredInputs = sourceState is not null && authoredInputsSidecar is not null
+            ? authoredInputsSidecar.CopyFrom(sourceState)
+            : [];
 
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
@@ -268,7 +276,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             PublishedAt: null,
             Scope: WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt: expiresAt,
-            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout));
+            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
+            AuthoredInputs: authoredInputs);
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

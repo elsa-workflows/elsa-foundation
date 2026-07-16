@@ -25,22 +25,24 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     private const string InputTypeMetadataKey = "typeName";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
-    public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState inputState)
     {
+        var value = inputState.Value;
+        var isSensitive = inputState.IsSensitive ?? false;
         if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileLiteralInput(nodeId, inputDefinition, value);
+            return CompileLiteralInput(nodeId, inputDefinition, value, isSensitive);
 
         // Studio's object editor serializes arrays and objects as JSON under the "Object" syntax. The value is
         // authored data, not an executable expression, so preserve it as a durable literal. This is particularly
         // important for publish-time trigger metadata such as HttpEndpoint.SupportedMethods, which must be known
         // before a workflow instance exists.
         if (string.Equals(value.ExpressionType, ObjectExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileObjectInput(nodeId, inputDefinition, value);
+            return CompileObjectInput(nodeId, inputDefinition, value, isSensitive);
 
         if (string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileVariableInput(nodeId, inputDefinition, value);
+            return CompileVariableInput(nodeId, inputDefinition, value, isSensitive);
 
-        return CompileExpressionInput(nodeId, inputDefinition, value);
+        return CompileExpressionInput(nodeId, inputDefinition, value, isSensitive);
     }
 
     /// <summary>
@@ -50,7 +52,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     /// the registered <c>VariableExpressionHandler</c>, which resolves it through the visible scope
     /// chain at execution time (ADR 0027).
     /// </summary>
-    private RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, bool isSensitive)
     {
         var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
         var referenceText = JsonSerializer.Serialize(new VariableReferencePayload(reference.ReferenceKey, reference.DeclaringScopeId));
@@ -62,7 +64,9 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             inputName: inputDefinition.Name,
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(VariableExpressionType, referenceText, resultType),
-            metadata: BuildInputMetadata(inputType, inputDefinition));
+            metadata: BuildInputMetadata(inputType, inputDefinition),
+            inputKey: inputDefinition.ReferenceKey,
+            isSensitive: isSensitive);
     }
 
     private static VariableReference ParseVariableReference(string nodeId, InputDefinition inputDefinition, object? value)
@@ -76,7 +80,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
 
     private sealed record VariableReferencePayload(string referenceKey, string? declaringScopeId);
 
-    private RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, bool isSensitive)
     {
         var inputType = ResolveInputType(inputDefinition);
         object? converted;
@@ -95,10 +99,12 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             inputName: inputDefinition.Name,
             source: RuntimeInputBindingSource.Literal,
             literalValue: literal,
-            metadata: BuildInputMetadata(inputType, inputDefinition));
+            metadata: BuildInputMetadata(inputType, inputDefinition),
+            inputKey: inputDefinition.ReferenceKey,
+            isSensitive: isSensitive);
     }
 
-    private RuntimeInputBinding CompileObjectInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileObjectInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, bool isSensitive)
     {
         var inputType = ResolveInputType(inputDefinition);
         try
@@ -116,7 +122,9 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
                 inputName: inputDefinition.Name,
                 source: RuntimeInputBindingSource.Literal,
                 literalValue: literal,
-                metadata: BuildInputMetadata(inputType, inputDefinition));
+                metadata: BuildInputMetadata(inputType, inputDefinition),
+                inputKey: inputDefinition.ReferenceKey,
+                isSensitive: isSensitive);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
@@ -126,7 +134,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         }
     }
 
-    private RuntimeInputBinding CompileExpressionInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileExpressionInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, bool isSensitive)
     {
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
@@ -142,7 +150,9 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             inputName: inputDefinition.Name,
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
-            metadata: BuildInputMetadata(inputType, inputDefinition));
+            metadata: BuildInputMetadata(inputType, inputDefinition),
+            inputKey: inputDefinition.ReferenceKey,
+            isSensitive: isSensitive);
     }
 
     // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the

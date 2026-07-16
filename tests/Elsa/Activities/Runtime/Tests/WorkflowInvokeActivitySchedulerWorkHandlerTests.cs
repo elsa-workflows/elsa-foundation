@@ -227,6 +227,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, inputSnapshot.CaptureMode);
         Assert.NotNull(inputSnapshot.Payload);
         Assert.Equal("string", inputSnapshot.Payload.Value.GetProperty("kind").GetString());
+        Assert.Equal("Text", inputSnapshot.InputKey);
+        Assert.Equal("Invoke", inputSnapshot.Phase);
+        Assert.Equal("wfexec-1:actexec-1:invoke-work:Text:Invoke", inputSnapshot.EvaluationId);
+        Assert.Equal(1, inputSnapshot.Sequence);
+        Assert.False(inputSnapshot.IsSensitive);
 
         await AssertCompletionWorkAsync();
     }
@@ -602,6 +607,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var incident = Assert.Single(projection.Incidents);
         Assert.Equal("InputMaterializationFailed", incident.FailureType);
         Assert.True(incident.IsBlocking);
+        var snapshot = Assert.Single(projection.ValueSnapshots);
+        Assert.Equal("Text", snapshot.InputKey);
+        Assert.Equal("Invoke", snapshot.Phase);
+        Assert.Equal("InputMaterializationFailed", snapshot.Failure?.Code);
+        Assert.Equal("incident:invoke-work:actexec-1:InputMaterializationFailed", snapshot.Failure?.IncidentId);
 
         var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);

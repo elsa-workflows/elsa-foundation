@@ -132,7 +132,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // review) — no per-resume workflow-execution-state read, and a Correlate/SetName in this run is visible here.
         var scopeService = new RuntimeContainerScopeService(serviceProvider.GetRequiredService<IActivityExecutionStateStore>());
 
-        IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        RuntimeActivityInputMaterializationBatch materialization;
         VariableScope? variableScope;
         RuntimeInputBindingStateProjectionSet projections;
         IReadOnlyDictionary<string, object?> workflowVariables;
@@ -162,7 +162,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 workflowInputs: workflowInputValues,
                 activityOutputValues: activityOutputValues,
                 variableScope: variableScope);
-            inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
+            materialization = await _inputMaterializer.MaterializeInputResultsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -173,13 +173,40 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
             return;
         }
-        var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
+        var incidentId = materialization.HasFailures
+            ? ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, resumePayload.ActivityExecutionId, "InputMaterializationFailed")
+            : null;
+        var valueSnapshots = ActivityOutputPublisher.BuildInputValueSnapshots(
+            payloadCapturePolicy,
+            workItem,
+            resumePayload.ActivityExecutionId,
+            resumePayload.ExecutableNodeId,
+            "BookmarkResume",
+            materialization.Results,
+            _timeProvider.GetUtcNow(),
+            RuntimeMetadataKeys.ResumeSchedulerWorkItemId,
+            incidentId).ToList();
+        if (materialization.HasFailures)
+        {
+            await RecordFaultAsync(
+                serviceProvider,
+                activityFaultIncidentRecorder,
+                checkpointCommitter,
+                workItem,
+                resumePayload,
+                state,
+                new RuntimeActivityInputMaterializationException(materialization.Results),
+                "InputMaterializationFailed",
+                valueSnapshots,
+                cancellationToken);
+            return;
+        }
+
+        var inputs = materialization.Inputs;
         IActivity activity;
         SimpleActivityExecutionContext context;
         try
         {
-            valueSnapshots.AddRange(BuildInputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, inputs, _timeProvider.GetUtcNow()));
-
             // Activity construction + argument binding (ActivityArgumentBinder, invoked inside Create) runs
             // inside a fault boundary on the resume path too (#325, sibling of #317). Previously this step sat
             // between the input-materialization try/catch and the resume-execution try/catch, so a binder/constructor
@@ -534,6 +561,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     activityExecutionId: resumePayload.ActivityExecutionId,
                     valueName: input.Name,
                     type: type,
+                    isSensitive: input.IsSensitive,
                     metadata: new Dictionary<string, string>
                     {
                         [RuntimeMetadataKeys.ExecutableNodeId] = resumePayload.ExecutableNodeId,
@@ -546,8 +574,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     type,
                     capturedAt,
                     ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value, input.Name, type),
-                    isSensitive: false,
-                    metadata: decision.Metadata);
+                    isSensitive: input.IsSensitive,
+                    metadata: decision.Metadata,
+                    inputKey: input.InputKey ?? input.Name,
+                    evaluationId: ActivityOutputPublisher.EvaluationId(workItem, resumePayload.ActivityExecutionId, input.InputKey ?? input.Name, "BookmarkResume"),
+                    phase: "BookmarkResume",
+                    sequence: null);
             })
             .ToArray();
 

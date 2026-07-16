@@ -63,6 +63,9 @@ public sealed class ActivityAuthoringCatalogTests
             "Ports",
             "ContainerStructure",
             "AuthoringTemplate");
+
+        var input = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
+        AssertProperties(input, "ReferenceKey", "Name", "Type");
     }
 
     [Fact]
