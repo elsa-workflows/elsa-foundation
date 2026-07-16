@@ -58,7 +58,9 @@ public sealed class ActivityLibraryAcceptanceTests
     public static TheoryData<Type, Type, string[]> MigratedPrimitiveLeafContracts =>
         new()
         {
+            { typeof(Break), typeof(ActivityUnit), [] },
             { typeof(Fault), typeof(ActivityUnit), ["message"] },
+            { typeof(Inline), typeof(object), [nameof(Inline.Expression)] },
             { typeof(ReadLine), typeof(ReadLineResult), [] },
             { typeof(WriteLines), typeof(ActivityUnit), [nameof(WriteLines.Lines)] },
             { typeof(Event), typeof(EventResult), [nameof(Event.EventName), nameof(Event.CorrelationId)] }

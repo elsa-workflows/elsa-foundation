@@ -3,6 +3,7 @@ using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -259,7 +260,23 @@ public sealed class BreakPropagationExecutionTests
             descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: activityType == typeof(Break) ? BreakContract() : null);
+
+    private static ActivityContract BreakContract() =>
+        new(
+            typeof(Break).FullName!,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            ClrConstruction.Payload(Serializer, typeof(Break)),
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))),
+                true,
+                ActivityValuePolicy.Default,
+                []),
+            [ActivityOutcomes.Break],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(Break))));
 
     private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
         new(

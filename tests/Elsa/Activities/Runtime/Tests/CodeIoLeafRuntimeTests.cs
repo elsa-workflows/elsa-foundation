@@ -150,16 +150,29 @@ public sealed class CodeIoLeafRuntimeTests
 
     private static ActivityContract? BuildTypedContract(Type activityType)
     {
+        if (activityType == typeof(Break))
+        {
+            return NewContract(
+                activityType,
+                [],
+                UnitResult(),
+                [ActivityOutcomes.Break]);
+        }
+
+        if (activityType == typeof(Inline))
+        {
+            return NewContract(
+                activityType,
+                [new ActivityInputContract("Expression", nameof(Inline.Expression), new ValueTypeDescriptor("Object"), false, false, null, ActivityValuePolicy.Default)],
+                new ActivityResultContract(new ValueTypeDescriptor("Object"), false, ActivityValuePolicy.Default, []));
+        }
+
         if (activityType == typeof(WriteLines))
         {
             return NewContract(
                 activityType,
                 [new ActivityInputContract("Lines", nameof(WriteLines.Lines), LinesType, false, false, null, ActivityValuePolicy.Default)],
-                new ActivityResultContract(
-                    new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))),
-                    true,
-                    ActivityValuePolicy.Default,
-                    []));
+                UnitResult());
         }
 
         if (activityType == typeof(ReadLine))
@@ -180,7 +193,8 @@ public sealed class CodeIoLeafRuntimeTests
     private static ActivityContract NewContract(
         Type activityType,
         IReadOnlyCollection<ActivityInputContract> inputs,
-        ActivityResultContract result) =>
+        ActivityResultContract result,
+        IReadOnlyCollection<string>? outcomes = null) =>
         new(
             activityType.FullName!,
             "1.0.0",
@@ -188,8 +202,15 @@ public sealed class CodeIoLeafRuntimeTests
             ClrConstruction.Payload(Serializer, activityType),
             inputs,
             result,
-            [ActivityOutcomes.Done],
+            outcomes ?? [ActivityOutcomes.Done],
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(activityType)));
+
+    private static ActivityResultContract UnitResult() =>
+        new(
+            new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))),
+            true,
+            ActivityValuePolicy.Default,
+            []);
 
     private static RuntimeInputBinding LiteralBinding(string inputName, object value, ValueTypeDescriptor type) =>
         new(
