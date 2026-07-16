@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Runtime.Core.Models;
@@ -83,6 +84,104 @@ public abstract record ActivityTransition
 
 public abstract record ActivityTransition<TResult> : ActivityTransition;
 
+/// <summary>
+/// Typed transition returned by a stateful activity. Successful completion remains atomic while a
+/// suspension additionally carries one complete private-state snapshot and typed registrations.
+/// </summary>
+public abstract record ActivityTransition<TResult, TState> : ActivityTransition<TResult>
+{
+    public static ActivityTransition<TResult, TState> Complete(TResult result, string outcome = "Done") =>
+        new CompleteStatefulActivityTransition(result, outcome);
+
+    public static ActivityTransition<TResult, TState> Suspend<TTrigger>(
+        TState state,
+        IReadOnlyCollection<ActivityTriggerRegistration<TTrigger>> registrations,
+        int stateSchemaVersion = 1) =>
+        new SuspendStatefulActivityTransition<TTrigger>(state, registrations, stateSchemaVersion);
+
+    public static ActivityTransition<TResult, TState> Fault(ActivityFault fault) =>
+        new FaultStatefulActivityTransition(fault);
+
+    public static ActivityTransition<TResult, TState> Cancel(string reason) =>
+        new CancelStatefulActivityTransition(reason);
+
+    private sealed record CompleteStatefulActivityTransition : ActivityTransition<TResult, TState>, IActivityCompletionTransition<TResult>
+    {
+        public CompleteStatefulActivityTransition(TResult result, string outcome)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(outcome);
+            Result = result;
+            Outcome = outcome;
+        }
+
+        public override ActivityTransitionKind Kind => ActivityTransitionKind.Complete;
+        public TResult Result { get; }
+        public string Outcome { get; }
+        object? IActivityCompletionTransition.Result => Result;
+        public Type ResultType => typeof(TResult);
+    }
+
+    private sealed record SuspendStatefulActivityTransition<TTrigger> :
+        ActivityTransition<TResult, TState>,
+        IStatefulActivitySuspensionTransition<TState>
+    {
+        private readonly TState _state;
+
+        public SuspendStatefulActivityTransition(
+            TState state,
+            IReadOnlyCollection<ActivityTriggerRegistration<TTrigger>> registrations,
+            int stateSchemaVersion)
+        {
+            ArgumentNullException.ThrowIfNull(registrations);
+            if (registrations.Count == 0)
+                throw new ArgumentException("A suspended activity must declare at least one typed trigger registration.", nameof(registrations));
+            if (stateSchemaVersion <= 0)
+                throw new ArgumentOutOfRangeException(nameof(stateSchemaVersion), stateSchemaVersion, "An activity state schema version must be positive.");
+
+            StatePayload = PersistableActivityValue.Snapshot(state, "private state");
+            _state = PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
+            StateValueType = PersistableActivityValue.Descriptor(typeof(TState), stateSchemaVersion);
+            Registrations = Array.AsReadOnly<IActivityTriggerRegistration>(registrations.Cast<IActivityTriggerRegistration>().ToArray());
+            Triggers = Array.AsReadOnly(registrations
+                .Select(registration => new ActivityTriggerExpectation(
+                    registration.ResumeTargetKey,
+                    registration.StimulusType,
+                    registration.PayloadType))
+                .ToArray());
+        }
+
+        public override ActivityTransitionKind Kind => ActivityTransitionKind.Suspend;
+        public TState State => _state;
+        object IActivitySuspensionTransition.State => State!;
+        public Type StateType => typeof(TState);
+        public ValueTypeDescriptor StateValueType { get; }
+        public JsonElement StatePayload { get; }
+        public Type TriggerType => typeof(TTrigger);
+        public IReadOnlyCollection<IActivityTriggerRegistration> Registrations { get; }
+        public IReadOnlyCollection<ActivityTriggerExpectation> Triggers { get; }
+    }
+
+    private sealed record FaultStatefulActivityTransition : ActivityTransition<TResult, TState>, IActivityFaultTransition
+    {
+        public FaultStatefulActivityTransition(ActivityFault fault) => ActivityFault = fault ?? throw new ArgumentNullException(nameof(fault));
+        public override ActivityTransitionKind Kind => ActivityTransitionKind.Fault;
+        public ActivityFault ActivityFault { get; }
+        ActivityFault IActivityFaultTransition.Fault => ActivityFault;
+    }
+
+    private sealed record CancelStatefulActivityTransition : ActivityTransition<TResult, TState>, IActivityCancellationTransition
+    {
+        public CancelStatefulActivityTransition(string reason)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+            Reason = reason;
+        }
+
+        public override ActivityTransitionKind Kind => ActivityTransitionKind.Cancel;
+        public string Reason { get; }
+    }
+}
+
 /// <summary>Engine-facing, type-erased view of a successful activity completion.</summary>
 public interface IActivityCompletionTransition
 {
@@ -110,6 +209,20 @@ public interface IActivitySuspensionTransition<out TState> : IActivitySuspension
 {
     new TState State { get; }
 }
+
+/// <summary>Engine-facing suspension view with a frozen state payload and typed registrations.</summary>
+public interface IStatefulActivitySuspensionTransition : IActivitySuspensionTransition
+{
+    ValueTypeDescriptor StateValueType { get; }
+    JsonElement StatePayload { get; }
+    Type TriggerType { get; }
+    IReadOnlyCollection<IActivityTriggerRegistration> Registrations { get; }
+}
+
+/// <summary>Author-facing strongly typed state view of a stateful suspension.</summary>
+public interface IStatefulActivitySuspensionTransition<out TState> :
+    IStatefulActivitySuspensionTransition,
+    IActivitySuspensionTransition<TState>;
 
 public interface IActivityFaultTransition
 {
