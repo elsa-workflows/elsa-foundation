@@ -106,19 +106,19 @@ and then recover after completion without reevaluation or reactivation.
 
 ### Tests — write and fail first
 
-- [ ] T035 [P] [US3] Add ActivityStarted checkpoint crash-window and all-or-nothing snapshot tests in `tests/Elsa/Workflows/Runtime/Tests/ActivityInputSnapshotCheckpointTests.cs`
-- [ ] T036 [P] [US3] Add retry/resume pinned-input and fresh-attempt identity tests in `tests/Elsa/Activities/Runtime/Tests/PinnedInputRetryResumeTests.cs`
+- [X] T035 [P] [US3] Add ActivityStarted checkpoint crash-window and all-or-nothing snapshot tests in `tests/Elsa/Workflows/Runtime/Tests/ActivityInputSnapshotCheckpointTests.cs`
+- [X] T036 [P] [US3] Add retry/resume pinned-input and fresh-attempt identity tests in `tests/Elsa/Activities/Runtime/Tests/PinnedInputRetryResumeTests.cs`
 - [X] T037 [P] [US3] Add post-completion crash recovery/no-reinvoke tests in `tests/Elsa/Persistence/Groundwork/Tests/CommittedActivityCompletionRecoveryTests.cs`
-- [ ] T038 [P] [US3] Add persistable/transient value-policy and sensitivity non-downgrade tests in `tests/Elsa/Workflows/Runtime/Tests/ValueDurabilityPolicyTests.cs`
-- [ ] T039 [US3] Add structural-frame/causal-lineage result selection and ambiguity tests in `tests/Elsa/Workflows/Runtime/Tests/CausalActivityResultResolverTests.cs`
+- [X] T038 [P] [US3] Add persistable/transient value-policy and sensitivity non-downgrade tests in `tests/Elsa/Workflows/Runtime/Tests/ValueDurabilityPolicyTests.cs`
+- [X] T039 [US3] Add structural-frame/causal-lineage result selection and ambiguity tests in `tests/Elsa/Workflows/Runtime/Tests/CausalActivityResultResolverTests.cs`
 
 ### Implementation
 
-- [ ] T040 [US3] Move complete input materialization into the Scheduled→Running checkpoint in `src/Elsa/Workflows/Runtime/Services/WorkflowStartActivitySchedulerWorkHandler.cs`
-- [ ] T041 [US3] Make `RuntimeActivityInputMaterializer` produce wrapper-free immutable snapshots with persistability/policy validation in `src/Elsa/Workflows/Runtime/Services/RuntimeActivityInputMaterializer.cs`
-- [ ] T042 [US3] Make retry, resume, and parent completion hydrate only from the committed snapshot in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs` and related handlers
+- [X] T040 [US3] Move complete input materialization into the Scheduled→Running checkpoint in `src/Elsa/Workflows/Runtime/Services/WorkflowStartActivitySchedulerWorkHandler.cs`
+- [X] T041 [US3] Make `RuntimeActivityInputMaterializer` produce wrapper-free immutable snapshots with persistability/policy validation in `src/Elsa/Workflows/Runtime/Services/RuntimeActivityInputMaterializer.cs`
+- [X] T042 [US3] Make retry, resume, and parent completion hydrate only from the committed snapshot in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs` and related handlers
 - [X] T043 [US3] Commit result/outcome/status/inspection/continuation intent atomically and short-circuit already-completed invocations in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
-- [ ] T044 [US3] Replace active/latest-output semantics with structural-frame and causal-lineage result resolution in `src/Elsa/Workflows/Runtime/Services/CausalActivityResultResolver.cs`
+- [X] T044 [US3] Replace active/latest-output semantics with structural-frame and causal-lineage result resolution in `src/Elsa/Workflows/Runtime/Services/CausalActivityResultResolver.cs`
 - [ ] T045 [US3] Propagate effective persistence, external-payload, encryption, sensitivity, and redaction policy through materialization and projection in `src/Elsa/Workflows/Runtime/Services/`
 - [ ] T046 [US3] Run focused runtime, Groundwork, distributed recovery, and publishing tests and mark US3 ledger successors implemented/passing
 
@@ -138,18 +138,18 @@ request members, variables, a conditional, a child workflow, prior results, and 
 ### Tests — write and fail first
 
 - [ ] T047 [P] [US2] Add foundational builder ordering, `.From`, `.Value`, null/default/omitted, lexical-scope, and connection tests in `tests/Elsa/Workflows/Design/Tests/WorkflowBuilderTests.cs`
-- [ ] T048 [P] [US2] Add generator golden/diagnostic tests for named activity methods and call-handle shapes in `tests/Elsa/Workflows/Design/CodeGeneration/Tests/ActivityCallGeneratorTests.cs`
-- [ ] T049 [P] [US2] Add Build-once/version-input determinism tests in `tests/Elsa/Workflows/Design/Tests/WorkflowDefinitionCompilerTests.cs`
-- [ ] T050 [US2] Add paired code-first/dynamic canonical equivalence and validation tests in `tests/Elsa/Workflows/Publishing/Api/Tests/CodeFirstDynamicConformanceTests.cs`
+- [X] T048 [P] [US2] Add generator golden/diagnostic tests for named activity methods and call-handle shapes in `tests/Elsa/Workflows/Design/CodeGeneration/Tests/ActivityCallGeneratorTests.cs`
+- [X] T049 [P] [US2] Add Build-once/version-input determinism tests in `tests/Elsa/Workflows/Design/Tests/WorkflowDefinitionCompilerTests.cs`
+- [X] T050 [US2] Add paired code-first/dynamic canonical equivalence and validation tests in `tests/Elsa/Workflows/Publishing/Api/Tests/CodeFirstDynamicConformanceTests.cs`
 
 ### Implementation
 
-- [ ] T051 [US2] Implement `WorkflowDefinition<TRequest,TResult>` and the IDE-guided build/compiler entry point in `src/Elsa/Workflows/Design/Core/Authoring/WorkflowDefinition.cs`
+- [X] T051 [US2] Implement `WorkflowDefinition<TRequest,TResult>` and the IDE-guided build/compiler entry point in `src/Elsa/Workflows/Design/Core/Authoring/WorkflowDefinition.cs`
 - [ ] T052 [US2] Implement sequence/structured builders, workflow request/result sources, nodes, connections, and authoring-only `ActivityArgument<T>` in `src/Elsa/Workflows/Design/Core/Authoring/`
 - [ ] T053 [US2] Implement lexical `Variable<T>` declaration/read handles and engine-intrinsic `Set`, return, merge, and control authored nodes in `src/Elsa/Workflows/Design/Core/Authoring/`
-- [ ] T054 [US2] Implement the incremental activity-call generator and stable diagnostics in `src/Elsa/Workflows/Design/CodeGeneration/`
-- [ ] T055 [US2] Generate call handles exposing `Node`, whole `Result`, typed `Outputs`, and typed `Outcomes` in `src/Elsa/Workflows/Design/CodeGeneration/`
-- [ ] T056 [US2] Lower builder state into the existing `WorkflowDefinitionState` without serializing carriers or delegates in `src/Elsa/Workflows/Design/Core/Authoring/WorkflowDefinitionCompiler.cs`
+- [X] T054 [US2] Implement the incremental activity-call generator and stable diagnostics in `src/Elsa/Workflows/Design/CodeGeneration/`
+- [X] T055 [US2] Generate call handles exposing `Node`, whole `Result`, typed `Outputs`, and typed `Outcomes` in `src/Elsa/Workflows/Design/CodeGeneration/`
+- [X] T056 [US2] Lower builder state into the existing `WorkflowDefinitionState` without serializing carriers or delegates in `src/Elsa/Workflows/Design/Core/Authoring/WorkflowDefinitionCompiler.cs`
 - [ ] T057 [US2] Add typed child-workflow request/result calls and ordinary builder extension support in `src/Elsa/Workflows/Design/Core/Authoring/`
 - [ ] T058 [US2] Run generator, design, publishing golden/equivalence, and architecture tests and mark US2 ledger successors implemented/passing
 

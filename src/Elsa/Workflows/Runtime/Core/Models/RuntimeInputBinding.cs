@@ -352,4 +352,11 @@ public sealed record RuntimeResolvedInput(
     JsonElement? Value,
     RuntimeExpressionBinding? Expression,
     DurableValueState? DurableValue,
-    RuntimeReferenceValue? Reference);
+    RuntimeReferenceValue? Reference)
+{
+    /// <summary>
+    /// Canonical materialized source including its effective protection policy and payload location.
+    /// Legacy bindings may expose only <see cref="Value"/> until their compatibility adapter is removed.
+    /// </summary>
+    public ValueEnvelope? Envelope { get; init; }
+}

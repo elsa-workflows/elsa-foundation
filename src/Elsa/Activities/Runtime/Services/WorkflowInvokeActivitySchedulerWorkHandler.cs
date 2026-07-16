@@ -179,17 +179,29 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             // scope for the post-execution write-back below.
             variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken, workflowVariables);
 
-            var resolutionContext = new RuntimeInputBindingResolutionContext(
-                workflowExecutionId: workItem.WorkflowExecutionId,
-                activityExecutionId: invokePayload.ActivityExecutionId,
-                durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
-                activityOutputs: activityOutputRegister,
-                serviceProvider: serviceProvider,
-                workflowVariables: workflowVariables,
-                workflowInputs: workflowInputValues,
-                activityOutputValues: activityOutputValues,
-                variableScope: variableScope);
-            inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
+            if (executableNode.ActivityContract is null)
+            {
+                var resolutionContext = new RuntimeInputBindingResolutionContext(
+                    workflowExecutionId: workItem.WorkflowExecutionId,
+                    activityExecutionId: invokePayload.ActivityExecutionId,
+                    durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
+                    activityOutputs: activityOutputRegister,
+                    serviceProvider: serviceProvider,
+                    workflowVariables: workflowVariables,
+                    workflowInputs: workflowInputValues,
+                    activityOutputValues: activityOutputValues,
+                    variableScope: variableScope,
+                    workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
+                    variableEnvelopes: projections.VariableEnvelopes);
+                inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
+            }
+            else
+            {
+                state.EnsureValueFlowCompatible();
+                if (state.InputSnapshot is null)
+                    throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no committed input snapshot.");
+                inputs = [];
+            }
         }
         catch (OperationCanceledException)
         {
@@ -208,7 +220,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityInputSnapshot? valueFlowSnapshot = null;
         try
         {
-            valueSnapshots.AddRange(ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, inputs, _timeProvider.GetUtcNow()));
+            valueSnapshots.AddRange(executableNode.ActivityContract is { } pinnedContract
+                ? ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, pinnedContract, state.InputSnapshot!, _timeProvider.GetUtcNow())
+                : ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, inputs, _timeProvider.GetUtcNow()));
 
             // Activity construction + argument binding (ActivityArgumentBinder, invoked inside Create) runs
             // inside the same fault boundary as input materialization (#317). Previously this step sat between
@@ -217,19 +231,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             // no incident. Recording it as a blocking incident faults the activity and surfaces a queryable cause.
             if (executableNode.ActivityContract is { } activityContract)
             {
-                valueFlowSnapshot = state.InputSnapshot ?? ActivityInputSnapshotFactory.Create(
-                    executableNode,
-                    invokePayload.ActivityExecutionId,
-                    activityContract,
-                    inputs,
-                    _timeProvider.GetUtcNow());
-                valueFlowAttempt = state.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)
-                    ?? new ActivityAttempt(
-                        $"{invokePayload.ActivityExecutionId}:attempt:{(state.Attempts?.Count ?? 0) + 1}",
-                        invokePayload.ActivityExecutionId,
-                        (state.Attempts?.Count ?? 0) + 1,
-                        ActivityAttemptReason.Initial,
+                valueFlowSnapshot = state.InputSnapshot!;
+                valueFlowAttempt = state.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null);
+                if (valueFlowAttempt is null)
+                {
+                    if (state.Completion is not null)
+                        throw new InvalidOperationException($"VF-ACT-007: Completed activity invocation '{state.InvocationId}' cannot create another attempt.");
+
+                    var attempts = state.Attempts?.ToArray() ?? [];
+                    var ordinal = attempts.Length == 0 ? 1 : attempts.Max(attempt => attempt.Ordinal) + 1;
+                    valueFlowAttempt = new ActivityAttempt(
+                        $"{state.InvocationId}:attempt:{ordinal}",
+                        state.InvocationId,
+                        ordinal,
+                        ActivityAttemptReason.Retry,
                         _timeProvider.GetUtcNow());
+                    state = state with { Attempts = attempts.Append(valueFlowAttempt).ToArray() };
+                }
                 activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
                     new ActivityActivationRequest(activityContract, valueFlowSnapshot, valueFlowAttempt),
                     cancellationToken);

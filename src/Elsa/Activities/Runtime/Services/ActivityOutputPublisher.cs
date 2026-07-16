@@ -167,6 +167,69 @@ internal static class ActivityOutputPublisher
             })
             .ToArray();
 
+    public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ActivityContract contract,
+        ActivityInputSnapshot snapshot,
+        DateTimeOffset capturedAt) =>
+        BuildInputValueSnapshots(
+            payloadCapturePolicy,
+            workItem,
+            invokePayload.ActivityExecutionId,
+            invokePayload.ExecutableNodeId,
+            contract,
+            snapshot,
+            RuntimeMetadataKeys.InvokeSchedulerWorkItemId,
+            capturedAt);
+
+    public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
+        RuntimeSchedulerWorkItem workItem,
+        string activityExecutionId,
+        string executableNodeId,
+        ActivityContract contract,
+        ActivityInputSnapshot snapshot,
+        string schedulerWorkItemMetadataKey,
+        DateTimeOffset capturedAt) =>
+        snapshot.Values
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item =>
+            {
+                var input = contract.Inputs[item.Key];
+                var value = item.Value;
+                var type = new RuntimeValueTypeDescriptor("alias", value.Type.Alias, value.Type.Schema);
+                var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
+                    RuntimePayloadCaptureSubject.ActivityInput,
+                    workItem.WorkflowExecutionId,
+                    capturedAt,
+                    activityExecutionId: activityExecutionId,
+                    valueName: input.Name,
+                    type: type,
+                    metadata: new Dictionary<string, string>
+                    {
+                        [RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId,
+                        [schedulerWorkItemMetadataKey] = workItem.WorkItemId
+                    }));
+                var payload = value.Presence switch
+                {
+                    ValuePresence.Present when value.InlineValue.HasValue => SerializeCapturedValue(decision, value.InlineValue.Value, input.Name, type),
+                    ValuePresence.ExplicitNull => SerializeCapturedValue(decision, null, input.Name, type),
+                    _ => null
+                };
+                return ActivityExecutionInspectionValueSnapshot.FromDecision(
+                    input.Name,
+                    ActivityExecutionInspectionValueSubject.ActivityInput,
+                    decision,
+                    type,
+                    capturedAt,
+                    payload,
+                    value.Policy.IsSensitive,
+                    decision.Metadata);
+            })
+            .ToArray();
+
     public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
         RuntimeSchedulerWorkItem workItem,

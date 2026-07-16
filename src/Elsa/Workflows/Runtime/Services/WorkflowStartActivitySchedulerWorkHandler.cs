@@ -1,8 +1,10 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -16,6 +18,10 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
+    private readonly IRuntimeActivityInputMaterializer? _inputMaterializer;
+    private readonly IDurableValueStateStore? _durableValueStateStore;
+    private readonly IRuntimeActivityOutputRegister? _activityOutputRegister;
+    private readonly IServiceScopeFactory? _serviceScopeFactory;
 
     public WorkflowStartActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -23,7 +29,11 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         RuntimeCheckpointCommitter? checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IRuntimeActivityInputMaterializer? inputMaterializer = null,
+        IDurableValueStateStore? durableValueStateStore = null,
+        IRuntimeActivityOutputRegister? activityOutputRegister = null,
+        IServiceScopeFactory? serviceScopeFactory = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -36,6 +46,10 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
+        _inputMaterializer = inputMaterializer;
+        _durableValueStateStore = durableValueStateStore;
+        _activityOutputRegister = activityOutputRegister;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     public string Name => HandlerName;
@@ -50,7 +64,17 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     /// <summary>Direct (no-pipeline) dispatch: run the handler and commit its checkpoint inline (when one is produced).</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
-        var commit = await ExecuteAsync(workItem, cancellationToken);
+        RuntimeCheckpointCommit? commit;
+        if (_serviceScopeFactory is null)
+        {
+            commit = await ExecuteAsync(workItem, serviceProvider: null, cancellationToken);
+        }
+        else
+        {
+            await using var scope = _serviceScopeFactory.CreateAsyncScope();
+            commit = await ExecuteAsync(workItem, scope.ServiceProvider, cancellationToken);
+        }
+
         if (commit is not null)
             await _checkpointCommitter!.CommitAsync(commit, cancellationToken);
     }
@@ -59,12 +83,15 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pipelineContext);
-        var commit = await ExecuteAsync(workItem, cancellationToken);
+        var commit = await ExecuteAsync(workItem, pipelineContext.Workspace.AmbientServices, cancellationToken);
         if (commit is not null)
             pipelineContext.Workspace.StageCheckpointCommit(commit);
     }
 
-    private async ValueTask<RuntimeCheckpointCommit?> ExecuteAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
+    private async ValueTask<RuntimeCheckpointCommit?> ExecuteAsync(
+        RuntimeSchedulerWorkItem workItem,
+        IServiceProvider? serviceProvider,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
@@ -76,7 +103,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
-        if (!executable.NodesById.ContainsKey(startPayload.ExecutableNodeId))
+        if (!executable.NodesById.TryGetValue(startPayload.ExecutableNodeId, out var executableNode))
             throw new InvalidOperationException($"StartActivity scheduler work item '{workItem.WorkItemId}' references executable node '{startPayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
 
         var state = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, startPayload.ActivityExecutionId, cancellationToken);
@@ -88,6 +115,9 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
         if (state.Status == ActivityExecutionStatus.Running)
         {
+            if (executableNode.ActivityContract is not null && state.InputSnapshot is null)
+                throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no committed input snapshot.");
+
             await EnqueueInvokeActivityAsync(workItem, startPayload, cancellationToken);
             return null;
         }
@@ -95,7 +125,27 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         if (state.Status != ActivityExecutionStatus.Scheduled)
             return null;
 
-        var runningState = StartActivity(workItem, startPayload, state);
+        var startedAt = _timeProvider.GetUtcNow();
+        ActivityInputSnapshot? inputSnapshot = null;
+        ActivityAttempt? firstAttempt = null;
+        if (executableNode.ActivityContract is not null)
+        {
+            inputSnapshot = await MaterializeInputSnapshotAsync(
+                executable,
+                executableNode,
+                state,
+                serviceProvider,
+                startedAt,
+                cancellationToken);
+            firstAttempt = new ActivityAttempt(
+                $"{state.InvocationId}:attempt:1",
+                state.InvocationId,
+                1,
+                ActivityAttemptReason.Initial,
+                startedAt);
+        }
+
+        var runningState = StartActivity(workItem, startPayload, state, executableNode.ActivityContract, inputSnapshot, firstAttempt, startedAt);
         if (_checkpointCommitter is null || _inspectionAccumulator is null)
         {
             await _activityExecutionStateStore.SaveAsync(runningState, cancellationToken);
@@ -127,7 +177,11 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     private ActivityExecutionState StartActivity(
         RuntimeSchedulerWorkItem workItem,
         RuntimeStartActivityCommandPayload startPayload,
-        ActivityExecutionState state)
+        ActivityExecutionState state,
+        ActivityContract? contract,
+        ActivityInputSnapshot? inputSnapshot,
+        ActivityAttempt? firstAttempt,
+        DateTimeOffset startedAt)
     {
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.StartReason] = startPayload.Reason;
@@ -136,9 +190,62 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         return state with
         {
             Status = ActivityExecutionStatus.Running,
-            StartedAt = _timeProvider.GetUtcNow(),
+            StartedAt = startedAt,
+            ContractIdentity = contract is null
+                ? state.ContractIdentity
+                : new ActivityInvocationContractIdentity(contract.ActivityTypeKey, contract.ContractVersion, contract.SchemaFingerprint),
+            InputSnapshot = inputSnapshot ?? state.InputSnapshot,
+            Attempts = firstAttempt is null ? state.Attempts : [firstAttempt],
             Metadata = metadata
         };
+    }
+
+    private async ValueTask<ActivityInputSnapshot> MaterializeInputSnapshotAsync(
+        WorkflowExecutable executable,
+        ExecutableNode executableNode,
+        ActivityExecutionState state,
+        IServiceProvider? serviceProvider,
+        DateTimeOffset materializedAt,
+        CancellationToken cancellationToken)
+    {
+        var inputMaterializer = _inputMaterializer
+            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
+        var durableValueStateStore = _durableValueStateStore
+            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
+        var activityOutputRegister = _activityOutputRegister
+            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an activity output register.");
+
+        var durableValues = await durableValueStateStore.ListAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+        var runtimeView = await _activityExecutionStateStore.ListAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+        var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+        var variableScope = await new RuntimeContainerScopeService(_activityExecutionStateStore).BuildScopeAsync(
+            executable,
+            state.Execution.WorkflowExecutionId,
+            state,
+            cancellationToken,
+            projections.WorkflowVariables);
+        var resolutionContext = new RuntimeInputBindingResolutionContext(
+            workflowExecutionId: state.Execution.WorkflowExecutionId,
+            activityExecutionId: state.InvocationId,
+            durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
+            activityOutputs: activityOutputRegister,
+            serviceProvider: serviceProvider,
+            workflowVariables: projections.WorkflowVariables,
+            workflowInputs: projections.WorkflowInputs,
+            activityOutputValues: projections.ActivityOutputValues,
+            variableScope: variableScope,
+            consumerInvocation: state,
+            runtimeView: runtimeView,
+            executable: executable,
+            workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
+            variableEnvelopes: projections.VariableEnvelopes);
+
+        return await inputMaterializer.MaterializeSnapshotAsync(
+            executableNode,
+            state.InvocationId,
+            resolutionContext,
+            materializedAt,
+            cancellationToken);
     }
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(

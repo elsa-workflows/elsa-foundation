@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Constants;
@@ -40,6 +42,47 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
     }
 
+    public async ValueTask<ActivityInputSnapshot> MaterializeSnapshotAsync(
+        ExecutableNode node,
+        string invocationId,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        DateTimeOffset materializedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
+        ArgumentNullException.ThrowIfNull(resolutionContext);
+
+        var contract = node.ActivityContract
+            ?? throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' has no pinned activity contract.");
+        ValidateCompleteBindingSet(node, contract);
+
+        var values = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var input in contract.Inputs.Values.OrderBy(input => input.Key, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var binding = node.InputBindings[input.Key];
+            ValidatePortableType(input, binding, node.ExecutableNodeId);
+            ValidateEffectivePolicy(input, binding, node.ExecutableNodeId);
+
+            var value = await MaterializeEnvelopeAsync(
+                node,
+                input,
+                binding,
+                resolutionContext,
+                cancellationToken);
+
+            values.Add(input.Key, value);
+        }
+
+        return new ActivityInputSnapshot(
+            invocationId,
+            contract.SchemaFingerprint,
+            ComputeBindingFingerprint(node),
+            values,
+            materializedAt);
+    }
+
     public ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
         ExecutableNode node,
         IServiceProvider? serviceProvider = null,
@@ -67,20 +110,142 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         foreach (var (inputName, binding) in node.InputBindings)
         {
             var type = ResolveInputType(binding, node.ExecutableNodeId, inputName);
-            var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
-
-            object? value;
-            if (resolved.Source == RuntimeInputBindingSource.Expression)
-                value = CoerceToType(await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
-            else if (resolved.Value.HasValue)
-                value = JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
-            else
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported materialized value binding.");
+            var value = await MaterializeValueAsync(node, inputName, binding, resolutionContext, cancellationToken, type);
 
             inputs.Add(BuildInput(node.ExecutableNodeId, inputName, type, value));
         }
 
         return inputs;
+    }
+
+    private async ValueTask<object?> MaterializeValueAsync(
+        ExecutableNode node,
+        string inputName,
+        RuntimeInputBinding binding,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken,
+        Type? resolvedType = null)
+    {
+        var type = resolvedType ?? ResolveInputType(binding, node.ExecutableNodeId, inputName);
+        var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
+
+        if (resolved.Source == RuntimeInputBindingSource.Expression)
+            return CoerceToType(await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
+
+        if (resolved.Value.HasValue)
+            return JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
+
+        throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported materialized value binding.");
+    }
+
+    private async ValueTask<ValueEnvelope> MaterializeEnvelopeAsync(
+        ExecutableNode node,
+        ActivityInputContract input,
+        RuntimeInputBinding binding,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
+    {
+        var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
+        if (resolved.Source == RuntimeInputBindingSource.Expression)
+        {
+            var type = ResolveInputType(binding, node.ExecutableNodeId, input.Key);
+            var materialized = CoerceToType(
+                await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, input.Key, resolutionContext, cancellationToken),
+                type);
+            return materialized is null
+                ? ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy)
+                : ValueEnvelope.Inline(
+                    binding.TargetType,
+                    JsonSerializer.SerializeToElement(materialized, materialized.GetType()),
+                    binding.EffectivePolicy);
+        }
+
+        var source = resolved.Envelope;
+        if (source is null)
+        {
+            throw new InvalidOperationException(
+                $"VF-ACT-005: Canonical input '{input.Key}' on executable node '{node.ExecutableNodeId}' " +
+                "was resolved without its source protection envelope.");
+        }
+
+        if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType))
+            throw new InvalidOperationException($"VF-ACT-004: Literal input '{input.Key}' on executable node '{node.ExecutableNodeId}' does not match its declared portable type.");
+        if (source.Presence == ValuePresence.Absent)
+            throw new InvalidOperationException($"VF-ACT-003: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' is absent after binding normalization.");
+        if (source.Policy.Lifecycle == DurableValueLifecycle.None || !binding.EffectivePolicy.Satisfies(source.Policy))
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' would downgrade its source persistence or protection policy.");
+
+        return new ValueEnvelope(
+            binding.TargetType,
+            source.Presence,
+            source.InlineValue,
+            source.ExternalReference,
+            binding.EffectivePolicy);
+    }
+
+    private static void ValidateCompleteBindingSet(ExecutableNode node, ActivityContract contract)
+    {
+        var missing = contract.Inputs.Keys.Except(node.InputBindings.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var unknown = node.InputBindings.Keys.Except(contract.Inputs.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+        if (missing.Length == 0 && unknown.Length == 0)
+            return;
+
+        throw new InvalidOperationException(
+            $"VF-ACT-003: Executable node '{node.ExecutableNodeId}' cannot materialize a complete input snapshot. " +
+            $"Missing keys: [{string.Join(", ", missing)}]; unknown keys: [{string.Join(", ", unknown)}].");
+    }
+
+    private static void ValidatePortableType(ActivityInputContract input, RuntimeInputBinding binding, string nodeId)
+    {
+        if (SameType(input.Type, binding.TargetType))
+            return;
+
+        throw new InvalidOperationException(
+            $"VF-ACT-004: Input '{input.Key}' on executable node '{nodeId}' has portable type " +
+            $"'{binding.TargetType.Alias}', but contract '{input.Type.Alias}' is pinned.");
+    }
+
+    private static void ValidateEffectivePolicy(ActivityInputContract input, RuntimeInputBinding binding, string nodeId)
+    {
+        var policy = binding.EffectivePolicy;
+        if (!input.Policy.IsPersistable || policy.Lifecycle == DurableValueLifecycle.None)
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' is not persistable at the durable ActivityStarted boundary.");
+
+        var contractMinimum = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            input.Policy.IsSensitive,
+            input.Policy.RequiresEncryption,
+            input.Policy.RedactionMode);
+        if (!policy.Satisfies(contractMinimum))
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' would downgrade its contract protection policy.");
+    }
+
+    private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>
+        StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
+        left.CollectionKind == right.CollectionKind &&
+        left.SchemaVersion == right.SchemaVersion &&
+        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
+
+    private static string ComputeBindingFingerprint(ExecutableNode node)
+    {
+        var canonical = JsonSerializer.Serialize(node.InputBindings
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => new
+            {
+                key = item.Key,
+                item.Value.TargetType,
+                item.Value.EffectivePolicy,
+                item.Value.Source,
+                item.Value.Literal,
+                item.Value.WorkflowRequest,
+                item.Value.Variable,
+                item.Value.ActivityResult,
+                item.Value.Expression,
+                metadata = item.Value.Metadata.OrderBy(metadata => metadata.Key, StringComparer.Ordinal)
+            }));
+        return $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant()}";
     }
 
     private static async ValueTask<object?> EvaluateExpressionAsync(

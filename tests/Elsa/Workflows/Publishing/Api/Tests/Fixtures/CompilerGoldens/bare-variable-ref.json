@@ -2,8 +2,8 @@
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "identity": {
-    "artifactHash": "sha256:6f2f48568edc5ec6463dd4f72f3cb3eb81f17769a1eb297453464cdca550082e",
-    "artifactId": "artifact-6f2f48568edc",
+    "artifactHash": "sha256:23e3de13ffff960c4eeee6a979955f67cf36a928a0a855c201962d09e8d33e2a",
+    "artifactId": "artifact-23e3de13ffff",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -21,11 +21,7 @@
     "executableNodeId": "write-var",
     "inputBindings": [
       {
-        "expression": {
-          "expression": "{\u0022referenceKey\u0022:\u0022var-counter\u0022,\u0022declaringScopeId\u0022:null}",
-          "language": "Variable",
-          "resultTypeId": "String"
-        },
+        "expression": null,
         "inputName": "Text",
         "key": "Text",
         "literalValue": null,
@@ -35,7 +31,7 @@
             "Value": "Text"
           }
         ],
-        "source": "Expression"
+        "source": "VariableRead"
       }
     ],
     "metadata": [

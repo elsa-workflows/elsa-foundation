@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
@@ -172,8 +173,20 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 workItem,
                 payload,
                 parentExecutableNode,
+                parentState,
                 cancellationToken);
-            valueSnapshots = BuildInputValueSnapshots(payloadCapturePolicy, workItem, payload, constructedParent.Inputs, _timeProvider.GetUtcNow());
+            await using var activationLease = constructedParent.ActivationLease;
+            valueSnapshots = parentExecutableNode.ActivityContract is { } contract
+                ? ActivityOutputPublisher.BuildInputValueSnapshots(
+                    payloadCapturePolicy,
+                    workItem,
+                    payload.ActivityExecutionId,
+                    payload.ExecutableNodeId,
+                    contract,
+                    constructedParent.InputSnapshot!,
+                    RuntimeMetadataKeys.ParentCompletionSchedulerWorkItemId,
+                    _timeProvider.GetUtcNow())
+                : BuildInputValueSnapshots(payloadCapturePolicy, workItem, payload, constructedParent.Inputs, _timeProvider.GetUtcNow());
             var parentActivity = constructedParent.Activity;
             var childFaulted = IsChildFaulted(workItem);
 
@@ -224,7 +237,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 parentState,
                 variableScope,
                 carrier);
-            RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
+            if (parentExecutableNode.ActivityContract is null)
+                RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
 
             if (childFaulted)
             {
@@ -355,6 +369,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         RuntimeSchedulerWorkItem workItem,
         RuntimeCompleteActivityCommandPayload payload,
         ExecutableNode executableNode,
+        ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
         var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
@@ -362,6 +377,18 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         var workflowVariables = projections.WorkflowVariables;
         var workflowInputs = projections.WorkflowInputs;
         var activityOutputValues = projections.ActivityOutputValues;
+
+        if (executableNode.ActivityContract is { } contract)
+        {
+            state.EnsureValueFlowCompatible();
+            var snapshot = RequireCommittedSnapshot(state, contract);
+            var attempt = state.Attempts?.LastOrDefault(item => item.EndedAt is null)
+                ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
+            var activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
+                new ActivityActivationRequest(contract, snapshot, attempt, state.PrivateState),
+                cancellationToken);
+            return new ConstructedActivity(activationLease.Activity, [], projections, snapshot, activationLease);
+        }
 
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: workItem.WorkflowExecutionId,
@@ -371,7 +398,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             serviceProvider: serviceProvider,
             workflowVariables: workflowVariables,
             workflowInputs: workflowInputs,
-            activityOutputValues: activityOutputValues);
+            activityOutputValues: activityOutputValues,
+            workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
+            variableEnvelopes: projections.VariableEnvelopes);
         var inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
 
         var activity = await activityFactory.Create(
@@ -381,7 +410,25 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             ActivityOutputPublisher.BuildOutputArguments(executableNode),
             cancellationToken);
 
-        return new ConstructedActivity(activity, inputs, projections);
+        return new ConstructedActivity(activity, inputs, projections, null, null);
+    }
+
+    private static ActivityInputSnapshot RequireCommittedSnapshot(ActivityExecutionState state, ActivityContract contract)
+    {
+        var snapshot = state.InputSnapshot
+            ?? throw new InvalidOperationException($"VF-ACT-009: Typed activity invocation '{state.InvocationId}' has no committed input snapshot.");
+
+        if (!StringComparer.Ordinal.Equals(snapshot.InvocationId, state.InvocationId) ||
+            !StringComparer.Ordinal.Equals(snapshot.ContractFingerprint, contract.SchemaFingerprint))
+            throw new InvalidOperationException($"VF-ACT-001: Typed activity invocation '{state.InvocationId}' does not match its pinned input snapshot contract.");
+
+        if (state.ContractIdentity is not { } identity ||
+            !StringComparer.Ordinal.Equals(identity.ActivityTypeKey, contract.ActivityTypeKey) ||
+            !StringComparer.Ordinal.Equals(identity.ContractVersion, contract.ContractVersion) ||
+            !StringComparer.Ordinal.Equals(identity.SchemaFingerprint, contract.SchemaFingerprint))
+            throw new InvalidOperationException($"VF-ACT-001: Typed activity invocation '{state.InvocationId}' does not match its pinned activity contract.");
+
+        return snapshot;
     }
 
     private async ValueTask EnqueueChildActivityScheduleWorkAsync(
@@ -844,5 +891,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
     private sealed record ConstructedActivity(
         IActivity Activity,
         IReadOnlyList<RuntimeMaterializedActivityInput> Inputs,
-        RuntimeInputBindingStateProjectionSet Projections);
+        RuntimeInputBindingStateProjectionSet Projections,
+        ActivityInputSnapshot? InputSnapshot,
+        ActivityActivationLease? ActivationLease);
 }

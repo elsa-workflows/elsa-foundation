@@ -113,6 +113,15 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string IsSensitive = "runtime.isSensitive";
 
+    /// <summary>Compatibility metadata used when a role-owned envelope is projected from legacy durable-value state.</summary>
+    public const string RequiresEncryption = "runtime.requiresEncryption";
+
+    /// <summary>Compatibility metadata used when a role-owned envelope is projected from legacy durable-value state.</summary>
+    public const string RedactionMode = "runtime.redactionMode";
+
+    /// <summary>Compatibility metadata used when a role-owned envelope is projected from legacy durable-value state.</summary>
+    public const string RetentionPolicy = "runtime.retentionPolicy";
+
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
 
     /// <summary>

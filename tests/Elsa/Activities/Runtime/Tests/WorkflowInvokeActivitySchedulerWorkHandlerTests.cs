@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
-public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
+public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
@@ -76,7 +76,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var legacyFactory = new RecordingActivityFactory(new RecordingActivity());
         var activator = new RecordingTypedActivator();
         await _executableStore.SaveAsync(NewTypedExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
         await using var provider = NewProvider(legacyFactory, includeInspection: true, activityActivator: activator);
         var handler = NewHandler(provider);
 
@@ -105,7 +105,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var legacyFactory = new RecordingActivityFactory(new RecordingActivity());
         var activator = new RecordingTypedActivator();
         await _executableStore.SaveAsync(NewTypedExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
         await using var provider = NewProvider(legacyFactory, includeInspection: true, activityActivator: activator);
         var handler = NewHandler(provider);
         var workItem = NewInvokeWorkItem(NewIdentity());
@@ -1044,6 +1044,39 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string> { ["runtime.startReason"] = "test" });
 
+    private ActivityExecutionState NewTypedRunningState()
+    {
+        var contract = NewTypedExecutable().RootActivity.ActivityContract!;
+        var snapshot = new ActivityInputSnapshot(
+            "actexec-1",
+            contract.SchemaFingerprint,
+            "sha256:bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["text"] = ValueEnvelope.Inline(
+                    new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+                    JsonSerializer.SerializeToElement("hello"),
+                    ValueProtectionPolicy.InstanceInline)
+            },
+            _now);
+        var attempt = new ActivityAttempt(
+            "actexec-1:attempt:1",
+            "actexec-1",
+            1,
+            ActivityAttemptReason.Initial,
+            _now);
+
+        return NewRunningState() with
+        {
+            ContractIdentity = new ActivityInvocationContractIdentity(
+                contract.ActivityTypeKey,
+                contract.ContractVersion,
+                contract.SchemaFingerprint),
+            InputSnapshot = snapshot,
+            Attempts = [attempt]
+        };
+    }
+
     private static WorkflowExecutable NewExecutable()
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
@@ -1098,7 +1131,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
-    private static WorkflowExecutable NewTypedExecutable()
+    private static WorkflowExecutable NewTypedExecutable(string literalText = "hello")
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "typed" });
         var contract = new ActivityContract(
@@ -1106,7 +1139,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             "1.0.0",
             "typed",
             descriptor,
-            [new ActivityInputContract("text", "Text", new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Any"), true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("text", "Text", new Elsa.Primitives.Models.ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(
                 new Elsa.Primitives.Models.ValueTypeDescriptor("test/typed-result"),
                 true,
@@ -1115,10 +1148,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             ["Done"],
             new ActivityActivationRequirement("typed", "test/typed"));
         var input = new RuntimeInputBinding(
-            inputName: "text",
+            inputKey: "text",
+            targetType: new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement("hello"),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeof(string).FullName! });
+            literal: ValueEnvelope.Inline(
+                new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement(literalText),
+                ValueProtectionPolicy.InstanceInline));
         var node = new ExecutableNode(
             "node-start",
             "authored-node-start",
@@ -1250,10 +1287,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     {
         public int ActivateCalls { get; private set; }
         public TypedCompletingActivity? Activity { get; private set; }
+        public List<ActivityActivationRequest> Requests { get; } = [];
 
         public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
         {
             ActivateCalls++;
+            Requests.Add(request);
             var text = request.Inputs.Values["text"].InlineValue!.Value.GetString()!;
             Activity = new TypedCompletingActivity(text);
             return ValueTask.FromResult(new ActivityActivationLease(Activity));

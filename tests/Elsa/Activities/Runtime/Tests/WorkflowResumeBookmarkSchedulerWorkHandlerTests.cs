@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -13,7 +14,7 @@ using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
-public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
+public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 17, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
@@ -449,7 +450,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         return workItem;
     }
 
-    private ServiceProvider NewProvider(IActivityFactory factory)
+    private ServiceProvider NewProvider(IActivityFactory factory, IActivityActivator? activityActivator = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => factory);
@@ -474,6 +475,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
         services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
+        if (activityActivator is not null)
+            services.AddSingleton(activityActivator);
         return services.BuildServiceProvider();
     }
 
@@ -651,7 +654,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         bool includeResumeTarget = true,
         string resumeTargetId = "resume-target:delivery",
         RuntimeInputBinding? inputBinding = null,
-        bool includeOutputCapture = false)
+        bool includeOutputCapture = false,
+        ActivityContract? activityContract = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var resumeTargets = includeResumeTarget
@@ -667,13 +671,18 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 
         return new(
             identity: NewIdentity(),
-            rootActivity: NewNode("node-wait", document.RootElement, inputBinding, includeOutputCapture),
+            rootActivity: NewNode("node-wait", document.RootElement, inputBinding, includeOutputCapture, activityContract),
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
-    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload, RuntimeInputBinding? inputBinding = null, bool includeOutputCapture = false) =>
+    private static ExecutableNode NewNode(
+        string nodeId,
+        JsonElement descriptorPayload,
+        RuntimeInputBinding? inputBinding = null,
+        bool includeOutputCapture = false,
+        ActivityContract? activityContract = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -683,7 +692,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             descriptorPayload: descriptorPayload.Clone(),
             inputBindings: inputBinding is null
                 ? new Dictionary<string, RuntimeInputBinding>()
-                : new Dictionary<string, RuntimeInputBinding> { ["Text"] = inputBinding },
+                : new Dictionary<string, RuntimeInputBinding> { [inputBinding.InputName] = inputBinding },
             outputCaptures: includeOutputCapture
                 ? new Dictionary<string, RuntimeOutputCapture>
                 {
@@ -697,10 +706,61 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                         metadata: new Dictionary<string, string>())
                 }
                 : new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: activityContract);
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
+    private static WorkflowExecutable NewTypedExecutable(string currentLiteral)
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { type = "typed-resume" });
+        var valueType = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        var contract = new ActivityContract(
+            "test/typed-resume",
+            "1.0.0",
+            "typed-resume",
+            descriptor,
+            [new ActivityInputContract("text", "Text", valueType, true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("typed-resume", "test/typed-resume"));
+        var binding = new RuntimeInputBinding(
+            inputKey: "text",
+            targetType: valueType,
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(valueType, JsonSerializer.SerializeToElement(currentLiteral), ValueProtectionPolicy.InstanceInline));
+        return NewExecutable(inputBinding: binding, activityContract: contract);
+    }
+
+    private ActivityExecutionState NewTypedSuspendedState(ActivityContract contract, string pinnedText)
+    {
+        var valueType = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        var snapshot = new ActivityInputSnapshot(
+            "actexec-1",
+            contract.SchemaFingerprint,
+            "sha256:original-bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["text"] = ValueEnvelope.Inline(valueType, JsonSerializer.SerializeToElement(pinnedText), ValueProtectionPolicy.InstanceInline)
+            },
+            _now.AddMinutes(-2));
+        var initialAttempt = new ActivityAttempt(
+            "actexec-1:attempt:1",
+            "actexec-1",
+            1,
+            ActivityAttemptReason.Initial,
+            _now.AddMinutes(-2),
+            _now.AddMinutes(-1),
+            transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend);
+        return NewSuspendedState() with
+        {
+            ContractIdentity = new ActivityInvocationContractIdentity(contract.ActivityTypeKey, contract.ContractVersion, contract.SchemaFingerprint),
+            InputSnapshot = snapshot,
+            Attempts = [initialAttempt]
+        };
+    }
 
     private static JsonElement Json(string json)
     {
@@ -726,6 +786,36 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 outputProducingActivity.Customer = (OutputArgument<object?>)customer;
             return ValueTask.FromResult(activity);
         }
+    }
+
+    private sealed class RecordingTypedResumeActivator : IActivityActivator
+    {
+        public List<ActivityActivationRequest> Requests { get; } = [];
+        public List<TypedResumeTargetActivity> Activities { get; } = [];
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            var activity = new TypedResumeTargetActivity(request.Inputs.Values["text"].InlineValue!.Value.GetString()!);
+            Activities.Add(activity);
+            return ValueTask.FromResult(new ActivityActivationLease(activity));
+        }
+    }
+
+    private sealed class TypedResumeTargetActivity(string text) : ActivityBase, IDisposable
+    {
+        public string? ObservedText { get; private set; }
+        public string? ObservedAttemptId { get; private set; }
+        public bool Disposed { get; private set; }
+
+        [ResumeTarget("resume-target:delivery")]
+        private void Resume(IActivityExecutionContext context)
+        {
+            ObservedText = text;
+            ObservedAttemptId = ((SimpleActivityExecutionContext)context).AttemptId;
+        }
+
+        public void Dispose() => Disposed = true;
     }
 
     private sealed class ThrowingActivityFactory(Exception exception) : IActivityFactory

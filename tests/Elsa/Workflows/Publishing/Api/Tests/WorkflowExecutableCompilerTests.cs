@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
@@ -132,11 +133,10 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task CompilesVariableReferenceInputIntoRuntimeExpressionBinding()
+    public async Task CompilesVariableReferenceInputIntoCanonicalVariableReadBinding()
     {
-        // #206: a structured Variable reference input must compile into a runtime expression binding
-        // whose language is "Variable" and whose expression text round-trips the reference (reference
-        // key + declaring scope), so the runtime VariableExpressionHandler resolves it at execution time.
+        // A structured Variable reference compiles directly to the closed variable-read role. Runtime
+        // no longer needs to route a normal variable read through an expression-language handler.
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
         var reference = JsonSerializer.SerializeToElement(new { referenceKey = "var-counter", declaringScopeId = "node-sequence" });
         var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(reference))));
@@ -150,19 +150,15 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "artifact-"));
 
         var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
-        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
         Assert.Null(binding.LiteralValue);
-        var expression = binding.Expression;
-        Assert.NotNull(expression);
-        Assert.Equal("Variable", expression!.Language);
-
-        var parsed = JsonSerializer.Deserialize<JsonElement>(expression.Expression);
-        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
-        Assert.Equal("node-sequence", parsed.GetProperty("declaringScopeId").GetString());
+        Assert.Null(binding.Expression);
+        Assert.Equal("var-counter", binding.Variable!.VariableKey);
+        Assert.Equal("node-sequence", binding.Variable.DeclaringScopeId);
     }
 
     [Fact]
-    public async Task CompilesBareVariableReferenceKeyInputIntoRuntimeExpressionBinding()
+    public async Task CompilesBareVariableReferenceKeyInputIntoWorkflowScopedVariableReadBinding()
     {
         // A Variable input may carry just a bare reference key string (workflow-scope reference).
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
@@ -177,10 +173,9 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "artifact-"));
 
         var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
-        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
-        Assert.Equal("Variable", binding.Expression!.Language);
-        var parsed = JsonSerializer.Deserialize<JsonElement>(binding.Expression.Expression);
-        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
+        Assert.Equal("var-counter", binding.Variable!.VariableKey);
+        Assert.Equal(VariableReference.WorkflowScopeId, binding.Variable.DeclaringScopeId);
     }
 
     [Fact]

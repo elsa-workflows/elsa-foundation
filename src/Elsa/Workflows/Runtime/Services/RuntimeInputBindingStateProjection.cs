@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -27,6 +28,17 @@ public static class RuntimeInputBindingStateProjection
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.VariableName);
 
     /// <summary>
+    /// Canonical workflow-variable projection retaining payload location and protection policy. The key is the
+    /// stable workflow-scope variable key used by the current authored/runtime bridge.
+    /// </summary>
+    public static IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> ProjectWorkflowVariableEnvelopes(
+        IEnumerable<DurableValueState> durableValues) =>
+        ProjectEnvelopesByMetadataKey(durableValues, RuntimeMetadataKeys.VariableName)
+            .ToDictionary(
+                item => new RuntimeVariableValueAddress(VariableReference.WorkflowScopeId, item.Key),
+                item => item.Value);
+
+    /// <summary>
     /// Builds the workflow-input snapshot (input name → value) from the durable values captured for a workflow
     /// execution, mirroring <see cref="ProjectActivityOutputValues"/>. Inputs are tagged with the
     /// <see cref="RuntimeMetadataKeys.InputName"/> metadata key when seeded. When several captures share an
@@ -34,6 +46,11 @@ public static class RuntimeInputBindingStateProjection
     /// </summary>
     public static IReadOnlyDictionary<string, object?> ProjectWorkflowInputs(IEnumerable<DurableValueState> durableValues) =>
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
+
+    /// <summary>Canonical workflow-request projection retaining payload location and protection policy.</summary>
+    public static IReadOnlyDictionary<string, ValueEnvelope> ProjectWorkflowInputEnvelopes(
+        IEnumerable<DurableValueState> durableValues) =>
+        ProjectEnvelopesByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
 
     /// <summary>
     /// Projects the start stimulus payload (spec 089 A) from its reserved single-slot channel
@@ -73,6 +90,8 @@ public static class RuntimeInputBindingStateProjection
             WorkflowInputs: ProjectWorkflowInputs(materialized),
             WorkflowVariables: ProjectWorkflowVariables(materialized),
             ActivityOutputValues: ProjectActivityOutputValues(materialized),
+            WorkflowInputEnvelopes: ProjectWorkflowInputEnvelopes(materialized),
+            VariableEnvelopes: ProjectWorkflowVariableEnvelopes(materialized),
             CorrelationId: identity.CorrelationId,
             InstanceName: identity.InstanceName,
             StimulusInput: ProjectStimulusInput(materialized),
@@ -101,6 +120,46 @@ public static class RuntimeInputBindingStateProjection
 
         return result;
     }
+
+    internal static IReadOnlyDictionary<string, ValueEnvelope> ProjectEnvelopesByMetadataKey(
+        IEnumerable<DurableValueState> durableValues,
+        string nameMetadataKey)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+
+        var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var durableValue in durableValues
+                     .Where(value => value.Metadata.ContainsKey(nameMetadataKey))
+                     .OrderBy(value => value.CapturedAt))
+        {
+            result[durableValue.Metadata[nameMetadataKey]] = ToEnvelope(durableValue);
+        }
+
+        return result;
+    }
+
+    private static ValueEnvelope ToEnvelope(DurableValueState value)
+    {
+        var type = new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Any");
+        var policy = new ValueProtectionPolicy(
+            value.Lifecycle,
+            value.Storage,
+            IsTrue(value.Metadata, RuntimeMetadataKeys.IsSensitive),
+            IsTrue(value.Metadata, RuntimeMetadataKeys.RequiresEncryption),
+            value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RedactionMode),
+            value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RetentionPolicy));
+
+        if (value.ExternalReference is not null)
+            return ValueEnvelope.External(type, value.ExternalReference, policy);
+        if (value.InlineValue.HasValue && value.InlineValue.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return ValueEnvelope.Null(type, policy);
+        if (value.InlineValue.HasValue)
+            return ValueEnvelope.Inline(type, value.InlineValue.Value, policy);
+        throw new InvalidOperationException($"Durable value '{value.ValueId}' has no materialized inline or external payload.");
+    }
+
+    private static bool IsTrue(IReadOnlyDictionary<string, string> metadata, string key) =>
+        metadata.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed) && parsed;
 }
 
 /// <summary>
@@ -111,10 +170,35 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
     IReadOnlyDictionary<string, object?> WorkflowInputs,
     IReadOnlyDictionary<string, object?> WorkflowVariables,
     IReadOnlyDictionary<string, object?> ActivityOutputValues,
+    IReadOnlyDictionary<string, ValueEnvelope> WorkflowInputEnvelopes,
+    IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> VariableEnvelopes,
     string? CorrelationId,
     string? InstanceName,
     object? StimulusInput,
-    string? TriggerNodeId);
+    string? TriggerNodeId)
+{
+    /// <summary>Compatibility constructor for execution-time carriers that consume only object projections.</summary>
+    public RuntimeInputBindingStateProjectionSet(
+        IReadOnlyDictionary<string, object?> WorkflowInputs,
+        IReadOnlyDictionary<string, object?> WorkflowVariables,
+        IReadOnlyDictionary<string, object?> ActivityOutputValues,
+        string? CorrelationId,
+        string? InstanceName,
+        object? StimulusInput,
+        string? TriggerNodeId)
+        : this(
+            WorkflowInputs,
+            WorkflowVariables,
+            ActivityOutputValues,
+            new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal),
+            new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>(),
+            CorrelationId,
+            InstanceName,
+            StimulusInput,
+            TriggerNodeId)
+    {
+    }
+}
 
 /// <summary>
 /// Projects the workflow identity (correlation id / instance name) out of the durable values captured for a workflow

@@ -12,8 +12,8 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 
 /// <summary>
 /// Compiles a single authored activity input into its durable <see cref="RuntimeInputBinding"/>. Owns the
-/// three binding strategies (literal / variable-reference / expression), authored-type resolution against
-/// the well-known type registry, and literal value conversion. Extracted from
+/// closed role-owned sources, authored-type resolution against the well-known type registry, and literal
+/// value conversion. Extracted from
 /// <see cref="WorkflowExecutableCompiler"/> (W30b, #418) so binding compilation is independently
 /// unit-testable and can evolve without touching activity-tree compilation.
 /// </summary>
@@ -22,6 +22,9 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     private const string LiteralExpressionType = "Literal";
     private const string ObjectExpressionType = "Object";
     private const string VariableExpressionType = "Variable";
+    private const string WorkflowRequestExpressionType = "WorkflowRequest";
+    private const string ActivityResultExpressionType = "ActivityResult";
+    private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
@@ -39,29 +42,86 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         if (string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileVariableInput(nodeId, inputDefinition, value);
 
+        if (string.Equals(value.ExpressionType, WorkflowRequestExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileWorkflowRequestInput(nodeId, inputDefinition, value);
+
+        if (string.Equals(value.ExpressionType, ActivityResultExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileActivityResultInput(nodeId, inputDefinition, value);
+
+        if (string.Equals(value.ExpressionType, DefaultExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileDefaultInput(nodeId, inputDefinition);
+
         return CompileExpressionInput(nodeId, inputDefinition, value);
     }
 
     /// <summary>
-    /// Compiles a structured <c>Variable</c> reference input into a runtime expression binding whose
-    /// language is <c>Variable</c> and whose expression text round-trips the reference (reference key
-    /// plus optional declaring scope) as a JSON object. The runtime materializer feeds that object to
-    /// the registered <c>VariableExpressionHandler</c>, which resolves it through the visible scope
-    /// chain at execution time (ADR 0027).
+    /// Compiles the existing authored <c>Variable</c> syntax into the canonical variable-read role.
+    /// A missing declaring scope retains the historical workflow-scope meaning.
     /// </summary>
     private RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
         var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
-        var referenceText = JsonSerializer.Serialize(new VariableReferencePayload(reference.ReferenceKey, reference.DeclaringScopeId));
-
-        var inputType = ResolveInputType(inputDefinition);
-        var resultType = new RuntimeValueTypeDescriptor("alias", inputDefinition.Type.Alias, null);
 
         return new RuntimeInputBinding(
-            inputName: inputDefinition.Name,
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding(VariableExpressionType, referenceText, resultType),
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.VariableRead,
+            variable: new RuntimeVariableReference(
+                reference.ReferenceKey,
+                reference.DeclaringScopeId ?? VariableReference.WorkflowScopeId),
             metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private static RuntimeInputBinding CompileWorkflowRequestInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        var payload = RequireObjectPayload(nodeId, inputDefinition, value, WorkflowRequestExpressionType);
+        var memberKey = RequireStringProperty(nodeId, inputDefinition, payload, WorkflowRequestExpressionType, "memberKey");
+        var path = ReadOptionalStringProperty(payload, "path");
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference(memberKey, path),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private static RuntimeInputBinding CompileActivityResultInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        var payload = RequireObjectPayload(nodeId, inputDefinition, value, ActivityResultExpressionType);
+        var producerNodeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerNodeId");
+        var projectionKey = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "projectionKey");
+        var producerScopeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerScopeId");
+        var isOptional = payload.TryGetProperty("isOptional", out var optionalElement) &&
+                         optionalElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+                         optionalElement.GetBoolean();
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId, isOptional),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private RuntimeInputBinding CompileDefaultInput(string nodeId, InputDefinition inputDefinition)
+    {
+        if (!inputDefinition.DefaultValue.HasValue)
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' requests its contract default, but the pinned input contract declares no default.");
+
+        var defaultSyntax = inputDefinition.DefaultSyntax;
+        if (string.IsNullOrWhiteSpace(defaultSyntax) ||
+            string.Equals(defaultSyntax, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileLiteralInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, LiteralExpressionType));
+
+        if (string.Equals(defaultSyntax, ObjectExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileObjectInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, ObjectExpressionType));
+
+        throw new ArgumentException(
+            $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' default syntax '{defaultSyntax}' is executable. Canonical activity defaults must be pinned literals.");
     }
 
     private static VariableReference ParseVariableReference(string nodeId, InputDefinition inputDefinition, object? value)
@@ -72,8 +132,6 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
 
         return reference;
     }
-
-    private sealed record VariableReferencePayload(string referenceKey, string? declaringScopeId);
 
     private RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
@@ -177,6 +235,42 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
 
         return value.ToString();
     }
+
+    private static JsonElement RequireObjectPayload(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        string expressionType)
+    {
+        var payload = value.Value is JsonElement element
+            ? element
+            : JsonSerializer.SerializeToElement(value.Value);
+        if (payload.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries no object reference payload.");
+
+        return payload;
+    }
+
+    private static string RequireStringProperty(
+        string nodeId,
+        InputDefinition inputDefinition,
+        JsonElement payload,
+        string expressionType,
+        string propertyName)
+    {
+        if (payload.TryGetProperty(propertyName, out var property) &&
+            property.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(property.GetString()))
+            return property.GetString()!;
+
+        throw new ArgumentException(
+            $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries no '{propertyName}'.");
+    }
+
+    private static string? ReadOptionalStringProperty(JsonElement payload, string propertyName) =>
+        payload.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
 
     private static Dictionary<string, string> BuildInputMetadata(InputDefinition inputDefinition) =>
         new()
