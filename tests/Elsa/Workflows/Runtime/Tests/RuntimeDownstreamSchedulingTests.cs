@@ -4,6 +4,8 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -362,6 +364,44 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.IsAssignableFrom<ArgumentException>(exception.InnerException);
     }
 
+    [Fact]
+    public async Task AddWorkflowRuntime_ContributesSchedulerHandlerAndPreservesQueuedWorkItem()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        var contribution = Assert.Single(services
+            .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<RuntimePostCommitIntentHandlerContribution>()
+            .Where(candidate => candidate.IntentKind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        Assert.Equal(typeof(RuntimeSchedulerPostCommitIntentDispatcher), contribution.HandlerType);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var expected = NewScheduleWorkItem();
+
+        await scope.ServiceProvider.GetRequiredService<IRuntimePostCommitIntentDispatcher>()
+            .DispatchAsync(NewSchedulerIntent(expected));
+
+        var actual = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .ListAsync(new RuntimeSchedulerWorkQuery(expected.WorkflowExecutionId)));
+        Assert.Equal(expected.WorkItemId, actual.WorkItemId);
+        Assert.Equal(expected.WorkflowExecutionId, actual.WorkflowExecutionId);
+        Assert.Equal(expected.CommandId, actual.CommandId);
+        Assert.Equal(expected.CommandKind, actual.CommandKind);
+        Assert.Equal(expected.EnvelopeId, actual.EnvelopeId);
+        Assert.Equal(expected.IdempotencyKey, actual.IdempotencyKey);
+        Assert.Equal(expected.EnqueuedAt, actual.EnqueuedAt);
+        Assert.Equal(expected.RecordedAt, actual.RecordedAt);
+        Assert.Equal(expected.Sequence, actual.Sequence);
+        Assert.Equal(expected.Payload?.GetRawText(), actual.Payload?.GetRawText());
+        Assert.Equal(
+            expected.CommandMetadata.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            actual.CommandMetadata.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        Assert.Equal(
+            expected.EnvelopeMetadata.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            actual.EnvelopeMetadata.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+    }
+
     private WorkflowCompleteActivitySchedulerWorkHandler NewCompleteHandler(
         IWorkflowSchedulerWorkQueue queue,
         IWorkflowExecutableStore executableStore) =>
@@ -475,8 +515,14 @@ public sealed class RuntimeDownstreamSchedulingTests
                 "actexec-next",
                 RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
                 "actexec-source")),
-            commandMetadata: new Dictionary<string, string>(),
-            envelopeMetadata: new Dictionary<string, string>());
+            commandMetadata: new Dictionary<string, string>
+            {
+                ["command-origin"] = "scheduler-parity"
+            },
+            envelopeMetadata: new Dictionary<string, string>
+            {
+                ["envelope-trace"] = "trace-scheduler-parity"
+            });
 
     private ActivityExecutionState NewCompletedActivityState() =>
         new(

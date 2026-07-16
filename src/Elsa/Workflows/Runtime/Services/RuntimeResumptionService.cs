@@ -38,7 +38,7 @@ public sealed class RuntimeResumptionService(
             new RuntimePostCommitOutboxProcessRequest(
                 limit: request.OutboxBatchSize,
                 workflowExecutionId: null,
-                intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork),
+                intentKind: null),
             cancellationToken);
 
         var executionIds = await DiscoverExecutionIdsAsync(request, cancellationToken);

@@ -84,3 +84,4 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 |---|---|
 | discovered but not root-indexed | [src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md](../../src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/Elsa/Activities/Graph/Runtime/EXTENSION_POINTS.md](../../src/Elsa/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
+

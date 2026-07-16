@@ -2,12 +2,16 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class RuntimeResumptionServiceTests
 {
+    private const string MarkerKind = "Test.Marker";
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -24,7 +28,63 @@ public sealed class RuntimeResumptionServiceTests
 
         var outboxRequest = Assert.Single(harness.OutboxProcessor.Requests);
         Assert.Null(outboxRequest.WorkflowExecutionId);
-        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, outboxRequest.IntentKind);
+        Assert.Null(outboxRequest.IntentKind);
+    }
+
+    [Fact]
+    public async Task SweepAsync_DeliversContributedIntentCommittedThroughRealCheckpointAndOutbox()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton<Marker>();
+        services.AddRuntimePostCommitIntentHandler<MarkerHandler>(MarkerKind);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var scopedProvider = scope.ServiceProvider;
+        var intent = NewMarkerIntent();
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: "commit-marker-1",
+            Checkpoint: new RuntimeCheckpoint(
+                "checkpoint-marker-1",
+                RuntimeCheckpointNames.PostCommitIntentRecorded,
+                "wfexec-marker-1",
+                Now,
+                [],
+                new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
+            PostCommitIntents: [intent],
+            Metadata: new Dictionary<string, string>());
+
+        var commitResult = await scopedProvider.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
+        Assert.True(commitResult.Succeeded);
+        var store = scopedProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+        Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
+
+        var marker = scopedProvider.GetRequiredService<Marker>();
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            scopedProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
+            new FakeWorkQueue(),
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now));
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal(1, result.OutboxDeliveredCount);
+        var deliveredIntent = Assert.Single(marker.Intents);
+        Assert.Equal(intent.IntentId, deliveredIntent.IntentId);
+        Assert.Equal(intent.Kind, deliveredIntent.Kind);
+        Assert.Equal(intent.WorkflowExecutionId, deliveredIntent.WorkflowExecutionId);
+        Assert.Equal(intent.ActivityExecutionId, deliveredIntent.ActivityExecutionId);
+        Assert.Equal(intent.IdempotencyKey, deliveredIntent.IdempotencyKey);
+        Assert.Equal(intent.RecordedAt, deliveredIntent.RecordedAt);
+        Assert.Empty(agentProvider.Activations);
+        Assert.Empty(agentProvider.Agent.Envelopes);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
     }
 
     [Fact]
@@ -243,6 +303,31 @@ public sealed class RuntimeResumptionServiceTests
             reason: RuntimeInterruptionReason.HostStopped,
             detectedAt: Now,
             requeueFromLastCheckpoint: true);
+
+    private static RuntimePostCommitIntent NewMarkerIntent() =>
+        new(
+            intentId: "intent-marker-1",
+            workflowExecutionId: "wfexec-marker-1",
+            kind: MarkerKind,
+            recordedAt: Now,
+            activityExecutionId: "actexec-marker-1",
+            idempotencyKey: "marker-1",
+            payload: null,
+            metadata: new Dictionary<string, string>());
+
+    private sealed class Marker
+    {
+        public List<RuntimePostCommitIntent> Intents { get; } = [];
+    }
+
+    private sealed class MarkerHandler(Marker marker) : IRuntimePostCommitIntentHandler
+    {
+        public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+        {
+            marker.Intents.Add(intent);
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private sealed class Harness
     {
