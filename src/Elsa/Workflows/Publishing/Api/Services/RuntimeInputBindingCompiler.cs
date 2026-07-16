@@ -200,6 +200,9 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
 
+        if (TryReadPortableExpressionDefinition(value.Value, out var definition))
+            return CompilePortableExpressionInput(nodeId, inputDefinition, value.ExpressionType, definition);
+
         var expressionText = ExtractExpressionText(value.Value);
         if (string.IsNullOrWhiteSpace(expressionText))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{value.ExpressionType}' but carries no expression text.");
@@ -214,6 +217,64 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
             metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private static RuntimeInputBinding CompilePortableExpressionInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        string authoredExpressionType,
+        ExpressionDefinition definition)
+    {
+        if (!string.Equals(authoredExpressionType, definition.Language, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' declares expression type '{authoredExpressionType}', but its portable definition declares language '{definition.Language}'.");
+        }
+
+        if (!string.Equals(inputDefinition.Type.Alias, definition.ResultType.Alias, StringComparison.Ordinal) ||
+            inputDefinition.Type.CollectionKind != definition.ResultType.CollectionKind)
+        {
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' expects '{inputDefinition.Type.Alias}', but its portable expression declares result type '{definition.ResultType.Alias}'.");
+        }
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                definition.Language,
+                definition.Source,
+                new RuntimeValueTypeDescriptor("alias", definition.ResultType.Alias, null),
+                definition.Metadata,
+                definition.Parameters,
+                definition.Options,
+                definition.CapabilityProfile),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private static bool TryReadPortableExpressionDefinition(object? value, out ExpressionDefinition definition)
+    {
+        if (value is ExpressionDefinition instance)
+        {
+            definition = instance;
+            return true;
+        }
+
+        var element = value as JsonElement? ?? (value is null ? null : JsonSerializer.SerializeToElement(value));
+        if (element is not { ValueKind: JsonValueKind.Object } payload ||
+            !payload.TryGetProperty("language", out _) ||
+            !payload.TryGetProperty("source", out _) ||
+            !payload.TryGetProperty("capabilityProfile", out _))
+        {
+            definition = null!;
+            return false;
+        }
+
+        definition = payload.Deserialize<ExpressionDefinition>()
+            ?? throw new ArgumentException("Portable expression definition payload could not be deserialized.");
+        return true;
     }
 
     // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the

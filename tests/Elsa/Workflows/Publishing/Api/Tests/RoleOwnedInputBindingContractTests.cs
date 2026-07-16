@@ -186,6 +186,42 @@ public sealed class RoleOwnedInputBindingContractTests
         Assert.DoesNotContain(", System.", JsonSerializer.Serialize(binding), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Compiler_PreservesPortableExpressionDefinitionWithoutAmbientCompatibility()
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition(
+            ReferenceKey: "message",
+            Name: "Text",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            DisplayName: "Text",
+            Category: null);
+        var definition = new ExpressionDefinition(
+            "JavaScript",
+            "args.customerId",
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["customerId"] = new WorkflowRequestExpressionParameterBinding("customer-id")
+            },
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1,
+            new Dictionary<string, string> { ["origin"] = "elsa3-import" });
+
+        var binding = compiler.Compile(
+            "node-write",
+            input,
+            new ArgumentValue(JsonSerializer.SerializeToElement(definition), "JavaScript"));
+
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        var expression = Assert.IsType<RuntimeExpressionBinding>(binding.Expression);
+        Assert.Equal("args.customerId", expression.Expression);
+        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
+        Assert.Equal("customer-id", Assert.IsType<WorkflowRequestExpressionParameterBinding>(expression.Parameters["customerId"]).MemberKey);
+        Assert.Equal("elsa3-import", expression.Metadata["origin"]);
+    }
+
     private static RuntimeInputBinding ResultBinding(
         string projectionKey,
         IReadOnlyDictionary<string, string> metadata) =>
