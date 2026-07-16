@@ -77,8 +77,9 @@ must be able to evolve without silently breaking already-suspended workflows. Th
   [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs).
   The version is stamped into the Groundwork **envelope** `SchemaVersion` field on
   every write — never inside the content JSON and never on the domain state records, keeping
-  persistence concerns out of `WorkflowExecutionState` et al. The legacy manifest-wide stamp
-  `"1.0.0"` (everything written before versioning) parses as version `1` for every kind.
+  persistence concerns out of `WorkflowExecutionState` et al. Only positive-integer document stamps are
+  accepted. The storage manifest's `"1.0.0"` version is a separate Groundwork manifest/index contract and
+  is not a persisted-document alias.
 - **Loud enforcement on read.** The serializer parses the stamp: the current version deserializes
   directly; a version below the kind's minimum-readable boundary, an unrecognized/non-positive version, or a future version throws
   Groundwork's structured `DocumentSchemaVersionException`, naming the kind, stamp, parsed version, and
@@ -134,11 +135,12 @@ The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds 
 kind and two cross-cutting (across-execution / across-artifact) indexes. Both route through the same bridge
 serializer, versioning, and fixture gate as every other runtime kind.
 
-- **New document kind `workflowTriggerBinding` (version 1).** A durable index entry written at **publish
+- **Document kind `workflowTriggerBinding` (current/minimum version 2).** A durable index entry written at **publish
   time** mapping an external stimulus identity `(stimulusType, stimulusHash)` to a start-trigger activity
   inside a *pinned, published* executable — the piece Elsa 4 was missing that made "start a workflow from
   an external event" impossible. It is indexed over the published artifact, never the mutable authored
-  definition. Golden fixture: `Fixtures/v1/workflowTriggerBinding.json`. Two Groundwork indexes back it:
+  definition. The binding also carries its publication, slot, provider-cardinality, and prepared/active authority.
+  Its sole golden fixture is `Fixtures/v2/workflowTriggerBinding.json`; v1 is rejected. Two Groundwork indexes back it:
   `by-stimulus` (keyword over `stimulusHash`, the cross-artifact fan-out used by the router to start every
   workflow waiting on a stimulus) and `by-artifact` (keyword over `artifactId`, used to replace an
   artifact's bindings on republish). Writing an unroutable published trigger (a trigger node whose stimulus
@@ -154,8 +156,8 @@ serializer, versioning, and fixture gate as every other runtime kind.
   persisted** nested field `state.parentActivityExecutionId` (Groundwork index fields are dot-paths resolved by
   walking nested JSON). No version bump or upcaster is needed: the state record shape is unchanged; only a new
   index was declared — the existing `GroundworkRuntimeDocumentFixtureTests` drift test stays green, which is the
-  wire-safety proof. The manifest `SchemaVersion` stays `"1.0.0"` (it is the frozen legacy stamp that
-  `ElsaRuntimeDocumentVersions.Parse` recognizes, not a migration knob); the Condition 7 backfill below triggers on
+  wire-safety proof. The manifest `SchemaVersion` stays `"1.0.0"` (it versions the storage manifest, not persisted
+  document content); the Condition 7 backfill below triggers on
   the physicalized index-set change, so activity-execution states written before the index existed become visible
   through it without a re-save. The store queries the single-field parent index and then applies a defensive
   in-memory `workflowExecutionId` filter, so the full `(workflowExecutionId, parentActivityExecutionId)` semantics

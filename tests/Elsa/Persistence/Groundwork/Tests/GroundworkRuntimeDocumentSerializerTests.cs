@@ -60,17 +60,6 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Equal(state.StimulusType, deserialized.StimulusType);
     }
 
-    [Fact]
-    public void Deserialize_Accepts_The_Legacy_Stamp_As_Version_1()
-    {
-        var (_, contentJson) = Serializer.Serialize(Kind, Bookmark());
-
-        // Every document written before per-kind versioning carries the manifest-wide "1.0.0" stamp.
-        var deserialized = Serializer.Deserialize<BookmarkState>(Envelope(ElsaRuntimeDocumentVersions.LegacySchemaVersion, contentJson));
-
-        Assert.Equal("bm-1", deserialized.BookmarkId);
-    }
-
     // --- Read path: version enforcement fails loudly ---
 
     [Fact]
@@ -96,7 +85,6 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             if (minimumReadableVersion == 1)
                 continue;
 
-            data.Add(documentKind, ElsaRuntimeDocumentVersions.LegacySchemaVersion);
             for (var version = 1; version < currentVersion; version++)
                 data.Add(documentKind, ElsaRuntimeDocumentVersions.Stamp(version));
         }
@@ -123,6 +111,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [InlineData("0")]
     [InlineData("-1")]
     [InlineData("1.0")]
+    [InlineData("1.0.0")]
     public void Deserialize_Throws_On_An_Unparsable_Version(string schemaVersion)
     {
         var (_, contentJson) = Serializer.Serialize(Kind, Bookmark());
@@ -135,12 +124,11 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
-    public void IsCurrentVersion_Is_True_For_Current_Aliases_And_False_For_Other_Recognized_Versions()
+    public void IsCurrentVersion_Is_True_For_The_Current_Stamp_And_False_For_Other_Recognized_Versions()
     {
         var (_, contentJson) = Serializer.Serialize(Kind, Bookmark());
 
         Assert.True(Serializer.IsCurrentVersion(Envelope("1", contentJson)));
-        Assert.True(Serializer.IsCurrentVersion(Envelope(ElsaRuntimeDocumentVersions.LegacySchemaVersion, contentJson)));
         Assert.False(Serializer.IsCurrentVersion(Envelope(
             ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
             "1",

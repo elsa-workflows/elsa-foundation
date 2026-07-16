@@ -17,13 +17,6 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// </remarks>
 public static class ElsaRuntimeDocumentVersions
 {
-    /// <summary>
-    /// The stamp every document written before per-kind versioning carried
-    /// (the manifest-wide <see cref="ElsaRuntimeStorageManifest.SchemaVersion"/>).
-    /// It reads as version 1 of every kind.
-    /// </summary>
-    public const string LegacySchemaVersion = "1.0.0";
-
     private static readonly IReadOnlyDictionary<string, int> Current = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
@@ -72,22 +65,18 @@ public static class ElsaRuntimeDocumentVersions
     }
 
     /// <summary>
-    /// Parses a persisted schema-version stamp. The pre-versioning stamp
-    /// (<see cref="LegacySchemaVersion"/>) parses as version 1; anything that is not a positive
-    /// integer fails loudly rather than being treated as compatible.
+    /// Parses a persisted schema-version stamp. Anything that is not a positive integer fails loudly
+    /// rather than being treated as compatible.
     /// </summary>
     /// <exception cref="FormatException">The stamp is not a recognized version.</exception>
     public static int Parse(string documentKind, string schemaVersion)
     {
-        if (string.Equals(schemaVersion, LegacySchemaVersion, StringComparison.Ordinal))
-            return 1;
-
         if (int.TryParse(schemaVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed >= 1)
             return parsed;
 
         throw new FormatException(
             $"Document kind '{documentKind}' carries unrecognized schema version stamp '{schemaVersion}'. " +
-            $"Expected a positive integer or the legacy stamp '{LegacySchemaVersion}'. Refusing to deserialize.");
+            "Expected a positive integer. Refusing to deserialize.");
     }
 
     /// <summary>Formats a version as the stamp written to <c>SaveDocumentRequest.SchemaVersion</c>.</summary>

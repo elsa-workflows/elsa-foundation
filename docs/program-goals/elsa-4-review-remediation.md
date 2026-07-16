@@ -401,8 +401,9 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     change). Groundwork queries the parent index then defensively post-filters by `workflowExecutionId`.
     `Parallel.CountBranchesAsync` reads only the composite's children instead of the whole workflow. **QA gate
     caught a regression:** the worker's initial `ElsaRuntimeStorageManifest.SchemaVersion` bump `1.0.0→1.1.0`
-    broke `ElsaRuntimeDocumentVersions.Parse` for every kind (that constant is the frozen legacy stamp, not a
-    migration knob) — surfaced only by the FULL Groundwork test project, reverted before merge.
+    incorrectly treated the storage-manifest version as a document migration knob — surfaced only by the FULL
+    Groundwork test project and reverted before merge. The later pre-GA clean baseline made the two version domains
+    explicit and removed the old `"1.0.0"` document-stamp alias entirely.
   - **#413 item 6 Flowchart async Start (#531):** removed the last sync-over-async holdout — deleted the blocking
     `FlowchartStatePersister.SaveState` wrapper; engine `Start`→`StartAsync`; `Flowchart.Execute`→`ExecuteAsync`
     (picks the existing `ActivityBase` virtual, no base-contract change). The prescribed bite exposed that the

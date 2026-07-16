@@ -12,12 +12,11 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 public static class ElsaRuntimeStorageManifest
 {
-    // FROZEN legacy stamp. This is NOT a migration knob: ElsaRuntimeDocumentVersions.Parse recognizes only a
-    // positive integer or this exact "1.0.0" string (which it maps to version 1), and documents/tests stamp
-    // with this value — changing it makes Parse reject every kind. Per-kind schema versions live separately in
-    // ElsaRuntimeDocumentVersions.Current. Adding an index (like #514's by-parent-activity-execution, or the
+    // FROZEN storage-manifest version. This is NOT a document migration knob: per-kind document schema versions
+    // live separately in ElsaRuntimeDocumentVersions.Current, and the document parser accepts only their positive
+    // integer stamps. Adding an index (like #514's by-parent-activity-execution, or the
     // pre-existing bookmarkState by-stimulus) does NOT bump this: Groundwork's added-index backfill (Condition 7)
-    // triggers on the physicalized index-set change, not on this string. See docs/serialization.md.
+    // triggers on the physicalized index-set change, not on this manifest version. See docs/serialization.md.
     public const string SchemaVersion = "1.0.0";
 
     // Shared index identities and field names. Index identities only need to be unique within a unit,
