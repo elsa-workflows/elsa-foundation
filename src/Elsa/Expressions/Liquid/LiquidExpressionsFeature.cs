@@ -83,6 +83,7 @@ public class LiquidExpressionsFeature : IShellFeature
         services
             .AddSingleton(templateManagerOptions)
             .AddScoped<ILiquidTemplateManager, LiquidTemplateManager>()
+            .AddScoped<IPortableExpressionHandler, PortableLiquidExpressionHandler>()
             .AddScoped<FluidParser>()
             .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>();
     }
