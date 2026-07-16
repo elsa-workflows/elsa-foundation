@@ -143,7 +143,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 
         RuntimeCheckpointCommitStoreResult? result = null;
         await _rootWriteLeaseManager.ExecuteAsync(
-            workflowExecutionChange.State.PinnedExecutable.ArtifactId,
+            workflowExecutionChange.State.PinnedExecutable,
             $"checkpoint:{commit.CommitId}",
             async ct => result = await write(commit, ct),
             cancellationToken);

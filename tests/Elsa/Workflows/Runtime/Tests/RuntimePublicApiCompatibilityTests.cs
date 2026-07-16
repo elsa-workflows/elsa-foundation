@@ -12,6 +12,11 @@ public sealed class RuntimePublicApiCompatibilityTests
     public void DispatchFoundation_PreservesPreexistingPublicConstructorSignatures()
     {
         AssertConstructor(
+            typeof(WorkflowExecutable),
+            typeof(WorkflowExecutableIdentity), typeof(ExecutableNode),
+            typeof(IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>), typeof(DateTimeOffset),
+            typeof(IReadOnlyDictionary<string, string>));
+        AssertConstructor(
             typeof(WorkflowExecutionStartDispatchRequest),
             typeof(string), typeof(string), typeof(string), typeof(string),
             typeof(IReadOnlyDictionary<string, string>), typeof(IReadOnlyDictionary<string, object>),
@@ -48,6 +53,66 @@ public sealed class RuntimePublicApiCompatibilityTests
             typeof(ISchedulerStateStore), typeof(IActivityExecutionInspectionWriter),
             typeof(IWorkflowExecutableRootWriteLeaseManager), typeof(InMemoryRuntimeCheckpointStoreState),
             typeof(TimeProvider));
+    }
+
+    [Fact]
+    public void Legacy_start_and_checkpoint_constructors_default_new_authority_and_depth_members()
+    {
+        var identity = new WorkflowExecutableIdentity(
+            "artifact-legacy",
+            "definition-legacy",
+            "version-legacy",
+            "1.0.0",
+            "sha256:legacy");
+        var request = new WorkflowExecutionStartDispatchRequest("artifact-legacy", "legacy-caller");
+        var command = new WorkflowExecutionStartCommandPayload(identity, "artifact-legacy");
+        var checkpoint = new RuntimeCheckpointCommandPayload(identity, "Legacy", [], "Legacy");
+
+        Assert.Null(request.StartAuthority);
+        Assert.Equal(0, request.DispatchNestingDepth);
+        Assert.Null(command.StartAuthority);
+        Assert.Equal(0, command.DispatchNestingDepth);
+        Assert.Equal(0, checkpoint.DispatchNestingDepth);
+    }
+
+    [Fact]
+    public void SourceReference_PreservesPreTenantDeconstructionShape()
+    {
+        var reference = new WorkflowExecutableSourceReference(
+            "reference",
+            "artifact",
+            "WorkflowDefinitionVersion",
+            "version",
+            "1",
+            "definition",
+            "version",
+            "1",
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch,
+            WorkflowExecutableReferenceScope.Published,
+            TenantId: "tenant-a");
+
+        var (
+            sourceReferenceId,
+            artifactId,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _) = reference;
+
+        Assert.Equal("reference", sourceReferenceId);
+        Assert.Equal("artifact", artifactId);
     }
 
     [Fact]

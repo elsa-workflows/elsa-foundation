@@ -3,7 +3,10 @@ using Elsa.Workflows.Publishing.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Core.Events;
 
-/// <summary>Sequential compile-time fan-in event for executable-node metadata claims.</summary>
+/// <summary>
+/// Compatibility event retained for source compatibility. Publishing emits
+/// <see cref="OnExecutableCompilationCollecting"/> for active compile fan-in.
+/// </summary>
 public sealed class OnExecutableNodeMetadataCollecting(ExecutableNodeMetadataContext context) : IEvent
 {
     public ExecutableNodeMetadataContext Context { get; } = context ?? throw new ArgumentNullException(nameof(context));

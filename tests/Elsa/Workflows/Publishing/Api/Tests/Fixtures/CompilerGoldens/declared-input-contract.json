@@ -1,0 +1,80 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
+  "identity": {
+    "artifactHash": "sha256:8092885fc6f115a81a425f8908bebeaf58889bf5f48f7fc66c400557df4e4bee",
+    "artifactId": "artifact-8092885fc6f1",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [
+      {
+        "defaultValue": {
+          "a": 1,
+          "b": 2
+        },
+        "isRequired": true,
+        "name": "alpha",
+        "type": {
+          "alias": "Object",
+          "collectionKind": "Single"
+        }
+      },
+      {
+        "defaultValue": null,
+        "isRequired": false,
+        "name": "zeta",
+        "type": {
+          "alias": "String",
+          "collectionKind": "Single"
+        }
+      }
+    ],
+    "version": 1
+  },
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Test.WriteLine",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "write-inputs",
+    "childSlots": [],
+    "descriptorPayload": {
+      "TypeAlias": "Object"
+    },
+    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "executableNodeId": "write-inputs",
+    "inputBindings": [
+      {
+        "expression": null,
+        "inputName": "Text",
+        "key": "Text",
+        "literalValue": "Hello World!",
+        "metadata": [
+          {
+            "Key": "referenceKey",
+            "Value": "Text"
+          },
+          {
+            "Key": "typeName",
+            "Value": "System.String, System.Private.CoreLib"
+          }
+        ],
+        "source": "Literal"
+      }
+    ],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "write-inputs"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": null
+  }
+}

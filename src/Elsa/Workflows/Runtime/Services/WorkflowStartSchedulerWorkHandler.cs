@@ -167,7 +167,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             correlationId: startPayload.CorrelationId,
             tenantId: startPayload.TenantId,
             partition: startPayload.Partition,
-            authority: startPayload.Authority);
+            authority: startPayload.Authority,
+            dispatchNestingDepth: startPayload.DispatchNestingDepth);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",

@@ -1,0 +1,117 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [
+    {
+      "artifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifactId": "child-a",
+      "dispatchNodeIds": [
+        "dispatch-a"
+      ]
+    },
+    {
+      "artifactHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "artifactId": "child-b",
+      "dispatchNodeIds": [
+        "dispatch-b"
+      ]
+    }
+  ],
+  "identity": {
+    "artifactHash": "sha256:bb4eeede3398532fdfe3b18f23eecef2f71a6ecb9b7888f1d8ea98b74fb30dff",
+    "artifactId": "artifact-bb4eeede3398",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
+  },
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Elsa.Activities.Sequence.Activities.Sequence",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "dependency-root",
+    "childSlots": [
+      {
+        "activities": [
+          {
+            "activityType": "Test.WriteLine",
+            "activityTypeVersion": "1.0.0",
+            "authoredActivityId": "dispatch-b",
+            "childSlots": [],
+            "descriptorPayload": {
+              "TypeAlias": "Object"
+            },
+            "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+            "executableNodeId": "dispatch-b",
+            "inputBindings": [],
+            "metadata": [
+              {
+                "Key": "authoredNodeId",
+                "Value": "dispatch-b"
+              },
+              {
+                "Key": "executionType",
+                "Value": "Action"
+              }
+            ],
+            "structure": null
+          },
+          {
+            "activityType": "Test.WriteLine",
+            "activityTypeVersion": "1.0.0",
+            "authoredActivityId": "dispatch-a",
+            "childSlots": [],
+            "descriptorPayload": {
+              "TypeAlias": "Object"
+            },
+            "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+            "executableNodeId": "dispatch-a",
+            "inputBindings": [],
+            "metadata": [
+              {
+                "Key": "authoredNodeId",
+                "Value": "dispatch-a"
+              },
+              {
+                "Key": "executionType",
+                "Value": "Action"
+              }
+            ],
+            "structure": null
+          }
+        ],
+        "name": "Sequence.Activities"
+      }
+    ],
+    "descriptorPayload": {
+      "TypeAlias": "Object"
+    },
+    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "executableNodeId": "dependency-root",
+    "inputBindings": [],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "dependency-root"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": {
+      "kind": "elsa.sequence.structure",
+      "payload": {
+        "activities": [
+          "dispatch-b",
+          "dispatch-a"
+        ],
+        "variables": []
+      },
+      "schemaVersion": "1.0.0"
+    }
+  }
+}

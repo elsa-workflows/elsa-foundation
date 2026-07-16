@@ -1,12 +1,17 @@
 {
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:4747db0537991ceaef5e313e76fb7eebb20b6e72204af9e6004def81be69a38a",
-    "artifactId": "artifact-4747db053799",
+    "artifactHash": "sha256:20432a71290e36813da321439381db01a09c57d538cb67a35a0df704e4bb4aaa",
+    "artifactId": "artifact-20432a71290e",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
   },
   "resumeTargets": [],
   "rootActivity": {

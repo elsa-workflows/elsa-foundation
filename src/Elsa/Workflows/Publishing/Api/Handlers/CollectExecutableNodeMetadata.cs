@@ -4,7 +4,10 @@ using Elsa.Workflows.Publishing.Core.Events;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
-/// <summary>Single fan-in handler that collects every registered executable-node metadata source.</summary>
+/// <summary>
+/// Compatibility handler retained for callers that explicitly publish the superseded metadata event.
+/// The Publishing feature registers <see cref="CollectExecutableCompilation"/> as its single active fan-in handler.
+/// </summary>
 public sealed class CollectExecutableNodeMetadata(IEnumerable<IExecutableNodeMetadataSource> sources)
     : IEventHandler<OnExecutableNodeMetadataCollecting>
 {

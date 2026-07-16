@@ -46,6 +46,27 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
     }
 
     [Fact]
+    public async Task Sweep_FinalRecheckProtectsAChildWhenAConcurrentParentRootAppears()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var sourceReferenceStore = new HookedSourceReferenceStore();
+        var child = Executable("artifact-child", _now.AddDays(-30));
+        var parent = Executable("artifact-parent", _now.AddDays(-30), child);
+        await executableStore.SaveAsync(child);
+        await executableStore.SaveAsync(parent);
+        sourceReferenceStore.AfterQuery = queryNumber =>
+            queryNumber == 2
+                ? sourceReferenceStore.SaveAsync(Reference("ref-concurrent-parent", parent.Identity.ArtifactId))
+                : ValueTask.CompletedTask;
+
+        var result = await NewCollector(executableStore, sourceReferenceStore).SweepAsync();
+
+        Assert.Equal(0, result.DeletedArtifactCount);
+        Assert.NotNull(await executableStore.FindAsync(child.Identity.ArtifactId));
+        Assert.NotNull(await executableStore.FindAsync(parent.Identity.ArtifactId));
+    }
+
+    [Fact]
     public async Task Sweep_RootWriteLeaseAcquiredBeforeDeletionGuardWinsAndRetainsArtifact()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
@@ -227,9 +248,9 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             timeProvider ?? new FixedTimeProvider(_now),
             NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
 
-    private WorkflowExecutable Executable(string artifactId, DateTimeOffset createdAt) =>
+    private WorkflowExecutable Executable(string artifactId, DateTimeOffset createdAt, params WorkflowExecutable[] dependencies) =>
         new(
-            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", Hash(artifactId)),
             rootActivity: new ExecutableNode(
                 executableNodeId: "node-root",
                 authoredActivityId: "authored-root",
@@ -242,7 +263,14 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: createdAt,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: dependencies.Select(dependency => new WorkflowExecutableDependency(
+                dependency.Identity.ArtifactId,
+                dependency.Identity.ArtifactHash,
+                ["node-root"])).ToArray());
+
+    private static string Hash(string artifactId) => $"sha256:{artifactId}";
 
     private WorkflowExecutableSourceReference Reference(string sourceReferenceId, string artifactId) =>
         new(

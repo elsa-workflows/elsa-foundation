@@ -163,7 +163,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
         var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, cancellationToken);
         await rootWriteLeaseManager.ExecuteAsync(
-            executable.Identity.ArtifactId,
+            executable.Identity,
             $"test-run:{testRunId}",
             ct => sourceReferenceStore.SaveAsync(reference, ct),
             cancellationToken);

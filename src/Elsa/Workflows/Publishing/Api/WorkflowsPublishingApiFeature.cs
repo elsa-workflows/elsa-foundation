@@ -73,6 +73,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
         services.TryAddScoped<ExecutableNodeCompiler>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
+        services.AddEventHandler<OnExecutableCompilationCollecting, CollectExecutableCompilation>();
         services.AddEventHandler<OnExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();

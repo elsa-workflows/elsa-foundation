@@ -48,7 +48,7 @@ public sealed class PublishWorkflowRequestHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
         var now = timeProvider.GetUtcNow();
-        var executable = await CompileAsync(request.VersionId, now, cancellationToken);
+        var executable = await CompileAsync(request.VersionId, request.TenantId, now, cancellationToken);
         var identity = executable.Identity;
         var resolvedReview = request.PreflightToken is { } preflightToken
             ? await (snapshotReviews ?? throw new InvalidOperationException("Publication snapshot review services are not configured."))
@@ -95,12 +95,14 @@ public sealed class PublishWorkflowRequestHandler(
                 var currentReference = current.SourceReferenceId is { } sourceReferenceId
                     ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
                     : null;
-                if (currentReference is not null && currentReference.DeletedAt is null)
+                if (currentReference is not null &&
+                    currentReference.DeletedAt is null &&
+                    StringComparer.Ordinal.Equals(currentReference.TenantId, request.TenantId))
                     return PublishedWorkflowView.From(executable, currentReference, current, wasCreated: false);
             }
         }
 
-        var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, now, cancellationToken);
+        var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, request.TenantId, now, cancellationToken);
         var candidate = new PublicationRecord(
             publicationId,
             PublicationSlotIdentity.Create(identity.DefinitionId, resolved.SlotName),
@@ -118,7 +120,7 @@ public sealed class PublishWorkflowRequestHandler(
 
         PublicationActivationResult? activation = null;
         await rootWriteLeaseManager.ExecuteAsync(
-            identity.ArtifactId,
+            identity,
             $"publish:{publicationId}",
             async ct =>
             {
@@ -148,7 +150,11 @@ public sealed class PublishWorkflowRequestHandler(
         return PublishedWorkflowView.From(executable, reference, activation.Publication);
     }
 
-    private ValueTask<WorkflowExecutable> CompileAsync(string versionId, DateTimeOffset now, CancellationToken cancellationToken) =>
+    private ValueTask<WorkflowExecutable> CompileAsync(
+        string versionId,
+        string? tenantId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) =>
         compiler.CompileAsync(
             new WorkflowExecutableCompileRequest(
                 versionId,
@@ -157,7 +163,8 @@ public sealed class PublishWorkflowRequestHandler(
                 now,
                 ExpiresAt: null,
                 PublishedArtifactPrefix,
-                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" }),
+                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" },
+                tenantId),
             cancellationToken);
 
     private static PublicationRequestIntent? RequestIntent(PublicationAction? action, string? slotName) =>
@@ -171,6 +178,7 @@ public sealed class PublishWorkflowRequestHandler(
         WorkflowExecutable executable,
         string publicationId,
         string slotName,
+        string? tenantId,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -194,7 +202,8 @@ public sealed class PublishWorkflowRequestHandler(
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             PublicationId: publicationId,
             SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
-            AuthoredInputs: authoredInputs);
+            AuthoredInputs: authoredInputs,
+            TenantId: tenantId);
     }
 
     private async ValueTask RetireReferenceAsync(string publicationId, DateTimeOffset now, CancellationToken cancellationToken)

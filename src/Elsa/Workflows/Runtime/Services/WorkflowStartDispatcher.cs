@@ -13,13 +13,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutionPartitionAccessor? _partitionAccessor;
+    private readonly IWorkflowExecutableStartPolicy _startPolicy;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator)
-        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, TimeProvider.System, null)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, TimeProvider.System, null, new AllowWorkflowExecutableStartPolicy())
     {
     }
 
@@ -29,7 +30,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
-        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, null)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, null, new AllowWorkflowExecutableStartPolicy())
     {
     }
 
@@ -40,12 +41,25 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider,
         IWorkflowExecutionPartitionAccessor? partitionAccessor)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor, new AllowWorkflowExecutableStartPolicy())
+    {
+    }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
         ArgumentNullException.ThrowIfNull(agentProvider);
         ArgumentNullException.ThrowIfNull(idGenerator);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(startPolicy);
 
         _executableStore = executableStore;
         _sourceReferenceStore = sourceReferenceStore;
@@ -53,6 +67,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
         _partitionAccessor = partitionAccessor;
+        _startPolicy = startPolicy;
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -62,18 +77,84 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.DispatchNestingDepth < 0)
+            throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
 
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
-        // Reference gate (ADR 0040): scope and expiry are reference facts, so dispatch resolves the Source
-        // References for this artifact and gates on them. A published dispatch requires a live Published
-        // reference; a test-run dispatch requires a live TestRun reference and enforces its ExpiresAt. The
-        // rejection reason distinguishes "no live reference" from "reference expired".
-        var resolved = await ResolvePinnedExecutableAsync(request, executable, requiredScope, cancellationToken);
+        var resolved = request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency
+            ? await ResolveRetainedDependencyAsync(request, executable, cancellationToken)
+            : await ResolvePinnedExecutableAsync(request, executable, requiredScope, cancellationToken);
+        var partition = request.Partition ?? CurrentPartition();
+        await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
 
-        return await DispatchCoreAsync(request, resolved.Identity, resolved.Source, dispatchOptions, cancellationToken);
+        return await DispatchCoreAsync(request, resolved.Identity, resolved.Source, partition, dispatchOptions, cancellationToken);
     }
+
+    private async ValueTask<ResolvedPinnedExecutable> ResolveRetainedDependencyAsync(
+        WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutable child,
+        CancellationToken cancellationToken)
+    {
+        var authority = request.StartAuthority!.RetainedDependency!;
+        var parent = await _executableStore.FindAsync(authority.ParentArtifactId, cancellationToken);
+        if (parent is null)
+        {
+            throw AuthorityRejected(
+                "retained-dependency-parent-not-found",
+                "The retained parent executable is unavailable.");
+        }
+
+        if (!StringComparer.Ordinal.Equals(parent.Identity.ArtifactHash, authority.ParentArtifactHash))
+        {
+            throw AuthorityRejected(
+                "retained-dependency-parent-hash-mismatch",
+                "The retained parent executable does not match the authorized immutable identity.");
+        }
+
+        var exactEdge = parent.Dependencies.Any(dependency =>
+            StringComparer.Ordinal.Equals(dependency.ArtifactId, child.Identity.ArtifactId) &&
+            StringComparer.Ordinal.Equals(dependency.ArtifactHash, child.Identity.ArtifactHash) &&
+            dependency.DispatchNodeIds.Contains(authority.DispatchNodeId, StringComparer.Ordinal));
+        if (!exactEdge)
+        {
+            throw AuthorityRejected(
+                "retained-dependency-edge-mismatch",
+                "The retained parent does not authorize this exact child executable and dispatch node.");
+        }
+
+        return new(child.Identity, null);
+    }
+
+    private async ValueTask EnforceStartPolicyAsync(
+        WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutableIdentity executable,
+        WorkflowExecutionPartition partition,
+        CancellationToken cancellationToken)
+    {
+        var context = new WorkflowExecutableStartPolicyContext(
+            executable,
+            request.StartAuthority?.Kind ?? WorkflowExecutableStartAuthorityKind.LiveReference,
+            request.RequestedBy,
+            request.Authority,
+            request.RunKind,
+            request.TenantId,
+            partition,
+            request.DispatchNestingDepth);
+        var decision = await _startPolicy.EvaluateAsync(context, cancellationToken)
+            ?? throw new InvalidOperationException($"{nameof(IWorkflowExecutableStartPolicy)} returned no decision.");
+        if (!decision.IsAllowed)
+        {
+            throw new WorkflowExecutableStartRejectedException(
+                WorkflowExecutableStartRejectionCategory.Policy,
+                decision.ReasonCode!,
+                decision.Message!);
+        }
+    }
+
+    private static WorkflowExecutableStartRejectedException AuthorityRejected(string reasonCode, string message) =>
+        new(WorkflowExecutableStartRejectionCategory.Authority, reasonCode, message);
 
     // Resolves the artifact's Source References and returns content identity plus independently pinned source
     // attribution. This is deliberately fail-closed: the content artifact's identity can reflect whichever source
@@ -153,12 +234,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity pinnedIdentity,
         WorkflowExecutableSourceProvenance? pinnedSource,
+        WorkflowExecutionPartition partition,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
-        var partition = request.Partition ?? CurrentPartition();
         var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
@@ -173,7 +254,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             correlationId: request.CorrelationId,
             tenantId: request.TenantId,
             partition: partition,
-            authority: request.Authority));
+            authority: request.Authority,
+            startAuthority: request.StartAuthority,
+            dispatchNestingDepth: request.DispatchNestingDepth));
 
         var command = new WorkflowExecutionCommand(
             CommandId: _idGenerator.NewWorkflowExecutionCommandId(),

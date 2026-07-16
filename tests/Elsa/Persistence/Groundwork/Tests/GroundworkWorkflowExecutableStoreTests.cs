@@ -25,8 +25,9 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         await using var fixture = CreateStore(provider);
         IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
-        await store.SaveAsync(Executable("artifact-1"));
-        await store.SaveAsync(Executable("artifact-2"));
+        var dependency = Executable("artifact-2");
+        await store.SaveAsync(Executable("artifact-1", dependencies: [dependency]));
+        await store.SaveAsync(dependency);
 
         var found = await store.FindAsync("artifact-1");
         Assert.NotNull(found);
@@ -55,6 +56,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal(2, found.Nodes.Count);
         Assert.True(found.NodesById.ContainsKey("child"));
         Assert.Equal("slice-1", found.CompatibilityMetadata["slice"]);
+        var retainedDependency = Assert.Single(found.Dependencies);
+        Assert.Equal("artifact-2", retainedDependency.ArtifactId);
+        Assert.Equal("hash-artifact-2", retainedDependency.ArtifactHash);
+        Assert.Equal("root", Assert.Single(retainedDependency.DispatchNodeIds));
 
         var all = await store.ListAsync();
         Assert.Equal(2, all.Count);
@@ -393,7 +398,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         }
     }
 
-    private static WorkflowExecutable Executable(string artifactId, string artifactVersion = "1")
+    private static WorkflowExecutable Executable(
+        string artifactId,
+        string artifactVersion = "1",
+        IReadOnlyCollection<WorkflowExecutable>? dependencies = null)
     {
         var child = new ExecutableNode(
             executableNodeId: "child",
@@ -437,7 +445,12 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" })
             },
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
+            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
+            inputContract: null,
+            dependencies: dependencies?.Select(dependency => new WorkflowExecutableDependency(
+                dependency.Identity.ArtifactId,
+                dependency.Identity.ArtifactHash,
+                ["root"])).ToArray());
     }
 
     private static WorkflowExecutableSourceReference Reference(

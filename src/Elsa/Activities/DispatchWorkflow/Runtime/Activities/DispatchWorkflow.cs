@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Runtime.Core;
@@ -8,6 +9,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
 
@@ -66,9 +68,34 @@ public sealed class DispatchWorkflow : CodeActivity
             ?? throw new InvalidOperationException("DispatchWorkflow child executable pin is invalid.");
         ValidatePin(pin, definitionId.Trim());
 
+        var executableStore = context.GetRequiredService<IWorkflowExecutableStore>();
+        var childExecutable = await executableStore.FindAsync(pin.Executable.ArtifactId, context.CancellationToken)
+            ?? throw new InvalidOperationException("DispatchWorkflow pinned child executable is no longer available.");
+        if (!StringComparer.Ordinal.Equals(childExecutable.Identity.ArtifactHash, pin.Executable.ArtifactHash))
+            throw new InvalidOperationException("DispatchWorkflow pinned child executable identity is inconsistent.");
+        var inputContract = childExecutable.InputContract;
+        if (inputContract is null || inputContract.Version != WorkflowExecutableInputContract.CurrentVersion)
+            throw new InvalidOperationException("DispatchWorkflow pinned child executable does not carry a supported input contract.");
+
         var stateStore = context.GetRequiredService<IWorkflowExecutionStateStore>();
         var parent = await stateStore.FindAsync(runtimeContext.WorkflowExecutionId, context.CancellationToken)
             ?? throw new InvalidOperationException($"DispatchWorkflow parent execution '{runtimeContext.WorkflowExecutionId}' was not found.");
+        var maxNestingDepth = context.GetRequiredService<IOptions<DispatchWorkflowOptions>>().Value.MaxNestingDepth;
+        DispatchWorkflowOptions.ValidateMaxNestingDepth(maxNestingDepth, nameof(DispatchWorkflowOptions.MaxNestingDepth));
+        int childNestingDepth;
+        try
+        {
+            childNestingDepth = checked(parent.DispatchNestingDepth + 1);
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidOperationException("DispatchWorkflow nesting depth is invalid.", exception);
+        }
+        if (childNestingDepth > maxNestingDepth)
+        {
+            throw new InvalidOperationException(
+                $"DispatchWorkflow child nesting depth {childNestingDepth} exceeds the configured maximum of {maxNestingDepth}.");
+        }
         var partition = parent.Partition
             ?? throw new InvalidOperationException("DispatchWorkflow requires the parent execution's durable partition snapshot.");
         var parentAuthority = parent.Authority
@@ -82,11 +109,28 @@ public sealed class DispatchWorkflow : CodeActivity
             ? parent.CorrelationId
             : correlationOverride.Trim();
         var inputs = context.Get(Inputs) ?? new Dictionary<string, object?>();
-        ValidateInputs(inputs);
-        var jsonInputs = WorkflowExecutionStartCommandPayload.ToJsonValues(inputs);
+        var inputValidation = context.GetRequiredService<IWorkflowExecutableInputValidator>().Validate(
+            inputContract,
+            WorkflowExecutionStartCommandPayload.ToJsonValues(inputs));
+        if (!inputValidation.IsValid)
+        {
+            throw new InvalidOperationException(
+                "DispatchWorkflow inputs are invalid: " +
+                string.Join(" ", inputValidation.Findings.Select(finding => finding.Message)));
+        }
+        var jsonInputs = inputValidation.NormalizedInputs;
         var identity = new WorkflowDispatchIdentity(runtimeContext.WorkflowExecutionId, runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId);
         var now = context.GetRequiredService<TimeProvider>().GetUtcNow();
-        var provenance = pin.Source;
+        var provenance = pin.Source
+            ?? throw new InvalidOperationException("DispatchWorkflow child executable pin does not carry source provenance.");
+        var dispatchNodeId = runtimeContext.ExecutableNode.ExecutableNodeId;
+        var parentExecutable = await executableStore.FindAsync(parent.PinnedExecutable.ArtifactId, context.CancellationToken);
+        var hasRetainedEdge = parentExecutable is not null &&
+            StringComparer.Ordinal.Equals(parentExecutable.Identity.ArtifactHash, parent.PinnedExecutable.ArtifactHash) &&
+            parentExecutable.Dependencies.Any(dependency =>
+                StringComparer.Ordinal.Equals(dependency.ArtifactId, pin.Executable.ArtifactId) &&
+                StringComparer.Ordinal.Equals(dependency.ArtifactHash, pin.Executable.ArtifactHash) &&
+                dependency.DispatchNodeIds.Contains(dispatchNodeId, StringComparer.Ordinal));
         var record = new WorkflowDispatchRecord(
             dispatchId: identity.DispatchId,
             parentWorkflowExecutionId: runtimeContext.WorkflowExecutionId,
@@ -101,26 +145,30 @@ public sealed class DispatchWorkflow : CodeActivity
             partition: partition,
             runKind: parent.RunKind,
             authority: childAuthority,
-            inputDescriptors: inputs.Select(item => new WorkflowDispatchInputDescriptor(item.Key, DescribeType(item.Value))).ToArray(),
+            inputDescriptors: jsonInputs.Select(item => new WorkflowDispatchInputDescriptor(item.Key, DescribeType(item.Value))).ToArray(),
             createdAt: now,
             updatedAt: now,
             metadata: new Dictionary<string, string>
             {
-                ["runtime.sourceReferenceId"] = pin.Source.SourceReferenceId
-            });
+                ["runtime.sourceReferenceId"] = provenance.SourceReferenceId
+            },
+            dispatchNestingDepth: childNestingDepth);
         var startPayload = new WorkflowDispatchStartPayload(
             identity.DispatchId,
             runtimeContext.WorkflowExecutionId,
             runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
             identity.ChildWorkflowExecutionId,
             pin.Executable,
-            provenance,
+            hasRetainedEdge ? null : provenance,
             jsonInputs,
             correlationId,
             parent.TenantId,
             partition,
             parent.RunKind,
-            childAuthority);
+            childAuthority,
+            hasRetainedEdge ? parent.PinnedExecutable : null,
+            hasRetainedEdge ? dispatchNodeId : null,
+            childNestingDepth);
         var startIntent = new RuntimePostCommitIntent(
             intentId: identity.StartIntentId,
             workflowExecutionId: runtimeContext.WorkflowExecutionId,
@@ -142,12 +190,6 @@ public sealed class DispatchWorkflow : CodeActivity
         ArgumentNullException.ThrowIfNull(pin.Source);
         if (!StringComparer.Ordinal.Equals(pin.Source.DefinitionId, definitionId))
             throw new InvalidOperationException("DispatchWorkflow child executable pin does not match the authored workflow definition.");
-    }
-
-    private static void ValidateInputs(IReadOnlyDictionary<string, object?> inputs)
-    {
-        if (inputs.Keys.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("DispatchWorkflow input names cannot be blank.");
     }
 
     private static string DescribeType(object? value) => value switch

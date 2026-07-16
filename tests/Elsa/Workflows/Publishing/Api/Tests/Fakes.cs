@@ -12,6 +12,7 @@ using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
 
@@ -69,6 +70,38 @@ internal static class TestRootWriteLeases
             executableStore,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
             timeProvider ?? TimeProvider.System);
+}
+
+/// <summary>Reusable immutable executable/dependency builders for compiler and publication tests.</summary>
+internal static class TestExecutable
+{
+    public static WorkflowExecutableIdentity Identity(
+        string artifactId,
+        string artifactHash,
+        string definitionId = "definition-child",
+        string definitionVersionId = "version-child") =>
+        new(artifactId, definitionId, definitionVersionId, "1.0.0", artifactHash);
+
+    public static WorkflowExecutable Create(
+        WorkflowExecutableIdentity identity,
+        params WorkflowExecutableDependency[] dependencies) =>
+        new(
+            identity,
+            new ExecutableNode(
+                executableNodeId: "node-root",
+                authoredActivityId: "stored-root",
+                activityType: "Test.Stored",
+                activityTypeVersion: "1.0.0",
+                descriptorType: "Test",
+                descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+                metadata: new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UtcNow,
+            new Dictionary<string, string>(),
+            inputContract: new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []),
+            dependencies);
 }
 
 /// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>

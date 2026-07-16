@@ -47,6 +47,57 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     ];
 
     [Fact]
+    public void AddWorkflowRuntime_registers_the_default_executable_input_validator()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IWorkflowExecutableInputValidator));
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<WorkflowExecutableInputValidator>(provider.GetRequiredService<IWorkflowExecutableInputValidator>());
+    }
+
+    [Fact]
+    public void AddWorkflowRuntime_RegistersOneOverridableDefaultStartPolicy()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IWorkflowExecutableStartPolicy));
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<AllowWorkflowExecutableStartPolicy>(provider.GetRequiredService<IWorkflowExecutableStartPolicy>());
+    }
+
+    [Fact]
+    public void AddWorkflowRuntime_HonorsPolicyRegisteredBeforeTheDefault()
+    {
+        var replacement = new ReplacementStartPolicy();
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowExecutableStartPolicy>(replacement);
+        services.AddWorkflowRuntime();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Same(replacement, provider.GetRequiredService<IWorkflowExecutableStartPolicy>());
+        Assert.NotNull(provider.GetRequiredService<IWorkflowStartDispatcher>());
+    }
+
+    [Fact]
+    public void AddWorkflowRuntime_RejectsMultipleStartPolicyRegistrations()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddSingleton<IWorkflowExecutableStartPolicy, ReplacementStartPolicy>();
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IWorkflowStartDispatcher>());
+
+        Assert.Contains("exactly one", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(nameof(IWorkflowExecutableStartPolicy), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AddWorkflowRuntime_SeparatesOperationScopesFromHostLifetimeState()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
@@ -213,6 +264,14 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         ReplaceScoped<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>(services);
         ReplaceScoped<ISchedulerStateStore, InMemorySchedulerStateStore>(services);
         ReplaceScoped<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>(services);
+    }
+
+    private sealed class ReplacementStartPolicy : IWorkflowExecutableStartPolicy
+    {
+        public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(
+            WorkflowExecutableStartPolicyContext context,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(WorkflowExecutableStartDecision.Allow());
     }
 
     private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)

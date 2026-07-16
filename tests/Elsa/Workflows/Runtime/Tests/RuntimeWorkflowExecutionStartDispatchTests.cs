@@ -131,6 +131,120 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_AuthorizesExactRetainedDependencyAndPersistsItsProvenance()
+    {
+        var child = NewExecutable();
+        var parent = NewExecutable(
+            new WorkflowExecutableIdentity("parent-artifact", "parent-definition", "parent-version", "1.0.0", "sha256:parent"),
+            new WorkflowExecutableDependency("artifact-1", "sha256:test", ["node-root"]));
+        await _store.SaveAsync(child);
+        await _store.SaveAsync(parent);
+        var authority = WorkflowExecutableStartAuthority.FromRetainedDependency(
+            parent.Identity.ArtifactId,
+            parent.Identity.ArtifactHash,
+            "node-root");
+
+        var result = await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
+            artifactId: child.Identity.ArtifactId,
+            requestedBy: "runtime-test",
+            workflowExecutionId: null,
+            idempotencyKey: null,
+            metadata: null,
+            variables: null,
+            inputs: null,
+            stimulusInput: null,
+            triggerNodeId: null,
+            runKind: WorkflowRunKind.PublishedRun,
+            sourceSelection: null,
+            provenanceRequirement: WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+            parentWorkflowExecutionId: "parent-execution",
+            correlationId: null,
+            tenantId: null,
+            partition: null,
+            authority: null,
+            startAuthority: authority));
+
+        Assert.Null(result.PinnedSource);
+        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value
+            .Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.Equal(WorkflowExecutableStartAuthorityKind.RetainedDependency, payload.StartAuthority!.Kind);
+        Assert.Equal(parent.Identity.ArtifactId, payload.StartAuthority.RetainedDependency!.ParentArtifactId);
+        Assert.Equal(parent.Identity.ArtifactHash, payload.StartAuthority.RetainedDependency.ParentArtifactHash);
+        Assert.Equal("node-root", payload.StartAuthority.RetainedDependency.DispatchNodeId);
+    }
+
+    [Theory]
+    [InlineData("missing-parent", "sha256:parent", "node-root", "sha256:test")]
+    [InlineData("parent-artifact", "sha256:other", "node-root", "sha256:test")]
+    [InlineData("parent-artifact", "sha256:parent", "node-other", "sha256:test")]
+    [InlineData("parent-artifact", "sha256:parent", "node-root", "sha256:other-child")]
+    public async Task DispatchAsync_RejectsRetainedDependencyMismatchBeforePolicyOrActor(
+        string parentArtifactId,
+        string parentArtifactHash,
+        string dispatchNodeId,
+        string dependencyChildHash)
+    {
+        var policy = new RecordingStartPolicy(WorkflowExecutableStartDecision.Allow());
+        var dispatcher = NewDispatcher(policy);
+        var child = NewExecutable();
+        var parent = NewExecutable(
+            new WorkflowExecutableIdentity("parent-artifact", "parent-definition", "parent-version", "1.0.0", "sha256:parent"),
+            new WorkflowExecutableDependency("artifact-1", dependencyChildHash, ["node-root"]));
+        await _store.SaveAsync(child);
+        await _store.SaveAsync(parent);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableStartRejectedException>(() => dispatcher.DispatchAsync(
+            RetainedRequest(child.Identity.ArtifactId, parentArtifactId, parentArtifactHash, dispatchNodeId)).AsTask());
+
+        Assert.Equal(WorkflowExecutableStartRejectionCategory.Authority, exception.Category);
+        Assert.StartsWith("retained-dependency-", exception.ReasonCode, StringComparison.Ordinal);
+        Assert.Empty(policy.Contexts);
+        Assert.Empty(_agentProvider.ActivationRequests);
+        Assert.Empty(_agentProvider.Agent.Envelopes);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_EvaluatesPolicyAfterRetainedAuthorityAndBeforeActorLookup()
+    {
+        var policy = new RecordingStartPolicy(WorkflowExecutableStartDecision.Deny("artifact-retired", "This artifact is retired."));
+        var dispatcher = NewDispatcher(policy);
+        var child = NewExecutable();
+        var parent = NewExecutable(
+            new WorkflowExecutableIdentity("parent-artifact", "parent-definition", "parent-version", "1.0.0", "sha256:parent"),
+            new WorkflowExecutableDependency("artifact-1", "sha256:test", ["node-root"]));
+        await _store.SaveAsync(child);
+        await _store.SaveAsync(parent);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableStartRejectedException>(() => dispatcher.DispatchAsync(
+            RetainedRequest(child.Identity.ArtifactId, parent.Identity.ArtifactId, parent.Identity.ArtifactHash, "node-root")).AsTask());
+
+        Assert.Equal(WorkflowExecutableStartRejectionCategory.Policy, exception.Category);
+        Assert.Equal("artifact-retired", exception.ReasonCode);
+        Assert.Equal("This artifact is retired.", exception.Message);
+        var context = Assert.Single(policy.Contexts);
+        Assert.Equal(child.Identity, context.Executable);
+        Assert.Equal(WorkflowExecutableStartAuthorityKind.RetainedDependency, context.AuthorityKind);
+        Assert.Empty(_agentProvider.ActivationRequests);
+        Assert.Empty(_agentProvider.Agent.Envelopes);
+        Assert.Same(child, await _store.FindAsync(child.Identity.ArtifactId));
+        Assert.Same(parent, await _store.FindAsync(parent.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_AllowedPolicyRunsBeforeActorLookupAndPermitsStart()
+    {
+        var policy = new RecordingStartPolicy(WorkflowExecutableStartDecision.Allow());
+        var dispatcher = NewDispatcher(policy);
+        await ActivateAsync();
+
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
+
+        Assert.Single(policy.Contexts);
+        Assert.Single(_agentProvider.ActivationRequests);
+        Assert.Single(_agentProvider.Agent.Envelopes);
+    }
+
+    [Fact]
     public async Task DispatchAsync_DispatchesReferenceLessArtifactWithNullLegacyProvenance()
     {
         await _store.SaveAsync(NewExecutable());
@@ -557,13 +671,52 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             PublicationId: publicationId,
             SlotId: slotId);
 
-    private static WorkflowExecutable NewExecutable(WorkflowExecutableIdentity? identity = null) =>
+    private static WorkflowExecutable NewExecutable(
+        WorkflowExecutableIdentity? identity = null,
+        params WorkflowExecutableDependency[] dependencies) =>
         new(
             identity: identity ?? new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: dependencies);
+
+    private WorkflowStartDispatcher NewDispatcher(IWorkflowExecutableStartPolicy policy) =>
+        new(
+            _store,
+            _references,
+            _agentProvider,
+            new IncrementingRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(_now),
+            partitionAccessor: null,
+            startPolicy: policy);
+
+    private static WorkflowExecutionStartDispatchRequest RetainedRequest(
+        string childArtifactId,
+        string parentArtifactId,
+        string parentArtifactHash,
+        string dispatchNodeId) =>
+        new(
+            artifactId: childArtifactId,
+            requestedBy: "runtime-test",
+            workflowExecutionId: null,
+            idempotencyKey: null,
+            metadata: null,
+            variables: null,
+            inputs: null,
+            stimulusInput: null,
+            triggerNodeId: null,
+            runKind: WorkflowRunKind.PublishedRun,
+            sourceSelection: null,
+            provenanceRequirement: WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+            parentWorkflowExecutionId: "parent-execution",
+            correlationId: null,
+            tenantId: null,
+            partition: null,
+            authority: null,
+            startAuthority: WorkflowExecutableStartAuthority.FromRetainedDependency(parentArtifactId, parentArtifactHash, dispatchNodeId));
 
     private static ExecutableNode NewNode(string nodeId) =>
         new(
@@ -648,6 +801,19 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         public string NewWorkflowExecutionCommandEnvelopeId() => $"envelope-{++_envelopeIndex}";
 
         public string NewActivityExecutionId() => throw new NotSupportedException("Start dispatch does not schedule activities.");
+    }
+
+    private sealed class RecordingStartPolicy(WorkflowExecutableStartDecision decision) : IWorkflowExecutableStartPolicy
+    {
+        public List<WorkflowExecutableStartPolicyContext> Contexts { get; } = [];
+
+        public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(
+            WorkflowExecutableStartPolicyContext context,
+            CancellationToken cancellationToken = default)
+        {
+            Contexts.Add(context);
+            return ValueTask.FromResult(decision);
+        }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

@@ -53,14 +53,30 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one collector owns physical executable-artifact reclamation for a runtime composition).
 - **Signature:** `SweepAsync(CancellationToken cancellationToken = default)`.
-- **Usage:** an artifact is eligible only when it is outside creation/staging grace and absent from both root sets: live source references and retained workflow executions. Root writers acquire a provider-backed executable lease before committing either root. The collector first acquires a conditional deletion guard, then checks both root sets, and only that matching guard may delete; leases and guards use provider CAS so the check/delete boundary is safe across hosts. Root-query or guard failures retain the artifact for a later sweep.
+- **Usage:** an artifact is eligible only when it is outside creation/staging grace and absent from the transitive dependency closure of both root sets: live source references and retained workflow executions. Root writers acquire provider-backed leases for the full validated closure before committing either root. The collector first acquires a conditional deletion guard, then recomputes closure reachability, and only that matching guard may delete; leases and guards use provider CAS so the check/delete boundary is safe across hosts. Root-query, graph-integrity, or guard failures retain the artifact for a later sweep.
 - **Default implementation:** `WorkflowExecutableReferenceGarbageCollector`; registered by the Runtime composition root. The opt-in `WorkflowsRuntimeReferenceGarbageCollection` feature schedules it and exposes cadence/grace policy.
 
 ### `IWorkflowExecutableRootWriteLeaseManager` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one coordinator scopes the provider-backed lease required to establish an executable-retention root).
-- **Signature:** `ExecuteAsync(artifactId, leaseId, write, ...)` runs the durable write while acquiring, renewing, and finally releasing its lease.
-- **Usage:** canonical publication, test-run, and workflow-execution checkpoint writers execute their durable root write through this coordinator. Persistence providers implement the underlying lease/guard transitions on `IWorkflowExecutableStore`; custom root writers must use the same coordinator. Lease loss cancels the write and is surfaced rather than silently reporting an unprotected root.
+- **Signature:** `ExecuteAsync(rootIdentity, leaseId, write, ...)` runs the durable write while acquiring, renewing, and finally releasing sorted leases for the exact root and dependency closure. The original artifact-ID overload remains for source compatibility and single-artifact writes.
+- **Usage:** canonical publication, test-run, and workflow-execution checkpoint writers execute their durable root write through this coordinator. Persistence providers implement the underlying lease/guard transitions on `IWorkflowExecutableStore`; custom root writers must use the identity overload and provide closure-wide behavior. Lease loss cancels the write and is surfaced rather than silently reporting an unprotected root. Third-party implementations that rely on the default identity-overload fallback remain compatible but fence only the root until they override it.
 - **Default implementation:** `WorkflowExecutableRootWriteLeaseManager`.
+
+### `IWorkflowExecutableInputValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one validator owns declared workflow-input contract enforcement).
+- **Signature:** validates complete realized input bags or only statically known publication inputs and returns safe findings plus normalized inputs.
+- **Usage:** DispatchWorkflow Design validates knowable literal bindings before publication; Runtime validates the realized bag against the exact pinned child before staging responsibility. Supported literal defaults are materialized during normalization, unknown type aliases fail closed, and findings never retain rejected raw values.
+- **Default implementation:** `WorkflowExecutableInputValidator`.
+
+### `IWorkflowExecutableStartPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (exactly one policy decides whether an otherwise-authorized future executable start may materialize).
+- **Signature:** evaluates immutable executable, authority, and typed runtime context and returns an allow or classifiable deny decision.
+- **Usage:** evaluated after retained/live authority, input, and dispatch-depth validation and before actor lookup. A denial creates no workflow execution state and does not mutate the executable. Multiple policy registrations fail composition deterministically.
+- **Default implementation:** `AllowWorkflowExecutableStartPolicy`.
+
+### `WorkflowExecutableDependencyGraph` *(Runtime implementation service)*
+- **Kind:** Shared integrity service used by publication validation, closure leasing, and garbage collection.
+- **Usage:** resolves deterministic de-duplicated closures by full artifact ID/hash identity. Missing artifacts, hash mismatches, conflicting identities, and exact-identity cycles are classified failures; same-definition different-artifact edges remain legal.
 
 ### `IRuntimeCheckpointPersistencePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides how checkpoints flush in a runtime composition).

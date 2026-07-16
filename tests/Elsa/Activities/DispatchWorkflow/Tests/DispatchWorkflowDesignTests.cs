@@ -71,9 +71,12 @@ public sealed class DispatchWorkflowDesignTests
         var source = Source("published-source", "child-definition", executable.Identity.ArtifactId);
         await executables.SaveAsync(executable);
         await references.SaveAsync(source);
-        var sourceProvider = new DispatchPinSource(references, executables, new FixedTimeProvider(Now));
+        var sourceProvider = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
 
-        var contributions = await sourceProvider.GetMetadataAsync(Context(node));
+        var context = Context(node);
+        var compileContribution = await sourceProvider.GetContributionAsync(
+            new ExecutableCompilationContext(context.Request, context.Source, context.RootActivity));
+        var contributions = await sourceProvider.GetMetadataAsync(context);
 
         var contribution = Assert.Single(contributions);
         Assert.Equal(node.ExecutableNodeId, contribution.ExecutableNodeId);
@@ -81,7 +84,7 @@ public sealed class DispatchWorkflowDesignTests
         var pin = JsonSerializer.Deserialize<DispatchWorkflowPin>(contribution.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(pin);
         Assert.Equal(executable.Identity, pin!.Executable);
-        Assert.Equal(source.SourceReferenceId, pin.Source.SourceReferenceId);
+        Assert.Equal(source.SourceReferenceId, pin.Source!.SourceReferenceId);
         Assert.Equal(source.SourceKind, pin.Source.SourceKind);
         Assert.Equal(source.SourceId, pin.Source.SourceId);
         Assert.Equal(source.SourceVersion, pin.Source.SourceVersion);
@@ -90,6 +93,10 @@ public sealed class DispatchWorkflowDesignTests
         Assert.Equal(source.ArtifactVersion, pin.Source.ArtifactVersion);
         Assert.Equal(source.PublicationId, pin.Source.PublicationId);
         Assert.Equal(source.SlotId, pin.Source.SlotId);
+        var dependency = Assert.Single(compileContribution.Dependencies);
+        Assert.Equal(node.ExecutableNodeId, dependency.ExecutableNodeId);
+        Assert.Equal(executable.Identity.ArtifactId, dependency.ArtifactId);
+        Assert.Equal(executable.Identity.ArtifactHash, dependency.ArtifactHash);
     }
 
     [Fact]
@@ -152,6 +159,7 @@ public sealed class DispatchWorkflowDesignTests
         services.AddSingleton<IWorkflowDefinitionVersionStore>(new StubWorkflowVersionStore(workflowVersion));
         services.AddSingleton<IActivityDefinitionVersionStore>(new StubActivityVersionStore(activityVersion));
         services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
+        services.AddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
         services.AddSingleton<IWorkflowExecutableStore>(executableStore);
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sourceStore);
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
@@ -161,9 +169,9 @@ public sealed class DispatchWorkflowDesignTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
         Assert.Contains(
-            scope.ServiceProvider.GetServices<IExecutableNodeMetadataSource>(),
+            scope.ServiceProvider.GetServices<IExecutableCompilationSource>(),
             source => source is DispatchPinSource);
-        Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<OnExecutableNodeMetadataCollecting>>());
+        Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<OnExecutableCompilationCollecting>>());
 
         var executable = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableCompiler>().CompileAsync(
             new WorkflowExecutableCompileRequest(
@@ -179,6 +187,10 @@ public sealed class DispatchWorkflowDesignTests
         Assert.NotNull(pin);
         Assert.Equal(childExecutable.Identity, pin.Executable);
         Assert.Equal(WorkflowExecutableSourceProvenance.From(childSource), pin.Source);
+        var dependency = Assert.Single(executable.Dependencies);
+        Assert.Equal(childExecutable.Identity.ArtifactId, dependency.ArtifactId);
+        Assert.Equal(childExecutable.Identity.ArtifactHash, dependency.ArtifactHash);
+        Assert.Equal(["dispatch-node"], dependency.DispatchNodeIds);
     }
 
     [Fact]
@@ -189,12 +201,237 @@ public sealed class DispatchWorkflowDesignTests
         var references = new InMemoryWorkflowExecutableSourceReferenceStore();
         await references.SaveAsync(Source("source-a", "child-definition", "artifact-a"));
         await references.SaveAsync(Source("source-b", "child-definition", "artifact-b"));
-        var sourceProvider = new DispatchPinSource(references, executables, new FixedTimeProvider(Now));
+        var sourceProvider = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await sourceProvider.GetMetadataAsync(Context(node)));
 
         Assert.Contains("exactly one", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pin_contribution_rejects_missing_stale_and_unpublished_targets()
+    {
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+
+        var missing = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await pinSource.GetContributionAsync(CompilationContext(node)));
+        Assert.Contains("accessible live Published artifact", missing.Message, StringComparison.Ordinal);
+
+        await references.SaveAsync(Source("child-source", "child-definition", "stale-artifact") with { ExpiresAt = Now });
+        var stale = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await pinSource.GetContributionAsync(CompilationContext(node)));
+        Assert.Contains("accessible live Published artifact", stale.Message, StringComparison.Ordinal);
+
+        await references.SaveAsync(Source(
+            "child-source",
+            "child-definition",
+            "test-run-artifact",
+            WorkflowExecutableReferenceScope.TestRun));
+        var neverPublished = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await pinSource.GetContributionAsync(CompilationContext(node)));
+        Assert.Contains("accessible live Published artifact", neverPublished.Message, StringComparison.Ordinal);
+
+        await references.SaveAsync(Source("child-source", "child-definition", "retired-artifact") with { DeletedAt = Now });
+        var unpublished = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await pinSource.GetContributionAsync(CompilationContext(node)));
+        Assert.Contains("accessible live Published artifact", unpublished.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pin_contribution_rejects_missing_and_inconsistent_executables()
+    {
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await references.SaveAsync(Source("child-source", "child-definition", "expected-artifact"));
+
+        var missingSource = new DispatchPinSource(
+            references,
+            new InMemoryWorkflowExecutableStore(),
+            InputValidator(),
+            new FixedTimeProvider(Now));
+        var missing = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await missingSource.GetContributionAsync(CompilationContext(node)));
+        Assert.Contains("missing executable 'expected-artifact'", missing.Message, StringComparison.Ordinal);
+
+        var wrongExecutable = Executable("different-artifact", "content-owner", DispatchNode("child-root", "unused"));
+        var inconsistentSource = new DispatchPinSource(
+            references,
+            new FindOnlyExecutableStore(wrongExecutable),
+            InputValidator(),
+            new FixedTimeProvider(Now));
+        var inconsistent = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await inconsistentSource.GetContributionAsync(CompilationContext(node)));
+        Assert.Contains("inconsistent executable/source identity", inconsistent.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pin_contribution_allows_multiple_live_references_to_the_same_exact_artifact()
+    {
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var executable = Executable("child-artifact", "content-owner", node);
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await executables.SaveAsync(executable);
+        await references.SaveAsync(Source("source-a", "child-definition", executable.Identity.ArtifactId));
+        await references.SaveAsync(Source("source-b", "child-definition", executable.Identity.ArtifactId));
+
+        var contribution = await new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now))
+            .GetContributionAsync(CompilationContext(node));
+
+        Assert.Single(contribution.Dependencies);
+    }
+
+    [Fact]
+    public async Task Resolution_then_replacement_keeps_the_first_exact_pin_and_resolves_the_new_artifact_next_time()
+    {
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var oldExecutable = Executable("child-v1", "content-owner", DispatchNode("child-root-v1", "unused"));
+        var newExecutable = Executable("child-v2", "content-owner", DispatchNode("child-root-v2", "unused"));
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await executables.SaveAsync(oldExecutable);
+        await executables.SaveAsync(newExecutable);
+        await references.SaveAsync(Source("child-v1-source", "child-definition", oldExecutable.Identity.ArtifactId));
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+
+        var first = await pinSource.GetContributionAsync(CompilationContext(node));
+
+        await references.RetireAsync("child-v1-source", Now, "replaced");
+        await references.SaveAsync(Source("child-v2-source", "child-definition", newExecutable.Identity.ArtifactId));
+        var second = await pinSource.GetContributionAsync(CompilationContext(node));
+
+        AssertExactPin(first, oldExecutable.Identity, "child-v1-source");
+        AssertExactPin(second, newExecutable.Identity, "child-v2-source");
+        AssertExactPin(first, oldExecutable.Identity, "child-v1-source");
+    }
+
+    [Fact]
+    public async Task Pin_contribution_rejects_cross_tenant_and_legacy_targets()
+    {
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var legacy = LegacyExecutable("legacy-artifact", "content-owner", node);
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await executables.SaveAsync(legacy);
+        await references.SaveAsync(Source(
+            "tenant-b-source",
+            "child-definition",
+            legacy.Identity.ArtifactId,
+            tenantId: "tenant-b"));
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+
+        var inaccessible = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await pinSource.GetContributionAsync(CompilationContext(node, tenantId: "tenant-a")));
+        Assert.Contains("accessible", inaccessible.Message, StringComparison.Ordinal);
+
+        await references.SaveAsync(Source(
+            "tenant-a-source",
+            "child-definition",
+            legacy.Identity.ArtifactId,
+            tenantId: "tenant-a"));
+        var legacyError = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await pinSource.GetContributionAsync(CompilationContext(node, tenantId: "tenant-a")));
+        Assert.Contains("recompiled and republished", legacyError.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pin_contribution_rejects_literal_unknown_input_without_exposing_its_value()
+    {
+        const string rejectedValue = "publication-secret";
+        var node = DispatchNodeWithLiteralInputs(
+            "dispatch-node",
+            "child-definition",
+            JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["unknown"] = rejectedValue }));
+        var contract = new WorkflowExecutableInputContract(
+            WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput("known", new TypeReference("String"), false)]);
+
+        var exception = await AssertPinInputFailureAsync(node, contract);
+
+        Assert.Contains("not declared", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(rejectedValue, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pin_contribution_rejects_blank_duplicate_missing_required_and_incompatible_literal_inputs()
+    {
+        var cases = new[]
+        {
+            (
+                Inputs: Json("{\" \" : \"value\"}"),
+                Contract: Contract(new WorkflowDeclaredInput("known", new TypeReference("String"), false)),
+                Expected: "cannot be blank"),
+            (
+                Inputs: Json("{\"known\":\"one\",\"known\":\"two\"}"),
+                Contract: Contract(new WorkflowDeclaredInput("known", new TypeReference("String"), false)),
+                Expected: "more than once"),
+            (
+                Inputs: Json("{}"),
+                Contract: Contract(new WorkflowDeclaredInput("required", new TypeReference("String"), true)),
+                Expected: "was not supplied"),
+            (
+                Inputs: Json("{\"count\":\"not-an-integer\"}"),
+                Contract: Contract(new WorkflowDeclaredInput("count", new TypeReference("Int32"), false)),
+                Expected: "incompatible")
+        };
+
+        foreach (var (inputs, contract, expected) in cases)
+        {
+            var node = DispatchNodeWithLiteralInputs("dispatch-node", "child-definition", inputs);
+            var exception = await AssertPinInputFailureAsync(node, contract);
+            Assert.Contains(expected, exception.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Pin_contribution_rejects_unknown_aliases_for_literal_and_dynamic_inputs()
+    {
+        var validNode = DispatchNodeWithDynamicInputs("dispatch-node", "child-definition");
+        var validContract = Contract(new WorkflowDeclaredInput("required", new TypeReference("String"), true));
+        var validContribution = await GetPinContributionAsync(validNode, validContract);
+        Assert.Single(validContribution.Dependencies);
+
+        var invalidContract = Contract(new WorkflowDeclaredInput("required", new TypeReference("Extension.Unknown"), true));
+        var dynamicException = await AssertPinInputFailureAsync(validNode, invalidContract);
+        Assert.Contains("unknown type alias", dynamicException.Message, StringComparison.Ordinal);
+
+        var literalNode = DispatchNodeWithLiteralInputs(
+            "dispatch-node",
+            "child-definition",
+            JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["required"] = "value" }));
+        var literalException = await AssertPinInputFailureAsync(literalNode, invalidContract);
+        Assert.Contains("unknown type alias", literalException.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Declared_runtime_like_names_remain_ordinary_inputs_during_tenant_scoped_publication()
+    {
+        const string publicationTenant = "publication-tenant";
+        var node = DispatchNodeWithLiteralInputs(
+            "dispatch-node",
+            "child-definition",
+            JsonSerializer.SerializeToElement(new Dictionary<string, string>
+            {
+                ["tenant"] = "attempted-tenant-override",
+                ["authority"] = "attempted-authority-override"
+            }));
+        var contract = Contract(
+            new WorkflowDeclaredInput("tenant", new TypeReference("String"), true),
+            new WorkflowDeclaredInput("authority", new TypeReference("String"), true));
+
+        var contribution = await GetPinContributionAsync(
+            node,
+            contract,
+            publicationTenant,
+            referenceTenant: publicationTenant);
+
+        Assert.Single(contribution.Dependencies);
+        var pin = DeserializePin(contribution);
+        Assert.Equal("child-definition", pin.Source!.DefinitionId);
     }
 
     [Fact]
@@ -225,7 +462,7 @@ public sealed class DispatchWorkflowDesignTests
         Assert.Equal("same", enriched.Metadata["shared-key"]);
     }
 
-    private static ExecutableNodeMetadataContext Context(ExecutableNode node)
+    private static ExecutableNodeMetadataContext Context(ExecutableNode node, string? tenantId = null)
     {
         var request = new WorkflowExecutableCompileRequest(
             "parent-version",
@@ -233,7 +470,8 @@ public sealed class DispatchWorkflowDesignTests
             Now,
             Now,
             null,
-            "artifact-");
+            "artifact-",
+            TenantId: tenantId);
         var source = new WorkflowExecutableCompileSource(
             "parent-definition",
             "parent-version",
@@ -243,6 +481,12 @@ public sealed class DispatchWorkflowDesignTests
             "parent-version",
             "1.0.0");
         return new ExecutableNodeMetadataContext(request, source, node);
+    }
+
+    private static ExecutableCompilationContext CompilationContext(ExecutableNode node, string? tenantId = null)
+    {
+        var context = Context(node, tenantId);
+        return new ExecutableCompilationContext(context.Request, context.Source, context.RootActivity);
     }
 
     private static ExecutableNodeMetadataEnricher Enricher(params IExecutableNodeMetadataSource[] sources) =>
@@ -266,7 +510,54 @@ public sealed class DispatchWorkflowDesignTests
             new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string> { ["authoredNodeId"] = nodeId });
 
+    private static ExecutableNode DispatchNodeWithLiteralInputs(string nodeId, string definitionId, JsonElement inputs) =>
+        DispatchNodeWithInputs(
+            nodeId,
+            definitionId,
+            new RuntimeInputBinding("Inputs", RuntimeInputBindingSource.Literal, inputs));
+
+    private static ExecutableNode DispatchNodeWithDynamicInputs(string nodeId, string definitionId) =>
+        DispatchNodeWithInputs(
+            nodeId,
+            definitionId,
+            new RuntimeInputBinding(
+                "Inputs",
+                RuntimeInputBindingSource.Expression,
+                expression: new RuntimeExpressionBinding("JavaScript", "dynamicInputs")));
+
+    private static ExecutableNode DispatchNodeWithInputs(
+        string nodeId,
+        string definitionId,
+        RuntimeInputBinding inputsBinding)
+    {
+        var node = DispatchNode(nodeId, definitionId);
+        var bindings = node.InputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        bindings["Inputs"] = inputsBinding;
+        return new ExecutableNode(
+            node.ExecutableNodeId,
+            node.AuthoredActivityId,
+            node.ActivityType,
+            node.ActivityTypeVersion,
+            node.DescriptorType,
+            node.DescriptorPayload,
+            bindings,
+            node.OutputCaptures,
+            node.Metadata,
+            node.ChildSlots,
+            node.Structure);
+    }
+
     private static WorkflowExecutable Executable(string artifactId, string definitionId, ExecutableNode root) =>
+        new(
+            new WorkflowExecutableIdentity(artifactId, definitionId, "definition-version", "1.0.0", $"sha256:{artifactId}"),
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            Now,
+            new Dictionary<string, string>(),
+            new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []),
+            []);
+
+    private static WorkflowExecutable LegacyExecutable(string artifactId, string definitionId, ExecutableNode root) =>
         new(
             new WorkflowExecutableIdentity(artifactId, definitionId, "definition-version", "1.0.0", $"sha256:{artifactId}"),
             root,
@@ -274,11 +565,69 @@ public sealed class DispatchWorkflowDesignTests
             Now,
             new Dictionary<string, string>());
 
+    private static WorkflowExecutableInputContract Contract(params WorkflowDeclaredInput[] inputs) =>
+        new(WorkflowExecutableInputContract.CurrentVersion, inputs);
+
+    private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+    private static async Task<ExecutableCompilationContribution> GetPinContributionAsync(
+        ExecutableNode node,
+        WorkflowExecutableInputContract inputContract,
+        string? publicationTenant = null,
+        string? referenceTenant = null)
+    {
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        var executable = new WorkflowExecutable(
+            new WorkflowExecutableIdentity("child-artifact", "content-owner", "definition-version", "1.0.0", "sha256:child"),
+            DispatchNode("child-root", "unused"),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            Now,
+            new Dictionary<string, string>(),
+            inputContract,
+            []);
+        await executables.SaveAsync(executable);
+        await references.SaveAsync(Source(
+            "child-source",
+            "child-definition",
+            executable.Identity.ArtifactId,
+            tenantId: referenceTenant));
+        return await new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now))
+            .GetContributionAsync(CompilationContext(node, publicationTenant));
+    }
+
+    private static async Task<ArgumentException> AssertPinInputFailureAsync(
+        ExecutableNode node,
+        WorkflowExecutableInputContract inputContract) =>
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await GetPinContributionAsync(node, inputContract));
+
+    private static void AssertExactPin(
+        ExecutableCompilationContribution contribution,
+        WorkflowExecutableIdentity expectedIdentity,
+        string expectedSourceReferenceId)
+    {
+        var pin = DeserializePin(contribution);
+        Assert.Equal(expectedIdentity, pin.Executable);
+        Assert.Equal(expectedSourceReferenceId, pin.Source!.SourceReferenceId);
+        var dependency = Assert.Single(contribution.Dependencies);
+        Assert.Equal(expectedIdentity.ArtifactId, dependency.ArtifactId);
+        Assert.Equal(expectedIdentity.ArtifactHash, dependency.ArtifactHash);
+    }
+
+    private static DispatchWorkflowPin DeserializePin(ExecutableCompilationContribution contribution)
+    {
+        var metadata = Assert.Single(contribution.NodeMetadata);
+        Assert.Equal(DispatchWorkflowConstants.PinnedTargetMetadataKey, metadata.Key);
+        return Assert.IsType<DispatchWorkflowPin>(JsonSerializer.Deserialize<DispatchWorkflowPin>(metadata.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
     private static WorkflowExecutableSourceReference Source(
         string sourceReferenceId,
         string definitionId,
         string artifactId,
-        WorkflowExecutableReferenceScope scope = WorkflowExecutableReferenceScope.Published) =>
+        WorkflowExecutableReferenceScope scope = WorkflowExecutableReferenceScope.Published,
+        string? tenantId = null) =>
         new(
             sourceReferenceId,
             artifactId,
@@ -290,9 +639,20 @@ public sealed class DispatchWorkflowDesignTests
             "1.0.0",
             Now,
             scope == WorkflowExecutableReferenceScope.Published ? Now : null,
-            scope);
+            scope,
+            TenantId: tenantId);
 
     private static WorkflowDefinition Definition(string id, string name) => new() { Id = id, Name = name };
+
+    private static IWorkflowExecutableInputValidator InputValidator()
+    {
+        var registry = new WellKnownTypeRegistry();
+        registry.RegisterType(typeof(string), "String");
+        registry.RegisterType(typeof(int), "Int32");
+        registry.RegisterType(typeof(bool), "Boolean");
+        registry.RegisterType(typeof(object), "Object");
+        return new WorkflowExecutableInputValidator(registry);
+    }
 
     private sealed class StubDefinitionStore(params WorkflowDefinition[] definitions) : IWorkflowDefinitionStore
     {
@@ -366,6 +726,60 @@ public sealed class DispatchWorkflowDesignTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
+    private sealed class FindOnlyExecutableStore(WorkflowExecutable executable) : IWorkflowExecutableStore
+    {
+        public ValueTask SaveAsync(WorkflowExecutable value, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
+            string artifactId,
+            string leaseId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> RenewRootWriteLeaseAsync(
+            WorkflowExecutableRootWriteLease lease,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask ReleaseRootWriteLeaseAsync(
+            WorkflowExecutableRootWriteLease lease,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(
+            string artifactId,
+            string operationId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> CancelDeletionAsync(
+            WorkflowExecutableDeletionGuard guard,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(
+            WorkflowExecutableDeletionGuard guard,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutable?>(executable);
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
     private abstract class StubMetadataSource(params ExecutableNodeMetadataContribution[] contributions) : IExecutableNodeMetadataSource
     {
         public ValueTask<IReadOnlyCollection<ExecutableNodeMetadataContribution>> GetMetadataAsync(
@@ -384,9 +798,9 @@ public sealed class DispatchWorkflowDesignTests
 
     private sealed class CollectingInlineEventPublisher(IEnumerable<IExecutableNodeMetadataSource> sources) : IInlineEventPublisher
     {
-        private readonly CollectExecutableNodeMetadata _handler = new(sources);
+        private readonly CollectExecutableCompilation _handler = new([], sources);
 
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
-            _handler.Handle(Assert.IsType<OnExecutableNodeMetadataCollecting>(@event), cancellationToken);
+            _handler.Handle(Assert.IsType<OnExecutableCompilationCollecting>(@event), cancellationToken);
     }
 }

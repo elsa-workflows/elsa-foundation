@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Primitives.Models;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -536,6 +537,52 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_exposes_the_versioned_declared_input_contract_in_canonical_order()
+    {
+        var contract = new WorkflowExecutableInputContract(
+            WorkflowExecutableInputContract.CurrentVersion,
+            [
+                new WorkflowDeclaredInput("zeta", new TypeReference("String", CollectionKind.List), false),
+                new WorkflowDeclaredInput(
+                    "alpha",
+                    new TypeReference("Int32"),
+                    true,
+                    JsonSerializer.SerializeToElement(42))
+            ]);
+        await _executableStore.SaveAsync(Executable(_now, inputContract: contract));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.NotNull(detail!.InputContract);
+        Assert.Equal(WorkflowExecutableInputContract.CurrentVersion, detail.InputContract.Version);
+        Assert.Equal(["alpha", "zeta"], detail.InputContract.Inputs.Select(input => input.Name));
+        var alpha = detail.InputContract.Inputs.First();
+        Assert.Equal(new TypeReference("Int32"), alpha.Type);
+        Assert.True(alpha.IsRequired);
+        Assert.Equal(42, alpha.DefaultValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Detail_exposes_canonical_direct_dependencies_without_source_facts()
+    {
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            dependencies:
+            [
+                new WorkflowExecutableDependency("child-b", "sha256:b", ["root"]),
+                new WorkflowExecutableDependency("child-a", "sha256:a", ["root"])
+            ]));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Equal(["child-a", "child-b"], detail!.Dependencies.Select(dependency => dependency.ArtifactId));
+        Assert.DoesNotContain(
+            detail.Dependencies.SelectMany(dependency => dependency.GetType().GetProperties()),
+            property => property.Name.Contains("Source", StringComparison.Ordinal) ||
+                        property.Name.Contains("Publication", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Runtime_api_registers_the_inspector()
     {
         var services = new ServiceCollection();
@@ -548,7 +595,9 @@ public sealed class WorkflowExecutableInspectorTests
         DateTimeOffset now,
         JsonElement? descriptor = null,
         ExecutableActivityStructure? structure = null,
-        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null) =>
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
+        WorkflowExecutableInputContract? inputContract = null,
+        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies = null) =>
         new(
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             new ExecutableNode(
@@ -560,7 +609,9 @@ public sealed class WorkflowExecutableInspectorTests
                 structure: structure),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            inputContract,
+            dependencies);
 
     private Models.ExecutableSourceReferenceView CreateVersionOneView(string? sourceType, string? sourceKind)
     {
