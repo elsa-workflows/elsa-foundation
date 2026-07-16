@@ -75,11 +75,15 @@ public sealed class ExpressionDefinitionContractTests
 
         var missing = Assert.Throws<ArgumentException>(() => new ExpressionEvaluationRequest(
             definition,
-            new Dictionary<string, object?>(),
+            new Dictionary<string, JsonElement>(),
             CancellationToken.None));
         var unknown = Assert.Throws<ArgumentException>(() => new ExpressionEvaluationRequest(
             definition,
-            new Dictionary<string, object?> { ["amount"] = 12m, ["other"] = 1 },
+            new Dictionary<string, JsonElement>
+            {
+                ["amount"] = JsonSerializer.SerializeToElement(12m),
+                ["other"] = JsonSerializer.SerializeToElement(1)
+            },
             CancellationToken.None));
 
         Assert.Contains("Missing: [amount]", missing.Message, StringComparison.Ordinal);

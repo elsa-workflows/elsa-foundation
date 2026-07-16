@@ -183,7 +183,7 @@ public sealed class ExpressionEvaluationRequest
 {
     public ExpressionEvaluationRequest(
         ExpressionDefinition definition,
-        IReadOnlyDictionary<string, object?> parameterValues,
+        IReadOnlyDictionary<string, JsonElement> parameterValues,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -198,13 +198,13 @@ public sealed class ExpressionEvaluationRequest
         }
 
         Definition = definition;
-        ParameterValues = new ReadOnlyDictionary<string, object?>(
+        ParameterValues = new ReadOnlyDictionary<string, JsonElement>(
             parameterValues.OrderBy(item => item.Key, StringComparer.Ordinal)
-                .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+                .ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal));
         CancellationToken = cancellationToken;
     }
 
     public ExpressionDefinition Definition { get; }
-    public IReadOnlyDictionary<string, object?> ParameterValues { get; }
+    public IReadOnlyDictionary<string, JsonElement> ParameterValues { get; }
     public CancellationToken CancellationToken { get; }
 }

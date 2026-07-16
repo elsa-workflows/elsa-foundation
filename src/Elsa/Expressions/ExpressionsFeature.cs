@@ -35,6 +35,7 @@ public class ExpressionsFeature : IShellFeature
             .AddSingleton<IVariableDefaultValueFormatter, VariableDefaultValueFormatter>()
             .AddSingleton<IVariableMapper, VariableMapper>()
             .AddScoped<IExpressionEvaluator, ExpressionEvaluator>()
+            .AddScoped<IPortableExpressionEvaluator, PortableExpressionEvaluator>()
             .AddScoped<IVariableFactory, VariableFactory>();
 
         // Contributes Variable<T> and FuncExpressionValue converters to the JSON payload
