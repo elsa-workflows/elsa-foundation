@@ -77,7 +77,7 @@ public interface IActivityInvocationIdentity
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>
-public abstract class Activity<TResult> : ActivityBase
+public abstract class Activity<TResult> : ActivityBase, IActivityResult<TResult>
 {
     protected abstract ValueTask<ActivityTransition<TResult>> ExecuteAsync(ActivityExecutionContext context);
 

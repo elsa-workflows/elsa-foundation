@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -67,7 +68,7 @@ namespace Elsa.Activities.Parallel.Activities;
     ChildProperty = "activity",
     LabelProperty = "name",
     SlotNameTemplate = "Parallel.Branch[{name}]")]
-public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
+public sealed class Parallel : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
     public const string BranchSlotSuffix = "]";

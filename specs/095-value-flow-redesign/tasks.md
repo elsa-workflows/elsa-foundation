@@ -76,7 +76,7 @@ projections, two outcomes, and disposable dependencies; verify one-time hydratio
 - [X] T020 [P] [US1] Add complete/suspend/fault/cancel transition algebra tests in `tests/Elsa/Activities/Runtime/Tests/ActivityTransitionContractTests.cs`
 - [X] T021 [P] [US1] Replace `WriteLineBoundInputExecutionTests` with wrapper-free end-to-end hydration tests in `tests/Elsa/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs`
 - [X] T022 [P] [US1] Add atomic typed-result/projection/outcome and partial-result rejection tests in `tests/Elsa/Activities/Runtime/Tests/ActivityCompletionContractTests.cs`
-- [ ] T023 [US1] Expand `tests/Elsa/Activities/Runtime/Tests/ActivityLibraryAcceptanceTests.cs` to require ordinary input properties and one result contract for every first-party activity
+- [X] T023 [US1] Expand `tests/Elsa/Activities/Runtime/Tests/ActivityLibraryAcceptanceTests.cs` to require ordinary input properties and one result contract for every first-party activity
 
 ### Implementation
 
@@ -86,7 +86,7 @@ projections, two outcomes, and disposable dependencies; verify one-time hydratio
 - [ ] T027 [US1] Replace `ActivityArgumentBinder` with stable-key, one-time `ActivityInputHydrator` in `src/Elsa/Activities/Primitives/Binding/ActivityInputHydrator.cs`
 - [ ] T028 [US1] Replace runtime memory seeding and mutable output publication with snapshot hydration and an atomic completion projector in `src/Elsa/Activities/Runtime/Services/ActivityCompletionProjector.cs`
 - [ ] T029 [US1] Migrate invoke and parent-completion handlers to activation leases and returned transitions in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs` and `WorkflowParentActivityCompletionSchedulerWorkHandler.cs`
-- [ ] T030 [P] [US1] Migrate primitive and scheduling activities to plain inputs/results in `src/Elsa/Activities/Primitives/` and `src/Elsa/Activities/Scheduling/`
+- [X] T030 [P] [US1] Migrate primitive and scheduling activities to plain inputs/results in `src/Elsa/Activities/Primitives/` and `src/Elsa/Activities/Scheduling/`
 - [X] T031 [P] [US1] Migrate HTTP and scripting activities to plain inputs/atomic result records in `src/Elsa/Activities/Http/` and `src/Elsa/Activities/Scripting/`
 - [X] T032 [P] [US1] Migrate sequence, composition, flowchart, and control-flow CLR activities that remain non-intrinsic in `src/Elsa/Activities/Sequence/`, `Composition/`, `Flowchart/`, and `ControlFlow/`
 - [X] T033 [US1] Update CLR discovery and registration to scan plain annotated inputs and result projections in `src/Elsa/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`

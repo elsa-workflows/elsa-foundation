@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.While.Exceptions;
 using Elsa.Activities.While.Internal;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -50,7 +51,7 @@ namespace Elsa.Activities.While.Activities;
 /// </remarks>
 [ActivityStructure("elsa.while.structure", "1.0.0")]
 [ActivityChildSlot("While.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class While : ActivityBase, IActivityChildCompletionHandler
+public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
 {
     public const string BodySlotName = "While.Body";
     public const string StructureKind = "elsa.while.structure";

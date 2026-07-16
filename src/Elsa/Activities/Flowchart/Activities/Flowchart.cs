@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Flowchart.Activities;
@@ -23,7 +24,7 @@ namespace Elsa.Activities.Flowchart.Activities;
 /// </remarks>
 [ActivityStructure("elsa.flowchart.structure", "1.0.0", Mode = "flowchart", SupportsScopedVariables = true)]
 [ActivityChildSlot("Flowchart.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
-public sealed class Flowchart : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
+public sealed class Flowchart : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string ActivitiesSlotName = "Flowchart.Activities";
     public const string StructureKind = "elsa.flowchart.structure";

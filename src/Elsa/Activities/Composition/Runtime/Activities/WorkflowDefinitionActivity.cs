@@ -1,5 +1,6 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Primitives.Models;
 
 namespace Elsa.Activities.Composition.Runtime.Activities;
@@ -16,7 +17,7 @@ namespace Elsa.Activities.Composition.Runtime.Activities;
 /// the execution body (load-and-run the referenced workflow version) is deferred to the
 /// consumer/pinning unit.
 /// </remarks>
-public sealed class WorkflowDefinitionActivity : ActivityBase
+public sealed class WorkflowDefinitionActivity : ActivityBase, IActivityResult<ActivityUnit>
 {
     /// <summary>The workflow this activity runs — applied as typed state by the constructor.</summary>    
     public WorkflowIdentity? WorkflowIdentity { get; set; }

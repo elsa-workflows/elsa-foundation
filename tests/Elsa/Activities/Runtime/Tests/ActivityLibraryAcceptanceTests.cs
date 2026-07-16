@@ -83,15 +83,49 @@ public sealed class ActivityLibraryAcceptanceTests
         Assert.Equal(expectedResultType, FindActivityResultType(activityType));
     }
 
+    [Fact]
+    public void EveryRetainedFirstPartyClrActivity_HasPlainInputsAndExactlyOneAtomicResult()
+    {
+        var assemblies = new[]
+        {
+            typeof(WriteLine).Assembly,
+            typeof(SequenceActivity).Assembly,
+            typeof(ForEachActivity).Assembly,
+            typeof(Elsa.Activities.Flowchart.Activities.Flowchart).Assembly,
+            typeof(Elsa.Activities.Composition.Runtime.Activities.WorkflowDefinitionActivity).Assembly,
+            typeof(Elsa.Activities.Http.Activities.HttpEndpoint).Assembly,
+            typeof(Elsa.Activities.Scheduling.Activities.Timer).Assembly,
+            typeof(Elsa.Activities.Scripting.Activities.RunJavaScript).Assembly
+        };
+        var activityTypes = assemblies
+            .Distinct()
+            .SelectMany(assembly => assembly.GetTypes())
+            .Where(type => type is { IsAbstract: false, IsClass: true } && typeof(IActivity).IsAssignableFrom(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(activityTypes);
+        foreach (var activityType in activityTypes)
+        {
+            var properties = activityType.GetProperties();
+            Assert.DoesNotContain(properties, property => typeof(Argument).IsAssignableFrom(property.PropertyType));
+
+            var resultContracts = activityType.GetInterfaces()
+                .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
+                .Select(candidate => candidate.GetGenericArguments()[0])
+                .Distinct()
+                .ToArray();
+            Assert.True(
+                resultContracts.Length == 1,
+                $"Activity '{activityType.FullName}' must declare exactly one atomic result contract but declared {resultContracts.Length}.");
+        }
+    }
+
     private static Type? FindActivityResultType(Type activityType)
     {
-        for (var current = activityType; current is not null; current = current.BaseType)
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Activity<>))
-                return current.GetGenericArguments()[0];
-        }
-
-        return null;
+        return activityType.GetInterfaces()
+            .Single(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
+            .GetGenericArguments()[0];
     }
 
     [Fact]

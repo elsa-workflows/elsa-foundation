@@ -252,13 +252,18 @@ public sealed class ExecutableNodeCompiler(
 
     private static Type? FindTypedActivityResult(Type activityType)
     {
-        for (var current = activityType; current is not null; current = current.BaseType)
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Activity<>))
-                return current.GetGenericArguments()[0];
-        }
+        var contracts = activityType.GetInterfaces()
+            .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
+            .Select(candidate => candidate.GetGenericArguments()[0])
+            .Distinct()
+            .ToArray();
 
-        return null;
+        return contracts.Length switch
+        {
+            0 => null,
+            1 => contracts[0],
+            _ => throw new ArgumentException($"Activity type '{activityType.FullName}' declares more than one atomic result type.")
+        };
     }
 
     private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(

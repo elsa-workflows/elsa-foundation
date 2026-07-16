@@ -81,7 +81,9 @@ public sealed class WorkflowExecutionRun(IReadOnlyCollection<ActivityExecutionSt
 
     /// <summary>Reads the completion outcome names recorded on an execution state (empty when none).</summary>
     public static IReadOnlyCollection<string> CompletionOutcomes(ActivityExecutionState state) =>
-        state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serialized)
+        state.Completion is { } completion
+            ? [completion.OutcomeKey]
+            : state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serialized)
             ? JsonSerializer.Deserialize<string[]>(serialized) ?? []
             : [];
 }

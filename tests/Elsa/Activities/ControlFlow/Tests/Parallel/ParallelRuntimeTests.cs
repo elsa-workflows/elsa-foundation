@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Parallel;
-using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
@@ -126,7 +125,6 @@ public sealed class ParallelRuntimeTests
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithConstructor<ParallelConstructor>()
-            .WithConstructor<FinishConstructor>()
             .WithProbeLeaf()
             .Build("actexec-parallel", "actexec-finish", "actexec-b", "actexec-c");
 
@@ -218,13 +216,25 @@ public sealed class ParallelRuntimeTests
         var finishNode = new ExecutableNode(
             executableNodeId: "node-finish",
             authoredActivityId: "authored-finish",
-            activityType: typeof(Finish).FullName!,
+            activityType: "elsa.intrinsic.finish",
             activityTypeVersion: "1.0.0",
-            descriptorType: FinishDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new FinishDescriptor()),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = "Finish", schemaVersion = "1.0.0" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Outcome] = new(
+                    WorkflowIntrinsicInputKeys.Outcome,
+                    new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+                        JsonSerializer.SerializeToElement(ActivityOutcomes.Done),
+                        ValueProtectionPolicy.InstanceInline))
+            },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Finish);
 
         var branches = new (string Name, string Node)[] { ("a", "node-finish"), ("b", "node-b"), ("c", "node-c") };
         var childSlots = new List<ExecutableChildSlot>
@@ -275,19 +285,4 @@ public sealed class ParallelRuntimeTests
             new(new ParallelActivity());
     }
 
-    private sealed record FinishDescriptor
-    {
-        public static string DescriptorTypeKey => typeof(FinishDescriptor).FullName!;
-    }
-
-    private sealed class FinishConstructor : IActivityConstructor<FinishDescriptor>
-    {
-        public string DescriptorType => FinishDescriptor.DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new Finish());
-
-        public ValueTask<IActivity> Construct(FinishDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new Finish());
-    }
 }

@@ -45,7 +45,7 @@ namespace Elsa.Activities.For.Activities;
 /// </remarks>
 [ActivityStructure("elsa.for.structure", "1.0.0")]
 [ActivityChildSlot("For.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class For : ActivityBase, IActivityChildCompletionHandler
+public sealed class For : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
 {
     public const string BodySlotName = "For.Body";
     public const string StructureKind = "elsa.for.structure";

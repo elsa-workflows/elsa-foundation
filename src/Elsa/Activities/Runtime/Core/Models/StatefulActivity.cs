@@ -19,6 +19,7 @@ namespace Elsa.Activities.Runtime.Core.Models;
 /// </remarks>
 public abstract class StatefulActivity<TResult, TState, TTrigger> :
     ActivityBase,
+    IActivityResult<TResult>,
     IStatefulActivity<TResult, TState, TTrigger>
 {
     private int _attemptStarted;

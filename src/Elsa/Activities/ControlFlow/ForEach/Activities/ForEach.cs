@@ -38,7 +38,7 @@ namespace Elsa.Activities.ForEach.Activities;
 /// </remarks>
 [ActivityStructure("elsa.foreach.structure", "1.0.0")]
 [ActivityChildSlot("ForEach.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
+public sealed class ForEach : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
 {
     public const string BodySlotName = "ForEach.Body";
     public const string StructureKind = "elsa.foreach.structure";

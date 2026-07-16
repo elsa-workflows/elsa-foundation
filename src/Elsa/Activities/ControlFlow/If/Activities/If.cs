@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
@@ -24,7 +25,7 @@ namespace Elsa.Activities.If.Activities;
 [ActivityStructure("elsa.if.structure", "1.0.0")]
 [ActivityChildSlot("If.Then", "then", "Then", ActivityChildSlotCardinalities.Single)]
 [ActivityChildSlot("If.Else", "else", "Else", ActivityChildSlotCardinalities.Single)]
-public sealed class If : ActivityBase, IActivityChildCompletionHandler
+public sealed class If : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
 {
     public const string ThenSlotName = "If.Then";
     public const string ElseSlotName = "If.Else";

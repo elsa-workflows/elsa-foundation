@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Switch.Exceptions;
 using Elsa.Activities.Switch.Internal;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
@@ -33,7 +34,7 @@ namespace Elsa.Activities.Switch.Activities;
     LabelProperty = "match",
     SlotNameTemplate = "Switch.Case[{match}]")]
 [ActivityChildSlot("Switch.Default", "default", "Default", ActivityChildSlotCardinalities.Single)]
-public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
+public sealed class Switch : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
 {
     public const string DefaultSlotName = "Switch.Default";
     public const string CaseSlotPrefix = "Switch.Case[";

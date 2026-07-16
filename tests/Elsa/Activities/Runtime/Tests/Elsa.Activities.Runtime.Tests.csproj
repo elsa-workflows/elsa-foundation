@@ -26,6 +26,10 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Composition\Runtime\Elsa.Activities.Composition.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
