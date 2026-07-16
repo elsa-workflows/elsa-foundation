@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -69,6 +70,34 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, processed.RequestedDeliveryResultStatus);
         Assert.Equal(1, result.FailedCount);
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(11), limit: 10)));
+    }
+
+    [Fact]
+    public async Task Processor_UnsupportedKindUsesExistingPolicySelectedFinalFailurePath()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var services = new ServiceCollection();
+        services.AddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            scope.ServiceProvider.GetRequiredService<IRuntimePostCommitIntentDispatcher>(),
+            new FixedTimeProvider(_now));
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-unsupported",
+            "intent-unsupported",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.None,
+            kind: "Unsupported.Intent"));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
+
+        var processed = Assert.Single(result.Items);
+        Assert.Equal(1, result.FailedCount);
+        Assert.NotEqual(RuntimePostCommitOutboxStatus.Delivered, processed.RequestedDeliveryResultStatus);
+        Assert.Contains("Unsupported.Intent", processed.FailureMessage);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), limit: 10)));
     }
 
     [Fact]

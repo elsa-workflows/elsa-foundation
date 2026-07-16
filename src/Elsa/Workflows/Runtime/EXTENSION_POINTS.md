@@ -72,8 +72,16 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IRuntimePostCommitIntentDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one dispatcher owns delivery of committed outbound runtime intents for a composition).
 - **Signature:** `DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)`.
-- **Default implementation:** `RuntimeSchedulerPostCommitIntentDispatcher` *(dispatches scheduler-work intents after checkpoint commit; durable outbox providers replace this for distributed delivery)*.
-- **Usage:** dispatches post-commit intents in the order provided by the committed `RuntimeCheckpointCommit` only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
+- **Default implementation:** `RuntimePostCommitIntentDispatcher`, an ordinal keyed aggregate over contributed `IRuntimePostCommitIntentHandler` registrations.
+- **Usage:** the outbox processor invokes this replacement contract after checkpoint commit. The default aggregate selects exactly one contributed handler by the persisted intent kind; hosts may still replace the aggregate as a unit.
+
+### `IRuntimePostCommitIntentHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (one handler owns one stable post-commit intent kind).
+- **Signature:** `HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)`.
+- **Registration:** call `services.AddRuntimePostCommitIntentHandler<THandler>(intentKind)`. The registration argument is the sole kind authority; handlers expose no second kind property that could disagree. The built-in scheduler delivery registers `RuntimeSchedulerPostCommitIntentDispatcher` for `RuntimePostCommitIntentKinds.EnqueueSchedulerWork` through this same surface.
+- **Composition rules:** kinds use ordinal comparison. Repeating the same `(intent kind, handler type)` is idempotent. Different handler types claiming one kind fail deterministically with the kind and sorted handler identities; the aggregate defensively repeats that validation when composed.
+- **Lifetime and boundary:** the extension registers handlers as scoped defaults, and the aggregate resolves the selected handler from the active outbox-delivery scope. The global resumption sweep processes every deliverable intent kind outside workflow execution actor mailboxes. The per-execution `WorkflowDrainOrchestrator` remains intentionally filtered to scheduler work only.
+- **Failure behavior:** handler exceptions and unsupported kinds flow through `RuntimePostCommitOutboxProcessor`; the existing outbox retry policy selects the persisted failed/final state. Neither case is silently acknowledged as delivered.
 
 ### `IRuntimePostCommitOutboxStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns durable post-commit outbox state for a runtime composition).
@@ -90,7 +98,7 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IRuntimeResumptionService` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one service owns a single system-wide resumption sweep pass for a runtime composition).
 - **Signature:** `SweepAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken = default)`.
-- **Usage:** one sweep pass re-delivers stranded post-commit outbox items system-wide (`ProcessAsync(workflowExecutionId: null, intentKind: EnqueueSchedulerWork)`), unions durable scheduler-queue backlog (`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) with `IRuntimeRecoveryScanner` candidates, and re-drives each discovered execution by enqueueing a `RunSchedulerWork` envelope through the actor mailbox — preserving single-writer discipline. The request bounds each sweep (`MaxExecutionsPerSweep`) and skips executions the caller is backing off (`ExcludedWorkflowExecutionIds`). Re-drive failures surface on the result and do not abort the sweep; callers own logging and backoff. It is not registered by the runtime API feature — only the `WorkflowsRuntimeResumption` shell feature registers it and drives it from a recurring pump.
+- **Usage:** one sweep pass re-delivers stranded post-commit outbox items system-wide (`ProcessAsync(workflowExecutionId: null, intentKind: null)`) across all contributed kinds, unions durable scheduler-queue backlog (`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) with `IRuntimeRecoveryScanner` candidates, and re-drives each discovered execution by enqueueing a `RunSchedulerWork` envelope through the actor mailbox — preserving single-writer discipline. The request bounds each sweep (`MaxExecutionsPerSweep`) and skips executions the caller is backing off (`ExcludedWorkflowExecutionIds`). Re-drive failures surface on the result and do not abort the sweep; callers own logging and backoff. It is not registered by the runtime API feature — only the `WorkflowsRuntimeResumption` shell feature registers it and drives it from a recurring pump.
 - **Default implementation:** `RuntimeResumptionService` *(registered by the feature-gated `Elsa.Workflows.Runtime.Resumption` package)*.
 
 ### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*

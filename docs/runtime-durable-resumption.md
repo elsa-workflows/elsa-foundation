@@ -16,9 +16,11 @@ A workflow makes progress through a repeating cycle:
 
 1. An execution agent accepts a command and **commits a checkpoint** — the durability boundary. The
    checkpoint records new state *and* the follow-up work the commit implies as **post-commit outbox**
-   items (intent kind `EnqueueSchedulerWork`).
-2. The post-commit outbox is **delivered**: each `EnqueueSchedulerWork` item enqueues a
-   `RuntimeSchedulerWorkItem` into the **scheduler work queue**.
+   items. Scheduler continuation uses `EnqueueSchedulerWork`; modules may contribute other stable kinds.
+2. The post-commit outbox is **delivered**: the ordinal keyed runtime dispatcher selects the
+   contributed handler for each item. The built-in `EnqueueSchedulerWork` handler enqueues a
+   `RuntimeSchedulerWorkItem` into the **scheduler work queue**; other cross-execution handlers run
+   through the same global delivery path outside workflow execution actor mailboxes.
 3. The scheduler **drains** the queued work — running activities, scheduling children, and producing
    the next checkpoint — and the cycle repeats.
 
@@ -46,8 +48,10 @@ unrelated command to arrive (**RT-3**).
 - **A resumption sweep service** — `IRuntimeResumptionService` (`RuntimeResumptionService`). One
   `SweepAsync` pass:
   1. **Re-delivers** stranded post-commit outbox items **system-wide**
-     (`ProcessAsync(workflowExecutionId: null, intentKind: EnqueueSchedulerWork)`), including due
-     `FailedRetryable` retries — this closes RT-3.
+     (`ProcessAsync(workflowExecutionId: null, intentKind: null)`) across every contributed intent
+     kind, including due `FailedRetryable` retries — this closes RT-3. Normal per-execution draining
+     remains intentionally filtered to `EnqueueSchedulerWork`, so non-local cross-execution work is
+     never executed inside that workflow's actor mailbox.
   2. **Discovers** the interrupted executions: the union of the durable queue backlog
      (`ListPendingWorkflowExecutionIdsAsync`) and `IRuntimeRecoveryScanner` candidates.
   3. **Re-drives** each execution by enqueueing a `RunSchedulerWork` command envelope **through the
