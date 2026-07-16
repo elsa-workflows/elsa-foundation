@@ -3,6 +3,8 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -230,7 +232,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             }, priorWorkflowState)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
-            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables)
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -274,7 +277,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             }, priorWorkflowState)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
-            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -307,6 +311,23 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
             }));
+
+    private static VariableFrameState CreateRootVariableFrame(
+        string workflowExecutionId,
+        IReadOnlyDictionary<string, JsonElement> seedVariables)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        var values = seedVariables.ToDictionary(
+            item => item.Key,
+            item => item.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ValueEnvelope.Null(type, ValueProtectionPolicy.InstanceInline)
+                : ValueEnvelope.Inline(type, item.Value, ValueProtectionPolicy.InstanceInline),
+            StringComparer.Ordinal);
+        return new VariableFrameFactory().CreateRoot(
+            workflowExecutionId,
+            VariableReference.WorkflowScopeId,
+            values);
+    }
 
     private static RuntimeCheckpointCommandPayload DeserializeCheckpointPayload(RuntimeSchedulerWorkItem workItem) =>
         SchedulerWorkHandlerHelpers.DeserializePayload(

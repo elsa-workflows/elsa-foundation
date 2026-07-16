@@ -27,6 +27,12 @@ public sealed record WorkflowExecutionState(
     /// Immutable source attribution selected when this execution started. Null only for legacy state.
     /// </summary>
     public WorkflowExecutableSourceProvenance? PinnedSource { get; init; }
+
+    /// <summary>
+    /// The workflow activation's lexical variable frame. Null only for legacy states that predate
+    /// role-owned variable frames.
+    /// </summary>
+    public VariableFrameState? RootVariableFrame { get; init; }
 }
 
 public enum WorkflowRunKind

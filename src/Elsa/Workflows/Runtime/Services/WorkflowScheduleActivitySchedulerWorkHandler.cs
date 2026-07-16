@@ -161,10 +161,12 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId
             },
             DocumentVersion: ActivityExecutionValueFlowDocumentVersions.Current,
-            ContractIdentity: new ActivityInvocationContractIdentity(
-                executableNode.ActivityType,
-                executableNode.ActivityTypeVersion,
-                schedulePayload.PinnedExecutable.ArtifactHash),
+            ContractIdentity: executableNode.IntrinsicKind is null
+                ? new ActivityInvocationContractIdentity(
+                    executableNode.ActivityType,
+                    executableNode.ActivityTypeVersion,
+                    schedulePayload.PinnedExecutable.ArtifactHash)
+                : null,
             Attempts: [],
             TriggerRegistrations: [],
             TriggerDeliveries: [],

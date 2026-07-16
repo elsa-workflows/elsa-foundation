@@ -21,7 +21,9 @@ public sealed class ExecutableNode
         IReadOnlyDictionary<string, string> metadata,
         IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
         ExecutableActivityStructure? structure = null,
-        ActivityContract? activityContract = null)
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -34,6 +36,22 @@ public sealed class ExecutableNode
 
         var inputBindingSnapshot = inputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var outputCaptureSnapshot = outputCaptures.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+
+        if (intrinsicKind is not null && !Enum.IsDefined(intrinsicKind.Value))
+            throw new ArgumentOutOfRangeException(nameof(intrinsicKind), intrinsicKind, "Workflow intrinsic kind is not defined.");
+        if (intrinsicKind is not null && activityContract is not null)
+            throw new ArgumentException("An executable node cannot be both a CLR activity and an engine intrinsic.", nameof(intrinsicKind));
+        if (intrinsicKind is WorkflowIntrinsicKind.Set or WorkflowIntrinsicKind.Merge or WorkflowIntrinsicKind.Reduce)
+        {
+            if (intrinsicVariable is null)
+                throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a variable target.", nameof(intrinsicVariable));
+            if (!inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value))
+                throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a '{WorkflowIntrinsicInputKeys.Value}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicVariable is not null)
+        {
+            throw new ArgumentException("Only variable-writing intrinsics can carry a variable target.", nameof(intrinsicVariable));
+        }
 
         foreach (var (inputName, binding) in inputBindingSnapshot)
         {
@@ -59,6 +77,8 @@ public sealed class ExecutableNode
         ChildSlots = Array.AsReadOnly((childSlots ?? []).ToArray());
         Structure = structure;
         ActivityContract = activityContract;
+        IntrinsicKind = intrinsicKind;
+        IntrinsicVariable = intrinsicVariable;
     }
 
     public string ExecutableNodeId { get; }
@@ -73,4 +93,20 @@ public sealed class ExecutableNode
     public IReadOnlyCollection<ExecutableChildSlot> ChildSlots { get; }
     public ExecutableActivityStructure? Structure { get; }
     public ActivityContract? ActivityContract { get; }
+    public WorkflowIntrinsicKind? IntrinsicKind { get; }
+    public RuntimeVariableReference? IntrinsicVariable { get; }
+}
+
+public enum WorkflowIntrinsicKind
+{
+    Set,
+    Merge,
+    Reduce,
+    Return,
+    Control
+}
+
+public static class WorkflowIntrinsicInputKeys
+{
+    public const string Value = "value";
 }

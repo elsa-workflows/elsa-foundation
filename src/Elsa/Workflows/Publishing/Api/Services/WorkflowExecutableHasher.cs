@@ -123,10 +123,14 @@ public sealed class WorkflowExecutableHasher
         var structure = node.Structure is null
             ? string.Empty
             : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{CanonicalJson(node.Structure.Payload)}";
+        var intrinsic = node.IntrinsicKind is null
+            ? string.Empty
+            : $"intrinsic:{node.IntrinsicKind}:{node.IntrinsicVariable?.DeclaringScopeId}:{node.IntrinsicVariable?.VariableKey}";
         var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{CanonicalJson(node.DescriptorPayload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
+        var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
         return node.ActivityContract is null
-            ? legacyShape
-            : $"{legacyShape}:contract:{node.ActivityContract.SchemaFingerprint}";
+            ? nodeShape
+            : $"{nodeShape}:contract:{node.ActivityContract.SchemaFingerprint}";
     }
 
     private static string CanonicalJson(JsonElement? element)

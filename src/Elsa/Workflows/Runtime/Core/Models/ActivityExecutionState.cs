@@ -49,6 +49,11 @@ public sealed record ActivityExecutionState(
 {
     public string InvocationId => Execution.ActivityExecutionId;
 
+    /// <summary>
+    /// The container or iteration frame owned by this structural activity activation, when any.
+    /// </summary>
+    public VariableFrameState? VariableFrame { get; init; }
+
     public void EnsureValueFlowCompatible()
     {
         if (DocumentVersion != ActivityExecutionValueFlowDocumentVersions.Current)

@@ -147,6 +147,25 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
+    public void ExecutableHash_CoversIntrinsicKindAndVariableTarget()
+    {
+        var value = new RuntimeInputBinding(
+            WorkflowIntrinsicInputKeys.Value,
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                StringType,
+                JsonSerializer.SerializeToElement("updated"),
+                ValueProtectionPolicy.InstanceInline));
+        var first = IntrinsicNode(value, "scope-root", "first");
+        var changedTarget = IntrinsicNode(value, "scope-root", "second");
+        var hasher = new WorkflowExecutableHasher();
+
+        Assert.NotEqual(hasher.ComputeHash(first), hasher.ComputeHash(changedTarget));
+    }
+
+    [Fact]
     public void Compiler_EmitsAliasTypedCanonicalLiteralWithoutClrTypeMetadata()
     {
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
@@ -206,4 +225,18 @@ public sealed class RoleOwnedInputBindingContractTests
             inputBindings: new Dictionary<string, RuntimeInputBinding> { [binding.InputKey] = binding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
+
+    private static ExecutableNode IntrinsicNode(RuntimeInputBinding binding, string scopeId, string variableKey) =>
+        new(
+            executableNodeId: "node-set",
+            authoredActivityId: "set",
+            activityType: "elsa.intrinsic.set",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding> { [binding.InputKey] = binding },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference(variableKey, scopeId));
 }

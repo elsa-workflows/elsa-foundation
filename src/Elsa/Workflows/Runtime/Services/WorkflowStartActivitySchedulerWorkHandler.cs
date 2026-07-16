@@ -22,6 +22,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     private readonly IDurableValueStateStore? _durableValueStateStore;
     private readonly IRuntimeActivityOutputRegister? _activityOutputRegister;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
+    private readonly WorkflowIntrinsicExecutor? _intrinsicExecutor;
 
     public WorkflowStartActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -33,7 +34,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         IRuntimeActivityInputMaterializer? inputMaterializer = null,
         IDurableValueStateStore? durableValueStateStore = null,
         IRuntimeActivityOutputRegister? activityOutputRegister = null,
-        IServiceScopeFactory? serviceScopeFactory = null)
+        IServiceScopeFactory? serviceScopeFactory = null,
+        WorkflowIntrinsicExecutor? intrinsicExecutor = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -50,6 +52,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         _durableValueStateStore = durableValueStateStore;
         _activityOutputRegister = activityOutputRegister;
         _serviceScopeFactory = serviceScopeFactory;
+        _intrinsicExecutor = intrinsicExecutor;
     }
 
     public string Name => HandlerName;
@@ -112,6 +115,25 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
         if (!StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, startPayload.ExecutableNodeId))
             throw new InvalidOperationException($"StartActivity scheduler work item '{workItem.WorkItemId}' references executable node '{startPayload.ExecutableNodeId}', but activity execution '{startPayload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
+
+        if (executableNode.IntrinsicKind is not null)
+        {
+            if (state.Status == ActivityExecutionStatus.Completed)
+                return null;
+            if (state.Status != ActivityExecutionStatus.Scheduled)
+                throw new InvalidOperationException($"Intrinsic execution '{state.InvocationId}' must be Scheduled before execution; current status is '{state.Status}'.");
+
+            var executor = _intrinsicExecutor
+                ?? throw new InvalidOperationException($"Executable node '{executableNode.ExecutableNodeId}' requires the workflow intrinsic executor.");
+            return await executor.ExecuteAsync(
+                workItem,
+                startPayload,
+                executable,
+                executableNode,
+                state,
+                serviceProvider,
+                cancellationToken);
+        }
 
         if (state.Status == ActivityExecutionStatus.Running)
         {
