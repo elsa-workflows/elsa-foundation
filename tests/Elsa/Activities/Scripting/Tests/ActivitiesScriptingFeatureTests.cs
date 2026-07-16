@@ -7,10 +7,9 @@ namespace Elsa.Activities.Scripting.Tests;
 
 /// <summary>
 /// Feature-registration coverage for <see cref="ActivitiesScriptingFeature"/> (constitution §2.23.1). The
-/// <c>RunJavaScript</c> activity is constructed by the runtime's CLR activity constructor and evaluates through
-/// the shared Jint evaluator, so the feature registers no per-type activity services of its own; it declares the
-/// dependency on the JavaScript Jint engine feature (which registers <c>IJavaScriptEvaluator</c>) so composing
-/// this feature yields a working scripting activity.
+/// <c>RunJavaScript</c> activity is transiently DI-activated and constructor-injected with the isolated script
+/// evaluator, so the feature registers no per-type activity services of its own; its manifest dependency on the
+/// JavaScript Jint engine supplies that evaluator when the shell is composed.
 /// </summary>
 public sealed class ActivitiesScriptingFeatureTests
 {
