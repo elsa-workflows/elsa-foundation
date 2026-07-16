@@ -323,7 +323,7 @@ public sealed class ArchitectureGuardTests
         Assert.DoesNotContain("Elsa.Workflows.Runtime.Resumption", runtimeReferences);
         Assert.Contains(
             "WorkflowsRuntimeResumption",
-            File.ReadAllText(Path.Combine(Path.GetDirectoryName(runtime.FullPath)!, "DispatchWorkflowRuntimeFeature.cs")),
+            File.ReadAllText(Path.Join(Path.GetDirectoryName(runtime.FullPath)!, "DispatchWorkflowRuntimeFeature.cs")),
             StringComparison.Ordinal);
         Assert.DoesNotContain(forbiddenReferences, runtimeReferences.Contains);
         Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);

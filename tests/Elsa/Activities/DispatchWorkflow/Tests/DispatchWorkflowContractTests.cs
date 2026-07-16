@@ -66,7 +66,7 @@ public sealed class DispatchWorkflowContractTests
         var folder = Directory.CreateTempSubdirectory("dispatch-workflow-catalog-");
         try
         {
-            File.Copy(typeof(Activity).Assembly.Location, Path.Combine(folder.FullName, Path.GetFileName(typeof(Activity).Assembly.Location)));
+            File.Copy(typeof(Activity).Assembly.Location, Path.Join(folder.FullName, Path.GetFileName(typeof(Activity).Assembly.Location)));
             var scanner = new ClrAssemblyScanner(
                 new ActivityTypeVersionResolver(),
                 new ActivityTypeCategoryResolver(),
