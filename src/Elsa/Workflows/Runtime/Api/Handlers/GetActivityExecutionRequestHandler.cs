@@ -28,9 +28,14 @@ public sealed class GetActivityExecutionRequestHandler(
         var boundary = hierarchyStore is null
             ? null
             : await hierarchyStore.FindBoundaryAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
+        var attempt = hierarchyStore is null
+            ? null
+            : await hierarchyStore.FindAttemptNavigationAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
         return new GetActivityExecutionResponse(ActivityExecutionInspectionView.From(
             projection,
             boundary,
-            authorization.CanInspectSensitiveValues(workflowExecution)));
+            authorization.CanInspectSensitiveValues(workflowExecution),
+            attempt,
+            authorization.CanResolveSensitiveValuePayloads(workflowExecution)));
     }
 }

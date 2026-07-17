@@ -72,8 +72,10 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.Equal(RuntimeStateChangeOperation.Upsert, inspectionChange.Operation);
         Assert.Equal(ActivityExecutionStatus.Suspended, inspectionChange.State.Status);
         var bookmarkSummary = Assert.Single(inspectionChange.State.Bookmarks);
-        Assert.Equal("bookmark-1", bookmarkSummary.BookmarkId);
-        Assert.Equal("resume-target:delivery", bookmarkSummary.ResumeTargetId);
+        Assert.Equal("bookmark-1", bookmarkSummary.Identity.BookmarkId);
+        Assert.Equal("wfexec-1", bookmarkSummary.Identity.WorkflowExecutionId);
+        Assert.Equal("actexec-1", bookmarkSummary.Identity.ActivityExecutionId);
+        Assert.Equal("resume-target:delivery", bookmarkSummary.Identity.ResumeTargetId);
         Assert.Equal("delivery-status", bookmarkSummary.StimulusType);
         Assert.Equal("sha256:delivery-status:order-123", bookmarkSummary.StimulusHash);
         var snapshot = Assert.Single(inspectionChange.State.ValueSnapshots);

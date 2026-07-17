@@ -126,7 +126,9 @@ public sealed record ActivityExecutionInspectionView(
     public static ActivityExecutionInspectionView From(
         ActivityExecutionInspectionProjection projection,
         ActivityExecutionBoundary? boundary = null,
-        bool canInspectSensitiveValues = false) =>
+        bool canInspectSensitiveValues = false,
+        ActivityExecutionAttemptNavigation? attemptNavigation = null,
+        bool canResolveValuePayloads = false) =>
         new(
             projection.ActivityExecutionId,
             projection.WorkflowExecutionId,
@@ -145,10 +147,15 @@ public sealed record ActivityExecutionInspectionView(
             projection.LastCommittedAt,
             ActivitySchedulingProvenanceView.From(projection.Provenance, canInspectSensitiveValues),
             projection.OutcomeNames,
-            projection.Bookmarks.Select(x => ActivityExecutionBookmarkSummaryView.From(x, canInspectSensitiveValues)).ToArray(),
+            projection.Bookmarks.Select(ActivityExecutionBookmarkSummaryView.From).ToArray(),
             projection.Incidents.Select(x => ActivityExecutionIncidentSummaryView.From(x, canInspectSensitiveValues)).ToArray(),
-            projection.ValueSnapshots.Select(x => ActivityExecutionInspectionValueSnapshotView.From(x, canInspectSensitiveValues)).ToArray(),
-            ActivityExecutionAttemptView.From(projection.Attempt ?? projection.Provenance.Attempt),
+            projection.ValueSnapshots.Select((x, index) => ActivityExecutionInspectionValueSnapshotView.From(
+                x,
+                projection.ActivityExecutionId,
+                index,
+                canInspectSensitiveValues,
+                canResolveValuePayloads)).ToArray(),
+            ActivityExecutionAttemptView.From(attemptNavigation, projection.Attempt ?? projection.Provenance.Attempt),
             ActivityExecutionBoundaryView.From(boundary),
             ActivityExecutionInspectionDisclosure.Metadata(projection.Metadata, canInspectSensitiveValues));
 }
@@ -156,10 +163,29 @@ public sealed record ActivityExecutionInspectionView(
 public sealed record ActivityExecutionAttemptView(
     int AttemptNumber,
     string FirstAttemptActivityExecutionId,
-    string? PreviousAttemptActivityExecutionId)
+    string? PreviousAttemptActivityExecutionId,
+    string? NextAttemptActivityExecutionId,
+    int? TotalAttempts)
 {
     public static ActivityExecutionAttemptView? From(ActivityExecutionAttemptLineage? attempt) =>
-        attempt is null ? null : new(attempt.AttemptNumber, attempt.FirstAttemptActivityExecutionId, attempt.PreviousAttemptActivityExecutionId);
+        attempt is null ? null : new(
+            attempt.AttemptNumber,
+            attempt.FirstAttemptActivityExecutionId,
+            attempt.PreviousAttemptActivityExecutionId,
+            null,
+            null);
+
+    public static ActivityExecutionAttemptView? From(
+        ActivityExecutionAttemptNavigation? navigation,
+        ActivityExecutionAttemptLineage? fallback) =>
+        navigation is null
+            ? From(fallback)
+            : new(
+                navigation.Lineage.AttemptNumber,
+                navigation.Lineage.FirstAttemptActivityExecutionId,
+                navigation.Lineage.PreviousAttemptActivityExecutionId,
+                navigation.NextAttemptActivityExecutionId,
+                navigation.TotalAttempts);
 }
 
 public sealed record ActivityExecutionBoundaryView(
@@ -242,26 +268,30 @@ public sealed record ActivitySchedulingProvenanceView(
 }
 
 public sealed record ActivityExecutionBookmarkSummaryView(
-    string BookmarkId,
-    string ResumeTargetId,
+    ActivityExecutionBookmarkIdentityView Identity,
     string StimulusType,
     string StimulusHash,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? ExpiresAt,
-    IReadOnlyDictionary<string, string> Metadata,
-    object? Payload)
+    DateTimeOffset? ExpiresAt)
 {
-    public static ActivityExecutionBookmarkSummaryView From(ActivityExecutionBookmarkSummary summary, bool canInspectSensitiveValues = false) =>
+    public static ActivityExecutionBookmarkSummaryView From(ActivityExecutionBookmarkSummary summary) =>
         new(
-            summary.BookmarkId,
-            summary.ResumeTargetId,
+            new(
+                summary.Identity.BookmarkId,
+                summary.Identity.WorkflowExecutionId,
+                summary.Identity.ActivityExecutionId,
+                summary.Identity.ResumeTargetId),
             summary.StimulusType,
             summary.StimulusHash,
             summary.CreatedAt,
-            summary.ExpiresAt,
-            ActivityExecutionInspectionDisclosure.Metadata(summary.Metadata, canInspectSensitiveValues),
-            canInspectSensitiveValues ? summary.Payload : null);
+            summary.ExpiresAt);
 }
+
+public sealed record ActivityExecutionBookmarkIdentityView(
+    string BookmarkId,
+    string WorkflowExecutionId,
+    string ActivityExecutionId,
+    string ResumeTargetId);
 
 public sealed record ActivityExecutionIncidentSummaryView(
     string IncidentId,
@@ -273,6 +303,7 @@ public sealed record ActivityExecutionIncidentSummaryView(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ResolvedAt,
     bool IsBlocking,
+    ActivityExecutionIncidentCausationView? Causation,
     IReadOnlyDictionary<string, string> Metadata)
 {
     public static ActivityExecutionIncidentSummaryView From(
@@ -288,14 +319,28 @@ public sealed record ActivityExecutionIncidentSummaryView(
             summary.CreatedAt,
             summary.ResolvedAt,
             summary.IsBlocking,
+            ActivityExecutionIncidentCausationView.From(summary.Causation),
             ActivityExecutionInspectionDisclosure.Metadata(summary.Metadata, canInspectSensitiveValues));
 }
 
+public sealed record ActivityExecutionIncidentCausationView(
+    string IncidentId,
+    string ActivityExecutionId,
+    string? ExecutableNodeId,
+    string Kind)
+{
+    public static ActivityExecutionIncidentCausationView? From(ActivityExecutionIncidentCausation? causation) =>
+        causation is null
+            ? null
+            : new(causation.IncidentId, causation.ActivityExecutionId, causation.ExecutableNodeId, causation.Kind);
+}
+
 public sealed record ActivityExecutionInspectionValueSnapshotView(
+    string EvidenceId,
     string Name,
     string Subject,
     string CaptureMode,
-    string State,
+    string CaptureState,
     RuntimeValueTypeDescriptor? Type,
     DateTimeOffset CapturedAt,
     object? Payload,
@@ -311,15 +356,24 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     RuntimeInputEvaluationFailure? Failure = null)
 {
     public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot, bool canInspectSensitiveValues = false) =>
+        From(snapshot, "unknown", 0, canInspectSensitiveValues, false);
+
+    public static ActivityExecutionInspectionValueSnapshotView From(
+        ActivityExecutionInspectionValueSnapshot snapshot,
+        string activityExecutionId,
+        int ordinal,
+        bool canInspectSensitiveValues,
+        bool canResolveValuePayloads) =>
         new(
+            snapshot.EvidenceId ?? ActivityExecutionValueEvidenceIdentity.Create(activityExecutionId, snapshot, ordinal),
             snapshot.Name,
             snapshot.Subject.ToString(),
             snapshot.CaptureMode.ToString(),
-            canInspectSensitiveValues ? SnapshotState(snapshot) : "redacted",
+            DetermineCaptureState(snapshot),
             snapshot.Type,
             snapshot.CapturedAt,
-            canInspectSensitiveValues && snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload ? snapshot.Payload : null,
-            canInspectSensitiveValues && snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
+            null,
+            null,
             snapshot.CaptureReason,
             snapshot.IsSensitive,
             ActivityExecutionInspectionDisclosure.Metadata(snapshot.Metadata, canInspectSensitiveValues),
@@ -327,17 +381,33 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             snapshot.EvaluationId,
             snapshot.Phase,
             snapshot.Sequence,
-            canInspectSensitiveValues ? "allowed" : "redacted",
+            DetermineAccessState(snapshot, canInspectSensitiveValues, canResolveValuePayloads),
             canInspectSensitiveValues ? snapshot.Failure : null);
 
-    private static string SnapshotState(ActivityExecutionInspectionValueSnapshot snapshot) =>
-        snapshot.CaptureMode switch
+    private static string DetermineCaptureState(ActivityExecutionInspectionValueSnapshot snapshot) =>
+        snapshot.Failure is not null
+            ? "captureFailed"
+            : snapshot.CaptureMode switch
         {
             RuntimePayloadCaptureMode.None => "notCaptured",
             RuntimePayloadCaptureMode.MetadataOnly => "metadataOnly",
-            RuntimePayloadCaptureMode.DiagnosticSnapshot or RuntimePayloadCaptureMode.Payload when snapshot.Payload is not null => "captured",
+            RuntimePayloadCaptureMode.DiagnosticSnapshot when snapshot.Payload is not null => "diagnosticSnapshotCaptured",
+            RuntimePayloadCaptureMode.Payload when snapshot.Payload is not null => "payloadCaptured",
             _ => "unavailable"
         };
+
+    private static string DetermineAccessState(
+        ActivityExecutionInspectionValueSnapshot snapshot,
+        bool canInspectSensitiveValues,
+        bool canResolveValuePayloads)
+    {
+        if (snapshot.Payload is null ||
+            snapshot.CaptureMode is not (RuntimePayloadCaptureMode.DiagnosticSnapshot or RuntimePayloadCaptureMode.Payload))
+            return "unavailable";
+        if (!canInspectSensitiveValues)
+            return "redacted";
+        return canResolveValuePayloads ? "resolutionAvailable" : "resolutionPermissionRequired";
+    }
 }
 
 public sealed record ActivityExecutionInspectionSummaryView(

@@ -26,6 +26,9 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal("type.then", thenNode.ActivityType);
         Assert.Equal("type.else", elseNode.ActivityType);
         Assert.All(new[] { placement.Root, graphRoot, thenNode, elseNode }, x => Assert.Equal(69, x.ExecutableNodeId.Length));
+        Assert.All(
+            Flatten(placement.Root),
+            x => Assert.Equal(x.AuthoredActivityId, x.Metadata["activity.templateNodeId"]));
         Assert.Equal(graphRoot.ExecutableNodeId, placement.Root.Descriptor.Payload.GetProperty("entryNodeId").GetString());
         Assert.Equal(4, placement.LayoutSidecar.BoundarySegments.Count);
     }

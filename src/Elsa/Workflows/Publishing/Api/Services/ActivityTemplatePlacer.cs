@@ -156,6 +156,7 @@ public sealed class ActivityTemplatePlacer(
             var metadata = current.Node.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
             metadata["activity.invocationOrigin"] = JsonSerializer.Serialize(frame.Origin.Segments);
             metadata["activity.placementNamespace"] = placementHasher.ComputeHash(frame.Origin.ToCanonicalBytes());
+            metadata["activity.templateNodeId"] = current.Node.ExecutableNodeId;
             if (isBoundary)
             {
                 metadata["activity.definitionId"] = frame.Publication.DefinitionId;
