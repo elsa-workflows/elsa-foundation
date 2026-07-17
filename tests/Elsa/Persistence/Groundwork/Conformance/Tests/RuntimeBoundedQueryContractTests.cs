@@ -110,15 +110,28 @@ public sealed class RuntimeBoundedQueryContractTests
 
         var first = await store.ListByStimulusAsync(
             new WorkflowTriggerBindingPageQuery("Event", "shared", limit: 2));
+        await Assert.ThrowsAsync<InvalidDocumentQueryContinuationException>(async () =>
+            await store.ListByStimulusAsync(
+                new WorkflowTriggerBindingPageQuery(
+                    "Event",
+                    "another-stimulus",
+                    limit: 1,
+                    continuationToken: first.NextContinuationToken)));
         var second = await store.ListByStimulusAsync(
             new WorkflowTriggerBindingPageQuery(
                 "Event",
                 "shared",
-                limit: 2,
+                limit: 1,
                 continuationToken: first.NextContinuationToken));
 
-        Assert.Equal(["binding-a", "binding-c"], first.Items.Select(binding => binding.TriggerBindingId));
-        Assert.Equal(["binding-e"], second.Items.Select(binding => binding.TriggerBindingId));
+        Assert.Equal(
+            ["binding-a", "binding-c", "binding-e"],
+            first.Items
+                .Concat(second.Items)
+                .Select(binding => binding.TriggerBindingId)
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(2, first.Items.Count);
+        Assert.Single(second.Items);
         Assert.Equal(3, first.TotalCount);
         Assert.Equal(3, second.TotalCount);
         Assert.NotNull(first.NextContinuationToken);
@@ -128,15 +141,77 @@ public sealed class RuntimeBoundedQueryContractTests
             observation =>
             {
                 Assert.Equal(ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery, observation.Query.QueryIdentity);
-                Assert.Equal(2, observation.Query.Take);
-                Assert.InRange(observation.MaterializedDocuments, 0, 2);
+                Assert.InRange(observation.Query.Take!.Value, 1, 2);
+                Assert.InRange(observation.MaterializedDocuments, 0, observation.Query.Take.Value);
                 Assert.Contains(
                     observation.Query.Clauses.SelectMany(clause => clause.Comparisons),
                     comparison =>
                         comparison.Path == ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField &&
                         comparison.Values.SequenceEqual([bool.TrueString.ToLowerInvariant()]));
             });
-        Assert.Equal([0, 2], bounded.Observations.Select(observation => observation.Query.Skip));
+        Assert.All(bounded.Observations, observation => Assert.Null(observation.Query.Skip));
+        Assert.Null(bounded.Observations[0].Query.Continuation);
+        Assert.Equal(first.NextContinuationToken, bounded.Observations[1].Query.Continuation);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Trigger_binding_continuation_has_live_view_semantics_across_independent_publication(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync(
+            [new RuntimeUnitManifestSource(
+                "runtime-trigger-binding-live-view-contract",
+                ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind)]);
+
+        await using var readerClient = await driver.OpenPhysicalClientAsync();
+        IWorkflowTriggerBindingStore reader = new GroundworkWorkflowTriggerBindingStore(
+            readerClient.DocumentStore,
+            GroundworkProviderTestSerialization.Serializer,
+            readerClient.BoundedDocumentStore);
+        var originalIds = Enumerable.Range(0, 6).Select(index => $"original-{index:D2}").ToArray();
+        foreach (var id in originalIds)
+            await reader.SaveAsync(Binding(id));
+
+        var first = await reader.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "shared", limit: 2));
+        Assert.NotNull(first.NextContinuationToken);
+
+        await using (var writerClient = await driver.OpenPhysicalClientAsync())
+        {
+            IWorkflowTriggerBindingStore writer = new GroundworkWorkflowTriggerBindingStore(
+                writerClient.DocumentStore,
+                GroundworkProviderTestSerialization.Serializer,
+                writerClient.BoundedDocumentStore);
+            foreach (var id in Enumerable.Range(0, 32).Select(index => $"published-after-page-{index:D2}"))
+                await writer.SaveAsync(Binding(id));
+        }
+
+        var resumed = new List<WorkflowTriggerBinding>();
+        var continuation = first.NextContinuationToken;
+        while (continuation is not null)
+        {
+            var page = await reader.ListByStimulusAsync(
+                new WorkflowTriggerBindingPageQuery(
+                    "Event",
+                    "shared",
+                    limit: 3,
+                    continuationToken: continuation));
+            Assert.Equal(38, page.TotalCount);
+            resumed.AddRange(page.Items);
+            continuation = page.NextContinuationToken;
+        }
+
+        var traversed = first.Items.Concat(resumed).Select(binding => binding.TriggerBindingId).ToArray();
+        Assert.Equal(traversed.Length, traversed.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(originalIds, id => Assert.Contains(id, traversed));
+        var publishedSeen = traversed.Count(id => id.StartsWith("published-after-page-", StringComparison.Ordinal));
+        Assert.InRange(publishedSeen, 1, 31);
     }
 
     private static void AssertBounded(

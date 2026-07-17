@@ -15,12 +15,15 @@ namespace Elsa.Persistence.Groundwork;
 public static class ElsaRuntimeStorageManifest
 {
     // Composite-index components use explicit provider-neutral bounds. Stimulus hashes retain the legacy
-    // 450-character contract while stimulus types are narrower so the scoped composite fits SQL Server.
+    // 450-character contract while stimulus types are narrower so scoped composites fit SQL Server.
+    // The trigger-binding cursor route uses a slightly tighter type bound because its certified index
+    // also includes the fixed-width identity lookup tie-break.
     // These values are guarded by manifest and SQL Server route-admission tests.
     public const int RuntimeStatusProjectionLength = 32;
     public const int WorkflowDispatchIdProjectionLength = 76;
     public const int StimulusHashProjectionLength = LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength;
     public const int StimulusTypeProjectionLength = 256;
+    public const int WorkflowTriggerBindingStimulusTypeProjectionLength = 240;
 
     // FROZEN storage-manifest version. This is NOT a document migration knob: per-kind document schema versions
     // live separately in ElsaRuntimeDocumentVersions.Current, and the document parser accepts only their positive
@@ -693,11 +696,12 @@ public static class ElsaRuntimeStorageManifest
         []);
 
     internal static ProjectedColumnDefinition[] BoundStimulusProjectionColumns(
-        IEnumerable<ProjectedColumnDefinition> columns) =>
+        IEnumerable<ProjectedColumnDefinition> columns,
+        int stimulusTypeLength = StimulusTypeProjectionLength) =>
         columns.Select(column => column.LogicalName switch
         {
             ByStimulusIndex => column with { Length = StimulusHashProjectionLength },
-            ByStimulusTypeIndex => column with { Length = StimulusTypeProjectionLength },
+            ByStimulusTypeIndex => column with { Length = stimulusTypeLength },
             _ => column
         }).ToArray();
 

@@ -38,7 +38,9 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
             MissingValueBehavior.Excluded);
         var augmentedDefinition = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
-            ElsaRuntimeStorageManifest.BoundStimulusProjectionColumns(definition.ProjectedColumns),
+            ElsaRuntimeStorageManifest.BoundStimulusProjectionColumns(
+                definition.ProjectedColumns,
+                ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusTypeProjectionLength),
             definition.Indexes.Concat(
             [
                 new PhysicalIndexDefinition(
@@ -47,7 +49,10 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByStimulusIndex, 1),
                         new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByStimulusTypeIndex, 2),
-                        new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive, 3)
+                        new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive, 3),
+                        new PhysicalIndexColumnDefinition(
+                            new DocumentEnvelopeDefinition().IdLookupKeyColumn,
+                            4)
                     ])
             ]).ToArray(),
             definition.SchemaVersion,
@@ -68,7 +73,7 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                         stimulusAndType.Identity,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
                         QuerySortSupport.None,
-                        QueryPagingSupport.Offset,
+                        QueryPagingSupport.Cursor,
                         BoundedQueryExecutionClass.ScaleBearing,
                         supportsTotalCount: true,
                         predicateFields:

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -132,6 +134,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
 
         lock (_syncRoot)
         {
+            var continuationId = DecodeContinuation(query);
             var matches = _bindings.Values
                 .Where(binding =>
                     binding.IsActive &&
@@ -139,12 +142,22 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
                     StringComparer.Ordinal.Equals(binding.StimulusHash, query.StimulusHash))
                 .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
+            var remaining = continuationId is null
+                ? matches
+                : matches
+                    .Where(binding => StringComparer.Ordinal.Compare(binding.TriggerBindingId, continuationId) > 0)
+                    .ToArray();
+            var page = remaining.Take(query.Limit).ToArray();
+            var nextContinuation = remaining.Length > page.Length
+                ? EncodeContinuation(query, page[^1].TriggerBindingId)
+                : null;
 
             return ValueTask.FromResult(
                 new WorkflowTriggerBindingPage(
                     query,
-                    matches.Skip(query.Offset).Take(query.Limit).ToArray(),
-                    matches.Length));
+                    page,
+                    matches.Length,
+                    nextContinuation));
         }
     }
 
@@ -206,5 +219,65 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
                      .Select(binding => binding.TriggerBindingId)
                      .ToArray())
             _bindings.Remove(bindingId);
+    }
+
+    private static string EncodeContinuation(WorkflowTriggerBindingPageQuery query, string lastBindingId)
+    {
+        var payload = Encoding.UTF8.GetBytes($"{QueryBinding(query)}\0{lastBindingId}");
+        var checksum = SHA256.HashData(payload);
+        return $"imq1.{Base64UrlEncode(payload)}.{Base64UrlEncode(checksum)}";
+    }
+
+    private static string? DecodeContinuation(WorkflowTriggerBindingPageQuery query)
+    {
+        if (query.ContinuationToken is null)
+            return null;
+
+        try
+        {
+            var parts = query.ContinuationToken.Split('.');
+            if (parts is not ["imq1", var encodedPayload, var encodedChecksum])
+                throw new FormatException();
+
+            var payload = Base64UrlDecode(encodedPayload);
+            var suppliedChecksum = Base64UrlDecode(encodedChecksum);
+            var expectedChecksum = SHA256.HashData(payload);
+            if (suppliedChecksum.Length != expectedChecksum.Length ||
+                !CryptographicOperations.FixedTimeEquals(suppliedChecksum, expectedChecksum))
+            {
+                throw new FormatException();
+            }
+
+            var decoded = Encoding.UTF8.GetString(payload);
+            var separator = decoded.IndexOf('\0');
+            if (separator <= 0 ||
+                separator == decoded.Length - 1 ||
+                !StringComparer.Ordinal.Equals(decoded[..separator], QueryBinding(query)))
+            {
+                throw new FormatException();
+            }
+
+            return decoded[(separator + 1)..];
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            throw new ArgumentException(
+                "The trigger-binding continuation token is invalid or belongs to another stimulus query.",
+                nameof(query),
+                exception);
+        }
+    }
+
+    private static string QueryBinding(WorkflowTriggerBindingPageQuery query) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{query.StimulusType}\0{query.StimulusHash}")));
+
+    private static string Base64UrlEncode(ReadOnlySpan<byte> bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static byte[] Base64UrlDecode(string value)
+    {
+        var padded = value.Replace('-', '+').Replace('_', '/');
+        padded = padded.PadRight(padded.Length + ((4 - padded.Length % 4) % 4), '=');
+        return Convert.FromBase64String(padded);
     }
 }

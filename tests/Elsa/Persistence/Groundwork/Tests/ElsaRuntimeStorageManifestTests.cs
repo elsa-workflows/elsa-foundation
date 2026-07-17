@@ -327,16 +327,22 @@ public sealed class ElsaRuntimeStorageManifestTests
             type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path),
             active => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField, active.Path));
         Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+        Assert.Equal(QueryPagingSupport.Cursor, route.PagingSupport);
         Assert.True(route.SupportsTotalCount);
         Assert.Contains(
             physical.Indexes,
-            index => index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex && index.Columns.Count == 4);
+            index =>
+                index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex &&
+                index.Columns.Count == 5 &&
+                index.Columns[^1].ColumnLogicalName == new DocumentEnvelopeDefinition().IdLookupKeyColumn);
         Assert.Contains(
             physical.ProjectedColumns,
             column =>
                 column.LogicalName == ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive &&
                 column.Type == PortablePhysicalType.Boolean);
-        AssertStimulusProjectionLengths(physical);
+        AssertStimulusProjectionLengths(
+            physical,
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusTypeProjectionLength);
     }
 
     [Fact]
@@ -536,7 +542,9 @@ public sealed class ElsaRuntimeStorageManifestTests
                      query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
     }
 
-    private static void AssertStimulusProjectionLengths(PhysicalTableDefinition physical)
+    private static void AssertStimulusProjectionLengths(
+        PhysicalTableDefinition physical,
+        int stimulusTypeLength = ElsaRuntimeStorageManifest.StimulusTypeProjectionLength)
     {
         var stimulusHash = Assert.Single(
             physical.ProjectedColumns,
@@ -546,6 +554,6 @@ public sealed class ElsaRuntimeStorageManifestTests
             column => column.LogicalName == ElsaRuntimeStorageManifest.ByStimulusTypeIndex);
 
         Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashProjectionLength, stimulusHash.Length);
-        Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeProjectionLength, stimulusType.Length);
+        Assert.Equal(stimulusTypeLength, stimulusType.Length);
     }
 }

@@ -202,14 +202,15 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
                         ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
                         bool.TrueString.ToLowerInvariant())
                 ],
-                skip: query.Offset,
-                take: query.Limit),
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
 
         return new WorkflowTriggerBindingPage(
             query,
             result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray(),
-            result.TotalCount);
+            result.TotalCount,
+            result.NextContinuation);
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
