@@ -59,6 +59,20 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
                 options,
                 log,
                 cancellationToken);
+            var diagnostics = coreResult.Diagnostics.ToList();
+            if (!coreResult.IsReady)
+            {
+                if (coreResult.Inspection.History.AppliedState is not null &&
+                    !coreResult.Inspection.IsAppliedSchemaValid)
+                {
+                    EnsureDiagnostic(diagnostics, DriftDiagnostic());
+                }
+                else if (coreResult.PendingOperations.Count > 0)
+                {
+                    EnsureDiagnostic(diagnostics, PendingDiagnostic());
+                }
+            }
+
             return new GroundworkRuntimeSchemaAdmissionResult(
                 PhysicalTarget,
                 CompositionFingerprint,
@@ -66,7 +80,7 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
                 coreResult.Inspection.History.AppliedState?.TargetFingerprint,
                 coreResult.Inspection.IsAppliedSchemaValid,
                 coreResult.PendingOperations,
-                coreResult.Diagnostics,
+                diagnostics,
                 coreResult.IsReady,
                 coreResult.AppliedOperationCount);
         }
@@ -89,6 +103,19 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
         "ELSA-GW-SCHEMA-DRIFT",
         $"Live provider state for Groundwork physical target '{TargetFingerprint}' on provider '{PhysicalTarget.Provider.Name}' is incompatible with its durable applied schema history. Runtime admission is blocked and no repair was attempted.",
         "schema.providerState");
+
+    private GroundworkDiagnostic PendingDiagnostic() => GroundworkDiagnostic.Error(
+        "ELSA-GW-SCHEMA-PENDING",
+        $"Groundwork physical target '{TargetFingerprint}' on provider '{PhysicalTarget.Provider.Name}' has pending schema operations. Runtime admission is blocked until they are applied.",
+        "schema.pendingOperations");
+
+    private static void EnsureDiagnostic(
+        ICollection<GroundworkDiagnostic> diagnostics,
+        GroundworkDiagnostic diagnostic)
+    {
+        if (diagnostics.All(candidate => !string.Equals(candidate.Code, diagnostic.Code, StringComparison.Ordinal)))
+            diagnostics.Add(diagnostic);
+    }
 
     private static IReadOnlyList<GroundworkResolvedPhysicalNameSnapshot> CreateToolResolvedNames(
         IEnumerable<GroundworkResolvedPhysicalNameSnapshot> resolvedNames) => Array.AsReadOnly(resolvedNames

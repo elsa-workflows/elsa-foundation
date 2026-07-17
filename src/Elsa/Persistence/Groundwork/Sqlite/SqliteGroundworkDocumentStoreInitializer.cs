@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
@@ -21,6 +22,10 @@ namespace Elsa.Persistence.Groundwork.Sqlite;
 /// By default, runtime startup only inspects schema; enable <c>autoApplyOnStartup</c> to apply
 /// safe pending operations automatically.
 /// </summary>
+/// <exception cref="SqliteGroundworkPersistenceException">
+/// Thrown when SQLite provider infrastructure fails during initialization or while opening an access-bound
+/// store session. The originating provider exception is preserved as the inner exception.
+/// </exception>
 public sealed class SqliteGroundworkDocumentStoreInitializer(
     string connectionString,
     bool autoApplyOnStartup,
@@ -90,24 +95,41 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                sessionSource.TrySet((access, ct) =>
+                sessionSource.TrySet(async (access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
-                    var store = new SqlitePhysicalDocumentStore(
-                        connectionString,
-                        manifest,
-                        source.PhysicalTarget.Routes,
-                        access);
-                    var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-                        source.PhysicalTarget.Routes.Select(route =>
-                            KeyValuePair.Create<string, IBoundedDocumentStore>(
-                                route.StorageUnit.Value,
-                                SqlitePhysicalQueryRuntime.Create(
-                                    store,
-                                    manifest,
-                                    route,
-                                    source.PhysicalTarget.Provider))));
-                    return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
+                    SqliteConnection? connection = null;
+                    try
+                    {
+                        connection = new SqliteConnection(connectionString);
+                        await connection.OpenAsync(ct);
+                        var store = new SqlitePhysicalDocumentStore(
+                            connection,
+                            manifest,
+                            source.PhysicalTarget.Routes,
+                            access);
+                        var boundedStore = new GroundworkBoundedDocumentStoreRouter(
+                            source.PhysicalTarget.Routes.Select(route =>
+                                KeyValuePair.Create<string, IBoundedDocumentStore>(
+                                    route.StorageUnit.Value,
+                                    SqlitePhysicalQueryRuntime.Create(
+                                        store,
+                                        manifest,
+                                        route,
+                                        source.PhysicalTarget.Provider))));
+                        return new GroundworkStoreSessionResources(store, boundedStore, connection);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        await DisposeAfterCancellationAsync(connection);
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        throw new SqliteGroundworkPersistenceException(
+                            SqliteGroundworkPersistenceOperation.OpenSession,
+                            await DisposeAfterFailureAsync(connection, exception));
+                    }
                 });
             }
 
@@ -127,7 +149,9 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         }
         catch (Exception exception)
         {
-            throw SanitizedFailure(exception);
+            throw new SqliteGroundworkPersistenceException(
+                SqliteGroundworkPersistenceOperation.Initialize,
+                exception);
         }
         finally
         {
@@ -135,6 +159,39 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         }
     }
 
-    private static InvalidOperationException SanitizedFailure(Exception exception) => new(
-        $"SQLite Groundwork runtime initialization failed ({exception.GetType().Name}); provider and connection details were suppressed.");
+    private static async ValueTask<Exception> DisposeAfterFailureAsync(
+        SqliteConnection? connection,
+        Exception failure)
+    {
+        if (connection is null)
+            return failure;
+
+        try
+        {
+            await connection.DisposeAsync();
+            return failure;
+        }
+        catch (Exception cleanupFailure)
+        {
+            return new AggregateException(
+                "SQLite Groundwork session creation and cleanup both failed.",
+                failure,
+                cleanupFailure);
+        }
+    }
+
+    private static async ValueTask DisposeAfterCancellationAsync(SqliteConnection? connection)
+    {
+        if (connection is null)
+            return;
+
+        try
+        {
+            await connection.DisposeAsync();
+        }
+        catch
+        {
+            // Preserve the operation's cancellation contract; cleanup cannot replace the requested cancellation.
+        }
+    }
 }

@@ -111,7 +111,7 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         {
             var admission = await source.InspectRuntimeAdmissionAsync(
                 new SqlitePhysicalSchemaExecutor(inspectionConnection),
-                cancellationToken);
+                cancellationToken: cancellationToken);
             if (!admission.IsReady)
                 throw new InvalidOperationException("SQLite physical provider driver did not admit its applied runtime target.");
         }
@@ -145,25 +145,23 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
             services.DisposeAsync);
     }
 
-    protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
+    protected override async ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
         Guid clientId,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var source = _physicalSource ?? throw new InvalidOperationException("The SQLite physical target has not been applied.");
-        var store = new SqlitePhysicalDocumentStore(
-            RequireConnectionString().ConnectionString,
-            source.CreateManifest(),
-            source.PhysicalTarget.Routes,
-            GroundworkTestAccess.DefaultScoped);
-        var services = new ServiceCollection()
-            .AddSingleton<IDocumentStore>(store)
-            .BuildServiceProvider();
-        return ValueTask.FromResult(new GroundworkProviderClient(
+        return await SqlitePhysicalClientResourceOwner.OpenAsync(
             clientId,
-            services,
-            store,
-            services.DisposeAsync));
+            () => new SqliteConnection(RequireConnectionString().ConnectionString),
+            (connection, token) => new(connection.OpenAsync(token)),
+            connection => new SqlitePhysicalDocumentStore(
+                connection,
+                source.CreateManifest(),
+                source.PhysicalTarget.Routes,
+                GroundworkTestAccess.DefaultScoped),
+            connection => connection.DisposeAsync(),
+            cancellationToken);
     }
 
     protected override ValueTask<GroundworkProcessProbeResult> RunInNewProcessCoreAsync(
@@ -339,5 +337,107 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         command.CommandText = sql;
         return Convert.ToString(await command.ExecuteScalarAsync(cancellationToken),
             System.Globalization.CultureInfo.InvariantCulture) ?? "unknown";
+    }
+}
+
+/// <summary>
+/// Owns the construction and deterministic cleanup of SQLite physical-provider test clients.
+/// </summary>
+public static class SqlitePhysicalClientResourceOwner
+{
+    /// <summary>
+    /// Opens a connection, constructs its store and service provider, and returns a client that owns all resources.
+    /// </summary>
+    public static async ValueTask<GroundworkProviderClient> OpenAsync<TConnection>(
+        Guid clientId,
+        Func<TConnection> createConnection,
+        Func<TConnection, CancellationToken, ValueTask> openConnection,
+        Func<TConnection, IDocumentStore> createStore,
+        Func<TConnection, ValueTask> disposeConnection,
+        CancellationToken cancellationToken,
+        Func<ServiceProvider, ValueTask>? disposeServices = null)
+        where TConnection : class
+    {
+        TConnection? connection = null;
+        ServiceProvider? services = null;
+        try
+        {
+            connection = createConnection();
+            await openConnection(connection, cancellationToken);
+            var store = createStore(connection);
+            services = new ServiceCollection()
+                .AddSingleton<IDocumentStore>(store)
+                .BuildServiceProvider();
+            return new GroundworkProviderClient(
+                clientId,
+                services,
+                store,
+                () => DisposeAsync(
+                    () => (disposeServices ?? (static provider => provider.DisposeAsync()))(services),
+                    () => disposeConnection(connection)));
+        }
+        catch (Exception failure)
+        {
+            throw await CleanupAfterFailureAsync(
+                failure,
+                services is null
+                    ? null
+                    : () => (disposeServices ?? (static provider => provider.DisposeAsync()))(services),
+                connection is null ? null : () => disposeConnection(connection));
+        }
+    }
+
+    private static async ValueTask DisposeAsync(
+        Func<ValueTask> disposeServices,
+        Func<ValueTask> disposeConnection)
+    {
+        Exception? servicesFailure = null;
+        try
+        {
+            await disposeServices();
+        }
+        catch (Exception exception)
+        {
+            servicesFailure = exception;
+        }
+
+        try
+        {
+            await disposeConnection();
+        }
+        catch (Exception connectionFailure) when (servicesFailure is not null)
+        {
+            throw new AggregateException(
+                "SQLite physical provider client service and connection disposal both failed.",
+                servicesFailure,
+                connectionFailure);
+        }
+
+        if (servicesFailure is not null)
+            throw servicesFailure;
+    }
+
+    private static async ValueTask<Exception> CleanupAfterFailureAsync(
+        Exception failure,
+        Func<ValueTask>? disposeServices,
+        Func<ValueTask>? disposeConnection)
+    {
+        if (disposeServices is null && disposeConnection is null)
+            return failure;
+
+        try
+        {
+            await DisposeAsync(
+                disposeServices ?? (() => ValueTask.CompletedTask),
+                disposeConnection ?? (() => ValueTask.CompletedTask));
+            return failure;
+        }
+        catch (Exception cleanupFailure)
+        {
+            return new AggregateException(
+                "SQLite physical provider client creation and cleanup both failed.",
+                failure,
+                cleanupFailure);
+        }
     }
 }

@@ -26,7 +26,10 @@ public class GroundworkActivitiesDesignRegistrationTests
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? preRegister = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create()));
+        var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        services.AddSingleton<IDocumentStore>(documents);
+        services.AddSingleton<IBoundedDocumentStore>(
+            new GroundworkReusableActivityStoreTests.ActivityDesignTestBoundedDocumentStore(documents));
         services.AddSingleton<IPayloadSerializer, FakePayloadSerializer>();
         services.AddSingleton<ISystemClock, FakeClock>();
         services.AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>();

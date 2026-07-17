@@ -294,27 +294,6 @@ public static class ActivitiesDesignStorageManifest
             Column("draft_status", ManagementDraftStatusField),
             Column("version_lifecycle", ManagementVersionLifecycleField)
         };
-        var logicalIndexes = new[]
-        {
-            new LogicalIndexDeclaration(
-                "management-by-id",
-                [new IndexField(logicalIdField, IndexValueKind.Keyword)],
-                IndexValueKind.Keyword,
-                false,
-                MissingValueBehavior.Excluded),
-            new LogicalIndexDeclaration(
-                "management-by-sort",
-                [new IndexField(ManagementSortField, IndexValueKind.Keyword)],
-                IndexValueKind.Keyword,
-                false,
-                MissingValueBehavior.Excluded),
-            new LogicalIndexDeclaration(
-                "management-by-valid-to",
-                [new IndexField(ManagementValidToField, IndexValueKind.Keyword)],
-                IndexValueKind.Keyword,
-                false,
-                MissingValueBehavior.Excluded)
-        };
         var equality = new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal };
         var pageOperations = new HashSet<PortableQueryOperation>
         {
@@ -336,6 +315,37 @@ public static class ActivitiesDesignStorageManifest
             Predicate(ManagementRecommendationProviderField, PortableQueryOperation.Equal),
             Predicate(ManagementDraftStatusField, PortableQueryOperation.Equal),
             Predicate(ManagementVersionLifecycleField, PortableQueryOperation.Equal)
+        };
+        BoundedQueryPredicateField[] pageIndexPredicates =
+        [
+            Predicate(ManagementSortField, PortableQueryOperation.Equal),
+            .. pagePredicates
+        ];
+        var logicalIndexes = new[]
+        {
+            new LogicalIndexDeclaration(
+                "management-by-id",
+                [
+                    new IndexField(logicalIdField, IndexValueKind.Keyword),
+                    new IndexField(ManagementValidToField, IndexValueKind.Keyword)
+                ],
+                IndexValueKind.Keyword,
+                false,
+                MissingValueBehavior.Excluded),
+            new LogicalIndexDeclaration(
+                "management-by-sort",
+                [
+                    .. pageIndexPredicates.Select(predicate => new IndexField(predicate.Path, IndexValueKind.Keyword))
+                ],
+                IndexValueKind.Keyword,
+                false,
+                MissingValueBehavior.Excluded),
+            new LogicalIndexDeclaration(
+                "management-by-valid-to",
+                [new IndexField(ManagementValidToField, IndexValueKind.Keyword)],
+                IndexValueKind.Keyword,
+                false,
+                MissingValueBehavior.Excluded)
         };
         var boundedQueries = new[]
         {
@@ -361,7 +371,7 @@ public static class ActivitiesDesignStorageManifest
                 supportsDisjunction: true,
                 supportsTotalCount: true,
                 sortFields: [new BoundedQuerySortField(ManagementSortField, PhysicalSortDirection.Ascending)],
-                predicateFields: pagePredicates),
+                predicateFields: pageIndexPredicates),
             new BoundedQueryDeclaration(
                 ManagementExpiredQuery,
                 "management-by-valid-to",
@@ -389,7 +399,8 @@ public static class ActivitiesDesignStorageManifest
                     "management-by-sort",
                     [
                         new PhysicalIndexColumnDefinition("storage_scope", 0),
-                        new PhysicalIndexColumnDefinition("sort_key", 1)
+                        .. pageIndexPredicates.Select((predicate, index) =>
+                            new PhysicalIndexColumnDefinition(ColumnName(predicate.Path), index + 1))
                     ]),
                 new PhysicalIndexDefinition(
                     "management-by-valid-to",
@@ -422,6 +433,17 @@ public static class ActivitiesDesignStorageManifest
         DefinitionIdField => "definition_id",
         DraftIdField => "draft_id",
         DefinitionVersionIdField => "definition_version_id",
+        ManagementVisibilityField => "visibility",
+        ManagementValidFromField => "valid_from",
+        ManagementValidToField => "valid_to",
+        ManagementSortField => "sort_key",
+        ManagementSearchField => "search_text",
+        ManagementAuthorityField => "authority",
+        ManagementProviderField => "provider",
+        ManagementHeadProviderField => "head_provider",
+        ManagementRecommendationProviderField => "recommendation_provider",
+        ManagementDraftStatusField => "draft_status",
+        ManagementVersionLifecycleField => "version_lifecycle",
         _ => throw new ArgumentOutOfRangeException(nameof(path), path, null)
     };
 
