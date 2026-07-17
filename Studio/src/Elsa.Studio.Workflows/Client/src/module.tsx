@@ -13,6 +13,7 @@ const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").the
 const WorkflowExecutableInspectorPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutableInspectorPage })));
 const WorkflowInstancesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstancesPage })));
 const WorkflowInstanceDetailsPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstanceDetailsPage })));
+const ActivityDefinitionsPage = lazy(() => import("./ActivityDefinitionsPage").then(module => ({ default: module.ActivityDefinitionsPage })));
 const ActivityAvailabilityPage = lazy(() => import("./ActivityAvailabilityPage").then(module => ({ default: module.ActivityAvailabilityPage })));
 const RuntimeDiagnosticsSettingsPage = lazy(() => import("./RuntimeDiagnosticsSettingsPage").then(module => ({ default: module.RuntimeDiagnosticsSettingsPage })));
 
@@ -25,6 +26,8 @@ export { capabilityIds, clearApiCapabilityCache, resolveCapabilityLink } from ".
 export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 export { createEnumWorkflowRunInputEditorContribution } from "./workflowRunInputEditorContributions";
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
+export { activityDefinitionsObservationEvent } from "./activityDefinitionObservability";
+export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
@@ -46,7 +49,8 @@ export function register(api: ElsaStudioModuleApi) {
       path: "/workflows/definitions",
       iconColor: "#0ea5e9",
       items: [
-        { title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
+        { id: "workflows-definitions", title: "Workflow Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
+        { id: "workflows-activity-definitions", title: "Activity Definitions", path: "/workflows/activity-definitions", iconColor: "#0ea5e9" },
         { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
         { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" },
         { title: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9" },
@@ -54,6 +58,12 @@ export function register(api: ElsaStudioModuleApi) {
       ]
     },
     routes: [
+      {
+        id: "workflows-activity-definitions",
+        path: "/workflows/activity-definitions",
+        label: "Activity Definitions",
+        component: () => <WorkflowLazyBoundary label="activity definitions"><ActivityDefinitionsPage context={api.backend} /></WorkflowLazyBoundary>
+      },
       {
         id: "workflows-definitions",
         path: "/workflows/definitions",

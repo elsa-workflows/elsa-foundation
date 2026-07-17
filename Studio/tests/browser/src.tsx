@@ -1,9 +1,11 @@
 import React, { lazy, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
+import { ActivityDefinitionsPage } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage";
 import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
-import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import { createEndpointContext, type StudioActivityDescriptor, type StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
@@ -14,6 +16,8 @@ const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
+const activityDefinitionsFixture = searchParams.get("mode") === "activity-definitions";
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
   window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
@@ -188,5 +192,7 @@ const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
-  runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
+  activityDefinitionsFixture
+    ? <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={createEndpointContext(window.location.origin)} /></QueryClientProvider>
+    : runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
 );

@@ -87,13 +87,15 @@ describe("workflows module", () => {
     ]);
     expect(api.navigation.list()).toEqual([
       expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-definitions", label: "Workflow Definitions", path: "/workflows/definitions", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity Definitions", path: "/workflows/activity-definitions", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-runtime diagnostics", label: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-activity availability", label: "Activity Availability", path: "/workflows/activity-availability", parentId: "workflows" })
     ]);
     expect(api.routes.list()).toEqual([
+      expect.objectContaining({ id: "workflows-activity-definitions", path: "/workflows/activity-definitions" }),
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
       expect.objectContaining({ id: "workflows-executable-inspector", label: "Executable Inspector", path: "/workflows/executables/:artifactId" }),
@@ -2847,7 +2849,7 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
       });
       for (const item of featureArea.nav.items ?? []) {
         navigation.add({
-          id: `${featureArea.id}-${item.title.toLowerCase()}`,
+          id: item.id ?? `${featureArea.id}-${item.title.toLowerCase()}`,
           label: item.title,
           path: item.path,
           parentId: featureArea.id,
