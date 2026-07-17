@@ -1,3 +1,4 @@
+using System.Globalization;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,10 +16,9 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Scan cost.</b> Groundwork's portable query contract is equality-only, so <see cref="ListDueAsync"/>
-/// queries the whole schedule partition through the constant <c>by-collection</c> keyword index, then filters
-/// <c>NextOccurrence &lt;= asOf</c>, orders, and caps in memory — mirroring the durable-timer bridge. The pump's
-/// per-tick limit bounds fires, not this load.
+/// <b>Due selection.</b> <see cref="ListDueAsync"/> uses the declared <c>list-due</c> date route to bound the
+/// result set to schedules whose persisted <c>NextOccurrence</c> is at or before the requested instant, then
+/// preserves the contract's active-only filtering, deterministic ordering, and cap in process.
 /// </para>
 /// <para>
 /// <b>Compare-and-swap.</b> <see cref="TryAdvanceAsync"/> reads the current schedule envelope, checks the cursor
@@ -128,12 +128,17 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             throw new ArgumentOutOfRangeException(nameof(limit), "Due-schedule listing limit must be greater than zero.");
         cancellationToken.ThrowIfCancellationRequested();
 
-        var schedules = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ListAllQuery,
-            ElsaRuntimeStorageManifest.CollectionField,
-            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
-            envelope => envelope.Schedule,
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                    ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
+                    asOf.ToString("O", CultureInfo.InvariantCulture)))],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField)]),
             cancellationToken);
+        var schedules = result.Documents
+            .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule);
 
         return schedules
             .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= asOf)

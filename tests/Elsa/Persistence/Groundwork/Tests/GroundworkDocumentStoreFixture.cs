@@ -108,6 +108,8 @@ internal sealed class GroundworkDocumentStoreFixture(
                 return await QueryScopePageAsync(query, requireExpiry: false, cancellationToken);
             if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery)
                 return await QuerySingleValuePageAsync(query, ElsaRuntimeStorageManifest.TestScopeIdField, cancellationToken);
+            if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery)
+                return await QueryRecurringSchedulesDueAsync(query, cancellationToken);
 
             var (indexIdentity, value) = Resolve(query);
             var all = await store.QueryAsync(
@@ -195,6 +197,46 @@ internal sealed class GroundworkDocumentStoreFixture(
             return new DocumentQueryResult(window.ToArray(), matches.Length);
         }
 
+        private async Task<DocumentQueryResult> QueryRecurringSchedulesDueAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken)
+        {
+            var comparison = query.Clauses
+                .SelectMany(clause => clause.Comparisons)
+                .Single();
+            if (comparison.Operator != QueryComparisonOperator.LessThanOrEqual ||
+                comparison.Path != ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField ||
+                comparison.Values.Count != 1 ||
+                query.Order.Count != 1 ||
+                query.Order[0].Path != ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField)
+            {
+                throw new InvalidOperationException(
+                    $"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
+            }
+
+#pragma warning disable GW0004
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+#pragma warning restore GW0004
+            var asOf = DateTimeOffset.Parse(
+                comparison.Values[0] ?? throw new InvalidOperationException("Groundwork recurring schedule due cursor must be non-null."),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind);
+            var matches = all.Documents
+                .Select(document => (Document: document, NextOccurrence: ReadDateTimeOffset(
+                    document,
+                    ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField)))
+                .Where(entry => entry.NextOccurrence <= asOf)
+                .OrderBy(entry => entry.NextOccurrence)
+                .ThenBy(entry => entry.Document.Id, StringComparer.Ordinal)
+                .ToArray();
+            IEnumerable<DocumentEnvelope> window = matches.Select(entry => entry.Document);
+            if (query.Skip is { } skip)
+                window = window.Skip(skip);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
         private static DateTimeOffset ReadExpiry(DocumentEnvelope envelope)
         {
             using var document = JsonDocument.Parse(envelope.ContentJson);
@@ -217,8 +259,22 @@ internal sealed class GroundworkDocumentStoreFixture(
         private static string? ReadString(DocumentEnvelope envelope, string path)
         {
             using var document = JsonDocument.Parse(envelope.ContentJson);
-            var value = document.RootElement.GetProperty(path);
+            var value = GetPropertyPath(document.RootElement, path);
             return value.ValueKind == JsonValueKind.Null ? null : value.GetString();
+        }
+
+        private static DateTimeOffset ReadDateTimeOffset(DocumentEnvelope envelope, string path)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            return GetPropertyPath(document.RootElement, path).GetDateTimeOffset();
+        }
+
+        private static JsonElement GetPropertyPath(JsonElement root, string path)
+        {
+            var current = root;
+            foreach (var segment in path.Split('.'))
+                current = current.GetProperty(segment);
+            return current;
         }
 
         public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>

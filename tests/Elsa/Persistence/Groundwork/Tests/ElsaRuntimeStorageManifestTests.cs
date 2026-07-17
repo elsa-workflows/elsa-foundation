@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -55,6 +56,25 @@ public sealed class ElsaRuntimeStorageManifestTests
 
         Assert.Contains(unit.Queries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex);
         Assert.Contains(unit.Queries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByExecutionScopeIndex);
+    }
+
+    [Fact]
+    public void RecurringTriggerSchedule_Declares_Due_Date_Route()
+    {
+        var manifest = ElsaRuntimeStorageManifest.Create();
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind);
+
+        var byNextOccurrence = Assert.Single(
+            unit.Indexes,
+            i => i.Identity == ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence);
+        Assert.Equal(IndexValueKind.DateTime, byNextOccurrence.ValueKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, Assert.Single(byNextOccurrence.Fields).Path);
+        Assert.Contains(PortableQueryOperation.LessThanOrEqual, byNextOccurrence.SupportedOperations);
+
+        var query = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence, query.IndexIdentity);
+        Assert.Contains(PortableQueryOperation.LessThanOrEqual, query.Operations);
+        Assert.Equal(QuerySortSupport.Ascending, query.SortSupport);
     }
 
     [Fact]
@@ -142,5 +162,18 @@ public sealed class ElsaRuntimeStorageManifestTests
             unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowTestScopesByStatePageQuery &&
                      query.IndexIdentity == ElsaRuntimeStorageManifest.ByStateAndScopeIdIndex);
+    }
+
+    [Fact]
+    public async Task Recurring_trigger_schedule_declares_physical_due_route()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind);
+
+        var route = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence, route.IndexIdentity);
     }
 }
