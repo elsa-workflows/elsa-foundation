@@ -18,6 +18,7 @@ using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.Scoping;
+using Microsoft.Extensions.Logging;
 using Groundwork.MongoDb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

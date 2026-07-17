@@ -452,3 +452,5 @@ FodyWeavers.xsd
 
 # Elsa Copilot local session state (runtime cache, not source)
 **/.elsa/copilot/session-state/
+
+*.lock
