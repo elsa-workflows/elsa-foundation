@@ -45,7 +45,9 @@ export function ActivityDefinitionPublicationReview({
   const [version, setVersion] = useState("");
   const [receipt, setReceipt] = useState<ActivityPublicationReceipt | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [recommendationEvidence, setRecommendationEvidence] = useState<"first" | "unchanged" | "unconfirmed" | null>(null);
   const operationKeyRef = useRef<string | null>(null);
+  const reviewedRecommendationRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!preflight || !binding || phase === "publishing" || phase === "success") return;
@@ -62,6 +64,7 @@ export function ActivityDefinitionPublicationReview({
     setPhase("preparing");
     setFailure(null);
     setReceipt(null);
+    setRecommendationEvidence(null);
     setPreflight(null);
     operationKeyRef.current = null;
     try {
@@ -73,6 +76,7 @@ export function ActivityDefinitionPublicationReview({
       }
       const definition = await getActivityDefinition(context, definitionId);
       const expectedHead = definition.definition.headVersionId ?? definition.lifecycle.head?.versionId ?? null;
+      reviewedRecommendationRef.current = definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? null;
       const review = await preflightActivityDraftPublication(context, draftId, exact.revision, expectedHead);
       if (review.draftId !== draftId || review.definitionId !== definitionId || review.draftRevision !== exact.revision) {
         setPhase("failed");
@@ -99,6 +103,7 @@ export function ActivityDefinitionPublicationReview({
     if (next.status === "Applied" && next.outcome) {
       setPhase("success");
       setFailure(null);
+      void verifyRecommendation(next.outcome.definitionVersionId);
       return;
     }
     if (next.status === "Stale") {
@@ -118,6 +123,18 @@ export function ActivityDefinitionPublicationReview({
     setFailure(next.status === "Rejected"
       ? "The authoritative publication request was rejected. Review the returned diagnostics before reopening preflight."
       : "The authoritative publication operation failed. No success is assumed.");
+  };
+
+  const verifyRecommendation = async (publishedVersionId: string) => {
+    try {
+      const definition = await getActivityDefinition(context, definitionId);
+      const recommendation = definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? null;
+      setRecommendationEvidence(preflight?.hasBaseline
+        ? recommendation === reviewedRecommendationRef.current ? "unchanged" : "unconfirmed"
+        : recommendation === publishedVersionId ? "first" : "unconfirmed");
+    } catch {
+      setRecommendationEvidence("unconfirmed");
+    }
   };
 
   const reconcile = async (key = operationKeyRef.current) => {
@@ -173,7 +190,7 @@ export function ActivityDefinitionPublicationReview({
     {phase === "stale" || phase === "failed" || phase === "unknown" ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <button type="button" onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</button> : null}</div> : null}
     {phase === "success" && receipt?.outcome ? <div className="ad-publication-success" role="status">
       <CheckCircle2 size={20} aria-hidden />
-      <div><strong>Published immutable version {receipt.outcome.version}</strong><span>{preflight?.hasBaseline ? "The existing recommended version was not moved." : "The first published version became recommended automatically."}</span></div>
+      <div><strong>Published immutable version {receipt.outcome.version}</strong><span>{recommendationMessage(recommendationEvidence)}</span></div>
       <button type="button" onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></button>
     </div> : null}
     {preflight ? <>
@@ -324,12 +341,22 @@ function compareSemVer(left: NonNullable<ReturnType<typeof parseSemVer>>, right:
     if (a === b) continue;
     const numericA = /^\d+$/.test(a);
     const numericB = /^\d+$/.test(b);
-    if (numericA && numericB) return Number(a) - Number(b);
+    if (numericA && numericB) {
+      if (a.length !== b.length) return a.length > b.length ? 1 : -1;
+      return a > b ? 1 : -1;
+    }
     if (numericA) return -1;
     if (numericB) return 1;
     return a > b ? 1 : -1;
   }
   return 0;
+}
+
+function recommendationMessage(evidence: "first" | "unchanged" | "unconfirmed" | null) {
+  if (evidence === "first") return "The first published version became recommended automatically.";
+  if (evidence === "unchanged") return "The existing recommended version was not moved.";
+  if (evidence === "unconfirmed") return "The immutable version was published, but recommendation state could not be confirmed.";
+  return "Confirming the definition's recommendation state…";
 }
 
 function isStalePublication(error: unknown) {
