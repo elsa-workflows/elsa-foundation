@@ -288,8 +288,11 @@ public static class ElsaRuntimeStorageManifest
     public const string DurableTimerByWorkflowExecution = ByWorkflowExecutionIndex;
     public const string DurableTimerDueTimeField = "timer.dueTime";
     public const string DurableTimerByDueTime = "by-due-time";
+    public const string DurableTimerClaimOrderKeyField = "claimOrderKey";
+    public const string DurableTimerByClaimOrder = "by-claim-order";
     public const string ListDurableTimersByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
     public const string ListDueDurableTimersQuery = "list-due";
+    public const string ClaimDueDurableTimersQuery = "claim-due";
 
     // Durable trigger index over PUBLISHED artifacts (W7, E3-1). Each start-trigger activity in a
     // published executable becomes one document, so an external stimulus with no execution id can be
@@ -597,7 +600,16 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByCollectionIndex, CollectionField),
                     Keyword(DurableTimerByWorkflowExecution, WorkflowExecutionIdField),
-                    DateTime(DurableTimerByDueTime, DurableTimerDueTimeField)
+                    DateTime(DurableTimerByDueTime, DurableTimerDueTimeField),
+                    new IndexDeclaration(
+                        DurableTimerByClaimOrder,
+                        [new IndexField(DurableTimerClaimOrderKeyField, IndexValueKind.Keyword)],
+                        IndexValueKind.Keyword,
+                        false,
+                        true,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        IndexPhysicalizationPolicy.Optimized)
                 ],
                 [
                     Query("list-all", ByCollectionIndex),
@@ -605,6 +617,11 @@ public static class ElsaRuntimeStorageManifest
                     Query(
                         ListDueDurableTimersQuery,
                         DurableTimerByDueTime,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending),
+                    Query(
+                        ClaimDueDurableTimersQuery,
+                        DurableTimerByClaimOrder,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
                         QuerySortSupport.Ascending)
                 ]),

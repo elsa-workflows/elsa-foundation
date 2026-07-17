@@ -175,6 +175,8 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind =>
                 query.QueryIdentity is ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery
                     or ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery,
+            ElsaRuntimeStorageManifest.DurableTimerDocumentKind =>
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery,
             _ => false
         };
 

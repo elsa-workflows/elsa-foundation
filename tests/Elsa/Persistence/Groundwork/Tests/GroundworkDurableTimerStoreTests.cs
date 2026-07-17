@@ -81,6 +81,80 @@ public sealed class GroundworkDurableTimerStoreTests
     }
 
     [Fact]
+    public async Task ClaimDue_UsesBoundedClaimOrderRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IDurableTimerStore store = new GroundworkDurableTimerStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest(
+                "owner-a",
+                Now,
+                TimeSpan.FromMinutes(1),
+                limit: 17));
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
+        var order = Assert.Single(query.Order);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField, order.Path);
+        Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+        Assert.Equal(17, query.Take);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ClaimDue_ExpiryRenewalReleaseAndCompletionAreFenced(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IDurableTimerStore store = NewStore(fixture);
+        await store.SaveAsync(NewTimer("timer-1", dueOffset: TimeSpan.FromMinutes(-1)));
+
+        var initial = Assert.Single(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-a", Now, TimeSpan.FromMinutes(1), limit: 1)));
+        Assert.Empty(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-b", Now.AddSeconds(30), TimeSpan.FromMinutes(1), limit: 1)));
+
+        var reclaimed = Assert.Single(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-b", Now.AddMinutes(1), TimeSpan.FromMinutes(1), limit: 1)));
+        Assert.True(reclaimed.FencingToken > initial.FencingToken);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Stale,
+            (await store.CompleteClaimAsync(initial)).Status);
+
+        var renewal = await store.RenewClaimAsync(
+            reclaimed,
+            Now.AddMinutes(1),
+            TimeSpan.FromMinutes(2));
+        var renewed = Assert.IsType<RuntimeDurableTimerClaim>(renewal.Claim);
+        Assert.True(renewed.Revision > reclaimed.Revision);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Stale,
+            (await store.ReleaseClaimAsync(reclaimed, Now.AddMinutes(4))).Status);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Succeeded,
+            (await store.ReleaseClaimAsync(renewed, Now.AddMinutes(4))).Status);
+
+        Assert.Empty(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-c", Now.AddMinutes(4).AddTicks(-1), TimeSpan.FromMinutes(1), limit: 1)));
+        var released = Assert.Single(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-c", Now.AddMinutes(4), TimeSpan.FromMinutes(1), limit: 1)));
+        Assert.Equal(1, released.FailureCount);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Succeeded,
+            (await store.CompleteClaimAsync(released)).Status);
+        Assert.Null(await store.FindAsync("wfexec-1", "timer-1"));
+    }
+
+    [Fact]
     public async Task ListAsync_UsesDeclaredWorkflowExecutionRoute()
     {
         await using var fixture = CreateStore("memory");
