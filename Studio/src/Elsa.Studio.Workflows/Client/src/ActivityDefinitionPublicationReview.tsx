@@ -48,6 +48,7 @@ export function ActivityDefinitionPublicationReview({
   const [recommendationEvidence, setRecommendationEvidence] = useState<"first" | "unchanged" | "unconfirmed" | null>(null);
   const operationKeyRef = useRef<string | null>(null);
   const reviewedRecommendationRef = useRef<string | null>(null);
+  const recommendationVerificationRef = useRef(0);
 
   useEffect(() => {
     if (!preflight || !binding || phase === "publishing" || phase === "success") return;
@@ -65,6 +66,7 @@ export function ActivityDefinitionPublicationReview({
     setFailure(null);
     setReceipt(null);
     setRecommendationEvidence(null);
+    recommendationVerificationRef.current += 1;
     setPreflight(null);
     operationKeyRef.current = null;
     try {
@@ -126,13 +128,16 @@ export function ActivityDefinitionPublicationReview({
   };
 
   const verifyRecommendation = async (publishedVersionId: string) => {
+    const verification = ++recommendationVerificationRef.current;
     try {
       const definition = await getActivityDefinition(context, definitionId);
+      if (verification !== recommendationVerificationRef.current) return;
       const recommendation = definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? null;
       setRecommendationEvidence(preflight?.hasBaseline
         ? recommendation === reviewedRecommendationRef.current ? "unchanged" : "unconfirmed"
         : recommendation === publishedVersionId ? "first" : "unconfirmed");
     } catch {
+      if (verification !== recommendationVerificationRef.current) return;
       setRecommendationEvidence("unconfirmed");
     }
   };

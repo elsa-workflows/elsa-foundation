@@ -1463,6 +1463,8 @@ describe("Activity Definition publication", () => {
     expect(isExactVersionAtLeast("2.0.0", "2.0.0")).toBe(true);
     expect(isExactVersionAtLeast("7.3.2+build.4", "2.0.0")).toBe(true);
     expect(isExactVersionAtLeast("2.0.0-rc.1", "2.0.0")).toBe(false);
+    expect(isExactVersionAtLeast("2.0.0-999999999999999999999999", "2.0.0-1000000000000000000000000")).toBe(false);
+    expect(isExactVersionAtLeast("2.0.0-1000000000000000000000000", "2.0.0-999999999999999999999999")).toBe(true);
     expect(isExactVersionAtLeast("02.0.0", "2.0.0")).toBe(false);
     expect(safeChangeValue(publicationChange({ kind: "provider.credential-changed" }), { token: "raw" })).toBe("Protected value withheld");
     expect(safeChangeValue(publicationChange(), { nested: "opaque" })).toBe("Structured value changed");
