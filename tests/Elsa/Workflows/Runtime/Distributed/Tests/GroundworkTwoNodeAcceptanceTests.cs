@@ -25,7 +25,7 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
 {
     protected override ClusterState CreateClusterState()
     {
-        var runtimeManifest = ElsaRuntimeStorageManifest.Create();
+        var runtimeManifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var distributedManifest = DistributedGroundworkStorageManifest.Create();
         var combinedManifest = runtimeManifest with
         {

@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -10,9 +11,19 @@ public sealed class WorkflowDispatchIdentityTests
     {
         var first = new WorkflowDispatchIdentity("parent-1", "activity-1");
         var replay = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var other = new WorkflowDispatchIdentity("parent-1", "activity-2");
+        var startOutboxItemId = RuntimePostCommitOutboxItems.OutboxItemId("commit-1", first.StartIntentId);
 
         Assert.Equal(first.DeliveryIncidentId(0), replay.DeliveryIncidentId(0));
         Assert.Equal(first.WaitFailureResumeOutboxItemId(0), replay.WaitFailureResumeOutboxItemId(0));
+        Assert.Equal($"commit-1:{first.StartIntentId}", startOutboxItemId);
+        Assert.True(first.MatchesStartOutboxItemId(startOutboxItemId));
+        Assert.False(first.MatchesStartOutboxItemId(
+            RuntimePostCommitOutboxItems.OutboxItemId("commit-1", other.StartIntentId)));
+        Assert.False(first.MatchesStartOutboxItemId("outbox-forged"));
+        Assert.False(first.MatchesStartOutboxItemId($" :{first.StartIntentId}"));
+        Assert.False(first.MatchesStartOutboxItemId($"commit-secret\npayload:{first.StartIntentId}"));
+        Assert.False(first.MatchesStartOutboxItemId(null));
         Assert.NotEqual(first.DeliveryIncidentId(0), first.DeliveryIncidentId(1));
         Assert.NotEqual(first.WaitFailureResumeOutboxItemId(0), first.WaitFailureResumeOutboxItemId(1));
         Assert.StartsWith("incident:dispatch-delivery:v1:", first.DeliveryIncidentId(0));

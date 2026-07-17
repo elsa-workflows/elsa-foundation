@@ -131,6 +131,44 @@ public sealed class WorkflowDispatchInspectionTests
     }
 
     [Fact]
+    public async Task Failed_dispatch_list_and_detail_return_identical_safe_failure_evidence()
+    {
+        var store = new InMemoryWorkflowDispatchStore();
+        var pending = NewRecord("parent-failed-parity", "activity-failed-parity", WorkflowDispatchStatus.Pending);
+        var identity = new WorkflowDispatchIdentity(
+            pending.ParentWorkflowExecutionId,
+            pending.ParentActivityExecutionId);
+        var deadLetterId = RuntimePostCommitOutboxItems.OutboxItemId(
+            "commit-failed-parity",
+            identity.StartIntentId);
+        var failedAt = Now.AddMinutes(4);
+        var failed = WorkflowDispatchLifecycle.TransitionToDispatchFailed(
+            pending,
+            deadLetterId,
+            generation: 2,
+            attemptCount: 4,
+            firstAttemptAt: Now,
+            failedAt);
+        await store.SaveAsync(pending);
+        await store.SaveAsync(failed);
+        var listHandler = new ListWorkflowDispatchesRequestHandler(store);
+        var detailHandler = new GetWorkflowDispatchRequestHandler(store);
+
+        var listed = Assert.Single(await listHandler.Handle(
+            new ListWorkflowDispatches(failed.ParentWorkflowExecutionId, null, "dispatchfailed"),
+            CancellationToken.None));
+        var detailed = Assert.IsType<WorkflowDispatchView>(
+            (await detailHandler.Handle(new GetWorkflowDispatch(failed.DispatchId), CancellationToken.None)).Dispatch);
+
+        Assert.Equal(JsonSerializer.Serialize(detailed), JsonSerializer.Serialize(listed));
+        Assert.Equal(identity.DeliveryIncidentId(2), listed.DeliveryIncidentId);
+        Assert.Equal(deadLetterId, listed.DeliveryDeadLetterId);
+        Assert.Equal(4, listed.DeliveryAttemptCount);
+        Assert.Equal(failedAt, listed.DeliveryFailedAt);
+        Assert.True(listed.RedriveEligible);
+    }
+
+    [Fact]
     public void Safe_view_never_serializes_values_authority_context_or_arbitrary_diagnostics()
     {
         var record = NewRecord(
@@ -205,10 +243,12 @@ public sealed class WorkflowDispatchInspectionTests
     public void Safe_view_projects_only_allowlisted_delivery_failure_evidence()
     {
         var pending = NewRecord("parent-1", "activity-1", WorkflowDispatchStatus.Pending);
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var deadLetterId = RuntimePostCommitOutboxItems.OutboxItemId("commit-1", identity.StartIntentId);
         var failedAt = Now.AddMinutes(4);
         var failed = WorkflowDispatchLifecycle.TransitionToDispatchFailed(
             pending,
-            deadLetterId: "outbox-1",
+            deadLetterId,
             generation: 2,
             attemptCount: 4,
             firstAttemptAt: Now,
@@ -216,13 +256,61 @@ public sealed class WorkflowDispatchInspectionTests
 
         var view = WorkflowDispatchView.From(failed);
 
-        Assert.Equal(new WorkflowDispatchIdentity("parent-1", "activity-1").DeliveryIncidentId(2), view.DeliveryIncidentId);
-        Assert.Equal("outbox-1", view.DeliveryDeadLetterId);
+        Assert.Equal(identity.DeliveryIncidentId(2), view.DeliveryIncidentId);
+        Assert.Equal(deadLetterId, view.DeliveryDeadLetterId);
         Assert.Equal(2, view.DeliveryGeneration);
         Assert.Equal(4, view.DeliveryAttemptCount);
         Assert.Equal(Now, view.DeliveryFirstAttemptAt);
         Assert.Equal(failedAt, view.DeliveryFailedAt);
         Assert.True(view.RedriveEligible);
+    }
+
+    [Fact]
+    public void Safe_view_suppresses_failure_identifiers_when_either_value_conflicts_with_dispatch_identity()
+    {
+        var pending = NewRecord("parent-safe-identifiers", "activity-safe-identifiers", WorkflowDispatchStatus.Pending);
+        var identity = new WorkflowDispatchIdentity(
+            pending.ParentWorkflowExecutionId,
+            pending.ParentActivityExecutionId);
+        var otherIdentity = new WorkflowDispatchIdentity("other-parent", "other-activity");
+        var failed = WorkflowDispatchLifecycle.TransitionToDispatchFailed(
+            pending,
+            RuntimePostCommitOutboxItems.OutboxItemId(
+                "commit-safe-identifiers",
+                identity.StartIntentId),
+            generation: 2,
+            attemptCount: 4,
+            firstAttemptAt: Now,
+            failedAt: Now.AddMinutes(4));
+        var forgedValues = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [WorkflowDispatchLifecycle.DeliveryIncidentIdMetadataKey] =
+                otherIdentity.DeliveryIncidentId(2),
+            [WorkflowDispatchLifecycle.DeliveryDeadLetterIdMetadataKey] =
+                RuntimePostCommitOutboxItems.OutboxItemId(
+                    "commit-forged",
+                    otherIdentity.StartIntentId),
+            [WorkflowDispatchLifecycle.DeliveryGenerationMetadataKey] = "generation-secret-forged"
+        };
+
+        foreach (var forged in forgedValues)
+        {
+            var metadata = failed.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+            metadata[forged.Key] = forged.Value;
+            var corrupt = NewRecord(
+                failed.ParentWorkflowExecutionId,
+                failed.ParentActivityExecutionId,
+                WorkflowDispatchStatus.DispatchFailed,
+                metadata);
+
+            var view = WorkflowDispatchView.From(corrupt);
+            var json = JsonSerializer.Serialize(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+            Assert.Null(view.DeliveryIncidentId);
+            Assert.Null(view.DeliveryDeadLetterId);
+            Assert.False(view.RedriveEligible);
+            Assert.DoesNotContain(forged.Value, json, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

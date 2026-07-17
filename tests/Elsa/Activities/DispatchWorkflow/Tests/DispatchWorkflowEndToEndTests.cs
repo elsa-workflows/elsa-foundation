@@ -105,19 +105,25 @@ public sealed class DispatchWorkflowEndToEndTests
     }
 
     [Theory]
-    [InlineData(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted, DispatchWorkflowOutcomes.Faulted)]
-    [InlineData(WorkflowExecutionStatus.Cancelled, WorkflowDispatchStatus.Cancelled, DispatchWorkflowOutcomes.Cancelled)]
+    [InlineData(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted, DispatchWorkflowOutcomes.Faulted, WorkflowRunKind.TestRun)]
+    [InlineData(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted, DispatchWorkflowOutcomes.Faulted, WorkflowRunKind.PublishedRun)]
+    [InlineData(WorkflowExecutionStatus.Cancelled, WorkflowDispatchStatus.Cancelled, DispatchWorkflowOutcomes.Cancelled, WorkflowRunKind.TestRun)]
+    [InlineData(WorkflowExecutionStatus.Cancelled, WorkflowDispatchStatus.Cancelled, DispatchWorkflowOutcomes.Cancelled, WorkflowRunKind.PublishedRun)]
     public async Task NonSuccessChild_CompletesParentActivityWithOrdinarySafeOutcome(
         WorkflowExecutionStatus childStatus,
         WorkflowDispatchStatus dispatchStatus,
-        string expectedOutcome)
+        string expectedOutcome,
+        WorkflowRunKind runKind)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var caseSuffix = $"{expectedOutcome.ToLowerInvariant()}-{runKind.ToString().ToLowerInvariant()}";
         var run = await fixture.StartParentAsync(
-            caseId: $"terminal-{expectedOutcome.ToLowerInvariant()}",
-            parentWorkflowExecutionId: $"parent-terminal-{expectedOutcome.ToLowerInvariant()}",
+            caseId: $"terminal-{caseSuffix}",
+            parentWorkflowExecutionId: $"parent-terminal-{caseSuffix}",
             parentCorrelationId: "correlation-parent",
-            waitForCompletion: true);
+            waitForCompletion: true,
+            runKind: runKind,
+            testScope: runKind == WorkflowRunKind.TestRun ? NewTestScope($"scope-terminal-{caseSuffix}") : null);
         if (childStatus == WorkflowExecutionStatus.Faulted)
         {
             await fixture.Services.GetRequiredService<IIncidentStateStore>().TryAddAsync(new IncidentState(
@@ -169,23 +175,31 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.DoesNotContain("secret", resultValue.InlineValue.Value.GetRawText(), StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public async Task Wait_mode_starts_child_then_resumes_parent_once_with_completed_result()
+    [Theory]
+    [InlineData(WorkflowRunKind.TestRun)]
+    [InlineData(WorkflowRunKind.PublishedRun)]
+    public async Task Wait_mode_starts_child_then_resumes_parent_once_with_completed_result(WorkflowRunKind runKind)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var caseSuffix = runKind.ToString().ToLowerInvariant();
         var run = await fixture.StartParentAsync(
-            caseId: "wait-success",
-            parentWorkflowExecutionId: "parent-wait-success",
+            caseId: $"wait-success-{caseSuffix}",
+            parentWorkflowExecutionId: $"parent-wait-success-{caseSuffix}",
             parentCorrelationId: "correlation-parent",
-            waitForCompletion: true);
+            waitForCompletion: true,
+            runKind: runKind,
+            testScope: runKind == WorkflowRunKind.TestRun ? NewTestScope($"scope-wait-success-{caseSuffix}") : null);
 
         Assert.Equal(ActivityExecutionStatus.Suspended, run.Activity.Status);
+        Assert.Equal(runKind, run.Dispatch.RunKind);
         Assert.NotNull(await fixture.FindBookmarkAsync(run.Start.WorkflowExecutionId, run.Identity.WaitBookmarkId));
         Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
 
         var childSweep = await fixture.SweepAsync();
         Assert.Equal(1, childSweep.OutboxDeliveredCount);
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId))?.Status);
+        var child = await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, child?.Status);
+        Assert.Equal(runKind, child?.RunKind);
         Assert.Equal(WorkflowDispatchStatus.Completed, Assert.Single(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId)).Status);
 
         var resumeSweep = await fixture.SweepAsync();
@@ -196,7 +210,7 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
 
         var values = await fixture.ListDurableValuesAsync(run.Start.WorkflowExecutionId);
-        var resultValue = Assert.Single(values, value => value.DurableValueId.Contains("dispatch-result-wait-success", StringComparison.Ordinal));
+        var resultValue = Assert.Single(values, value => value.DurableValueId.Contains($"dispatch-result-wait-success-{caseSuffix}", StringComparison.Ordinal));
         var result = resultValue.InlineValue!.Value.Deserialize<DispatchWorkflowResult>(SerializerOptions);
         Assert.NotNull(result);
         Assert.Equal(run.Identity.ChildWorkflowExecutionId, result.ChildWorkflowExecutionId);
@@ -691,15 +705,21 @@ public sealed class DispatchWorkflowEndToEndTests
             item.WorkflowExecutionId == run.Start.WorkflowExecutionId));
     }
 
-    [Fact]
-    public async Task Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable()
+    [Theory]
+    [InlineData(WorkflowRunKind.TestRun)]
+    [InlineData(WorkflowRunKind.PublishedRun)]
+    public async Task Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable(
+        WorkflowRunKind runKind)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var caseSuffix = runKind.ToString().ToLowerInvariant();
         var run = await fixture.StartParentAsync(
-            caseId: "wait-delivery-exhaustion",
-            parentWorkflowExecutionId: "parent-wait-delivery-exhaustion",
+            caseId: $"wait-delivery-exhaustion-{caseSuffix}",
+            parentWorkflowExecutionId: $"parent-wait-delivery-exhaustion-{caseSuffix}",
             parentCorrelationId: "correlation-parent",
-            waitForCompletion: true);
+            waitForCompletion: true,
+            runKind: runKind,
+            testScope: runKind == WorkflowRunKind.TestRun ? NewTestScope($"scope-wait-delivery-exhaustion-{caseSuffix}") : null);
         await using var scope = fixture.Services.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
             PersistenceAccessContext.Scoped(new PersistenceScope(run.Dispatch.TenantId!)));
@@ -729,6 +749,7 @@ public sealed class DispatchWorkflowEndToEndTests
 
         var failed = Assert.IsType<WorkflowDispatchRecord>(await dispatchStore.FindAsync(run.Dispatch.DispatchId));
         Assert.Equal(WorkflowDispatchStatus.DispatchFailed, failed.Status);
+        Assert.Equal(runKind, failed.RunKind);
         Assert.False(WorkflowDispatchLifecycle.IsRedriveEligible(failed));
         var beforeResumeRedrive = await scope.ServiceProvider.GetRequiredService<IWorkflowDispatchRedriveStore>().RedriveAsync(
             new WorkflowDispatchRedriveRequest(run.Dispatch.DispatchId, "wait-redrive-before", timeProvider.GetUtcNow()));

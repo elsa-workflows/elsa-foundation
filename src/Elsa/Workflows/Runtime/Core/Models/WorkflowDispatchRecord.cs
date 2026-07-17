@@ -437,7 +437,8 @@ public sealed class WorkflowDispatchQuery
     {
         ValidateOptional(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
         ValidateOptional(childWorkflowExecutionId, nameof(childWorkflowExecutionId));
-        ValidateOptional(testScopeId, nameof(testScopeId));
+        if (testScopeId is not null)
+            WorkflowTestScope.ValidateScopeId(testScopeId, nameof(testScopeId));
         if (parentWorkflowExecutionId is null && childWorkflowExecutionId is null && status is null && testScopeId is null)
             throw new ArgumentException("A workflow dispatch query requires at least one operational filter.");
         if (take is <= 0 or > MaximumTake)

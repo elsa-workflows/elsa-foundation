@@ -442,7 +442,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             var claimable = _state.OutboxItems.Values
                 .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
-                .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
+                .OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
                 .ThenBy(item => item.RecordedAt)
                 .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
                 .Take(request.Limit)

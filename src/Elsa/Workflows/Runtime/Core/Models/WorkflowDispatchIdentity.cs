@@ -60,6 +60,20 @@ public sealed class WorkflowDispatchIdentity
         return $"outbox:dispatch-failed-resume:{Version}:{_digest}:g{generation}";
     }
 
+    /// <summary>Checks whether an outbox identity belongs to this dispatch's deterministic child-start intent.</summary>
+    public bool MatchesStartOutboxItemId(string? outboxItemId)
+    {
+        if (string.IsNullOrWhiteSpace(outboxItemId))
+            return false;
+
+        var suffix = $":{StartIntentId}";
+        if (!outboxItemId.EndsWith(suffix, StringComparison.Ordinal))
+            return false;
+
+        var commitId = outboxItemId[..^suffix.Length];
+        return commitId.Length > 0 && commitId.All(IsSafeIdentityCharacter);
+    }
+
     public string ParentResumeOutboxItemId(string commitId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
@@ -90,4 +104,7 @@ public sealed class WorkflowDispatchIdentity
         stream.Write(length);
         stream.Write(bytes);
     }
+
+    private static bool IsSafeIdentityCharacter(char value) =>
+        char.IsAsciiLetterOrDigit(value) || value is ':' or '-' or '_' or '.';
 }

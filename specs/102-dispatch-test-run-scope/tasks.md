@@ -15,11 +15,11 @@
 ## Phase 2: Foundational Scope Contracts
 
 - [x] T004 [P] Add failing validation, immutable-context, lifecycle, expiry-equality, legacy-null, and serialization tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTestScopeTests.cs`
-- [x] T005 [P] Add failing replacement-contract registration and order-independent duplicate-conflict tests in `tests/Elsa/Workflows/Runtime/Tests/RuntimeFeatureTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStoreRegistrationTests.cs`
+- [x] T005 [P] Add replacement-contract registration and order-independent duplicate-conflict tests in `tests/Elsa/Workflows/Runtime/Tests/RuntimeCoreCompositionRootTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePersistenceRegistrationTests.cs`
 - [x] T006 Add `WorkflowTestScope`, lifecycle, close request/result, page query/result, and cleanup result models in `src/Elsa/Workflows/Runtime/Core/Models/`
 - [x] T007 Add documented replacement contracts for scope storage, admission assertion, and cleanup in `src/Elsa/Workflows/Runtime/Core/Contracts/`
 - [x] T008 Implement one shared-fence in-memory scope store with idempotent create/close/complete and bounded expiry/closing queries in `src/Elsa/Workflows/Runtime/Services/`
-- [x] T009 Register the in-memory replacement contracts with explicit duplicate-provider conflict detection in `src/Elsa/Workflows/Runtime/RuntimeFeature.cs`
+- [x] T009 Register the in-memory replacement contracts with explicit duplicate-provider conflict detection in `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`
 - [x] T010 Run foundational Runtime contract and registration tests with `/usr/local/share/dotnet/dotnet`
 
 ## Phase 3: User Story 1 - Test Parents Run Published Children
@@ -27,9 +27,9 @@
 ### Tests
 
 - [x] T011 [P] [US1] Replace the TestRun compile rejection with a draft-parent proof that only the live Published child source/artifact is pinned in `tests/Elsa/Activities/DispatchWorkflow/Tests/DispatchWorkflowDesignTests.cs`
-- [x] T012 [P] [US1] Add start-request/command/checkpoint/execution-state scope validation and legacy JSON-default tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowStartDispatcherTests.cs`, `RuntimeCheckpointCommandPayloadTests.cs`, and `WorkflowCheckpointSchedulerWorkHandlerTests.cs`
+- [x] T012 [P] [US1] Add start-request/command/checkpoint/execution-state scope propagation, validation, and legacy JSON-default tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowStartLineageTests.cs` and `RuntimeCheckpointSerializationTests.cs`
 - [x] T013 [P] [US1] Add DispatchWorkflow record/payload/nested-child scope and exact `TestRun`/`PublishedRun`/compatibility run-kind inheritance tests in `tests/Elsa/Activities/DispatchWorkflow/Tests/DispatchWorkflowContractTests.cs` and `ChildStartExecutorTests.cs`
-- [x] T014 [P] [US1] Add parent/child lifecycle inspection run-kind tests before and after provider recreation in `tests/Elsa/Workflows/Runtime/Api/Tests/WorkflowDispatchInspectionTests.cs`
+- [x] T014 [P] [US1] Add exact run-kind projection plus provider-recreated detail inspection tests in `tests/Elsa/Workflows/Runtime/Api/Tests/WorkflowDispatchInspectionTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchStoreTests.cs`
 
 ### Implementation
 
@@ -45,16 +45,16 @@
 
 ### Tests
 
-- [x] T022 [P] [US2] Add in-memory root admission-versus-close and child registration-versus-close tests for both winners, claimed start replay, response loss, expiry equality, and terminal no-op in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTestScopeAdmissionTests.cs`
+- [x] T022 [P] [US2] Add in-memory scope creation, expiry equality, close/admission ordering, cleanup replay, terminal-prefix progress, and duplicate cleanup convergence tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTestScopeStoreTests.cs`
 - [x] T023 [P] [US2] Add detached parent-completion independence plus explicit/expiry cleanup before and after child admission in `tests/Elsa/Activities/DispatchWorkflow/Tests/DispatchWorkflowEndToEndTests.cs`
-- [x] T024 [P] [US2] Add detached scope-cancel marker validation, deterministic cancel identity, production-detached rejection, and duplicate delivery tests in `tests/Elsa/Activities/DispatchWorkflow/Tests/ChildCancelExecutorTests.cs`
-- [x] T025 [P] [US2] Add publishing projection cleanup coordination tests proving Runtime close precedes projection/source deletion in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowTestRunTests.cs`
-- [x] T026 [P] [US2] Add bounded expiry/Closing resumption sweep, restart, and safe progress tests in `tests/Elsa/Workflows/Runtime/Resumption/Tests/WorkflowTestScopeResumptionTests.cs`
+- [x] T024 [P] [US2] Add deterministic child-cancel identity, cancellation replay, suppressed admission, terminal no-op, and duplicate actor-delivery tests in `tests/Elsa/Activities/DispatchWorkflow/Tests/WorkflowDispatchCancellationTests.cs`
+- [x] T025 [P] [US2] Add publishing cleanup coordination proving Runtime scope close precedes test-run projection deletion in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowTestRunRequestHandlerTests.cs`
+- [x] T026 [P] [US2] Prove the bounded expiry/Closing scope sweep runs before ordinary resumption in every persistence scope in `tests/Elsa/Workflows/Runtime/Resumption/Tests/WorkflowsRuntimeResumptionFeatureTests.cs`; provider-recreated cleanup progress is covered by `tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTestScopeTests.cs`
 
 ### Implementation
 
 - [x] T027 [US2] Assert Open scope for root start/checkpoint and child dispatch commit under the shared in-memory provider fence in `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs`
-- [x] T028 [US2] Extend workflow dispatch queries with exact optional scope routing without cross-tenant/partition scans in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchQuery.cs` and `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowDispatchStore.cs`
+- [x] T028 [US2] Extend workflow dispatch queries with exact optional scope routing without cross-tenant/partition scans in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs` and `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowDispatchStore.cs`
 - [x] T029 [US2] Implement atomic detached cleanup transitions for Pending, Started, terminal, and cleanup/admission races with durable cancellation responsibility in `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowTestScopeStore.cs`
 - [x] T030 [US2] Add scope-cancellation metadata/state and deterministic scope cancel responsibility while preserving ordinary detached and waited semantics in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchCancellation.cs` and `WorkflowDispatchRecord.cs`
 - [x] T031 [US2] Bridge authoritative detached scope cancellation through the existing child actor Cancel delivery in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildCancelExecutor.cs`
@@ -68,10 +68,10 @@
 ### Tests
 
 - [x] T036 [P] [US3] Parameterize waited success/fault/cancel/delivery-failure outcomes across `TestRun` and `PublishedRun` in `tests/Elsa/Activities/DispatchWorkflow/Tests/DispatchWorkflowEndToEndTests.cs`
-- [x] T037 [P] [US3] Add hostile in-memory cleanup tests for wrong scope, tenant, partition, production, legacy-null, waited, and nested descendants in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTestScopeCleanupTests.cs`
+- [x] T037 [P] [US3] Add hostile in-memory cleanup tests for wrong scope context, tenant, partition, production, legacy-null, waited, other-scope, and nested descendants in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTestScopeStoreTests.cs`
 - [x] T038 [P] [US3] Add the Groundwork scope document, expiry/lifecycle query, exact dispatch-scope index, and refresh current-only fixtures in `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs`
 - [x] T039 [P] [US3] Add Groundwork atomic root/child admission-versus-close tests for both winners, already-claimed starts, response loss, concurrent cleaners, terminal races, and 100 duplicate teardown attempts in `tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTestScopeTests.cs`
-- [x] T040 [US3] Add Groundwork restart scenarios before/after materialization, cancel responsibility commit, response loss, expired claims, and nested detached descendants in `tests/Elsa/Persistence/Groundwork/Tests/DispatchWorkflowTestScopeCrashTests.cs`
+- [x] T040 [US3] Add Groundwork provider-recreation and race evidence for pre-admission teardown, admitted-child cancellation responsibility, rollback/retry, response-loss replay, concurrent cleaners, terminal-prefix progress, and bounded scope isolation in `tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTestScopeTests.cs`
 
 ### Implementation
 

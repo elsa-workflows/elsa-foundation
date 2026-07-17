@@ -36,7 +36,7 @@ public sealed class GroundworkCoalescingCrashConvergenceTests
     [Fact]
     public async Task Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects()
     {
-        var manifest = GroundworkProviderTestManifests.Runtime;
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
 
         // Reference: a crash-free Immediate run establishes the terminal state the recovered run must converge to.
         var controlSnapshot = await RunControlAsync(manifest);
