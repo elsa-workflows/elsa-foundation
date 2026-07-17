@@ -16,6 +16,7 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { activityDesignKeys } from "../api/activityDesign";
 import { clearActivityDefinitionRecoveryForIdentity, createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 import { activityDefinitionsObservationEvent, type ActivityDefinitionsObservation } from "../activityDefinitionObservability";
+import type { ActivityDefinitionDraftView } from "../activityDefinitionTypes";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -44,7 +45,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "No Activity Definitions yet");
     click(buttonByText(rendered.container, "Create Activity Definition"));
     await waitForText(rendered.container, "Activity Graph");
-    expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")?.value).toBe("elsa.activity-graph|1");
+    await waitFor(() => expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")?.value).toBe("elsa.activity-graph|1"));
 
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='category']")!, "Finance");
@@ -245,6 +246,365 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Saved revision 5");
     await rendered.unmount();
   }, 10_000);
+
+  it("authors capability-backed members and preserves exact default presence plus unknown wire fields", async () => {
+    let revision = 3;
+    const initial = fullDraft({ revision, payload: { edit: 0 } });
+    initial.contract = {
+      contractSchemaVersion: "1",
+      futureContractField: { retained: true },
+      inputs: [{
+        referenceKey: "customer-note",
+        name: "Customer note",
+        displayName: "Customer note",
+        description: null,
+        category: null,
+        order: 0,
+        uiHint: null,
+        uiSpecifications: { futureUiField: "retained" },
+        type: { alias: "String", collectionKind: "Single", futureTypeField: "retained" },
+        isRequired: false,
+        isNullable: true,
+        default: { syntax: "Literal", value: null, futureDefaultField: "retained" },
+        storageDriverKey: "elsa.json",
+        durability: "Required",
+        futureMemberField: { retained: true }
+      }],
+      outputs: [],
+      outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }]
+    };
+    const putJson = vi.fn(async (_url: string, body: unknown) => {
+      const request = body as { expectedRevision: number; contract: typeof initial.contract };
+      revision = request.expectedRevision + 1;
+      return { ...initial, revision, contract: request.contract };
+    });
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()],
+      putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return initial;
+        if (url === "/design/activities/authoring-capabilities") {
+          const response = authoringCapabilities();
+          response.types[0].compatibleStorageDriverKeys.push("elsa.blob");
+          response.storageDriverKeys.push("elsa.blob");
+          return response;
+        }
+        if (url === "/expressions/descriptors") return { items: [{ type: "Python", displayName: "Python", editingMode: "text" }] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Input 1: Customer note");
+    const doneOutcome = [...rendered.container.querySelectorAll("fieldset")].find(fieldset => fieldset.textContent?.includes("Outcome 1: Done"))!;
+    expect(doneOutcome.textContent).toContain("Required by the implementation provider");
+    expect([...doneOutcome.querySelectorAll("button")].some(button => button.textContent?.includes("Remove outcome"))).toBe(false);
+    expect(controlByLabel<HTMLInputElement>(doneOutcome, "Emitted by this activity").disabled).toBe(true);
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Durable storage driver").value).toBe("elsa.json");
+    const required = controlByLabel<HTMLInputElement>(rendered.container, "Required effective value");
+    const nullable = controlByLabel<HTMLInputElement>(rendered.container, "Allows null");
+    expect(required.checked).toBe(false);
+    expect(nullable.checked).toBe(true);
+    expect(nullable.disabled).toBe(true);
+    expect(rendered.container.textContent).toContain("Remove or change the literal null default before tightening nullability");
+    click(required);
+    expect(nullable.checked).toBe(true);
+
+    await waitFor(() => expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({
+      contract: expect.objectContaining({
+        inputs: [expect.objectContaining({
+          isRequired: true,
+          isNullable: true,
+          default: { syntax: "Literal", value: null, futureDefaultField: "retained" },
+          futureMemberField: { retained: true },
+          type: expect.objectContaining({ futureTypeField: "retained" }),
+          uiSpecifications: { futureUiField: "retained" }
+        })],
+        futureContractField: { retained: true }
+      })
+    })));
+
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Literal JSON value"), "\"present\"");
+    click(buttonByText(rendered.container, "Apply default"));
+    await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
+      JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: "present", futureDefaultField: "retained" })
+    )).toBe(true));
+
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default"), "none");
+    click(buttonByText(rendered.container, "Apply default"));
+    await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
+      (body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default === null
+    )).toBe(true));
+
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default"), "literal");
+    click(buttonByText(rendered.container, "Apply default"));
+    await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
+      JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: null })
+    )).toBe(true));
+
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default"), "expression");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Expression source"), "customer.note");
+    click(buttonByText(rendered.container, "Apply default"));
+    await waitFor(() => expect(putJson.mock.calls.some(([, body]) => {
+      const value = (body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default;
+      return JSON.stringify(value) === JSON.stringify({ syntax: "Python", value: "customer.note" });
+    })).toBe(true));
+
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Member name"), "Result");
+    click(buttonByText(rendered.container, "Add output"));
+    await waitForText(rendered.container, "Output 1: Result");
+    const output = [...rendered.container.querySelectorAll("fieldset")].find(fieldset => fieldset.textContent?.includes("Output 1: Result"))!;
+    click(controlByLabel<HTMLInputElement>(output, "Must be produced"));
+    click(controlByLabel<HTMLInputElement>(output, "Allows null"));
+    await waitFor(() => expect(putJson.mock.calls.some(([, body]) => {
+      const value = (body as { contract: { outputs: Array<Record<string, unknown>> } }).contract.outputs[0];
+      return JSON.stringify(value) === JSON.stringify({
+        referenceKey: "result",
+        name: "Result",
+        displayName: "Result",
+        description: null,
+        category: null,
+        order: 0,
+        uiHint: null,
+        uiSpecifications: null,
+        type: { alias: "String", collectionKind: "Single" },
+        isRequired: true,
+        isNullable: true,
+        storageDriverKey: "elsa.json",
+        durability: "Required"
+      });
+    })).toBe(true));
+    await rendered.unmount();
+  }, 15_000);
+
+  it("blocks contract actions and keeps stored content private when authoring capabilities are forbidden", async () => {
+    const putJson = vi.fn();
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/authoring-capabilities") throw new StudioHttpError(403, "forbidden", null);
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Contract authoring unavailable");
+    expect(rendered.container.textContent).toContain("Stored contract members remain visible");
+    expect(rendered.container.textContent).toContain("Graph implementation editor");
+    expect((buttonByText(rendered.container, "Add input") as HTMLButtonElement).disabled).toBe(true);
+    expect([...rendered.container.querySelectorAll("option")].some(option => option.textContent?.includes("System.String"))).toBe(false);
+    expect(putJson).not.toHaveBeenCalled();
+    await rendered.unmount();
+  });
+
+  it("keeps unavailable historical aliases inspectable on an exact immutable version", async () => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=versions&version=activity-version-1",
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        if (url.startsWith("/design/activities/definitions/activity-def-1/versions?")) return page([]);
+        if (url === "/design/activities/versions/activity-version-1") return {
+          definition: definitionIdentity(),
+          versionId: "activity-version-1",
+          version: "1.0.0",
+          lifecycle: "active",
+          publishedAt: "2026-07-17T10:00:00Z",
+          provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:historical" },
+          contract: {
+            contractSchemaVersion: "1",
+            inputs: [{
+              referenceKey: "legacy-value",
+              name: "Legacy value",
+              type: { alias: "Removed.Alias", collectionKind: "Single" },
+              isRequired: false,
+              isNullable: true,
+              default: null,
+              storageDriverKey: "historical.driver",
+              durability: "Required"
+            }],
+            outputs: [],
+            outcomes: []
+          }
+        };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Immutable public contract");
+    expect(rendered.container.textContent).toContain("Removed.Alias");
+    expect(rendered.container.textContent).toContain("Stored aliases remain visible");
+    expect(rendered.container.textContent).not.toContain("Replace type");
+    await rendered.unmount();
+  });
+
+  it("keeps invalid literal text local, announces it, and blocks revision-sensitive actions", async () => {
+    const initial = fullDraft({ revision: 3 });
+    initial.contract.inputs = [{
+      referenceKey: "message",
+      name: "Message",
+      displayName: "Message",
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false,
+      isNullable: true,
+      default: { syntax: "Literal", value: null },
+      storageDriverKey: "elsa.json",
+      durability: "Required"
+    }];
+    const putJson = vi.fn();
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return initial;
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Literal JSON value");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Literal JSON value"), "{");
+    await waitForText(rendered.container, "The visible text is not saved");
+    await waitForText(rendered.container, "Contract correction required");
+    expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
+    expect(buttonByText(rendered.container, "Discard local changes and return")).toBeTruthy();
+    expect(putJson).not.toHaveBeenCalled();
+    await rendered.unmount();
+  });
+
+  it("reviews destructive published-baseline edits before changing only the exact draft", async () => {
+    const initial = fullDraft({ revision: 3 });
+    initial.sourceVersionId = "activity-version-1";
+    initial.contract.inputs = [{
+      referenceKey: "message",
+      name: "Message",
+      displayName: "Message",
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false,
+      isNullable: false,
+      default: null,
+      storageDriverKey: "elsa.json",
+      durability: "Required"
+    }];
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...initial, revision: 4, contract: (body as { contract: unknown }).contract }));
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return initial;
+        if (url === "/design/activities/versions/activity-version-1") return { definition: definitionIdentity(), versionId: "activity-version-1", version: "1.0.0", contract: initial.contract, provider: initial.provider, lifecycle: "active", publishedAt: initial.updatedAt };
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Published baseline");
+    click(buttonByText(rendered.container, "Remove input"));
+    await waitForText(rendered.container, "Remove published-baseline input");
+    expect(putJson).not.toHaveBeenCalled();
+    expect(rendered.container.textContent).toContain("Activity Definitions");
+    expect(rendered.container.textContent).toContain("None rewritten");
+    expect(rendered.container.textContent).toContain("Workflows and occurrences");
+    click(buttonByText(rendered.container, "Confirm input removal"));
+    await waitFor(() => expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({
+      expectedRevision: 3,
+      contract: expect.objectContaining({ inputs: [] })
+    })));
+    await rendered.unmount();
+  });
+
+  it("guards existing-member changes conservatively when the exact baseline cannot be loaded", async () => {
+    const initial = fullDraft({ revision: 3 });
+    initial.sourceVersionId = "missing-version";
+    initial.contract.inputs = [{
+      referenceKey: "message",
+      name: "Message",
+      displayName: "Message",
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false,
+      isNullable: false,
+      default: null,
+      storageDriverKey: "elsa.json",
+      durability: "Required"
+    }];
+    const putJson = vi.fn();
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return initial;
+        if (url === "/design/activities/versions/missing-version") throw new StudioHttpError(404, "missing");
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Existing-member changes remain conservatively guarded");
+    click(buttonByText(rendered.container, "Remove input"));
+    await waitForText(rendered.container, "Remove published-baseline input");
+    expect(putJson).not.toHaveBeenCalled();
+    await rendered.unmount();
+  });
+
+  it("autosaves presentation-only copy without impact review but stages a breaking technical name change", async () => {
+    let serverDraft = fullDraft({ revision: 3 });
+    serverDraft.sourceVersionId = "activity-version-1";
+    serverDraft.contract.inputs = [{
+      referenceKey: "message",
+      name: "Message",
+      displayName: "Message",
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false,
+      isNullable: false,
+      default: null,
+      storageDriverKey: "elsa.json",
+      durability: "Required"
+    }];
+    const baselineContract = structuredClone(serverDraft.contract);
+    const putJson = vi.fn(async (_url: string, body: unknown) => {
+      const request = body as { expectedRevision: number; contract: typeof serverDraft.contract };
+      serverDraft = { ...serverDraft, revision: request.expectedRevision + 1, contract: request.contract };
+      return serverDraft;
+    });
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return serverDraft;
+        if (url === "/design/activities/versions/activity-version-1") return { definition: definitionIdentity(), versionId: "activity-version-1", version: "1.0.0", contract: baselineContract, provider: serverDraft.provider, lifecycle: "active", publishedAt: serverDraft.updatedAt };
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Published baseline");
+    openDetails(rendered.container.querySelector(".ad-contract-advanced")!);
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Display name"), "Friendly message");
+    await waitFor(() => expect(putJson).toHaveBeenCalledTimes(1));
+    expect(rendered.container.textContent).not.toContain("Review breaking input change");
+    await waitForText(rendered.container, "Saved revision 4");
+
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Name"), "Renamed message");
+    click(buttonByText(rendered.container, "Apply name"));
+    await waitForText(rendered.container, "Review breaking input change");
+    expect(putJson).toHaveBeenCalledTimes(1);
+    expect(rendered.container.textContent).toContain("Display name for presentation-only copy");
+    click(buttonByText(rendered.container, "Apply input change"));
+    await waitFor(() => expect(putJson).toHaveBeenCalledTimes(2));
+    expect(putJson.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+      expectedRevision: 4,
+      contract: expect.objectContaining({ inputs: [expect.objectContaining({ name: "Renamed message", displayName: "Friendly message" })] })
+    }));
+    await rendered.unmount();
+  }, 12_000);
 
   it("preserves stale local work and creates an explicit parallel recovery draft", async () => {
     const putJson = vi.fn(async () => {
@@ -650,10 +1010,16 @@ function capabilities() {
     { rel: "activity-definitions", href: "design/activities/definitions" },
     { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
     { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+    { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
+    { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
     { rel: "activity-draft-validation", href: "design/activities/drafts/{draftId}/validate", templated: true },
     { rel: "activity-draft-conflict-copies", href: "design/activities/drafts/{draftId}/conflict-copies", templated: true }
-  ] }] };
+  ] }, {
+    id: "elsa.api.expressions",
+    contractVersion: "1",
+    links: [{ rel: "expression-descriptors", href: "expressions/descriptors" }]
+  }] };
 }
 
 function authoringCapabilities() {
@@ -674,8 +1040,17 @@ function authoringCapabilities() {
       manifestSchemas: [{ schemaVersion: "1", isAuthorable: true, migratableFromSchemaVersions: ["1"] }],
       requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }]
     }],
-    types: [],
-    storageDriverKeys: [],
+    types: [{
+      alias: "String",
+      displayName: "Text",
+      category: "Primitives",
+      defaultEditor: "text",
+      supportedCollectionKinds: ["Single"],
+      supportsNull: true,
+      supportsDurability: true,
+      compatibleStorageDriverKeys: ["elsa.json"]
+    }],
+    storageDriverKeys: ["elsa.json"],
     snapshotFingerprint: "sha256:test"
   };
 }
@@ -713,7 +1088,7 @@ function draftSummary() {
   };
 }
 
-function fullDraft(overrides: Partial<{ draftId: string; revision: number; payload: unknown }> = {}) {
+function fullDraft(overrides: Partial<{ draftId: string; revision: number; payload: unknown }> = {}): ActivityDefinitionDraftView {
   return {
     draftId: overrides.draftId ?? "activity-draft-1",
     definitionId: "activity-def-1",
@@ -755,13 +1130,22 @@ function click(element: Element) {
   flushSync(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
-function change(element: HTMLInputElement | HTMLSelectElement, value: string) {
+function change(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
   flushSync(() => {
-    const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLSelectElement.prototype;
+    const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLTextAreaElement.prototype;
     Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(element, value);
     element.dispatchEvent(new Event("change", { bubbles: true }));
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(container: HTMLElement, text: string) {
+  const label = [...container.querySelectorAll("label")].find(candidate =>
+    [...candidate.querySelectorAll(":scope > span")].some(span => span.textContent?.trim() === text)
+  );
+  const control = label?.querySelector("input, select, textarea");
+  if (!control) throw new Error(`Control labelled '${text}' not found.`);
+  return control as T;
 }
 
 function openDetails(element: Element) {
