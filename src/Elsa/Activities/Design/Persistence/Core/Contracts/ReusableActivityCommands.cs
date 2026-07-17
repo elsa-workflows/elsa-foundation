@@ -47,11 +47,38 @@ public interface ICreateActivityDraftCommand
         CancellationToken cancellationToken = default);
 }
 
+public sealed record UpdateActivityDraftPresentationRequest(
+    string DraftId,
+    long ExpectedRevision,
+    string? PresentationLabel,
+    DateTimeOffset ChangedAt);
+
+public interface IUpdateActivityDraftPresentationCommand
+{
+    Task<ActivityDefinitionDraft> ExecuteAsync(
+        UpdateActivityDraftPresentationRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record CreateActivityDraftConflictCopyRequest(
+    string SourceDraftId,
+    long ExpectedSourceRevision,
+    ActivityDefinitionDraft ConflictCopy,
+    ActivityDefinitionDraftLayout Layout);
+
+public interface ICreateActivityDraftConflictCopyCommand
+{
+    Task ExecuteAsync(
+        CreateActivityDraftConflictCopyRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record ReplaceActivityDraftRequest(
     string DraftId,
     long ExpectedRevision,
     ActivityDefinitionDraftState State,
-    IReadOnlyList<ActivityLayoutRecord> Layout);
+    IReadOnlyList<ActivityLayoutRecord> Layout,
+    string? PresentationLabel = null);
 
 public interface IReplaceActivityDraftCommand
 {

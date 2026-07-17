@@ -25,6 +25,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
+    IActivityDefinitionManagementStore,
     IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
@@ -34,6 +35,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     ICreateActivityDefinitionCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
+    IUpdateActivityDraftPresentationCommand,
+    ICreateActivityDraftConflictCopyCommand,
     IReplaceActivityDraftCommand,
     IApplyActivityContractProposalCommand,
     IDiscardActivityDraftCommand,
@@ -242,6 +245,119 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         }
     }
 
+    public Task<ActivityManagementPage<ActivityDefinitionManagementRecord>> ReadDefinitionsAsync(
+        ActivityManagementPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateManagementQuery(query);
+        lock (_gate)
+        {
+            var source = _authoring.Values.OrderBy(x => x.Id, StringComparer.Ordinal).ToArray();
+            var scan = source.Skip(query.Offset).Take(Math.Min(500, Math.Max(query.Limit * 4, 100))).ToArray();
+            var items = new List<ActivityDefinitionManagementRecord>(query.Limit);
+            var consumed = 0;
+            foreach (var authoring in scan)
+            {
+                consumed++;
+                if (!IsVisible(authoring.TenantId, query.TenantId) || authoring.LastModifiedAt > query.AsOf)
+                    continue;
+                var record = ManagementRecord(authoring);
+                if (record is not null && Matches(record, query))
+                    items.Add(record);
+                if (items.Count == query.Limit)
+                    break;
+            }
+            var total = source
+                .Where(x => IsVisible(x.TenantId, query.TenantId) && x.LastModifiedAt <= query.AsOf)
+                .Select(ManagementRecord)
+                .Where(x => x is not null && Matches(x, query))
+                .LongCount();
+            return Task.FromResult(new ActivityManagementPage<ActivityDefinitionManagementRecord>(
+                items.ToArray(),
+                query.Offset + consumed < source.Length ? query.Offset + consumed : null,
+                total,
+                query.AsOf));
+        }
+    }
+
+    public Task<ActivityDefinitionManagementRecord?> FindDefinitionAsync(
+        string definitionId,
+        string? tenantId,
+        DateTimeOffset asOf,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (!_authoring.TryGetValue(definitionId, out var authoring) ||
+                !IsVisible(authoring.TenantId, tenantId) ||
+                authoring.LastModifiedAt > asOf)
+                return Task.FromResult<ActivityDefinitionManagementRecord?>(null);
+            return Task.FromResult(ManagementRecord(authoring));
+        }
+    }
+
+    public Task<ActivityManagementPage<ActivityDefinitionDraft>> ReadDraftsAsync(
+        string definitionId,
+        ActivityManagementPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateManagementQuery(query);
+        lock (_gate)
+        {
+            if (!_authoring.TryGetValue(definitionId, out var authoring) || !IsVisible(authoring.TenantId, query.TenantId))
+                return Task.FromResult(new ActivityManagementPage<ActivityDefinitionDraft>([], null, 0, query.AsOf));
+            var all = _drafts.Values
+                .Where(x => StringComparer.Ordinal.Equals(x.DefinitionId, definitionId) &&
+                            StringComparer.Ordinal.Equals(x.TenantId, authoring.TenantId))
+                .OrderBy(x => x.Id, StringComparer.Ordinal)
+                .ToArray();
+            var matched = all
+                .Where(x => x.LastModifiedAt <= query.AsOf)
+                .Where(x => query.DraftStatus is null || x.Status == query.DraftStatus)
+                .Where(x => query.ProviderKey is null || StringComparer.Ordinal.Equals(x.State.Provider.ProviderKey, query.ProviderKey))
+                .Where(x => query.Search is null || Contains(x.PresentationLabel, query.Search) || Contains(x.Id, query.Search))
+                .ToArray();
+            var items = matched.Skip(query.Offset).Take(query.Limit).Select(Clone).ToArray();
+            return Task.FromResult(new ActivityManagementPage<ActivityDefinitionDraft>(
+                items,
+                query.Offset + items.Length < matched.Length ? query.Offset + items.Length : null,
+                matched.LongLength,
+                query.AsOf));
+        }
+    }
+
+    public Task<ActivityManagementPage<ActivityDefinitionVersionPublication>> ReadVersionsAsync(
+        string definitionId,
+        ActivityManagementPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateManagementQuery(query);
+        lock (_gate)
+        {
+            if (!_authoring.TryGetValue(definitionId, out var authoring) || !IsVisible(authoring.TenantId, query.TenantId))
+                return Task.FromResult(new ActivityManagementPage<ActivityDefinitionVersionPublication>([], null, 0, query.AsOf));
+            var matched = _publications.Values
+                .Where(x => StringComparer.Ordinal.Equals(x.DefinitionId, definitionId) &&
+                            StringComparer.Ordinal.Equals(x.TenantId, authoring.TenantId) &&
+                            x.LastModifiedAt <= query.AsOf)
+                .Where(x => query.VersionLifecycle is null || x.Lifecycle == query.VersionLifecycle)
+                .Where(x => query.ProviderKey is null || StringComparer.Ordinal.Equals(x.Provider.ProviderKey, query.ProviderKey))
+                .Where(x => query.Search is null || Contains(x.Version, query.Search) || Contains(x.DefinitionVersionId, query.Search))
+                .OrderBy(x => x.DefinitionVersionId, StringComparer.Ordinal)
+                .ToArray();
+            var items = matched.Skip(query.Offset).Take(query.Limit).Select(Clone).ToArray();
+            return Task.FromResult(new ActivityManagementPage<ActivityDefinitionVersionPublication>(
+                items,
+                query.Offset + items.Length < matched.Length ? query.Offset + items.Length : null,
+                matched.LongLength,
+                query.AsOf));
+        }
+    }
+
     public Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(string draftId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -412,6 +528,54 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     }
 
     public Task<ActivityDefinitionDraft> ExecuteAsync(
+        UpdateActivityDraftPresentationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var draft = ActiveDraft(request.DraftId, request.ExpectedRevision);
+            EnsureDesignAuthority(Authoring(draft.DefinitionId));
+            var updated = Clone(draft);
+            updated.Revision = checked(updated.Revision + 1);
+            updated.PresentationLabel = request.PresentationLabel;
+            updated.LastModifiedAt = request.ChangedAt;
+            var layout = Clone(_draftLayouts[request.DraftId]);
+            layout.Revision = updated.Revision;
+            layout.LastModifiedAt = request.ChangedAt;
+            _drafts[request.DraftId] = updated;
+            _draftLayouts[request.DraftId] = layout;
+            _sequence++;
+            return Task.FromResult(Clone(updated));
+        }
+    }
+
+    public Task ExecuteAsync(
+        CreateActivityDraftConflictCopyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateDraftAndLayout(request.ConflictCopy, request.Layout);
+        lock (_gate)
+        {
+            var source = Draft(request.SourceDraftId);
+            if (source.Status != ActivityDefinitionDraftStatus.Active || source.Revision != request.ExpectedSourceRevision)
+                throw Conflict($"Activity draft '{request.SourceDraftId}' changed before its conflict copy could be created.");
+            EnsureDesignAuthority(Authoring(source.DefinitionId));
+            if (!StringComparer.Ordinal.Equals(source.DefinitionId, request.ConflictCopy.DefinitionId) ||
+                !StringComparer.Ordinal.Equals(source.TenantId, request.ConflictCopy.TenantId) ||
+                !StringComparer.Ordinal.Equals(source.SourceVersionId, request.ConflictCopy.SourceVersionId))
+                throw new ArgumentException("The conflict copy must inherit its source draft lineage.", nameof(request));
+            if (_drafts.ContainsKey(request.ConflictCopy.Id) || _draftLayouts.ContainsKey(request.Layout.DraftId))
+                throw Conflict($"Activity draft '{request.ConflictCopy.Id}' already exists.");
+            _drafts.Add(request.ConflictCopy.Id, Clone(request.ConflictCopy));
+            _draftLayouts.Add(request.ConflictCopy.Id, Clone(request.Layout));
+            _sequence++;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<ActivityDefinitionDraft> ExecuteAsync(
         ReplaceActivityDraftRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -424,6 +588,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             var updated = Clone(draft);
             updated.Revision = nextRevision;
             updated.State = Clone(request.State);
+            updated.PresentationLabel = request.PresentationLabel;
             updated.LastModifiedAt = DateTimeOffset.UtcNow;
 
             var layout = Clone(_draftLayouts[request.DraftId]);
@@ -839,6 +1004,57 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     private static bool IsVisible(string? itemTenantId, string? tenantId) =>
         itemTenantId is null || StringComparer.Ordinal.Equals(itemTenantId, tenantId);
 
+    private ActivityDefinitionManagementRecord? ManagementRecord(ActivityDefinitionAuthoringState authoring)
+    {
+        if (!_definitions.TryGetValue(authoring.DefinitionId, out var definition))
+            return null;
+        _publications.TryGetValue(authoring.HeadVersionId ?? string.Empty, out var head);
+        _publications.TryGetValue(authoring.RecommendedVersionId ?? string.Empty, out var recommendation);
+        if (head is not null && (!StringComparer.Ordinal.Equals(head.DefinitionId, authoring.DefinitionId) ||
+                                 !StringComparer.Ordinal.Equals(head.TenantId, authoring.TenantId)))
+            head = null;
+        if (recommendation is not null && (!StringComparer.Ordinal.Equals(recommendation.DefinitionId, authoring.DefinitionId) ||
+                                           !StringComparer.Ordinal.Equals(recommendation.TenantId, authoring.TenantId)))
+            recommendation = null;
+        return new(
+            Clone(definition),
+            Clone(authoring),
+            head is null ? null : Clone(head),
+            recommendation is null ? null : Clone(recommendation),
+            _drafts.Values.LongCount(x => StringComparer.Ordinal.Equals(x.DefinitionId, definition.Id) &&
+                                          StringComparer.Ordinal.Equals(x.TenantId, authoring.TenantId)),
+            _publications.Values.LongCount(x => StringComparer.Ordinal.Equals(x.DefinitionId, definition.Id) &&
+                                                StringComparer.Ordinal.Equals(x.TenantId, authoring.TenantId)));
+    }
+
+    private static bool Matches(ActivityDefinitionManagementRecord record, ActivityManagementPageQuery query)
+    {
+        if (record.Definition.LastModifiedAt > query.AsOf)
+            return false;
+        if (query.Authority is { } authority && record.Authoring.ContentAuthority.Kind != authority)
+            return false;
+        if (query.ProviderKey is { } provider &&
+            !StringComparer.Ordinal.Equals(record.Head?.Provider.ProviderKey, provider) &&
+            !StringComparer.Ordinal.Equals(record.Recommendation?.Provider.ProviderKey, provider))
+            return false;
+        return query.Search is null ||
+               Contains(record.Definition.DisplayName, query.Search) ||
+               Contains(record.Definition.ActivityTypeKey, query.Search) ||
+               Contains(record.Definition.Category, query.Search) ||
+               Contains(record.Definition.Description, query.Search);
+    }
+
+    private static bool Contains(string? value, string search) =>
+        value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static void ValidateManagementQuery(ActivityManagementPageQuery query)
+    {
+        if (query.Offset < 0)
+            throw new ArgumentOutOfRangeException(nameof(query.Offset));
+        if (query.Limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(query.Limit));
+    }
+
     private static ActivityDefinition Clone(ActivityDefinition source) => new()
     {
         Id = source.Id,
@@ -871,6 +1087,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         DefinitionId = source.DefinitionId,
         Revision = source.Revision,
         SourceVersionId = source.SourceVersionId,
+        PresentationLabel = source.PresentationLabel,
         Status = source.Status,
         State = Clone(source.State),
         PublishedVersionId = source.PublishedVersionId,
@@ -1011,7 +1228,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                 NodeOrigin = source.Location.NodeOrigin?.ToArray(),
                 DependencyPath = source.Location.DependencyPath?.ToArray()
             },
-        Metadata = source.Metadata?.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
+        Metadata = source.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
     };
 
     private static System.Text.Json.JsonElement? Clone(System.Text.Json.JsonElement? source) =>

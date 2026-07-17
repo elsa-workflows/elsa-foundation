@@ -538,6 +538,7 @@ public sealed class ActivityUpgradePlanTests
     private sealed class AuthoringContext(string? tenantId) : IActivityAuthoringContext
     {
         public string? TenantId { get; } = tenantId;
+        public string AuthorizationProfile => $"{TenantId ?? "global"}/manage";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => true;
     }

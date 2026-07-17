@@ -209,6 +209,7 @@ public sealed class ActivityDefinitionRecommendationTests
     private sealed class Context : IActivityAuthoringContext
     {
         public string? TenantId => "tenant-a";
+        public string AuthorizationProfile => "tenant-a/manage";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => true;
     }

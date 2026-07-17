@@ -32,6 +32,12 @@ public sealed class ActivityDefinitionDraft : TenantEntity
 
     public string? SourceVersionId { get; init; }
 
+    /// <summary>
+    /// Optional, non-unique author-facing label. This is presentation metadata and deliberately lives
+    /// outside <see cref="State"/> so providers cannot treat it as behavior.
+    /// </summary>
+    public string? PresentationLabel { get; set; }
+
     public ActivityDefinitionDraftStatus Status { get; set; } = ActivityDefinitionDraftStatus.Active;
 
     public ActivityDefinitionDraftState State { get; set; } = null!;

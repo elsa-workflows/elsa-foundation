@@ -56,6 +56,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IActivityDefinitionDraftStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionVersionPublicationStore>();
         services.AddScoped<IActivityDefinitionVersionPublicationStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IActivityDefinitionManagementStore>();
+        services.AddScoped<IActivityDefinitionManagementStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IRecommendedActivityDefinitionPickerStore>();
         services.AddScoped<IRecommendedActivityDefinitionPickerStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionLayoutStore>();
@@ -78,6 +80,10 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IUpdateActivityDefinitionPresentationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<ICreateActivityDraftCommand>();
         services.AddScoped<ICreateActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IUpdateActivityDraftPresentationCommand>();
+        services.AddScoped<IUpdateActivityDraftPresentationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<ICreateActivityDraftConflictCopyCommand>();
+        services.AddScoped<ICreateActivityDraftConflictCopyCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IReplaceActivityDraftCommand>();
         services.AddScoped<IReplaceActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IApplyActivityContractProposalCommand>();

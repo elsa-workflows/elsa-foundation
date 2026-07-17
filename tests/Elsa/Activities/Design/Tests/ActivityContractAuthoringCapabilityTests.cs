@@ -196,6 +196,7 @@ public sealed class ActivityContractAuthoringCapabilityTests
     private sealed class Context : IActivityAuthoringContext
     {
         public string? TenantId => "tenant-a";
+        public string AuthorizationProfile => "tenant-a/allowed-provider";
         public bool CanAuthorProvider(string providerKey) => StringComparer.Ordinal.Equals(providerKey, "allowed.provider");
         public bool CanReadProviderPayload(string providerKey) => false;
     }

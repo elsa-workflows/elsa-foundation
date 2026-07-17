@@ -74,8 +74,10 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             options.MaximumPageSize = DependencyMaximumPageSize;
         });
         services.TryAddSingleton<IActivityDependencyCursorCodec, HmacActivityDependencyCursorCodec>();
+        services.TryAddSingleton<IActivityManagementCursorCodec, HmacActivityManagementCursorCodec>();
         services.TryAddScoped<ActivityDependencyReader>();
         services.TryAddScoped<ReusableActivityAuthoringService>();
+        services.TryAddScoped<ActivityDefinitionManagementProjectionService>();
         services.TryAddScoped<ActivityContractProposalService>();
         services.TryAddScoped<ActivityVersionLifecycleService>();
         services.TryAddScoped<ActivityDefinitionRecommendationService>();

@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Microsoft.AspNetCore.Http;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Design.Api.Models;
 
@@ -13,7 +14,14 @@ public sealed record ActivityProblemDetailsView(
     string Instance,
     string ErrorCode,
     string TraceId,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActivityRecoveryView? Recovery = null);
+
+public sealed record ActivityRecoveryView(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? CurrentRevision = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Relation = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Href = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Instruction = null);
 
 public static class ActivityProblemDetails
 {
@@ -30,7 +38,8 @@ public static class ActivityProblemDetails
             context.Request.Path,
             exception.ErrorCode,
             context.TraceIdentifier,
-            ActivityDiagnosticOrderer.Order(exception.Diagnostics));
+            ActivityDiagnosticOrderer.Order(exception.Diagnostics),
+            exception.Recovery);
     }
 
     public static ActivityProblemDetailsView Unexpected(HttpContext context) => new(

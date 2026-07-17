@@ -103,10 +103,10 @@ namespace Elsa.Activities.Design.Api.Endpoints
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions
 {
     internal sealed class Add(ICommandSender sender, ILogger<Add> logger)
-        : ActivityAuthoringCommandEndpoint<CreateReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+        : ActivityAuthoringCommandEndpoint<CreateReusableActivityDefinition, ReusableActivityDefinitionMutationView>(sender, logger)
     {
         protected override int SuccessStatusCode => 201;
-        protected override string GetLocation(ReusableActivityDefinitionDetailsView response) =>
+        protected override string GetLocation(ReusableActivityDefinitionMutationView response) =>
             $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
 
         public override void Configure()
@@ -117,10 +117,10 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class Fork(ICommandSender sender, ILogger<Fork> logger)
-        : ActivityAuthoringCommandEndpoint<ForkReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+        : ActivityAuthoringCommandEndpoint<ForkReusableActivityDefinition, ReusableActivityDefinitionMutationView>(sender, logger)
     {
         protected override int SuccessStatusCode => 201;
-        protected override string GetLocation(ReusableActivityDefinitionDetailsView response) =>
+        protected override string GetLocation(ReusableActivityDefinitionMutationView response) =>
             $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
 
         public override void Configure()
@@ -131,7 +131,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class List(IRequestSender sender, ILogger<List> logger)
-        : ActivityAuthoringRequestEndpoint<ListReusableActivityDefinitions, IReadOnlyList<ActivityDefinitionIdentityView>>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<ListReusableActivityDefinitions, ActivityManagementPageView<ReusableActivityDefinitionManagementView>>(sender, logger)
     {
         public override void Configure()
         {
@@ -141,7 +141,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
-        : ActivityAuthoringRequestEndpoint<GetReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<GetReusableActivityDefinition, ReusableActivityDefinitionManagementView>(sender, logger)
     {
         public override void Configure()
         {
@@ -151,7 +151,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class Update(ICommandSender sender, ILogger<Update> logger)
-        : ActivityAuthoringCommandEndpoint<UpdateReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+        : ActivityAuthoringCommandEndpoint<UpdateReusableActivityDefinition, ActivityDefinitionIdentityView>(sender, logger)
     {
         public override void Configure()
         {
@@ -181,7 +181,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class ListDrafts(IRequestSender sender, ILogger<ListDrafts> logger)
-        : ActivityAuthoringRequestEndpoint<ListReusableActivityDrafts, IReadOnlyList<ReusableActivityDraftSummaryView>>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<ListReusableActivityDrafts, ActivityManagementPageView<ReusableActivityDraftManagementView>>(sender, logger)
     {
         public override void Configure()
         {
@@ -205,7 +205,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class ListVersions(IRequestSender sender, ILogger<ListVersions> logger)
-        : ActivityAuthoringRequestEndpoint<ListReusableActivityVersions, IReadOnlyList<ReusableActivityVersionSummaryView>>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<ListReusableActivityVersions, ActivityManagementPageView<ReusableActivityVersionManagementView>>(sender, logger)
     {
         public override void Configure()
         {
@@ -246,6 +246,30 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Put(RouteConstants.GetRoute("drafts/{draftId}"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class UpdatePresentation(ICommandSender sender, ILogger<UpdatePresentation> logger)
+        : ActivityAuthoringCommandEndpoint<UpdateReusableActivityDraftPresentation, ReusableActivityDraftView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Patch(RouteConstants.GetRoute("drafts/{draftId}/presentation"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class ConflictCopy(ICommandSender sender, ILogger<ConflictCopy> logger)
+        : ActivityAuthoringCommandEndpoint<CreateReusableActivityDraftConflictCopy, ReusableActivityDraftView>(sender, logger)
+    {
+        protected override int SuccessStatusCode => 201;
+        protected override string GetLocation(ReusableActivityDraftView response) =>
+            $"/{RouteConstants.GetRoute($"drafts/{response.DraftId}")}";
+
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("drafts/{draftId}/conflict-copies"));
             ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }

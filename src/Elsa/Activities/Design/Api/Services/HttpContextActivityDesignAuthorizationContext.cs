@@ -3,6 +3,7 @@ using System.Text;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Api.FastEndpoints.Constants;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Activities.Design.Api.Services;
@@ -41,6 +42,8 @@ public sealed class HttpContextActivityDesignAuthorizationContext(IHttpContextAc
 
     public bool CanReadProviderPayload(string providerKey) =>
         !string.IsNullOrWhiteSpace(providerKey) && HasPermission(ProviderPayloadReadPermission);
+
+    public bool CanManageActivityDefinitions => HasPermission(PermissionNames.ActivityDesignManage);
 
     public bool CanRead(ActivityDefinitionReference reference) =>
         reference.TenantId is null || StringComparer.Ordinal.Equals(reference.TenantId, TenantId);
