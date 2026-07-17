@@ -117,7 +117,7 @@ internal sealed class GroundworkDocumentStoreFixture(
             if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery)
                 return await QuerySingleValuePageAsync(query, ElsaRuntimeStorageManifest.TestScopeIdField, cancellationToken);
             if (IsOrderedRangeRoute(query.QueryIdentity))
-                return await QueryOrderedRangeAsync(query, cancellationToken);
+                return await new RuntimeTestBoundedDocumentStore(store).QueryAsync(query, cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.BookmarkStateDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery)
                 return await QueryCompositeEqualityAsync(
@@ -166,91 +166,11 @@ internal sealed class GroundworkDocumentStoreFixture(
             return new DocumentQueryResult(window.ToArray(), all.Count);
         }
 
-        private async Task<DocumentQueryResult> QueryOrderedRangeAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken)
-        {
-#pragma warning disable GW0004
-            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
-#pragma warning restore GW0004
-            var comparisons = query.Clauses.SelectMany(clause => clause.Comparisons).ToArray();
-            var matches = all.Documents
-                .Where(document => comparisons.All(comparison => Matches(document, comparison)))
-                .ToArray();
-            Array.Sort(matches, (left, right) => Compare(left, right, query.Order));
-            IEnumerable<DocumentEnvelope> window = matches;
-            if (query.Skip is { } skip)
-                window = window.Skip(skip);
-            if (query.Take is { } take)
-                window = window.Take(take);
-            return new DocumentQueryResult(window.ToArray(), matches.Length);
-        }
-
         private static bool IsOrderedRangeRoute(string identity) =>
             identity.StartsWith("page-", StringComparison.Ordinal) ||
             identity.StartsWith("list-deliverable", StringComparison.Ordinal) ||
             identity.StartsWith("list-immediate", StringComparison.Ordinal) ||
             identity.StartsWith("list-expired-claims", StringComparison.Ordinal);
-
-        private static bool Matches(DocumentEnvelope document, DocumentQueryComparison comparison)
-        {
-            var expected = comparison.Values.Single();
-            var actual = ReadComparable(document, comparison.Path);
-            if (comparison.Operator == QueryComparisonOperator.Equal && expected is null)
-                return actual is null;
-            if (expected is null)
-                throw new InvalidOperationException("Only Groundwork test equality comparisons may use null.");
-            if (actual is null)
-                return false;
-            var compared = StringComparer.Ordinal.Compare(actual, NormalizeComparable(comparison.Path, expected));
-            return comparison.Operator switch
-            {
-                QueryComparisonOperator.Equal => compared == 0,
-                QueryComparisonOperator.GreaterThan => compared > 0,
-                QueryComparisonOperator.LessThanOrEqual => compared <= 0,
-                _ => throw new InvalidOperationException(
-                    $"Groundwork test range comparison '{comparison.Operator}' is unsupported.")
-            };
-        }
-
-        private static int Compare(
-            DocumentEnvelope left,
-            DocumentEnvelope right,
-            IReadOnlyList<DocumentQueryOrder> order)
-        {
-            foreach (var item in order)
-            {
-                var compared = StringComparer.Ordinal.Compare(
-                    ReadComparable(left, item.Path),
-                    ReadComparable(right, item.Path));
-                if (compared != 0)
-                    return compared;
-            }
-            return StringComparer.Ordinal.Compare(left.Id, right.Id);
-        }
-
-        private static string? ReadComparable(DocumentEnvelope document, string path)
-        {
-            using var content = JsonDocument.Parse(document.ContentJson);
-            var value = GetPropertyPath(content.RootElement, path);
-            if (value.ValueKind == JsonValueKind.Null)
-                return null;
-            if (IsDateTimeField(path))
-                return value.GetDateTimeOffset().UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
-            return value.ValueKind == JsonValueKind.Number ? value.GetRawText() : value.GetString();
-        }
-
-        private static string NormalizeComparable(string path, string value) =>
-            IsDateTimeField(path)
-                ? DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
-                    .UtcTicks.ToString("D19", CultureInfo.InvariantCulture)
-                : value;
-
-        private static bool IsDateTimeField(string path) =>
-            path is ElsaRuntimeStorageManifest.WorkflowDispatchCreatedAtField or
-                ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField or
-                ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField or
-                ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField;
 
         private async Task<DocumentQueryResult> QueryCompositeEqualityAsync(
             DocumentQuery query,

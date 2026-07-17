@@ -73,6 +73,7 @@ not implemented.
 | `dotnet test tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj --no-restore --nologo -m:1` | Passed: 62 |
 | `dotnet test tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj --no-restore --nologo -m:1` | Passed: 17 |
 | `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj --no-restore --nologo -m:1` | Passed: 526 |
+| `dotnet test tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj -c Release --no-restore --nologo -m:1` | Passed: 254 |
 | `dotnet test tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj --no-restore --nologo -m:1` | Passed: 55 |
 | `dotnet test tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj --no-restore --nologo -m:1` | Passed: 45 |
 | `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore --nologo -m:1` | Passed: 226 |
@@ -91,10 +92,11 @@ provider evidence, not as a measurement of physical rows scanned. Physical bound
 by the admitted composite route declarations plus store-level assertions that every provider request
 has a bounded `Take`; it does not claim that the legacy test adapter itself performs index-limited I/O.
 
-The self-review loop converged after six iterations. It corrected null-availability selection,
+The self-review loop converged after nine iterations. It corrected null-availability selection,
 limit-derived allocation overflow, provider-evidence wording, PostgreSQL null ordering,
-logical/physical missing-value parity, and SQL Server composite-index width. The sixth iteration
-found no remaining actionable issues.
+logical/physical missing-value parity, SQL Server composite-index width, and shared legacy test-adapter
+admission for the bounded outbox routes exercised by the Publishing API restart scenario. The ninth
+iteration found no remaining actionable issues.
 
 ## Generated-map freshness exception
 
