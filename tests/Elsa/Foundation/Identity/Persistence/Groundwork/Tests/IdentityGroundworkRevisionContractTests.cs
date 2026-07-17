@@ -134,6 +134,108 @@ public sealed class IdentityGroundworkRevisionContractTests
     }
 
     [Fact]
+    public async Task Claim_mapping_revision_save_rejects_stale_revision_without_mutating_state()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ClaimMappingStore(docStore);
+        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareClaimMappingStore>(store);
+        var rule = IdentityGroundworkFixtures.ClaimMappingRule();
+        await store.SaveAsync(rule);
+
+        var first = await revisionAware.FindWithRevisionAsync(rule.TenantId, rule.Provider, rule.Id);
+        var second = await revisionAware.FindWithRevisionAsync(rule.TenantId, rule.Provider, rule.Id);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        var saved = await revisionAware.SaveWithRevisionAsync(
+            first.Record with { Order = 20 },
+            first.Revision);
+        var stale = await revisionAware.SaveWithRevisionAsync(
+            second.Record with { Order = 30 },
+            second.Revision);
+
+        var reloaded = await store.ListForProviderAsync(rule.TenantId, rule.Provider);
+        Assert.Equal(IamRevisionSaveStatus.Saved, saved.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, stale.Status);
+        Assert.Equal(20, Assert.Single(reloaded).Order);
+        Assert.NotEqual(first.Revision, saved.Revision);
+    }
+
+    [Fact]
+    public async Task Claim_mapping_revision_save_null_revision_is_create_only()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ClaimMappingStore(docStore);
+        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareClaimMappingStore>(store);
+        var rule = IdentityGroundworkFixtures.ClaimMappingRule();
+
+        var created = await revisionAware.SaveWithRevisionAsync(rule, expectedRevision: null);
+        var duplicate = await revisionAware.SaveWithRevisionAsync(rule with { Order = 99 }, expectedRevision: null);
+
+        Assert.Equal(IamRevisionSaveStatus.Saved, created.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, duplicate.Status);
+        Assert.Equal(10, Assert.Single(await store.ListForProviderAsync(rule.TenantId, rule.Provider)).Order);
+    }
+
+    [Fact]
+    public async Task Provider_configuration_revision_save_rejects_stale_tenant_revision_without_mutating_state()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ProviderConfigurationStore(docStore);
+        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareProviderConfigurationStore>(store);
+        var configuration = IdentityGroundworkFixtures.TenantProviderConfiguration();
+        await store.SaveAsync(configuration);
+
+        var first = await revisionAware.FindForTenantWithRevisionAsync(configuration.TenantId!, configuration.Provider);
+        var second = await revisionAware.FindForTenantWithRevisionAsync(configuration.TenantId!, configuration.Provider);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        var saved = await revisionAware.SaveWithRevisionAsync(
+            first.Record with { Enabled = false },
+            first.Revision);
+        var stale = await revisionAware.SaveWithRevisionAsync(
+            second.Record with { Kind = "stale-kind" },
+            second.Revision);
+
+        var reloaded = await store.FindForTenantAsync(configuration.TenantId!, configuration.Provider);
+        Assert.Equal(IamRevisionSaveStatus.Saved, saved.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, stale.Status);
+        Assert.False(reloaded!.Enabled);
+        Assert.Equal(configuration.Kind, reloaded.Kind);
+        Assert.NotEqual(first.Revision, saved.Revision);
+    }
+
+    [Fact]
+    public async Task Provider_configuration_revision_save_rejects_stale_global_revision_without_mutating_state()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.GlobalProviderConfigurationStore(docStore);
+        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareProviderConfigurationStore>(store);
+        var configuration = IdentityGroundworkFixtures.GlobalProviderConfiguration();
+        await store.SaveAsync(configuration);
+
+        var first = await revisionAware.FindGlobalWithRevisionAsync(configuration.Provider);
+        var second = await revisionAware.FindGlobalWithRevisionAsync(configuration.Provider);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        var saved = await revisionAware.SaveWithRevisionAsync(
+            first.Record with { Enabled = false },
+            first.Revision);
+        var stale = await revisionAware.SaveWithRevisionAsync(
+            second.Record with { Kind = "stale-kind" },
+            second.Revision);
+
+        var reloaded = await store.FindGlobalAsync(configuration.Provider);
+        Assert.Equal(IamRevisionSaveStatus.Saved, saved.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, stale.Status);
+        Assert.False(reloaded!.Enabled);
+        Assert.Equal(configuration.Kind, reloaded.Kind);
+        Assert.NotEqual(first.Revision, saved.Revision);
+    }
+
+    [Fact]
     public async Task Tenant_membership_revision_save_rejects_stale_revision_without_mutating_state()
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();

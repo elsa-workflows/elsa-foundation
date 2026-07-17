@@ -13,7 +13,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkProviderConfigurationStore(
     IDocumentStore store,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IProviderConfigurationStore
+    IPersistenceAccessContextAccessor accessContextAccessor) : IProviderConfigurationStore, IRevisionAwareProviderConfigurationStore
 {
     private const string GlobalDocumentScope = "global";
 
@@ -48,6 +48,57 @@ public sealed class GroundworkProviderConfigurationStore(
         ProviderConfigurationRecord configuration,
         CancellationToken cancellationToken = default)
     {
+        await SaveCoreAsync(configuration, expectedVersion: null, cancellationToken);
+    }
+
+    public async ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(
+        string provider,
+        CancellationToken cancellationToken = default)
+    {
+        accessContextAccessor.EnsureGlobalAccess();
+        var envelope = await store.LoadAsync(
+            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
+            IdentityCompositeDocumentId.From(GlobalDocumentScope, provider),
+            cancellationToken);
+
+        return envelope is null
+            ? null
+            : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+    }
+
+    public async ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(
+        string tenantId,
+        string provider,
+        CancellationToken cancellationToken = default)
+    {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
+        var envelope = await store.LoadAsync(
+            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
+            IdentityCompositeDocumentId.From(tenantId, provider),
+            cancellationToken);
+
+        return envelope is null
+            ? null
+            : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+    }
+
+    public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(
+        ProviderConfigurationRecord configuration,
+        string? expectedRevision,
+        CancellationToken cancellationToken = default)
+    {
+        if (!GroundworkIamRevisionMapper.TryExpectedVersion(expectedRevision, out var expectedVersion))
+            return GroundworkIamRevisionMapper.InvalidRevision();
+
+        var result = await SaveCoreAsync(configuration, expectedVersion, cancellationToken);
+        return GroundworkIamRevisionMapper.ToResult(result);
+    }
+
+    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+        ProviderConfigurationRecord configuration,
+        long? expectedVersion,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(configuration);
         if (configuration.TenantId is null)
             accessContextAccessor.EnsurePrivilegedGlobalAccess();
@@ -59,12 +110,13 @@ public sealed class GroundworkProviderConfigurationStore(
             IdentityCompositeDocumentId.Normalize(configuration.Provider),
             configuration);
         var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
-        await store.SaveAsync(
+        return await store.SaveAsync(
             new SaveDocumentRequest(
                 IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
                 IdentityCompositeDocumentId.From(configuration.TenantId ?? GlobalDocumentScope, configuration.Provider),
                 IdentityStorageManifest.SchemaVersion,
-                content),
+                content,
+                expectedVersion),
             cancellationToken);
     }
 
