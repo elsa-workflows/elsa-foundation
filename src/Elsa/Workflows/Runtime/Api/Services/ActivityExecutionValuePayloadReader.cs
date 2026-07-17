@@ -40,22 +40,32 @@ public sealed class ActivityExecutionValuePayloadReader(
         if (snapshot is null)
             return ActivityExecutionValuePayloadReadResult.NotFound();
 
-        if (string.IsNullOrWhiteSpace(authorization.AuditSubject))
+        var authorizationSnapshot = new PayloadResolutionAuthorizationSnapshot(
+            authorization.TenantScope,
+            authorization.AuthorizationProfile,
+            authorization.AuditSubject,
+            authorization.RequestCorrelationId,
+            CanResolve: false);
+        if (string.IsNullOrWhiteSpace(authorizationSnapshot.AuditSubject))
             return ActivityExecutionValuePayloadReadResult.Denied();
 
-        if (!authorization.CanResolveSensitiveValuePayloads(workflow))
+        authorizationSnapshot = authorizationSnapshot with
         {
-            await AuditAsync("denied", workflowExecutionId, activityExecutionId, evidenceId, cancellationToken);
+            CanResolve = authorization.CanResolveSensitiveValuePayloads(workflow)
+        };
+        if (!authorizationSnapshot.CanResolve)
+        {
+            await AuditAsync("denied", workflowExecutionId, activityExecutionId, evidenceId, authorizationSnapshot, cancellationToken);
             return ActivityExecutionValuePayloadReadResult.Denied();
         }
         if (snapshot.Payload is null ||
             snapshot.CaptureMode is not (RuntimePayloadCaptureMode.DiagnosticSnapshot or RuntimePayloadCaptureMode.Payload))
         {
-            await AuditAsync("unavailable", workflowExecutionId, activityExecutionId, evidenceId, cancellationToken);
+            await AuditAsync("unavailable", workflowExecutionId, activityExecutionId, evidenceId, authorizationSnapshot, cancellationToken);
             return ActivityExecutionValuePayloadReadResult.Unavailable();
         }
 
-        await AuditAsync("resolved", workflowExecutionId, activityExecutionId, evidenceId, cancellationToken);
+        await AuditAsync("resolved", workflowExecutionId, activityExecutionId, evidenceId, authorizationSnapshot, cancellationToken);
         return ActivityExecutionValuePayloadReadResult.Resolved(new(
             evidenceId,
             snapshot.CaptureMode.ToString(),
@@ -67,17 +77,25 @@ public sealed class ActivityExecutionValuePayloadReader(
         string workflowExecutionId,
         string activityExecutionId,
         string evidenceId,
+        PayloadResolutionAuthorizationSnapshot authorizationSnapshot,
         CancellationToken cancellationToken) =>
         auditSink.RecordAsync(
             new(
                 workflowExecutionId,
                 activityExecutionId,
                 evidenceId,
-                authorization.TenantScope,
-                authorization.AuthorizationProfile,
-                authorization.AuditSubject,
-                authorization.RequestCorrelationId,
+                authorizationSnapshot.TenantScope,
+                authorizationSnapshot.AuthorizationProfile,
+                authorizationSnapshot.AuditSubject,
+                authorizationSnapshot.RequestCorrelationId,
                 outcome,
                 timeProvider.GetUtcNow()),
             cancellationToken);
+
+    private sealed record PayloadResolutionAuthorizationSnapshot(
+        string TenantScope,
+        string AuthorizationProfile,
+        string AuditSubject,
+        string RequestCorrelationId,
+        bool CanResolve);
 }

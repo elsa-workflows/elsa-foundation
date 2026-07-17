@@ -125,11 +125,38 @@ public sealed class ActivityExecutionLayoutReader(
         try
         {
             var segments = System.Text.Json.JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(encoded);
-            return segments is not null && OriginsEqual(new(segments), boundaryOrigin);
+            if (segments is null)
+                return false;
+
+            var nodeOrigin = new ActivityInvocationOrigin(segments);
+            return OriginsEqual(nodeOrigin, boundaryOrigin)
+                   || IsDirectNestedBoundaryNode(node, nodeOrigin, boundaryOrigin);
         }
         catch (System.Text.Json.JsonException)
         {
             return false;
         }
     }
+
+    private static bool IsDirectNestedBoundaryNode(
+        ExecutableNode node,
+        ActivityInvocationOrigin nodeOrigin,
+        ActivityInvocationOrigin parentOrigin)
+    {
+        if (!HasValue(node.Metadata, "activity.definitionId") ||
+            !HasValue(node.Metadata, "activity.definitionVersionId") ||
+            !HasValue(node.Metadata, "activity.version") ||
+            !HasValue(node.Metadata, "activity.templateHash"))
+            return false;
+
+        var parentLength = parentOrigin.Segments.Count;
+        return nodeOrigin.Segments.Count == parentLength + 2
+               && nodeOrigin.Segments.Take(parentLength).Zip(parentOrigin.Segments)
+                   .All(x => x.First.Kind == x.Second.Kind && StringComparer.Ordinal.Equals(x.First.Id, x.Second.Id))
+               && nodeOrigin.Segments[parentLength].Kind == ActivityInvocationOriginSegmentKind.NestedPlacement
+               && nodeOrigin.Segments[parentLength + 1].Kind == ActivityInvocationOriginSegmentKind.TemplateBoundary;
+    }
+
+    private static bool HasValue(IReadOnlyDictionary<string, string> metadata, string key) =>
+        metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value);
 }

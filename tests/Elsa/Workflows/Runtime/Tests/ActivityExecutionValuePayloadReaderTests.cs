@@ -38,6 +38,19 @@ public sealed class ActivityExecutionValuePayloadReaderTests
     }
 
     [Fact]
+    public async Task Payload_resolution_uses_one_validated_attribution_snapshot_for_grant_and_audit()
+    {
+        var authorization = new ChangingSubjectAuthorization("subject-before-grant", "");
+        var harness = await Harness.CreateAsync(canResolve: true, authorization: authorization);
+
+        var result = await harness.Reader.ReadAsync("wf", "outer", "value-1", default);
+
+        Assert.Equal(ActivityExecutionValuePayloadReadOutcome.Resolved, result.Outcome);
+        Assert.Equal("subject-before-grant", Assert.Single(harness.Audit.Records).AuditSubject);
+        Assert.Equal(1, authorization.AuditSubjectReads);
+    }
+
+    [Fact]
     public async Task Payload_resolution_fails_closed_without_an_attributable_audit_subject()
     {
         var harness = await Harness.CreateAsync(canResolve: true, auditSubject: "");
@@ -140,7 +153,8 @@ public sealed class ActivityExecutionValuePayloadReaderTests
             bool saveInspection = true,
             RuntimePayloadCaptureMode captureMode = RuntimePayloadCaptureMode.Payload,
             bool includePayload = true,
-            Exception? auditFailure = null)
+            Exception? auditFailure = null,
+            IActivityExecutionInspectionAuthorizationContext? authorization = null)
         {
             var workflows = new InMemoryWorkflowExecutionStateStore();
             var inspections = new InMemoryActivityExecutionInspectionStore();
@@ -189,7 +203,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
             var reader = new ActivityExecutionValuePayloadReader(
                 workflows,
                 inspections,
-                new Authorization(canResolve, auditSubject, canInspect),
+                authorization ?? new Authorization(canResolve, auditSubject, canInspect),
                 audit,
                 TimeProvider.System);
             return new(reader, audit);
@@ -208,6 +222,26 @@ public sealed class ActivityExecutionValuePayloadReaderTests
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => canInspect;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
         public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => canResolve;
+    }
+
+    private sealed class ChangingSubjectAuthorization(params string[] auditSubjects)
+        : IActivityExecutionInspectionAuthorizationContext
+    {
+        public int AuditSubjectReads { get; private set; }
+        public string TenantScope => "tenant:tenant-a";
+        public string AuthorizationProfile => "resolve:true";
+        public string AuditSubject
+        {
+            get
+            {
+                var index = AuditSubjectReads++;
+                return auditSubjects[Math.Min(index, auditSubjects.Length - 1)];
+            }
+        }
+        public string RequestCorrelationId => "request-1";
+        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
+        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
+        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => true;
     }
 
     private sealed class RecordingAuditSink(Exception? failure) : IActivityExecutionValuePayloadAuditSink
