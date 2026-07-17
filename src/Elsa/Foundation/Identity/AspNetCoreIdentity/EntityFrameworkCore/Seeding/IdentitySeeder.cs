@@ -137,10 +137,27 @@ public sealed class IdentitySeeder(
             }
         }
 
-        // Ensure the admin role is attached — repairs pre-existing users that were created before
-        // role assignment was wired.
+        // Ensure the user record exists in the active IUserStore with the admin role attached. The
+        // UserManager writes to the ASP.NET Identity EF tables, but the IUserStore may be backed by a
+        // different persistence layer (e.g. Groundwork) that doesn't share those tables.
         var record = await userStore.FindAsync(tenantId, existing.Id, cancellationToken);
-        if (record is not null && !record.RoleIds.Contains(roleId))
+        if (record is null)
+        {
+            record = new UserRecord(
+                existing.Id,
+                tenantId,
+                existing.UserName ?? existing.Id,
+                existing.Email,
+                existing.DisplayName,
+                UserStatus.Active,
+                ResourceOwnership.Foundation,
+                new HashSet<string> { roleId },
+                new HashSet<string>());
+            await userStore.SaveAsync(record, cancellationToken);
+        }
+        else if (!record.RoleIds.Contains(roleId))
+        {
             await userStore.SaveAsync(record with { RoleIds = new HashSet<string>(record.RoleIds) { roleId } }, cancellationToken);
+        }
     }
 }
