@@ -236,7 +236,6 @@ public sealed class CodeFirstDynamicConformanceTests
                 priorResult: producer.Result,
                 formatted: workflow.Expression<string>("JavaScript", "request.customerId"),
                 literal: "fixed",
-                fallback: ActivityArgument.Default<string>(),
                 nodeId: "consumer");
         }
     }

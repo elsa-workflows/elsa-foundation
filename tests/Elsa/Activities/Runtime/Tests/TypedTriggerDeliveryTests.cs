@@ -35,7 +35,9 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        var write = Assert.Single(_checkpointWriter.ListCommits());
+        var write = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivitySuspended);
         Assert.Equal(RuntimeCheckpointNames.ActivitySuspended, write.Commit.Checkpoint.Name);
         var stateChange = Assert.Single(write.Commit.StateChanges.ActivityExecutions);
         var state = stateChange.State;

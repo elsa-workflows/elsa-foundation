@@ -11,7 +11,7 @@ namespace Elsa.Expressions.Tests.Unit;
 /// Invalid portable Liquid definitions fail predictably instead of rendering parser diagnostics as
 /// workflow values or requiring an ambient expression execution context.
 /// </summary>
-public sealed class LiquidTemplateManagerInvalidTemplateTests
+public sealed class PortableLiquidInvalidTemplateTests
 {
     [Theory]
     [InlineData("{% if true %}{% endraw %}{% endif %}")]

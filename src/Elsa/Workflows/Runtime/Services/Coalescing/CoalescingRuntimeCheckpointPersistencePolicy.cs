@@ -31,6 +31,7 @@ public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheck
     /// </summary>
     public static readonly IReadOnlySet<string> MandatoryFlushCheckpointNames = new HashSet<string>(StringComparer.Ordinal)
     {
+        RuntimeCheckpointNames.ActivityAttemptClaimed,
         RuntimeCheckpointNames.WorkflowSuspended,
         RuntimeCheckpointNames.WorkflowCompleted,
         RuntimeCheckpointNames.WorkflowFaulted,

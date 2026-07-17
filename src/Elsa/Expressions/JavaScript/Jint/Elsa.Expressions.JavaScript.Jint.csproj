@@ -9,8 +9,6 @@
 
   <ItemGroup>
     <PackageReference Include="Jint" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
 	  <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
@@ -18,9 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Expressions.JavaScript.Core.csproj" />
-    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
-    <ProjectReference Include="..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

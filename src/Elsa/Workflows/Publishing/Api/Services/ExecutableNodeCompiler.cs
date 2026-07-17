@@ -46,7 +46,7 @@ public sealed class ExecutableNodeCompiler(
         var activityVersion = activityRows[activity.ActivityVersionId];
 
         var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
-        var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows);
 
         foreach (var inputState in activity.Inputs)
@@ -55,7 +55,29 @@ public sealed class ExecutableNodeCompiler(
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
 
             var binding = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState);
-            inputBindings[binding.InputName] = binding;
+            if (!inputBindings.TryAdd(binding.InputName, binding))
+            {
+                throw new ArgumentException(
+                    $"VF-ACT-003: Activity node '{activity.NodeId}' declares duplicate input '{inputState.ReferenceKey}'. " +
+                    "Every published input must lower to exactly one canonical binding.");
+            }
+        }
+
+        foreach (var inputDefinition in activityVersion.Inputs.Where(input => !inputBindings.ContainsKey(input.ReferenceKey)))
+        {
+            if (inputDefinition.DefaultValue.HasValue)
+            {
+                var binding = inputBindingCompiler.Compile(
+                    activity.NodeId,
+                    inputDefinition,
+                    new ArgumentValue(null, "Default"));
+                inputBindings.Add(binding.InputName, binding);
+                continue;
+            }
+
+            throw new ArgumentException(
+                $"VF-ACT-003: Activity node '{activity.NodeId}' omits input '{inputDefinition.ReferenceKey}', which has no pinned default. " +
+                "Every published input must lower to exactly one canonical binding.");
         }
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
@@ -347,14 +369,14 @@ public sealed class ExecutableNodeCompiler(
         var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
         var policy = ValuePolicyCombiner.ToProtectionPolicy(
             ValuePolicyCombiner.FromAuthoredStorage(variable.StorageDriverType));
+        if (policy.Storage != DurableValueStorage.Inline)
+        {
+            throw new ArgumentException(
+                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
+        }
         RuntimeInputBinding? initialBinding = null;
         if (variable.Default is not null)
         {
-            if (policy.Storage != DurableValueStorage.Inline)
-            {
-                throw new ArgumentException(
-                    $"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' cannot use a literal initial value with storage profile '{variable.StorageDriverType}'. External variable materialization must be explicit before frame activation.");
-            }
             initialBinding = inputBindingCompiler.Compile(
                 nodeId,
                 new InputDefinition(

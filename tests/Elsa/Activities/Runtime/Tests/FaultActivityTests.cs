@@ -43,8 +43,10 @@ public sealed class FaultActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(IActivity activity)
     {
-        activity.Id = "invocation-1";
-        activity.NodeId = "node-1";
-        return new SimpleActivityExecutionContext(activity, CancellationToken.None);
+        return new SimpleActivityExecutionContext(
+            activity,
+            CancellationToken.None,
+            invocationId: "invocation-1",
+            executableNodeId: "node-1");
     }
 }

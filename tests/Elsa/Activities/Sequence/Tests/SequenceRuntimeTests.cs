@@ -20,6 +20,19 @@ public sealed class SequenceRuntimeTests
         var sequenceState = Assert.Single(run.States("node-sequence"));
         var firstChildState = Assert.Single(run.States("node-a"));
         Assert.Equal(ActivityExecutionStatus.Completed, sequenceState.Status);
+        var attempts = sequenceState.Attempts!.OrderBy(attempt => attempt.Ordinal).ToArray();
+        Assert.Equal(4, attempts.Length);
+        Assert.Equal(4, attempts.Select(attempt => attempt.AttemptId).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(attempts, attempt => Assert.NotNull(attempt.EndedAt));
+        Assert.Equal(ActivityAttemptReason.Initial, attempts[0].Reason);
+        Assert.All(attempts.Skip(1), attempt => Assert.Equal(ActivityAttemptReason.Resume, attempt.Reason));
+        Assert.All(
+            attempts.Take(3),
+            attempt => Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, attempt.TransitionKind));
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete, attempts[3].TransitionKind);
+        Assert.NotNull(sequenceState.Completion);
+        Assert.Equal(attempts[3].AttemptId, sequenceState.Completion.AttemptId);
+        Assert.Equal(ActivityOutcomes.Done, sequenceState.Completion.OutcomeKey);
         Assert.Equal("actexec-sequence", firstChildState.ParentActivityExecutionId);
         Assert.Equal("actexec-sequence", firstChildState.SchedulingActivityExecutionId);
     }

@@ -32,9 +32,8 @@ All decisions were resolved during the pre-spec design phase (approved plan: `~/
 
 ## D5 — Mid-workflow bookmark + resume-callback shape
 
-- **Decision**: Non-start `HttpEndpoint` creates a bookmark via `context.CreateBookmark(ActivityBookmarkRequest)` with the same (template, method) stimulus identity, plus a `[ResumeTarget]` method — the `Delay.cs` pattern. Preferred resume-method shape: `IActivityExecutionContext` parameter with the stimulus input exposed through a context-side accessor (small runtime addition, flagged to runtime owners); fallback if that's rejected: `JsonElement`-parameter resume method.
-- **Rationale**: Verified constraint — `WorkflowResumeBookmarkSchedulerWorkHandler.InvokeResumeMethodAsync` binds either the context or the `JsonElement` input, not both; the activity needs both (context to set outputs, input to read the request).
-- **Alternatives considered**: Stashing the request into a workflow output from a `JsonElement`-only resume method — works but bypasses declared outputs; kept only as fallback.
+- **Superseded by spec 095**: The earlier context-mutating bookmark and `[ResumeTarget]` proposal is not the as-built model. Under the [value-flow redesign](../095-value-flow-redesign/spec.md), `HttpEndpoint` derives from `StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>`: its first invocation returns a typed suspension containing immutable persisted state and typed trigger registrations, and resume receives an `ActivityResumeContext<HttpEndpointState, HttpRequestModel>` without mutating an activity execution context.
+- **As built**: Resume projects the HTTP request into one typed `HttpEndpointResult` and completes atomically. `Request`, `RouteData`, and `ParsedContent` are read-only projections of that result; they are not independently published or captured outputs.
 
 ## D6 — Request-body parsing reuse
 

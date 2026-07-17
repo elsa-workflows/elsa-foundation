@@ -49,8 +49,10 @@ public sealed class InlineActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(IActivity activity)
     {
-        activity.Id = "invocation-1";
-        activity.NodeId = "node-inline";
-        return new SimpleActivityExecutionContext(activity, CancellationToken.None);
+        return new SimpleActivityExecutionContext(
+            activity,
+            CancellationToken.None,
+            invocationId: "invocation-1",
+            executableNodeId: "node-inline");
     }
 }

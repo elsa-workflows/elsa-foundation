@@ -65,6 +65,27 @@ public sealed class ActivityFaultIncidentRecorderTests
         Assert.Equal(Assert.Single(state.IncidentIds), endedAttempt.IncidentId);
     }
 
+    [Fact]
+    public async Task CommitAsync_AppliesFaultCapturePolicyToInnerExceptionMetadata()
+    {
+        const string secret = "customer-secret-token";
+        var recorder = new ActivityFaultIncidentRecorder(
+            TimeProvider.System,
+            inspectionAccumulator: null,
+            new ScrubbingFaultCapturePolicy());
+
+        await recorder.CommitAsync(NewRequest(
+            new InvalidOperationException("Expression evaluation failed", new Exception(secret))));
+
+        var commit = Assert.IsType<RuntimeCheckpointCommit>(_store.Commit);
+        var incident = Assert.Single(commit.StateChanges.Incidents).State;
+        var activity = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal("[scrubbed]", incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+        Assert.Equal("[scrubbed]", activity.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+        Assert.DoesNotContain(secret, string.Join('\n', incident.Metadata.Values), StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, string.Join('\n', activity.Metadata.Values), StringComparison.Ordinal);
+    }
+
     private ActivityFaultIncidentRecordRequest NewRequest(Exception exception, ActivityExecutionState? state = null)
     {
         var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _store);
@@ -151,5 +172,11 @@ public sealed class ActivityFaultIncidentRecorderTests
             Commit = commit;
             return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([]));
         }
+    }
+
+    private sealed class ScrubbingFaultCapturePolicy : IRuntimeFaultCapturePolicy
+    {
+        public RuntimeFaultInfo Capture(Exception exception) =>
+            new(exception.GetType().FullName ?? exception.GetType().Name, "[scrubbed]", StackTrace: null);
     }
 }

@@ -33,8 +33,6 @@ public sealed class Cron : Activity<CronResult>
     /// <summary>The stable activity type key the trigger/schedule providers match on.</summary>
     public const string ActivityType = "Elsa.Cron";
 
-    public Cron() => Type = ActivityType;
-
     /// <summary>
     /// The cron expression, as an authored literal (UTC). Five fields = standard cron; six/seven fields enable
     /// the seconds field. Drives the stimulus hash and the recurring schedule.

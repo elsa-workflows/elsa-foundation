@@ -103,7 +103,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        if (!TryCreateTypedTriggerDelivery(state, bookmark, resumePayload, out var triggerDelivery))
+        if (!TryResolveTypedTriggerDelivery(state, bookmark, resumePayload, workItem, out var triggerDelivery))
             return;
 
         await ResumeActivityAsync(scope.ServiceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executable, executableNode, state, triggerDelivery!, cancellationToken);
@@ -131,13 +131,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         try
         {
             var snapshot = RequireCommittedSnapshot(state, executableNode.ActivityContract!);
-            resumeAttempt = NewAttempt(state, ActivityAttemptReason.Resume, triggerDelivery.DeliveryId, _timeProvider.GetUtcNow());
-            executionState = state with
-            {
-                InputSnapshot = snapshot,
-                Attempts = (state.Attempts ?? []).Append(resumeAttempt).ToArray(),
-                TriggerDeliveries = (state.TriggerDeliveries ?? []).Append(triggerDelivery).ToArray()
-            };
+            var activationClaim = await ActivityAttemptActivationClaimer.ClaimTypedResumeAsync(
+                checkpointCommitter,
+                _timeProvider,
+                workItem,
+                resumePayload,
+                state,
+                triggerDelivery,
+                cancellationToken);
+            resumeAttempt = activationClaim.Attempt;
+            executionState = activationClaim.State with { InputSnapshot = snapshot };
         }
         catch (OperationCanceledException)
         {
@@ -175,9 +178,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 new ActivityActivationRequest(contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery),
                 cancellationToken);
             activity = activationLease.Activity;
-
-            activity.NodeId = executableNode.ExecutableNodeId;
-            activity.Id = resumePayload.ActivityExecutionId;
 
             context = SimpleActivityExecutionContext.ForExecution(
                 activity,
@@ -357,10 +357,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, []), cancellationToken);
     }
 
-    private static bool TryCreateTypedTriggerDelivery(
+    private static bool TryResolveTypedTriggerDelivery(
         ActivityExecutionState state,
         BookmarkState bookmark,
         RuntimeResumeBookmarkCommandPayload resumePayload,
+        RuntimeSchedulerWorkItem workItem,
         out ActivityTriggerDelivery? delivery)
     {
         delivery = null;
@@ -384,14 +385,28 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return false;
 
         var priorDeliveries = state.TriggerDeliveries ?? [];
-        var isDuplicate = priorDeliveries.Any(candidate =>
+        var duplicate = priorDeliveries.FirstOrDefault(candidate =>
             StringComparer.Ordinal.Equals(candidate.RegistrationId, registration.RegistrationId) &&
             candidate.Status is ActivityTriggerDeliveryStatus.Received or ActivityTriggerDeliveryStatus.Consumed &&
             (StringComparer.Ordinal.Equals(candidate.DeliveryId, metadata.DeliveryId) ||
              registration.DeduplicationPolicy == ActivityTriggerDeduplicationPolicy.Once ||
              StringComparer.Ordinal.Equals(candidate.DeduplicationKey, metadata.DeduplicationKey)));
-        if (isDuplicate)
+        if (duplicate is not null)
+        {
+            var isClaimRedelivery = duplicate.Status == ActivityTriggerDeliveryStatus.Received &&
+                StringComparer.Ordinal.Equals(duplicate.DeliveryId, metadata.DeliveryId) &&
+                state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId, out var claimWorkItemId) &&
+                StringComparer.Ordinal.Equals(claimWorkItemId, workItem.WorkItemId) &&
+                state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaim, out var claimedAttemptId) &&
+                state.Attempts?.Any(attempt => attempt.EndedAt is null && StringComparer.Ordinal.Equals(attempt.AttemptId, claimedAttemptId)) == true;
+            if (isClaimRedelivery)
+            {
+                delivery = duplicate;
+                return true;
+            }
+
             return false;
+        }
 
         var payload = resumePayload.Input is { } input && input.ValueKind is not JsonValueKind.Null
             ? ValueEnvelope.Inline(registration.PayloadType, input, ValueProtectionPolicy.InstanceInline)
@@ -646,29 +661,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             throw new InvalidOperationException($"VF-ACT-001: Typed activity invocation '{state.InvocationId}' does not match its pinned activity contract.");
 
         return snapshot;
-    }
-
-    private static ActivityAttempt NewAttempt(
-        ActivityExecutionState state,
-        ActivityAttemptReason reason,
-        string? triggerDeliveryId,
-        DateTimeOffset startedAt)
-    {
-        if (state.Completion is not null)
-            throw new InvalidOperationException($"VF-ACT-007: Completed activity invocation '{state.InvocationId}' cannot create another attempt.");
-
-        var attempts = state.Attempts?.ToArray() ?? [];
-        if (attempts.Any(attempt => attempt.EndedAt is null))
-            throw new InvalidOperationException($"VF-ACT-009: Activity invocation '{state.InvocationId}' already has an open attempt.");
-
-        var ordinal = attempts.Length == 0 ? 1 : attempts.Max(attempt => attempt.Ordinal) + 1;
-        return new ActivityAttempt(
-            $"{state.InvocationId}:attempt:{ordinal}",
-            state.InvocationId,
-            ordinal,
-            reason,
-            startedAt,
-            triggerDeliveryId: triggerDeliveryId);
     }
 
     private static ActivityExecutionState EndOpenAttempt(

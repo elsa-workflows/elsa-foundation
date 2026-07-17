@@ -115,7 +115,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     }
 
     [Fact]
-    public async Task Materialization_rejects_destination_that_downgrades_result_projection_policy()
+    public async Task Materialization_propagates_result_projection_policy_to_destination()
     {
         var projectionPolicy = new ActivityValuePolicy(
             IsPersistable: true,
@@ -144,13 +144,45 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
         Assert.True(resolved.Envelope.Policy.RequiresEncryption);
         Assert.Equal("Full", resolved.Envelope.Policy.RedactionMode);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new RuntimeActivityInputMaterializer(_resolver)
-                .MaterializeSnapshotAsync(NewConsumerNode(binding), consumer.InvocationId, context, DateTimeOffset.UnixEpoch)
-                .AsTask());
+        var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
+            .MaterializeSnapshotAsync(NewConsumerNode(binding), consumer.InvocationId, context, DateTimeOffset.UnixEpoch);
 
-        Assert.Contains("VF-ACT-005", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("downgrade", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var value = snapshot.Values["customer-id"];
+        Assert.True(value.Policy.IsSensitive);
+        Assert.True(value.Policy.RequiresEncryption);
+        Assert.Equal("Full", value.Policy.RedactionMode);
+    }
+
+    [Fact]
+    public async Task Materialization_preserves_result_lifecycle_when_destination_requires_only_instance_lifecycle()
+    {
+        var resultPolicy = new ValueProtectionPolicy(DurableValueLifecycle.Result, DurableValueStorage.Inline);
+        var producer = CompletedProducer(ValueEnvelope.Inline(
+            new ValueTypeDescriptor("test/result"),
+            JsonSerializer.SerializeToElement(new { customerId = "customer-7" }),
+            resultPolicy));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"));
+        var context = NewContext(
+            consumer: consumer,
+            runtimeView: [producer, consumer],
+            executable: NewProducerExecutable(new ActivityValuePolicy(
+                IsPersistable: true,
+                IsSensitive: false,
+                RequiresEncryption: false,
+                RedactionMode: null,
+                Lifecycle: ActivityValueLifecycle.Result)));
+
+        var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
+            .MaterializeSnapshotAsync(NewConsumerNode(binding), consumer.InvocationId, context, DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(DurableValueLifecycle.Result, snapshot.Values["customer-id"].Policy.Lifecycle);
+        Assert.Equal("customer-7", snapshot.Values["customer-id"].InlineValue!.Value.GetString());
     }
 
     [Fact]

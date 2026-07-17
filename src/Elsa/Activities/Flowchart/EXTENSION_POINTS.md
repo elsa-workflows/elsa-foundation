@@ -44,10 +44,11 @@ This module also exposes these activity-owned contracts:
 
 ## Consumed runtime contracts
 
-`Flowchart` implements two runtime parent-callback contracts (`Elsa.Activities.Runtime.Core.Contracts`):
+`Flowchart` implements the engine-only structural execution protocol (`Elsa.Workflows.Runtime.Core.Contracts`):
 
-- `IActivityChildCompletionHandler` — invoked when a child completes; routes through `FlowchartExecutionEngine.OnChildCompletedAsync` to follow outbound connections, evaluate implicit/parallel joins, and complete the composite when no active or waiting paths remain.
-- `IActivityChildFaultHandler` — invoked when a child branch faults (#308); routes through `FlowchartExecutionEngine.OnChildFaultedAsync`. Because a flowchart join requires every inbound branch, a faulted inbound branch can never let the join fire, so the flowchart faults deterministically (surfacing a composite incident) instead of hanging — mirroring the `Parallel` fork/join composite. The faulted leaf keeps its own blocking incident.
+- `IRuntimeStructuralActivity` — starts the flowchart, schedules its initial children, and returns a `RuntimeStructuralContinuation` describing whether the runtime must complete, defer, fault, or cancel the composite.
+- `IRuntimeActivityChildCompletionHandler` — invoked when a child completes; routes through `FlowchartExecutionEngine.OnChildCompletedAsync` to follow outbound connections, evaluate implicit/parallel joins, and return the next continuation decision.
+- `IRuntimeActivityChildFaultHandler` — invoked when a child branch faults (#308); routes through `FlowchartExecutionEngine.OnChildFaultedAsync`. Because a flowchart join requires every inbound branch, a faulted inbound branch can never let the join fire, so the returned decision faults the flowchart deterministically (surfacing a composite incident) instead of hanging — mirroring the `Parallel` fork/join composite. The faulted leaf keeps its own blocking incident.
 
 ## Cross-domain contributions
 

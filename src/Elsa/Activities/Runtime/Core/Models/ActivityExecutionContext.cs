@@ -53,15 +53,17 @@ public sealed record ActivityExecutionContext
 
     internal static ActivityExecutionContext FromRuntime(IActivityExecutionContext context)
     {
-        var identity = context as IActivityInvocationIdentity;
+        if (context is not IActivityInvocationIdentity identity)
+            throw new InvalidOperationException($"Activity execution context '{context.GetType().FullName}' does not provide runtime-owned invocation identity.");
+
         return new(
-            workflowExecutionId: identity?.WorkflowExecutionId ?? string.Empty,
-            invocationId: identity?.InvocationId ?? context.Activity.Id,
-            attemptId: identity?.AttemptId ?? string.Empty,
-            executableNodeId: identity?.ExecutableNodeId ?? context.Activity.NodeId,
+            workflowExecutionId: identity.WorkflowExecutionId,
+            invocationId: identity.InvocationId,
+            attemptId: identity.AttemptId,
+            executableNodeId: identity.ExecutableNodeId,
             context.CancellationToken,
-            identity?.TriggerPayload,
-            identity?.TriggerNodeId);
+            identity.TriggerPayload,
+            identity.TriggerNodeId);
     }
 }
 

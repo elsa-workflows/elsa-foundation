@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence.Exceptions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,10 +22,10 @@ public sealed class SequenceActivityTests : IDisposable
     {
         var context = NewContext(NewSequenceNode([]));
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
         Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
@@ -33,10 +34,10 @@ public sealed class SequenceActivityTests : IDisposable
     {
         var context = NewContext(NewNode("node-sequence", activityType: "sequence"));
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
         Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
@@ -45,12 +46,12 @@ public sealed class SequenceActivityTests : IDisposable
     {
         var context = NewContext(NewSequenceNode([NewNode("node-a"), NewNode("node-b")]));
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-a", request.ExecutableNodeId);
         Assert.Equal("actexec-sequence", request.SchedulingActivityExecutionId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -72,12 +73,12 @@ public sealed class SequenceActivityTests : IDisposable
         var context = NewContext(NewSequenceNode([NewNode("node-a"), NewNode("node-b"), NewNode("node-c")]));
         var sequence = new SequenceActivity();
 
-        await sequence.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]));
+        var continuation = await sequence.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-b", request.ExecutableNodeId);
         Assert.Equal("actexec-a", request.SchedulingActivityExecutionId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -86,11 +87,11 @@ public sealed class SequenceActivityTests : IDisposable
         var context = NewContext(NewSequenceNode([NewNode("node-a"), NewNode("node-b")]));
         var sequence = new SequenceActivity();
 
-        await sequence.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Done]));
+        var continuation = await sequence.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Done]));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -101,11 +102,11 @@ public sealed class SequenceActivityTests : IDisposable
         var context = NewContext(NewSequenceNode([NewNode("node-a"), NewNode("node-b"), NewNode("node-c")]));
         var sequence = new SequenceActivity();
 
-        await sequence.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Break]));
+        var continuation = await sequence.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Break]));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Break], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Break, continuation.OutcomeName);
     }
 
     [Fact]
@@ -135,22 +136,14 @@ public sealed class SequenceActivityTests : IDisposable
         await Assert.ThrowsAsync<SequenceExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
-    [Fact]
-    public async Task ExecuteAsync_ThrowsWhenRuntimeContextIsMissing()
-    {
-        var context = new NonRuntimeActivityExecutionContext(new SequenceActivity());
-
-        await Assert.ThrowsAsync<SequenceExecutionException>(() => ((IActivity)new SequenceActivity()).ExecuteAsync(context).AsTask());
-    }
-
     public void Dispose() => _serviceProvider.Dispose();
 
-    private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        await ((IActivity)new SequenceActivity()).ExecuteAsync(context);
+    private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)new SequenceActivity()).ExecuteStructureAsync(context);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode)
     {
-        var activity = new SequenceActivity { Id = "actexec-sequence", NodeId = "node-sequence" };
+        var activity = new SequenceActivity();
         return new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,
@@ -233,9 +226,4 @@ public sealed class SequenceActivityTests : IDisposable
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class NonRuntimeActivityExecutionContext(IActivity activity) : IActivityExecutionContext
-    {
-        public IActivity Activity { get; } = activity;
-        public CancellationToken CancellationToken => CancellationToken.None;
-    }
 }

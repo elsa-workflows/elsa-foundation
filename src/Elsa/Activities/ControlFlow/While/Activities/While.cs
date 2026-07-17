@@ -51,7 +51,7 @@ namespace Elsa.Activities.While.Activities;
 /// </remarks>
 [ActivityStructure("elsa.while.structure", "1.0.0")]
 [ActivityChildSlot("While.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
+public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "While.Body";
     public const string StructureKind = "elsa.while.structure";
@@ -61,16 +61,15 @@ public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IActivi
     [ActivityInput(Key = nameof(Condition))]
     public bool Condition { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
         var navigator = WhileNavigator.From(runtimeContext.ExecutableNode);
 
         // First condition evaluation: false on entry means the body never runs.
-        ContinueOrComplete(runtimeContext, navigator, Condition, completedChildActivityExecutionId: null);
+        return ValueTask.FromResult(ContinueOrComplete(runtimeContext, navigator, Condition, completedChildActivityExecutionId: null));
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -87,18 +86,16 @@ public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IActivi
         // (separate) Break activity module — mirroring For/ForEach/Do.
         if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         // The runtime re-materializes this composite's inputs for every child-completion evaluation, so
         // this read reflects any state the body mutated this pass: the condition is re-evaluated before
         // the next pass.
-        ContinueOrComplete(runtimeContext, navigator, Condition, context.CompletedChildActivityExecutionId);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(ContinueOrComplete(runtimeContext, navigator, Condition, context.CompletedChildActivityExecutionId));
     }
 
-    private static void ContinueOrComplete(
+    private static RuntimeStructuralContinuation ContinueOrComplete(
         IRuntimeActivityExecutionContext runtimeContext,
         WhileNavigator navigator,
         bool condition,
@@ -106,8 +103,7 @@ public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IActivi
     {
         if (!condition || navigator.Body is not { } body)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return RuntimeStructuralContinuation.Complete();
         }
 
         var compositeExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
@@ -131,6 +127,8 @@ public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IActivi
                 executionPathId: null,
                 executionScopeId: null,
                 schedulingCause: null));
+
+        return RuntimeStructuralContinuation.Defer;
     }
 
     /// <summary>

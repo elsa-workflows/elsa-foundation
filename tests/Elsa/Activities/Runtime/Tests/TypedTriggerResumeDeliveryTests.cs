@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -103,6 +106,66 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_RedeliveredAfterWorkerCancellation_ClaimsFreshAttemptWithoutAcceptingTriggerTwice()
+    {
+        var executable = NewTypedExecutable(currentLiteral: "original");
+        var contract = executable.RootActivity.ActivityContract!;
+        var triggerType = Descriptor<ApprovalTrigger>();
+        var activator = new CancelThenCompleteResumeActivator(_activityStateStore);
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, triggerType));
+        await SaveBookmarkAsync();
+        await using var provider = NewProvider(activator);
+        var handler = NewHandler(provider);
+        var workItem = NewResumeWorkItem(
+            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            triggerDelivery: Delivery(triggerType, "dedupe-42"));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => handler.HandleAsync(workItem).AsTask());
+
+        var interrupted = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal("actexec-1:attempt:2", interrupted!.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+        Assert.Equal("resume-work", interrupted.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId]);
+        Assert.Equal(ActivityTriggerDeliveryStatus.Received, Assert.Single(interrupted.TriggerDeliveries!).Status);
+
+        await handler.HandleAsync(workItem);
+
+        Assert.Collection(
+            activator.Requests,
+            first =>
+            {
+                Assert.Equal("actexec-1:attempt:2", first.Attempt.AttemptId);
+                Assert.Equal("delivery-42", first.Attempt.TriggerDeliveryId);
+            },
+            second =>
+            {
+                Assert.Equal("actexec-1:attempt:3", second.Attempt.AttemptId);
+                Assert.Equal(ActivityAttemptReason.Resume, second.Attempt.Reason);
+                Assert.Equal("delivery-42", second.Attempt.TriggerDeliveryId);
+            });
+        Assert.Collection(
+            activator.StatesObservedBeforeActivation,
+            first =>
+            {
+                Assert.Equal("actexec-1:attempt:2", first.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+                Assert.Single(first.TriggerDeliveries!);
+            },
+            second =>
+            {
+                var attempts = second.Attempts!.OrderBy(attempt => attempt.Ordinal).ToArray();
+                Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, attempts[1].TransitionKind);
+                Assert.Null(attempts[2].EndedAt);
+                Assert.Equal("actexec-1:attempt:3", second.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+                Assert.Single(second.TriggerDeliveries!);
+            });
+        var completed = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Completed, completed!.Status);
+        Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, Assert.Single(completed.TriggerDeliveries!).Status);
+        Assert.Equal(3, completed.Attempts!.Count);
+        Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
     public async Task HandleAsync_TypedResumeCanAtomicallyConsumeOneTriggerAndRegisterItsReplacement()
     {
         var executable = NewTypedExecutable(currentLiteral: "original");
@@ -134,7 +197,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal("actexec-1:attempt:2:trigger:1", replacement.RegistrationId);
         Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
 
-        var commit = Assert.Single(_checkpointWriter.ListCommits()).Commit;
+        var commit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.BookmarkConsumed).Commit;
         var replacementIntent = Assert.Single(commit.PostCommitIntents);
         var replacementWork = replacementIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, replacementWork.CommandKind);
@@ -195,7 +260,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, Assert.Single(state.TriggerDeliveries!).Status);
         Assert.Empty(state.BookmarkIds);
         Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        var commit = Assert.Single(_checkpointWriter.ListCommits()).Commit;
+        var commit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCancelled).Commit;
         Assert.Equal(Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.ActivityCancelled, commit.Checkpoint.Name);
         var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.Cancel, cancelWork.CommandKind);
@@ -268,6 +335,34 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             Activities.Add(activity);
             return ValueTask.FromResult(new ActivityActivationLease(activity));
         }
+    }
+
+    private sealed class CancelThenCompleteResumeActivator(IActivityExecutionStateStore activityStateStore) : IActivityActivator
+    {
+        public List<ActivityActivationRequest> Requests { get; } = [];
+        public List<ActivityExecutionState> StatesObservedBeforeActivation { get; } = [];
+
+        public async ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            StatesObservedBeforeActivation.Add(
+                (await activityStateStore.FindAsync("wfexec-1", "actexec-1", cancellationToken))!);
+            IActivity activity = Requests.Count == 1 ? new InterruptedApprovalActivity() : new ApprovalActivity();
+            return new ActivityActivationLease(activity);
+        }
+    }
+
+    private sealed class InterruptedApprovalActivity : StatefulActivity<ActivityUnit, ApprovalState, ApprovalTrigger>
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit, ApprovalState>> ExecuteAsync(ActivityExecutionContext context) =>
+            throw new NotSupportedException();
+
+        protected override ValueTask<ActivityTransition<ActivityUnit, ApprovalState>> ResumeAsync(
+            ActivityResumeContext<ApprovalState, ApprovalTrigger> context) =>
+            ValueTask.FromException<ActivityTransition<ActivityUnit, ApprovalState>>(
+                new OperationCanceledException("Simulated worker cancellation after typed resume activation."));
     }
 
     private sealed class ResuspendingResumeActivator : IActivityActivator

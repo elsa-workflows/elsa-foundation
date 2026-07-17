@@ -45,7 +45,7 @@ namespace Elsa.Activities.For.Activities;
 /// </remarks>
 [ActivityStructure("elsa.for.structure", "1.0.0")]
 [ActivityChildSlot("For.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class For : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
+public sealed class For : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "For.Body";
     public const string StructureKind = "elsa.for.structure";
@@ -73,22 +73,21 @@ public sealed class For : ActivityBase, IActivityResult<ActivityUnit>, IActivity
     [ActivityInput(Key = nameof(EndInclusive), Order = 30)]
     public bool EndInclusive { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
         var range = ResolveRange();
         var navigator = ForNavigator.From(runtimeContext.ExecutableNode);
 
         if (!range.HasFirst || navigator.Body is null)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleBody(runtimeContext, navigator.Body, range.Start);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -100,8 +99,7 @@ public sealed class For : ActivityBase, IActivityResult<ActivityUnit>, IActivity
 
         if (context.OutcomeNames.Contains(BreakOutcome, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         var range = ResolveRange();
@@ -110,12 +108,11 @@ public sealed class For : ActivityBase, IActivityResult<ActivityUnit>, IActivity
 
         if (nextIndex is not { } index || navigator.Body is null)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleBody(runtimeContext, navigator.Body, index);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
     private void ScheduleBody(IRuntimeActivityExecutionContext runtimeContext, ExecutableNode body, int index)

@@ -154,7 +154,7 @@ public sealed class ActivityFaultIncidentRecorder
             [RuntimeMetadataKeys.FaultSubStatus] = request.SubStatus
         };
 
-    private static ActivityExecutionState NewFaultedActivityState(
+    private ActivityExecutionState NewFaultedActivityState(
         ActivityFaultIncidentRecordRequest request,
         string incidentId,
         DateTimeOffset completedAt,
@@ -219,7 +219,7 @@ public sealed class ActivityFaultIncidentRecorder
         };
     }
 
-    private static IncidentState NewIncident(
+    private IncidentState NewIncident(
         ActivityFaultIncidentRecordRequest request,
         string incidentId,
         DateTimeOffset occurredAt,
@@ -245,7 +245,7 @@ public sealed class ActivityFaultIncidentRecorder
             metadata: metadata);
     }
 
-    private static void AddExceptionMetadata(IDictionary<string, string> metadata, RuntimeFaultInfo faultInfo, Exception exception)
+    private void AddExceptionMetadata(IDictionary<string, string> metadata, RuntimeFaultInfo faultInfo, Exception exception)
     {
         metadata[RuntimeMetadataKeys.FaultType] = faultInfo.ExceptionType;
         metadata[RuntimeMetadataKeys.FaultMessage] = faultInfo.Message;
@@ -256,8 +256,9 @@ public sealed class ActivityFaultIncidentRecorder
         if (exception.InnerException is not { } inner)
             return;
 
-        metadata[RuntimeMetadataKeys.FaultInnerType] = inner.GetType().FullName ?? inner.GetType().Name;
-        metadata[RuntimeMetadataKeys.FaultInnerMessage] = inner.Message;
+        var innerFaultInfo = _faultCapturePolicy.Capture(inner);
+        metadata[RuntimeMetadataKeys.FaultInnerType] = innerFaultInfo.ExceptionType;
+        metadata[RuntimeMetadataKeys.FaultInnerMessage] = innerFaultInfo.Message;
     }
 }
 

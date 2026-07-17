@@ -135,7 +135,8 @@ public sealed class ExpressionDefinitionContractTests
 
         Assert.DoesNotContain(exposedTypes, type => typeof(Delegate).IsAssignableFrom(type));
         Assert.DoesNotContain(typeof(IServiceProvider), exposedTypes);
-        Assert.DoesNotContain(typeof(IExpressionExecutionContext), exposedTypes);
+        Assert.DoesNotContain(exposedTypes, type =>
+            StringComparer.Ordinal.Equals(type.FullName, "Elsa.Expressions.Core.Contracts.IExpressionExecutionContext"));
     }
 
     private static ExpressionDefinition Definition(IReadOnlyDictionary<string, ExpressionParameterBinding> parameters) =>

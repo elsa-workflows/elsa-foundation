@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Do.Exceptions;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,12 +22,12 @@ public sealed class DoActivityTests : IDisposable
     {
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-body", request.ExecutableNodeId);
         Assert.Equal("actexec-do", request.SchedulingActivityExecutionId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -35,11 +36,11 @@ public sealed class DoActivityTests : IDisposable
         // Post-test loop: the body runs at least once, so a false entry condition still schedules it.
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: false);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-body", request.ExecutableNodeId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -47,7 +48,7 @@ public sealed class DoActivityTests : IDisposable
     {
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.False(string.IsNullOrEmpty(request.SchedulingProvenance.IterationId));
@@ -60,11 +61,11 @@ public sealed class DoActivityTests : IDisposable
     {
         var context = NewContext(NewDoNode(body: null), condition: true);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -72,12 +73,12 @@ public sealed class DoActivityTests : IDisposable
     {
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
 
-        await ((IActivityChildCompletionHandler)context.Activity).OnChildCompletedAsync(
+        var continuation = await ((IRuntimeActivityChildCompletionHandler)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-1", "node-body", [ActivityOutcomes.Done]));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-body", request.ExecutableNodeId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
         // The next pass uses an iteration id seeded from the completed child, distinct from the first pass.
         Assert.Equal("actexec-do:iter:actexec-body-1", request.SchedulingProvenance.IterationId);
     }
@@ -87,12 +88,12 @@ public sealed class DoActivityTests : IDisposable
     {
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: false);
 
-        await ((IActivityChildCompletionHandler)context.Activity).OnChildCompletedAsync(
+        var continuation = await ((IRuntimeActivityChildCompletionHandler)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-1", "node-body", [ActivityOutcomes.Done]));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -101,12 +102,12 @@ public sealed class DoActivityTests : IDisposable
         // Condition is true, but a Break outcome ends the loop early all the same.
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
 
-        await ((IActivityChildCompletionHandler)context.Activity).OnChildCompletedAsync(
+        var continuation = await ((IRuntimeActivityChildCompletionHandler)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-1", "node-body", [DoActivity.BreakOutcome]));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public sealed class DoActivityTests : IDisposable
         // For/ForEach/If/Switch/Parallel) instead of silently rescheduling the body or completing.
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
 
-        await Assert.ThrowsAsync<DoExecutionException>(() => ((IActivityChildCompletionHandler)context.Activity)
+        await Assert.ThrowsAsync<DoExecutionException>(() => ((IRuntimeActivityChildCompletionHandler)context.Activity)
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -130,7 +131,7 @@ public sealed class DoActivityTests : IDisposable
         var entryIterationId = Assert.Single(entryContext.GetChildActivityScheduleRequests()).SchedulingProvenance.IterationId;
 
         var nextContext = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
-        await ((IActivityChildCompletionHandler)nextContext.Activity).OnChildCompletedAsync(
+        await ((IRuntimeActivityChildCompletionHandler)nextContext.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(nextContext, "actexec-body-1", "node-body", [ActivityOutcomes.Done]));
         var nextIterationId = Assert.Single(nextContext.GetChildActivityScheduleRequests()).SchedulingProvenance.IterationId;
 
@@ -161,22 +162,14 @@ public sealed class DoActivityTests : IDisposable
         await Assert.ThrowsAsync<DoExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
-    [Fact]
-    public async Task Execute_Throws_WhenRuntimeContextIsMissing()
-    {
-        var context = new NonRuntimeActivityExecutionContext(new DoActivity());
-
-        await Assert.ThrowsAsync<DoExecutionException>(() => ((IActivity)new DoActivity()).ExecuteAsync(context).AsTask());
-    }
-
     public void Dispose() => _serviceProvider.Dispose();
 
-    private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        await ((IActivity)context.Activity).ExecuteAsync(context);
+    private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, bool condition)
     {
-        var activity = new DoActivity { Id = "actexec-do", NodeId = "node-do", Condition = condition };
+        var activity = new DoActivity { Condition = condition };
         var context = new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,

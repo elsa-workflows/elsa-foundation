@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Switch.Exceptions;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,12 +24,12 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a")), ("b", NewNode("node-b"))],
             @default: NewNode("node-default")), value: "b");
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-b", request.ExecutableNodeId);
         Assert.Equal("actexec-switch", request.SchedulingActivityExecutionId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -38,7 +39,7 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a"))],
             @default: NewNode("node-default")), value: "zzz");
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-default", request.ExecutableNodeId);
@@ -51,11 +52,11 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", null)],
             @default: NewNode("node-default")), value: "a");
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal(["a"], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal("a", continuation.OutcomeName);
     }
 
     [Fact]
@@ -65,11 +66,11 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a"))],
             @default: null), value: "zzz");
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Default], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Default, continuation.OutcomeName);
     }
 
     [Fact]
@@ -79,11 +80,11 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a")), ("b", NewNode("node-b"))],
             @default: NewNode("node-default")), value: "b");
 
-        await new SwitchActivity().OnChildCompletedAsync(
+        var continuation = await new SwitchActivity().OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Done]));
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal(["b"], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal("b", continuation.OutcomeName);
     }
 
     [Fact]
@@ -93,11 +94,11 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a"))],
             @default: NewNode("node-default")), value: "zzz");
 
-        await new SwitchActivity().OnChildCompletedAsync(
+        var continuation = await new SwitchActivity().OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-default", "node-default", [ActivityOutcomes.Done]));
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Default], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Default, continuation.OutcomeName);
     }
 
     [Fact]
@@ -109,11 +110,11 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a")), ("b", NewNode("node-b"))],
             @default: NewNode("node-default")), value: "b");
 
-        await new SwitchActivity().OnChildCompletedAsync(
+        var continuation = await new SwitchActivity().OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Break]));
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Break], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Break, continuation.OutcomeName);
     }
 
     [Fact]
@@ -177,22 +178,14 @@ public sealed class SwitchActivityTests : IDisposable
         await Assert.ThrowsAsync<SwitchExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
-    [Fact]
-    public async Task Execute_Throws_WhenRuntimeContextIsMissing()
-    {
-        var context = new NonRuntimeActivityExecutionContext(new SwitchActivity());
-
-        await Assert.ThrowsAsync<SwitchExecutionException>(() => ((IActivity)new SwitchActivity()).ExecuteAsync(context).AsTask());
-    }
-
     public void Dispose() => _serviceProvider.Dispose();
 
-    private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        await ((IActivity)context.Activity).ExecuteAsync(context);
+    private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, string value)
     {
-        var activity = new SwitchActivity { Id = "actexec-switch", NodeId = "node-switch", Value = value };
+        var activity = new SwitchActivity { Value = value };
         var context = new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,
@@ -286,9 +279,4 @@ public sealed class SwitchActivityTests : IDisposable
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class NonRuntimeActivityExecutionContext(IActivity activity) : IActivityExecutionContext
-    {
-        public IActivity Activity { get; } = activity;
-        public CancellationToken CancellationToken => CancellationToken.None;
-    }
 }

@@ -13,17 +13,19 @@ that they run on separate threads. Each branch is forked under a distinct `Branc
 executable node in its own slot, so branch outputs are recorded against distinct executions and never
 overwrite each other.
 
-The join is stateless: the child-completion callback recovers how many branches have finished by querying
-the durable activity-execution store for this composite's completed branch children (the runtime persists
-each completing child as `Completed` before enqueuing the parent-completion evaluation), rather than
+The join is stateless: the runtime structural child-completion callback recovers how many branches have
+finished by querying the durable activity-execution store for this composite's completed branch children
+(the runtime persists each completing child as `Completed` before enqueuing the parent-completion evaluation), rather than
 carrying a mutable counter across the per-completion re-construction. The engine flips this composite to
 `Completed` on the first satisfying completion and short-circuits later sibling evaluations, so the join
 never double-completes. If a branch runs `Finish`, the engine ends the run terminally and cancels the
 remaining queued sibling branches (#293).
 
-**Fault-aware join (#308).** Branch faults are propagated to the composite through
-`IActivityChildFaultHandler`: when a branch faults, the engine rides a child-fault parent-evaluation work
-item on the branch's fault incident, so `Parallel` re-evaluates its join deterministically instead of hanging.
+**Fault-aware join (#308).** `Parallel` participates in the engine-only `IRuntimeStructuralActivity`
+protocol. Its initial invocation schedules all runnable branches and returns
+`RuntimeStructuralContinuation.Defer`; child completion and fault callbacks return the next immutable
+continuation decision. When a branch faults, the engine rides a child-fault parent-evaluation work item on
+the branch's fault incident, so `Parallel` re-evaluates its join deterministically instead of hanging.
 The join counts each branch by terminal disposition and completes with `Done` once enough branches reach
 `Completed` to meet the threshold; it **faults the composite** (surfacing a composite incident) once too many
 branches reach a terminal non-success state (`Faulted`/`Cancelled`) for the remaining branches to reach the

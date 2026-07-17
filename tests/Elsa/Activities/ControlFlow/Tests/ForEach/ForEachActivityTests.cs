@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +29,7 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(new[] { "x", "y", "z" });
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal(BodyNodeId, request.ExecutableNodeId);
@@ -36,7 +37,7 @@ public sealed class ForEachActivityTests : IDisposable
         // ADR 0028 step 3: the body is scheduled under a distinct per-pass IterationId.
         Assert.Equal($"{ForEachExecutionId}:foreach-iteration:0", request.SchedulingProvenance.IterationId);
         Assert.Equal("0", request.Metadata["foreach.iterationIndex"]);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -50,7 +51,7 @@ public sealed class ForEachActivityTests : IDisposable
             redactionMode: "mask");
         var context = NewContext(new[] { "secret" }, CollectionBinding(policy));
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var item = Assert.Single(context.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName];
         Assert.Equal("String", item.Type.Alias);
@@ -74,11 +75,11 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(Array.Empty<string>());
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -86,11 +87,11 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(collection: null);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -106,12 +107,12 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(new[] { "x", "y", "z" });
 
-        await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0));
+        var continuation = await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal(BodyNodeId, request.ExecutableNodeId);
         Assert.Equal($"{ForEachExecutionId}:foreach-iteration:1", request.SchedulingProvenance.IterationId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -120,11 +121,11 @@ public sealed class ForEachActivityTests : IDisposable
         var context = NewContext(new[] { "x", "y", "z" });
 
         // Item index 2 is the last of three; completing it exhausts the collection.
-        await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 2));
+        var continuation = await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 2));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     // The completion callback must publish the next item in the typed iteration frame. This pins the
@@ -199,23 +200,15 @@ public sealed class ForEachActivityTests : IDisposable
             .AsTask());
     }
 
-    [Fact]
-    public async Task Execute_Throws_WhenRuntimeContextIsMissing()
-    {
-        await Assert.ThrowsAsync<ForEachExecutionException>(() => ((IActivity)new ForEachActivity())
-            .ExecuteAsync(new NonRuntimeActivityExecutionContext(new ForEachActivity()))
-            .AsTask());
-    }
-
-    private static async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        await ((IActivity)context.Activity).ExecuteAsync(context);
+    private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
     private static ActivityChildCompletedContext NewCompletion(SimpleActivityExecutionContext context, int iterationIndex) =>
         new(context, "actexec-body", BodyNodeId, [ActivityOutcomes.Done], $"{ForEachExecutionId}:foreach-iteration:{iterationIndex}");
 
     private SimpleActivityExecutionContext NewContext(object? collection, RuntimeInputBinding? collectionBinding = null)
     {
-        var activity = new ForEachActivity { Id = ForEachExecutionId, NodeId = ForEachNodeId, Collection = collection };
+        var activity = new ForEachActivity { Collection = collection };
         var context = new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,
@@ -304,9 +297,4 @@ public sealed class ForEachActivityTests : IDisposable
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class NonRuntimeActivityExecutionContext(IActivity activity) : IActivityExecutionContext
-    {
-        public IActivity Activity { get; } = activity;
-        public CancellationToken CancellationToken => CancellationToken.None;
-    }
 }

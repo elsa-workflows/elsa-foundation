@@ -3,9 +3,8 @@ using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
-using Elsa.Expressions.JavaScript.Options;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Primitives.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -13,6 +12,21 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 public sealed class ExplicitExpressionParametersTests
 {
+    [Fact]
+    public void Jint_feature_registers_only_the_isolated_expression_and_typed_script_evaluators()
+    {
+        var services = new ServiceCollection();
+
+        new JintFeature().ConfigureServices(services);
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPortableJavaScriptEvaluator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IJavaScriptScriptEvaluator));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType.FullName is
+            "Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptExecutionContext" or
+            "Elsa.Expressions.JavaScript.Jint.Contracts.IJintEngineFactory" or
+            "Elsa.Expressions.JavaScript.Jint.Contracts.IPreparedScriptFactory");
+    }
+
     [Fact]
     public async Task Evaluates_declared_json_parameters_through_args()
     {
@@ -94,9 +108,9 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
-    public async Task Pure_evaluation_never_inherits_the_legacy_clr_access_option()
+    public async Task Pure_evaluation_does_not_expose_clr_access()
     {
-        await using var provider = BuildProvider(allowClrAccess: true);
+        await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
 
@@ -106,9 +120,9 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
-    public async Task Pure_evaluation_never_inherits_the_legacy_configuration_host_function()
+    public async Task Pure_evaluation_has_no_configuration_host_function()
     {
-        await using var provider = BuildProvider(allowConfigurationAccess: true);
+        await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
 
@@ -122,7 +136,7 @@ public sealed class ExplicitExpressionParametersTests
     [Fact]
     public async Task Time_random_locale_and_environment_intrinsics_are_unavailable()
     {
-        await using var provider = BuildProvider(allowClrAccess: true);
+        await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
 
@@ -133,22 +147,12 @@ public sealed class ExplicitExpressionParametersTests
         Assert.Equal("undefined:undefined:undefined:undefined:undefined:undefined:undefined", result.GetString());
     }
 
-    private static ServiceProvider BuildProvider(bool allowClrAccess = false, bool allowConfigurationAccess = false)
+    private static ServiceProvider BuildProvider()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["Secret"] = "must-not-leak" })
-            .Build());
         new ExpressionsFeature().ConfigureServices(services);
-        new JavaScriptFeature
-        {
-            GetConfigurationFunction = new ConfigurationAccessFunctionProviderOptions
-            {
-                AllowConfigurationAccess = allowConfigurationAccess
-            }
-        }.ConfigureServices(services);
-        new JintFeature { AllowClrAccess = allowClrAccess }.ConfigureServices(services);
-        services.AddMemoryCache();
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
         return services.BuildServiceProvider();
     }
 

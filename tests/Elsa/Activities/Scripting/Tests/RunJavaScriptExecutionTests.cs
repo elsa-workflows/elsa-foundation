@@ -20,13 +20,11 @@ public sealed class RunJavaScriptExecutionTests
         await using var scope = provider.CreateAsyncScope();
         var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
         {
-            Id = "script-1",
-            NodeId = "script-node",
             Script = "return { answer: args.left + args.right };",
             Arguments = JsonSerializer.SerializeToElement(new { left = 40, right = 2 })
         };
 
-        var transition = await ExecuteAsync(activity, scope.ServiceProvider);
+        var transition = await ExecuteAsync(activity);
 
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(transition);
         Assert.Equal(42, completion.Result.Value!.Value.GetProperty("answer").GetInt32());
@@ -40,12 +38,10 @@ public sealed class RunJavaScriptExecutionTests
         await using var scope = provider.CreateAsyncScope();
         var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
         {
-            Id = "script-1",
-            NodeId = "script-node",
             Script = "   "
         };
 
-        var transition = await ExecuteAsync(activity, scope.ServiceProvider);
+        var transition = await ExecuteAsync(activity);
 
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(transition);
         Assert.Null(completion.Result.Value);
@@ -58,13 +54,11 @@ public sealed class RunJavaScriptExecutionTests
         await using var scope = provider.CreateAsyncScope();
         var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
         {
-            Id = "script-1",
-            NodeId = "script-node",
             Script = "while (true) { }"
         };
 
         await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await ExecuteAsync(activity, scope.ServiceProvider));
+            await ExecuteAsync(activity));
     }
 
     [Fact]
@@ -75,13 +69,11 @@ public sealed class RunJavaScriptExecutionTests
         var arguments = JsonSerializer.SerializeToElement(new { order = new { total = 42 } });
         var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
         {
-            Id = "script-1",
-            NodeId = "script-node",
             Script = "try { args.order.total = 0; } catch { } return [args.order.total, typeof getVariable, typeof services];",
             Arguments = arguments
         };
 
-        var transition = await ExecuteAsync(activity, scope.ServiceProvider);
+        var transition = await ExecuteAsync(activity);
 
         var result = Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(transition).Result.Value!.Value;
         Assert.Equal(42, result[0].GetInt32());
@@ -90,9 +82,13 @@ public sealed class RunJavaScriptExecutionTests
         Assert.Equal(42, arguments.GetProperty("order").GetProperty("total").GetInt32());
     }
 
-    private static async ValueTask<ActivityTransition> ExecuteAsync(RunJavaScript activity, IServiceProvider services)
+    private static async ValueTask<ActivityTransition> ExecuteAsync(RunJavaScript activity)
     {
-        var context = new SimpleActivityExecutionContext(activity, CancellationToken.None);
+        var context = new SimpleActivityExecutionContext(
+            activity,
+            CancellationToken.None,
+            invocationId: "script-1",
+            executableNodeId: "script-node");
         return await ((IActivity)activity).ExecuteAsync(context);
     }
 

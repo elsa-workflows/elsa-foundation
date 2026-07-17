@@ -23,8 +23,10 @@ public sealed class SimpleActivityExecutionContext(
     ActivityExecutionState? activityExecutionState = null,
     VariableScope? variableScope = null,
     JsonElement? triggerPayload = null,
-    string? triggerNodeId = null)
-    : IRuntimeActivityExecutionContext, IActivityInvocationIdentity, IActivityTransitionContext
+    string? triggerNodeId = null,
+    string? invocationId = null,
+    string? executableNodeId = null)
+    : IRuntimeActivityExecutionContext, IActivityInvocationIdentity
 {
     // The single construction path for a runtime activity context.
     public static SimpleActivityExecutionContext ForExecution(
@@ -57,15 +59,13 @@ public sealed class SimpleActivityExecutionContext(
     }
 
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
-    private readonly List<string> _compositeCompletionOutcomeNames = [];
-    private readonly List<string> _finishWorkflowOutcomeNames = [];
 
     public IActivity Activity { get; } = activity;
     public CancellationToken CancellationToken { get; } = cancellationToken;
     public string WorkflowExecutionId { get; } = workflowExecutionId ?? string.Empty;
-    public string InvocationId => activityExecutionState?.InvocationId ?? Activity.Id;
+    public string InvocationId => invocationId ?? activityExecutionState?.InvocationId ?? throw MissingRuntimeValue(nameof(InvocationId));
     public string AttemptId => activityExecutionState?.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId ?? string.Empty;
-    public string ExecutableNodeId => executableNode?.ExecutableNodeId ?? Activity.NodeId;
+    public string ExecutableNodeId => executableNodeId ?? executableNode?.ExecutableNodeId ?? throw MissingRuntimeValue(nameof(ExecutableNodeId));
     public JsonElement? TriggerPayload => triggerPayload?.Clone() ?? activityExecutionState?.TriggerDeliveries?
         .LastOrDefault(delivery => delivery.Status == ActivityTriggerDeliveryStatus.Consumed)?
         .Payload.InlineValue?.Clone();
@@ -74,19 +74,6 @@ public sealed class SimpleActivityExecutionContext(
     public RuntimeSchedulerWorkItem SchedulerWorkItem => schedulerWorkItem ?? throw MissingRuntimeValue(nameof(SchedulerWorkItem));
     public ExecutableNode ExecutableNode => executableNode ?? throw MissingRuntimeValue(nameof(ExecutableNode));
     public ActivityExecutionState ActivityExecutionState => activityExecutionState ?? throw MissingRuntimeValue(nameof(ActivityExecutionState));
-    public bool CompositeCompletionRequested { get; private set; }
-    public bool CompositeCompletionDeferred { get; private set; }
-    public IReadOnlyCollection<string> CompositeCompletionOutcomeNames => _compositeCompletionOutcomeNames.ToArray();
-    public string? RequestedOutcomeName => _compositeCompletionOutcomeNames.FirstOrDefault();
-    public bool FinishWorkflowRequested { get; private set; }
-    public IReadOnlyCollection<string> FinishWorkflowOutcomeNames => _finishWorkflowOutcomeNames.ToArray();
-    public bool CorrelationIdAssignmentRequested { get; private set; }
-    public string? RequestedCorrelationId { get; private set; }
-    public bool InstanceNameAssignmentRequested { get; private set; }
-    public string? RequestedInstanceName { get; private set; }
-    private readonly Dictionary<string, object?> _requestedWorkflowOutputs = new(StringComparer.Ordinal);
-    public bool WorkflowOutputAssignmentRequested { get; private set; }
-    public IReadOnlyDictionary<string, object?> RequestedWorkflowOutputs => new Dictionary<string, object?>(_requestedWorkflowOutputs, StringComparer.Ordinal);
 
     public void ScheduleChildActivity(
         string executableNodeId,
@@ -105,64 +92,6 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
         _childActivityScheduleRequests.ToArray();
-
-    public void CompleteCompositeActivity(IEnumerable<string>? outcomeNames = null)
-    {
-        var outcomeSnapshot = (outcomeNames ?? [ActivityOutcomes.Done]).ToArray();
-        if (outcomeSnapshot.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("Composite completion outcome names cannot contain blank values.");
-
-        if (outcomeSnapshot.Distinct(StringComparer.Ordinal).Count() != outcomeSnapshot.Length)
-            throw new InvalidOperationException("Composite completion outcome names cannot contain duplicates.");
-
-        CompositeCompletionRequested = true;
-        CompositeCompletionDeferred = false;
-        _compositeCompletionOutcomeNames.Clear();
-        _compositeCompletionOutcomeNames.AddRange(outcomeSnapshot);
-    }
-
-    public void DeferCompositeCompletion()
-    {
-        if (CompositeCompletionRequested)
-            throw new InvalidOperationException("Composite completion cannot be deferred after completion was requested.");
-
-        CompositeCompletionDeferred = true;
-    }
-
-    public void FinishWorkflow(IEnumerable<string>? outcomeNames = null)
-    {
-        var outcomeSnapshot = (outcomeNames ?? [ActivityOutcomes.Done]).ToArray();
-        if (outcomeSnapshot.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("Finish workflow outcome names cannot contain blank values.");
-
-        if (outcomeSnapshot.Distinct(StringComparer.Ordinal).Count() != outcomeSnapshot.Length)
-            throw new InvalidOperationException("Finish workflow outcome names cannot contain duplicates.");
-
-        FinishWorkflowRequested = true;
-        _finishWorkflowOutcomeNames.Clear();
-        _finishWorkflowOutcomeNames.AddRange(outcomeSnapshot);
-    }
-
-    public void SetCorrelationId(string? correlationId)
-    {
-        CorrelationIdAssignmentRequested = true;
-        RequestedCorrelationId = string.IsNullOrWhiteSpace(correlationId) ? null : correlationId;
-    }
-
-    public void SetInstanceName(string? instanceName)
-    {
-        InstanceNameAssignmentRequested = true;
-        RequestedInstanceName = string.IsNullOrWhiteSpace(instanceName) ? null : instanceName;
-    }
-
-    public void SetWorkflowOutput(string outputName, object? value)
-    {
-        if (string.IsNullOrWhiteSpace(outputName))
-            return;
-
-        WorkflowOutputAssignmentRequested = true;
-        _requestedWorkflowOutputs[outputName] = value;
-    }
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution

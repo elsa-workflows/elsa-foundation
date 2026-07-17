@@ -1,6 +1,9 @@
 using Elsa.Workflows.Design.CodeGeneration;
+using Elsa.Activities.Design.Reconciliation.Handlers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Elsa.Workflows.Design.CodeGeneration.Tests;
@@ -231,6 +234,106 @@ public sealed class ActivityCallGeneratorTests
         Assert.DoesNotContain(result.OutputCompilation.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
+    [Theory]
+    [InlineData("1.2.3-alpha.1", "ProtocolVectors.PrereleaseActivity")]
+    [InlineData("10.20.30-rc.4+build.981", "ProtocolVectors.BuildMetadataActivity")]
+    public void GeneratedVersionIdMatchesCanonicalCatalogStableId(string version, string activityTypeKey)
+    {
+        var className = activityTypeKey[(activityTypeKey.LastIndexOf('.') + 1)..];
+        var source = $$"""
+            using Elsa.Activities.Runtime.Core.Attributes;
+            using Elsa.Activities.Runtime.Core.Contracts;
+
+            {{RuntimeStubs}}
+            {{AuthoringStubs}}
+
+            namespace ProtocolVectors;
+
+            [Version("{{version}}")]
+            public sealed class {{className}} : IActivity, IActivityResult<string>;
+            """;
+
+        var generatedId = GeneratedVersionId(RunGenerator(source));
+
+        Assert.Equal(CanonicalVersionId(activityTypeKey, version), generatedId);
+    }
+
+    [Fact]
+    public void BuildMetadataIsIgnoredExactlyLikeCanonicalSemVer()
+    {
+        const string typeKey = "ProtocolVectors.BuildMetadataEquivalentActivity";
+        var first = GeneratedVersionId(RunGenerator(VersionedActivitySource(typeKey, "2.3.4+sha.111")));
+        var second = GeneratedVersionId(RunGenerator(VersionedActivitySource(typeKey, "2.3.4+sha.222")));
+
+        Assert.Equal(CanonicalVersionId(typeKey, "2.3.4+sha.111"), first);
+        Assert.Equal(CanonicalVersionId(typeKey, "2.3.4+sha.222"), second);
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void InheritedVersionMatchesCanonicalCatalogStableId()
+    {
+        const string version = "4.0.0-beta.2+inherited";
+        const string typeKey = "ProtocolVectors.InheritedVersionActivity";
+        var source = $$"""
+            using Elsa.Activities.Runtime.Core.Attributes;
+            using Elsa.Activities.Runtime.Core.Contracts;
+
+            {{RuntimeStubs}}
+            {{AuthoringStubs}}
+
+            namespace ProtocolVectors;
+
+            [Version("{{version}}")]
+            public abstract class VersionedActivityBase : IActivity;
+
+            public sealed class InheritedVersionActivity : VersionedActivityBase, IActivityResult<string>;
+            """;
+
+        var generatedId = GeneratedVersionId(RunGenerator(source));
+
+        Assert.Equal(CanonicalVersionId(typeKey, version), generatedId);
+    }
+
+    [Fact]
+    public void InformationalVersionFallbackMatchesCanonicalCatalogStableId()
+    {
+        const string version = "6.7.8-preview.3+source.42";
+        const string typeKey = "ProtocolVectors.InformationalVersionActivity";
+        var source = $$"""
+            [assembly: System.Reflection.AssemblyInformationalVersion("{{version}}")] // exercise the no-[Version] fallback
+
+            {{RuntimeStubs}}
+            {{AuthoringStubs}}
+
+            namespace ProtocolVectors;
+
+            public sealed class InformationalVersionActivity :
+                Elsa.Activities.Runtime.Core.Contracts.IActivity,
+                Elsa.Activities.Runtime.Core.Contracts.IActivityResult<string>;
+            """;
+
+        var generatedId = GeneratedVersionId(RunGenerator(source));
+
+        Assert.Equal(CanonicalVersionId(typeKey, version), generatedId);
+    }
+
+    [Theory]
+    [InlineData("1.0")]
+    [InlineData("1.0.0-01")]
+    [InlineData("1.0.0+bad+metadata")]
+    public void InvalidVersionIsRejectedByGeneratorAndCanonicalCatalog(string version)
+    {
+        const string typeKey = "ProtocolVectors.InvalidVersionActivity";
+        var result = RunGenerator(VersionedActivitySource(typeKey, version));
+
+        var diagnostic = GetSingleGeneratorDiagnostic(result);
+        Assert.Equal(ActivityCallGenerator.UnsupportedShapeDiagnosticId, diagnostic.Id);
+        Assert.Contains("activity version id must not be empty", diagnostic.GetMessage(), StringComparison.Ordinal);
+        var canonicalException = Assert.Throws<TargetInvocationException>(() => CanonicalVersionId(typeKey, version));
+        Assert.IsType<ArgumentException>(canonicalException.InnerException);
+    }
+
     private static GeneratorResult RunGenerator(string source, IReadOnlyCollection<MetadataReference>? additionalReferences = null)
     {
         var compilation = CSharpCompilation.Create(
@@ -267,6 +370,42 @@ public sealed class ActivityCallGeneratorTests
         .SourceText
         .ToString()
         .ReplaceLineEndings("\n");
+
+    private static string GeneratedVersionId(GeneratorResult result)
+    {
+        var generated = GetFacadeSource(result);
+        var match = Regex.Match(generated, "\"(?<id>actver_[A-Za-z0-9_-]+)\"");
+        Assert.True(match.Success, generated);
+        return match.Groups["id"].Value;
+    }
+
+    private static string CanonicalVersionId(string activityTypeKey, string version)
+    {
+        var canonicalType = typeof(CollectActivityVersions).Assembly.GetType(
+            "Elsa.Activities.Design.Reconciliation.Services.ActivityCatalogStableIds",
+            throwOnError: true)!;
+        var method = canonicalType.GetMethod("VersionId", BindingFlags.Public | BindingFlags.Static)!;
+        return (string)method.Invoke(null, [activityTypeKey, version])!;
+    }
+
+    private static string VersionedActivitySource(string activityTypeKey, string version)
+    {
+        var separator = activityTypeKey.LastIndexOf('.');
+        var namespaceName = activityTypeKey[..separator];
+        var className = activityTypeKey[(separator + 1)..];
+        return $$"""
+            using Elsa.Activities.Runtime.Core.Attributes;
+            using Elsa.Activities.Runtime.Core.Contracts;
+
+            {{RuntimeStubs}}
+            {{AuthoringStubs}}
+
+            namespace {{namespaceName}};
+
+            [Version("{{version}}")]
+            public sealed class {{className}} : IActivity, IActivityResult<string>;
+            """;
+    }
 
     private static Diagnostic GetSingleGeneratorDiagnostic(GeneratorResult result)
     {

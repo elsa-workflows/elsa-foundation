@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,12 +22,12 @@ public sealed class IfActivityTests : IDisposable
     {
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: true);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-then", request.ExecutableNodeId);
         Assert.Equal("actexec-if", request.SchedulingActivityExecutionId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -34,7 +35,7 @@ public sealed class IfActivityTests : IDisposable
     {
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: false);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-else", request.ExecutableNodeId);
@@ -45,11 +46,11 @@ public sealed class IfActivityTests : IDisposable
     {
         var context = NewContext(NewIfNode(then: null, @else: NewNode("node-else")), condition: true);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.True], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.True, continuation.OutcomeName);
     }
 
     [Fact]
@@ -57,11 +58,11 @@ public sealed class IfActivityTests : IDisposable
     {
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: null), condition: false);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.False], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.False, continuation.OutcomeName);
     }
 
     [Fact]
@@ -69,11 +70,11 @@ public sealed class IfActivityTests : IDisposable
     {
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: true);
 
-        await new IfActivity().OnChildCompletedAsync(
+        var continuation = await new IfActivity().OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-then", "node-then", [ActivityOutcomes.Done]));
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.True], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.True, continuation.OutcomeName);
     }
 
     [Fact]
@@ -81,11 +82,11 @@ public sealed class IfActivityTests : IDisposable
     {
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: false);
 
-        await new IfActivity().OnChildCompletedAsync(
+        var continuation = await new IfActivity().OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-else", "node-else", [ActivityOutcomes.Done]));
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.False], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.False, continuation.OutcomeName);
     }
 
     [Fact]
@@ -95,11 +96,11 @@ public sealed class IfActivityTests : IDisposable
         // outcome bubbles to the enclosing loop (#299).
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: true);
 
-        await new IfActivity().OnChildCompletedAsync(
+        var continuation = await new IfActivity().OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-then", "node-then", [ActivityOutcomes.Break]));
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Break], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Break, continuation.OutcomeName);
     }
 
     [Fact]
@@ -129,22 +130,14 @@ public sealed class IfActivityTests : IDisposable
         await Assert.ThrowsAsync<IfExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
-    [Fact]
-    public async Task Execute_Throws_WhenRuntimeContextIsMissing()
-    {
-        var context = new NonRuntimeActivityExecutionContext(new IfActivity());
-
-        await Assert.ThrowsAsync<IfExecutionException>(() => ((IActivity)new IfActivity()).ExecuteAsync(context).AsTask());
-    }
-
     public void Dispose() => _serviceProvider.Dispose();
 
-    private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        await ((IActivity)context.Activity).ExecuteAsync(context);
+    private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, bool condition)
     {
-        var activity = new IfActivity { Id = "actexec-if", NodeId = "node-if", Condition = condition };
+        var activity = new IfActivity { Condition = condition };
         var context = new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,
@@ -231,9 +224,4 @@ public sealed class IfActivityTests : IDisposable
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class NonRuntimeActivityExecutionContext(IActivity activity) : IActivityExecutionContext
-    {
-        public IActivity Activity { get; } = activity;
-        public CancellationToken CancellationToken => CancellationToken.None;
-    }
 }

@@ -64,14 +64,8 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
-    public async Task Start_FirstFlowchartStateCommitCarriesInitialScheduledState()
+    public async Task Start_CommitsInitialStateAndChildIntentAtomically_AndReplayDoesNotDuplicateChild()
     {
-        // Tight guard on Start's OWN persist (not a later terminal re-save). The FIRST flowchart-state
-        // commit must be the one Start writes right after scheduling the start node: start node scheduled
-        // as an active child on the still-Active root path, and no terminal Completed diagnostic yet.
-        // If StartAsync's persist is removed, the first flowchart-state commit becomes the child-completion
-        // persist, which already carries the Completed diagnostic and an empty ActiveChildren set — so these
-        // assertions flip and the test goes red (the independent bite proof).
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
         var executable = fixture.NewExecutable(
             children: [fixture.NewProbeNode("node-a")],
@@ -81,10 +75,9 @@ public sealed class FlowchartExecutionEngineTests
         await fixture.ExecuteAsync(executable);
 
         var writer = Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(fixture.Provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
-        var firstFlowchartStateCommit = writer.ListCommits()
-            .First(write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityInspectionCaptured &&
-                            write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
-        var activityStateChange = Assert.Single(firstFlowchartStateCommit.Commit.StateChanges.ActivityExecutions);
+        Assert.DoesNotContain(writer.ListCommits(), write => write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
+        var atomicCommit = Assert.Single(writer.ListCommits(), write => SchedulesChild(write.Commit, "node-a")).Commit;
+        var activityStateChange = Assert.Single(atomicCommit.StateChanges.ActivityExecutions);
         var serialized = activityStateChange.State.Metadata[FlowchartExecutionEngine.StateMetadataKey];
         var initialState = JsonSerializer.Deserialize<FlowchartExecutionState>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web))
                            ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
@@ -99,36 +92,44 @@ public sealed class FlowchartExecutionEngineTests
         var rootPath = Assert.Single(initialState.ExecutionPaths, path => path.ExecutionPathId == "path:root");
         Assert.Equal(ExecutionPathStatus.Active, rootPath.Status);
         Assert.Contains(initialState.Scopes, scope => scope.ExecutionScopeId == "scope:root");
-        // ...and no terminal Completed diagnostic has been recorded yet (that only appears on the
-        // child-completion/quiescence persist, which is a LATER commit).
+        // ...and no terminal Completed diagnostic has been recorded yet.
         Assert.DoesNotContain(initialState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
+
+        // Simulate a worker crash after the atomic commit but before child-intent delivery. Replaying the
+        // same commit recovers the same single outbox item; it cannot create a second child or lose the first.
+        var replayStore = new InMemoryRuntimeCheckpointCommitStore();
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), replayStore);
+        var first = await committer.CommitAsync(atomicCommit);
+        var replay = await committer.CommitAsync(atomicCommit);
+        Assert.Equal(first.PendingPostCommitWorkIds, replay.PendingPostCommitWorkIds);
+        Assert.Single(first.PendingPostCommitWorkIds);
+        Assert.Single(replayStore.ListCommits());
+        Assert.Single(await replayStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(DateTimeOffset.MaxValue, 10)));
     }
 
     [Fact]
-    public async Task Start_MarksFlowchartStateInspectionCheckpointAsMandatory()
+    public async Task ChildCompletion_CommitsNextStateAndChildIntentAtomically()
     {
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a", "actexec-b"]);
         var executable = fixture.NewExecutable(
-            children: [fixture.NewProbeNode("node-a")],
-            connections: [],
+            children: [fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-b")],
+            connections: [fixture.NewConnection("node-a", "node-b")],
             startNodeId: "node-a");
 
         await fixture.ExecuteAsync(executable);
 
         var writer = Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(fixture.Provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
-        var flowchartStateWrites = writer.ListCommits()
-            .Where(write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityInspectionCaptured &&
-                            write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal))
-            .ToArray();
-        Assert.NotEmpty(flowchartStateWrites);
-        Assert.All(flowchartStateWrites, write => Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]));
-        var committer = new RuntimeCheckpointCommitter(
-            new SkipFlowchartInspectionCheckpointPolicy(),
-            new InMemoryRuntimeCheckpointCommitStore());
+        Assert.DoesNotContain(writer.ListCommits(), write => write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
+        var nextChildCommit = Assert.Single(writer.ListCommits(), write => SchedulesChild(write.Commit, "node-b")).Commit;
+        var parentChange = Assert.Single(nextChildCommit.StateChanges.ActivityExecutions);
+        var serialized = parentChange.State.Metadata[FlowchartExecutionEngine.StateMetadataKey];
+        var state = JsonSerializer.Deserialize<FlowchartExecutionState>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                    ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => committer.CommitAsync(flowchartStateWrites[0].Commit).AsTask());
-        Assert.Contains("Mandatory runtime checkpoint", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("flowchart-state", exception.Message, StringComparison.Ordinal);
+        var activeChild = Assert.Single(state.ActiveChildren);
+        Assert.Equal("node-b", activeChild.NodeId);
+        Assert.Contains(state.ExecutionPaths, path => path.CurrentNodeId == "node-b" && path.Status == ExecutionPathStatus.Active);
+        Assert.Single(writer.ListCommits().SelectMany(write => write.Commit.PostCommitIntents), intent => SchedulesChild(intent, "node-b"));
     }
 
     [Fact]
@@ -539,6 +540,22 @@ public sealed class FlowchartExecutionEngineTests
                 new FlowchartConnection(new FlowchartEndpoint("node-a"), new FlowchartEndpoint("node-b")),
                 new FlowchartConnection(new FlowchartEndpoint("node-a", "Other"), new FlowchartEndpoint("node-c"))
             ]);
+
+    private static bool SchedulesChild(RuntimeCheckpointCommit commit, string executableNodeId) =>
+        commit.PostCommitIntents.Any(intent => SchedulesChild(intent, executableNodeId));
+
+    private static bool SchedulesChild(RuntimePostCommitIntent intent, string executableNodeId)
+    {
+        if (!StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) || intent.Payload is null)
+            return false;
+
+        var workItem = intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>();
+        if (workItem?.CommandKind != WorkflowExecutionCommandKind.ScheduleActivity || workItem.Payload is null)
+            return false;
+
+        var payload = workItem.Payload.Value.Deserialize<RuntimeScheduleActivityCommandPayload>();
+        return StringComparer.Ordinal.Equals(payload?.ExecutableNodeId, executableNodeId);
+    }
 
     private sealed record TestPolicyContext(
         string? CurrentNodeId,

@@ -59,7 +59,7 @@ public sealed class IfRuntimeTests
     public async Task SelectedBranchIsEmpty_FinalizesWithoutSchedulingChild_AndCompletesWorkflow()
     {
         // Condition selects the Then branch, but its slot is empty: the composite must finalize via
-        // CompleteCompositeActivity (True outcome) with no child scheduled, and the run must complete.
+        // The returned structural completion (True outcome) schedules no child, and the run must complete.
         await using var harness = NewHarness("actexec-if");
 
         var run = await harness.RunAsync(NewExecutable(condition: true, includeThen: false));

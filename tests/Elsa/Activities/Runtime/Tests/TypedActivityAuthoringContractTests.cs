@@ -9,12 +9,27 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class TypedActivityAuthoringContractTests
 {
     [Fact]
+    public void Activity_contract_exposes_only_atomic_execution()
+    {
+        var method = Assert.Single(typeof(IActivity).GetMethods());
+
+        Assert.Equal(nameof(IActivity.ExecuteAsync), method.Name);
+        Assert.Equal(typeof(ValueTask<ActivityTransition>), method.ReturnType);
+        Assert.Equal([typeof(IActivityExecutionContext)], method.GetParameters().Select(x => x.ParameterType));
+        Assert.Empty(typeof(IActivity).GetProperties());
+    }
+
+    [Fact]
     public async Task Typed_activity_receives_only_identity_and_cancellation_and_returns_atomic_result()
     {
         await using var services = new ServiceCollection().BuildServiceProvider();
         using var cancellation = new CancellationTokenSource();
-        var activity = new GreetingActivity { Id = "invocation-1", NodeId = "node-1", Recipient = "Ada" };
-        var runtimeContext = new SimpleActivityExecutionContext(activity, cancellation.Token);
+        var activity = new GreetingActivity { Recipient = "Ada" };
+        var runtimeContext = new SimpleActivityExecutionContext(
+            activity,
+            cancellation.Token,
+            invocationId: "invocation-1",
+            executableNodeId: "node-1");
 
         var transition = await ((IActivity)activity).ExecuteAsync(runtimeContext);
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<Greeting>>(transition);

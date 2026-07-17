@@ -349,7 +349,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             structure: new ActivityNodeStructure(
                 UnknownStructureKind,
                 UnknownStructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { marker = "kept" })));
+                JsonSerializer.SerializeToElement(new { marker = "kept" })),
+            Text("opaque"));
         var workflowVersion = WorkflowVersion(root);
         var handler = Handler(workflowVersion);
 

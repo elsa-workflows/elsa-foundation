@@ -18,7 +18,9 @@ public sealed class WriteLineBoundInputExecutionTests
         var writeLine = Assert.IsType<WriteLine>(activation.Activity);
         var context = new Elsa.Workflows.Runtime.Core.Services.SimpleActivityExecutionContext(
             writeLine,
-            CancellationToken.None);
+            CancellationToken.None,
+            invocationId: "write-line-invocation",
+            executableNodeId: "write-line-node");
 
         var output = await ConsoleCapture.RunAsync(async () => await ((IActivity)writeLine).ExecuteAsync(context));
 

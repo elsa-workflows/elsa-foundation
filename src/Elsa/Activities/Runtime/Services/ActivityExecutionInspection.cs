@@ -56,6 +56,7 @@ internal static class ActivityExecutionInspection
                 var input = contract.Inputs[item.Key];
                 var value = item.Value;
                 var type = new RuntimeValueTypeDescriptor("alias", value.Type.Alias, value.Type.Schema);
+                var isSensitive = value.Policy.IsSensitive || input.Policy.IsSensitive;
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityInput,
                     workItem.WorkflowExecutionId,
@@ -63,6 +64,7 @@ internal static class ActivityExecutionInspection
                     activityExecutionId: activityExecutionId,
                     valueName: input.Name,
                     type: type,
+                    isSensitive: isSensitive,
                     metadata: new Dictionary<string, string>
                     {
                         [RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId,
@@ -81,7 +83,7 @@ internal static class ActivityExecutionInspection
                     type,
                     capturedAt,
                     payload,
-                    value.Policy.IsSensitive,
+                    isSensitive,
                     decision.Metadata);
             })
             .ToArray();
@@ -120,6 +122,7 @@ internal static class ActivityExecutionInspection
                 var type = projection is null
                     ? TypeDescriptorFor(output.Value)
                     : new RuntimeValueTypeDescriptor("alias", projection.Type.Alias, projection.Type.Schema);
+                var isSensitive = contract?.Result.Policy.IsSensitive == true || projection?.Policy.IsSensitive == true;
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityOutput,
                     workItem.WorkflowExecutionId,
@@ -127,6 +130,7 @@ internal static class ActivityExecutionInspection
                     activityExecutionId: activityExecutionId,
                     valueName: output.OutputName,
                     type: type,
+                    isSensitive: isSensitive,
                     metadata: new Dictionary<string, string>
                     {
                         [RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId,
@@ -139,7 +143,7 @@ internal static class ActivityExecutionInspection
                     type,
                     capturedAt,
                     SerializeCapturedValue(decision, output.Value, output.OutputName, type),
-                    isSensitive: projection?.Policy.IsSensitive ?? false,
+                    isSensitive: isSensitive,
                     metadata: decision.Metadata);
             })
             .ToArray();

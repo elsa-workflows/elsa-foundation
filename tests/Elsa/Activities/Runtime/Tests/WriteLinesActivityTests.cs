@@ -71,8 +71,10 @@ public sealed class WriteLinesActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(IActivity activity)
     {
-        activity.Id = "invocation-write-lines";
-        activity.NodeId = "node-write-lines";
-        return new(activity, CancellationToken.None);
+        return new(
+            activity,
+            CancellationToken.None,
+            invocationId: "invocation-write-lines",
+            executableNodeId: "node-write-lines");
     }
 }

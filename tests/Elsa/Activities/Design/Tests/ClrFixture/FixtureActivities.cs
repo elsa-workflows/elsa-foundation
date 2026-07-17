@@ -176,10 +176,6 @@ public sealed record StructuredFixtureResult([property: Output(Key = "summary")]
 public sealed class TriggerFixtureActivity : ActivityBase
 {
     public const string ActivityType = "Elsa.Fixture.Trigger";
-
-    public TriggerFixtureActivity() : base(ActivityType)
-    {
-    }
 }
 
 /// <summary>A typed activity used to verify stable plain CLR contract discovery keys.</summary>

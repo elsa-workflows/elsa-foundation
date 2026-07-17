@@ -25,7 +25,6 @@ public sealed class HttpEndpoint :
     public HttpEndpoint(IHttpRequestBodyParser bodyParser)
     {
         _bodyParser = bodyParser;
-        Type = ActivityType;
     }
 
     /// <summary>The endpoint-relative route template.</summary>

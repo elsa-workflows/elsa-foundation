@@ -132,6 +132,22 @@ public sealed partial class ValueFlowArchitectureTests(ITestOutputHelper output)
             "Unexpected or expanded hits:" + Environment.NewLine + string.Join(Environment.NewLine, violations.Select(FormatHit)));
     }
 
+    [Fact]
+    public void CanonicalSource_HasNoAmbientExpressionExecutionCarrier()
+    {
+        var hits = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file))
+            .Select(file => new SourceHit(RelativePath(file), AmbientExpressionCarrierPattern().Matches(File.ReadAllText(file)).Count))
+            .Where(hit => hit.Count > 0)
+            .OrderBy(hit => hit.Path, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            hits.Length == 0,
+            "Canonical expression evaluation must use immutable declared parameters and must not expose the retired ambient execution carriers:" +
+            Environment.NewLine + string.Join(Environment.NewLine, hits.Select(FormatHit)));
+    }
+
     private void ReportAllowlisted<T>(string heading, IEnumerable<T> values)
     {
         var entries = values.Select(value => value?.ToString()).Where(value => value is not null).ToArray();
@@ -215,6 +231,9 @@ public sealed partial class ValueFlowArchitectureTests(ITestOutputHelper output)
 
     [GeneratedRegex(@"\bIMemory(?:Block|BlockReference|Register)\b", RegexOptions.CultureInvariant)]
     private static partial Regex MemoryReferencePattern();
+
+    [GeneratedRegex(@"\b(?:IExpressionExecutionContext|IExecutionExpressionState|IMaterializationExpressionState|IScopedVariableProvider|IJavaScriptExecutionContext|IJavaScriptFunction|IJintEngineFactory|IJintEngineOptionsConfigurator|IPreparedScriptFactory|JavaScriptOptions|JavaScriptTypeDescriptor)\b", RegexOptions.CultureInvariant)]
+    private static partial Regex AmbientExpressionCarrierPattern();
 
     private sealed record ProjectInfo(string Name, string FullPath);
 

@@ -60,13 +60,13 @@ public sealed class LiquidExplicitParametersTests
     }
 
     [Fact]
-    public async Task Portable_handler_never_inherits_legacy_configuration_access()
+    public async Task Portable_handler_has_no_configuration_access()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Secret"] = "must-not-leak" })
             .Build());
-        new LiquidExpressionsFeature { AllowConfigurationAccess = true }.ConfigureServices(services);
+        new LiquidExpressionsFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var handler = scope.ServiceProvider.GetServices<IPortableExpressionHandler>().Single();

@@ -5,7 +5,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scripting.Activities;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Scripting.Tests;
@@ -34,13 +33,14 @@ public sealed class RunJavaScriptContractTests
         var evaluator = new RecordingScriptEvaluator(JsonSerializer.SerializeToElement(new { total = 42 }));
         var activity = new RunJavaScript(evaluator)
         {
-            Id = "invocation-1",
-            NodeId = "script-node",
             Script = "return { total: args.amount * 2 };",
             Arguments = JsonSerializer.SerializeToElement(new { amount = 21 })
         };
-        using var services = new ServiceCollection().BuildServiceProvider();
-        var context = new SimpleActivityExecutionContext(activity, CancellationToken.None);
+        var context = new SimpleActivityExecutionContext(
+            activity,
+            CancellationToken.None,
+            invocationId: "invocation-1",
+            executableNodeId: "script-node");
 
         var transition = await ((IActivity)activity).ExecuteAsync(context);
 

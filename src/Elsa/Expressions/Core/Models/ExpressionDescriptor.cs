@@ -20,11 +20,6 @@ public class ExpressionDescriptor(string typeName, ExpressionEditingMode editing
     public ExpressionEditingMode EditingMode { get; } = editingMode;
 
     /// <summary>
-    /// Gets or sets the expression handler factory.
-    /// </summary>
-    public Func<IServiceProvider, IExpressionHandler> HandlerFactory { get; set; } = default!;
-
-    /// <summary>
     /// Gets or sets the expression type properties.
     /// </summary>
     public IDictionary<string, object> Properties { get; set; } = new Dictionary<string, object>();

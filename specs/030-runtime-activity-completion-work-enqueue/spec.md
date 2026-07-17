@@ -5,10 +5,15 @@
 **Status**: Draft
 **Input**: Continue the Runtime Execution Seam after activity invocation. Activity completion propagation must be deterministic scheduler work, not recursive bubbling.
 
+> **Superseded behavior (2026-07-16)**: Spec 095 removed `IActivity.CanExecuteAsync` and the hidden
+> skipped-invocation path. Conditional execution is now represented explicitly in the executable graph, while
+> invoked CLR activities return a declared terminal transition or suspend. The completion-enqueue contract below
+> reflects that current model.
+
 ## Scenarios & Tests
 
 1. Given an invoked activity completes successfully, when its terminal activity execution state is saved, then runtime enqueues `CompleteActivity` scheduler work for the same activity execution.
-2. Given `CanExecuteAsync` returns false, when the skipped terminal state is saved, then runtime still enqueues completion-drain work without pretending a normal `Done` outcome was produced.
+2. Given an invoked activity returns a successful declared outcome, when its terminal state is saved, then completion-drain work carries that declared outcome.
 3. Given activity invocation faults before a completed state is saved, then no completion-drain work is enqueued.
 4. Given completion-drain work reaches Workflows Runtime, then a named handler accepts and validates the payload instead of letting fallback no-op handling silently acknowledge it.
 
@@ -32,6 +37,6 @@
 ## Acceptance Criteria
 
 - Successful activity invocation queues one `CompleteActivity` work item after the completed state is stored.
-- Skipped activity invocation queues completion work with no normal outcome names.
+- Successful activity invocation queues completion work with its declared outcome names.
 - Activity and materialization failures do not queue completion work.
 - Workflows Runtime composition dispatches `CompleteActivity` through a named handler, not `NoopWorkflowSchedulerWorkHandler`.

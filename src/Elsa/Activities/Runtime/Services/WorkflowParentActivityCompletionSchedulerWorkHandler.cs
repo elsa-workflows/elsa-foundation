@@ -112,7 +112,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
     {
         var workflowExecutableStore = serviceProvider.GetRequiredService<IWorkflowExecutableStore>();
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
-        var schedulerWorkQueue = serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
 
         var executable = await workflowExecutableStore.FindAsync(payload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
@@ -145,6 +144,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (parentState.Status != ActivityExecutionStatus.Running)
             return;
 
+        if (ActivityAttemptActivationClaimer.WasActivationCompleted(parentState, workItem.WorkItemId))
+            return;
+
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         var checkpointCommitter = serviceProvider.GetService<RuntimeCheckpointCommitter>();
@@ -159,9 +161,21 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
 
         SimpleActivityExecutionContext context;
+        RuntimeStructuralContinuation continuation;
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots = [];
         try
         {
+            if (checkpointCommitter is null)
+                throw new InvalidOperationException("A checkpoint committer is required to durably claim a structural callback activation attempt.");
+
+            var activationClaim = await ActivityAttemptActivationClaimer.ClaimStructuralCallbackAsync(
+                checkpointCommitter,
+                _timeProvider,
+                workItem,
+                payload,
+                parentState,
+                cancellationToken);
+            parentState = activationClaim.State;
             var constructedParent = await ConstructActivityAsync(
                 serviceProvider,
                 parentExecutableNode,
@@ -185,17 +199,47 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 // A faulted child is propagated only to parents that opt into child-fault handling (fork/join
                 // composites). For any other parent the fault stays a blocking incident — sequential containers
                 // must halt on a faulted step, not advance past it.
-                if (parentActivity is not IActivityChildFaultHandler)
+                if (parentActivity is not IRuntimeActivityChildFaultHandler)
+                {
+                    var endedParentState = ActivityAttemptActivationClaimer.EndOpenAttempt(
+                        parentState,
+                        Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
+                        _timeProvider.GetUtcNow());
+                    endedParentState = ActivityAttemptActivationClaimer.MarkActivationCompleted(endedParentState, workItem.WorkItemId);
+                    await CommitDeferredParentActivityAsync(
+                        checkpointCommitter,
+                        inspectionAccumulator,
+                        idGenerator,
+                        workItem,
+                        payload,
+                        endedParentState,
+                        [],
+                        [],
+                        valueSnapshots,
+                        cancellationToken);
                     return;
+                }
             }
-            else if (parentActivity is not IActivityChildCompletionHandler)
+            else if (parentActivity is not IRuntimeActivityChildCompletionHandler)
             {
-                await EnqueueContinuationSchedulingAsync(schedulerWorkQueue, workItem, payload, cancellationToken);
+                var endedParentState = ActivityAttemptActivationClaimer.EndOpenAttempt(
+                    parentState,
+                    Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
+                    _timeProvider.GetUtcNow());
+                endedParentState = ActivityAttemptActivationClaimer.MarkActivationCompleted(endedParentState, workItem.WorkItemId);
+                await CommitDeferredParentActivityAsync(
+                    checkpointCommitter,
+                    inspectionAccumulator,
+                    idGenerator,
+                    workItem,
+                    payload,
+                    endedParentState,
+                    [],
+                    [NewContinuationSchedulingWorkItem(workItem, payload)],
+                    valueSnapshots,
+                    cancellationToken);
                 return;
             }
-
-            parentActivity.NodeId = parentExecutableNode.ExecutableNodeId;
-            parentActivity.Id = payload.ActivityExecutionId;
 
             context = SimpleActivityExecutionContext.ForExecution(
                 parentActivity,
@@ -216,7 +260,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     ReadIncidentId(workItem),
                     completedChildState.IterationId);
 
-                await ((IActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext);
+                continuation = await ((IRuntimeActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext);
             }
             else
             {
@@ -227,12 +271,195 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     payload.OutcomeNames,
                     completedChildState.IterationId);
 
-                await ((IActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
+                continuation = await ((IRuntimeActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
             }
 
             var scheduledChildren = context.GetChildActivityScheduleRequests();
-            if (context.CompositeCompletionRequested && scheduledChildren.Count > 0)
-                throw new InvalidOperationException("Composite activity cannot both request completion and schedule child activities in the same child-completion evaluation.");
+            if (!continuation.IsDeferred && scheduledChildren.Count > 0)
+                throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same child-completion evaluation.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            if (checkpointCommitter is null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw();
+                throw;
+            }
+            await RecordParentFaultAsync(
+                activityFaultIncidentRecorder,
+                activityExecutionStateStore,
+                checkpointCommitter,
+                workItem,
+                payload,
+                parentState,
+                exception,
+                valueSnapshots,
+                cancellationToken);
+            return;
+        }
+
+        var currentParentState = await activityExecutionStateStore.FindAsync(
+                                     workItem.WorkflowExecutionId,
+                                     payload.ActivityExecutionId,
+                                     cancellationToken)
+                                 ?? parentState;
+        if (currentParentState.Status != ActivityExecutionStatus.Running)
+            return;
+
+        currentParentState = RuntimeStructuralStateProjector.Apply(currentParentState, continuation);
+
+        if (continuation.Kind == RuntimeStructuralContinuationKind.Fault)
+        {
+            if (checkpointCommitter is null)
+                throw new InvalidOperationException("A checkpoint committer is required to persist a structural activity fault.");
+
+            var fault = continuation.Fault!;
+            var faultedParentState = currentParentState with
+            {
+                Fault = new NormalizedActivityFault(
+                    fault.Code,
+                    typeof(ActivityFault).FullName!,
+                    fault.Message,
+                    sanitizedStackTrace: null,
+                    fault.IsRetryable)
+            };
+            var exception = new ActivityTransitionFaultException(fault);
+            var request = NewFaultIncidentRecordRequest(
+                checkpointCommitter,
+                workItem,
+                payload,
+                faultedParentState,
+                exception,
+                "ActivityReturnedFault",
+                valueSnapshots);
+            var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ActivityReturnedFault");
+            var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
+                activityExecutionStateStore,
+                _timeProvider,
+                workItem,
+                payload.PinnedExecutable,
+                faultedParentState,
+                incidentId,
+                cancellationToken);
+            await activityFaultIncidentRecorder.CommitAsync(
+                parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
+                cancellationToken);
+            return;
+        }
+
+        if (continuation.Kind == RuntimeStructuralContinuationKind.Cancel)
+        {
+            if (checkpointCommitter is null)
+                throw new InvalidOperationException("A checkpoint committer is required to persist a structural activity cancellation.");
+
+            await ActivityCancellationCheckpointService.CommitAsync(
+                checkpointCommitter,
+                inspectionAccumulator,
+                _timeProvider,
+                workItem,
+                currentParentState,
+                continuation.CancellationReason!,
+                valueSnapshots,
+                cancellationToken: cancellationToken);
+            return;
+        }
+
+        var childScheduleRequests = context.GetChildActivityScheduleRequests();
+        if (continuation.IsDeferred)
+        {
+            currentParentState = ActivityAttemptActivationClaimer.EndOpenAttempt(
+                currentParentState,
+                Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
+                _timeProvider.GetUtcNow());
+            currentParentState = ActivityAttemptActivationClaimer.MarkActivationCompleted(currentParentState, workItem.WorkItemId);
+            await CommitDeferredParentActivityAsync(
+                checkpointCommitter!,
+                inspectionAccumulator,
+                idGenerator,
+                workItem,
+                payload,
+                currentParentState,
+                childScheduleRequests,
+                [],
+                valueSnapshots,
+                cancellationToken);
+            return;
+        }
+
+        ActivityExecutionState completedParentState;
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
+        try
+        {
+            var completedAt = _timeProvider.GetUtcNow();
+            var contract = parentExecutableNode.ActivityContract
+                ?? throw new InvalidOperationException($"VF-ACT-001: Executable structural activity node '{parentExecutableNode.ExecutableNodeId}' has no pinned activity contract.");
+            var openAttempt = currentParentState.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)
+                ?? throw new InvalidOperationException($"VF-ACT-009: Running structural activity invocation '{currentParentState.InvocationId}' has no open committed attempt.");
+            var completionProjection = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
+                workItem.WorkflowExecutionId,
+                currentParentState.InvocationId,
+                openAttempt,
+                contract,
+                ActivityTransition.Complete(ActivityUnit.Value, continuation.OutcomeName!),
+                completedAt,
+                cancellationToken);
+            var completedAttempt = new ActivityAttempt(
+                openAttempt.AttemptId,
+                openAttempt.InvocationId,
+                openAttempt.Ordinal,
+                openAttempt.Reason,
+                openAttempt.StartedAt,
+                completedAt,
+                openAttempt.TriggerDeliveryId,
+                Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete);
+            var priorAttempts = currentParentState.Attempts?.Where(attempt => attempt.AttemptId != openAttempt.AttemptId) ?? [];
+            currentParentState = currentParentState with
+            {
+                Attempts = priorAttempts.Append(completedAttempt).OrderBy(attempt => attempt.Ordinal).ToArray(),
+                Completion = completionProjection.Completion
+            };
+            var recordedOutputs = completionProjection.Projections
+                .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
+                .Select(item => new RecordedActivityOutput(
+                    item.Key,
+                    item.Value.Presence == ValuePresence.ExplicitNull ? null : item.Value.InlineValue))
+                .ToArray();
+            if (recordedOutputs.Length > 0)
+            {
+                valueSnapshots = valueSnapshots
+                    .Concat(ActivityExecutionInspection.BuildOutputValueSnapshots(
+                        payloadCapturePolicy,
+                        workItem,
+                        payload.ActivityExecutionId,
+                        payload.ExecutableNodeId,
+                        parentExecutableNode.ActivityContract,
+                        recordedOutputs,
+                        RuntimeMetadataKeys.ParentCompletionSchedulerWorkItemId,
+                        completedAt))
+                    .ToArray();
+            }
+
+            // A completing container's scope is no longer live for runtime expressions; mark it completed
+            // and retain its final variable values as inspection evidence only through the configured
+            // capture/retention policy (ADR 0027, #210).
+            containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
+                payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
+                workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, _timeProvider.GetUtcNow());
+            completedParentState = CompleteParentActivity(
+                workItem,
+                payload,
+                currentParentState,
+                [completionProjection.Completion.OutcomeKey],
+                completedAt);
+
+            // Only a container that actually owns scoped variables gets its scope marked completed; this
+            // keeps the completion of ordinary containers untouched (ADR 0027, #210).
+            if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
+                completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
         }
         catch (OperationCanceledException)
         {
@@ -246,68 +473,67 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 throw;
             }
 
-            var latestFaultedParentState = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
-                                           ?? parentState;
-            var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, exception, "ParentCompletionFaulted", valueSnapshots);
-
-            // Unlike a leaf activity, the faulting node here is the parent composite whose own
-            // OnChildCompleted/OnChildFaulted threw. Mirror the sibling invoke/resume handlers and ride a
-            // child-fault parent-evaluation work item along on the incident checkpoint so the grandparent join
-            // resolves deterministically instead of waiting forever for a completion that never arrives (#379).
-            // TryBuildAsync returns null when the faulted parent has no parent, leaving a plain blocking incident.
-            var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ParentCompletionFaulted");
-            var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
-                activityExecutionStateStore, _timeProvider, workItem, payload.PinnedExecutable, latestFaultedParentState, incidentId, cancellationToken);
-
-            await activityFaultIncidentRecorder.CommitAsync(
-                parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
+            await RecordParentFaultAsync(
+                activityFaultIncidentRecorder,
+                activityExecutionStateStore,
+                checkpointCommitter,
+                workItem,
+                payload,
+                currentParentState,
+                exception,
+                valueSnapshots,
                 cancellationToken);
             return;
         }
 
-        var childScheduleRequests = context.GetChildActivityScheduleRequests();
-        if (childScheduleRequests.Count > 0)
-        {
-            if (checkpointCommitter is null || inspectionAccumulator is null)
-            {
-                await EnqueueChildActivityScheduleWorkAsync(schedulerWorkQueue, idGenerator, workItem, payload, childScheduleRequests, cancellationToken);
-                return;
-            }
-
-            await CommitChildSchedulingParentActivityAsync(checkpointCommitter, inspectionAccumulator, idGenerator, workItem, payload, parentState, childScheduleRequests, valueSnapshots, cancellationToken);
-            return;
-        }
-
-        if (!context.CompositeCompletionRequested && context.CompositeCompletionDeferred)
-            return;
-
-        if (!context.CompositeCompletionRequested)
-            throw new InvalidOperationException($"Composite activity execution '{payload.ActivityExecutionId}' did not request completion, child activity scheduling, or deferred completion after child execution '{completedChildActivityExecutionId}' completed.");
-
-        var latestParentState = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
-                                ?? parentState;
-
-        // A completing container's scope is no longer live for runtime expressions; mark it completed
-        // and retain its final variable values as inspection evidence only through the configured
-        // capture/retention policy (ADR 0027, #210).
-        var containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
-            payloadCapturePolicy, scopeService, parentExecutableNode, latestParentState,
-            workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, _timeProvider.GetUtcNow());
-        var completedParentState = CompleteParentActivity(workItem, payload, latestParentState, context.CompositeCompletionOutcomeNames);
-
-        // Only a container that actually owns scoped variables gets its scope marked completed; this
-        // keeps the completion of ordinary containers untouched (ADR 0027, #210).
-        if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
-            completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
-
-        if (checkpointCommitter is null || inspectionAccumulator is null)
-        {
-            await activityExecutionStateStore.SaveAsync(completedParentState, cancellationToken);
-            await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, payload, completedParentState, cancellationToken);
-            return;
-        }
+        if (checkpointCommitter is null)
+            throw new InvalidOperationException("A checkpoint committer is required to atomically persist structural activity completion.");
 
         await CommitCompletedParentActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, payload, completedParentState, ReadCompletionOutcomeNames(completedParentState), containerVariableSnapshots, cancellationToken);
+    }
+
+    private async ValueTask RecordParentFaultAsync(
+        ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCompleteActivityCommandPayload payload,
+        ActivityExecutionState fallbackState,
+        Exception exception,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        CancellationToken cancellationToken)
+    {
+        var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
+                                           workItem.WorkflowExecutionId,
+                                           payload.ActivityExecutionId,
+                                           cancellationToken)
+                                       ?? fallbackState;
+        var request = NewFaultIncidentRecordRequest(
+            checkpointCommitter,
+            workItem,
+            payload,
+            latestFaultedParentState,
+            exception,
+            "ParentCompletionFaulted",
+            valueSnapshots);
+
+        // The faulting node is the parent composite. Ride a child-fault evaluation for its own parent on the
+        // incident checkpoint so a grandparent join resolves instead of waiting forever. A root has no such work.
+        var incidentId = ActivityFaultIncidentRecorder.IncidentId(
+            workItem.WorkItemId,
+            payload.ActivityExecutionId,
+            "ParentCompletionFaulted");
+        var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
+            activityExecutionStateStore,
+            _timeProvider,
+            workItem,
+            payload.PinnedExecutable,
+            latestFaultedParentState,
+            incidentId,
+            cancellationToken);
+        await activityFaultIncidentRecorder.CommitAsync(
+            parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
+            cancellationToken);
     }
 
     private async ValueTask<ConstructedActivity> ConstructActivityAsync(
@@ -344,18 +570,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             throw new InvalidOperationException($"VF-ACT-001: Typed activity invocation '{state.InvocationId}' does not match its pinned activity contract.");
 
         return snapshot;
-    }
-
-    private async ValueTask EnqueueChildActivityScheduleWorkAsync(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IRuntimeExecutionIdGenerator idGenerator,
-        RuntimeSchedulerWorkItem parentCompletionWorkItem,
-        RuntimeCompleteActivityCommandPayload parentCompletionPayload,
-        IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
-        CancellationToken cancellationToken)
-    {
-        foreach (var workItem in NewChildActivityScheduleWorkItems(idGenerator, parentCompletionWorkItem, parentCompletionPayload, scheduleRequests))
-            await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
     private IEnumerable<RuntimeSchedulerWorkItem> NewChildActivityScheduleWorkItems(
@@ -416,14 +630,15 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         }
     }
 
-    private async ValueTask CommitChildSchedulingParentActivityAsync(
+    private async ValueTask CommitDeferredParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
-        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         IRuntimeExecutionIdGenerator idGenerator,
         RuntimeSchedulerWorkItem parentCompletionWorkItem,
         RuntimeCompleteActivityCommandPayload parentCompletionPayload,
         ActivityExecutionState parentState,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> continuationWorkItems,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken)
     {
@@ -441,13 +656,22 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             [RuntimeMetadataKeys.ExecutableArtifactVersion] = parentCompletionPayload.PinnedExecutable.ArtifactVersion,
             [RuntimeMetadataKeys.ExecutableArtifactHash] = parentCompletionPayload.PinnedExecutable.ArtifactHash
         };
-        var inspection = await inspectionAccumulator.BuildProjectionAsync(
-            parentState,
-            checkpointId,
-            occurredAt,
-            valueSnapshots: valueSnapshots,
-            metadata: metadata,
-            cancellationToken: cancellationToken);
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> inspectionChanges = inspectionAccumulator is null
+            ? []
+            :
+            [
+                new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                    StateId: parentCompletionPayload.ActivityExecutionId,
+                    Operation: RuntimeStateChangeOperation.Upsert,
+                    State: await inspectionAccumulator.BuildProjectionAsync(
+                        parentState,
+                        checkpointId,
+                        occurredAt,
+                        valueSnapshots: valueSnapshots,
+                        metadata: metadata,
+                        cancellationToken: cancellationToken),
+                    Metadata: metadata)
+            ];
         var childWorkItems = NewChildActivityScheduleWorkItems(idGenerator, parentCompletionWorkItem, parentCompletionPayload, scheduleRequests).ToArray();
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{parentCompletionWorkItem.WorkItemId}:activity-inspection-captured:{parentCompletionPayload.ActivityExecutionId}",
@@ -461,20 +685,21 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
                 scheduler: null,
-                activityExecutions: [],
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: parentCompletionPayload.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: parentState,
+                        Metadata: metadata)
+                ],
                 bookmarks: [],
                 durableValues: [],
                 incidents: [],
                 operational: [],
-                activityExecutionInspections:
-                [
-                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                        StateId: parentCompletionPayload.ActivityExecutionId,
-                        Operation: RuntimeStateChangeOperation.Upsert,
-                        State: inspection,
-                        Metadata: metadata)
-                ]),
+                activityExecutionInspections: inspectionChanges),
             PostCommitIntents: childWorkItems
+                .Concat(continuationWorkItems)
                 .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
             Metadata: metadata);
@@ -482,43 +707,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
-    private async ValueTask EnqueueCompletionWorkAsync(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        RuntimeSchedulerWorkItem parentCompletionWorkItem,
-        RuntimeCompleteActivityCommandPayload parentCompletionPayload,
-        ActivityExecutionState completedParentState,
-        CancellationToken cancellationToken)
-    {
-        var now = _timeProvider.GetUtcNow();
-        var payload = new RuntimeCompleteActivityCommandPayload(
-            parentCompletionPayload.PinnedExecutable,
-            parentCompletionPayload.ExecutableNodeId,
-            parentCompletionPayload.ActivityExecutionId,
-            completedParentState.ParentActivityExecutionId,
-            completedParentState.BranchId,
-            ReadCompletionOutcomeNames(completedParentState),
-            RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
-
-        var workItem = new RuntimeSchedulerWorkItem(
-            workItemId: $"{parentCompletionWorkItem.WorkItemId}:complete:{parentCompletionPayload.ActivityExecutionId}",
-            workflowExecutionId: parentCompletionWorkItem.WorkflowExecutionId,
-            commandId: $"{parentCompletionWorkItem.CommandId}:complete:{parentCompletionPayload.ActivityExecutionId}",
-            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            envelopeId: parentCompletionWorkItem.EnvelopeId,
-            idempotencyKey: $"{parentCompletionWorkItem.IdempotencyKey}:complete:{parentCompletionPayload.ActivityExecutionId}",
-            enqueuedAt: now,
-            recordedAt: now,
-            sequence: parentCompletionWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: parentCompletionWorkItem.CommandMetadata,
-            envelopeMetadata: parentCompletionWorkItem.EnvelopeMetadata);
-
-        await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
-    }
-
     private async ValueTask CommitCompletedParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
-        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         RuntimeSchedulerWorkItem parentCompletionWorkItem,
         RuntimeCompleteActivityCommandPayload parentCompletionPayload,
         ActivityExecutionState completedParentState,
@@ -540,14 +731,16 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             [RuntimeMetadataKeys.ExecutableArtifactVersion] = parentCompletionPayload.PinnedExecutable.ArtifactVersion,
             [RuntimeMetadataKeys.ExecutableArtifactHash] = parentCompletionPayload.PinnedExecutable.ArtifactHash
         };
-        var inspection = await inspectionAccumulator.BuildProjectionAsync(
-            completedParentState,
-            checkpointId,
-            occurredAt,
-            outcomeNames: outcomeNames,
-            valueSnapshots: valueSnapshots,
-            metadata: metadata,
-            cancellationToken: cancellationToken);
+        var inspection = inspectionAccumulator is null
+            ? null
+            : await inspectionAccumulator.BuildProjectionAsync(
+                completedParentState,
+                checkpointId,
+                occurredAt,
+                outcomeNames: outcomeNames,
+                valueSnapshots: valueSnapshots,
+                metadata: metadata,
+                cancellationToken: cancellationToken);
         var completionWorkItem = NewCompletionWorkItem(parentCompletionWorkItem, parentCompletionPayload, completedParentState);
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{parentCompletionWorkItem.WorkItemId}:parent-activity-completed:{parentCompletionPayload.ActivityExecutionId}",
@@ -573,14 +766,16 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 durableValues: [],
                 incidents: [],
                 operational: [],
-                activityExecutionInspections:
-                [
-                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                        StateId: parentCompletionPayload.ActivityExecutionId,
-                        Operation: RuntimeStateChangeOperation.Upsert,
-                        State: inspection,
-                        Metadata: metadata)
-                ]),
+                activityExecutionInspections: inspection is null
+                    ? []
+                    :
+                    [
+                        new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: parentCompletionPayload.ActivityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: inspection,
+                            Metadata: metadata)
+                    ]),
             PostCommitIntents: [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, completionWorkItem, occurredAt)],
             Metadata: metadata);
 
@@ -617,11 +812,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             envelopeMetadata: parentCompletionWorkItem.EnvelopeMetadata);
     }
 
-    private async ValueTask EnqueueContinuationSchedulingAsync(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+    private RuntimeSchedulerWorkItem NewContinuationSchedulingWorkItem(
         RuntimeSchedulerWorkItem sourceWorkItem,
-        RuntimeCompleteActivityCommandPayload sourcePayload,
-        CancellationToken cancellationToken)
+        RuntimeCompleteActivityCommandPayload sourcePayload)
     {
         var now = _timeProvider.GetUtcNow();
         var activityExecutionId = sourcePayload.ActivityExecutionId;
@@ -635,7 +828,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason,
             SchedulerCompletionKind.ContinuationScheduling);
 
-        var workItem = new RuntimeSchedulerWorkItem(
+        return new RuntimeSchedulerWorkItem(
             workItemId: $"{sourceWorkItem.WorkItemId}:continuation:{activityExecutionId}",
             workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
             commandId: $"{sourceWorkItem.CommandId}:continuation:{activityExecutionId}",
@@ -648,15 +841,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: sourceWorkItem.CommandMetadata,
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
-
-        await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
     private ActivityExecutionState CompleteParentActivity(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCompleteActivityCommandPayload payload,
         ActivityExecutionState state,
-        IReadOnlyCollection<string> outcomeNames)
+        IReadOnlyCollection<string> outcomeNames,
+        DateTimeOffset completedAt)
     {
         var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -667,7 +859,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {
             Status = ActivityExecutionStatus.Completed,
-            CompletedAt = _timeProvider.GetUtcNow(),
+            CompletedAt = completedAt,
             Metadata = metadata
         });
     }

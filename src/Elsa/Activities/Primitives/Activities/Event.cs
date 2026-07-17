@@ -29,8 +29,6 @@ public sealed class Event : Activity<EventResult>
     /// <summary>The stable activity type key the trigger extractor's provider matches on.</summary>
     public const string ActivityType = "Elsa.Event";
 
-    public Event() => Type = ActivityType;
-
     /// <summary>The name of the event that starts (or targets) the workflow. Drives the stimulus hash.</summary>
     [ActivityInput(Key = nameof(EventName))]
     [Required]

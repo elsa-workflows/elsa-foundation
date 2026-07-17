@@ -96,7 +96,11 @@ public sealed class EventTriggerStimulusProviderTests
                 [nameof(Event.CorrelationId)] = "order-7"
             });
         var activity = Assert.IsType<Event>(activation.Activity);
-        var context = new SimpleActivityExecutionContext(activity, CancellationToken.None);
+        var context = new SimpleActivityExecutionContext(
+            activity,
+            CancellationToken.None,
+            invocationId: "event-invocation",
+            executableNodeId: "event-node");
 
         var transition = await ((IActivity)activity).ExecuteAsync(context);
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);

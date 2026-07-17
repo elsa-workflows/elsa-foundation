@@ -2,10 +2,6 @@
 
 public sealed class FeatureOptions
 {
-    public bool AllowClrAccess { get; set; }
-
-    public TimeSpan? ScriptCacheTimeout { get; set; } = TimeSpan.FromDays(1);
-
     /// <summary>
     /// Sandbox limit (DS-9): the wall-clock execution timeout applied to a single script evaluation via
     /// a Jint timeout constraint. A pathological script (e.g. an infinite loop) is aborted once this

@@ -24,9 +24,9 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
                 ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
 
     [Fact]
-    public void Workflow_executable_shape_is_explicitly_versioned_at_v4() =>
+    public void Workflow_executable_shape_is_explicitly_versioned_at_v5() =>
         Assert.Equal(
-            4,
+            5,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
 
@@ -74,6 +74,17 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
 
         var expected = ReadCommittedFixture(kind, currentVersion);
         AssertJsonSemanticallyEqual(expected, contentJson, kind, currentVersion);
+    }
+
+    [Fact]
+    public void Historical_workflow_executable_v4_fixture_upcasts_to_the_current_v5_fixture()
+    {
+        const string kind = ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind;
+        var historical = JsonNode.Parse(ReadCommittedFixture(kind, 4))!.AsObject();
+
+        var upcasted = GroundworkTestSerialization.UpcasterRegistry.Upcast(kind, 4, 5, historical);
+
+        AssertJsonSemanticallyEqual(ReadCommittedFixture(kind, 5), upcasted.ToJsonString(), kind, 5);
     }
 
     [Theory]

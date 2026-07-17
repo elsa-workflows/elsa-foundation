@@ -86,9 +86,6 @@ internal static class TypedActivityTestActivation
             registry,
             serializer,
             new ActivityInputHydrator());
-        var activation = await activator.ActivateAsync(request);
-        activation.Activity.Id = "invocation-1";
-        activation.Activity.NodeId = "node-1";
-        return activation;
+        return await activator.ActivateAsync(request);
     }
 }

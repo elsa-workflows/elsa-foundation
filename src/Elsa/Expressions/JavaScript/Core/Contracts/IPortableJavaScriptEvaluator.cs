@@ -4,8 +4,7 @@ using Elsa.Expressions.Core.Models;
 namespace Elsa.Expressions.JavaScript.Core.Contracts;
 
 /// <summary>
-/// Evaluates the isolated JavaScript binding surface. Unlike <see cref="IJavaScriptEvaluator"/>, this
-/// contract accepts no workflow execution context or extension callbacks.
+/// Evaluates the isolated JavaScript binding surface from one immutable, explicitly parameterized request.
 /// </summary>
 public interface IPortableJavaScriptEvaluator
 {

@@ -1,5 +1,6 @@
+using System.Text.Json;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
-using Jint;
 using Jint.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -7,9 +8,7 @@ using Xunit;
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 /// <summary>
-/// DS-9: the Jint sandbox limits (timeout / statement-count / recursion-depth) are wired and each is
-/// individually configurable via the feature's ManifestSettings; the previously discarded
-/// CancellationToken is honoured. A pathological script must be aborted rather than hang the host.
+/// The isolated typed script evaluator honors every configured sandbox limit and cancellation.
 /// </summary>
 public class JintSandboxConstraintTests
 {
@@ -24,9 +23,9 @@ public class JintSandboxConstraintTests
             f.MaxRecursionDepth = null;
         });
         using var scope = provider.CreateScope();
-        var engine = await scope.Factory().Create(null);
+        var evaluator = scope.ScriptEvaluator();
 
-        Assert.Throws<TimeoutException>(() => { engine.Evaluate("while (true) {}"); });
+        await Assert.ThrowsAsync<TimeoutException>(() => EvaluateAsync(evaluator, "while (true) { }").AsTask());
     }
 
     [Fact]
@@ -39,9 +38,9 @@ public class JintSandboxConstraintTests
             f.MaxRecursionDepth = null;
         });
         using var scope = provider.CreateScope();
-        var engine = await scope.Factory().Create(null);
+        var evaluator = scope.ScriptEvaluator();
 
-        Assert.Throws<StatementsCountOverflowException>(() => { engine.Evaluate("while (true) {}"); });
+        await Assert.ThrowsAsync<StatementsCountOverflowException>(() => EvaluateAsync(evaluator, "while (true) { }").AsTask());
     }
 
     [Fact]
@@ -54,9 +53,9 @@ public class JintSandboxConstraintTests
             f.MaxRecursionDepth = 50;
         });
         using var scope = provider.CreateScope();
-        var engine = await scope.Factory().Create(null);
+        var evaluator = scope.ScriptEvaluator();
 
-        Assert.Throws<RecursionDepthOverflowException>(() => { engine.Evaluate("function f(n){ return f(n+1); } f(0);"); });
+        await Assert.ThrowsAsync<RecursionDepthOverflowException>(() => EvaluateAsync(evaluator, "function f(n) { return f(n + 1); } return f(0);").AsTask());
     }
 
     [Fact]
@@ -70,11 +69,11 @@ public class JintSandboxConstraintTests
             f.MaxRecursionDepth = null;
         });
         using var scope = provider.CreateScope();
+        var evaluator = scope.ScriptEvaluator();
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
-        var engine = await scope.Factory().Create(null, cts.Token);
 
-        Assert.Throws<ExecutionCanceledException>(() => { engine.Evaluate("while (true) {}"); });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => EvaluateAsync(evaluator, "while (true) { }", cts.Token).AsTask());
     }
 
     [Fact]
@@ -82,12 +81,12 @@ public class JintSandboxConstraintTests
     {
         await using var provider = JintTestHost.Build();
         using var scope = provider.CreateScope();
+        var evaluator = scope.ScriptEvaluator();
         using var cts = new CancellationTokenSource();
-        var engine = await scope.Factory().Create(null, cts.Token);
 
-        var result = engine.Evaluate("1 + 2").AsNumber();
+        var result = await EvaluateAsync(evaluator, "return 1 + 2;", cts.Token);
 
-        Assert.Equal(3, result);
+        Assert.Equal(3, result!.Value.GetInt32());
     }
 
     [Fact]
@@ -102,15 +101,23 @@ public class JintSandboxConstraintTests
             f.MaxRecursionDepth = null;
         });
         using var scope = provider.CreateScope();
-        var factory = scope.Factory();
+        var evaluator = scope.ScriptEvaluator();
 
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
-        var abortedEngine = await factory.Create(null, cancelled.Token);
-        Assert.Throws<ExecutionCanceledException>(() => { abortedEngine.Evaluate("while (true) {}"); });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => EvaluateAsync(evaluator, "while (true) { }", cancelled.Token).AsTask());
 
         using var live = new CancellationTokenSource();
-        var liveEngine = await factory.Create(null, live.Token);
-        Assert.Equal(5, liveEngine.Evaluate("2 + 3").AsNumber());
+        var result = await EvaluateAsync(evaluator, "return 2 + 3;", live.Token);
+        Assert.Equal(5, result!.Value.GetInt32());
     }
+
+    private static ValueTask<JsonElement?> EvaluateAsync(
+        IJavaScriptScriptEvaluator evaluator,
+        string source,
+        CancellationToken cancellationToken = default) =>
+        evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+            source,
+            JsonSerializer.SerializeToElement(new { }),
+            cancellationToken));
 }

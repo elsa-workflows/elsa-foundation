@@ -56,7 +56,7 @@ public sealed class AnyValueReadParityTests
         IReadOnlyDictionary<string, JsonElement> values,
         string path)
     {
-        await using var provider = JintTestHost.Build(configureServices: services => services.AddMemoryCache());
+        await using var provider = JintTestHost.Build();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableJavaScriptEvaluator>();
         var result = await evaluator.EvaluateAsync(Request("JavaScript", $"args.payload.{path}", values));

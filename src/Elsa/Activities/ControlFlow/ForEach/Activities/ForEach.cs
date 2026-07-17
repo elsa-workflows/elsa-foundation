@@ -38,7 +38,7 @@ namespace Elsa.Activities.ForEach.Activities;
 /// </remarks>
 [ActivityStructure("elsa.foreach.structure", "1.0.0")]
 [ActivityChildSlot("ForEach.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class ForEach : ActivityBase, IActivityResult<ActivityUnit>, IActivityChildCompletionHandler
+public sealed class ForEach : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "ForEach.Body";
     public const string StructureKind = "elsa.foreach.structure";
@@ -65,23 +65,22 @@ public sealed class ForEach : ActivityBase, IActivityResult<ActivityUnit>, IActi
     /// <summary>When <c>true</c>, the zero-based iteration index is exposed to the body alongside the current item.</summary>
     public bool ExposeIndex { get; set; } = true;
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
         var navigator = ForEachNavigator.From(runtimeContext.ExecutableNode);
         var items = ForEachCollection.Resolve(Collection);
 
         // Empty/null collection or empty body short-circuits without scheduling a pass.
         if (items.Count == 0 || navigator.Body is null)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleIteration(runtimeContext, navigator.Body, items, index: 0);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -96,8 +95,7 @@ public sealed class ForEach : ActivityBase, IActivityResult<ActivityUnit>, IActi
         // (separate) Break activity module — mirroring For/While/Do.
         if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         var completedIndex = ResolveCompletedIndex(runtimeContext, context.CompletedChildIterationId);
@@ -106,12 +104,11 @@ public sealed class ForEach : ActivityBase, IActivityResult<ActivityUnit>, IActi
 
         if (nextIndex >= items.Count)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleIteration(runtimeContext, navigator.Body, items, nextIndex);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
     private void ScheduleIteration(

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,8 +16,12 @@ public sealed class WorkflowIntrinsicExecutor(
     IRuntimeInputBindingResolver inputBindingResolver,
     IDurableValueStateStore durableValueStateStore,
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IExternalPayloadStore? externalPayloadStore = null)
 {
+    private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(externalPayloadStore);
+    private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
+
     public async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(
         RuntimeSchedulerWorkItem startWorkItem,
         RuntimeStartActivityCommandPayload startPayload,
@@ -594,25 +597,66 @@ public sealed class WorkflowIntrinsicExecutor(
             if (binding.EffectivePolicy.Lifecycle == DurableValueLifecycle.None)
                 throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist transient expression input '{binding.InputName}'.");
 
-            var evaluated = await RuntimeActivityInputMaterializer.EvaluatePortableExpressionAsync(
+            var evaluated = await _portableExpressionEvaluator.EvaluateAsync(
                 expression,
                 binding.TargetType,
+                binding.EffectivePolicy,
                 intrinsicState.Execution.ExecutableNodeId,
                 binding.InputName,
                 context,
                 cancellationToken);
-            return evaluated.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-                ? ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy)
-                : ValueEnvelope.Inline(binding.TargetType, evaluated, binding.EffectivePolicy);
+            var envelope = evaluated.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ValueEnvelope.Null(binding.TargetType, evaluated.EffectivePolicy)
+                : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
+            return await ApplyStorageAsync(
+                workflowState.WorkflowExecutionId,
+                intrinsicState.InvocationId,
+                binding.InputName,
+                envelope,
+                evaluated.EffectivePolicy,
+                evaluated.EffectivePolicy,
+                cancellationToken);
         }
         var source = resolved.Envelope
             ?? throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' resolved '{binding.InputName}' without its source value envelope.");
         if (source.Presence == ValuePresence.Absent)
             throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot materialize an absent value.");
-        if (source.Policy.Lifecycle == DurableValueLifecycle.None || !binding.EffectivePolicy.Satisfies(source.Policy))
-            throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist '{binding.InputName}' without preserving its source protection policy.");
+        if (source.Policy.Lifecycle == DurableValueLifecycle.None)
+            throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist transient source '{binding.InputName}'.");
+        var combinedPolicy = ValuePolicyCombiner.Combine(
+            binding.EffectivePolicy,
+            source.Policy,
+            $"Intrinsic input '{binding.InputName}' on node '{intrinsicState.Execution.ExecutableNodeId}'");
 
-        return new ValueEnvelope(binding.TargetType, source.Presence, source.InlineValue, source.ExternalReference, binding.EffectivePolicy);
+        var combined = new ValueEnvelope(binding.TargetType, source.Presence, source.InlineValue, source.ExternalReference, combinedPolicy);
+        return await ApplyStorageAsync(
+            workflowState.WorkflowExecutionId,
+            intrinsicState.InvocationId,
+            binding.InputName,
+            combined,
+            source.Policy,
+            combinedPolicy,
+            cancellationToken);
+    }
+
+    private async ValueTask<ValueEnvelope> ApplyStorageAsync(
+        string workflowExecutionId,
+        string invocationId,
+        string valueName,
+        ValueEnvelope value,
+        ValueProtectionPolicy sourcePolicy,
+        ValueProtectionPolicy effectivePolicy,
+        CancellationToken cancellationToken)
+    {
+        return await _externalEnvelopeStorage.RewriteAsync(
+            new RuntimeExternalEnvelopeRewriteRequest(
+                workflowExecutionId,
+                $"intrinsic:{invocationId}:value:{valueName}",
+                $"Intrinsic value '{valueName}'",
+                value,
+                sourcePolicy,
+                effectivePolicy),
+            cancellationToken);
     }
 
     private static FrameOwner ResolveVisibleFrame(

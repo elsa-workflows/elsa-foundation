@@ -57,8 +57,10 @@ public sealed class ReadLineActivityTests : IDisposable
 
     private SimpleActivityExecutionContext NewContext(IActivity activity)
     {
-        activity.Id = "invocation-read-line";
-        activity.NodeId = "node-read-line";
-        return new(activity, CancellationToken.None);
+        return new(
+            activity,
+            CancellationToken.None,
+            invocationId: "invocation-read-line",
+            executableNodeId: "node-read-line");
     }
 }

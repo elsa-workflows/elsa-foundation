@@ -481,15 +481,12 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Compiler indexing (W8):** `WorkflowExecutableCompiler` now reflects `[ResumeTarget]` methods off each node's resolved activity type and indexes them into `WorkflowExecutable.ResumeTargets` (previously always empty). `Delay` is the first suspending activity to exercise this. The map is keyed by the attribute's resume-target ID, so duplicate IDs across nodes fail compilation loudly.
 - **Follow-up (W8) — node-scoped resume targets.** Because the key is the attribute ID (matching how the resume resolver and the create-bookmark handler already match), only **one instance** of a given resume-target activity is supported per workflow this wave (two `Delay`s in one workflow fail compilation). Node-scoped resume-target IDs (keyed by `ExecutableNodeId` + attribute ID) are the follow-up to lift this, and require a matching change in the resume resolver.
 
-### `ISignalHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Contributor (receives a signal and acts — push pattern).
-- **Signature:** `ValueTask ReceiveSignalAsync(object signal, SignalContext context);`
-- **Usage:** implement on activity classes to receive signals sent to the workflow. `ActivityBase` exposes `ReceiveSignalAsync` which dispatches to the activity's `ISignalHandler` implementation.
-- **Not a fan-in aggregator** — each activity implements this directly; there is no aggregating event handler. Signals are dispatched to activities in the workflow graph, not via the DI container.
-- **Sub-interface:** `IBehavior : ISignalHandler` — for behaviour objects composable onto activities.
-
-**Known implementations (shipped):**
-- Activity classes that override `ReceiveSignalAsync` in the codebase.
+### `IRuntimeStructuralActivity` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Engine-only structural activity protocol; not a DI contributor or ordinary activity-author callback surface.
+- **Signature:** `ExecuteStructureAsync(IRuntimeActivityExecutionContext context)` returns `ValueTask<RuntimeStructuralContinuation>`.
+- **Usage:** lets a composite schedule and coordinate executable children without placing child scheduling or continuation methods on the minimal `IActivity` contract. The initial runtime invocation uses this method instead of `IActivity.ExecuteAsync`. `IRuntimeActivityChildCompletionHandler` and `IRuntimeActivityChildFaultHandler` provide the corresponding parent re-evaluation callbacks.
+- **Decision model:** every structural entry point returns one immutable `RuntimeStructuralContinuation`: `Complete(outcome)`, `Defer`, `Faulted(ActivityFault)`, or `Cancel(reason)`. A terminal decision cannot schedule children in the same evaluation. Initial execution may defer only after scheduling at least one child; a child callback may defer while awaiting existing children or after scheduling the next child.
+- **Known implementations (shipped):** `Sequence`, `Flowchart`, `Parallel`, `If`, `Switch`, `For`, `ForEach`, `While`, and `Do`.
 
 ### `IActivityTriggerStimulusProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Strategy set (context-selected, exact-one owner per executable trigger node; not a contributor fan-in).

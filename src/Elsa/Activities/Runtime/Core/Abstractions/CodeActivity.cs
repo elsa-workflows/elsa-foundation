@@ -1,16 +1,9 @@
 namespace Elsa.Activities.Runtime.Core.Abstractions;
 
 /// <summary>
-/// Base class for custom activities with auto-complete behavior.
+/// Optional semantic base for code-first activity authors. It intentionally adds no runtime behavior over
+/// <see cref="ActivityBase"/>; execution semantics come from the implemented activity transition contract.
 /// </summary>
 public abstract class CodeActivity : ActivityBase
 {
-    protected CodeActivity()
-    {
-    }
-
-    protected CodeActivity(string activityType, string version = "1.0.0")
-        : base(activityType, version)
-    {
-    }
 }

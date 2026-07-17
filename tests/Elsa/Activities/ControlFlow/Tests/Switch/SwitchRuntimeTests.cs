@@ -63,7 +63,7 @@ public sealed class SwitchRuntimeTests
     public async Task SelectedCaseBranchIsEmpty_FinalizesWithoutSchedulingChild_AndCompletesWorkflow()
     {
         // Value selects case "a", but its slot is empty: the composite must finalize via
-        // CompleteCompositeActivity ("a" outcome) with no child scheduled, and the run must complete.
+        // The returned structural completion ("a" outcome) schedules no child, and the run must complete.
         await using var harness = NewHarness("actexec-switch");
 
         var run = await harness.RunAsync(NewExecutable(value: "a", includeCaseBranch: false));

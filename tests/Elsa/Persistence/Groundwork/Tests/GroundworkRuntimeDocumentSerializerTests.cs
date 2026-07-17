@@ -287,6 +287,95 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
+    public void WorkflowExecutableV4ToV5Upcaster_removes_empty_output_captures_recursively()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "executable": {
+                "rootActivity": {
+                  "executableNodeId": "root",
+                  "outputCaptures": {},
+                  "childSlots": [
+                    {
+                      "activities": [
+                        {
+                          "executableNodeId": "child",
+                          "outputCaptures": {},
+                          "childSlots": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var result = new WorkflowExecutableDocumentV4ToV5Upcaster().Upcast(content);
+
+        var root = Assert.IsType<JsonObject>(result["executable"]!["rootActivity"]);
+        var child = Assert.IsType<JsonObject>(root["childSlots"]![0]!["activities"]![0]);
+        Assert.False(root.ContainsKey("outputCaptures"));
+        Assert.False(child.ContainsKey("outputCaptures"));
+    }
+
+    [Fact]
+    public void WorkflowExecutableV4ToV5Upcaster_rejects_non_empty_nested_output_captures()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "executable": {
+                "rootActivity": {
+                  "executableNodeId": "root",
+                  "outputCaptures": {},
+                  "childSlots": [
+                    {
+                      "activities": [
+                        {
+                          "executableNodeId": "child",
+                          "outputCaptures": { "Result": { "outputName": "Result" } },
+                          "childSlots": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(
+            () => new WorkflowExecutableDocumentV4ToV5Upcaster().Upcast(content));
+
+        Assert.Contains("child", exception.Message);
+        Assert.Contains("outputCaptures", exception.Message);
+        Assert.Contains("Republish", exception.Message);
+        Assert.True(content["executable"]!["rootActivity"]!.AsObject().ContainsKey("outputCaptures"));
+    }
+
+    [Fact]
+    public void WorkflowExecutableV4ToV5Upcaster_rejects_malformed_output_captures_with_a_version_exception()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "executable": {
+                "rootActivity": {
+                  "executableNodeId": 42,
+                  "outputCaptures": null,
+                  "childSlots": []
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(
+            () => new WorkflowExecutableDocumentV4ToV5Upcaster().Upcast(content));
+
+        Assert.Contains("<unknown>", exception.Message);
+        Assert.Contains("outputCaptures", exception.Message);
+    }
+
+    [Fact]
     public void ActivityExecutionStateV2ToV3Upcaster_adds_a_neutral_variable_frame()
     {
         var content = JsonNode.Parse("""{"state":{"invocationId":"ae-1"}}""")!.AsObject();
@@ -428,6 +517,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             new WorkflowExecutableDocumentV1ToV2Upcaster(),
             new WorkflowExecutableDocumentV2ToV3Upcaster(),
             new WorkflowExecutableDocumentV3ToV4Upcaster(),
+            new WorkflowExecutableDocumentV4ToV5Upcaster(),
             new ActivityExecutionStateDocumentV1ToV2Upcaster(),
             new ActivityExecutionStateDocumentV2ToV3Upcaster(),
             new ActivityExecutionStateDocumentV3ToV4Upcaster(),

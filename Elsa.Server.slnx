@@ -110,7 +110,6 @@
     <Project Path="src/Elsa/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
-    <Project Path="src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Primitives/Elsa.Expressions.JavaScript.Primitives.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Expressions/JavaScript/Rendering/">

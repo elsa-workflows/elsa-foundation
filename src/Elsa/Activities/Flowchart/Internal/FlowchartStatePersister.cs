@@ -1,28 +1,20 @@
 using System.Text.Json;
 using Elsa.Activities.Flowchart.Exceptions;
 using Elsa.Activities.Flowchart.Models;
-using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Activities.Flowchart.Internal;
 
 /// <summary>
-/// Loads and persists the <see cref="FlowchartExecutionState"/> blob and owns the #382 prune-on-save
+/// Loads and stages the <see cref="FlowchartExecutionState"/> blob and owns the #382 prune-on-save
 /// behavior. Serializes with <see cref="JsonSerializerDefaults.Web"/> and no string-enum converter, so all
 /// state enums persist as ordinals — the frozen §E6 wire surface pinned by the golden fixtures. The persisted
-/// blob is written under <see cref="FlowchartExecutionEngine.StateMetadataKey"/> as part of a mandatory
-/// activity-inspection checkpoint. Mechanical extraction of the former engine helpers; the prune predicate,
-/// serialization options, checkpoint envelope, and metadata are byte-for-byte unchanged.
+/// blob is carried under <see cref="FlowchartExecutionEngine.StateMetadataKey"/> as structural private
+/// metadata. The runtime folds that metadata into the same checkpoint as the structural continuation and
+/// its child schedule intents; this service never commits state independently.
 /// </summary>
-public sealed class FlowchartStatePersister(
-    RuntimeCheckpointCommitter checkpointCommitter,
-    IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
-    TimeProvider? timeProvider = null)
+public sealed class FlowchartStatePersister
 {
-    private const string FlowchartStatePersistenceReason = "FlowchartStatePersistence";
     private const string RootPathId = "path:root";
 
     /// <summary>Maximum diagnostics retained in the persisted state blob (#382); oldest are dropped first.</summary>
@@ -132,74 +124,16 @@ public sealed class FlowchartStatePersister(
         return state with { Arrivals = arrivals, ExecutionPaths = paths, Scopes = scopes, Diagnostics = diagnostics };
     }
 
-    public async ValueTask SaveStateAsync(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
+    public RuntimeStructuralContinuation StageState(
+        RuntimeStructuralContinuation continuation,
+        FlowchartExecutionState state)
     {
-        var metadata = context.ActivityExecutionState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[FlowchartExecutionEngine.StateMetadataKey] = JsonSerializer.Serialize(PruneForPersistence(state), SerializerOptions);
-        var updatedState = context.ActivityExecutionState with { Metadata = metadata };
-        var occurredAt = (timeProvider ?? TimeProvider.System).GetUtcNow();
-        var checkpointId = $"checkpoint:{context.SchedulerWorkItem.WorkItemId}:flowchart-state";
-        var commitId = $"commit:{context.SchedulerWorkItem.WorkItemId}:flowchart-state";
-        var checkpointMetadata = new Dictionary<string, string>
-        {
-            [RuntimeMetadataKeys.SchedulerWorkItemId] = context.SchedulerWorkItem.WorkItemId,
-            [RuntimeMetadataKeys.CommandId] = context.SchedulerWorkItem.CommandId,
-            [RuntimeMetadataKeys.CheckpointReason] = FlowchartStatePersistenceReason,
-            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
-            [RuntimeMetadataKeys.ExecutableArtifactId] = context.PinnedExecutable.ArtifactId,
-            [RuntimeMetadataKeys.ExecutableArtifactVersion] = context.PinnedExecutable.ArtifactVersion,
-            [RuntimeMetadataKeys.ExecutableArtifactHash] = context.PinnedExecutable.ArtifactHash
-        };
-        var stateChangeMetadata = new Dictionary<string, string>
-        {
-            [RuntimeMetadataKeys.SchedulerWorkItemId] = context.SchedulerWorkItem.WorkItemId,
-            [RuntimeMetadataKeys.CheckpointReason] = FlowchartStatePersistenceReason
-        };
-        var inspection = await inspectionAccumulator.BuildProjectionAsync(
-            updatedState,
-            checkpointId,
-            occurredAt,
-            metadata: stateChangeMetadata,
-            cancellationToken: context.CancellationToken);
-        var commit = new RuntimeCheckpointCommit(
-            CommitId: commitId,
-            Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: checkpointId,
-                Name: RuntimeCheckpointNames.ActivityInspectionCaptured,
-                WorkflowExecutionId: context.WorkflowExecutionId,
-                OccurredAt: occurredAt,
-                ActivityExecutionIds: [updatedState.Execution.ActivityExecutionId],
-                Metadata: checkpointMetadata),
-            StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
-                scheduler: null,
-                activityExecutions:
-                [
-                    new RuntimeStateChange<ActivityExecutionState>(
-                        StateId: updatedState.Execution.ActivityExecutionId,
-                        Operation: RuntimeStateChangeOperation.Upsert,
-                        State: updatedState,
-                        Metadata: stateChangeMetadata)
-                ],
-                bookmarks: [],
-                durableValues: [],
-                incidents: [],
-                operational: [],
-                activityExecutionInspections:
-                [
-                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                        StateId: updatedState.Execution.ActivityExecutionId,
-                        Operation: RuntimeStateChangeOperation.Upsert,
-                        State: inspection,
-                        Metadata: stateChangeMetadata)
-                ]),
-            PostCommitIntents: [],
-            Metadata: new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = context.SchedulerWorkItem.WorkItemId,
-                [RuntimeMetadataKeys.CommandKind] = context.SchedulerWorkItem.CommandKind.ToString()
-            });
+        ArgumentNullException.ThrowIfNull(continuation);
+        ArgumentNullException.ThrowIfNull(state);
 
-        await checkpointCommitter.CommitAsync(commit, context.CancellationToken);
+        return continuation.WithPrivateMetadata(new Dictionary<string, string>
+        {
+            [FlowchartExecutionEngine.StateMetadataKey] = JsonSerializer.Serialize(PruneForPersistence(state), SerializerOptions)
+        });
     }
 }

@@ -43,6 +43,29 @@ public static class ValuePolicyCombiner
             RetentionPolicy: CombineExact(owner.RetentionPolicy, minimum.RetentionPolicy, "retention", valueRole));
     }
 
+    /// <summary>
+    /// Combines two effective runtime policies without discarding either value owner's minima.
+    /// Strength-like fields take the stronger value; exact/custom fields must agree.
+    /// </summary>
+    public static ValueProtectionPolicy Combine(
+        ValueProtectionPolicy owner,
+        ValueProtectionPolicy minimum,
+        string valueRole)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(minimum);
+        ArgumentException.ThrowIfNullOrWhiteSpace(valueRole);
+
+        return new ValueProtectionPolicy(
+            CombineLifecycle(owner.Lifecycle, minimum.Lifecycle, valueRole),
+            CombineStorage(owner.Storage, minimum.Storage, valueRole),
+            owner.IsSensitive || minimum.IsSensitive,
+            owner.RequiresEncryption || minimum.RequiresEncryption,
+            CombineExact(owner.RedactionMode, minimum.RedactionMode, "redaction", valueRole),
+            CombineExact(owner.RetentionPolicy, minimum.RetentionPolicy, "retention", valueRole),
+            CombineMetadata(owner.Metadata, minimum.Metadata, valueRole));
+    }
+
     public static ValueProtectionPolicy ToProtectionPolicy(ActivityValuePolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
@@ -108,9 +131,9 @@ public static class ValuePolicyCombiner
         if (minimum.RetentionPolicy is not null && !StringComparer.Ordinal.Equals(effective.RetentionPolicy, minimum.RetentionPolicy))
             return false;
 
-        return !minimum.Metadata.TryGetValue(StorageProfileMetadataKey, out var requiredProfile) ||
-               effective.Metadata.TryGetValue(StorageProfileMetadataKey, out var effectiveProfile) &&
-               StringComparer.Ordinal.Equals(effectiveProfile, requiredProfile);
+        return minimum.Metadata.All(required =>
+            effective.Metadata.TryGetValue(required.Key, out var effectiveValue) &&
+            StringComparer.Ordinal.Equals(effectiveValue, required.Value));
     }
 
     private static ActivityValueLifecycle CombineLifecycle(
@@ -125,6 +148,22 @@ public static class ValuePolicyCombiner
         return LifecycleRank(owner) >= LifecycleRank(minimum) ? owner : minimum;
     }
 
+    private static DurableValueLifecycle CombineLifecycle(
+        DurableValueLifecycle owner,
+        DurableValueLifecycle minimum,
+        string valueRole)
+    {
+        if (owner == minimum)
+            return owner;
+        if (owner == DurableValueLifecycle.None)
+            return minimum;
+        if (minimum == DurableValueLifecycle.None)
+            return owner;
+        if (owner == DurableValueLifecycle.Custom || minimum == DurableValueLifecycle.Custom)
+            throw Incompatible("custom lifecycle", valueRole);
+        return LifecycleRank(owner) >= LifecycleRank(minimum) ? owner : minimum;
+    }
+
     private static ActivityValueStorage CombineStorage(
         ActivityValueStorage owner,
         ActivityValueStorage minimum,
@@ -135,6 +174,37 @@ public static class ValuePolicyCombiner
         if (owner == ActivityValueStorage.Custom || minimum == ActivityValueStorage.Custom)
             throw Incompatible("custom storage", valueRole);
         return StorageRank(owner) >= StorageRank(minimum) ? owner : minimum;
+    }
+
+    private static DurableValueStorage CombineStorage(
+        DurableValueStorage owner,
+        DurableValueStorage minimum,
+        string valueRole)
+    {
+        if (owner == minimum)
+            return owner;
+        if (owner == DurableValueStorage.None)
+            return minimum;
+        if (minimum == DurableValueStorage.None)
+            return owner;
+        if (owner == DurableValueStorage.Custom || minimum == DurableValueStorage.Custom)
+            throw Incompatible("custom storage", valueRole);
+        return StorageRank(owner) >= StorageRank(minimum) ? owner : minimum;
+    }
+
+    private static IReadOnlyDictionary<string, string> CombineMetadata(
+        IReadOnlyDictionary<string, string> owner,
+        IReadOnlyDictionary<string, string> minimum,
+        string valueRole)
+    {
+        var combined = new Dictionary<string, string>(owner, StringComparer.Ordinal);
+        foreach (var (key, value) in minimum)
+        {
+            if (combined.TryGetValue(key, out var existing) && !StringComparer.Ordinal.Equals(existing, value))
+                throw Incompatible($"metadata '{key}'", valueRole);
+            combined[key] = value;
+        }
+        return combined;
     }
 
     private static string? CombineExact(string? owner, string? minimum, string policyName, string valueRole)

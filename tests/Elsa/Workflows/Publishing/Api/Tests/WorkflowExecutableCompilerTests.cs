@@ -62,6 +62,50 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task RejectsOmittedOptionalInputWithoutPinnedDefault()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-optional",
+            "Test.Optional",
+            [new InputDefinition("value", "Value", new TypeReference("String"), null, "Value", null, IsRequired: false)]);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("optional", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("omits input 'value'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("no pinned default", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsDuplicateAuthoredInputBindings()
+    {
+        var compiler = Compiler(WorkflowVersion(Node("write-one", Text("first"), Text("second"))));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("duplicate input 'Text'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exactly one canonical binding", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsCaseVariantOfStableInputKey()
+    {
+        var input = new WorkflowArgumentState("text", new ArgumentValue("value", "Literal"), null, null, null, null);
+        var compiler = Compiler(WorkflowVersion(Node("write-one", input)));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("input 'text' does not match any input definition", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LegacyClrTriggerCatalogRow_CompilesWithDeclaredIdentityAndTriggerExecutionType()
     {
         var compiler = Compiler(WorkflowVersion(new ActivityNode("legacy-trigger", "activity-legacy-trigger", [], [])));
@@ -424,7 +468,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task CompilesVariableStoragePolicyIntoExecutableStructure()
+    public async Task RejectsExternalVariableDeclarationUntilFrameExternalizationExists()
     {
         var secret = new Elsa.Expressions.Core.Models.VariableDefinition(
             ReferenceKey: "var-secret",
@@ -437,14 +481,10 @@ public sealed class WorkflowExecutableCompilerTests
             [Node("write-one", Text("one"))],
             [secret])));
 
-        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
-        var projection = executable.RootActivity.Structure!.Payload.Deserialize<RuntimeVariableStructureProjection>(
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        var declaration = Assert.Single(projection!.Variables);
-        Assert.Equal(DurableValueStorage.External, declaration.Policy.Storage);
-        Assert.Equal("encrypted-variables", declaration.Policy.Metadata[ValuePolicyCombiner.StorageProfileMetadataKey]);
-        Assert.Null(declaration.InitialBinding);
+        Assert.Contains("canonical variable-frame externalization is not implemented", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -464,7 +504,7 @@ public sealed class WorkflowExecutableCompilerTests
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
-        Assert.Contains("External variable materialization must be explicit", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("canonical variable-frame externalization is not implemented", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("super-private-value", exception.Message, StringComparison.Ordinal);
     }
 

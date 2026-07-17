@@ -7,6 +7,19 @@ public static class RuntimeMetadataKeys
     public const string CheckpointRequirement = "runtime.checkpointRequirement";
     public const string CheckpointRequirementMandatory = "Mandatory";
     public const string ActivityExecutionId = "runtime.activityExecutionId";
+    /// <summary>
+    /// Attempt identity durably claimed by an InvokeActivity delivery before CLR activation. If the same open
+    /// attempt is still claimed when the work item is redelivered, the runtime closes it and commits a fresh retry
+    /// attempt before constructing another CLR activity instance.
+    /// </summary>
+    public const string ActivityAttemptActivationClaim = "runtime.activityAttemptActivationClaim";
+    /// <summary>Scheduler work item that owns the active attempt claim, used to distinguish redelivery from a duplicate command.</summary>
+    public const string ActivityAttemptActivationClaimWorkItemId = "runtime.activityAttemptActivationClaimWorkItemId";
+    /// <summary>
+    /// JSON array of scheduler work-item IDs whose claimed structural activation completed a durable continuation.
+    /// The history is append-only so delayed at-least-once replays remain recognizable after newer callbacks finish.
+    /// </summary>
+    public const string ActivityActivationCompletedWorkItemIds = "runtime.activityActivationCompletedWorkItemIds";
     public const string BookmarkId = "runtime.bookmarkId";
     public const string CheckpointReason = "runtime.checkpointReason";
     public const string CancellationReason = "runtime.cancellationReason";
@@ -49,10 +62,9 @@ public static class RuntimeMetadataKeys
     public const string OwnershipFencingToken = "runtime.ownership.fencingToken";
 
     /// <summary>
-    /// System-metadata key on a workflow execution carrying the workflow instance name (#260). Set by the
-    /// <c>SetName</c> leaf control activity through <see cref="Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext.SetInstanceName"/>;
-    /// the engine folds it into the activity-completed checkpoint's workflow-execution state change, mirroring
-    /// how the correlation id is persisted. Absent when no name has been assigned.
+    /// System-metadata key on a workflow execution carrying the workflow instance name (#260). The compiled
+    /// <c>SetInstanceName</c> workflow intrinsic folds it into the intrinsic-completed checkpoint's
+    /// workflow-execution state change. Absent when no name has been assigned.
     /// </summary>
     public const string InstanceName = "runtime.instanceName";
 
@@ -109,8 +121,8 @@ public static class RuntimeMetadataKeys
     /// read projection (#254 Seam R1): <c>RuntimeWorkflowOutputStateProjection</c> (engine package)
     /// threads it as <c>IsSensitive</c> into the <c>IRuntimePayloadCapturePolicy</c> consult, so a sensitive-marked
     /// output surfaces on the read edge as an explicit redacted marker even under a payload-capturing policy.
-    /// Nothing writes this key yet — <c>SetWorkflowOutput</c> carries no sensitivity channel — it is the reserved
-    /// read-side contract for when a producer does.
+    /// The canonical <c>SetOutput</c> intrinsic carries sensitivity in its role-owned value envelope; this key
+    /// remains the compatibility read-side marker for older durable-value records.
     /// </summary>
     public const string IsSensitive = "runtime.isSensitive";
 

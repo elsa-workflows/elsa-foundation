@@ -10,11 +10,6 @@ namespace Elsa.Expressions.Liquid.Services;
 /// <summary>
 /// Evaluates pure Liquid bindings from their complete, explicitly declared JSON parameter snapshot.
 /// </summary>
-/// <remarks>
-/// This path deliberately does not use <see cref="LiquidTemplateManager"/>. The legacy manager builds
-/// a template context around an <see cref="IExpressionExecutionContext"/> and publishes configuration
-/// events; a binding expression receives neither of those ambient surfaces.
-/// </remarks>
 public sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPortableExpressionHandler
 {
     private static readonly HashSet<string> NumericAliases =

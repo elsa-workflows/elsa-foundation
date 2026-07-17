@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Flowchart.Internal;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
@@ -44,6 +45,10 @@ public sealed class FlowchartFaultJoinTests
         var flowchart = run.State(FlowchartNodeId);
         Assert.Equal(ActivityExecutionStatus.Faulted, flowchart.Status);
         Assert.NotEmpty(flowchart.IncidentIds);
+        var persistedFlowchartState = JsonSerializer.Deserialize<FlowchartExecutionState>(
+            flowchart.Metadata[FlowchartExecutionEngine.StateMetadataKey],
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Contains(persistedFlowchartState!.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Faulted);
         Assert.DoesNotContain(run.States(FlowchartNodeId), state => state.Status == ActivityExecutionStatus.Completed);
 
         // The run resolved deterministically: the join did not silently complete the workflow as a success.

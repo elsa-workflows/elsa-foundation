@@ -58,14 +58,12 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_StableActivityIdentity_RecognizesOnlyHttpEndpoint()
     {
-        var activity = new HttpEndpoint(new HttpRequestBodyParser());
-        var endpointNode = EndpointNode(path: "hello-world", activityType: activity.Type);
+        var endpointNode = EndpointNode(path: "hello-world", activityType: HttpEndpoint.ActivityType);
         var otherClrNode = EndpointNode(path: "hello-world", activityType: typeof(WriteHttpResponse).FullName!);
 
         var result = _provider.Describe(endpointNode);
 
         Assert.Equal("Elsa.HttpEndpoint", HttpEndpoint.ActivityType);
-        Assert.Equal(HttpEndpoint.ActivityType, activity.Type);
         Assert.True(result.IsRecognized);
         Assert.Single(result.Descriptors);
         Assert.False(_provider.Describe(otherClrNode).IsRecognized);

@@ -1,8 +1,8 @@
 # Verification: Role-Owned Workflow Value Flow
 
-**Verified:** 2026-07-16
-**Scope:** spec 095 production code, tests, serialized goldens, generated maps, migration notes, and
-the one-way Elsa 3 importer boundary.
+**Verified:** 2026-07-17
+**Scope:** spec 095 production code, tests, serialized goldens, migration notes, and the one-way
+Elsa 3 importer boundary. Generated-map refresh was intentionally skipped for this final pass.
 
 The constitution remains draft/provisional. This verification therefore proves conformance to the
 ratified work-unit contracts and tests for spec 095; it does not present the draft constitution as a
@@ -20,13 +20,13 @@ not a partial audit.
 | FR-007–FR-009 | Pass | Typed workflow request/result builder contracts, request pinning, terminal-result validation, and deterministic compiler/fingerprint tests. |
 | FR-010–FR-013 | Pass | Plain `[ActivityInput]` members, one atomic typed result, read-only projections, stable keys/fingerprints, CLR rename compatibility, and scanner/contract tests. |
 | FR-014–FR-018 | Pass | `IActivityActivator`, constructor injection, reduced typed execution context, pinned defaults, reflection/generated/manual metadata conformance, activation requirements, and 218 Activities Design tests. |
-| FR-019–FR-026 | Pass | Invocation/snapshot/attempt/completion records, retry/resume identity, normalized faults, durability-policy rejection, atomic checkpoint tests, distributed recovery, and 242 Groundwork tests. |
+| FR-019–FR-026 | Pass | Invocation/snapshot/attempt/completion records, retry/resume identity, normalized faults, durability-policy rejection, atomic checkpoint tests, distributed recovery, and 246 Groundwork tests. |
 | FR-027–FR-031 | Pass | Root/container/iteration `VariableFrameState`, materialization-time reads, intrinsic `Set`, immutable expression inputs, and concurrent-write publication diagnostics. |
 | FR-032–FR-036 | Pass | Structural/causal result resolution, explicit scope returns and back-edge state, unavailable/ambiguous producer diagnostics, and deterministic branch/iteration ordering across randomized completion. |
-| FR-037–FR-040 | Pass | Portable expression definitions, immutable declared parameters, JavaScript/Liquid binding-path prohibition tests, deleted workflow ambient preprocessors/write-back, and typed script activity results. |
-| FR-041–FR-044 | Pass | Typed stateful activities, immutable private state, fresh resume activations, durable trigger deduplication, and distinct complete/suspend/fault/cancel transitions. |
+| FR-037–FR-040 | Pass | Portable expression definitions, immutable declared parameters, JavaScript/Liquid binding-path prohibition tests, deleted ambient evaluator/context/handler, raw Jint engine/configurator, delegate-host-function, and configuration/preprocessor seams, zero-reference architecture guard, and typed isolated script activity results. |
+| FR-041–FR-044 | Pass | Typed stateful activities, immutable private state, fresh resume activations, durable trigger deduplication, distinct complete/suspend/fault/cancel transitions, and return-valued structural continuation decisions with no mutable completion/outcome context channel. |
 | FR-045–FR-052 | Pass | IDE-guided `WorkflowDefinition<TRequest,TResult>`, build-once determinism, `.From`/`.Value`, generated named methods and call handles, typed child-workflow authoring, and ordinary builder extensions. |
-| FR-053–FR-054 | Pass | Owner-level persistence/sensitivity/redaction policy, policy-combination rules, and no-downgrade tests. |
+| FR-053–FR-054 | Pass | Owner-level persistence/sensitivity/redaction policy, source-policy propagation, conflict rules, and external-payload rewrite tests that prevent relabeling data without enforcing the stronger policy. |
 | FR-055–FR-056 | Pass | Importer-local memory-reference graph, valid lowering matrix, output-only/combined handling, and path-specific `VF-IMP-*` diagnostics. |
 | FR-057–FR-060 | Pass | Deleted canonical memory/argument/factory APIs, no compatibility adapter, alias-only type metadata, completed migration ledger, and architecture zero-reference guards. |
 | FR-061 | Pass | Typed trigger start/resume authority and provider-recognition fixtures, HTTP start/resume integration, and resumption tests. |
@@ -47,7 +47,7 @@ not a partial audit.
 | SC-009 | Pass | Durable input/state/result policy tests reject nonpersistable values before user code. |
 | SC-010 | Pass | The retained benchmark report covers all strategies, workloads, metrics, environment, and correctness gates. |
 | SC-011 | Pass | Intrinsic semantic counters assert zero CLR activations and zero child scopes. |
-| SC-012 | Pass | Architecture suite passes 96/96; refreshed maps report zero Runtime-to-Design direct references. |
+| SC-012 | Pass | Architecture suite passes 97/97 with no new Runtime-to-Design direct references. |
 | SC-013 | Pass | Generator, reflection scanner, and manual contract conformance tests agree on stable member/result metadata. |
 | SC-014 | Pass | `test-migration-ledger.md` records a passing successor or explicit architectural removal rationale for every affected objective. |
 
@@ -56,20 +56,26 @@ not a partial audit.
 | Project | Result |
 |---|---|
 | `Elsa.Activities.Design.Tests` | 218 passed |
-| `Elsa.Activities.Runtime.Tests` | 112 passed |
-| `Elsa.Activities.ControlFlow.Tests` | 203 passed |
-| `Elsa.Activities.Sequence.Tests` | 16 passed |
+| `Elsa.Activities.Runtime.Tests` | 127 passed |
+| `Elsa.Activities.ControlFlow.Tests` | 196 passed |
+| `Elsa.Activities.Sequence.Tests` | 15 passed |
 | `Elsa.Activities.Flowchart.Tests` | 55 passed |
+| `Elsa.Activities.Scripting.Tests` | 8 passed |
+| `Elsa.Activities.Scheduling.Tests` | 25 passed |
 | `Elsa.Activities.Http.Tests` | 192 passed |
 | `Elsa.Activities.Http.IntegrationTests` | 29 passed |
-| `Elsa.Workflows.Publishing.Api.Tests` | 164 passed |
-| `Elsa.Workflows.Runtime.Tests` | 878 passed |
-| `Elsa.Persistence.Groundwork.Tests` | 242 passed |
-| `Elsa.Expressions.JavaScript.Jint.Tests` | 39 passed |
+| `Elsa.Workflows.Publishing.Api.Tests` | 170 passed |
+| `Elsa.Workflows.Design.CodeGeneration.Tests` | 12 passed |
+| `Elsa.Workflows.Runtime.Tests` | 891 passed |
+| `Elsa.Persistence.Groundwork.Tests` | 246 passed |
+| `Elsa.Expressions.Tests` | 93 passed |
+| `Elsa.Expressions.JavaScript.Jint.Tests` | 30 passed |
 | `Elsa3.Mapping.Tests` | 30 passed |
-| `Elsa.Architecture.Tests` | 96 passed |
+| `Elsa.Architecture.Tests` | 97 passed |
 | Activation semantic test host | 17 passed |
 
-The complete solution build passes with zero errors. The complete solution test passes sequentially
-with Git commit signing disabled for repository-fixture commits, and the final canonical carrier scan
-has zero non-architecture/non-importer hits.
+The complete solution build passes with zero errors. The complete solution test was executed with Git
+commit signing disabled for repository-fixture commits. Every spec-095 affected suite above passes; the
+solution-wide parallel run exposed three timing failures in the unchanged Structured Logs persistence
+suite, whose isolated rerun passed 29/30 and retained one five-second service-resolution timeout. The
+final canonical carrier scan has zero non-architecture/non-importer hits.

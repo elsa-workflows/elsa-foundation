@@ -33,8 +33,6 @@ public sealed class Timer : Activity<TimerResult>
     /// <summary>The stable activity type key the trigger/schedule providers match on.</summary>
     public const string ActivityType = "Elsa.Timer";
 
-    public Timer() => Type = ActivityType;
-
     /// <summary>
     /// The recurrence interval, as an authored literal: an ISO-8601 duration (<c>PT5M</c>) or a
     /// <see cref="TimeSpan"/> string (<c>00:05:00</c>). Drives the stimulus hash and the recurring schedule.

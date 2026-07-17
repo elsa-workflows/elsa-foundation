@@ -18,7 +18,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// path, break/race/fault handling, and composite completion — and delegates the mechanics to focused
 /// collaborators: <see cref="FlowchartJoinCoordinator"/> (join/arrival bookkeeping),
 /// <see cref="FlowchartPolicyApplier"/> (policy-decision scheduling), <see cref="FlowchartStatePersister"/>
-/// (load/save + #382 prune), plus the static <see cref="FlowchartStateMutator"/>,
+/// (load/stage + #382 prune), plus the static <see cref="FlowchartStateMutator"/>,
 /// <see cref="FlowchartScopeResolver"/>, <see cref="FlowchartScheduler"/>, and
 /// <see cref="FlowchartDiagnosticAccumulator"/> helpers. All record ids remain a pure function of
 /// <see cref="FlowchartExecutionState.Sequence"/>, whose only mutation home is <see cref="FlowchartStateMutator"/>.
@@ -37,11 +37,7 @@ public sealed class FlowchartExecutionEngine(
     public const string SchedulingCauseMetadataKey = "flowchart.schedulingCause";
     public const string TargetNodeIdMetadataKey = "flowchart.targetNodeId";
 
-    // First-execution entry. Async so the mandatory checkpoint commit is awaited on the natural
-    // async path — the former sync `Start` reached the async persister via a blocking
-    // GetAwaiter().GetResult() wrapper (sync-over-async), the last such holdout among the engine's
-    // persistence call sites; #413 item 6 removed it.
-    public async ValueTask StartAsync(IRuntimeActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -51,18 +47,17 @@ public sealed class FlowchartExecutionEngine(
 
         if (startNode is null)
         {
-            context.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(startNode.ExecutableNodeId);
         var rootPath = state.ExecutionPaths.SingleOrDefault(path => path.ExecutionPathId == "path:root")
             ?? throw new InvalidOperationException($"Root execution path 'path:root' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
         state = ScheduleNode(context, state, startNode.ExecutableNodeId, rootPath.ExecutionPathId, rootPath.ExecutionScopeId, rootPath.IterationKey, context.ActivityExecutionState.Execution.ActivityExecutionId, "start");
-        await persister.SaveStateAsync(context, state);
+        return ValueTask.FromResult(persister.StageState(RuntimeStructuralContinuation.Defer, state));
     }
 
-    public async ValueTask OnChildCompletedAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completionContext)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completionContext)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(completionContext);
@@ -80,8 +75,7 @@ public sealed class FlowchartExecutionEngine(
         if (path.Status == ExecutionPathStatus.Canceled || scope.Status == ExecutionScopeStatus.Canceled)
         {
             state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Canceled, completionContext.CompletedChildExecutableNodeId, path.IncomingConnectionId, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart ignored completion for canceled path '{path.ExecutionPathId}'.");
-            await PersistAndMaybeCompleteAsync(context, state);
-            return;
+            return ValueTask.FromResult(PersistAndMaybeComplete(state));
         }
 
         // Break propagation (#304): when any path inside the Flowchart reaches a Break outcome, the whole
@@ -101,9 +95,7 @@ public sealed class FlowchartExecutionEngine(
                 LastOutcomeNames = completionContext.OutcomeNames
             });
             state = CancelPendingPathsForBreak(state, path, completionContext.CompletedChildExecutableNodeId);
-            await persister.SaveStateAsync(context, state);
-            context.CompleteCompositeActivity([ActivityOutcomes.Break]);
-            return;
+            return ValueTask.FromResult(persister.StageState(RuntimeStructuralContinuation.Complete(ActivityOutcomes.Break), state));
         }
 
         if (scope.Kind == ExecutionScopeKind.Race && scope.Status == ExecutionScopeStatus.Active)
@@ -130,8 +122,9 @@ public sealed class FlowchartExecutionEngine(
             catch (FlowchartExecutionException exception)
             {
                 state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.PolicyFailure, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, exception.Message);
-                await persister.SaveStateAsync(context, state);
-                throw;
+                return ValueTask.FromResult(persister.StageState(
+                    RuntimeStructuralContinuation.Faulted(new ActivityFault("flowchart.policy.failed", exception.Message)),
+                    state));
             }
 
             var currentPath = state.ExecutionPaths.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionPathId, path.ExecutionPathId))
@@ -143,8 +136,7 @@ public sealed class FlowchartExecutionEngine(
                     CurrentNodeId = completionContext.CompletedChildExecutableNodeId,
                     LastOutcomeNames = completionContext.OutcomeNames
                 });
-            await PersistAndMaybeCompleteAsync(context, state);
-            return;
+            return ValueTask.FromResult(PersistAndMaybeComplete(state));
         }
 
         var outboundConnections = graph.SelectOutboundConnections(completionContext.CompletedChildExecutableNodeId, completionContext.OutcomeNames);
@@ -162,8 +154,7 @@ public sealed class FlowchartExecutionEngine(
             state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart path '{path.ExecutionPathId}' completed at terminal node '{completionContext.CompletedChildExecutableNodeId}'.");
             state = joinCoordinator.ReleaseReadyWaitingJoins(context, state, graph);
 
-            await PersistAndMaybeCompleteAsync(context, state);
-            return;
+            return ValueTask.FromResult(PersistAndMaybeComplete(state));
         }
 
         var scheduledTargets = new HashSet<string>(StringComparer.Ordinal);
@@ -205,7 +196,7 @@ public sealed class FlowchartExecutionEngine(
         });
         state = joinCoordinator.ReleaseReadyWaitingJoins(context, state, graph);
 
-        await PersistAndMaybeCompleteAsync(context, state);
+        return ValueTask.FromResult(PersistAndMaybeComplete(state));
     }
 
     /// <summary>
@@ -213,12 +204,12 @@ public sealed class FlowchartExecutionEngine(
     /// path — and any downstream join that requires it (a Flowchart join needs <em>every</em> inbound branch) —
     /// can never proceed. Rather than leave the Flowchart Running forever (waiting on a completion that will never
     /// arrive), the Flowchart faults deterministically:
-    /// it records a <see cref="FlowchartDiagnosticKind.Faulted"/> diagnostic, persists it, then throws so the
-    /// runtime surfaces a composite incident on the Flowchart — mirroring the <c>Parallel</c> fork/join
+    /// it records a <see cref="FlowchartDiagnosticKind.Faulted"/> diagnostic, persists it, then returns a fault
+    /// decision so the runtime surfaces a composite incident on the Flowchart — mirroring the <c>Parallel</c> fork/join
     /// composite's default-threshold behavior, where a single faulted branch faults the join. The faulted leaf
     /// keeps its own blocking incident regardless.
     /// </summary>
-    public async ValueTask OnChildFaultedAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext faultContext)
+    public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext faultContext)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(faultContext);
@@ -233,23 +224,20 @@ public sealed class FlowchartExecutionEngine(
 
         var message = $"Flowchart faulted because child node '{faultedNodeId}' faulted: a faulted child cannot complete, so its execution path — and any downstream join that requires it (a Flowchart join needs every inbound branch) — can no longer proceed.";
         state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Faulted, faultedNodeId, null, faultedChild?.ExecutionPathId, faultedChild?.ExecutionScopeId, message);
-        await persister.SaveStateAsync(context, state);
-
-        throw new FlowchartExecutionException(message);
+        return ValueTask.FromResult(persister.StageState(
+            RuntimeStructuralContinuation.Faulted(new ActivityFault("flowchart.child.faulted", message)),
+            state));
     }
 
-    private async ValueTask PersistAndMaybeCompleteAsync(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
+    private RuntimeStructuralContinuation PersistAndMaybeComplete(FlowchartExecutionState state)
     {
         if (state.ActiveChildren.Count == 0 && state.ExecutionPaths.All(path => path.Status != ExecutionPathStatus.Waiting && path.Status != ExecutionPathStatus.Active))
         {
             state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, null, null, null, state.RootExecutionScopeId, "Flowchart completed because no active or waiting execution paths remain.");
-            await persister.SaveStateAsync(context, state);
-            context.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return persister.StageState(RuntimeStructuralContinuation.Complete(), state);
         }
 
-        await persister.SaveStateAsync(context, state);
-        context.DeferCompositeCompletion();
+        return persister.StageState(RuntimeStructuralContinuation.Defer, state);
     }
 
     private static string ResolveExecutionPathId(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, string completedNodeId)
