@@ -229,7 +229,7 @@ public static class ElsaRuntimeStorageManifest
     // instance on each occurrence across process restarts. The by-collection partition serves the due-schedule
     // sweep through an equality index (Groundwork is equality-only, so next-occurrence filtering/ordering
     // happens in memory — see GroundworkRecurringTriggerScheduleStore); the by-artifact index serves
-    // replace-on-republish.
+    // replace-on-republish and the by-publication index serves publication projection prepare/activate/delete.
     public const string RecurringTriggerScheduleDocumentKind = "recurringTriggerSchedule";
 
     /// <summary>Index used by the recurring-trigger pump's due-schedule sweep (constant partition).</summary>
@@ -237,6 +237,14 @@ public static class ElsaRuntimeStorageManifest
 
     /// <summary>Index used by the recurring-schedule replace-on-republish delete path.</summary>
     public const string RecurringTriggerScheduleByArtifact = ByArtifactIndex;
+
+    /// <summary>Nested path to the publication id inside the persisted recurring-schedule envelope.</summary>
+    public const string RecurringTriggerSchedulePublicationIdField = "schedule.publicationId";
+
+    /// <summary>Index used by publication projection prepare, activate, and delete operations.</summary>
+    public const string RecurringTriggerScheduleByPublication = ByPublicationIndex;
+
+    public const string ListRecurringTriggerSchedulesByPublicationQuery = "list-by-publication";
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
@@ -439,11 +447,13 @@ public static class ElsaRuntimeStorageManifest
                 "Recurring trigger schedule",
                 [
                     Keyword(ByCollectionIndex, CollectionField),
-                    Keyword(ByArtifactIndex, ArtifactIdField)
+                    Keyword(ByArtifactIndex, ArtifactIdField),
+                    Keyword(ByPublicationIndex, RecurringTriggerSchedulePublicationIdField)
                 ],
                 [
                     Query("list-all", ByCollectionIndex),
-                    Query("list-by-artifact", ByArtifactIndex)
+                    Query("list-by-artifact", ByArtifactIndex),
+                    Query(ListRecurringTriggerSchedulesByPublicationQuery, ByPublicationIndex)
                 ]),
             Unit(
                 PublicationProjectionStateDocumentKind,

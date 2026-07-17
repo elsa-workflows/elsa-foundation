@@ -91,6 +91,40 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task ListByPublication_UsesPublicationScopedRoute(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRecurringTriggerScheduleStore store = NewStore(fixture);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [
+                NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), publicationId: "publication-1", slotId: "slot-a"),
+                NewSchedule("artifact-1", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-1", slotId: "slot-a")
+            ]);
+        await store.PreparePublicationAsync(
+            "publication-2",
+            [NewSchedule("artifact-1", "node-c", TimeSpan.FromMinutes(3), publicationId: "publication-2", slotId: "slot-b")]);
+
+        var schedules = await store.ListByPublicationAsync("publication-1");
+
+        Assert.Equal(
+            new[]
+            {
+                RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-a"),
+                RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-b")
+            },
+            schedules.Select(schedule => schedule.ScheduleId).OrderBy(x => x));
+        Assert.All(schedules, schedule =>
+        {
+            Assert.Equal("publication-1", schedule.PublicationId);
+            Assert.False(schedule.IsActive);
+        });
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task TryAdvance_ClaimsOccurrence_OnlyWhenCursorMatches(string provider)
     {
         await using var fixture = CreateStore(provider);
@@ -203,15 +237,21 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         string artifactId,
         string executableNodeId,
         TimeSpan nextOffset,
-        string expression = "PT5M") => new(
-        ScheduleId: RecurringTriggerSchedule.BuildId(artifactId, executableNodeId),
+        string expression = "PT5M",
+        string? publicationId = null,
+        string? slotId = null) => new(
+        ScheduleId: publicationId is null
+            ? RecurringTriggerSchedule.BuildId(artifactId, executableNodeId)
+            : RecurringTriggerSchedule.BuildId(publicationId, artifactId, executableNodeId),
         ArtifactId: artifactId,
         StimulusType: "Timer",
         StimulusHash: $"sha256:{executableNodeId}",
         Kind: RecurringScheduleKind.Interval,
         Expression: expression,
         NextOccurrence: Now + nextOffset,
-        CreatedAt: Now);
+        CreatedAt: Now,
+        PublicationId: publicationId,
+        SlotId: slotId);
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
