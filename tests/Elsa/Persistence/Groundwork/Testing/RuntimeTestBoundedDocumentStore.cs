@@ -97,6 +97,7 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         return comparison.Operator switch
         {
             QueryComparisonOperator.Equal => compared == 0,
+            QueryComparisonOperator.StartsWith => actual.StartsWith(expected, StringComparison.Ordinal),
             QueryComparisonOperator.GreaterThan => compared > 0,
             QueryComparisonOperator.LessThanOrEqual => compared <= 0,
             _ => throw new InvalidOperationException(
@@ -171,6 +172,9 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                 WorkflowDispatchOrderedRangeQueries.Contains(query.QueryIdentity),
             ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind =>
                 RecoveryOrderedRangeQueries.Contains(query.QueryIdentity),
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind =>
+                query.QueryIdentity is ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery
+                    or ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery,
             _ => false
         };
 

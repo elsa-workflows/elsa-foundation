@@ -181,6 +181,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
     [Fact]
     public void RuntimeSchedulerWorkModels_RejectInvalidQueueMetadata()
     {
+        var workItem = NewWorkItem(1);
         Assert.Throws<ArgumentException>(() => NewWorkItem(1, workflowExecutionId: " "));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeSchedulerWorkQuery("wfexec-1", limit: 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeSchedulerWorkItem(
@@ -193,6 +194,16 @@ public sealed class RuntimeSchedulerWorkQueueTests
             enqueuedAt: _now,
             recordedAt: _now,
             sequence: -1));
+        Assert.Throws<ArgumentException>(() =>
+            new RuntimeSchedulerWorkClaimRequest("wfexec-1", " ", _now, TimeSpan.FromMinutes(1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new RuntimeSchedulerWorkClaimRequest("wfexec-1", "owner-1", _now, TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new RuntimeSchedulerWorkClaim(workItem, "owner-1", 0, 1, _now, _now.AddMinutes(1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new RuntimeSchedulerWorkClaim(workItem, "owner-1", 1, 0, _now, _now.AddMinutes(1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new RuntimeSchedulerWorkClaim(workItem, "owner-1", 1, 1, _now, _now));
     }
 
     private RuntimeSchedulerWorkItem NewWorkItem(

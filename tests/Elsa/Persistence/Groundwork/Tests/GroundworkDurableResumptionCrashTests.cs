@@ -129,7 +129,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     }
 
     [Fact]
-    public async Task WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState()
+    public async Task WindowC_CrashAfterClaimBeforeCheckpoint_ResumptionConvergesAfterClaimExpiry()
     {
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
@@ -144,6 +144,8 @@ public sealed class GroundworkDurableResumptionCrashTests
         // and this window was unrecoverable at item granularity.)
         await using (var crashed = BuildProvider(store, services =>
         {
+            UseFixedTime(services, Now);
+
             // Manual decoration (Scrutor's Decorate is not referenced here): capture the durable writer type registered
             // by AddGroundworkRuntimeStores and wrap it so the FIRST commit throws OperationCanceledException.
             var innerDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
@@ -167,9 +169,10 @@ public sealed class GroundworkDurableResumptionCrashTests
             Assert.NotEqual(controlSnapshot, crashedSnapshot);
         }
 
-        // Generation 2: honest services over the surviving store. The sweep discovers the durable backlog and re-drives
-        // the handler idempotently to the terminal state, draining the queue.
-        await using (var recovered = BuildProvider(store))
+        // Generation 2: honest services over the surviving store after the abandoned claim's visibility timeout. The
+        // sweep discovers the durable backlog, reclaims it with a higher fencing token, and re-drives the handler
+        // idempotently to the terminal state.
+        await using (var recovered = BuildProvider(store, services => UseFixedTime(services, Now.AddMinutes(2))))
         {
             var sweep = ResolveResumptionService(recovered);
             await sweep.SweepAsync(new RuntimeResumptionSweepRequest());
@@ -200,6 +203,12 @@ public sealed class GroundworkDurableResumptionCrashTests
         services.AddGroundworkRuntimeStores();
         customize?.Invoke(services);
         return services.BuildServiceProvider();
+    }
+
+    private static void UseFixedTime(IServiceCollection services, DateTimeOffset now)
+    {
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(now));
     }
 
     private static async Task SeedAndStartAsync(ServiceProvider provider)
@@ -301,6 +310,11 @@ public sealed class GroundworkDurableResumptionCrashTests
 
             return inner.CommitAsync(commit, decision, cancellationToken);
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     // Simulates a crash between checkpoint commit and post-commit outbox delivery: the outbox row is

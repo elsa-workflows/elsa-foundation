@@ -868,7 +868,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Claim/acknowledgement races and client-side query work remain.",
       "performanceWorkload": "queue-drain",
       "accessPolicy": "ordinary",
@@ -904,7 +904,9 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerWorkQueueTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs"
       ]
     },
     {

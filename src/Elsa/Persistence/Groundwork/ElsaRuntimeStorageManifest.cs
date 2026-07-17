@@ -54,6 +54,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ByOutboxRecordedAtIndex = "by-outbox-recorded-at";
     public const string ByOutboxItemIdIndex = "by-outbox-item-id";
     public const string ByOutboxIntentKindIndex = "by-outbox-intent-kind";
+    public const string BySchedulerWorkOrderIndex = "by-scheduler-work-order";
     public const string ByStimulusAndTypeIndex = "by-stimulus-and-type";
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
@@ -67,6 +68,7 @@ public static class ElsaRuntimeStorageManifest
     public const string PublicationIdField = "publicationId";
     public const string ListAllQuery = "list-all";
     public const string ListByWorkflowExecutionQuery = "list-by-workflow-execution";
+    public const string ListPendingSchedulerWorkflowExecutionsQuery = "list-pending-scheduler-workflow-executions";
     public const string ListByArtifactQuery = "list-by-artifact";
     public const string ListByParentActivityExecutionQuery = "list-by-parent-activity-execution";
     // Nested dot-path into the persisted activity-execution document: the parent id already lives under
@@ -91,6 +93,7 @@ public static class ElsaRuntimeStorageManifest
     public const string PostCommitOutboxRecordedAtField = "item.recordedAt";
     public const string PostCommitOutboxItemIdField = "item.outboxItemId";
     public const string PostCommitOutboxIntentKindField = "item.intent.kind";
+    public const string SchedulerWorkOrderKeyField = "orderKey";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
@@ -273,6 +276,7 @@ public static class ElsaRuntimeStorageManifest
     // Durable scheduler work queue. Each queued work item is a document so the queue survives process
     // restarts; the by-collection partition supports the system-wide pending-executions sweep.
     public const string SchedulerWorkItemDocumentKind = "schedulerWorkItem";
+    public const string SchedulerWorkByWorkflowOrderIndex = BySchedulerWorkOrderIndex;
 
     // Durable scheduler poison records. Each failed work item is keyed by workflow execution and work item id so
     // handler crashes survive process restarts and can be inspected/re-driven according to the runtime retry policy.
@@ -549,11 +553,37 @@ public static class ElsaRuntimeStorageManifest
                 SchedulerWorkItemDocumentKind,
                 "Scheduler work queue item",
                 [
-                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    new IndexDeclaration(
+                        SchedulerWorkByWorkflowOrderIndex,
+                        [new IndexField(SchedulerWorkOrderKeyField, IndexValueKind.Keyword)],
+                        IndexValueKind.Keyword,
+                        false,
+                        true,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        IndexPhysicalizationPolicy.Optimized),
+                    new IndexDeclaration(
+                        ByWorkflowExecutionIndex,
+                        [new IndexField(WorkflowExecutionIdField, IndexValueKind.Keyword)],
+                        IndexValueKind.Keyword,
+                        false,
+                        true,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        IndexPhysicalizationPolicy.Optimized),
                     Keyword(ByCollectionIndex, CollectionField)
                 ],
                 [
-                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query(
+                        ListByWorkflowExecutionQuery,
+                        SchedulerWorkByWorkflowOrderIndex,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        QuerySortSupport.Ascending),
+                    Query(
+                        ListPendingSchedulerWorkflowExecutionsQuery,
+                        ByWorkflowExecutionIndex,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        QuerySortSupport.Ascending),
                     Query("list-all", ByCollectionIndex)
                 ]),
             Unit(
