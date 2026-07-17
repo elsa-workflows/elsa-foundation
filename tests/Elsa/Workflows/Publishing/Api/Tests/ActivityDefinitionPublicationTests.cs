@@ -788,12 +788,25 @@ public sealed class ActivityDefinitionPublicationTests
             var commit = CreateCommit();
             var publications = new PublisherPublicationStore([]);
             var projection = new GroundworkActivityDependencyProjection(store, publications);
-            return new(documents, new(store, documents, payloads, runtimeSerializer, publications, projection), commit);
+            var managementProjection = new GroundworkActivityManagementProjectionWriter(
+                store,
+                new ImmediateLockProvider(),
+                documents);
+            return new(documents, new(store, documents, payloads, runtimeSerializer, publications, projection, managementProjection), commit);
         }
 
         private static async Task SeedAsync(IDocumentStore store)
         {
             var now = new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
+            var definition = new ActivityDefinition
+            {
+                Id = "definition-1",
+                ActivityTypeKey = "test.activity",
+                Category = "Tests",
+                DisplayName = "Test activity",
+                CreatedAt = now,
+                LastModifiedAt = now
+            };
             var authoring = new ActivityDefinitionAuthoringState
             {
                 Id = "authoring-generated-id",
@@ -811,6 +824,12 @@ public sealed class ActivityDefinitionPublicationTests
                 CreatedAt = now,
                 LastModifiedAt = now
             };
+            await store.SaveAsync(GroundworkDocumentWriter.ToSaveRequest(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                ActivitiesDesignStorageManifest.SchemaVersion,
+                definition,
+                GroundworkActivitiesDesignJson.Options));
             await store.SaveAsync(GroundworkDocumentWriter.ToSaveRequest(
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection,

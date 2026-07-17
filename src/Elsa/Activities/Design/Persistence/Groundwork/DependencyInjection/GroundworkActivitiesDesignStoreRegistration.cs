@@ -50,14 +50,16 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>();
 
         services.AddScoped<GroundworkReusableActivityStores>();
+        services.AddScoped<GroundworkActivityManagementProjectionWriter>();
+        services.AddScoped<GroundworkActivityManagementProjectionRetention>();
+        services.RemoveAll<IActivityDefinitionManagementProjectionStore>();
+        services.AddScoped<IActivityDefinitionManagementProjectionStore, GroundworkActivityDefinitionManagementProjectionStore>();
         services.RemoveAll<IActivityDefinitionAuthoringStore>();
         services.AddScoped<IActivityDefinitionAuthoringStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionDraftStore>();
         services.AddScoped<IActivityDefinitionDraftStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionVersionPublicationStore>();
         services.AddScoped<IActivityDefinitionVersionPublicationStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IActivityDefinitionManagementStore>();
-        services.AddScoped<IActivityDefinitionManagementStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IRecommendedActivityDefinitionPickerStore>();
         services.AddScoped<IRecommendedActivityDefinitionPickerStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionLayoutStore>();

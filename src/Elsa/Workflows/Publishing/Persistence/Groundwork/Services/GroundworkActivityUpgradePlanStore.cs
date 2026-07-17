@@ -42,7 +42,8 @@ public sealed class GroundworkActivityUpgradePlanStore(
     IActivityProviderRegistry activityProviders,
     ActivityContractAuthoringValidator contractValidator,
     IEnumerable<IActivityProviderReferenceRewriter> activityRewriters,
-    IIdentityGenerator identityGenerator) : IActivityUpgradeDiscoverySource, IActivityUpgradePlanMutationStore
+    IIdentityGenerator identityGenerator,
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter) : IActivityUpgradeDiscoverySource, IActivityUpgradePlanMutationStore
 {
     private static readonly JsonSerializerOptions ActivityJson = GroundworkActivitiesDesignJson.Options;
     private readonly JsonSerializerOptions _workflowJson = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
@@ -157,6 +158,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         var requests = new List<SaveDocumentRequest>();
         var scopes = new HashSet<string>(StringComparer.Ordinal) { ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind };
         var applied = new List<ActivityUpgradeAppliedDraft>();
+        var changedActivityDrafts = new List<ActivityDefinitionDraft>();
         foreach (var step in selectedSteps.OrderBy(x => x.Order))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -165,10 +167,10 @@ public sealed class GroundworkActivityUpgradePlanStore(
             switch (step.Action)
             {
                 case ActivityUpgradeAction.UpdateDraft when step.Target.Kind == "ActivityDraft":
-                    await StageActivityDraftUpdateAsync(step, requests, scopes, applied, appliedAt, cancellationToken);
+                    await StageActivityDraftUpdateAsync(step, requests, scopes, applied, changedActivityDrafts, appliedAt, cancellationToken);
                     break;
                 case ActivityUpgradeAction.CloneActivityVersion:
-                    await StageActivityDraftCloneAsync(step, requests, scopes, applied, appliedAt, cancellationToken);
+                    await StageActivityDraftCloneAsync(step, requests, scopes, applied, changedActivityDrafts, appliedAt, cancellationToken);
                     break;
                 case ActivityUpgradeAction.UpdateDraft when step.Target.Kind == "WorkflowDraft":
                     await StageWorkflowDraftUpdateAsync(step, requests, scopes, applied, appliedAt, cancellationToken);
@@ -204,7 +206,15 @@ public sealed class GroundworkActivityUpgradePlanStore(
             planEnvelope.Version));
         try
         {
-            await store.SaveAllAsync(DocumentCommitScope.Of(scopes.ToArray()), requests, cancellationToken);
+            if (changedActivityDrafts.Count == 0)
+                await store.SaveAllAsync(DocumentCommitScope.Of(scopes.ToArray()), requests, cancellationToken);
+            else
+            {
+                await using var managementProjection = await managementProjectionWriter.PrepareAsync(
+                    new(appliedAt, [], changedActivityDrafts, []),
+                    cancellationToken);
+                await managementProjection.CommitAsync(scopes, requests, cancellationToken);
+            }
         }
         catch (DocumentAtomicWriteException)
         {
@@ -319,6 +329,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         ICollection<SaveDocumentRequest> requests,
         ISet<string> scopes,
         ICollection<ActivityUpgradeAppliedDraft> applied,
+        ICollection<ActivityDefinitionDraft> managementDrafts,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -350,6 +361,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind);
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind);
         applied.Add(new("ActivityDraft", draft.Id, draft.DefinitionId, draft.Revision, false));
+        managementDrafts.Add(draft);
     }
 
     private async Task StageActivityDraftCloneAsync(
@@ -357,6 +369,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         ICollection<SaveDocumentRequest> requests,
         ISet<string> scopes,
         ICollection<ActivityUpgradeAppliedDraft> applied,
+        ICollection<ActivityDefinitionDraft> managementDrafts,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -386,6 +399,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind);
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind);
         applied.Add(new("ActivityDraft", id, source.DefinitionId, 1, true));
+        managementDrafts.Add(draft);
     }
 
     private void EnsureMutableActivityState(ActivityDefinitionDraft draft)

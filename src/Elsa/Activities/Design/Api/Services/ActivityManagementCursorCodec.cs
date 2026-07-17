@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.Design.Api.Services;
 
-public sealed record ActivityManagementCursorState(string Scope, int Offset, DateTimeOffset AsOf);
+public sealed record ActivityManagementCursorState(string Scope, int Offset, long SnapshotSequence);
 
 public interface IActivityManagementCursorCodec
 {
@@ -49,7 +49,7 @@ public sealed class HmacActivityManagementCursorCodec : IActivityManagementCurso
             var expected = HMACSHA256.HashData(_key, payload);
             if (!CryptographicOperations.FixedTimeEquals(signature, expected)) throw new ActivityManagementCursorInvalidException();
             var state = JsonSerializer.Deserialize<ActivityManagementCursorState>(payload, JsonOptions);
-            if (state is null || state.Offset < 0 || string.IsNullOrWhiteSpace(state.Scope))
+            if (state is null || state.Offset < 0 || state.SnapshotSequence < 0 || string.IsNullOrWhiteSpace(state.Scope))
                 throw new ActivityManagementCursorInvalidException();
             return state;
         }

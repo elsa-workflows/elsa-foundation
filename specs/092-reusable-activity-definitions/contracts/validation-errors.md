@@ -187,7 +187,7 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `409` | `activity.version.stale-lifecycle` | Lifecycle command observed a different current state. |
 | `409` | `activity.upgrade.stale-plan` | At least one pinned draft revision/head changed before apply. |
 | `409` | `activity.cursor.binding-mismatch` | A non-management opaque cursor belongs to another tenant, root, query, or authorization profile. |
-| `410` | `activity.cursor.expired` | A retained non-management cursor snapshot or watermark is no longer valid. |
+| `410` | `activity.cursor.expired` | A retained management snapshot, non-management cursor snapshot, or watermark is no longer valid. Recovery may instruct the client to restart without a cursor. |
 | `422` | `activity.publication.invalid` | One or more deterministic publication diagnostics block publication. |
 | `422` | `activity.version.bump-insufficient` | Requested SemVer does not meet the calculated minimum. Usually included under publication invalid. |
 | `422` | `activity.dependency.cycle` | Exact dependency cycle detected. Usually included under publication invalid. |

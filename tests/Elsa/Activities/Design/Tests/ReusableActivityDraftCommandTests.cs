@@ -11,7 +11,6 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Tests.Fixtures;
 using Elsa.Primitives.Contracts;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests;
@@ -594,17 +593,6 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
-    public async Task Definition_read_uses_activity_type_key_when_an_adopted_definition_has_no_display_name()
-    {
-        var harness = new Harness();
-        var adopted = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource, displayName: null);
-
-        var view = await harness.Management.GetDefinitionAsync(adopted.DefinitionId, default);
-
-        Assert.Equal($"seed.{adopted.DefinitionId}", view.Definition.DisplayName);
-    }
-
-    [Fact]
     public async Task Discard_requires_the_exact_active_revision()
     {
         var harness = new Harness();
@@ -661,20 +649,11 @@ public sealed class ReusableActivityDraftCommandTests
                 _ids,
                 _time,
                 _context);
-            Management = new(
-                Stores,
-                _context,
-                _time,
-                new HmacActivityManagementCursorCodec(Options.Create(new ActivityDependencyCursorOptions
-                {
-                    SigningKey = "activity-management-tests-signing-key"
-                })));
             Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()), Service, _context);
         }
 
         public InMemoryReusableActivityStores Stores { get; }
         public ReusableActivityAuthoringService Service { get; }
-        public ActivityDefinitionManagementProjectionService Management { get; }
         public ActivityContractProposalService Proposals { get; }
 
         public CreateReusableActivityDefinition CreateDefinitionCommand() => new(

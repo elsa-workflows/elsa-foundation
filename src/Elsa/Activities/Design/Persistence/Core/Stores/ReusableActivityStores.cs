@@ -37,58 +37,6 @@ public interface IActivityDefinitionVersionPublicationStore
         CancellationToken cancellationToken = default);
 }
 
-public sealed record ActivityManagementPageQuery(
-    string? TenantId,
-    int Offset,
-    int Limit,
-    DateTimeOffset AsOf,
-    string? Search = null,
-    ActivityContentAuthorityKind? Authority = null,
-    string? ProviderKey = null,
-    ActivityDefinitionDraftStatus? DraftStatus = null,
-    ActivityDefinitionVersionLifecycle? VersionLifecycle = null);
-
-public sealed record ActivityDefinitionManagementRecord(
-    ActivityDefinition Definition,
-    ActivityDefinitionAuthoringState Authoring,
-    ActivityDefinitionVersionPublication? Head,
-    ActivityDefinitionVersionPublication? Recommendation,
-    long DraftCount,
-    long VersionCount);
-
-public sealed record ActivityManagementPage<T>(
-    IReadOnlyList<T> Items,
-    int? NextOffset,
-    long TotalCount,
-    DateTimeOffset AsOf);
-
-/// <summary>
-/// Authorization-safe, bounded management projections. Totals are exact for the same authorized,
-/// filtered snapshot represented by the returned items and continuation.
-/// </summary>
-public interface IActivityDefinitionManagementStore
-{
-    Task<ActivityManagementPage<ActivityDefinitionManagementRecord>> ReadDefinitionsAsync(
-        ActivityManagementPageQuery query,
-        CancellationToken cancellationToken = default);
-
-    Task<ActivityDefinitionManagementRecord?> FindDefinitionAsync(
-        string definitionId,
-        string? tenantId,
-        DateTimeOffset asOf,
-        CancellationToken cancellationToken = default);
-
-    Task<ActivityManagementPage<ActivityDefinitionDraft>> ReadDraftsAsync(
-        string definitionId,
-        ActivityManagementPageQuery query,
-        CancellationToken cancellationToken = default);
-
-    Task<ActivityManagementPage<ActivityDefinitionVersionPublication>> ReadVersionsAsync(
-        string definitionId,
-        ActivityManagementPageQuery query,
-        CancellationToken cancellationToken = default);
-}
-
 public sealed record RecommendedActivityDefinitionPickerItem(
     ActivityDefinition Definition,
     ActivityDefinitionVersionPublication Version);

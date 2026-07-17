@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Entities;
 using Elsa.Serialization.Core;
@@ -21,7 +22,8 @@ namespace Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 /// </summary>
 public sealed class GroundworkReusableActivityImportCommand(
     IDocumentStore store,
-    IPayloadSerializer payloadSerializer) : IReusableActivityImportCommand
+    IPayloadSerializer payloadSerializer,
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter) : IReusableActivityImportCommand
 {
     private const string ActivitySchema = "1.0.0";
     private const string WorkflowSchema = "1.0.0";
@@ -77,13 +79,41 @@ public sealed class GroundworkReusableActivityImportCommand(
         if (pending.Count == 0)
             return new(true);
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        var newDefinitionIds = pending
+            .Where(x => x.DocumentKind == ActivityDefinitionKind)
+            .Select(x => x.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var newActivities = mutation.Activities.Where(x => newDefinitionIds.Contains(x.Definition.Id)).ToArray();
+        if (newActivities.Length == 0)
+        {
+            await store.SaveAllAsync(
+                DocumentCommitScope.Of(
+                    ActivityDefinitionKind,
+                    ActivityVersionKind,
+                    ActivityAuthoringKind,
+                    WorkflowDefinitionKind,
+                    WorkflowVersionKind),
+                pending,
+                cancellationToken);
+            return new(false);
+        }
+
+        var changedAt = newActivities.Max(x => x.Definition.LastModifiedAt);
+        await using var managementProjection = await managementProjectionWriter.PrepareAsync(
+            new(
+                changedAt,
+                newActivities.Select(x => new ActivityManagementDefinitionChange(x.Definition, x.AuthoringState)).ToArray(),
+                [],
+                []),
+            cancellationToken);
+        await managementProjection.CommitAsync(
+            [
                 ActivityDefinitionKind,
                 ActivityVersionKind,
                 ActivityAuthoringKind,
                 WorkflowDefinitionKind,
-                WorkflowVersionKind),
+                WorkflowVersionKind
+            ],
             pending,
             cancellationToken);
         return new(false);

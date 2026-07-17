@@ -69,16 +69,17 @@ Mutable authoring aggregate header.
 | `TenantId` | string? | Must equal the owning definition tenant. |
 | `Revision` | long | Monotonic optimistic revision; every successful mutation increments it once. |
 | `SourceVersionId` | string? | Immutable lineage to the version cloned or migrated from. |
-| `PresentationLabel` | string? | Optional, non-unique author-facing label stored outside behavior state. |
 | `Status` | enum | `Active`, `Published`, or `Discarded`. |
+| `PresentationLabel` | string? | Optional non-unique author-facing label; the server-generated draft identity remains authoritative. |
 | `State` | `ActivityDefinitionDraftState` | Complete desired authoring document. |
 | `CreatedAt`, `UpdatedAt` | timestamps | Audit facts. |
 
 Invariants:
 
 - Multiple active drafts may share a `DefinitionId`.
-- Multiple drafts may share the same `PresentationLabel`, and a label is never required. The label
-  is not identity, lineage, provider source, or behavior-hash input.
+- Draft labels are optional and need not be unique within a definition; creating or autosaving a
+  draft never requires the author to invent a unique name. A label is not identity, lineage,
+  provider source, or behavior-hash input.
 - `SourceVersionId` never changes after draft creation.
 - Full-state update and presentation-label update both require `ExpectedRevision == Revision` and
   participate in the same autosave revision stream. A successful mutation increments `Revision`
@@ -129,7 +130,7 @@ Derived sibling record for the latest validated draft revision.
 
 Publication always revalidates inside its atomic transition; a stored clean validation from an older revision is never sufficient.
 
-### 1.8 Bounded management projections
+### 1.8 Bounded temporal management projections
 
 Definition, draft, and version management collections return
 `ActivityManagementPageView<T>` rather than unbounded relationship arrays.
@@ -141,7 +142,7 @@ Definition, draft, and version management collections return
 | `TotalCount` | long | Exact count within the same authorized query snapshot; never a global count. |
 | `HasMore` | bool | Whether the same bound snapshot has another page. |
 | `Continuation` | string? | Opaque scope/query/authorization-bound continuation, null on the terminal page. |
-| `Snapshot` | `{SnapshotId, AsOf}` | Stable identity and timestamp for the management snapshot. |
+| `Snapshot` | `{SnapshotId, AsOf}` | Stable sequence-derived identity and timestamp for the management snapshot. |
 
 `ReusableActivityDefinitionManagementView` contains only `Definition`, a bounded `Lifecycle`
 summary, typed `Actions`, and `UpdatedAt`; definition detail never embeds draft or version arrays.
@@ -151,6 +152,24 @@ Action availability is represented as ordered `ActivityActionAvailabilityView` e
 `{Action, Allowed, UnavailableCode}`. `UnavailableCode` is null when allowed and otherwise carries a
 stable privacy-safe reason code. The projection is a convenience for rendering; every mutation
 rechecks authorization, authority, lifecycle, provider capability, and optimistic preconditions.
+
+Catalog definition, draft, and version lists read provider-queryable safe summaries rather than
+scanning or deserializing authoring aggregates. Each summary revision uses a durable monotonic
+sequence interval `[ValidFromSequence, ValidToSequenceExclusive)`, with `long.MaxValue` denoting
+the current open interval. One mutation batch advances the scope watermark once and atomically
+commits the authoritative documents, closed prior summary revisions, new summary revisions, the
+snapshot marker, and the watermark compare-and-swap.
+
+The projections contain only list-safe facts: identities, tenant/global visibility, presentation
+metadata, authority, status/lifecycle, provider/schema keys, head/recommendation references, counts,
+normalized search text, and deterministic sort keys. Provider payloads, graph source, compiled
+descriptors, contract defaults, and other protected authoring content are never projected.
+
+List queries bind to one exact sequence and apply tenant visibility, temporal interval, search,
+filters, deterministic ordering, offset paging, and exact total count in the selected Groundwork
+provider. Hidden rows therefore affect neither items nor totals. A retention operation may remove
+closed revisions and advances `RetainedFromSequence` atomically; reads below that floor return a
+stable snapshot-expired diagnostic and never restart at the current snapshot.
 
 ## 2. Public contract and provider source
 

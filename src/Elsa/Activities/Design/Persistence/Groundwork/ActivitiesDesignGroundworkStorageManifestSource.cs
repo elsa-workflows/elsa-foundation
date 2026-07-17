@@ -21,7 +21,8 @@ public sealed class ActivitiesDesignGroundworkStorageManifestSource : IGroundwor
             [
                 typeof(IActivityDefinitionStore),
                 typeof(IActivityDefinitionVersionStore),
-                typeof(IActivityAvailabilitySettingsStore)
+                typeof(IActivityAvailabilitySettingsStore),
+                typeof(IActivityDefinitionManagementProjectionStore)
             ],
             [],
             [],

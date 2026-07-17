@@ -43,6 +43,7 @@ public sealed class ActivityDefinitionDraft : TenantEntity
     public ActivityDefinitionDraftState State { get; set; } = null!;
 
     public string? PublishedVersionId { get; set; }
+
 }
 
 public sealed class ActivityDefinitionDraftLayout : TenantEntity

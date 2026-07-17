@@ -100,7 +100,11 @@ public sealed class GroundworkReusableActivityStoreTests
             racingStore,
             new FakeClock(),
             new ImmediateDistributedLockProvider(),
-            new TestBoundedDocumentStore(racingStore));
+            new TestBoundedDocumentStore(racingStore),
+            new GroundworkActivityManagementProjectionWriter(
+                racingStore,
+                new ImmediateDistributedLockProvider(),
+                harness.Documents));
 
         await Assert.ThrowsAsync<DocumentAtomicWriteException>(() => stores.ExecuteAsync(new UpdateActivityDefinitionPresentationRequest(
             "definition-1", null, "Losing update", "Losing update", null, DateTimeOffset.UtcNow)));
@@ -383,7 +387,11 @@ public sealed class GroundworkReusableActivityStoreTests
             racingStore,
             new FakeClock(),
             new ImmediateDistributedLockProvider(),
-            new TestBoundedDocumentStore(racingStore));
+            new TestBoundedDocumentStore(racingStore),
+            new GroundworkActivityManagementProjectionWriter(
+                racingStore,
+                new ImmediateDistributedLockProvider(),
+                documents));
 
         await Assert.ThrowsAsync<DocumentAtomicWriteException>(() => stores.ExecuteAsync(CreateRequest()));
 
@@ -517,7 +525,11 @@ public sealed class GroundworkReusableActivityStoreTests
                 documents,
                 new FakeClock(),
                 new ImmediateDistributedLockProvider(),
-                new TestBoundedDocumentStore(documents)));
+                new TestBoundedDocumentStore(documents),
+                new GroundworkActivityManagementProjectionWriter(
+                    documents,
+                    new ImmediateDistributedLockProvider(),
+                    documents)));
         }
 
         public Task SaveAsync<TEntity>(TEntity entity) where TEntity : Entity

@@ -74,9 +74,10 @@ GET /design/activities/definitions/{definitionId}/versions?limit=25&cursor={opaq
 
 - `limit` is a requested page size between `1` and `100`. Omitting it uses the bounded server
   default of `25`.
-- Omitting `cursor` starts a new authorization-filtered snapshot. The opaque continuation binds
-  tenant/visibility scope, caller authorization profile, collection/definition scope, normalized
-  query inputs, requested limit, snapshot time, and continuation offset. The cursor is signed and
+- Omitting `cursor` starts a new authorization-filtered snapshot at the current activity management
+  projection sequence. The opaque continuation binds tenant/visibility scope, caller authorization
+  profile, collection/definition scope, normalized query inputs, requested limit, snapshot sequence,
+  snapshot time, and continuation offset. The cursor is signed and
   cannot be altered or forged without rejection.
 - `search`, collection-specific filters, `sort`, and `limit` must remain compatible with the
   cursor binding. An invalid or mismatched cursor returns
@@ -100,8 +101,17 @@ GET /design/activities/definitions/{definitionId}/versions?limit=25&cursor={opaq
 
 `totalCount` is the exact count of resources visible under the bound query and authorization
 snapshot, never a global or pre-authorization count. `count` is the number of items in this
-response. `hasMore` and `continuation` describe
-only the same snapshot. A terminal page returns `hasMore: false` and `continuation: null`.
+response. `hasMore` and `continuation` describe only the same `[validFrom, validTo)` projection
+view, even when concurrent authoring or publication advances the current watermark. Search,
+tenant/global visibility, filters, ordering, paging, and exact total count are evaluated by the
+selected persistence provider against that same snapshot; inaccessible rows do not influence
+totals or continuation behavior. A terminal page returns `hasMore: false` and `continuation: null`.
+
+The snapshot binding is replayable only while retained and only for the original query and
+authorization scope. A malformed or mismatched binding returns
+`400 activity.management.cursor-invalid`. A valid binding below the retention floor returns
+`410 activity.cursor.expired` with recovery instruction `restart-without-cursor`; the server never
+silently restarts the list from the newest snapshot.
 
 ### Update definition presentation metadata
 
@@ -155,6 +165,8 @@ authorization or not-found response. Success returns `200 OK` with
 ```
 
 `forkedFrom` is null for definitions that were not created by a fork. It is audit provenance only: it does not grant authority over, or establish version lineage with, the source definition.
+Disclosure-safe management projections also return it as null because source lineage identities may
+no longer be visible to the caller; mutation responses may include it when the fork was authorized.
 
 ### Management summaries, detail, and action availability
 
