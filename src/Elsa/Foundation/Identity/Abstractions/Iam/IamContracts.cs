@@ -72,6 +72,13 @@ public interface IClaimMappingStore
     ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareClaimMappingStore
+{
+    ValueTask<IamRevisionedRecord<ClaimMappingRule>?> FindWithRevisionAsync(string tenantId, string provider, string ruleId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ClaimMappingRule rule, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface IProviderConfigurationStore
 {
     ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(string provider, CancellationToken cancellationToken = default);
@@ -88,6 +95,15 @@ public interface IProviderConfigurationStore
 
         return allowGlobalFallback ? await FindGlobalAsync(provider, cancellationToken) : null;
     }
+}
+
+public interface IRevisionAwareProviderConfigurationStore
+{
+    ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(string provider, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ProviderConfigurationRecord configuration, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
 public interface ITenantMembershipStore

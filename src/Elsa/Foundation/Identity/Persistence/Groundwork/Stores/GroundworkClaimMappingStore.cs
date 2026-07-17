@@ -16,7 +16,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 public sealed class GroundworkClaimMappingStore(
     IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IBoundedDocumentStore? boundedStore = null) : IClaimMappingStore
+    IBoundedDocumentStore? boundedStore = null) : IClaimMappingStore, IRevisionAwareClaimMappingStore
 {
     private const int PageSize = 512;
     private const int MaxMaterialization = 100_000;
@@ -57,6 +57,41 @@ public sealed class GroundworkClaimMappingStore(
 
     public async ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default)
     {
+        await SaveCoreAsync(rule, expectedVersion: null, cancellationToken);
+    }
+
+    public async ValueTask<IamRevisionedRecord<ClaimMappingRule>?> FindWithRevisionAsync(
+        string tenantId,
+        string provider,
+        string ruleId,
+        CancellationToken cancellationToken = default)
+    {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
+        var envelope = await store.LoadAsync(
+            IdentityStorageManifest.IdentityClaimMappingDocumentKind,
+            IdentityCompositeDocumentId.From(tenantId, provider, ruleId),
+            cancellationToken);
+
+        return envelope is null ? null : new IamRevisionedRecord<ClaimMappingRule>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+    }
+
+    public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(
+        ClaimMappingRule rule,
+        string? expectedRevision,
+        CancellationToken cancellationToken = default)
+    {
+        if (!GroundworkIamRevisionMapper.TryExpectedVersion(expectedRevision, out var expectedVersion))
+            return GroundworkIamRevisionMapper.InvalidRevision();
+
+        var result = await SaveCoreAsync(rule, expectedVersion, cancellationToken);
+        return GroundworkIamRevisionMapper.ToResult(result);
+    }
+
+    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+        ClaimMappingRule rule,
+        long? expectedVersion,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(rule);
         accessContextAccessor.EnsureCurrentScope(rule.TenantId);
 
@@ -67,12 +102,13 @@ public sealed class GroundworkClaimMappingStore(
             IdentityDocumentId.From(rule.TenantId, rule.Provider),
             rule);
         var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
-        await store.SaveAsync(
+        return await store.SaveAsync(
             new SaveDocumentRequest(
                 IdentityStorageManifest.IdentityClaimMappingDocumentKind,
                 IdentityCompositeDocumentId.From(rule.TenantId, rule.Provider, rule.Id),
                 IdentityStorageManifest.SchemaVersion,
-                content),
+                content,
+                expectedVersion),
             cancellationToken);
     }
 
