@@ -194,6 +194,65 @@ test("Activity Graph diagnostics focus accessible root context while the exact c
   state.releaseCatalog();
 });
 
+test("Activity Definition publication keeps first and later recommendation semantics while preserving exact versions", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await createBrowserActivity(page);
+
+  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await expect(page.getByText("First publication · no published baseline exists")).toBeVisible();
+  await expect(page.getByText("Protected value redacted")).toBeVisible();
+  await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
+  await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
+  await page.getByRole("button", { name: "Publish 2.0.0" }).click();
+  await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
+  await expect(page.getByText("first published version became recommended automatically", { exact: false })).toBeVisible();
+  expect(state.recommendedVersionId).toBe("published-version-1");
+
+  await page.getByRole("button", { name: "Reopen preflight" }).click();
+  await expect(page.getByText("Compared with published head")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Publication version" })).toHaveValue("2.1.0");
+  await page.getByRole("textbox", { name: "Publication version" }).fill("3.4.5");
+  await page.getByRole("button", { name: "Publish 3.4.5" }).click();
+  await expect(page.getByText("Published immutable version 3.4.5")).toBeVisible();
+  await expect(page.getByText("existing recommended version was not moved", { exact: false })).toBeVisible();
+  expect(state.recommendedVersionId).toBe("published-version-1");
+  expect(state.requestedVersions).toEqual(["2.0.0", "3.4.5"]);
+  expect(state.publicationWrites).toBe(2);
+});
+
+test("Activity Definition publication reconciles an ambiguous response without duplicate writes", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  state.publishMode = "ambiguous";
+  await createBrowserActivity(page);
+
+  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await expect(page.getByText("Minimum valid version: 1.0.0")).toBeVisible();
+  await page.getByRole("button", { name: "Publish 1.0.0" }).click();
+  await expect(page.getByText("Published immutable version 1.0.0")).toBeVisible();
+  expect(state.publicationWrites).toBe(1);
+  expect(state.receiptLookups).toBe(1);
+});
+
+test("Activity Definition publication blocks invalid preflight and reopens stale head review without writes", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await createBrowserActivity(page);
+  state.preflightMode = "invalid";
+
+  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await expect(page.getByText("Publication blocked")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish 1.0.0" })).toBeDisabled();
+  expect(state.publicationWrites).toBe(0);
+
+  state.preflightMode = "valid";
+  state.publishMode = "stale";
+  await page.getByRole("button", { name: "Reopen preflight" }).click();
+  await expect(page.getByText("Ready to publish")).toBeVisible();
+  await page.getByRole("button", { name: "Publish 1.0.0" }).click();
+  await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
+  expect(state.publicationWrites).toBe(1);
+  expect(state.appliedPublications).toBe(0);
+});
+
 async function mockActivityDefinitions(page: Page, collectionHandler?: Parameters<Page["route"]>[1]) {
   await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(capabilities()) }));
   await page.route(/\/design\/activities\/definitions\?.*/, collectionHandler ?? (route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(collectionPage()) })));
@@ -228,7 +287,16 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     validationMode: "invalid" as "invalid" | "valid" | "forbidden" | "not-found" | "unavailable" | "stale",
     catalogBlocked: false,
     releaseCatalog: () => {},
-    draft: authoringDraft("activity-draft-browser", 1, initialGraphPayload())
+    draft: authoringDraft("activity-draft-browser", 1, initialGraphPayload()),
+    headVersionId: null as string | null,
+    recommendedVersionId: null as string | null,
+    publicationWrites: 0,
+    appliedPublications: 0,
+    receiptLookups: 0,
+    requestedVersions: [] as string[],
+    publishMode: "normal" as "normal" | "ambiguous" | "stale",
+    preflightMode: "valid" as "valid" | "invalid",
+    latestReceipt: null as ReturnType<typeof browserPublicationReceipt> | null
   };
   let releaseCatalog!: () => void;
   const catalogGate = new Promise<void>(resolve => { releaseCatalog = resolve; });
@@ -247,6 +315,11 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     state.draft = authoringDraft("activity-draft-browser", 1, body.provider.payload);
     await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ definition: authoringDefinition(), draft: authoringDraftSummary(state.draft) }) });
   });
+  await page.route("**/design/activities/definitions/activity-def-browser", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(authoringManagementDefinition(state))
+  }));
   await page.route("**/design/activities/drafts/activity-draft-browser", async route => {
     if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) });
     if (route.request().method() === "PUT") {
@@ -338,6 +411,56 @@ async function mockActivityDefinitionAuthoring(page: Page) {
       })
     });
   });
+  await page.route("**/design/activities/drafts/activity-draft-browser/publication-preflight", async route => {
+    const body = route.request().postDataJSON() as { expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null };
+    const invalid = state.preflightMode === "invalid";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(browserPublicationPreflight(
+        body.expectedDraftRevision,
+        state.headVersionId,
+        invalid
+      ))
+    });
+  });
+  await page.route("**/design/activities/drafts/activity-draft-browser/publish", async route => {
+    const body = route.request().postDataJSON() as { version: string; idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string };
+    state.publicationWrites += 1;
+    state.requestedVersions.push(body.version);
+    if (state.publishMode === "stale") {
+      return route.fulfill({
+        status: 409,
+        contentType: "application/problem+json",
+        body: JSON.stringify({ title: "Stale review", errorCode: "activity.publication.review-stale" })
+      });
+    }
+    const versionId = `published-version-${state.appliedPublications + 1}`;
+    state.appliedPublications += 1;
+    state.headVersionId = versionId;
+    state.recommendedVersionId ??= versionId;
+    state.latestReceipt = browserPublicationReceipt(
+      body.idempotencyKey,
+      body.version,
+      body.expectedDraftRevision,
+      body.expectedDefinitionHeadVersionId ?? null,
+      body.reviewToken,
+      versionId
+    );
+    if (state.publishMode === "ambiguous") {
+      state.publishMode = "normal";
+      return route.abort("connectionreset");
+    }
+    return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(state.latestReceipt) });
+  });
+  await page.route(/\/design\/activities\/publications\/[^/]+$/, async route => {
+    state.receiptLookups += 1;
+    await route.fulfill({
+      status: state.latestReceipt ? 200 : 404,
+      contentType: state.latestReceipt ? "application/json" : "application/problem+json",
+      body: JSON.stringify(state.latestReceipt ?? { title: "Receipt unavailable" })
+    });
+  });
   await page.route("**/design/activities/drafts/activity-draft-recovery", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) }));
   return state;
 }
@@ -346,12 +469,17 @@ function authoringApiCapabilities() {
   return { capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
     { rel: "activity-definitions", href: "design/activities/definitions" },
     { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
+    { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-draft-validation", href: "design/activities/drafts/{draftId}/validate", templated: true },
     { rel: "activity-draft-conflict-copies", href: "design/activities/drafts/{draftId}/conflict-copies", templated: true },
     { rel: "activity-catalog", href: "design/activities/catalog" }
   ] }, { id: "elsa.api.expressions", contractVersion: "1", links: [
     { rel: "expression-descriptors", href: "expressions/descriptors" }
+  ] }, { id: "elsa.api.publishing", contractVersion: "1", links: [
+    { rel: "activity-publication-preflight", href: "design/activities/drafts/{draftId}/publication-preflight", templated: true },
+    { rel: "activity-publication", href: "design/activities/drafts/{draftId}/publish", templated: true },
+    { rel: "activity-publication-receipt", href: "design/activities/publications/{idempotencyKey}", templated: true }
   ] }] };
 }
 
@@ -375,6 +503,78 @@ function authoringCapabilities() {
 
 function authoringDefinition() {
   return { definitionId: "activity-def-browser", activityTypeKey: "elsa.user.browser-graph-activity.activity-def-browser", tenantId: "browser-tenant", category: "Browser tests", displayName: "Browser graph activity", description: null, contentAuthority: { kind: "design", authorityKey: "elsa.activity-design", sourceId: null }, forkedFrom: null, headVersionId: null, recommendedVersionId: null };
+}
+
+function authoringManagementDefinition(state: { headVersionId: string | null; recommendedVersionId: string | null; appliedPublications: number }) {
+  const definition = { ...authoringDefinition(), headVersionId: state.headVersionId, recommendedVersionId: state.recommendedVersionId };
+  const reference = state.headVersionId ? { versionId: state.headVersionId, version: state.appliedPublications === 1 ? "2.0.0" : "3.4.5", lifecycle: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" } : null;
+  const recommendation = state.recommendedVersionId ? { versionId: state.recommendedVersionId, version: "2.0.0", lifecycle: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" } : null;
+  return { definition, lifecycle: { draftCount: 1, versionCount: state.appliedPublications, head: reference, recommendation }, actions: [], updatedAt: "2026-07-17T10:00:00Z" };
+}
+
+function browserPublicationPreflight(revision: number, headVersionId: string | null, invalid: boolean) {
+  const first = headVersionId === null;
+  return {
+    draftId: "activity-draft-browser",
+    draftRevision: revision,
+    definitionId: "activity-def-browser",
+    definitionHeadVersionId: headVersionId,
+    hasBaseline: !first,
+    reviewToken: `sha256:review-${revision}-${headVersionId ?? "first"}`,
+    isPublishable: !invalid,
+    minimumVersion: first ? "1.0.0" : "2.1.0",
+    validVersions: [first ? "1.0.0" : "2.1.0"],
+    diff: { compatibility: "Compatible", requiredBump: first ? "Minor" : "Patch", behaviorChanged: true, summary: { breaking: 0, additive: 1, nonBehavioral: 0, warnings: 0 } },
+    impactFirstChanges: [{
+      changeId: "provider-protected",
+      area: "Provider",
+      kind: "provider.secret-rotated",
+      subject: { memberKind: null, referenceKey: null, dependencyVersionId: null, occurrenceId: null },
+      before: { redacted: true, value: "raw-protected-provider-value" },
+      after: { kind: "Redacted", value: "raw-protected-provider-value" },
+      impact: "Additive",
+      requiredBump: "Minor",
+      message: "Protected provider configuration changed."
+    }],
+    dependencies: [],
+    provider: { kind: "Provider", key: "elsa.activity-graph", schemaVersion: "1", status: invalid ? "Unavailable" : "Available", supportedSchemaVersions: invalid ? [] : ["1"] },
+    storage: [],
+    runtime: [{ kind: "Runtime", key: "elsa.activity-graph", schemaVersion: "1", status: invalid ? "Missing" : "Available", supportedSchemaVersions: invalid ? [] : ["1"] }],
+    diagnostics: invalid ? [{ code: "activity.runtime.consumer-missing", severity: "Error", message: "Required Runtime consumer is missing.", subject: { kind: "ActivityDraft", id: "activity-draft-browser", revision }, location: null, remediation: "Install Runtime support.", metadata: {} }] : []
+  };
+}
+
+function browserPublicationReceipt(idempotencyKey: string, version: string, revision: number, expectedHeadVersionId: string | null, reviewToken: string, versionId: string) {
+  return {
+    idempotencyKey,
+    status: "Applied",
+    draftId: "activity-draft-browser",
+    expectedDraftRevision: revision,
+    expectedDefinitionHeadVersionId: expectedHeadVersionId,
+    reviewToken,
+    requestedVersion: version,
+    outcome: {
+      definitionId: "activity-def-browser",
+      definitionVersionId: versionId,
+      draftId: "activity-draft-browser",
+      version,
+      templateId: `template-${versionId}`,
+      templateHash: `sha256:${versionId}`,
+      sourceReferenceId: `source-${versionId}`,
+      publishedAt: "2026-07-17T11:00:00Z"
+    },
+    errorCode: null,
+    diagnostics: [],
+    updatedAt: "2026-07-17T11:00:00Z"
+  };
+}
+
+async function createBrowserActivity(page: Page) {
+  await page.goto("/?mode=activity-definitions");
+  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
+  await page.getByRole("button", { name: "Create definition" }).click();
+  await expect(page.getByText("Saved revision 1")).toBeVisible();
 }
 
 function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {

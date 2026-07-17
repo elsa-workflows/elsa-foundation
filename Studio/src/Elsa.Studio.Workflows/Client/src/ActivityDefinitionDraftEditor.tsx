@@ -7,11 +7,12 @@ import { createActivityDefinitionRecoveryStore, type ActivityDefinitionRecoveryS
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { ActivityDefinitionContractEditor } from "./ActivityDefinitionContractEditor";
 import { ActivityDefinitionDiagnosticsPanel, type ActivityDraftValidationFailure } from "./ActivityDefinitionDiagnosticsPanel";
+import { ActivityDefinitionPublicationReview } from "./ActivityDefinitionPublicationReview";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "./api/capabilities";
 
 type SaveStatus = "saved" | "pending" | "saving" | "offline" | "conflict" | "failed";
 
-export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, activityEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft }: {
+export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, activityEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion }: {
   context: StudioEndpointContext;
   definitionId: string;
   draftId: string;
@@ -21,16 +22,17 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   onNavigationGuardChange(blocked: boolean): void;
   onBack(force?: boolean): void;
   onOpenDraft(definitionId: string, draftId: string): void;
+  onOpenVersion(definitionId: string, versionId: string): void;
 }) {
   const query = useFullActivityDefinitionDraft(context, draftId);
 
   if (query.isPending || query.isFetching && !query.isFetchedAfterMount) return <main className="ad-page ad-draft-editor" aria-busy="true"><div className="ad-skeleton" role="status">Loading the exact Activity Definition draft…</div></main>;
   if (query.isError || !query.data || query.data.definitionId !== definitionId) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> Activity Definition</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity draft unavailable</h1><p>Studio could not confirm the exact authorized draft. No provider state is shown.</p><button type="button" onClick={() => void query.refetch()}>Try again</button></section></main>;
 
-  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} activityEditors={activityEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} />;
+  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} activityEditors={activityEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} />;
 }
 
-function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft }: {
+function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion }: {
   context: StudioEndpointContext;
   initialDraft: ActivityDefinitionDraftView;
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[];
@@ -39,6 +41,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
   onNavigationGuardChange(blocked: boolean): void;
   onBack(force?: boolean): void;
   onOpenDraft(definitionId: string, draftId: string): void;
+  onOpenVersion(definitionId: string, versionId: string): void;
 }) {
   const [draft, setDraft] = useState(initialDraft);
   const [status, setStatus] = useState<SaveStatus>("saved");
@@ -272,7 +275,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
         setValidationFailure("transport");
         return;
       }
-      validationRevision = revisionRef.current;
+      validationRevision = saved.revision;
       validationSignature = editableSignature(currentRef.current);
       const validation = await validateActivityDefinitionDraft(context, draft.draftId, validationRevision);
       if (revisionRef.current !== validationRevision || editableSignature(currentRef.current) !== validationSignature) return;
@@ -303,7 +306,9 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
       const active = queueRef.current;
       await active;
       if (active !== queueRef.current) continue;
-      return !autosavePausedRef.current && savedSignatureRef.current === editableSignature(currentRef.current);
+      return !autosavePausedRef.current && savedSignatureRef.current === editableSignature(currentRef.current)
+        ? { revision: revisionRef.current, signature: savedSignatureRef.current }
+        : null;
     }
   };
 
@@ -370,6 +375,17 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
       canReturn={Boolean(diagnosticReturnRef.current)}
       onFocus={focusDiagnostic}
       onReturn={returnToDiagnostic}
+    />
+    <ActivityDefinitionPublicationReview
+      context={context}
+      definitionId={draft.definitionId}
+      draftId={draft.draftId}
+      currentRevision={draft.revision}
+      currentSignature={editableSignature(draft)}
+      disabled={status === "conflict" || !contractLocallyValid || validating}
+      flushExactSavedRevision={flushExactSavedRevision}
+      onFocusDiagnostic={focusDiagnostic}
+      onOpenVersion={versionId => onOpenVersion(draft.definitionId, versionId)}
     />
     {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from revision {recovery.baseRevision} for {recovery.providerKey} schema {recovery.providerSchemaVersion}. It expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<button type="button" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</button>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}
     {status === "conflict" ? <section className="ad-conflict-card" role="alert"><AlertTriangle size={20} /><div><h2>Local work preserved</h2><p>The server draft advanced to revision {conflictRevision}. Studio paused autosave and will not force overwrite or merge opaque provider state.</p><button type="button" onClick={() => void createConflictCopy()} disabled={copying}><CopyPlus size={16} /> {copying ? "Creating recovery draft…" : "Create parallel recovery draft"}</button>{copyError ? <span>Recovery could not be confirmed. The local work remains in this editor.</span> : null}</div></section> : null}
