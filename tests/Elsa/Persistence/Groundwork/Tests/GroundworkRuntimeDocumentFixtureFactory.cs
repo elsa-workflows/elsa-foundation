@@ -34,6 +34,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+        ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
@@ -114,6 +115,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 await new GroundworkWorkflowExecutableStore(store, Serializer).SaveAsync(Executable());
                 break;
             case ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind:
+                await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).SaveAsync(ActivityTemplate());
+                break;
+            case ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind:
                 await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).SaveAsync(ActivityTemplate());
                 break;
             case ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind:
@@ -197,6 +201,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkWorkflowExecutableStore(store, Serializer).FindAsync("artifact-1"))?.Identity.DefinitionId,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind =>
             (await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).FindAsync("template-1"))?.TemplateHash,
+        ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind =>
+            await ReadTemplateHashClaimTemplateIdAsync(store),
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind =>
             (await new GroundworkWorkflowExecutableSourceReferenceStore(store, Serializer).FindAsync("sourceref-1"))?.ArtifactId,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind =>
@@ -263,6 +269,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind => "Http",
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind => "definition-1",
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => "hash-template-1",
+        ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind => "template-1",
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => "artifact-1",
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind => ActivityExecutionStatus.Running,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind => "ae-1",
@@ -306,10 +313,21 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         return document.RootElement.GetProperty("projectionKind").GetString();
     }
 
+    private static async Task<object?> ReadTemplateHashClaimTemplateIdAsync(IDocumentStore store)
+    {
+        var envelope = await store.LoadAsync(ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind, TemplateHashClaimId);
+        if (envelope is null)
+            return null;
+
+        using var document = JsonDocument.Parse(envelope.ContentJson);
+        return document.RootElement.GetProperty("templateId").GetString();
+    }
+
     // --- Canonical builders (deterministic ids and timestamps) ---
 
     private const string CommitId = "commit-1";
     private const string ProjectionStateId = "triggerBindings:13:publication-1";
+    private const string TemplateHashClaimId = "templateHash:15:hash-template-1";
 
     private static WorkflowTestScope TestScope() => new(
         "test-scope-1",
@@ -754,6 +772,27 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("The capturing store only records saves.");
+            Task.FromResult<IDocumentUnitOfWork>(new CapturingDocumentUnitOfWork(this));
+    }
+
+    private sealed class CapturingDocumentUnitOfWork(CapturingDocumentStore store) : IDocumentUnitOfWork
+    {
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            store.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            store.DeleteAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            store.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task CommitAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public ValueTask DisposeAsync() =>
+            ValueTask.CompletedTask;
     }
 }

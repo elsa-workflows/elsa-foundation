@@ -89,6 +89,29 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Single(await store.ListAsync());
     }
 
+    [Fact]
+    public async Task SaveAsync_UsesCreateOnlyWrite_And_DoesNotOverwriteConcurrentWinner()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var competingStore = new GroundworkWorkflowExecutableStore(documentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(documentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, request.DocumentKind);
+                Assert.Equal("artifact-1", request.Id);
+                Assert.Equal(0, request.ExpectedVersion);
+                await competingStore.SaveAsync(Executable("artifact-1", artifactVersion: "winner"));
+            }
+        };
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(interceptingStore, GroundworkTestSerialization.Serializer);
+
+        await store.SaveAsync(Executable("artifact-1", artifactVersion: "loser"));
+
+        var winner = await competingStore.FindAsync("artifact-1");
+        Assert.Equal("winner", winner!.Identity.ArtifactVersion);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
