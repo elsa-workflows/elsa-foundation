@@ -1459,6 +1459,50 @@ describe("Activity Definition publication", () => {
     await rendered.unmount();
   });
 
+  it("keeps an unresolved mismatched receipt reconciliation-only without opening a second publication", async () => {
+    let preflightCalls = 0;
+    let publishCalls = 0;
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async (url: string, body: unknown) => {
+        if (url.endsWith("/publication-preflight")) {
+          preflightCalls += 1;
+          return publicationPreflight();
+        }
+        if (url.endsWith("/publish")) {
+          publishCalls += 1;
+          const request = body as { idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string };
+          return publicationReceipt({
+            idempotencyKey: request.idempotencyKey,
+            expectedDraftRevision: request.expectedDraftRevision,
+            expectedDefinitionHeadVersionId: request.expectedDefinitionHeadVersionId ?? null,
+            reviewToken: request.reviewToken,
+            requestedVersion: "9.9.9"
+          });
+        }
+        throw new Error(`Unexpected POST ${url}`);
+      }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Prepare publication"));
+    await waitForText(rendered.container, "Minimum valid version: 1.0.0");
+    click(buttonByText(rendered.container, "Publish 1.0.0"));
+    await waitForText(rendered.container, "Reconcile the existing operation");
+    const reopen = buttonByText(rendered.container, "Reopen preflight") as HTMLButtonElement;
+    expect(reopen.disabled).toBe(true);
+    click(reopen);
+    expect(preflightCalls).toBe(1);
+    expect(publishCalls).toBe(1);
+    await rendered.unmount();
+  });
+
   it("validates exact semantic-version precedence and keeps protected values opaque", () => {
     expect(isExactVersionAtLeast("2.0.0", "2.0.0")).toBe(true);
     expect(isExactVersionAtLeast("7.3.2+build.4", "2.0.0")).toBe(true);

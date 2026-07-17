@@ -61,7 +61,7 @@ export function ActivityDefinitionPublicationReview({
   }, [binding, currentRevision, currentSignature, phase, preflight]);
 
   const prepare = async () => {
-    if (disabled || phase === "preparing" || phase === "publishing") return;
+    if (disabled || phase === "preparing" || phase === "publishing" || phase === "unknown") return;
     setPhase("preparing");
     setFailure(null);
     setReceipt(null);
@@ -97,8 +97,8 @@ export function ActivityDefinitionPublicationReview({
 
   const applyReceipt = (next: ActivityPublicationReceipt) => {
     if (!receiptMatchesReview(next, operationKeyRef.current, preflight, version)) {
-      setPhase("failed");
-      setFailure("The authoritative receipt did not match this reviewed operation. Studio did not assume publication success.");
+      setPhase("unknown");
+      setFailure("The authoritative receipt did not match this reviewed operation. Reconcile the existing operation before starting another publication.");
       return;
     }
     setReceipt(next);
@@ -187,7 +187,7 @@ export function ActivityDefinitionPublicationReview({
   return <section className="ad-publication-review" aria-labelledby="activity-publication-title">
     <header className="ad-publication-header">
       <div><span className="ad-kicker">Immutable publication</span><h2 id="activity-publication-title">Review &amp; publish</h2><p>Studio first saves the exact draft, then asks the backend for one authoritative impact and readiness projection.</p></div>
-      <button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing"}>
+      <button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}>
         <GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Reopen preflight" : "Prepare publication"}
       </button>
     </header>
