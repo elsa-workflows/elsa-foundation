@@ -595,7 +595,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Conditional transition and restart evidence is incomplete.",
       "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",
