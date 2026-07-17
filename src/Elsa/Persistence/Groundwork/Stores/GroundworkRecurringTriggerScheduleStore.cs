@@ -186,19 +186,23 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             new DocumentQuery(
                 DocumentKind,
                 ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
-                    ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
-                    asOf.ToString("O", CultureInfo.InvariantCulture)))],
-                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField)]),
+                [
+                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField,
+                        bool.TrueString.ToLowerInvariant())),
+                    DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
+                        asOf.ToString("O", CultureInfo.InvariantCulture)))
+                ],
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)
+                ],
+                take: limit),
             cancellationToken);
-        var schedules = result.Documents
-            .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule);
-
-        return schedules
-            .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= asOf)
-            .OrderBy(schedule => schedule.NextOccurrence)
-            .ThenBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
-            .Take(limit)
+        return result.Documents
+            .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule)
             .ToArray();
     }
 

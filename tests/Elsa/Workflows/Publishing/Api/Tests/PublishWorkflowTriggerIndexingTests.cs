@@ -51,7 +51,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var view = await Handler(new StubTriggerProvider("Event", "hash-order")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        var byStimulus = await _bindingStore.ListByStimulusAsync("Event", "hash-order");
+        var byStimulus = (await _bindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "hash-order"))).Items;
         var binding = Assert.Single(byStimulus);
         Assert.Equal(view.ArtifactId, binding.ArtifactId);
         Assert.Equal("trigger-node", binding.ExecutableNodeId);
@@ -64,8 +65,12 @@ public sealed class PublishWorkflowTriggerIndexingTests
         await Handler("old", new StubTriggerProvider("Event", "hash-old")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var view = await Handler("new", new StubTriggerProvider("Event", "hash-new")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        Assert.Empty(await _bindingStore.ListByStimulusAsync("Event", "hash-old"));
-        Assert.Equal(view.ArtifactId, Assert.Single(await _bindingStore.ListByStimulusAsync("Event", "hash-new")).ArtifactId);
+        Assert.Empty((await _bindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "hash-old"))).Items);
+        Assert.Equal(
+            view.ArtifactId,
+            Assert.Single((await _bindingStore.ListByStimulusAsync(
+                new WorkflowTriggerBindingPageQuery("Event", "hash-new"))).Items).ArtifactId);
     }
 
     [Fact]

@@ -310,7 +310,12 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Collection(
             logical.Fields,
             stimulus => Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path),
-            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path));
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path),
+            active =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField, active.Path);
+                Assert.Equal(IndexValueKind.Boolean, active.ValueKind);
+            });
 
         var route = Assert.Single(
             unit.PhysicalStorage.BoundedQueries,
@@ -319,10 +324,18 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Collection(
             route.PredicateFields,
             stimulus => Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path),
-            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path));
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path),
+            active => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField, active.Path));
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+        Assert.True(route.SupportsTotalCount);
         Assert.Contains(
             physical.Indexes,
-            index => index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex && index.Columns.Count == 3);
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex && index.Columns.Count == 4);
+        Assert.Contains(
+            physical.ProjectedColumns,
+            column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive &&
+                column.Type == PortablePhysicalType.Boolean);
         AssertStimulusProjectionLengths(physical);
     }
 
@@ -388,7 +401,38 @@ public sealed class ElsaRuntimeStorageManifestTests
         var route = Assert.Single(
             unit.PhysicalStorage!.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery);
-        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence, route.IndexIdentity);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.RecurringTriggerScheduleByActiveNextOccurrenceAndScheduleId,
+            route.IndexIdentity);
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+        Assert.Collection(
+            route.PredicateFields,
+            active =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField, active.Path);
+                Assert.Contains(PortableQueryOperation.Equal, active.Operations);
+            },
+            due =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, due.Path);
+                Assert.Contains(PortableQueryOperation.LessThanOrEqual, due.Operations);
+            });
+        Assert.Collection(
+            route.SortFields,
+            active => Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField, active.Path),
+            due => Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, due.Path),
+            schedule => Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField, schedule.Path));
+
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage.Policy).Definition;
+        Assert.Equal(
+            PortablePhysicalType.Boolean,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByRecurringScheduleActiveIndex).Type);
+        Assert.Contains(
+            physical.Indexes,
+            index =>
+                index.LogicalName ==
+                ElsaRuntimeStorageManifest.RecurringTriggerScheduleByActiveNextOccurrenceAndScheduleId);
     }
 
     [Fact]
@@ -401,7 +445,24 @@ public sealed class ElsaRuntimeStorageManifestTests
         var route = Assert.Single(
             unit.PhysicalStorage!.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery);
-        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByDueTime, route.IndexIdentity);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByDueTimeAndTimerId, route.IndexIdentity);
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+        Assert.Collection(
+            route.PredicateFields,
+            due =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, due.Path);
+                Assert.Contains(PortableQueryOperation.LessThanOrEqual, due.Operations);
+            });
+        Assert.Collection(
+            route.SortFields,
+            due => Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, due.Path),
+            timer => Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerIdField, timer.Path));
+
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage.Policy).Definition;
+        Assert.Contains(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.DurableTimerByDueTimeAndTimerId);
     }
 
     [Fact]

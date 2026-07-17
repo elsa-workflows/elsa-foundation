@@ -24,7 +24,8 @@ public sealed class PublicationProjectionReconcilerTests
         await fixture.Reconciler.ActivateAsync(fixture.Publication, replacedPublicationId: null);
 
         Assert.Equal(1, fixture.Indexer.PrepareCallCount);
-        Assert.Single(await fixture.BindingStore.ListByStimulusAsync("Event", "orders"));
+        Assert.Single((await fixture.BindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "orders"))).Items);
         Assert.Single(await fixture.ScheduleStore.ListDueAsync(_now.AddHours(2), 10));
 
         await fixture.Reconciler.RemoveAsync(fixture.Publication);
@@ -118,7 +119,8 @@ public sealed class PublicationProjectionReconcilerTests
         await fixture.Reconciler.RestoreAsync(fixture.Publication);
 
         Assert.Equal(2, fixture.Indexer.PrepareCallCount);
-        Assert.Single(await fixture.BindingStore.ListByStimulusAsync("Event", "orders"));
+        Assert.Single((await fixture.BindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "orders"))).Items);
         Assert.Single(await fixture.ScheduleStore.ListDueAsync(_now.AddHours(2), 10));
     }
 

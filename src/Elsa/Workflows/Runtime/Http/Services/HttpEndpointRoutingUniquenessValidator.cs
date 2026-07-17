@@ -37,12 +37,36 @@ public sealed class HttpEndpointRoutingUniquenessValidator(IWorkflowTriggerBindi
             if (!StringComparer.Ordinal.Equals(binding.StimulusType, HttpEndpointRouting.StimulusType))
                 continue;
 
-            var claimants = await bindingStore.ListByStimulusAsync(binding.StimulusType, binding.StimulusHash, cancellationToken);
-            var conflicting = claimants.FirstOrDefault(existing => IsConflict(binding, snapshot.ArtifactId, existing));
+            var conflicting = await FindConflictAsync(binding, snapshot.ArtifactId, cancellationToken);
 
             if (conflicting is not null)
                 throw EndpointRoutingConflictException.ForBindings(binding, conflicting);
         }
+    }
+
+    private async ValueTask<WorkflowTriggerBinding?> FindConflictAsync(
+        WorkflowTriggerBinding binding,
+        string candidateArtifactId,
+        CancellationToken cancellationToken)
+    {
+        string? continuationToken = null;
+        do
+        {
+            var page = await bindingStore.ListByStimulusAsync(
+                new WorkflowTriggerBindingPageQuery(
+                    binding.StimulusType,
+                    binding.StimulusHash,
+                    WorkflowTriggerBindingPageQuery.MaximumLimit,
+                    continuationToken),
+                cancellationToken);
+            var conflict = page.Items.FirstOrDefault(existing => IsConflict(binding, candidateArtifactId, existing));
+            if (conflict is not null)
+                return conflict;
+
+            continuationToken = page.NextContinuationToken;
+        } while (continuationToken is not null);
+
+        return null;
     }
 
     private static bool IsConflict(

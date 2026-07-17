@@ -123,10 +123,11 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         }
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)
+    public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(
+        WorkflowTriggerBindingPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -134,11 +135,16 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
             var matches = _bindings.Values
                 .Where(binding =>
                     binding.IsActive &&
-                    StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType) &&
-                    StringComparer.Ordinal.Equals(binding.StimulusHash, stimulusHash))
+                    StringComparer.Ordinal.Equals(binding.StimulusType, query.StimulusType) &&
+                    StringComparer.Ordinal.Equals(binding.StimulusHash, query.StimulusHash))
+                .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
 
-            return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
+            return ValueTask.FromResult(
+                new WorkflowTriggerBindingPage(
+                    query,
+                    matches.Skip(query.Offset).Take(query.Limit).ToArray(),
+                    matches.Length));
         }
     }
 
