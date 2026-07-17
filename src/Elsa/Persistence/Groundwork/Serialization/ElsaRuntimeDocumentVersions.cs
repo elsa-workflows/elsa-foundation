@@ -37,7 +37,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,

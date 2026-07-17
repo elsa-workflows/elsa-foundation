@@ -138,6 +138,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetServices<IPostCommitFailureProjector>(),
                 serviceProvider.GetService<ILogger<RuntimePostCommitOutboxProcessor>>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
+        services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
@@ -187,13 +188,14 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
                 serviceProvider.GetServices<IWorkflowSchedulerWorkHandler>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
-                TimeProvider.System,
+                serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>(),
                 serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
                 serviceProvider.GetRequiredService<IRuntimeDomainRetryPolicy>(),
-                serviceProvider.GetRequiredService<IWorkflowEngineTracer>()));
+                serviceProvider.GetRequiredService<IWorkflowEngineTracer>(),
+                serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
