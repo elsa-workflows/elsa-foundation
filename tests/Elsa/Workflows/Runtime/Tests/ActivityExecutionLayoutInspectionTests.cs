@@ -113,6 +113,80 @@ public class ActivityExecutionLayoutInspectionTests
     }
 
     [Fact]
+    public async Task Pinned_structure_includes_authored_nodes_that_never_executed_or_received_geometry()
+    {
+        var workflowStates = new InMemoryWorkflowExecutionStateStore();
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        var hierarchy = HierarchyStore();
+        var origin = Origin();
+        var originMetadata = new Dictionary<string, string>
+        {
+            ["activity.invocationOrigin"] = JsonSerializer.Serialize(origin.Segments)
+        };
+        var neverExecuted = Node("node-never-executed", "authored-never-executed", metadata: originMetadata);
+        var root = Node(
+            "node-outer",
+            "authored-outer",
+            structure: new(
+                "elsa.flowchart.structure",
+                "1.0.0",
+                JsonSerializer.SerializeToElement(new
+                {
+                    connections = new[]
+                    {
+                        new
+                        {
+                            source = new { nodeId = "authored-outer" },
+                            target = new { nodeId = "authored-never-executed" }
+                        }
+                    }
+                })),
+            children: [neverExecuted],
+            metadata: originMetadata);
+        await workflowStates.SaveAsync(WorkflowState("source-executed"));
+        await executables.SaveAsync(WorkflowExecutable(root));
+        await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(
+            ActivityExecutionInspectionProjectionTests.Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true)));
+        await references.SaveAsync(Reference("source-executed", origin, x: 100));
+
+        var reader = new ActivityExecutionLayoutReader(workflowStates, hierarchy, executables, references, new Authorization(true, false));
+        var view = await reader.ReadAsync("wf", "outer", default);
+
+        Assert.Equal(2, view!.Nodes.Count);
+        var unexecuted = view.Nodes.Single(x => x.ExecutableNodeId == "node-never-executed");
+        Assert.False(unexecuted.HasPinnedGeometry);
+        Assert.Equal("elsa.test", unexecuted.ActivityType);
+        Assert.Equal("node-never-executed", Assert.Single(view.Connections).Target.ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Pinned_structure_remains_available_when_the_optional_layout_sidecar_is_missing()
+    {
+        var workflowStates = new InMemoryWorkflowExecutionStateStore();
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        var hierarchy = HierarchyStore();
+        var origin = Origin();
+        var metadata = new Dictionary<string, string>
+        {
+            ["activity.invocationOrigin"] = JsonSerializer.Serialize(origin.Segments)
+        };
+        var child = Node("node-child", "authored-child", metadata: metadata);
+        await workflowStates.SaveAsync(WorkflowState("missing-reference"));
+        await executables.SaveAsync(WorkflowExecutable(Node("node-outer", "authored-outer", children: [child], metadata: metadata)));
+        await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(
+            ActivityExecutionInspectionProjectionTests.Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true)));
+
+        var reader = new ActivityExecutionLayoutReader(workflowStates, hierarchy, executables, references, new Authorization(true, false));
+        var view = await reader.ReadAsync("wf", "outer", default);
+
+        Assert.Equal("Automatic", view!.Selection);
+        Assert.Equal(2, view.Nodes.Count);
+        Assert.All(view.Nodes, node => Assert.False(node.HasPinnedGeometry));
+    }
+
+    [Fact]
     public async Task Legacy_Execution_Without_Exact_Source_Reference_Evidence_Does_Not_Guess_From_A_Single_Current_Reference()
     {
         var workflowStates = new InMemoryWorkflowExecutionStateStore();
@@ -286,7 +360,8 @@ public class ActivityExecutionLayoutInspectionTests
         string executableNodeId,
         string authoredActivityId,
         ExecutableActivityStructure? structure = null,
-        IReadOnlyCollection<ExecutableNode>? children = null) => new(
+        IReadOnlyCollection<ExecutableNode>? children = null,
+        IReadOnlyDictionary<string, string>? metadata = null) => new(
         executableNodeId,
         authoredActivityId,
         "elsa.test",
@@ -294,7 +369,7 @@ public class ActivityExecutionLayoutInspectionTests
         new RuntimeActivityDescriptor("elsa.test", "1", JsonSerializer.SerializeToElement(new { })),
         new Dictionary<string, RuntimeInputBinding>(),
         new Dictionary<string, RuntimeOutputCapture>(),
-        new Dictionary<string, string>(),
+        metadata ?? new Dictionary<string, string>(),
         children is null ? [] : [new ExecutableChildSlot("Activities", children)],
         structure);
 
@@ -369,7 +444,10 @@ public class ActivityExecutionLayoutInspectionTests
     {
         public string TenantScope => "tenant:a";
         public string AuthorizationProfile => $"structure:{structure};values:{values}";
+        public string AuditSubject => "test";
+        public string RequestCorrelationId => "test-request";
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => structure;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => values;
+        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
     }
 }

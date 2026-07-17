@@ -127,6 +127,20 @@ internal sealed class InMemoryActivityExecutionHierarchyStore : IActivityExecuti
             return ValueTask.FromResult<ActivityExecutionBoundary?>(null);
     }
 
+    public ValueTask<ActivityExecutionAttemptNavigation?> FindAttemptNavigationAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return ValueTask.FromResult(ActivityExecutionHierarchyProjector.FindAttemptNavigation(
+                _records.Values
+                    .Where(record => StringComparer.Ordinal.Equals(record.WorkflowExecutionId, workflowExecutionId))
+                    .ToArray(),
+                activityExecutionId));
+    }
+
     private static bool IsAfter(ActivityExecutionHierarchyRecord record, long sequence, string activityExecutionId) =>
         record.ExecutionSequence > sequence ||
         record.ExecutionSequence == sequence && StringComparer.Ordinal.Compare(record.ActivityExecutionId, activityExecutionId) > 0;

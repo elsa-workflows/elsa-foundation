@@ -154,7 +154,10 @@ public sealed record ExecutableActivityLayoutRecord(
     double Y,
     double? Width = null,
     double? Height = null,
-    JsonElement? AdditionalProperties = null);
+    JsonElement? AdditionalProperties = null,
+    string? ActivityType = null,
+    string? ActivityTypeVersion = null,
+    bool HasPinnedGeometry = true);
 
 /// <summary>Runtime facts owned by one ordinary outer activity execution; this is not a child workflow.</summary>
 public sealed record ActivityExecutionScope(
@@ -184,6 +187,11 @@ public sealed record ActivityExecutionAttemptLineage(
     string FirstAttemptActivityExecutionId,
     string? PreviousAttemptActivityExecutionId);
 
+public sealed record ActivityExecutionAttemptNavigation(
+    ActivityExecutionAttemptLineage Lineage,
+    string? NextAttemptActivityExecutionId,
+    int TotalAttempts);
+
 public sealed record ActivityExecutionBoundary(
     string Kind,
     string DefinitionId,
@@ -196,7 +204,8 @@ public sealed record ActivityExecutionBoundary(
     int DirectChildCount,
     long CommittedDescendantCount,
     ActivityExecutionHierarchyAggregate Aggregate,
-    bool LayoutAvailable);
+    bool LayoutAvailable,
+    string? ExecutableNodeId = null);
 
 public sealed record ActivityExecutionHierarchyAggregate(
     ActivityExecutionHierarchyAggregateStatus Status,
@@ -298,6 +307,21 @@ public sealed record ActivityExecutionHierarchyCursorState(
     string LastActivityExecutionId,
     int SchemaVersion = 1);
 
+public sealed record ActivityExecutionCursorFailureMetadata(
+    string CursorClass,
+    ActivityExecutionCursorBindingState BoundaryBinding,
+    ActivityExecutionCursorBindingState QueryBinding,
+    ActivityExecutionCursorBindingState AccessBinding,
+    bool Recoverable,
+    string RecoveryAction);
+
+public enum ActivityExecutionCursorBindingState
+{
+    Unknown,
+    Matched,
+    Mismatched
+}
+
 public enum ActivityExecutionHierarchyCursorFailure
 {
     Invalid,
@@ -308,9 +332,11 @@ public enum ActivityExecutionHierarchyCursorFailure
 public sealed class ActivityExecutionHierarchyCursorException(
     ActivityExecutionHierarchyCursorFailure failure,
     string message,
-    Exception? innerException = null) : Exception(message, innerException)
+    Exception? innerException = null,
+    ActivityExecutionCursorFailureMetadata? metadata = null) : Exception(message, innerException)
 {
     public ActivityExecutionHierarchyCursorFailure Failure { get; } = failure;
+    public ActivityExecutionCursorFailureMetadata? Metadata { get; } = metadata;
 }
 
 public sealed record ActivityExecutionLayout(
