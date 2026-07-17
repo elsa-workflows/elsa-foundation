@@ -26,7 +26,9 @@ public sealed class RuntimeInputBinding
         InputKey = inputKey ?? inputName;
         IsSensitive = isSensitive;
         Source = source;
-        LiteralValue = literalValue?.Clone();
+        LiteralValue = source == RuntimeInputBindingSource.Literal
+            ? literalValue?.Clone() ?? JsonSerializer.SerializeToElement<object?>(null)
+            : null;
         Expression = expression;
         ActivityOutput = activityOutput;
         DurableValue = durableValue;
@@ -53,8 +55,9 @@ public sealed class RuntimeInputBinding
         RuntimeDurableValueReference? durableValue,
         RuntimeReferenceValue? reference)
     {
+        var hasLiteralPayload = source == RuntimeInputBindingSource.Literal || literalValue.HasValue;
         var payloadCount =
-            (literalValue.HasValue ? 1 : 0) +
+            (hasLiteralPayload ? 1 : 0) +
             (expression is not null ? 1 : 0) +
             (activityOutput is not null ? 1 : 0) +
             (durableValue is not null ? 1 : 0) +
@@ -65,7 +68,7 @@ public sealed class RuntimeInputBinding
 
         var valid = source switch
         {
-            RuntimeInputBindingSource.Literal => literalValue.HasValue,
+            RuntimeInputBindingSource.Literal => true,
             RuntimeInputBindingSource.Expression => expression is not null,
             RuntimeInputBindingSource.ActivityOutput => activityOutput is not null,
             RuntimeInputBindingSource.DurableValue => durableValue is not null,

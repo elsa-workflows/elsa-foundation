@@ -12,6 +12,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
@@ -25,15 +26,22 @@ using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using FastEndpoints;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Manifests;
+using Groundwork.Core.Scoping;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -44,8 +52,41 @@ public sealed class ActivityDraftTestRunTests
     [Fact]
     public void Endpoint_and_request_match_the_reviewed_activity_draft_test_run_contract()
     {
+        AssertEndpoint(
+            "ActivityDraftTestRunEndpoint",
+            "POST",
+            "publishing/activity-drafts/{draftId}/test-runs");
+        AssertEndpoint(
+            "GetActivityDraftTestRunEndpoint",
+            "GET",
+            "publishing/activity-test-runs/{testRunId}");
+        AssertEndpoint(
+            "GetActivityDraftTestRunByIdempotencyKeyEndpoint",
+            "GET",
+            "publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}");
+        AssertEndpoint(
+            "CancelActivityDraftTestRunEndpoint",
+            "POST",
+            "publishing/activity-test-runs/{testRunId}/cancel");
+        var json = JsonSerializer.Serialize(new StartActivityDraftTestRun(
+            "draft-1",
+            8,
+            "rerun-42",
+            new Dictionary<string, ActivityDraftTestRunInput>
+            {
+                ["order"] = new("Present", JsonSerializer.SerializeToElement(new { id = "order-42" }))
+            },
+            "designer-test-42"), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(
+            "{\"expectedRevision\":8,\"idempotencyKey\":\"rerun-42\",\"inputs\":{\"order\":{\"state\":\"Present\",\"value\":{\"id\":\"order-42\"}}},\"correlationId\":\"designer-test-42\"}",
+            json);
+        Assert.DoesNotContain("draftId", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AssertEndpoint(string typeName, string verb, string route)
+    {
         var endpointType = typeof(StartActivityDraftTestRun).Assembly.GetType(
-            "Elsa.Workflows.Publishing.Api.Endpoints.ActivityDraftTestRunEndpoint",
+            $"Elsa.Workflows.Publishing.Api.Endpoints.{typeName}",
             throwOnError: true)!;
         var loggerType = typeof(NullLogger<>).MakeGenericType(endpointType);
         var logger = loggerType.GetProperty("Instance")?.GetValue(null)
@@ -58,26 +99,14 @@ public sealed class ActivityDraftTestRunTests
             .Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), new object[] { new Sender(), logger }])!;
         endpoint.Configure();
 
-        Assert.Equal("POST", Assert.Single(endpoint.Definition.Verbs));
-        Assert.Equal("publishing/activity-drafts/{draftId}/test-runs", Assert.Single(endpoint.Definition.Routes));
-        var json = JsonSerializer.Serialize(new StartActivityDraftTestRun(
-            "draft-1",
-            8,
-            new Dictionary<string, ActivityDraftTestRunInput>
-            {
-                ["order"] = new("Present", JsonSerializer.SerializeToElement(new { id = "order-42" }))
-            },
-            "designer-test-42"), new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.Equal(
-            "{\"expectedRevision\":8,\"inputs\":{\"order\":{\"state\":\"Present\",\"value\":{\"id\":\"order-42\"}}},\"correlationId\":\"designer-test-42\"}",
-            json);
-        Assert.DoesNotContain("draftId", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(verb, Assert.Single(endpoint.Definition.Verbs));
+        Assert.Equal(route, Assert.Single(endpoint.Definition.Routes));
     }
 
     [Fact]
     public async Task Draft_test_run_denies_a_foreign_exact_draft_before_compilation_without_disclosure()
     {
-        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documents = new InMemoryDocumentStore(CombinedStorageManifest());
         var authoring = AuthoringState.Create("tenant-b");
         await using var provider = BuildProvider(
             documents,
@@ -87,13 +116,133 @@ public sealed class ActivityDraftTestRunTests
         await using var scope = provider.CreateAsyncScope();
 
         var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
-            scope.ServiceProvider.GetRequiredService<IActivityDraftTestRunPublisher>().StartAsync(new(
+            scope.ServiceProvider.GetRequiredService<IActivityDraftTestRunService>().StartAsync(new(
                 AuthoringState.DraftId,
-                authoring.Draft.Revision)));
+                authoring.Draft.Revision,
+                "foreign-run")));
 
         Assert.Equal("activity.tenant.reference-denied", exception.ErrorCode);
         Assert.Empty(exception.Diagnostics);
         Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Same_tenant_local_draft_and_key_create_distinct_cross_tenant_runs()
+    {
+        var manifest = CombinedStorageManifest();
+        await using var tenantA = BuildProvider(
+            new InMemoryDocumentStore(
+                manifest,
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-a"))),
+            TimeProvider.System,
+            AuthoringState.Create("tenant-a"),
+            new TestActivityPublishingAuthorizationContext("tenant-a"),
+            persistenceScope: "tenant-a");
+        await using var tenantB = BuildProvider(
+            new InMemoryDocumentStore(
+                manifest,
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-b"))),
+            TimeProvider.System,
+            AuthoringState.Create("tenant-b"),
+            new TestActivityPublishingAuthorizationContext("tenant-b"),
+            persistenceScope: "tenant-b");
+
+        var first = await StartAsync(tenantA, 4, "same-tenant-local-key");
+        var second = await StartAsync(tenantB, 4, "same-tenant-local-key");
+
+        Assert.NotEqual(first.TestRunId, second.TestRunId);
+        Assert.NotEqual(first.WorkflowExecutionId, second.WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task Same_global_draft_and_key_create_tenant_owned_runs_for_each_caller()
+    {
+        var manifest = CombinedStorageManifest();
+        var globalAuthoring = AuthoringState.Create();
+        await using var tenantA = BuildProvider(
+            new InMemoryDocumentStore(
+                manifest,
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-a"))),
+            TimeProvider.System,
+            globalAuthoring,
+            new TestActivityPublishingAuthorizationContext("tenant-a"),
+            persistenceScope: "tenant-a");
+        await using var tenantB = BuildProvider(
+            new InMemoryDocumentStore(
+                manifest,
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-b"))),
+            TimeProvider.System,
+            globalAuthoring,
+            new TestActivityPublishingAuthorizationContext("tenant-b"),
+            persistenceScope: "tenant-b");
+
+        var first = await StartAsync(tenantA, 4, "same-global-key");
+        var second = await StartAsync(tenantB, 4, "same-global-key");
+        var firstReceipt = await tenantA.GetRequiredService<IActivityDraftTestRunStore>().FindAsync(first.TestRunId);
+        var secondReceipt = await tenantB.GetRequiredService<IActivityDraftTestRunStore>().FindAsync(second.TestRunId);
+
+        Assert.NotEqual(first.TestRunId, second.TestRunId);
+        Assert.NotEqual(first.WorkflowExecutionId, second.WorkflowExecutionId);
+        Assert.Equal("tenant-a", firstReceipt?.TenantId);
+        Assert.Equal("tenant-b", secondReceipt?.TenantId);
+        Assert.Null(firstReceipt?.ResourceTenantId);
+        Assert.Null(secondReceipt?.ResourceTenantId);
+        Assert.Equal(
+            "tenant-a",
+            (await tenantA.GetRequiredService<IWorkflowExecutionStateStore>()
+                .FindAsync(first.WorkflowExecutionId))?.TenantId);
+        Assert.Equal(
+            "tenant-b",
+            (await tenantB.GetRequiredService<IWorkflowExecutionStateStore>()
+                .FindAsync(second.WorkflowExecutionId))?.TenantId);
+    }
+
+    [Fact]
+    public async Task Foreign_caller_cannot_learn_a_receipt_loaded_from_the_operation_scope()
+    {
+        var authorization = new MutableAuthorizationContext("tenant-a");
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(
+                CombinedStorageManifest(),
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-a"))),
+            TimeProvider.System,
+            authoring,
+            authorization,
+            persistenceScope: "tenant-a");
+        var started = await StartAsync(provider, authoring.Draft.Revision, "private-run");
+
+        authorization.TenantId = "tenant-b";
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(
+            () => provider.GetRequiredService<IActivityDraftTestRunService>().GetAsync(started.TestRunId));
+
+        Assert.Equal("activity.tenant.reference-denied", exception.ErrorCode);
+        Assert.DoesNotContain(started.TestRunId, exception.Message, StringComparison.Ordinal);
+        Assert.Empty(exception.Diagnostics);
+    }
+
+    [Fact]
+    public async Task Test_run_rejects_unbounded_request_identity_material()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring);
+        var testRuns = provider.GetRequiredService<IActivityDraftTestRunService>();
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            testRuns.StartAsync(new(
+                AuthoringState.DraftId,
+                authoring.Draft.Revision,
+                new string('k', 201))));
+
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+        Assert.Null(await provider.GetRequiredService<IActivityDraftTestRunStore>()
+            .FindByIdempotencyKeyAsync(
+                ActivityDraftTestRunIdentity.CreateOperationScope(null),
+                AuthoringState.DraftId,
+                new string('k', 201)));
     }
 
     [Fact]
@@ -123,7 +272,235 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
-    public async Task Groundwork_sqlite_graph_run_suspends_restarts_in_runtime_only_host_resumes_inspects_and_propagates_output_once()
+    public async Task Full_host_distinguishes_validation_and_runtime_dispatch_rejection()
+    {
+        var authoring = AuthoringState.Create();
+        await using (var validationHost = BuildProvider(
+                         new InMemoryDocumentStore(CombinedStorageManifest()),
+                         TimeProvider.System,
+                         authoring))
+        {
+            var rejected = await StartAsync(validationHost, authoring.Draft.Revision + 1, "stale-revision");
+
+            Assert.Equal(ActivityDraftTestRunReceiptStatus.ValidationRejected.ToString(), rejected.Status);
+            Assert.Equal(ActivityDraftTestRunFailureKind.Validation.ToString(), rejected.Failure?.Kind);
+            Assert.Equal("activity.draft.stale-revision", rejected.Failure?.Code);
+            Assert.False(rejected.Cancellation.Available);
+            Assert.Equal(ActivityDraftTestRunCancellationStatus.Unavailable.ToString(), rejected.Cancellation.Status);
+            Assert.Null(await validationHost.GetRequiredService<IWorkflowExecutionStateStore>()
+                .FindAsync(rejected.WorkflowExecutionId));
+        }
+
+        await using (var runtimeHost = BuildProvider(
+                         new InMemoryDocumentStore(CombinedStorageManifest()),
+                         TimeProvider.System,
+                         authoring,
+                         startPolicy: new DenyStartPolicy()))
+        {
+            var rejected = await StartAsync(runtimeHost, authoring.Draft.Revision, "runtime-rejection");
+
+            Assert.Equal(ActivityDraftTestRunReceiptStatus.DispatchRejected.ToString(), rejected.Status);
+            Assert.Equal(ActivityDraftTestRunFailureKind.RuntimeDispatch.ToString(), rejected.Failure?.Kind);
+            Assert.Equal("runtime.start.test-policy-denied", rejected.Failure?.Code);
+            Assert.Equal("Runtime rejected the Test Run start request.", rejected.Failure?.Message);
+            Assert.DoesNotContain("provider-secret", rejected.Failure!.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Tri_state_inputs_reject_contradictions_and_accept_explicit_json_null()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring);
+        var testRuns = provider.GetRequiredService<IActivityDraftTestRunService>();
+        var invalid = new[]
+        {
+            new ActivityDraftTestRunInput("Absent", JsonSerializer.SerializeToElement("contradiction")),
+            new ActivityDraftTestRunInput("Present"),
+            new ActivityDraftTestRunInput("Unknown", JsonSerializer.SerializeToElement("value"))
+        };
+
+        for (var index = 0; index < invalid.Length; index++)
+        {
+            var rejected = await testRuns.StartAsync(new(
+                AuthoringState.DraftId,
+                authoring.Draft.Revision,
+                $"invalid-input-{index}",
+                new Dictionary<string, ActivityDraftTestRunInput> { ["order"] = invalid[index] }));
+            Assert.Equal(ActivityDraftTestRunReceiptStatus.ValidationRejected.ToString(), rejected.Status);
+            Assert.Equal(ActivityDraftTestRunFailureKind.Validation.ToString(), rejected.Failure?.Kind);
+            Assert.Equal("activity.test-run.input-state-invalid", rejected.Failure?.Code);
+        }
+
+        Assert.Empty(await provider.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
+        var explicitNull = await testRuns.StartAsync(new(
+            AuthoringState.DraftId,
+            authoring.Draft.Revision,
+            "explicit-null",
+            new Dictionary<string, ActivityDraftTestRunInput>
+            {
+                ["order"] = new("Present", JsonSerializer.SerializeToElement<object?>(null))
+            }));
+        Assert.Null(explicitNull.Failure);
+        Assert.NotNull(await provider.GetRequiredService<IWorkflowExecutionStateStore>()
+            .FindAsync(explicitNull.WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task Full_host_cancellation_is_idempotent_and_reconciles_to_terminal()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring);
+        var started = await StartAsync(provider, authoring.Draft.Revision, "cancel-run");
+        await RedriveAsync(provider);
+        var testRuns = provider.GetRequiredService<IActivityDraftTestRunService>();
+
+        var first = await testRuns.CancelAsync(started.TestRunId);
+        var duplicate = await testRuns.CancelAsync(started.TestRunId);
+        await RedriveAsync(provider);
+        var terminal = await testRuns.GetAsync(started.TestRunId);
+
+        Assert.True(first.Cancellation.CapabilityAdvertised);
+        Assert.Contains(first.Cancellation.Status, new[]
+        {
+            ActivityDraftTestRunCancellationStatus.Cancelling.ToString(),
+            ActivityDraftTestRunCancellationStatus.Terminal.ToString()
+        });
+        Assert.Equal(first.WorkflowExecutionId, duplicate.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled.ToString(), terminal.Status);
+        Assert.Equal(ActivityDraftTestRunCancellationStatus.Terminal.ToString(), terminal.Cancellation.Status);
+        Assert.False(terminal.Cancellation.Available);
+    }
+
+    [Fact]
+    public async Task Ambiguous_acknowledgement_reconciles_the_original_run_after_the_draft_is_removed()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring,
+            makeFirstDispatchAmbiguous: true);
+
+        var ambiguous = await StartAsync(provider, authoring.Draft.Revision, "ambiguous-run");
+        authoring.Drafts.Remove();
+        var reconciled = await StartAsync(provider, authoring.Draft.Revision, "ambiguous-run");
+        var byKey = await provider.GetRequiredService<IActivityDraftTestRunService>()
+            .GetByIdempotencyKeyAsync(AuthoringState.DraftId, "ambiguous-run");
+        var executions = await provider.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync();
+
+        Assert.Equal("activity.test-run.dispatch-ambiguous", ambiguous.Failure?.Code);
+        Assert.Null(reconciled.Failure);
+        Assert.NotEqual(ActivityDraftTestRunReceiptStatus.ValidationRejected.ToString(), reconciled.Status);
+        Assert.Equal(ambiguous.TestRunId, reconciled.TestRunId);
+        Assert.Equal(reconciled.TestRunId, byKey.TestRunId);
+        Assert.Equal(ambiguous.WorkflowExecutionId, reconciled.WorkflowExecutionId);
+        Assert.Equal(reconciled.WorkflowExecutionId, Assert.Single(executions).WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task Preparing_receipt_rejects_safely_when_the_exact_draft_disappears_before_materialization()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring,
+            templateCompiler: new ThrowingTemplateCompiler());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => StartAsync(provider, authoring.Draft.Revision, "preparing-run"));
+        authoring.Drafts.Remove();
+        var rejected = await StartAsync(provider, authoring.Draft.Revision, "preparing-run");
+
+        Assert.Equal(ActivityDraftTestRunReceiptStatus.ValidationRejected.ToString(), rejected.Status);
+        Assert.Equal("activity.draft.stale-revision", rejected.Failure?.Code);
+        Assert.Null(rejected.ArtifactId);
+        Assert.Empty(await provider.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
+    }
+
+    [Fact]
+    public async Task Full_host_rejects_rebinding_an_idempotency_key_to_a_different_request()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring);
+        var original = await StartAsync(provider, authoring.Draft.Revision, "bound-key");
+        await using var scope = provider.CreateAsyncScope();
+        var testRuns = scope.ServiceProvider.GetRequiredService<IActivityDraftTestRunService>();
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            testRuns.StartAsync(new(
+                AuthoringState.DraftId,
+                authoring.Draft.Revision,
+                "bound-key",
+                new Dictionary<string, ActivityDraftTestRunInput>
+                {
+                    ["order"] = new("Present", JsonSerializer.SerializeToElement(new { id = "different-order" }))
+                },
+                "different-correlation")));
+
+        Assert.Equal("activity.test-run.idempotency-mismatch", exception.ErrorCode);
+        Assert.Equal(original.WorkflowExecutionId, Assert.Single(
+            await provider.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync()).WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task Policy_denied_cancellation_is_projected_and_persisted_as_unavailable()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring,
+            cancellationPolicy: new DenyCancellationPolicy());
+        var started = await StartAsync(provider, authoring.Draft.Revision, "policy-denied-cancel");
+        await RedriveAsync(provider);
+        var testRuns = provider.GetRequiredService<IActivityDraftTestRunService>();
+
+        var projected = await testRuns.GetAsync(started.TestRunId);
+        var cancelled = await testRuns.CancelAsync(started.TestRunId);
+        var receipt = await provider.GetRequiredService<IActivityDraftTestRunStore>().FindAsync(started.TestRunId);
+
+        Assert.True(projected.Cancellation.CapabilityAdvertised);
+        Assert.False(projected.Cancellation.Available);
+        Assert.Equal(ActivityDraftTestRunCancellationStatus.Unavailable.ToString(), projected.Cancellation.Status);
+        Assert.Equal("Test policy denies cancellation.", projected.Cancellation.Reason);
+        Assert.Equal(ActivityDraftTestRunCancellationStatus.Unavailable.ToString(), cancelled.Cancellation.Status);
+        Assert.Equal(ActivityDraftTestRunCancellationStatus.Unavailable, receipt?.CancellationStatus);
+    }
+
+    [Fact]
+    public async Task Full_host_fault_reconciles_to_terminal_without_disclosing_provider_payload()
+    {
+        var authoring = AuthoringState.Create();
+        await using var provider = BuildProvider(
+            new InMemoryDocumentStore(CombinedStorageManifest()),
+            TimeProvider.System,
+            authoring,
+            templateCompiler: new FaultingTemplateCompiler());
+
+        var started = await StartAsync(provider, authoring.Draft.Revision, "faulting-run");
+        await RedriveAsync(provider);
+        var faulted = await provider.GetRequiredService<IActivityDraftTestRunService>().GetAsync(started.TestRunId);
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted.ToString(), faulted.Status);
+        Assert.Null(faulted.Failure);
+        Assert.Null(faulted.Reason);
+        Assert.Equal(ActivityDraftTestRunCancellationStatus.Terminal.ToString(), faulted.Cancellation.Status);
+        Assert.NotNull(faulted.OuterActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task Groundwork_sqlite_graph_run_suspends_restarts_in_runtime_only_host_then_reopens_status()
     {
         var clock = new MutableTimeProvider(new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-activity-restart-{Guid.NewGuid():N}.db");
@@ -132,6 +509,7 @@ public sealed class ActivityDraftTestRunTests
         ActivityDraftTestRunView first;
         ActivityDraftTestRunView second;
         string templateId;
+        string outerActivityExecutionId;
         IReadOnlyDictionary<string, long> committedExecutionSequences;
 
         try
@@ -141,10 +519,13 @@ public sealed class ActivityDraftTestRunTests
             {
                 await using var generation1 = BuildProvider(generation1Documents, clock, authoring);
                 first = await StartAsync(generation1, authoring.Draft.Revision, "same-request");
-                second = await StartAsync(generation1, authoring.Draft.Revision, "same-request");
+                var duplicate = await StartAsync(generation1, authoring.Draft.Revision, "same-request");
+                second = await StartAsync(generation1, authoring.Draft.Revision, "new-rerun");
                 await RedriveAsync(generation1);
 
                 Assert.Equal(first.ArtifactId, second.ArtifactId);
+                Assert.Equal(first.TestRunId, duplicate.TestRunId);
+                Assert.Equal(first.WorkflowExecutionId, duplicate.WorkflowExecutionId);
                 Assert.NotEqual(first.WorkflowExecutionId, second.WorkflowExecutionId);
                 var firstStatus = await StatusAsync(generation1, first.WorkflowExecutionId);
                 var secondStatus = await StatusAsync(generation1, second.WorkflowExecutionId);
@@ -165,6 +546,15 @@ public sealed class ActivityDraftTestRunTests
                 }
                 Assert.Single(firstBookmarks);
                 Assert.Single(await generation1.GetRequiredService<IBookmarkStateStore>().ListAsync(second.WorkflowExecutionId));
+                var suspended = await generation1.GetRequiredService<IActivityDraftTestRunService>().GetAsync(first.TestRunId);
+                Assert.Contains(suspended.Status, new[]
+                {
+                    WorkflowExecutionStatus.Running.ToString(),
+                    WorkflowExecutionStatus.Suspended.ToString()
+                });
+                Assert.NotNull(suspended.OuterActivityExecutionId);
+                Assert.False(suspended.Expiration.SourceReferenceExpired);
+                Assert.True(suspended.Expiration.RunStillActive);
 
                 var executions = await generation1.GetRequiredService<IActivityExecutionStateStore>().ListAsync(first.WorkflowExecutionId);
                 Assert.Equal(2, executions.Count);
@@ -175,17 +565,24 @@ public sealed class ActivityDraftTestRunTests
                 Assert.Single((await generation1.GetRequiredService<IDurableValueStateStore>().ListAsync(first.WorkflowExecutionId))
                     .Where(IsBoundaryInput));
 
-                var executable = await generation1.GetRequiredService<IWorkflowExecutableStore>().FindAsync(first.ArtifactId);
+                var artifactId = Assert.IsType<string>(first.ArtifactId);
+                var sourceReferenceId = Assert.IsType<string>(first.SourceReferenceId);
+                var executable = await generation1.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId);
                 Assert.NotNull(executable);
                 templateId = Assert.Single(await generation1.GetRequiredService<IExecutableActivityTemplateStore>().ListAsync()).TemplateId;
                 Assert.Equal("sha256:test-run-suspending-template", executable!.CompatibilityMetadata["activity.templateHash"]);
 
-                clock.Advance(ActivityDraftTestRunPublisher.DefaultRetention + TimeSpan.FromSeconds(1));
+                clock.Advance(ActivityDraftTestRunService.DefaultRetention + TimeSpan.FromSeconds(1));
                 var sweep = await generation1.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync();
                 Assert.False(sweep.DidWork);
-                Assert.NotNull(await generation1.GetRequiredService<IWorkflowExecutableStore>().FindAsync(first.ArtifactId));
+                Assert.NotNull(await generation1.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId));
                 Assert.NotNull(await generation1.GetRequiredService<IExecutableActivityTemplateStore>().FindAsync(templateId));
-                Assert.NotNull(await generation1.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(first.SourceReferenceId));
+                Assert.NotNull(await generation1.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(sourceReferenceId));
+                var expiredButRunning = await generation1.GetRequiredService<IActivityDraftTestRunService>().GetAsync(first.TestRunId);
+                Assert.True(expiredButRunning.Expiration.SourceReferenceExpired);
+                Assert.True(expiredButRunning.Expiration.SourceReferenceRetained);
+                Assert.True(expiredButRunning.Expiration.EvidenceRetained);
+                Assert.True(expiredButRunning.Expiration.RunStillActive);
             }
             finally
             {
@@ -213,6 +610,7 @@ public sealed class ActivityDraftTestRunTests
                 Assert.Equal("completed", output.InlineValue?.GetString());
 
                 var outer = Assert.Single(resumedExecutions.Where(x => x.ParentActivityExecutionId is null));
+                outerActivityExecutionId = outer.Execution.ActivityExecutionId;
                 var hierarchy = await generation2.GetRequiredService<ActivityExecutionHierarchyReader>().ReadAsync(
                     first.WorkflowExecutionId,
                     outer.Execution.ActivityExecutionId,
@@ -230,25 +628,42 @@ public sealed class ActivityDraftTestRunTests
                 Assert.NotNull(layout);
                 Assert.Equal("ExecutedReference", layout!.Selection);
                 Assert.Equal(first.SourceReferenceId, layout.SourceReferenceId);
-
                 var retainedSweep = await generation2.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync();
                 Assert.False(retainedSweep.DidWork);
                 Assert.NotNull(await generation2.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(first.SourceReferenceId));
-
-                var executionStore = generation2.GetRequiredService<IWorkflowExecutionStateStore>();
-                Assert.True(await executionStore.DeleteAsync(first.WorkflowExecutionId));
-                Assert.True(await executionStore.DeleteAsync(second.WorkflowExecutionId));
-                var sweep = await generation2.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync();
-                Assert.Equal(3, sweep.DeletedReferenceCount);
-                Assert.Equal(1, sweep.DeletedArtifactCount);
-                Assert.Equal(1, sweep.DeletedActivityTemplateCount);
-                Assert.Null(await generation2.GetRequiredService<IWorkflowExecutableStore>().FindAsync(first.ArtifactId));
-                Assert.Null(await generation2.GetRequiredService<IExecutableActivityTemplateStore>().FindAsync(templateId));
-                Assert.Null(await generation2.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(first.SourceReferenceId));
             }
             finally
             {
                 await DisposeStoreAsync(generation2Documents);
+            }
+
+            var generation3Documents = await OpenSqliteAsync(connectionString);
+            try
+            {
+                await using var generation3 = BuildProvider(generation3Documents, clock, authoring);
+                var completed = await generation3.GetRequiredService<IActivityDraftTestRunService>().GetAsync(first.TestRunId);
+                Assert.Equal(WorkflowExecutionStatus.Completed.ToString(), completed.Status);
+                Assert.Equal(outerActivityExecutionId, completed.OuterActivityExecutionId);
+                Assert.False(completed.Expiration.RunStillActive);
+                Assert.Equal(
+                    completed,
+                    await generation3.GetRequiredService<IActivityDraftTestRunService>()
+                        .GetByIdempotencyKeyAsync(AuthoringState.DraftId, "same-request"));
+
+                var executionStore = generation3.GetRequiredService<IWorkflowExecutionStateStore>();
+                Assert.True(await executionStore.DeleteAsync(first.WorkflowExecutionId));
+                Assert.True(await executionStore.DeleteAsync(second.WorkflowExecutionId));
+                var sweep = await generation3.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync();
+                Assert.Equal(3, sweep.DeletedReferenceCount);
+                Assert.Equal(1, sweep.DeletedArtifactCount);
+                Assert.Equal(1, sweep.DeletedActivityTemplateCount);
+                Assert.Null(await generation3.GetRequiredService<IWorkflowExecutableStore>().FindAsync(Assert.IsType<string>(first.ArtifactId)));
+                Assert.Null(await generation3.GetRequiredService<IExecutableActivityTemplateStore>().FindAsync(templateId));
+                Assert.Null(await generation3.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(Assert.IsType<string>(first.SourceReferenceId)));
+            }
+            finally
+            {
+                await DisposeStoreAsync(generation3Documents);
             }
         }
         finally
@@ -264,9 +679,10 @@ public sealed class ActivityDraftTestRunTests
         string correlationId)
     {
         await using var scope = provider.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IActivityDraftTestRunPublisher>().StartAsync(new(
+        return await scope.ServiceProvider.GetRequiredService<IActivityDraftTestRunService>().StartAsync(new(
             AuthoringState.DraftId,
             revision,
+            correlationId,
             new Dictionary<string, ActivityDraftTestRunInput>
             {
                 ["order"] = new("Present", JsonSerializer.SerializeToElement(new { id = "order-42" }))
@@ -304,7 +720,12 @@ public sealed class ActivityDraftTestRunTests
         IDocumentStore documents,
         TimeProvider clock,
         AuthoringState authoring,
-        IActivityPublishingAuthorizationContext? authorization = null)
+        IActivityPublishingAuthorizationContext? authorization = null,
+        IActivityTemplateCompiler? templateCompiler = null,
+        IWorkflowExecutableStartPolicy? startPolicy = null,
+        bool makeFirstDispatchAmbiguous = false,
+        string? persistenceScope = null,
+        IActivityDraftTestRunCancellationPolicy? cancellationPolicy = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -315,8 +736,10 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton<IActivityDefinitionDraftStore>(authoring.Drafts);
         services.AddSingleton<IActivityDefinitionLayoutStore>(authoring.Layouts);
         services.AddSingleton<IActivityDefinitionVersionPublicationStore, EmptyPublicationStore>();
-        services.AddSingleton<IActivityTemplateCompiler, SuspendingTemplateCompiler>();
+        services.AddSingleton<IActivityTemplateCompiler>(
+            templateCompiler ?? new SuspendingTemplateCompiler());
         services.AddSingleton<IActivityConstructor, SuspendingActivityConstructor>();
+        services.AddSingleton<IActivityConstructor, FaultingActivityConstructor>();
         if (authorization is not null)
             services.AddSingleton(authorization);
         services.AddSingleton<IActivityExecutionInspectionAuthorizationContext, AllowAllActivityExecutionInspectionAuthorizationContext>();
@@ -327,11 +750,50 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton(documents);
         services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
         services.AddGroundworkRuntimeStores();
+        services.AddGroundworkPublishingStores();
+        if (persistenceScope is not null)
+        {
+            services.Replace(ServiceDescriptor.Scoped<IPersistenceAccessContextAccessor>(
+                _ => GroundworkTestAccess.AccessContext(persistenceScope)));
+        }
+        if (startPolicy is not null)
+        {
+            services.RemoveAll<IWorkflowExecutableStartPolicy>();
+            services.AddSingleton(startPolicy);
+        }
+        if (makeFirstDispatchAmbiguous)
+            DecorateFirstStartDispatchAsAmbiguous(services);
+        if (cancellationPolicy is not null)
+        {
+            services.RemoveAll<IActivityDraftTestRunCancellationPolicy>();
+            services.AddSingleton(cancellationPolicy);
+        }
 
         var provider = services.BuildServiceProvider();
         RegisterConstructors(provider);
         return provider;
     }
+
+    private static void DecorateFirstStartDispatchAsAmbiguous(IServiceCollection services)
+    {
+        var registration = services.Last(x => x.ServiceType == typeof(IWorkflowStartDispatcher));
+        services.Remove(registration);
+        var ambiguity = new AmbiguousDispatchState();
+        services.Add(ServiceDescriptor.Describe(
+            typeof(IWorkflowStartDispatcher),
+            serviceProvider => new ThrowAfterFirstSuccessfulDispatch(
+                (IWorkflowStartDispatcher)CreateService(registration, serviceProvider),
+                ambiguity),
+            registration.Lifetime));
+    }
+
+    private static object CreateService(ServiceDescriptor registration, IServiceProvider serviceProvider) =>
+        registration.ImplementationInstance
+        ?? registration.ImplementationFactory?.Invoke(serviceProvider)
+        ?? ActivatorUtilities.GetServiceOrCreateInstance(
+            serviceProvider,
+            registration.ImplementationType
+            ?? throw new InvalidOperationException("The service registration has no implementation."));
 
     private static ServiceProvider BuildRuntimeOnlyProvider(IDocumentStore documents, TimeProvider clock)
     {
@@ -363,9 +825,22 @@ public sealed class ActivityDraftTestRunTests
     private static async Task<IDocumentStore> OpenSqliteAsync(string connectionString) =>
         await SqliteDocumentStoreFactory.CreateAsync(
             connectionString,
-            ElsaRuntimeStorageManifest.Create(),
+            CombinedStorageManifest(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
             GroundworkTestAccess.DefaultScoped);
+
+    private static StorageManifest CombinedStorageManifest()
+    {
+        var runtime = ElsaRuntimeStorageManifest.Create();
+        var publishing = PublishingGroundworkStorageManifest.Create();
+        return new(
+            new("elsa-activity-test-run-tests"),
+            new("elsa.tests"),
+            new("1.0.0"),
+            runtime.StorageUnits.Concat(publishing.StorageUnits).ToArray(),
+            new HashSet<string> { "optimistic-concurrency" },
+            []);
+    }
 
     private static async ValueTask DisposeStoreAsync(IDocumentStore store)
     {
@@ -473,7 +948,46 @@ public sealed class ActivityDraftTestRunTests
         private static JsonElement Type() => JsonSerializer.SerializeToElement(new { alias = "object" });
     }
 
+    private sealed class FaultingTemplateCompiler : IActivityTemplateCompiler
+    {
+        public ValueTask<ActivityTemplateCompilerResult> CompileAsync(
+            ActivityTemplateCompilerRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var root = new ExecutableNode(
+                "faulting-root",
+                "faulting-root",
+                "test.faulting-activity",
+                "1",
+                new(
+                    FaultingActivityConstructor.ConsumerKeyValue,
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { })),
+                new Dictionary<string, RuntimeInputBinding>(),
+                new Dictionary<string, RuntimeOutputCapture>(),
+                new Dictionary<string, string>());
+            var template = new ExecutableActivityTemplate(
+                "activity-template-test-run-faulting",
+                "sha256:test-run-faulting-template",
+                root,
+                new Dictionary<string, WorkflowExecutableResumeTarget>(),
+                [],
+                [],
+                [new(FaultingActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion)],
+                "test-provider/1",
+                new Dictionary<string, string>(),
+                DateTimeOffset.UnixEpoch);
+            return ValueTask.FromResult(new ActivityTemplateCompilerResult(
+                template,
+                new(1, 0, 0, 1, 0, 0, 0),
+                [],
+                []));
+        }
+    }
+
     private sealed record SuspendingDescriptor;
+    private sealed record FaultingDescriptor;
 
     private sealed class SuspendingActivityConstructor : IActivityConstructor<SuspendingDescriptor>
     {
@@ -502,10 +1016,92 @@ public sealed class ActivityDraftTestRunTests
         }
     }
 
+    private sealed class FaultingActivityConstructor : IActivityConstructor<FaultingDescriptor>
+    {
+        public const string ConsumerKeyValue = "test.faulting-activity";
+        public string ConsumerKey => ConsumerKeyValue;
+
+        public ValueTask<IActivity> Construct(
+            FaultingDescriptor descriptor,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken) => new(new FaultingActivity());
+    }
+
+    private sealed class FaultingActivity : CodeActivity
+    {
+        protected override void Execute(IActivityExecutionContext context) =>
+            throw new InvalidOperationException("provider-secret fault details stay in Runtime Evidence.");
+    }
+
     private sealed class SequentialIdentityGenerator : IIdentityGenerator
     {
         private int _value;
         public string Generate() => $"id-{Interlocked.Increment(ref _value)}";
+    }
+
+    private sealed class DenyStartPolicy : IWorkflowExecutableStartPolicy
+    {
+        public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(
+            WorkflowExecutableStartPolicyContext context,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(WorkflowExecutableStartDecision.Deny(
+                "test-policy-denied",
+                "provider-secret must never reach the activity Test Run response."));
+    }
+
+    private sealed class DenyCancellationPolicy : IActivityDraftTestRunCancellationPolicy
+    {
+        public ValueTask<ActivityDraftTestRunCancellationDecision> EvaluateAsync(
+            ActivityDraftTestRunReceipt receipt,
+            WorkflowExecutionState? execution,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityDraftTestRunCancellationDecision(
+                true,
+                false,
+                "Test policy denies cancellation."));
+    }
+
+    private sealed class ThrowingTemplateCompiler : IActivityTemplateCompiler
+    {
+        public ValueTask<ActivityTemplateCompilerResult> CompileAsync(
+            ActivityTemplateCompilerRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Compilation stopped after the Preparing receipt was persisted.");
+    }
+
+    private sealed class MutableAuthorizationContext(string? tenantId) : IActivityPublishingAuthorizationContext
+    {
+        public string? TenantId { get; set; } = tenantId;
+
+        public bool CanAccessTenant(string? candidateTenantId) =>
+            candidateTenantId is null || StringComparer.Ordinal.Equals(candidateTenantId, TenantId);
+    }
+
+    private sealed class AmbiguousDispatchState
+    {
+        public int HasThrown;
+    }
+
+    private sealed class ThrowAfterFirstSuccessfulDispatch(
+        IWorkflowStartDispatcher inner,
+        AmbiguousDispatchState state) : IWorkflowStartDispatcher
+    {
+        public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
+            WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await inner.DispatchAsync(
+                request,
+                requiredScope,
+                dispatchOptions,
+                cancellationToken);
+            if (Interlocked.Exchange(ref state.HasThrown, 1) == 0)
+                throw new InvalidOperationException("The transport dropped the first dispatch acknowledgement.");
+            return result;
+        }
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
@@ -585,9 +1181,14 @@ public sealed class ActivityDraftTestRunTests
 
     private sealed class DraftStore(ActivityDefinitionDraft draft) : IActivityDefinitionDraftStore
     {
+        private ActivityDefinitionDraft? _draft = draft;
+
+        public void Remove() => _draft = null;
+
         public Task<ActivityDefinitionDraft?> FindAsync(string draftId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<ActivityDefinitionDraft?>(StringComparer.Ordinal.Equals(draftId, draft.Id) ? draft : null);
-        public Task<IReadOnlyList<ActivityDefinitionDraft>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionDraft>>([draft]);
+            Task.FromResult(StringComparer.Ordinal.Equals(draftId, _draft?.Id) ? _draft : null);
+        public Task<IReadOnlyList<ActivityDefinitionDraft>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ActivityDefinitionDraft>>(_draft is null ? [] : [_draft]);
     }
 
     private sealed class LayoutStore(ActivityDefinitionDraftLayout layout) : IActivityDefinitionLayoutStore

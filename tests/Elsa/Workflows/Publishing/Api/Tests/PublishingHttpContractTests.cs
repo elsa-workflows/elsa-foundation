@@ -177,7 +177,7 @@ public sealed class PublishingHttpContractTests
                 "The requested activity draft was not found.",
                 [])));
 
-        await InvokeHandleAsync(notFound, new StartActivityDraftTestRun("missing", 1));
+        await InvokeHandleAsync(notFound, new StartActivityDraftTestRun("missing", 1, "run-1"));
 
         Assert.Equal(StatusCodes.Status404NotFound, notFound.HttpContext.Response.StatusCode);
         Assert.Contains("\"errorCode\":\"activity.draft.not-found\"", await ResponseBodyAsync(notFound), StringComparison.Ordinal);
@@ -185,7 +185,7 @@ public sealed class PublishingHttpContractTests
         var unexpected = CreateEndpoint(
             "Elsa.Workflows.Publishing.Api.Endpoints.ActivityDraftTestRunEndpoint",
             new ExceptionSender(new InvalidOperationException("secret provider payload")));
-        await InvokeHandleAsync(unexpected, new StartActivityDraftTestRun("draft-1", 1));
+        await InvokeHandleAsync(unexpected, new StartActivityDraftTestRun("draft-1", 1, "run-1"));
 
         Assert.Equal(StatusCodes.Status500InternalServerError, unexpected.HttpContext.Response.StatusCode);
         var body = await ResponseBodyAsync(unexpected);

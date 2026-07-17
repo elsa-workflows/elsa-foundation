@@ -198,6 +198,21 @@ public sealed class RuntimeValueBindingContractTests
     }
 
     [Fact]
+    public void RuntimeInputBinding_RoundTripsExplicitNullLiteral()
+    {
+        var binding = new RuntimeInputBinding(
+            inputName: "optional",
+            source: RuntimeInputBindingSource.Literal,
+            literalValue: JsonSerializer.SerializeToElement<object?>(null));
+
+        var json = JsonSerializer.Serialize(binding);
+        var roundTrip = JsonSerializer.Deserialize<RuntimeInputBinding>(json)!;
+
+        Assert.Equal(RuntimeInputBindingSource.Literal, roundTrip.Source);
+        Assert.Equal(JsonValueKind.Null, roundTrip.LiteralValue!.Value.ValueKind);
+    }
+
+    [Fact]
     public void ExecutableNode_SnapshotsBindingCaptureAndMetadataDictionaries()
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>

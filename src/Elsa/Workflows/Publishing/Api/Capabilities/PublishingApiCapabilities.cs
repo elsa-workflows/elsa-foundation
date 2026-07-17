@@ -20,7 +20,11 @@ public static class PublishingApiCapabilities
             new("publication-slots", "publishing/workflows/{definitionId}/slots", templated: true),
             new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true),
             new("workflow-test-runs", "publishing/workflows/{versionId}/test-runs", templated: true),
-            new("workflow-draft-test-runs", "publishing/workflows/drafts/test-runs")
+            new("workflow-draft-test-runs", "publishing/workflows/drafts/test-runs"),
+            new("activity-draft-test-run-dispatch", "publishing/activity-drafts/{draftId}/test-runs", templated: true),
+            new("activity-draft-test-run-status", "publishing/activity-test-runs/{testRunId}", templated: true),
+            new("activity-draft-test-run-idempotency-status", "publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", templated: true),
+            new("activity-draft-test-run-cancel", "publishing/activity-test-runs/{testRunId}/cancel", templated: true)
         ],
         SourceFeatureId);
 }
