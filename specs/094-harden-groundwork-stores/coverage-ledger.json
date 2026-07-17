@@ -1380,11 +1380,11 @@
     {
       "id": "secrets-repository",
       "family": "secrets",
-      "contract": "ISecretRepository",
+      "contract": "ISecretRepository; IRevisionAwareSecretRepository; IPagedSecretRepository",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "TryAdd is read-then-save, List is unbounded, and updates carry no expected revision.",
       "performanceWorkload": "secret-create-read-list",
       "accessPolicy": "ordinary",
