@@ -115,27 +115,37 @@ describe("InspectorPanel slot actions", () => {
   it("keeps full reusable identity, provider, lifecycle, and upgrade availability in the Inspector", () => {
     const node: ActivityNode = {
       ...forEachNode,
-      activityVersionId: "invoice-version-2",
-      activityDefinitionId: "invoice-definition",
-      activityDefinitionVersionId: "invoice-version-2",
-      activityDefinitionVersion: "2.0.0"
+      activityVersionId: "invoice-version-2"
     };
     const container = render(panelElement([], {}, {
       selectedNode: node,
       selectedNodeLabel: "Invoice evaluator",
       selectedActivityType: "Contoso.InvoiceEvaluator",
+      selectedReusableDefinitionId: "invoice-definition",
+      selectedReusableSemanticVersion: "2.0.0",
       selectedReusableVersion: {
-        version: {
-          versionId: "invoice-version-2",
+        definition: {
           definitionId: "invoice-definition",
-          version: "2.0.0",
-          lifecycle: "Active",
-          publishedAt: "2026-07-17T10:00:00Z"
+          activityTypeKey: "Contoso.InvoiceEvaluator",
+          tenantId: null,
+          category: "Finance",
+          displayName: "Invoice evaluator",
+          description: null,
+          contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design", sourceId: null },
+          forkedFrom: null,
+          headVersionId: "invoice-version-3",
+          recommendedVersionId: "invoice-version-3"
         },
-        providerKey: "elsa.activity-graph",
-        providerSchemaVersion: "1",
-        isRecommended: false,
-        actions: []
+        versionId: "invoice-version-2",
+        version: "2.0.0",
+        contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] },
+        provider: {
+          providerKey: "elsa.activity-graph",
+          schemaVersion: "1",
+          manifestFingerprint: "sha256:invoice-v2"
+        },
+        lifecycle: "Active",
+        publishedAt: "2026-07-17T10:00:00Z"
       },
       selectedRecommendedVersion: {
         definitionId: "invoice-definition",

@@ -121,7 +121,7 @@ describe("workflow adapter", () => {
     });
   });
 
-  it("pins the exact reusable definition version identity and projects only its compact canvas facts", () => {
+  it("persists only the exact version ID while deriving reusable canvas facts from the catalog", () => {
     const reusable: ActivityCatalogItem = {
       ...writeLine,
       activityVersionId: "invoice-version-2",
@@ -132,12 +132,6 @@ describe("workflow adapter", () => {
     };
 
     const activity = createActivityNode(reusable, "invoice");
-    const historicalCatalogItem: ActivityCatalogItem = {
-      ...reusable,
-      activityDefinitionId: undefined,
-      activityDefinitionVersionId: undefined,
-      activityDefinitionVersion: undefined
-    };
     const canvas = buildCanvas({
       owner: flowchartRoot([activity]),
       slot: {
@@ -148,13 +142,14 @@ describe("workflow adapter", () => {
         mode: "flowchart",
         activities: [activity]
       }
-    }, [historicalCatalogItem], []);
+    }, [reusable], []);
 
-    expect(activity).toMatchObject({
+    expect(activity).toEqual({
       activityVersionId: "invoice-version-2",
-      activityDefinitionId: "invoice-definition",
-      activityDefinitionVersionId: "invoice-version-2",
-      activityDefinitionVersion: "2.0.0"
+      nodeId: "invoice",
+      inputs: [],
+      outputs: [],
+      structure: null
     });
     expect(canvas.nodes[0]?.data).toMatchObject({
       icon: "reusable",

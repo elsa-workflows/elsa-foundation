@@ -52,7 +52,7 @@ import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
 import { useDialogFocus } from "./useDialogFocus";
-import { useActivityDefinitionVersion } from "../api/activityDesign";
+import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 
 export function WorkflowEditor({
   context,
@@ -160,14 +160,17 @@ export function WorkflowEditor({
     isFlowchartDesigner,
     canAddActivitiesToCanvas
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
-  const inspectedReusableVersion = useActivityDefinitionVersion(
+  const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
+  const inspectedReusableDefinitionId = inspectedCatalogItem?.activityDefinitionId ?? null;
+  const inspectedReusableVersion = useFullActivityDefinitionVersion(
     context,
-    inspectedNode?.activityDefinitionId ?? "",
-    inspectedNode?.activityDefinitionVersionId ?? null,
-    Boolean(inspectedNode?.activityDefinitionId && inspectedNode?.activityDefinitionVersionId)
+    inspectedNode?.activityVersionId ?? null,
+    Boolean(inspectedReusableDefinitionId)
   );
-  const inspectedRecommendation = inspectedNode?.activityDefinitionId
-    ? recommendedDefinitions.find(item => item.definitionId === inspectedNode.activityDefinitionId) ?? null
+  const inspectedRecommendationDefinitionId = inspectedReusableVersion.data?.definition.definitionId
+    ?? inspectedReusableDefinitionId;
+  const inspectedRecommendation = inspectedRecommendationDefinitionId
+    ? recommendedDefinitions.find(item => item.definitionId === inspectedRecommendationDefinitionId) ?? null
     : null;
 
   const paletteGroups = useMemo(() => groupActivityPalette(paletteCatalog), [paletteCatalog]);
@@ -487,7 +490,6 @@ export function WorkflowEditor({
 
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
-  const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : undefined;
   const inspectedLabel = inspectedNode
     ? (nodes.find(node => node.id === inspectedNode.nodeId)?.data.label
       ?? (inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode.nodeId))
@@ -547,8 +549,10 @@ export function WorkflowEditor({
           selectedActivityType={inspectedNode ? (inspectedDescriptor?.typeName ?? catalogByVersion.get(inspectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}
           selectedDescriptor={inspectedDescriptor}
           selectedNodeAvailability={inspectedNodeAvailability}
+          selectedReusableDefinitionId={inspectedReusableDefinitionId}
+          selectedReusableSemanticVersion={inspectedCatalogItem?.activityDefinitionVersion}
           selectedReusableVersion={inspectedReusableVersion.data}
-          selectedReusableVersionStatus={!inspectedNode?.activityDefinitionId
+          selectedReusableVersionStatus={!inspectedReusableDefinitionId
             ? "idle"
             : inspectedReusableVersion.isPending
               ? "loading"

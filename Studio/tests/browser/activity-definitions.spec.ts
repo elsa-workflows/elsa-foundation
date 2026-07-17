@@ -246,6 +246,17 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await recommended.focus();
   await page.keyboard.press("Enter");
 
+  await expect(page.getByText("Draft saved and reloaded")).toBeVisible();
+  expect(journey.draftWrites).toBe(1);
+  expect(journey.draftReads).toBe(1);
+  expect(journey.submittedRoot).toEqual({
+    nodeId: "invoice-boundary",
+    activityVersionId: "published-version-1",
+    inputs: [],
+    outputs: [],
+    structure: null
+  });
+  expect(JSON.stringify(journey.submittedRoot)).not.toContain("activityDefinition");
   await expect(page.getByRole("button", { name: /Published browser activity exact version 2\.0\.0/ })).toBeVisible();
   const inspector = page.getByRole("complementary", { name: "Activity inspector" });
   await expect(inspector).toContainText("activity-def-browser");
@@ -514,7 +525,24 @@ async function mockActivityDefinitionAuthoring(page: Page) {
 }
 
 async function mockReusableBoundaryJourney(page: Page) {
-  const state = { dispatchWrites: 0 };
+  const state: {
+    dispatchWrites: number;
+    draftWrites: number;
+    draftReads: number;
+    submittedRoot: unknown;
+  } = {
+    dispatchWrites: 0,
+    draftWrites: 0,
+    draftReads: 0,
+    submittedRoot: null
+  };
+  let workflowDraft = {
+    id: "workflow-draft-1",
+    definitionId: "workflow-definition-1",
+    state: { rootActivity: null as Record<string, unknown> | null },
+    layout: [] as unknown[],
+    validationErrors: [] as unknown[]
+  };
   await page.unroute("**/capabilities");
   await page.unroute("**/design/activities/catalog");
   await page.route("**/capabilities", route => route.fulfill({
@@ -528,6 +556,13 @@ async function mockReusableBoundaryJourney(page: Page) {
           { rel: "activity-catalog", href: "design/activities/catalog" },
           { rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" },
           { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
+        ]
+      },
+      {
+        id: "elsa.api.workflow-design",
+        contractVersion: "1",
+        links: [
+          { rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }
         ]
       },
       {
@@ -588,6 +623,34 @@ async function mockReusableBoundaryJourney(page: Page) {
       publishedAt: "2026-07-17T10:00:00Z"
     })
   }));
+  await page.route("**/design/workflows/drafts/workflow-draft-1", async route => {
+    if (route.request().method() === "PUT") {
+      state.draftWrites += 1;
+      const submitted = route.request().postDataJSON() as {
+        state: { rootActivity?: Record<string, unknown> | null };
+        layout: unknown[];
+      };
+      state.submittedRoot = submitted.state.rootActivity ?? null;
+      const root = submitted.state.rootActivity;
+      workflowDraft = {
+        ...workflowDraft,
+        state: {
+          rootActivity: root ? {
+            nodeId: root.nodeId,
+            activityVersionId: root.activityVersionId,
+            inputs: root.inputs,
+            outputs: root.outputs,
+            structure: root.structure
+          } : null
+        },
+        layout: submitted.layout
+      };
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(workflowDraft) });
+    }
+
+    state.draftReads += 1;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(workflowDraft) });
+  });
   await page.route("**/runtime/executables/workflow-artifact-1/execute", route => {
     state.dispatchWrites += 1;
     return route.fulfill({

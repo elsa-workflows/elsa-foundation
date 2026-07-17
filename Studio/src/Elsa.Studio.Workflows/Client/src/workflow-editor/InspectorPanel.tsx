@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, Repeat2 } from "lucide-react";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
-import type { ActivityDefinitionVersionManagementView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
+import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
@@ -31,7 +31,9 @@ interface InspectorPanelProps {
   selectedActivityType: string;
   selectedDescriptor: StudioActivityDescriptor | null;
   selectedNodeAvailability: ActivityAvailabilityDiagnosticEntry | null;
-  selectedReusableVersion?: ActivityDefinitionVersionManagementView | null;
+  selectedReusableDefinitionId?: string | null;
+  selectedReusableSemanticVersion?: string | null;
+  selectedReusableVersion?: ActivityDefinitionVersionView | null;
   selectedReusableVersionStatus?: "idle" | "loading" | "ready" | "failed";
   selectedRecommendedVersion?: RecommendedActivityDefinition | null;
   selectedSlots: ChildSlot[];
@@ -64,6 +66,8 @@ export function InspectorPanel({
   selectedActivityType,
   selectedDescriptor,
   selectedNodeAvailability,
+  selectedReusableDefinitionId,
+  selectedReusableSemanticVersion,
   selectedReusableVersion,
   selectedReusableVersionStatus = "idle",
   selectedRecommendedVersion,
@@ -109,9 +113,11 @@ export function InspectorPanel({
         <dt>Activity version</dt>
         <dd>{selectedNode.activityVersionId}</dd>
       </dl>
-      {selectedNode.activityDefinitionId ? (
+      {selectedReusableDefinitionId ? (
         <ReusableActivityIdentity
           node={selectedNode}
+          definitionId={selectedReusableDefinitionId}
+          semanticVersion={selectedReusableSemanticVersion}
           version={selectedReusableVersion}
           status={selectedReusableVersionStatus}
           recommendation={selectedRecommendedVersion}
@@ -199,38 +205,42 @@ export function InspectorPanel({
 
 function ReusableActivityIdentity({
   node,
+  definitionId,
+  semanticVersion,
   version,
   status,
   recommendation
 }: {
   node: ActivityNode;
-  version?: ActivityDefinitionVersionManagementView | null;
+  definitionId: string;
+  semanticVersion?: string | null;
+  version?: ActivityDefinitionVersionView | null;
   status: "idle" | "loading" | "ready" | "failed";
   recommendation?: RecommendedActivityDefinition | null;
 }) {
   const upgradeAvailable = Boolean(recommendation
     && recommendation.isAvailable
-    && recommendation.definitionId === node.activityDefinitionId
-    && recommendation.versionId !== node.activityDefinitionVersionId);
+    && recommendation.definitionId === (version?.definition.definitionId ?? definitionId)
+    && recommendation.versionId !== node.activityVersionId);
   const recommendedVersion = upgradeAvailable ? recommendation : null;
   return (
     <section className="wf-reusable-identity" aria-label="Reusable activity identity">
       <h4>Reusable boundary</h4>
       <dl>
         <dt>Definition ID</dt>
-        <dd>{node.activityDefinitionId}</dd>
+        <dd>{version?.definition.definitionId ?? definitionId}</dd>
         <dt>Version ID</dt>
-        <dd>{node.activityDefinitionVersionId ?? node.activityVersionId}</dd>
+        <dd>{version?.versionId ?? node.activityVersionId}</dd>
         <dt>Exact version</dt>
-        <dd>{node.activityDefinitionVersion ?? version?.version.version ?? "Unknown"}</dd>
+        <dd>{version?.version ?? semanticVersion ?? "Unknown"}</dd>
         {version ? (
           <>
             <dt>Provider</dt>
-            <dd>{version.providerKey}</dd>
+            <dd>{version.provider.providerKey}</dd>
             <dt>Provider schema</dt>
-            <dd>{version.providerSchemaVersion}</dd>
+            <dd>{version.provider.schemaVersion}</dd>
             <dt>Lifecycle</dt>
-            <dd>{version.version.lifecycle}</dd>
+            <dd>{version.lifecycle}</dd>
           </>
         ) : null}
       </dl>

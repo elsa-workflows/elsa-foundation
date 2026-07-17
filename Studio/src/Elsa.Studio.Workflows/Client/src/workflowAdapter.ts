@@ -743,15 +743,9 @@ export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
 
 export function createActivityNode(activity: ActivityCatalogItem, nodeId: string): ActivityNode {
   const template = activity.authoringTemplate ? structuredClone(activity.authoringTemplate) : null;
-  const reusableIdentity = activity.activityDefinitionId ? {
-    activityDefinitionId: activity.activityDefinitionId,
-    activityDefinitionVersionId: activity.activityDefinitionVersionId ?? activity.activityVersionId,
-    activityDefinitionVersion: activity.activityDefinitionVersion ?? activity.version
-  } : {};
   return template
-    ? { ...template, ...reusableIdentity, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
+    ? { ...template, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
     : {
-        ...reusableIdentity,
         nodeId,
         activityVersionId: activity.activityVersionId,
         inputs: [],
@@ -807,8 +801,8 @@ function createWorkflowNode(
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
-      activityDefinitionVersion: activity.activityDefinitionVersion ?? catalogItem?.activityDefinitionVersion,
-      icon: activity.activityDefinitionId ? "reusable" : resolveActivityIcon(catalogItem),
+      activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
+      icon: resolveActivityIcon(catalogItem),
       childSlots: getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),

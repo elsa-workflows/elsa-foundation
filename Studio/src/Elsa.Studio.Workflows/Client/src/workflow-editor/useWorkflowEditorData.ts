@@ -84,7 +84,7 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     markSaved(nextDraft);
     resetHistory(nextDraft);
     loadDraft(nextDraft);
-    const activities = nextCatalog.activities ?? [];
+    const activities = decorateReusableCatalog(nextCatalog.activities ?? [], nextRecommendedDefinitions);
     setCatalog(activities);
     setRecommendedDefinitions(nextRecommendedDefinitions);
     const nextPaletteCatalog = projectRecommendedPalette(activities, nextRecommendedDefinitions);
@@ -141,6 +141,22 @@ export function projectRecommendedPalette(
     });
     return result;
   }, nativeActivities);
+}
+
+export function decorateReusableCatalog(
+  catalog: ActivityCatalogItem[],
+  recommendations: RecommendedActivityDefinition[]
+): ActivityCatalogItem[] {
+  const recommendationByType = new Map(recommendations.map(recommendation => [recommendation.activityTypeKey, recommendation]));
+  return catalog.map(activity => {
+    const recommendation = recommendationByType.get(activity.activityTypeKey);
+    return recommendation ? {
+      ...activity,
+      activityDefinitionId: recommendation.definitionId,
+      activityDefinitionVersionId: activity.activityVersionId,
+      activityDefinitionVersion: activity.version
+    } : activity;
+  });
 }
 
 function toActivityDescriptor(activity: ActivityCatalogItem): StudioActivityDescriptor {

@@ -846,7 +846,7 @@ describe("workflows module", () => {
       if (url.includes("/activities")) return response({ activities: [
         activity({
           activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.NativeWriteLine",
           category: "Primitives",
           displayName: "Write Line",
           description: "Writes a line to the console."
@@ -889,7 +889,7 @@ describe("workflows module", () => {
 
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-root");
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-v1");
-    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.NativeWriteLine");
 
     await unmount();
   });

@@ -73,9 +73,6 @@ export interface WorkflowDefinitionState {
 export interface ActivityNode {
   nodeId: string;
   activityVersionId: string;
-  activityDefinitionId?: string;
-  activityDefinitionVersionId?: string;
-  activityDefinitionVersion?: string;
   inputs: unknown[];
   outputs: unknown[];
   structure?: ActivityNodeStructure | null;
@@ -130,7 +127,7 @@ export interface ActivityCatalogItem {
   ports?: unknown[];
   containerStructure?: Record<string, unknown> | null;
   authoringTemplate?: ActivityNode;
-  /** Stable reusable-activity identity. Present only on the exact recommended picker projection. */
+  /** Transient reusable identity derived from catalog and recommendation data; never part of ActivityNode wire state. */
   activityDefinitionId?: string;
   activityDefinitionVersionId?: string;
   activityDefinitionVersion?: string;

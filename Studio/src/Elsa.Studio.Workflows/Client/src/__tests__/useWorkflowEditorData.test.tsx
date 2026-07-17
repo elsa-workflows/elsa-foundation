@@ -71,6 +71,9 @@ function Probe({ context }: { context: StudioEndpointContext }) {
         {data.expressionDescriptors.map(descriptor => descriptor.type).join(",")}
       </output>
       <output data-testid="palette">{data.paletteCatalog.map(activity => activity.activityVersionId).join(",")}</output>
+      <output data-testid="catalog">
+        {data.catalog.map(activity => `${activity.activityVersionId}:${activity.activityDefinitionVersion ?? "-"}`).join(",")}
+      </output>
       <button type="button" onClick={() => void data.reload()}>Reload definition</button>
       <button type="button" onClick={() => void data.reloadExpressionDescriptors()}>Retry descriptors</button>
     </div>
@@ -226,6 +229,8 @@ describe("useWorkflowEditorData expression descriptor contract", () => {
     const container = render(api.context);
 
     await waitFor(() => expect(container.querySelector("[data-testid='palette']")?.textContent).toBe("write-line-v1,invoice-v2"));
+    expect(container.querySelector("[data-testid='catalog']")?.textContent)
+      .toBe("write-line-v1:-,invoice-v10:10.0.0,invoice-v2:2.0.0");
   });
 });
 
