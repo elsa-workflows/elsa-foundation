@@ -150,7 +150,18 @@ internal sealed class ActivityPublicationReviewPolicy(
             HeadVersionId = headVersionId,
             TemplateHash = template?.TemplateHash,
             template?.ProviderFingerprint,
-            Diff = diff,
+            Diff = diff is null
+                ? null
+                : new
+                {
+                    diff.Compatibility,
+                    diff.RequiredBump,
+                    diff.BehaviorChanged,
+                    diff.Provider,
+                    diff.Summary,
+                    diff.Changes,
+                    diff.Diagnostics
+                },
             RequiredBump = requiredBump.ToString(),
             ValidVersions = validVersions,
             Dependencies = dependencies,

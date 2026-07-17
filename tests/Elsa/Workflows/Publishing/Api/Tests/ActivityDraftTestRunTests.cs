@@ -555,8 +555,8 @@ public sealed class ActivityDraftTestRunTests
                 State = new(
                     new(
                         "1",
-                        [new("order", "Order", new("object"), true, null, WellKnownRuntimeDurableValueStorageDrivers.Json)],
-                        [new("result", "Result", new("object"), true, WellKnownRuntimeDurableValueStorageDrivers.Json)],
+                        [new("order", "Order", new("object"), true, false, null, WellKnownRuntimeDurableValueStorageDrivers.Json)],
+                        [new("result", "Result", new("object"), true, false, WellKnownRuntimeDurableValueStorageDrivers.Json)],
                         [new("done", "Done", true)]),
                     new("test.provider", "1", JsonSerializer.SerializeToElement(new { })),
                     new Dictionary<string, string>())

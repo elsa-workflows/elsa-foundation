@@ -185,7 +185,7 @@ public sealed class WorkflowExecutableCompilerTests
         var contract = new ActivityContract(
             "1",
             [],
-            [new("result", "Result", new TypeReference("Object"), true, driver.DriverKey)],
+            [new("result", "Result", new TypeReference("Object"), true, false, driver.DriverKey)],
             []);
         var outputTarget = new WorkflowArgumentState(
             "result",
@@ -1357,6 +1357,7 @@ public sealed class WorkflowExecutableCompilerTests
             StorageDriverType: null,
             DisplayName: name,
             Category: null,
+            IsNullable: !isRequired,
             IsRequired: isRequired,
             DefaultValue: defaultValue,
             DefaultSyntax: defaultSyntax);
