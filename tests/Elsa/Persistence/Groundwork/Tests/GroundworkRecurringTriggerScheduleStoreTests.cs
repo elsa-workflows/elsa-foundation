@@ -240,6 +240,36 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task PreparePublication_StagesCreateOnlyProjectionState(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var observingStore = new GroundworkFailureInjectingDocumentStore(
+            fixture.DocumentStore,
+            fixture.BoundedDocumentStore,
+            fixture.DocumentStore.Access,
+            new GroundworkFailureController());
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            observingStore,
+            GroundworkTestSerialization.Serializer,
+            observingStore);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [NewSchedule(
+                "artifact-1",
+                "node-a",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-1",
+                slotId: "slot-a")]);
+
+        var projectionSave = Assert.Single(observingStore.StagedSaves.Where(request =>
+            request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind));
+        Assert.Equal(0, projectionSave.ExpectedVersion);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task ActivatePublication_StagesProjectionStateWithLoadedVersions(string provider)
     {
         await using var fixture = CreateStore(provider);
@@ -260,16 +290,61 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
             "publication-2",
             [NewSchedule("artifact-2", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-2", slotId: "slot-b")]);
 
+        await store.ActivatePublicationAsync("publication-1", replacedPublicationId: null);
+        var stagedBeforeReplacement = observingStore.StagedSaves.Count;
         await store.ActivatePublicationAsync("publication-2", "publication-1");
 
         var activationProjectionSaves = observingStore.StagedSaves
+            .Skip(stagedBeforeReplacement)
             .Where(request =>
                 request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind &&
                 request.ExpectedVersion is not null)
             .ToArray();
-        Assert.Equal([1L, 1L], activationProjectionSaves.Select(request => request.ExpectedVersion));
+        Assert.Equal([1L, 2L], activationProjectionSaves.Select(request => request.ExpectedVersion).Order());
         Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-2", StringComparison.Ordinal));
         Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-1", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ActivatePublication_RejectsDelayedReplacementOfInactivePredecessor(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRecurringTriggerScheduleStore store = NewStore(fixture);
+
+        await store.PreparePublicationAsync(
+            "publication-old",
+            [NewSchedule(
+                "artifact-old",
+                "node-old",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-old",
+                slotId: "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-a",
+            [NewSchedule(
+                "artifact-a",
+                "node-a",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-a",
+                slotId: "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-b",
+            [NewSchedule(
+                "artifact-b",
+                "node-b",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-b",
+                slotId: "slot-a")]);
+        await store.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await store.ActivatePublicationAsync("publication-a", "publication-old");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.ActivatePublicationAsync("publication-b", "publication-old").AsTask());
+
+        Assert.True(Assert.Single(await store.ListByPublicationAsync("publication-a")).IsActive);
+        Assert.False(Assert.Single(await store.ListByPublicationAsync("publication-b")).IsActive);
     }
 
     [Theory]

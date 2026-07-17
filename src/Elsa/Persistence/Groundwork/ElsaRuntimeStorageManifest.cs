@@ -2,6 +2,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 
 namespace Elsa.Persistence.Groundwork;
@@ -13,10 +14,13 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 public static class ElsaRuntimeStorageManifest
 {
-    // Composite-index components use their domain bounds rather than the legacy 450-character fallback.
-    // These values are guarded by runtime-model and SQL Server route-admission tests.
+    // Composite-index components use explicit provider-neutral bounds. Stimulus hashes retain the legacy
+    // 450-character contract while stimulus types are narrower so the scoped composite fits SQL Server.
+    // These values are guarded by manifest and SQL Server route-admission tests.
     public const int RuntimeStatusProjectionLength = 32;
     public const int WorkflowDispatchIdProjectionLength = 76;
+    public const int StimulusHashProjectionLength = LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength;
+    public const int StimulusTypeProjectionLength = 256;
 
     // FROZEN storage-manifest version. This is NOT a document migration knob: per-kind document schema versions
     // live separately in ElsaRuntimeDocumentVersions.Current, and the document parser accepts only their positive
@@ -667,6 +671,15 @@ public static class ElsaRuntimeStorageManifest
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);
+
+    internal static ProjectedColumnDefinition[] BoundStimulusProjectionColumns(
+        IEnumerable<ProjectedColumnDefinition> columns) =>
+        columns.Select(column => column.LogicalName switch
+        {
+            ByStimulusIndex => column with { Length = StimulusHashProjectionLength },
+            ByStimulusTypeIndex => column with { Length = StimulusTypeProjectionLength },
+            _ => column
+        }).ToArray();
 
     private static StorageUnit Unit(
         string documentKind,

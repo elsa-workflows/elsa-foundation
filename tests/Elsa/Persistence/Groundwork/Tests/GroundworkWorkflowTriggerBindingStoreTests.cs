@@ -93,6 +93,61 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task Save_AcceptsAnIdenticalConcurrentWinner(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        var binding = Binding("artifact-1", "node-a", "Event", "hash-order");
+        IWorkflowTriggerBindingStore seedStore = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        await seedStore.SaveAsync(binding);
+
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(1, request.ExpectedVersion);
+                await seedStore.SaveAsync(binding);
+            }
+        };
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var replay = await store.SaveAsync(binding);
+
+        Assert.Same(binding, replay);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task PreparePublication_StagesCreateOnlyProjectionState(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        var observingStore = new GroundworkFailureInjectingDocumentStore(
+            fixture.DocumentStore,
+            fixture.BoundedDocumentStore,
+            fixture.DocumentStore.Access,
+            new GroundworkFailureController());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            observingStore,
+            GroundworkTestSerialization.Serializer,
+            observingStore);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [PublicationBinding("publication-1", "artifact-1", "node-a", "slot-a")]);
+
+        var projectionSave = Assert.Single(observingStore.StagedSaves.Where(request =>
+            request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind));
+        Assert.Equal(0, projectionSave.ExpectedVersion);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task ActivatePublication_StagesProjectionStateWithLoadedVersions(string provider)
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
@@ -113,16 +168,49 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             "publication-2",
             [PublicationBinding("publication-2", "artifact-2", "node-b", "slot-b")]);
 
+        await store.ActivatePublicationAsync("publication-1", replacedPublicationId: null);
+        var stagedBeforeReplacement = observingStore.StagedSaves.Count;
         await store.ActivatePublicationAsync("publication-2", "publication-1");
 
         var activationProjectionSaves = observingStore.StagedSaves
+            .Skip(stagedBeforeReplacement)
             .Where(request =>
                 request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind &&
                 request.ExpectedVersion is not null)
             .ToArray();
-        Assert.Equal([1L, 1L], activationProjectionSaves.Select(request => request.ExpectedVersion));
+        Assert.Equal([1L, 2L], activationProjectionSaves.Select(request => request.ExpectedVersion).Order());
         Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-2", StringComparison.Ordinal));
         Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-1", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ActivatePublication_RejectsDelayedReplacementOfInactivePredecessor(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+
+        await store.PreparePublicationAsync(
+            "publication-old",
+            [PublicationBinding("publication-old", "artifact-old", "node-old", "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-a",
+            [PublicationBinding("publication-a", "artifact-a", "node-a", "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-b",
+            [PublicationBinding("publication-b", "artifact-b", "node-b", "slot-a")]);
+        await store.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await store.ActivatePublicationAsync("publication-a", "publication-old");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.ActivatePublicationAsync("publication-b", "publication-old").AsTask());
+
+        Assert.True(Assert.Single(await store.ListByPublicationAsync("publication-a")).IsActive);
+        Assert.False(Assert.Single(await store.ListByPublicationAsync("publication-b")).IsActive);
     }
 
     private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>

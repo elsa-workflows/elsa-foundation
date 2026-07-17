@@ -394,7 +394,8 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
       ]
     },
     {
@@ -819,7 +820,8 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
       ]
     },
     {
@@ -957,7 +959,8 @@
       "deliveryOwner": "#645/boundary-7-bounded-queries-and-boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTriggerBindingStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkAddedIndexBackfillRegressionTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkAddedIndexBackfillRegressionTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
       ]
     },
     {
@@ -1001,7 +1004,8 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTriggerBindingStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
       ]
     },
     {
