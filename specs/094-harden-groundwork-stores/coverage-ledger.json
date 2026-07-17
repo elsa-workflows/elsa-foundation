@@ -445,7 +445,7 @@
       "outcome": "specialized-primitive",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Fence validation has a TOCTOU window and correctness relies on process-local locks.",
       "performanceWorkload": "checkpoint-commit",
       "accessPolicy": "ordinary",
