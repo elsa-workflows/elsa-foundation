@@ -49,7 +49,8 @@ public sealed class ReusableActivityAuthoringService(
         var contract = ToDomainContract(command.Contract);
         EnsureAuthorableProvider(command.Provider);
         EnsureAuthorableContract(contract, new("ActivityDraft", draftId, definitionId, Revision: 1));
-        var definition = NewDefinition(definitionId, typeKeyPolicy.Generate(command.DisplayName, definitionId), command.Category, command.DisplayName, command.Description, now);
+        var activityTypeKey = ResolveActivityTypeKey(command.ActivityTypeKey, command.DisplayName, definitionId);
+        var definition = NewDefinition(definitionId, activityTypeKey, command.Category, command.DisplayName, command.Description, now);
         var authoring = NewAuthoring(definitionId, new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design), null, now);
         var draft = NewDraft(draftId, definitionId, null, contract, command.Provider, now);
         var layout = NewDraftLayout(draftId, command.Layout, now);
@@ -721,6 +722,28 @@ public sealed class ReusableActivityAuthoringService(
         ActivityDiagnosticOrderer.Order(validation.Diagnostics));
 
     private string NewId(string prefix) => $"{prefix}-{identityGenerator.Generate()}";
+
+    private string ResolveActivityTypeKey(string? requestedActivityTypeKey, string displayName, string definitionId)
+    {
+        if (requestedActivityTypeKey is null)
+            return typeKeyPolicy.Generate(displayName, definitionId);
+        if (!typeKeyPolicy.Rules.AllowsPreCreationOverride)
+            throw BadRequest("An activity type key override is not allowed by the active key policy.");
+
+        try
+        {
+            return typeKeyPolicy.NormalizeAndValidateOverride(requestedActivityTypeKey);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new ActivityAuthoringException(
+                400,
+                "activity.definition.key-invalid",
+                "Invalid activity definition key",
+                "The supplied activity type key does not satisfy the advertised activity type key rules.",
+                innerException: exception);
+        }
+    }
 
     private static ActivityContract ToDomainContract(ActivityContractView contract)
     {

@@ -194,6 +194,7 @@ public sealed record ActivityContractTypeCapability(
 
 public sealed record ActivityTypeKeyRules(
     bool ServerGenerated,
+    bool AllowsPreCreationOverride,
     bool Immutable,
     string Prefix,
     string Pattern,

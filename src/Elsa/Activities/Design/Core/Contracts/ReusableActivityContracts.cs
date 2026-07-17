@@ -44,6 +44,8 @@ public interface IActivityTypeKeyPolicy
     ActivityTypeKeyRules Rules { get; }
 
     string Generate(string displayName, string definitionId);
+
+    string NormalizeAndValidateOverride(string activityTypeKey);
 }
 
 public interface IActivityProviderRegistry

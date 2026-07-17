@@ -24,7 +24,10 @@ Stable Activity Catalog identity and lineage.
 
 Invariants:
 
-- `(TenantId, ActivityTypeKey)` is unique. Normal authoring never accepts this key: the server generates it from the display name plus the new definition identity, and it is immutable thereafter.
+- `(TenantId, ActivityTypeKey)` is unique. Normal authoring generates the key from the display name
+  plus the new definition identity unless an advanced author supplies a pre-creation override. The
+  server normalizes and validates an override against its advertised prefix, pattern, maximum length,
+  and collision scope; collisions fail without suffixing. The persisted key is immutable thereafter.
 - Changing display metadata does not create a version and does not affect behavior hashes.
 - `HeadVersionId` changes only inside successful publication.
 - Exact version resolution never uses `HeadVersionId`; it exists for authoring concurrency and convenience reads.
