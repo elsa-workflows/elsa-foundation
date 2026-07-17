@@ -1475,8 +1475,7 @@ describe("Activity Definition publication", () => {
       receiptOverrides: { status: "Preparing" },
       expectedMessage: "not in a recognized terminal state"
     }
-  ] satisfies Array<{ name: string; receiptOverrides: Record<string, unknown>; expectedMessage: string }>)
-  ("keeps an unresolved $name reconciliation-only without opening a second publication", async ({ receiptOverrides, expectedMessage }) => {
+  ] satisfies Array<{ name: string; receiptOverrides: Record<string, unknown>; expectedMessage: string }>)("keeps an unresolved $name reconciliation-only without opening a second publication", async ({ receiptOverrides, expectedMessage }) => {
     let preflightCalls = 0;
     let publishCalls = 0;
     const rendered = renderPage({
