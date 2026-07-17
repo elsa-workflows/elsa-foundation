@@ -38,7 +38,7 @@ As the parent-program owner, I need the checked task ledgers and parent audit to
 - **FR-006**: TestRun cleanup MUST make bounded progress through every matching child, including more than one query page.
 - **FR-007**: Redrive MUST use the safe disposition response documented by spec 101; list and detail inspection MUST expose the same safe failure evidence.
 - **FR-008**: Failure classification and identifiers MUST be projected from known values or deterministic identities rather than arbitrary incident metadata.
-- **FR-009**: Groundwork dispatch queries and outbox claims MUST apply stable ordering and limits in the provider query rather than scanning every matching provider page.
+- **FR-009**: Groundwork dispatch queries and outbox claims MUST apply stable ordering and limits in the provider query rather than scanning every matching provider page, and their physical routes MUST pass supported-provider admission limits.
 - **FR-010**: Safe retry scheduling and attempt evidence required by #681 MUST be produced by runtime code and exposed without payload leakage.
 - **FR-011**: Groundwork convergence, waited TestRun terminal outcomes, child run-kind inspection, published-child selection, and integrated two-node DispatchWorkflow behavior MUST have executable acceptance tests.
 - **FR-012**: The parent audit and task ledgers MUST state only evidence supported by existing tests and commits.

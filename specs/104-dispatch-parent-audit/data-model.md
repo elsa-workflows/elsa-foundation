@@ -17,6 +17,15 @@
 - Stable key: `(CreatedAt, DispatchId)`.
 - Applies to lifecycle queries used by retention and TestRun cleanup.
 - Repeated bounded pages must advance even when earlier records remain retained or already requested for cancellation.
+- The deterministic dispatch ID projection is 76 UTF-16 code units; test-scope IDs are bounded to
+  128 so the largest scoped composite remains within SQL Server's 1,700-byte index-key limit.
+
+## Post-commit outbox selection
+
+- Provider order uses status/filter fields, temporal availability, recorded time, and Groundwork's
+  implicit ordinal document-identity tie-breaker.
+- Intent kinds are bounded to 230 UTF-16 code units; workflow execution IDs retain the existing
+  450-unit portable projection.
 
 ## Conditional dispatch deletion
 

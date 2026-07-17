@@ -3,13 +3,15 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>Immutable test-run identity and persistence context propagated through runtime execution.</summary>
 public sealed record WorkflowTestScope
 {
+    public const int MaximumScopeIdLength = 128;
+
     public WorkflowTestScope(
         string scopeId,
         DateTimeOffset expiresAt,
         string? tenantId,
         WorkflowExecutionPartition partition)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
+        ValidateScopeId(scopeId, nameof(scopeId));
         ArgumentNullException.ThrowIfNull(partition);
         if (expiresAt == default || expiresAt == DateTimeOffset.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(expiresAt), "A workflow test scope requires a finite expiry.");
@@ -29,6 +31,17 @@ public sealed record WorkflowTestScope
 
     /// <summary>Returns true at and after the finite expiry boundary.</summary>
     public bool IsExpired(DateTimeOffset observedAt) => ExpiresAt <= observedAt;
+
+    internal static void ValidateScopeId(string scopeId, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scopeId, parameterName);
+        if (scopeId.Length > MaximumScopeIdLength)
+        {
+            throw new ArgumentException(
+                $"A workflow test-scope ID must be at most {MaximumScopeIdLength} UTF-16 code units.",
+                parameterName);
+        }
+    }
 
     /// <summary>Compares every immutable scope fact using provider-neutral ordinal semantics.</summary>
     public static bool ContextEquals(WorkflowTestScope? left, WorkflowTestScope? right) =>
@@ -106,7 +119,7 @@ public sealed record WorkflowTestScopeCloseRequest
         WorkflowTestScopeCloseReason reason,
         DateTimeOffset requestedAt)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
+        WorkflowTestScope.ValidateScopeId(scopeId, nameof(scopeId));
         if (!Enum.IsDefined(reason))
             throw new ArgumentOutOfRangeException(nameof(reason));
         if (requestedAt == default)
@@ -149,8 +162,8 @@ public sealed record WorkflowTestScopePageQuery(
             throw new ArgumentOutOfRangeException(nameof(PageSize), "A workflow test-scope page size must be greater than zero.");
         if (State is { } state && !Enum.IsDefined(state))
             throw new ArgumentOutOfRangeException(nameof(State));
-        if (ContinuationToken is not null && string.IsNullOrWhiteSpace(ContinuationToken))
-            throw new ArgumentException("A workflow test-scope continuation token cannot be blank.", nameof(ContinuationToken));
+        if (ContinuationToken is not null)
+            WorkflowTestScope.ValidateScopeId(ContinuationToken, nameof(ContinuationToken));
     }
 }
 

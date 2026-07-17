@@ -234,6 +234,8 @@ public sealed record RuntimeStateChange<TState>(
 
 public sealed class RuntimePostCommitIntent
 {
+    public const int MaximumKindLength = 230;
+
     [JsonConstructor]
     public RuntimePostCommitIntent(
         string intentId,
@@ -249,7 +251,7 @@ public sealed class RuntimePostCommitIntent
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        ValidateKind(kind, nameof(kind));
 
         if (dependsOnWaitRegistrationId is not null && string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId))
             throw new ArgumentException("A wait registration dependency cannot be blank.", nameof(dependsOnWaitRegistrationId));
@@ -283,6 +285,17 @@ public sealed class RuntimePostCommitIntent
     public string? DependsOnWaitRegistrationId { get; }
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
+
+    internal static void ValidateKind(string kind, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind, parameterName);
+        if (kind.Length > MaximumKindLength)
+        {
+            throw new ArgumentException(
+                $"A runtime post-commit intent kind must be at most {MaximumKindLength} UTF-16 code units.",
+                parameterName);
+        }
+    }
 }
 
 public enum RuntimeWaitDependentIntentFailurePolicy

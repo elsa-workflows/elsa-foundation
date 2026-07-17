@@ -18,6 +18,22 @@ public sealed class WorkflowTestScopeTests
     }
 
     [Fact]
+    public void Scope_identity_is_bounded_for_portable_persistence_indexes()
+    {
+        var tooLong = new string('s', WorkflowTestScope.MaximumScopeIdLength + 1);
+
+        Assert.Throws<ArgumentException>(() => NewScope(scopeId: tooLong));
+        Assert.Throws<ArgumentException>(() => new WorkflowTestScopeCloseRequest(
+            tooLong,
+            WorkflowTestScopeCloseReason.ExplicitTeardown,
+            CreatedAt));
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowTestScopePageQuery(ExpiresAt, 10, ContinuationToken: tooLong).Validate());
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowDispatchQuery(testScopeId: tooLong));
+    }
+
+    [Fact]
     public void Scope_requires_a_finite_expiry_and_partition()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new WorkflowTestScope(

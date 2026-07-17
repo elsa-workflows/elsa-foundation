@@ -2,6 +2,7 @@ using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Persistence.Groundwork;
 
@@ -96,9 +97,27 @@ internal static class WorkflowDispatchGroundworkStoragePhysicalizer
                     ElsaRuntimeStorageManifest.ByTestScopeIndex
                 ])
         };
+        var projectedColumns = definition.ProjectedColumns
+            .Select(column => column.LogicalName switch
+            {
+                ElsaRuntimeStorageManifest.ByStatusIndex => column with
+                {
+                    Length = ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength
+                },
+                ElsaRuntimeStorageManifest.ByTestScopeIndex => column with
+                {
+                    Length = WorkflowTestScope.MaximumScopeIdLength
+                },
+                ElsaRuntimeStorageManifest.ByDispatchIdIndex => column with
+                {
+                    Length = ElsaRuntimeStorageManifest.WorkflowDispatchIdProjectionLength
+                },
+                _ => column
+            })
+            .ToArray();
         var augmentedDefinition = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
-            definition.ProjectedColumns,
+            projectedColumns,
             definition.Indexes.Concat(
             [
                 CompositePhysicalIndex(

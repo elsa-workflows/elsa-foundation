@@ -58,6 +58,19 @@ runs. Candidate and claim collections therefore grow only from actual returned r
 SQLite test adapter materializes before emulating new routes, so it is not evidence of physical rows
 scanned and the audit does not present it as such.
 
+## Decision: composite routes must fit SQL Server's physical index budget
+
+**Rationale**: Groundwork's SQL Server provider rejects index keys wider than 1,700 bytes during
+route admission. Status and deterministic identity projections use their actual bounded widths,
+test-scope IDs and intent kinds enforce portable public limits, and outbox routes rely on
+Groundwork's existing ordinal document-identity tie-breaker instead of duplicating the outbox ID in
+every composite. A no-connection provider test constructs the admitted dispatch stores so the
+provider validator executes in CI.
+
+**Alternatives considered**: retaining 450-character defaults makes every new composite invalid;
+adding hash fields changes the persisted JSON shape and leaves prior documents without backfillable
+values; testing only SQLite cannot exercise SQL Server's key-width validator.
+
 ## Decision: generated maps remain untouched by generators
 
 **Rationale**: The user explicitly skipped generated-map refresh. The remediation will reconcile audit language and any pre-existing tracked inconsistency without executing map scripts.

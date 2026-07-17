@@ -14,13 +14,16 @@ using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.SqlServer.Unified;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Groundwork.Documents.Scoping;
 using Groundwork.SqlServer;
+using Groundwork.SqlServer.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -84,6 +87,43 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
 
     private static ShellFeatureContext CreateBareShellContext() =>
         new(new ShellSettings(new ShellId("sqlserver-registration"), ["GroundworkUnifiedPersistenceSqlServer"]), []);
+
+    [Fact]
+    public async Task Dispatch_physical_routes_fit_SQL_Server_index_limits_without_connecting()
+    {
+        var capabilityReport = SqlServerGroundworkCapabilities.Runtime();
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            capabilityReport,
+            new GroundworkProviderTopologySnapshot(
+                capabilityReport.Provider.Name,
+                "sqlserver",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            SqlServerGroundworkCapabilities.PhysicalNames);
+
+        var dispatchRoutes = source.PhysicalTarget.Routes
+            .Where(route => route.StorageUnit.Value is
+                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind or
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind)
+            .ToArray();
+        var manifest = source.CreateManifest();
+        var dispatchManifest = manifest with
+        {
+            StorageUnits = manifest.StorageUnits
+                .Where(unit => dispatchRoutes.Any(route => route.StorageUnit == unit.Identity))
+                .ToArray()
+        };
+        var store = new SqlServerPhysicalDocumentStore(
+            ConnectionString,
+            dispatchManifest,
+            dispatchRoutes,
+            DocumentStoreAccess.Global);
+
+        Assert.Equal(2, dispatchRoutes.Length);
+        Assert.NotNull(store);
+    }
 
     [Fact]
     public async Task Explicit_identity_schema_and_feature_register_the_matching_SQL_Server_composition()

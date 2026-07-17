@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
@@ -219,6 +220,21 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(
             physical.Indexes,
             index => index.LogicalName == ElsaRuntimeStorageManifest.ByChildWorkflowExecutionAndStatusIndex && index.Columns.Count == 3);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByStatusIndex).Length);
+        Assert.Equal(
+            WorkflowTestScope.MaximumScopeIdLength,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByTestScopeIndex).Length);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowDispatchIdProjectionLength,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByDispatchIdIndex).Length);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowDispatchIdProjectionLength,
+            new WorkflowDispatchIdentity("parent", "activity").DispatchId.Length);
     }
 
     [Fact]
@@ -237,6 +253,14 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Equal(MissingValueBehavior.IncludedAsNull, immediateIndex.MissingValueBehavior);
         var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
             unit.PhysicalStorage.Policy).Definition;
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxStatusIndex).Length);
+        Assert.Equal(
+            RuntimePostCommitIntent.MaximumKindLength,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxIntentKindIndex).Length);
         var immediatePhysicalIndex = Assert.Single(
             physical.Indexes,
             index => index.LogicalName == immediate.IndexIdentity);
@@ -252,6 +276,9 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(
             immediate.SortFields,
             field => field.Path == ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField);
+        Assert.DoesNotContain(
+            immediate.SortFields,
+            field => field.Path == ElsaRuntimeStorageManifest.PostCommitOutboxItemIdField);
 
         var due = Assert.Single(
             unit.PhysicalStorage.BoundedQueries,

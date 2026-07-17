@@ -2,6 +2,7 @@ using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Persistence.Groundwork;
 
@@ -92,9 +93,23 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
                 ElsaRuntimeStorageManifest.ByOutboxVisibleAfterIndex,
                 [Filter.Workflow, Filter.IntentKind])
         };
+        var projectedColumns = definition.ProjectedColumns
+            .Select(column => column.LogicalName switch
+            {
+                ElsaRuntimeStorageManifest.ByOutboxStatusIndex => column with
+                {
+                    Length = ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength
+                },
+                ElsaRuntimeStorageManifest.ByOutboxIntentKindIndex => column with
+                {
+                    Length = RuntimePostCommitIntent.MaximumKindLength
+                },
+                _ => column
+            })
+            .ToArray();
         var augmentedDefinition = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
-            definition.ProjectedColumns,
+            projectedColumns,
             definition.Indexes.Concat(routes.Select(route => route.PhysicalIndex)).ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
@@ -130,11 +145,10 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
                 IndexValueKind.Keyword),
             .. filterFields.Select(filter => new IndexField(filter.Path)),
             new IndexField(temporalField, IndexValueKind.DateTime),
-            new IndexField(ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField, IndexValueKind.DateTime),
-            new IndexField(ElsaRuntimeStorageManifest.PostCommitOutboxItemIdField)
+            new IndexField(ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField, IndexValueKind.DateTime)
         ];
         var logicalIndex = new LogicalIndexDeclaration(
-            $"by-{indexIdentity}-status-time-recorded-id",
+            $"by-{indexIdentity}-status-time-recorded",
             fields,
             IndexValueKind.Keyword,
             isUnique: false,
@@ -144,8 +158,7 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
             ElsaRuntimeStorageManifest.ByOutboxStatusIndex,
             .. filterFields.Select(filter => filter.ProjectedColumn),
             temporalProjectedColumn,
-            ElsaRuntimeStorageManifest.ByOutboxRecordedAtIndex,
-            ElsaRuntimeStorageManifest.ByOutboxItemIdIndex
+            ElsaRuntimeStorageManifest.ByOutboxRecordedAtIndex
         ];
         var physicalIndex = new PhysicalIndexDefinition(
             logicalIndex.Identity,

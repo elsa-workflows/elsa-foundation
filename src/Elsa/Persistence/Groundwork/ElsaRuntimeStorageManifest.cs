@@ -13,6 +13,11 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 public static class ElsaRuntimeStorageManifest
 {
+    // Composite-index components use their domain bounds rather than the legacy 450-character fallback.
+    // These values are guarded by runtime-model and SQL Server route-admission tests.
+    public const int RuntimeStatusProjectionLength = 32;
+    public const int WorkflowDispatchIdProjectionLength = 76;
+
     // FROZEN storage-manifest version. This is NOT a document migration knob: per-kind document schema versions
     // live separately in ElsaRuntimeDocumentVersions.Current, and the document parser accepts only their positive
     // integer stamps. Adding an index (like #514's by-parent-activity-execution, or the

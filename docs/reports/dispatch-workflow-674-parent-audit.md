@@ -17,9 +17,13 @@ The remaining implementation issues were corrected:
   complete deterministic dispatch/start-outbox relationship validates.
 - Groundwork dispatch paging and post-commit outbox delivery/claim selection now use provider-side
   bounded, stably ordered routes. Store-level regressions prove a fixed number of admitted bounded
-  reads with `Take` propagated to every read; SQLite and in-memory suites prove equivalent behavior.
+  reads with `Take` propagated to every read; SQLite and in-memory suites prove equivalent behavior,
+  and SQL Server route admission proves the dispatch composites fit the provider's index-key limit.
 - Null outbox availability remains immediately claimable through dedicated null-aware bounded
   routes, and unrestricted positive query limits no longer overflow internal collection capacity.
+- Test-scope IDs and post-commit intent kinds now enforce the portable projection bounds needed by
+  the largest dispatch composites, while Groundwork's ordinal document identity remains the stable
+  outbox tie-breaker without duplicating the outbox ID in each physical index.
 
 The other reported crash, redrive, retry, cancellation, retention, cleanup, and distributed
 convergence concerns were already corrected by the replacement program and remain covered by
@@ -64,14 +68,16 @@ not implemented.
 
 | Command | Result |
 |---|---|
-| `dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --no-restore --nologo -m:1` | Passed: 1153 |
+| `dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --no-restore --nologo -m:1` | Passed: 1155 |
 | `dotnet test tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj --no-restore --nologo -m:1` | Passed: 182 |
 | `dotnet test tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj --no-restore --nologo -m:1` | Passed: 62 |
 | `dotnet test tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj --no-restore --nologo -m:1` | Passed: 17 |
-| `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj --no-restore --nologo -m:1` | Passed: 511 |
+| `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj --no-restore --nologo -m:1` | Passed: 526 |
 | `dotnet test tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj --no-restore --nologo -m:1` | Passed: 55 |
 | `dotnet test tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj --no-restore --nologo -m:1` | Passed: 45 |
 | `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore --nologo -m:1` | Passed: 226 |
+| `dotnet test tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj --no-restore --nologo -m:1` | Passed: 24 |
+| `dotnet test tests/Elsa/Persistence/Groundwork/SqlServer/Tests/Elsa.Persistence.Groundwork.SqlServer.Tests.csproj --no-restore --nologo -m:1 --filter FullyQualifiedName~Dispatch_physical_routes_fit_SQL_Server_index_limits_without_connecting` | Passed: 1 |
 | `dotnet test Elsa.Server.slnx --no-restore --nologo -m:1` | Executed; failed only in the pre-existing `AspNetCoreIdentityProviderEvidenceTests.Checked_in_provider_artifacts_are_complete_sanitized_and_share_one_tested_code_candidate` evidence-version alignment check, outside the remediation diff. A focused rerun reproduced the same failure. |
 | `rg -n -- "- \[ \]" specs/101-dispatch-delivery-recovery specs/102-dispatch-test-run-scope specs/103-dispatch-distributed-execution` | No unchecked tasks |
 | `git diff --check` | Passed |
@@ -85,9 +91,10 @@ provider evidence, not as a measurement of physical rows scanned. Physical bound
 by the admitted composite route declarations plus store-level assertions that every provider request
 has a bounded `Take`; it does not claim that the legacy test adapter itself performs index-limited I/O.
 
-The self-review loop converged after four iterations. It corrected null-availability selection,
-limit-derived allocation overflow, provider-evidence wording, PostgreSQL null ordering, and
-logical/physical missing-value parity. The fourth iteration found no remaining actionable issues.
+The self-review loop converged after six iterations. It corrected null-availability selection,
+limit-derived allocation overflow, provider-evidence wording, PostgreSQL null ordering,
+logical/physical missing-value parity, and SQL Server composite-index width. The sixth iteration
+found no remaining actionable issues.
 
 ## Generated-map freshness exception
 

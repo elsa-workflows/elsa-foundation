@@ -505,7 +505,6 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         }
         orderFields.Add(temporalField);
         orderFields.Add(ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField);
-        orderFields.Add(ElsaRuntimeStorageManifest.PostCommitOutboxItemIdField);
 
         var result = await BoundedStore.QueryAsync(
             new DocumentQuery(
