@@ -399,6 +399,52 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public async Task Execution_liveness_declares_finite_owner_aware_recovery_routes()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind);
+        var recoveryRoutes = unit.PhysicalStorage!.BoundedQueries
+            .Where(query => query.Identity.StartsWith("list-recovery-", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(10, recoveryRoutes.Length);
+        Assert.All(recoveryRoutes, route =>
+        {
+            Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+            Assert.Equal(QueryPagingSupport.None, route.PagingSupport);
+            Assert.NotEmpty(route.PredicateFields);
+            Assert.NotEmpty(route.SortFields);
+        });
+
+        var ownerless = Assert.Single(
+            recoveryRoutes,
+            route => route.Identity == ElsaRuntimeStorageManifest.ListRecoveryDetectedOwnerlessQuery);
+        Assert.Collection(
+            ownerless.PredicateFields,
+            status => Assert.Equal(ElsaRuntimeStorageManifest.RecoveryInterruptionStatusField, status.Path),
+            owner => Assert.Equal(ElsaRuntimeStorageManifest.RecoveryHasOperationalOwnerField, owner.Path));
+
+        var leaseOwner = Assert.Single(
+            recoveryRoutes,
+            route => route.Identity == ElsaRuntimeStorageManifest.ListRecoveryByLeaseExpiryAndOwnerQuery);
+        Assert.Collection(
+            leaseOwner.PredicateFields,
+            owner => Assert.Equal(ElsaRuntimeStorageManifest.RecoveryLeaseOwnerIdField, owner.Path),
+            expiry => Assert.Equal(ElsaRuntimeStorageManifest.RecoveryLeaseExpiresAtField, expiry.Path));
+        Assert.Contains(PortableQueryOperation.LessThanOrEqual, leaseOwner.PredicateFields[1].Operations);
+
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage.Policy).Definition;
+        Assert.Contains(
+            physical.ProjectedColumns,
+            column => column.Path == ElsaRuntimeStorageManifest.RecoveryHasOperationalOwnerField &&
+                      column.Type == PortablePhysicalType.Boolean);
+        Assert.All(
+            recoveryRoutes,
+            route => Assert.Contains(physical.Indexes, index => index.LogicalName == route.IndexIdentity));
+    }
+
+    [Fact]
     public async Task Workflow_executable_source_reference_declares_physical_bounded_routes()
     {
         var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();

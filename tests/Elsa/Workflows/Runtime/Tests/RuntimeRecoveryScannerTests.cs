@@ -158,6 +158,28 @@ public sealed class RuntimeRecoveryScannerTests
     }
 
     [Fact]
+    public async Task ScanAsync_SelectsTheOldestEligibleSignalBeforeApplyingTheLimit()
+    {
+        var store = new InMemoryExecutionLivenessStateStore();
+        var scanner = new InMemoryRuntimeRecoveryScanner(store);
+        await store.SaveAsync(NewExecutionLivenessState(
+            "operational-1",
+            "wfexec-1",
+            "worker-1",
+            leaseExpiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(NewExecutionLivenessState(
+            "operational-2",
+            "wfexec-2",
+            "worker-1",
+            leaseAcquiredAt: _now.AddMinutes(-3),
+            leaseExpiresAt: _now.AddMinutes(-2)));
+
+        var candidate = Assert.Single(await scanner.ScanAsync(NewRequest(limit: 1)));
+
+        Assert.Equal("wfexec-2", candidate.WorkflowExecutionId);
+    }
+
+    [Fact]
     public async Task ScanAsync_AppliesOwnerFilterToTheRecoverySource()
     {
         var store = new InMemoryExecutionLivenessStateStore();

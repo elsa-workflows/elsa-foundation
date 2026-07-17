@@ -193,6 +193,36 @@ public static class ElsaRuntimeStorageManifest
     // (ExecutionLivenessState was OperationalState; WorkflowHoldState was ControlPlaneState).
     // Do not change the literal values: they are the durable Groundwork document-kind discriminators.
     public const string ExecutionLivenessStateDocumentKind = "operationalState";
+    public const string RecoveryHasOperationalOwnerField = "hasOperationalOwner";
+    public const string RecoveryInterruptionStatusField = "state.interruptedExecution.status";
+    public const string RecoveryInterruptedAtField = "state.interruptedExecution.interruptedAt";
+    public const string RecoveryLeaseOwnerIdField = "state.executionLease.ownerId";
+    public const string RecoveryLeaseAcquiredAtField = "state.executionLease.acquiredAt";
+    public const string RecoveryLeaseExpiresAtField = "state.executionLease.expiresAt";
+    public const string RecoveryHeartbeatOwnerIdField = "state.heartbeat.ownerId";
+    public const string RecoveryHeartbeatRecordedAtField = "state.heartbeat.recordedAt";
+
+    public const string RecoveryDetectedIndex = "by-recovery-detected";
+    public const string RecoveryDetectedLeaseOwnerIndex = "by-recovery-detected-lease-owner";
+    public const string RecoveryDetectedHeartbeatOwnerIndex = "by-recovery-detected-heartbeat-owner";
+    public const string RecoveryDetectedOwnerlessIndex = "by-recovery-detected-ownerless";
+    public const string RecoveryLeaseExpiryIndex = "by-recovery-lease-expiry";
+    public const string RecoveryLeaseExpiryOwnerIndex = "by-recovery-lease-expiry-owner";
+    public const string RecoveryLeaseAcquisitionIndex = "by-recovery-lease-acquisition";
+    public const string RecoveryLeaseAcquisitionOwnerIndex = "by-recovery-lease-acquisition-owner";
+    public const string RecoveryHeartbeatIndex = "by-recovery-heartbeat";
+    public const string RecoveryHeartbeatOwnerIndex = "by-recovery-heartbeat-owner";
+
+    public const string ListRecoveryDetectedQuery = "list-recovery-detected";
+    public const string ListRecoveryDetectedByLeaseOwnerQuery = "list-recovery-detected-by-lease-owner";
+    public const string ListRecoveryDetectedByHeartbeatOwnerQuery = "list-recovery-detected-by-heartbeat-owner";
+    public const string ListRecoveryDetectedOwnerlessQuery = "list-recovery-detected-ownerless";
+    public const string ListRecoveryByLeaseExpiryQuery = "list-recovery-by-lease-expiry";
+    public const string ListRecoveryByLeaseExpiryAndOwnerQuery = "list-recovery-by-lease-expiry-and-owner";
+    public const string ListRecoveryByLeaseAcquisitionQuery = "list-recovery-by-lease-acquisition";
+    public const string ListRecoveryByLeaseAcquisitionAndOwnerQuery = "list-recovery-by-lease-acquisition-and-owner";
+    public const string ListRecoveryByHeartbeatQuery = "list-recovery-by-heartbeat";
+    public const string ListRecoveryByHeartbeatAndOwnerQuery = "list-recovery-by-heartbeat-and-owner";
     public const string WorkflowHoldStateDocumentKind = "controlPlaneState";
     public const string IncidentStateDocumentKind = "incidentState";
 
@@ -324,12 +354,13 @@ public static class ElsaRuntimeStorageManifest
     /// over the provider-neutral legacy declarations.
     /// </summary>
     public static StorageManifest CreatePhysicalized() =>
-        PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
-            TestScopeStoragePhysicalizer.AddCompositeRoutes(
-                WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                    BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                        WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))));
+        ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(
+            PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
+                TestScopeStoragePhysicalizer.AddCompositeRoutes(
+                    WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                        BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                            WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())))))));
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
