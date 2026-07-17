@@ -7,12 +7,12 @@ Spec task: T066.
 ## Preview.60 accepted evidence generation
 
 The accepted provider evidence was generated from clean committed candidate
-`c19ed3544295c12747172bd01d5bcd2a6ca26f28` (tree
-`2d73292862a45e6cce8d4e9bfe35a7236863871f`). Groundwork packages, provider assemblies, and the
+`69d6b61654d1a432bce04e6aaa7bd6ac08409fc9` (tree
+`8bee91717235fd954e3f284a7ea9f9c6ae3e92b5`). Groundwork packages, provider assemblies, and the
 repository-local tool are all `0.0.1-preview.60`. The immutable generation identifier is
-`650b98846abe50695df09914d2ddcf6eb2d6329087adf103824f993a5eaef1a6`; consumers resolve it only
+`a02df7f6c1ad90eab0dc141eddcb7fdfae8b1cef10faa0abe9eca02b2fb7baaa`; consumers resolve it only
 through `current.json`, whose SHA-256 is
-`6ab2979f55c87b5ea104d2cec29aba8cce5569e38709af9e72ce036e521cc2e5`.
+`6b0703694467208d54c4f0b5da2ff153059926c5586d25e2c1e48a59ae67d4e5`.
 
 The all-provider publisher ran sequentially and published `current.json` only after all four
 provider bundles passed validation:
@@ -24,7 +24,7 @@ ELSA_GENERATE_IDENTITY_PROVIDER_EVIDENCE=1 \
   --filter FullyQualifiedName~Generate_all_preview60_provider_artifacts_only_after_the_complete_matrix_passes
 ```
 
-Result: `1/1` passed in `2m59s`. The checked-in artifact validator then passed `1/1`:
+Result: `1/1` passed in `2m57s`. The checked-in artifact validator then passed `1/1`:
 
 ```bash
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
@@ -34,10 +34,10 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
 
 | Provider | Identity | Topology | Native classification | Artifact SHA-256 |
 | --- | --- | --- | --- | --- |
-| SQLite | `groundwork-sqlite` | `file-backed-distinct-connections` | `index-search` | `4d5e62f985e92f5a1790696341c7e19e517ca5c7171073b9d4c788c9f964ae37` |
-| SQL Server | `groundwork-sqlserver` | `real-sqlserver-container` | `index-seek` | `e1792509eab78e4f2d47471d29fc84c8196c5f52c5cc53c85a70369d4c5a914a` |
-| PostgreSQL | `groundwork-postgresql` | `real-postgresql-container` | `indexed` | `da64e04b74437e0d56c94fc8fd4e9d94eff22a90e328b8e1dca54f8153e6eec1` |
-| MongoDB | `groundwork-mongodb` | `transaction-capable-replica-set` | `index-scan` | `e3923ad36b46703db17a9dbf3d01fd8614db34ac70bb1c9fe53fd5f0d644ecdc` |
+| SQLite | `groundwork-sqlite` | `file-backed-distinct-connections` | `index-search` | `423317c549282c991b23eebd1667565b55a37e6370556440fedb7b16d6c87454` |
+| SQL Server | `groundwork-sqlserver` | `real-sqlserver-container` | `index-seek` | `f143d4eb84015627e7a0689c0479f390f8c593fdd6fb4868c155e284b89a75cd` |
+| PostgreSQL | `groundwork-postgresql` | `real-postgresql-container` | `indexed` | `ad945e7ba73f1a7f3ddcf918d88041e8f9df22d251b902ea76c36f53e179cc38` |
+| MongoDB | `groundwork-mongodb` | `transaction-capable-replica-set` | `index-scan` | `4af91f7eadc8cc68639aa16cb19b252e568ba28dc3b1cac9968183d21f0e2177` |
 
 Every artifact records the exact closed catalog of `25` objectives and all `15` advertised
 framework capabilities, confirms external-process restart evidence, explains all `10` production

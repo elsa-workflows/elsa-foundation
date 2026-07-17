@@ -2,7 +2,7 @@
 
 This guide is the executable evidence path for #644. The current candidate targets Groundwork `0.0.1-preview.60`, Docker is available for non-SQLite providers, and the repository-local tool manifest is restored at the same version as the packages.
 
-> **Evidence status:** Preview.60 provider evidence is accepted for committed candidate `c19ed3544295c12747172bd01d5bcd2a6ca26f28` (tree `2d73292862a45e6cce8d4e9bfe35a7236863871f`) under immutable generation `650b98846abe50695df09914d2ddcf6eb2d6329087adf103824f993a5eaef1a6`. The dated preview.55-preview.59 material below remains historical provenance only. The checked-in EF contract baseline is non-executed; live EF/Groundwork equality and timing remain owned by #646.
+> **Evidence status:** Preview.60 provider evidence is accepted for committed candidate `69d6b61654d1a432bce04e6aaa7bd6ac08409fc9` (tree `8bee91717235fd954e3f284a7ea9f9c6ae3e92b5`) under immutable generation `a02df7f6c1ad90eab0dc141eddcb7fdfae8b1cef10faa0abe9eca02b2fb7baaa`. The dated preview.55-preview.59 material below remains historical provenance only. The checked-in EF contract baseline is non-executed; live EF/Groundwork equality and timing remain owned by #646.
 
 ## 1. Establish The Exact Baseline
 
@@ -725,21 +725,21 @@ Preview.59 and earlier provider and SC-010 runs are retained as historical regre
 - schema CLI/runtime parity and independent read-only before/after hashes; and
 - re-derived v1.1 workload hashes. If they remain `5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and `32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`, retain them as Groundwork workload-contract evidence only.
 
-The clean evidence candidate is commit `c19ed3544295c12747172bd01d5bcd2a6ca26f28`, tree
-`2d73292862a45e6cce8d4e9bfe35a7236863871f`. The all-provider generator passed `1/1` in `2m59s`
+The clean evidence candidate is commit `69d6b61654d1a432bce04e6aaa7bd6ac08409fc9`, tree
+`8bee91717235fd954e3f284a7ea9f9c6ae3e92b5`. The all-provider generator passed `1/1` in `2m57s`
 and installed immutable generation
-`650b98846abe50695df09914d2ddcf6eb2d6329087adf103824f993a5eaef1a6`. `current.json` is the sole
+`a02df7f6c1ad90eab0dc141eddcb7fdfae8b1cef10faa0abe9eca02b2fb7baaa`. `current.json` is the sole
 reader entry point and has SHA-256
-`6ab2979f55c87b5ea104d2cec29aba8cce5569e38709af9e72ce036e521cc2e5`; it is atomically replaced
+`6b0703694467208d54c4f0b5da2ff153059926c5586d25e2c1e48a59ae67d4e5`; it is atomically replaced
 only after the complete generation directory is installed. Fault-injection tests passed at all three
 publication boundaries.
 
 | Provider | Native classification | Artifact SHA-256 |
 | --- | --- | --- |
-| SQLite | `index-search` | `4d5e62f985e92f5a1790696341c7e19e517ca5c7171073b9d4c788c9f964ae37` |
-| SQL Server | `index-seek` | `e1792509eab78e4f2d47471d29fc84c8196c5f52c5cc53c85a70369d4c5a914a` |
-| PostgreSQL | `indexed` | `da64e04b74437e0d56c94fc8fd4e9d94eff22a90e328b8e1dca54f8153e6eec1` |
-| MongoDB | `index-scan` | `e3923ad36b46703db17a9dbf3d01fd8614db34ac70bb1c9fe53fd5f0d644ecdc` |
+| SQLite | `index-search` | `423317c549282c991b23eebd1667565b55a37e6370556440fedb7b16d6c87454` |
+| SQL Server | `index-seek` | `f143d4eb84015627e7a0689c0479f390f8c593fdd6fb4868c155e284b89a75cd` |
+| PostgreSQL | `indexed` | `ad945e7ba73f1a7f3ddcf918d88041e8f9df22d251b902ea76c36f53e179cc38` |
+| MongoDB | `index-scan` | `4af91f7eadc8cc68639aa16cb19b252e568ba28dc3b1cac9968183d21f0e2177` |
 
 Each bundle records the exact `25`-objective catalog, all `15` advertised capabilities, external
 process confirmation, `10` native routes, `6` physical tables, `100,000` rows per table, and `7`
@@ -770,7 +770,7 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
 Original T083 full validation ran against candidate `26a79a88dbe96fa0647b21f4305aca146c76f191`; the
 Linux Unicode compatibility remediation produced a preview.59 successor candidate, and the mainline
 preview.60 merge produced accepted successor candidate
-`c19ed3544295c12747172bd01d5bcd2a6ca26f28` after repeating every affected gate:
+`69d6b61654d1a432bce04e6aaa7bd6ac08409fc9` after repeating every affected gate:
 
 - `dotnet format analyzers Elsa.Server.slnx --verify-no-changes --no-restore --severity warn --verbosity minimal`: passed with no changes.
 - Release solution build: `0` errors and `81` warnings on the full rebuild; the warnings are existing Groundwork obsolete-API diagnostics.
@@ -780,7 +780,7 @@ preview.60 merge produced accepted successor candidate
 - Groundwork Identity suite: `133/133` passed; mixed Identity integration suite: `132/132` passed; Identity persistence Groundwork suite: `43/43` passed; router suite: `3/3` passed.
 - Conformance suite before installing checked-in artifacts: `74` passed and `7` expected opt-in skips in `4m27s`.
 - Unicode hotfix verification: Linux .NET 10 container `14/14` in `168ms`, Identity persistence `45/45`, Groundwork Identity `133/133` in `1m33s`, architecture `225/225` in `1m17s`, and focused analyzers passed; independent review found no blocker.
-- Publication fault matrix: `3/3` passed; successor all-provider evidence publisher: `1/1` passed in `2m59s`; checked-in semantic/schema validator: `1/1` passed on the final docs/evidence worktree.
+- Publication fault matrix: `3/3` passed; successor all-provider evidence publisher: `1/1` passed in `2m57s`; checked-in semantic/schema validator: `1/1` passed on the final docs/evidence worktree.
 - `git diff --check` and the precise forbidden-property scan: passed.
 
 The independent audit found six evidence-integrity blockers: inert JSON Schema validation,
