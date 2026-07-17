@@ -819,7 +819,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "missing",
+      "status": "planned",
       "initialGap": "No Groundwork implementation exists; the current durable outcome is memory-only.",
       "performanceWorkload": "queue-drain",
       "accessPolicy": "ordinary",
