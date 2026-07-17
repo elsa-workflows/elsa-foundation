@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
@@ -146,6 +147,7 @@ public sealed record ActivityInputContract(
     string Name,
     TypeReference Type,
     bool IsRequired,
+    [property: JsonRequired] bool IsNullable,
     ActivityInputDefault? Default,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
@@ -161,6 +163,7 @@ public sealed record ActivityOutputContract(
     string Name,
     TypeReference Type,
     bool IsRequired,
+    [property: JsonRequired] bool IsNullable,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
     string? DisplayName = null,

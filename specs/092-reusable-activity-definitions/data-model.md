@@ -204,7 +204,8 @@ applies only to versions successfully published under this contract.
 | `ReferenceKey` | string | Stable identity used for binding and diffing. |
 | `Name` | string | Current author-facing name. |
 | `Type` | `TypeReference` | Alias-based provider-neutral type. |
-| `IsRequired` | bool | Absence fails when no default applies; explicit null is validated against the type separately. |
+| `IsRequired` | bool | Absence fails when no default applies. Independent from `IsNullable`. |
+| `IsNullable` | bool | Explicitly permits a present null value. Required on every canonical mutable and immutable wire shape and allowed only when the selected type capability has `SupportsNull`. |
 | `Default` | `ActivityInputDefault?` | Caller-side binding template. |
 | `StorageDriverKey` | string | Stable durability driver key; public boundary defaults to durable-required. |
 | `Durability` | enum | `Required` in the first slice; future stronger policies may be additive. |
@@ -221,7 +222,7 @@ The consuming workflow artifact stores the compiled binding. Defaults are applie
 
 ### 2.4 `ActivityOutputContract`
 
-Same stable identity, name, type, storage-driver, durability, requiredness, and presentation principles as inputs. A required output must be assigned and durably captured before successful boundary completion.
+Same stable identity, name, type, explicit nullability, storage-driver, durability, requiredness, and presentation principles as inputs. `IsRequired` means the implementation must produce the output; `IsNullable` independently determines whether the produced value may be null. A required output must be assigned and durably captured before successful boundary completion.
 
 ### 2.5 `ActivityOutcomeContract`
 
@@ -369,7 +370,7 @@ The sidecar never contributes to the template or workflow artifact behavior hash
 |---|---|---|
 | `ChangeId` | string | Deterministic within the comparison. |
 | `Area` | enum | Contract, default, outcome, durability, provider, implementation, dependency, or presentation. |
-| `Kind` | stable string | Added, removed, renamed, type-changed, requiredness-changed, default-changed, and similar stable classifications. |
+| `Kind` | stable string | Added, removed, renamed, type-changed, requiredness-changed, nullability-changed, default-changed, and similar stable classifications. |
 | `Subject` | contract/dependency subject | Includes member kind and stable reference key when applicable. |
 | `Before`, `After` | safe projections | Public contract facts only; no protected provider payloads. |
 | `Impact` | enum | Nonbehavioral, additive, or breaking. |

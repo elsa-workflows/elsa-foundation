@@ -44,7 +44,7 @@ public sealed class ActivityInputOptionsProviderResolverTests
     private static ActivityInputOptionsContext CreateContext()
     {
         var node = new ActivityNode("node-1", "activity-v1", [], []);
-        var input = new InputDefinition("Field", "Field", new TypeReference("String"), null, "Field", null);
+        var input = new InputDefinition("Field", "Field", new TypeReference("String"), null, "Field", null, false);
         var state = new WorkflowDefinitionState([], node, [], [], null);
         return new ActivityInputOptionsContext(state, node, input);
     }

@@ -221,6 +221,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
                 "name": "Order",
                 "type": { "alias": "acme.order", "collectionKind": "{{collectionKind}}" },
                 "isRequired": true,
+                "isNullable": true,
                 "default": null,
                 "storageDriverKey": "elsa.json"
               }],
@@ -231,7 +232,32 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
         var view = JsonSerializer.Deserialize<ActivityContractView>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Equal(CollectionKind.Single, Assert.Single(view!.ToDomain().Inputs).Type.CollectionKind);
+        var input = Assert.Single(view!.ToDomain().Inputs);
+        Assert.Equal(CollectionKind.Single, input.Type.CollectionKind);
+        Assert.True(input.IsNullable);
+    }
+
+    [Fact]
+    public void Mutable_contract_wire_shape_requires_explicit_nullability()
+    {
+        const string json = """
+            {
+              "contractSchemaVersion": "1",
+              "inputs": [{
+                "referenceKey": "order",
+                "name": "Order",
+                "type": { "alias": "acme.order", "collectionKind": "Single" },
+                "isRequired": true,
+                "default": null,
+                "storageDriverKey": "elsa.json"
+              }],
+              "outputs": [],
+              "outcomes": []
+            }
+            """;
+
+        Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<ActivityContractView>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
 
     [Fact]
@@ -239,13 +265,14 @@ public sealed class ActivityDefinitionAuthoringApiTests
     {
         var domain = new ActivityContract(
             "1",
-            [new("order", "Order", new("acme.order", CollectionKind.Single), true, null, "elsa.json")],
+            [new("order", "Order", new("acme.order", CollectionKind.Single), true, false, null, "elsa.json")],
             [],
             []);
 
         var json = JsonSerializer.Serialize(domain.ToView(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         Assert.Contains("\"collectionKind\":\"Single\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"isNullable\":false", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"collectionKind\":\"None\"", json, StringComparison.Ordinal);
     }
 

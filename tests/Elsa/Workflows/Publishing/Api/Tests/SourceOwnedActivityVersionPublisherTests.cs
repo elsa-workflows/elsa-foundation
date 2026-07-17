@@ -31,6 +31,8 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, commit.ExecutableTemplate.Root.Descriptor.ConsumerKey);
         Assert.Equal(commit.ExecutableTemplate.TemplateId, commit.Publication.TemplateId);
         Assert.Equal(commit.ExecutableTemplate.TemplateHash, commit.Publication.TemplateHash);
+        Assert.True(Assert.Single(commit.Publication.Contract.Inputs).IsNullable);
+        Assert.False(Assert.Single(commit.Publication.Contract.Outputs).IsNullable);
     }
 
     [Fact]
@@ -85,7 +87,15 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         SourceKind = "CLR",
         SourceId = "assembly-a",
         Hash = "catalog-hash",
-        Definition = Definition()
+        Definition = Definition(),
+        Inputs =
+        [
+            new("message", "Message", new("String"), null, "Message", null, true)
+        ],
+        Outputs =
+        [
+            new("result", "Result", new("String"), null, "Result", null, false)
+        ]
     };
 
     private sealed class RecordingCommand : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>

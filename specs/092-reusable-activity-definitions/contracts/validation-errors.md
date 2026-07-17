@@ -189,6 +189,7 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `409` | `activity.cursor.binding-mismatch` | A non-management opaque cursor belongs to another tenant, root, query, or authorization profile. |
 | `410` | `activity.cursor.expired` | A retained management snapshot, non-management cursor snapshot, or watermark is no longer valid. Recovery may instruct the client to restart without a cursor. |
 | `422` | `activity.publication.invalid` | One or more deterministic publication diagnostics block publication. |
+| `422` | `activity.contract.capability-rejected` | A mutable contract uses a type, collection kind, storage driver, durability, or nullability fact unavailable in the activated authoring capability catalog. |
 | `422` | `activity.version.bump-insufficient` | Requested SemVer does not meet the calculated minimum. Usually included under publication invalid. |
 | `422` | `activity.dependency.cycle` | Exact dependency cycle detected. Usually included under publication invalid. |
 | `422` | `activity.provider.compilation-failed` | Provider rejected or could not deterministically compile valid source. |
@@ -198,6 +199,16 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `503` | `activity.runtime.requirement-unavailable` | Requested activation cannot proceed because a required Runtime consumer/schema is unavailable. Runtime also records an activation incident. |
 
 An endpoint may choose the operation-level code (`activity.publication.invalid`) while individual diagnostics carry more specific codes (`activity.dependency.cycle`, `activity.version.bump-insufficient`).
+
+Nullability-specific mutable-contract diagnostics are:
+
+- `activity.contract.nullability-unavailable` at the member's `/isNullable` location when a nullable
+  member is requested for a type whose capability has `supportsNull: false`.
+- `activity.contract.null-default-not-allowed` at the input default value when a null default is
+  requested for a member whose own `isNullable` value is false.
+
+Both are deterministic errors. The rejected operation writes no draft, version, proposal
+application, conflict copy, or reconciliation publication.
 
 ## 5. Validation response versus error response
 

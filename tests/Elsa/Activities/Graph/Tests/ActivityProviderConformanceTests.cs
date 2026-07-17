@@ -67,7 +67,7 @@ public sealed class ActivityProviderConformanceTests
 
     private static ActivityContract Contract() => new(
         "1",
-        [new("input", "Input", new TypeReference("string"), false, null, "elsa.json")],
+        [new("input", "Input", new TypeReference("string"), false, false, null, "elsa.json")],
         [],
         [new("done", "Done", true)]);
 

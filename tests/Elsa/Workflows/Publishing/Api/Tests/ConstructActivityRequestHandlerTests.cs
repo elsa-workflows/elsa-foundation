@@ -40,8 +40,8 @@ public sealed class ConstructActivityRequestHandlerTests
         var version = Version("v1", "def1", "2.0.0",
             consumerKey: "test.consumer",
             payload: JsonSerializer.SerializeToElement(new { }),
-            inputs: [new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null)],
-            outputs: [new OutputDefinition("result", "Result", new TypeReference("Object"), null, "Result", null)]);
+            inputs: [new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null, false)],
+            outputs: [new OutputDefinition("result", "Result", new TypeReference("Object"), null, "Result", null, true)]);
         var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]), new FakeActivityFactory(new StubActivity()));
 
         var view = await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);

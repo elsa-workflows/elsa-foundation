@@ -161,7 +161,7 @@ An Elsa 3 administrator can analyze a collection, review deterministic conversio
 
 #### Public contract and provider model
 
-- **FR-008**: Every draft and version MUST expose a provider-neutral public contract containing stable reference keys, inputs, outputs, outcomes, type references, requiredness, defaults, durability requirements, and presentation metadata.
+- **FR-008**: Every draft and version MUST expose a provider-neutral public contract containing stable reference keys, inputs, outputs, outcomes, type references, requiredness, explicit per-member nullability, defaults, durability requirements, and presentation metadata. Requiredness and nullability are independent facts.
 - **FR-009**: The system MUST preserve absent, explicitly null, and present input states as distinct states.
 - **FR-010**: Literal and expression-based defaults MUST be supported as caller-side binding templates and MUST be captured into each consuming published artifact.
 - **FR-011**: Public boundary values MUST be durable by default and MUST identify durable storage behavior by a stable storage-driver key rather than a CLR type name.
@@ -180,8 +180,8 @@ An Elsa 3 administrator can analyze a collection, review deterministic conversio
 - **FR-021**: Exact-version dependency graphs MUST be acyclic; a rejection MUST report the complete cycle path.
 - **FR-022**: The system MUST expose canonical direct dependency edges as authoritative facts; reverse and transitive dependency views MUST be derived and rebuildable.
 - **FR-023**: A version comparison MUST classify public-contract, default, outcome, durability, provider, implementation, and exact-dependency changes and state the minimum required semantic-version increment.
-- **FR-024**: The minimum increment MUST be major for removed or renamed contract members/outcomes, reference-key changes, incompatible type changes, optional-to-required changes, new required outputs, weaker durability, changed or removed defaults, or newly emitted outcomes.
-- **FR-025**: The minimum increment MUST be minor for compatible optional/defaulted inputs and compatible optional outputs, and patch for non-behavioral presentation-only changes.
+- **FR-024**: The minimum increment MUST be major for removed or renamed contract members/outcomes, reference-key changes, incompatible type changes, optional-to-required changes, nullability tightening, new required outputs, weaker durability, changed or removed defaults, or newly emitted outcomes.
+- **FR-025**: The minimum increment MUST be minor for compatible optional/defaulted inputs, compatible optional outputs, and nullability relaxation under the platform baseline, and patch for non-behavioral presentation-only changes.
 - **FR-026**: Published activity versions, templates, source references, and consuming workflow executables MUST never be mutated by an upgrade.
 - **FR-027**: Upgrade planning MUST order dependency changes bottom-up and pin every proposed draft revision and definition head; application MUST be atomic for the selected closure.
 
@@ -234,7 +234,7 @@ An Elsa 3 administrator can analyze a collection, review deterministic conversio
 - **Activity Definition**: Stable Activity Catalog identity and lineage for one reusable activity contract.
 - **Activity Definition Draft**: Mutable provider-neutral contract plus provider manifest, optimistic revision, optional source-version lineage, content authority, tenant, and validation state.
 - **Activity Definition Version**: Immutable semantic version of an activity definition with an authoritative public contract, provider identity, exact dependencies, and executable-template reference.
-- **Activity Public Contract**: Provider-neutral inputs, outputs, outcomes, stable reference keys, type references, defaults, requiredness, durability policy, and presentation metadata.
+- **Activity Public Contract**: Provider-neutral inputs, outputs, outcomes, stable reference keys, type references, defaults, independent requiredness and per-member nullability, durability policy, and presentation metadata.
 - **Provider Manifest**: Provider-owned authored implementation payload identified by stable provider key and schema version.
 - **Executable Activity Template**: Content-addressed, immutable, deterministic Runtime execution material with exact closed dependencies and Runtime consumer requirements.
 - **Activity Dependency Edge**: Immutable direct edge from an owning activity version/template to an exact dependency version/template, including authored origin.
