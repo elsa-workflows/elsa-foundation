@@ -138,16 +138,14 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                 .UtcTicks.ToString("D19", CultureInfo.InvariantCulture)
             : value;
 
-    private static JsonElement? GetPropertyPath(JsonElement root, string path)
-    {
-        var current = root;
-        foreach (var segment in path.Split('.'))
-        {
-            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(segment, out current))
-                return null;
-        }
-        return current;
-    }
+    private static JsonElement? GetPropertyPath(JsonElement root, string path) =>
+        path.Split('.').Aggregate<string, JsonElement?>(
+            root,
+            (current, segment) =>
+                current is { ValueKind: JsonValueKind.Object } &&
+                current.Value.TryGetProperty(segment, out var child)
+                    ? child
+                    : null);
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
         (await QueryAsync(query, cancellationToken)).TotalCount;
