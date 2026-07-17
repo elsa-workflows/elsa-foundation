@@ -21,6 +21,7 @@ using Groundwork.Documents.Scoping;
 using Groundwork.MongoDb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 using static Elsa.Persistence.Groundwork.RegistrationTests.GroundworkProviderRegistrationAssertions;
@@ -43,6 +44,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     public void Runtime_feature_registers_a_replica_set_gated_startup_leaf_without_exposing_credentials()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         new MongoDbGroundworkRuntimePersistenceShellFeature
         {
             ConnectionString = ConnectionString,
@@ -61,6 +63,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     public void Unified_feature_registers_the_six_provider_families_without_selecting_identity()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         new MongoDbGroundworkUnifiedPersistenceShellFeature(CreateBareShellContext())
         {
             ConnectionString = ConnectionString,
@@ -84,6 +87,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     public void Repeated_runtime_provider_registration_is_idempotent()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         var feature = new MongoDbGroundworkRuntimePersistenceShellFeature
         {
             ConnectionString = ConnectionString,
@@ -101,6 +105,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     public async Task Startup_publishes_the_selected_store_once_only_after_topology_and_schema_admission()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         new MongoDbGroundworkRuntimePersistenceShellFeature
         {
             ConnectionString = ConnectionString,
@@ -152,6 +157,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     public async Task Unified_shell_standalone_composes_the_six_provider_families_into_one_exact_MongoDB_target()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         new MongoDbGroundworkUnifiedPersistenceShellFeature(CreateBareShellContext())
         {
             ConnectionString = ConnectionString,
@@ -192,6 +198,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     public async Task Explicit_identity_schema_and_feature_compose_and_admit_on_the_unified_MongoDB_target()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
             ConnectionString,
             DatabaseName);
@@ -265,8 +272,11 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
             string databaseName,
             GroundworkPhysicalSchemaManifestSource source,
             GroundworkStoreSessionSource sessionSource,
+            bool autoApplyOnStartup,
+            ILogger logger,
             CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(logger);
             cancellationToken.ThrowIfCancellationRequested();
             OpenAttempts++;
             Source = source;
