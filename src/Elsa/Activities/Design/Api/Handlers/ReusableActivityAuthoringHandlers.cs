@@ -573,7 +573,8 @@ public sealed class ReusableActivityAuthoringService(
         definition.Description,
         authoring.ContentAuthority,
         authoring.ForkedFrom,
-        authoring.HeadVersionId);
+        authoring.HeadVersionId,
+        authoring.RecommendedVersionId);
 
     private static ReusableActivityDraftSummaryView ToSummary(ActivityDefinitionDraft draft) => new(
         draft.Id,

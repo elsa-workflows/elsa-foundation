@@ -226,6 +226,45 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
+    public async Task Recommendation_move_picker_and_lifecycle_replacement_share_exact_groundwork_cas()
+    {
+        var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest(
+            headVersionId: "version-2",
+            recommendedVersionId: "version-1"));
+        await harness.SaveAsync(Publication("publication-1", "version-1", "definition-1", "1.0.0", 0));
+        await harness.SaveAsync(Publication("publication-2", "version-2", "definition-1", "2.0.0", 0));
+
+        await harness.Stores.ExecuteAsync(new SetActivityDefinitionRecommendationRequest(
+            "definition-1",
+            null,
+            "version-2",
+            "version-1",
+            "version-2",
+            ActivityDefinitionVersionLifecycle.Active,
+            DateTimeOffset.UtcNow));
+        var picker = await harness.Stores.ReadAsync(null, 0, 25);
+        await harness.Stores.ExecuteAsync(new ChangeActivityVersionLifecycleRequest(
+            "version-2",
+            ActivityDefinitionVersionLifecycle.Active,
+            ActivityDefinitionVersionLifecycle.Retired,
+            "Superseded",
+            null,
+            new(
+                "version-2",
+                "version-2",
+                ActivityRecommendationDisposition.Replace,
+                "version-1",
+                ActivityDefinitionVersionLifecycle.Active)));
+
+        Assert.Equal("version-2", Assert.Single(picker.Items).Version.DefinitionVersionId);
+        Assert.Equal("version-1", (await harness.Stores.FindAsync("definition-1"))!.RecommendedVersionId);
+        Assert.Equal(
+            ActivityDefinitionVersionLifecycle.Retired,
+            (await ((IActivityDefinitionVersionPublicationStore)harness.Stores).FindAsync("version-2"))!.Lifecycle);
+    }
+
+    [Fact]
     public async Task Mixed_owner_dependency_projection_rebuilds_with_a_bound_watermark()
     {
         var harness = Harness.Create();
@@ -303,7 +342,9 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     private static CreateActivityDefinitionRequest CreateRequest(
-        ActivityContentAuthorityKind authority = ActivityContentAuthorityKind.Design)
+        ActivityContentAuthorityKind authority = ActivityContentAuthorityKind.Design,
+        string? headVersionId = null,
+        string? recommendedVersionId = null)
     {
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         return new CreateActivityDefinitionRequest(
@@ -320,6 +361,8 @@ public sealed class GroundworkReusableActivityStoreTests
                 Id = "authoring-1",
                 DefinitionId = "definition-1",
                 ContentAuthority = new(authority, authority == ActivityContentAuthorityKind.Design ? "design" : "provider"),
+                HeadVersionId = headVersionId,
+                RecommendedVersionId = recommendedVersionId,
                 CreatedAt = now,
                 LastModifiedAt = now
             },

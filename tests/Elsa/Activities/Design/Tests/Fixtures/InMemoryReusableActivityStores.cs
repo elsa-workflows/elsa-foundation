@@ -24,6 +24,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
+    IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
     IActivityDirectDependencyStore,
@@ -36,6 +37,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IDiscardActivityDraftCommand,
     IStoreActivityDraftValidationCommand,
     IChangeActivityVersionLifecycleCommand,
+    ISetActivityDefinitionRecommendationCommand,
     ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference>
     where TExecutableTemplate : class
     where TSourceReference : class
@@ -202,6 +204,40 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                     .OrderBy(x => x.Version, StringComparer.Ordinal)
                     .Select(Clone)
                     .ToArray());
+    }
+
+    public Task<RecommendedActivityDefinitionPickerPage> ReadAsync(
+        string? tenantId,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (offset < 0)
+            throw new ArgumentOutOfRangeException(nameof(offset));
+        if (limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+        lock (_gate)
+        {
+            var source = _authoring.Values.OrderBy(x => x.Id, StringComparer.Ordinal).ToArray();
+            var items = new List<RecommendedActivityDefinitionPickerItem>(limit);
+            var sourceOffset = offset;
+            while (sourceOffset < source.Length && items.Count < limit)
+            {
+                var authoring = source[sourceOffset++];
+                if (!IsVisible(authoring.TenantId, tenantId) || authoring.RecommendedVersionId is null ||
+                    !_publications.TryGetValue(authoring.RecommendedVersionId, out var publication) ||
+                    publication.Lifecycle != ActivityDefinitionVersionLifecycle.Active ||
+                    !StringComparer.Ordinal.Equals(publication.DefinitionId, authoring.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(publication.TenantId, authoring.TenantId) ||
+                    !_definitions.TryGetValue(authoring.DefinitionId, out var definition))
+                    continue;
+                items.Add(new(Clone(definition), Clone(publication)));
+            }
+            return Task.FromResult(new RecommendedActivityDefinitionPickerPage(
+                items,
+                sourceOffset < source.Length ? sourceOffset : null));
+        }
     }
 
     public Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(string draftId, CancellationToken cancellationToken = default)
@@ -439,10 +475,47 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         lock (_gate)
         {
             var current = Publication(request.DefinitionVersionId);
+            var authoring = Authoring(current.DefinitionId);
+            if (!IsVisible(authoring.TenantId, request.TenantId) ||
+                !StringComparer.Ordinal.Equals(authoring.TenantId, current.TenantId))
+                throw Conflict($"Activity version '{request.DefinitionVersionId}' is outside the caller tenant scope.");
             if (current.Lifecycle != request.ExpectedLifecycle)
                 throw Conflict($"Activity version '{request.DefinitionVersionId}' is {current.Lifecycle}, not {request.ExpectedLifecycle}.");
             if (!IsAllowedTransition(current.Lifecycle, request.Lifecycle))
                 throw Conflict($"Activity version lifecycle cannot transition from {current.Lifecycle} to {request.Lifecycle}.");
+
+            var invalidatesRecommendation = request.Lifecycle is ActivityDefinitionVersionLifecycle.Retired or ActivityDefinitionVersionLifecycle.Revoked &&
+                                            StringComparer.Ordinal.Equals(authoring.RecommendedVersionId, current.DefinitionVersionId);
+            if (invalidatesRecommendation)
+            {
+                var decision = request.RecommendationDecision ?? throw Conflict("An explicit recommendation decision is required.");
+                EnsureExpectedHead(authoring, decision.ExpectedDefinitionHeadVersionId);
+                if (!StringComparer.Ordinal.Equals(authoring.RecommendedVersionId, decision.ExpectedRecommendedVersionId))
+                    throw Conflict($"Activity definition '{authoring.DefinitionId}' recommendation is stale.");
+                var changedAuthoring = Clone(authoring);
+                if (decision.Disposition == ActivityRecommendationDisposition.Clear)
+                {
+                    if (decision.ReplacementVersionId is not null || decision.ExpectedReplacementLifecycle is not null)
+                        throw new ArgumentException("A clear recommendation decision cannot include a replacement.", nameof(request));
+                    changedAuthoring.RecommendedVersionId = null;
+                }
+                else
+                {
+                    if (decision.ReplacementVersionId is null || decision.ExpectedReplacementLifecycle is null)
+                        throw new ArgumentException("A replacement recommendation decision requires a version and lifecycle.", nameof(request));
+                    var replacement = Publication(decision.ReplacementVersionId);
+                    if (!StringComparer.Ordinal.Equals(replacement.DefinitionId, current.DefinitionId) ||
+                        !StringComparer.Ordinal.Equals(replacement.TenantId, current.TenantId))
+                        throw Missing($"Activity version publication '{decision.ReplacementVersionId}' was not found.");
+                    if (replacement.Lifecycle != decision.ExpectedReplacementLifecycle || replacement.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                        throw Conflict($"Activity version '{decision.ReplacementVersionId}' lifecycle is stale.");
+                    changedAuthoring.RecommendedVersionId = replacement.DefinitionVersionId;
+                }
+                changedAuthoring.LastModifiedAt = DateTimeOffset.UtcNow;
+                _authoring[current.DefinitionId] = changedAuthoring;
+            }
+            else if (request.RecommendationDecision is not null)
+                throw new ArgumentException("A recommendation decision is valid only for the recommended version.", nameof(request));
 
             var updated = Clone(current);
             updated.Lifecycle = request.Lifecycle;
@@ -450,6 +523,46 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             _publications[request.DefinitionVersionId] = updated;
             _sequence++;
             return Task.FromResult(Clone(updated));
+        }
+    }
+
+    public Task<ActivityDefinitionAuthoringState> ExecuteAsync(
+        SetActivityDefinitionRecommendationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var authoring = Authoring(request.DefinitionId);
+            if (!IsVisible(authoring.TenantId, request.TenantId))
+                throw Conflict($"Activity definition '{request.DefinitionId}' is outside the caller tenant scope.");
+            EnsureExpectedHead(authoring, request.ExpectedDefinitionHeadVersionId);
+            if (!StringComparer.Ordinal.Equals(authoring.RecommendedVersionId, request.ExpectedRecommendedVersionId))
+                throw Conflict($"Activity definition '{request.DefinitionId}' recommendation is stale.");
+            if (request.RecommendedVersionId is null)
+            {
+                if (request.ExpectedRecommendedVersionLifecycle is not null)
+                    throw new ArgumentException("A cleared recommendation cannot declare a target lifecycle.", nameof(request));
+            }
+            else
+            {
+                if (request.ExpectedRecommendedVersionLifecycle is null)
+                    throw new ArgumentException("A recommendation target requires an expected lifecycle.", nameof(request));
+                var target = Publication(request.RecommendedVersionId);
+                if (!StringComparer.Ordinal.Equals(target.DefinitionId, request.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(target.TenantId, authoring.TenantId))
+                    throw Missing($"Activity version publication '{request.RecommendedVersionId}' was not found.");
+                if (target.Lifecycle != request.ExpectedRecommendedVersionLifecycle ||
+                    target.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                    throw Conflict($"Activity version '{request.RecommendedVersionId}' lifecycle is stale.");
+            }
+
+            var changed = Clone(authoring);
+            changed.RecommendedVersionId = request.RecommendedVersionId;
+            changed.LastModifiedAt = request.ChangedAt;
+            _authoring[request.DefinitionId] = changed;
+            _sequence++;
+            return Task.FromResult(Clone(changed));
         }
     }
 
@@ -496,6 +609,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             _drafts[draft.Id] = publishedDraft;
 
             var advanced = Clone(authoring);
+            if (advanced.HeadVersionId is null && advanced.RecommendedVersionId is null)
+                advanced.RecommendedVersionId = mutation.Publication.DefinitionVersionId;
             advanced.HeadVersionId = mutation.Publication.DefinitionVersionId;
             advanced.LastModifiedAt = mutation.Publication.PublishedAt;
             _authoring[mutation.DefinitionId] = advanced;
@@ -714,6 +829,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         ContentAuthority = source.ContentAuthority,
         ForkedFrom = source.ForkedFrom,
         HeadVersionId = source.HeadVersionId,
+        RecommendedVersionId = source.RecommendedVersionId,
         CreatedAt = source.CreatedAt,
         LastModifiedAt = source.LastModifiedAt
     };

@@ -16,6 +16,7 @@ Stable Activity Catalog identity and lineage.
 | `ContentAuthority` | `ActivityContentAuthority` | Immutable authority for the lineage. |
 | `ForkedFrom` | `ActivityDefinitionForkOrigin?` | Exact source-owned definition/version used to create this independent lineage; audit provenance only. |
 | `HeadVersionId` | string? | Latest successfully published version under the definition lock; not a runtime selector. |
+| `RecommendedVersionId` | string? | Exact active immutable version offered for new direct selection; never inferred from head or SemVer ordering. |
 | `Category` | string | Mutable picker grouping metadata. |
 | `DisplayName` | string | Mutable presentation metadata. |
 | `Description` | string? | Mutable presentation metadata. |
@@ -27,6 +28,9 @@ Invariants:
 - Changing display metadata does not create a version and does not affect behavior hashes.
 - `HeadVersionId` changes only inside successful publication.
 - Exact version resolution never uses `HeadVersionId`; it exists for authoring concurrency and convenience reads.
+- The first successful publication establishes `RecommendedVersionId` when no publication existed. Later publication, reconciliation, or restoration never moves or re-establishes it implicitly.
+- An authorized recommendation change binds the exact head, current recommendation, target identity, and target lifecycle. Only an active version in the same definition can be recommended.
+- Retiring or revoking the recommended version atomically replaces it with an exact active sibling or records an explicit no-recommendation decision.
 - A source-owned definition cannot be mutated through general authoring commands.
 - Fork provenance never changes content authority and never makes the new definition part of the source definition's version lineage.
 

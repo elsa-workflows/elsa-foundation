@@ -30,6 +30,7 @@ public sealed class GroundworkReusableActivityStores(
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
+    IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
     IActivityDirectDependencyStore,
@@ -40,7 +41,8 @@ public sealed class GroundworkReusableActivityStores(
     IReplaceActivityDraftCommand,
     IDiscardActivityDraftCommand,
     IStoreActivityDraftValidationCommand,
-    IChangeActivityVersionLifecycleCommand
+    IChangeActivityVersionLifecycleCommand,
+    ISetActivityDefinitionRecommendationCommand
 {
     // This initial concrete projection derives immutable activity-version edges. The aggregate port
     // already carries all four owner kinds; T060 adds current activity/workflow draft and workflow-
@@ -108,6 +110,70 @@ public sealed class GroundworkReusableActivityStores(
         .Select(x => x.Entity)
         .OrderBy(x => x.Version, StringComparer.Ordinal)
         .ToArray();
+
+    public async Task<RecommendedActivityDefinitionPickerPage> ReadAsync(
+        string? tenantId,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (offset < 0)
+            throw new ArgumentOutOfRangeException(nameof(offset));
+        if (limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        var reader = boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+            "Recommended activity picker queries require an admitted bounded document-store runtime.");
+        var items = new List<RecommendedActivityDefinitionPickerItem>(limit);
+        var sourceOffset = offset;
+        long totalCount = offset;
+        while (items.Count < limit)
+        {
+            var result = await reader.QueryAsync(
+                new DocumentQuery(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ListAllQuery,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        ActivitiesDesignStorageManifest.CollectionField,
+                        ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection))],
+                    null,
+                    sourceOffset,
+                    Math.Min(100, Math.Max(limit * 2, 20))),
+                cancellationToken);
+            totalCount = result.TotalCount;
+            if (result.Documents.Count == 0)
+                break;
+
+            foreach (var envelope in result.Documents)
+            {
+                sourceOffset++;
+                var authoring = Deserialize<ActivityDefinitionAuthoringState>(
+                    envelope,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind).Entity;
+                if (!IsVisible(authoring.TenantId, tenantId) || authoring.RecommendedVersionId is null)
+                    continue;
+                var publication = await ((IActivityDefinitionVersionPublicationStore)this).FindAsync(authoring.RecommendedVersionId, cancellationToken);
+                if (publication is null ||
+                    publication.Lifecycle != ActivityDefinitionVersionLifecycle.Active ||
+                    !StringComparer.Ordinal.Equals(publication.DefinitionId, authoring.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(publication.TenantId, authoring.TenantId))
+                    continue;
+                var definition = await LoadAsync<ActivityDefinition>(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                    authoring.DefinitionId,
+                    cancellationToken);
+                if (definition is null ||
+                    !StringComparer.Ordinal.Equals(definition.Entity.TenantId, authoring.TenantId) ||
+                    !IsVisible(definition.Entity.TenantId, tenantId))
+                    continue;
+                items.Add(new(definition.Entity, publication));
+                if (items.Count == limit)
+                    break;
+            }
+        }
+
+        return new(items, sourceOffset < totalCount ? sourceOffset : null);
+    }
 
     public async Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(
         string draftId,
@@ -386,18 +452,125 @@ public sealed class GroundworkReusableActivityStores(
         CancellationToken cancellationToken = default)
     {
         var publication = await RequiredPublicationAsync(request.DefinitionVersionId, cancellationToken);
+        var authoring = await RequiredAuthoringAsync(publication.Entity.DefinitionId, cancellationToken);
+        if (!IsVisible(authoring.Entity.TenantId, request.TenantId) ||
+            !StringComparer.Ordinal.Equals(authoring.Entity.TenantId, publication.Entity.TenantId))
+            throw Conflict($"Activity version '{request.DefinitionVersionId}' is outside the caller tenant scope.");
         if (publication.Entity.Lifecycle != request.ExpectedLifecycle)
             throw Conflict($"Activity version '{request.DefinitionVersionId}' is {publication.Entity.Lifecycle}, not {request.ExpectedLifecycle}.");
         if (!IsAllowedTransition(publication.Entity.Lifecycle, request.Lifecycle))
             throw Conflict($"Activity version lifecycle cannot transition from {publication.Entity.Lifecycle} to {request.Lifecycle}.");
 
+        Stored<ActivityDefinitionVersionPublication>? replacement = null;
+        var invalidatesRecommendation = request.Lifecycle is ActivityDefinitionVersionLifecycle.Retired or ActivityDefinitionVersionLifecycle.Revoked &&
+                                        StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, publication.Entity.DefinitionVersionId);
+        if (invalidatesRecommendation)
+        {
+            var decision = request.RecommendationDecision ?? throw Conflict("An explicit recommendation decision is required.");
+            EnsureExpectedHead(authoring.Entity, decision.ExpectedDefinitionHeadVersionId);
+            if (!StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, decision.ExpectedRecommendedVersionId))
+                throw Conflict($"Activity definition '{authoring.Entity.DefinitionId}' recommendation is stale.");
+            if (decision.Disposition == ActivityRecommendationDisposition.Clear)
+            {
+                if (decision.ReplacementVersionId is not null || decision.ExpectedReplacementLifecycle is not null)
+                    throw new ArgumentException("A clear recommendation decision cannot include a replacement.", nameof(request));
+                authoring.Entity.RecommendedVersionId = null;
+            }
+            else
+            {
+                if (decision.ReplacementVersionId is null || decision.ExpectedReplacementLifecycle is null)
+                    throw new ArgumentException("A replacement recommendation decision requires a version and lifecycle.", nameof(request));
+                replacement = await RequiredPublicationAsync(decision.ReplacementVersionId, cancellationToken);
+                if (!StringComparer.Ordinal.Equals(replacement.Entity.DefinitionId, publication.Entity.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(replacement.Entity.TenantId, publication.Entity.TenantId))
+                    throw Missing($"Activity version publication '{decision.ReplacementVersionId}' was not found.");
+                if (replacement.Entity.Lifecycle != decision.ExpectedReplacementLifecycle ||
+                    replacement.Entity.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                    throw Conflict($"Activity version '{decision.ReplacementVersionId}' lifecycle is stale.");
+                authoring.Entity.RecommendedVersionId = replacement.Entity.DefinitionVersionId;
+            }
+            authoring.Entity.LastModifiedAt = clock.UtcNow;
+        }
+        else if (request.RecommendationDecision is not null)
+            throw new ArgumentException("A recommendation decision is valid only for the recommended version.", nameof(request));
+
         publication.Entity.Lifecycle = request.Lifecycle;
         publication.Entity.LastModifiedAt = clock.UtcNow;
+        var requests = new List<SaveDocumentRequest>
+        {
+            Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, publication.Entity, publication.Envelope.Version)
+        };
+        if (invalidatesRecommendation)
+            requests.Add(Save(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, authoring.Entity, authoring.Envelope.Version));
+        if (replacement is not null)
+            requests.Add(Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, replacement.Entity, replacement.Envelope.Version));
         await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind),
-            [Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, publication.Entity, publication.Envelope.Version)],
+            invalidatesRecommendation
+                ? DocumentCommitScope.Of(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind)
+                : DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind),
+            requests,
             cancellationToken);
         return publication.Entity;
+    }
+
+    public async Task<ActivityDefinitionAuthoringState> ExecuteAsync(
+        SetActivityDefinitionRecommendationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var authoring = await RequiredAuthoringAsync(request.DefinitionId, cancellationToken);
+        if (!IsVisible(authoring.Entity.TenantId, request.TenantId))
+            throw Conflict($"Activity definition '{request.DefinitionId}' is outside the caller tenant scope.");
+        EnsureExpectedHead(authoring.Entity, request.ExpectedDefinitionHeadVersionId);
+        if (!StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, request.ExpectedRecommendedVersionId))
+            throw Conflict($"Activity definition '{request.DefinitionId}' recommendation is stale.");
+
+        Stored<ActivityDefinitionVersionPublication>? target = null;
+        if (request.RecommendedVersionId is null)
+        {
+            if (request.ExpectedRecommendedVersionLifecycle is not null)
+                throw new ArgumentException("A cleared recommendation cannot declare a target lifecycle.", nameof(request));
+        }
+        else
+        {
+            if (request.ExpectedRecommendedVersionLifecycle is null)
+                throw new ArgumentException("A recommendation target requires an expected lifecycle.", nameof(request));
+            target = await RequiredPublicationAsync(request.RecommendedVersionId, cancellationToken);
+            if (!StringComparer.Ordinal.Equals(target.Entity.DefinitionId, request.DefinitionId) ||
+                !StringComparer.Ordinal.Equals(target.Entity.TenantId, authoring.Entity.TenantId))
+                throw Missing($"Activity version publication '{request.RecommendedVersionId}' was not found.");
+            if (target.Entity.Lifecycle != request.ExpectedRecommendedVersionLifecycle)
+                throw Conflict($"Activity version '{request.RecommendedVersionId}' lifecycle is stale.");
+            if (target.Entity.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                throw Conflict($"Activity version '{request.RecommendedVersionId}' is not active.");
+        }
+
+        authoring.Entity.RecommendedVersionId = request.RecommendedVersionId;
+        authoring.Entity.LastModifiedAt = request.ChangedAt;
+        var requests = new List<SaveDocumentRequest>
+        {
+            Save(
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection,
+                authoring.Entity,
+                authoring.Envelope.Version)
+        };
+        if (target is not null)
+            requests.Add(Save(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection,
+                target.Entity,
+                target.Envelope.Version));
+        await store.SaveAllAsync(
+            target is null
+                ? DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind)
+                : DocumentCommitScope.Of(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind),
+            requests,
+            cancellationToken);
+        return authoring.Entity;
     }
 
     private async Task<Stored<ActivityDefinitionAuthoringState>> RequiredAuthoringAsync(string definitionId, CancellationToken cancellationToken) =>

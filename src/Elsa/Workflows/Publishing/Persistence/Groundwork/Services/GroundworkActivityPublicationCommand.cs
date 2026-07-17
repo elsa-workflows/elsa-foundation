@@ -89,10 +89,13 @@ public sealed class GroundworkActivityPublicationCommand(
             edge,
             0)));
 
+        var establishesRecommendation = authoring.HeadVersionId is null && authoring.RecommendedVersionId is null;
         draft.Status = ActivityDefinitionDraftStatus.Published;
         draft.PublishedVersionId = commit.Design.Publication.DefinitionVersionId;
         draft.LastModifiedAt = commit.Design.Publication.PublishedAt;
         authoring.HeadVersionId = commit.Design.Publication.DefinitionVersionId;
+        if (establishesRecommendation)
+            authoring.RecommendedVersionId = commit.Design.Publication.DefinitionVersionId;
         authoring.LastModifiedAt = commit.Design.Publication.PublishedAt;
         requests.Add(CreateDesignRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,

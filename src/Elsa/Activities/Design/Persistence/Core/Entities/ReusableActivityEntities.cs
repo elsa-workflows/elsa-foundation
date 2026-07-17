@@ -16,6 +16,12 @@ public sealed class ActivityDefinitionAuthoringState : TenantEntity
     public ActivityDefinitionForkOrigin? ForkedFrom { get; init; }
 
     public string? HeadVersionId { get; set; }
+
+    /// <summary>
+    /// Exact immutable version offered for new direct selection. This is an explicit product decision,
+    /// independent of publication head and version ordering.
+    /// </summary>
+    public string? RecommendedVersionId { get; set; }
 }
 
 public sealed class ActivityDefinitionDraft : TenantEntity
