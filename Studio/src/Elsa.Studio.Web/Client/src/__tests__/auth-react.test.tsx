@@ -6,6 +6,7 @@ import {
   AuthGuard,
   AuthProvider,
   RequireAuth,
+  authSessionEndedEvent,
   useAuthCapabilities,
   useAuthContext,
   useAuthSession,
@@ -21,6 +22,22 @@ afterEach(() => {
 });
 
 describe("auth React SDK", () => {
+  it("announces a completed logout so scoped device-local data can be cleared", async () => {
+    const manager = stubManager(authenticatedSession());
+    const listener = vi.fn();
+    window.addEventListener(authSessionEndedEvent, listener);
+    const { container, unmount } = renderWithAuth(manager, <LogoutProbe />);
+    await flushPromises();
+
+    flushSync(() => container.querySelector("button")!.click());
+    await flushPromises();
+
+    expect(manager.logout).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener(authSessionEndedEvent, listener);
+    await unmount();
+  });
+
   it("exposes normalized session, permissions, and capabilities through hooks", async () => {
     const manager = stubManager(authenticatedSession());
     const { container, unmount } = renderWithAuth(manager, <AuthProbe />);
@@ -347,6 +364,11 @@ function renderWithAuth(manager: AuthProviderManager, children: React.ReactNode)
       container.remove();
     }
   };
+}
+
+function LogoutProbe() {
+  const { logout } = useAuthContext();
+  return <button type="button" onClick={() => void logout()}>Log out</button>;
 }
 
 function stubManager(session: AuthSession): AuthProviderManager {

@@ -1,4 +1,4 @@
-import type { StudioRuntimeSettings, StudioWorkflowRuntimeSettings } from "../sdk";
+import type { AuthSession, StudioActivityDefinitionRuntimeSettings, StudioRuntimeSettings, StudioWorkflowRuntimeSettings } from "../sdk";
 
 export interface StudioRuntimeConfig {
   backendBaseUrl?: string;
@@ -7,6 +7,7 @@ export interface StudioRuntimeConfig {
   // carry a host management key, so there is no field for it here — new frontend code cannot depend on one.
   auth?: StudioAuthRuntimeConfig;
   workflows?: StudioWorkflowRuntimeSettings;
+  activityDefinitions?: StudioActivityDefinitionRuntimeSettings;
 }
 
 /**
@@ -44,8 +45,12 @@ export function getStudioRuntimeConfig(): StudioRuntimeConfig {
   return window.__ELSA_STUDIO_RUNTIME__ ?? {};
 }
 
-export function getStudioRuntimeSettings(config: StudioRuntimeConfig): StudioRuntimeSettings {
+export function getStudioRuntimeSettings(config: StudioRuntimeConfig, session?: AuthSession | null): StudioRuntimeSettings {
   return {
-    workflows: config.workflows
+    workflows: config.workflows,
+    activityDefinitions: config.activityDefinitions,
+    identity: session?.status === "authenticated"
+      ? { subject: session.subject, tenantId: session.tenantId }
+      : undefined
   };
 }

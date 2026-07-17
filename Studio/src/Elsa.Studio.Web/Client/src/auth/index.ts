@@ -5,6 +5,7 @@ export { useAuthSession } from "./useAuthSession";
 export { usePermissions } from "./usePermissions";
 export { useAuthCapabilities } from "./useAuthCapabilities";
 export { useAuthContext } from "./AuthContext";
+export { authSessionEndedEvent } from "./types";
 export { AuthGuard } from "./guards/AuthGuard";
 export { RequireAuth } from "./guards/RequireAuth";
 export type { RequireAuthErrorFallbackProps, RequireAuthProps } from "./guards/RequireAuth";

@@ -1,12 +1,14 @@
 import "@xyflow/react/dist/style.css";
 import { lazy } from "react";
-import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
 import { createObjectExpressionEditorContribution } from "./objectExpressionEditor";
 import "./styles.css";
 import { registerVariableReferenceContribution } from "./variableReferenceContribution";
 import { registerInputReferenceContribution } from "./inputReferenceContribution";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
+import { activityGraphImplementationEditorContribution } from "./activityGraphContribution";
+import { clearActivityDefinitionRecoveryForIdentity } from "./activityDefinitionRecovery";
 
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
 const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutablesPage })));
@@ -34,6 +36,10 @@ export function register(api: ElsaStudioModuleApi) {
   registerVariableReferenceContribution(api.expressionEditors);
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   registerInputReferenceContribution(api.expressionEditors);
+  api.activityEditors.add(activityGraphImplementationEditorContribution);
+  if (api.runtime.identity?.subject && api.runtime.identity.tenantId && typeof window !== "undefined") {
+    window.addEventListener(authSessionEndedEvent, () => clearActivityDefinitionRecoveryForIdentity(api.runtime.identity), { once: true });
+  }
   const runInputEditors = () => api.workflowRunInputEditors?.list() ?? [];
   api.featureAreas.add({
     id: "workflows",
@@ -62,7 +68,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-activity-definitions",
         path: "/workflows/activity-definitions",
         label: "Activity Definitions",
-        component: () => <WorkflowLazyBoundary label="activity definitions"><ActivityDefinitionsPage context={api.backend} /></WorkflowLazyBoundary>
+        component: () => <WorkflowLazyBoundary label="activity definitions"><ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} runtime={api.runtime} /></WorkflowLazyBoundary>
       },
       {
         id: "workflows-definitions",

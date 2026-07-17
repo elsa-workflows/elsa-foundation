@@ -24,7 +24,8 @@ internal static class StudioRuntimeScript
             // backend identity endpoints. Omitted endpoints fall back to the SDK defaults (`/_elsa/identity/token`);
             // when Enabled is false the shell keeps booting anonymously.
             ["auth"] = BuildAuthRuntimeConfig(configuration),
-            ["workflows"] = BuildWorkflowsRuntimeConfig(configuration)
+            ["workflows"] = BuildWorkflowsRuntimeConfig(configuration),
+            ["activityDefinitions"] = BuildActivityDefinitionsRuntimeConfig(configuration)
         };
 
     /// <summary>Renders the full <c>/studio-runtime.js</c> body.</summary>
@@ -53,5 +54,17 @@ internal static class StudioRuntimeScript
         new()
         {
             ["autosaveEnabledByDefault"] = configuration.GetValue("Studio:Workflows:AutosaveEnabledByDefault", defaultValue: true)
+        };
+
+    private static Dictionary<string, object?> BuildActivityDefinitionsRuntimeConfig(IConfiguration configuration) =>
+        new()
+        {
+            ["localRecovery"] = new Dictionary<string, object?>
+            {
+                // Provider manifests may contain sensitive authoring state, so device-local recovery is an explicit
+                // host policy opt-in rather than a browser default.
+                ["enabled"] = configuration.GetValue("Studio:ActivityDefinitions:LocalRecovery:Enabled", defaultValue: false),
+                ["ttlMinutes"] = configuration.GetValue("Studio:ActivityDefinitions:LocalRecovery:TtlMinutes", defaultValue: 1440)
+            }
         };
 }
