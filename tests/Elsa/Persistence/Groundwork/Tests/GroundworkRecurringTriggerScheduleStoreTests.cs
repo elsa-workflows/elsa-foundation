@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
@@ -69,6 +70,31 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 RecurringTriggerSchedule.BuildId("art", "a")
             },
             limited.Select(s => s.ScheduleId));
+    }
+
+    [Fact]
+    public async Task ListDue_UsesDeclaredNextOccurrenceRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListDueAsync(Now, limit: 17);
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
+        Assert.Equal(Now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
+        var order = Assert.Single(query.Order);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, order.Path);
+        Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+        Assert.Null(query.Take);
     }
 
     [Theory]
@@ -293,5 +319,25 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             inner.BeginAsync(scope, cancellationToken);
+    }
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(new DocumentQueryResult([], 0));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

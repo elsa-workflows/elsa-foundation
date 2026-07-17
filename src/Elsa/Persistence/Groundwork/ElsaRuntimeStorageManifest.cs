@@ -226,10 +226,9 @@ public static class ElsaRuntimeStorageManifest
 
     // Durable recurring-trigger schedule store (W16). Each Timer/Cron start trigger in a published artifact
     // becomes one schedule document with no execution id, so the recurring-trigger pump can start a NEW
-    // instance on each occurrence across process restarts. The by-collection partition serves the due-schedule
-    // sweep through an equality index (Groundwork is equality-only, so next-occurrence filtering/ordering
-    // happens in memory — see GroundworkRecurringTriggerScheduleStore); the by-artifact index serves
-    // replace-on-republish and the by-publication index serves publication projection prepare/activate/delete.
+    // instance on each occurrence across process restarts. The by-next-occurrence route bounds the due-schedule
+    // sweep by the persisted cursor; the by-artifact index serves replace-on-republish and the by-publication
+    // index serves publication projection prepare/activate/delete.
     public const string RecurringTriggerScheduleDocumentKind = "recurringTriggerSchedule";
 
     /// <summary>Index used by the recurring-trigger pump's due-schedule sweep (constant partition).</summary>
@@ -244,7 +243,14 @@ public static class ElsaRuntimeStorageManifest
     /// <summary>Index used by publication projection prepare, activate, and delete operations.</summary>
     public const string RecurringTriggerScheduleByPublication = ByPublicationIndex;
 
+    /// <summary>Nested path to the mutable recurring fire cursor inside the persisted recurring-schedule envelope.</summary>
+    public const string RecurringTriggerScheduleNextOccurrenceField = "schedule.nextOccurrence";
+
+    /// <summary>Date index used by the recurring-trigger pump's due-schedule sweep.</summary>
+    public const string RecurringTriggerScheduleByNextOccurrence = "by-next-occurrence";
+
     public const string ListRecurringTriggerSchedulesByPublicationQuery = "list-by-publication";
+    public const string ListDueRecurringTriggerSchedulesQuery = "list-due";
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
@@ -448,12 +454,18 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByCollectionIndex, CollectionField),
                     Keyword(ByArtifactIndex, ArtifactIdField),
-                    Keyword(ByPublicationIndex, RecurringTriggerSchedulePublicationIdField)
+                    Keyword(ByPublicationIndex, RecurringTriggerSchedulePublicationIdField),
+                    DateTime(RecurringTriggerScheduleByNextOccurrence, RecurringTriggerScheduleNextOccurrenceField)
                 ],
                 [
                     Query("list-all", ByCollectionIndex),
                     Query("list-by-artifact", ByArtifactIndex),
-                    Query(ListRecurringTriggerSchedulesByPublicationQuery, ByPublicationIndex)
+                    Query(ListRecurringTriggerSchedulesByPublicationQuery, ByPublicationIndex),
+                    Query(
+                        ListDueRecurringTriggerSchedulesQuery,
+                        RecurringTriggerScheduleByNextOccurrence,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending)
                 ]),
             Unit(
                 PublicationProjectionStateDocumentKind,
