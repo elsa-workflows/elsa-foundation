@@ -14,6 +14,13 @@ namespace Elsa.Workflows.Runtime.Distributed;
 public static class DistributedRuntimeStorageManifest
 {
     /// <summary>
+    /// Durable per-execution command stream coordination document. The Groundwork transport uses this head with
+    /// provider-level compare-and-swap to allocate strictly increasing per-execution command sequences without
+    /// scanning the command backlog.
+    /// </summary>
+    public const string ExecutionCommandStreamHeadDocumentKind = "executionCommandStreamHead";
+
+    /// <summary>
     /// Durable cross-node command inbox. Each queued command for a workflow execution is one document so the inbox
     /// survives node death and a survivor can re-lease and re-drive it on failover.
     /// </summary>

@@ -39,6 +39,11 @@ public static class DistributedGroundworkStorageManifest
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
+                DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind,
+                "Execution command stream head",
+                [],
+                []),
+            Unit(
                 DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
                 "Execution command transport item",
                 [
