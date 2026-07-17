@@ -81,6 +81,22 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         Assert.Null(await queue.DequeueAsync("wfexec-1"));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Delete_RemovesWorkItemIdBeyondPortableDocumentLimit(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var workItemId = $"work:{new string('x', 450)}";
+
+        await queue.EnqueueAsync(NewWorkItem(1, workItemId: workItemId));
+
+        Assert.True(await queue.DeleteAsync("wfexec-1", workItemId));
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.False(await queue.DeleteAsync("wfexec-1", workItemId));
+    }
+
     [Fact]
     public async Task Physical_identity_collision_fails_closed()
     {
@@ -106,6 +122,35 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
             content));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await queue.EnqueueAsync(workItem));
+
+        Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Delete_physical_identity_collision_fails_closed()
+    {
+        await using var fixture = CreateStore("sqlite");
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var workItem = NewWorkItem(1, workItemId: $"work:{new string('x', 450)}");
+        var logicalDocumentId = DocumentId.Compose(workItem.WorkflowExecutionId, workItem.WorkItemId);
+        var physicalDocumentId = GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(logicalDocumentId);
+        var wrongItem = NewWorkItem(2, workflowExecutionId: "wfexec-wrong", workItemId: "work-wrong");
+        var wrongEnvelope = new
+        {
+            Collection = ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            WorkflowExecutionId = wrongItem.WorkflowExecutionId,
+            Item = wrongItem
+        };
+        var (schemaVersion, content) = GroundworkTestSerialization.Serializer.Serialize(
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            wrongEnvelope);
+        await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            physicalDocumentId,
+            schemaVersion,
+            content));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await queue.DeleteAsync(workItem.WorkflowExecutionId, workItem.WorkItemId));
 
         Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
     }
