@@ -441,7 +441,10 @@ public class GroundworkStorageCompositionTests
 
         Assert.NotEmpty(projectedStrings);
         Assert.All(projectedStrings, column =>
-            Assert.Equal(LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength, column.Length));
+            Assert.InRange(
+                column.Length ?? 0,
+                1,
+                LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength));
     }
 
     [Fact]

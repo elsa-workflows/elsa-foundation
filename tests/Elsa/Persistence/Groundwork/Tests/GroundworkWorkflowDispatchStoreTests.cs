@@ -1,4 +1,7 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -22,6 +25,29 @@ public sealed class GroundworkWorkflowDispatchStoreTests
 
         Assert.True(WorkflowDispatchLifecycle.RecordsEqual(record, replay));
         Assert.True(WorkflowDispatchLifecycle.RecordsEqual(record, (await store.FindAsync(record.DispatchId))!));
+    }
+
+    [Theory]
+    [InlineData("sqlite", WorkflowRunKind.TestRun)]
+    [InlineData("sqlite", WorkflowRunKind.PublishedRun)]
+    [InlineData("memory", WorkflowRunKind.TestRun)]
+    [InlineData("memory", WorkflowRunKind.PublishedRun)]
+    public async Task Provider_recreation_preserves_run_kind_through_detail_inspection(
+        string provider,
+        WorkflowRunKind runKind)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        var record = Pending("parent-run-kind", $"activity-{runKind}", runKind: runKind);
+        await CreateStore(fixture).SaveAsync(record);
+
+        var recreated = CreateStore(fixture);
+        var detailed = Assert.IsType<WorkflowDispatchView>(
+            (await new GetWorkflowDispatchRequestHandler(recreated).Handle(
+                new GetWorkflowDispatch(record.DispatchId),
+                CancellationToken.None)).Dispatch);
+
+        Assert.Equal(runKind, WorkflowDispatchView.From(record).RunKind);
+        Assert.Equal(runKind, detailed.RunKind);
     }
 
     [Theory]
@@ -124,6 +150,50 @@ public sealed class GroundworkWorkflowDispatchStoreTests
         Assert.Equal(second.DispatchId, Assert.Single(status).DispatchId);
     }
 
+    [Fact]
+    public async Task Query_take_and_continuation_bound_total_provider_work_independent_of_history()
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create("memory");
+        var seedStore = CreateStore(fixture);
+        var records = new List<WorkflowDispatchRecord>();
+        for (var index = 0; index < WorkflowDispatchQuery.MaximumTake * 3; index++)
+        {
+            var record = Pending("parent-bounded", $"activity-{index:D3}");
+            records.Add(record);
+            await seedStore.SaveAsync(record);
+        }
+
+        var recording = new RecordingBoundedDocumentStore(fixture.BoundedDocumentStore);
+        var queryStore = new GroundworkWorkflowDispatchStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            recording);
+        var ordered = records.OrderBy(record => record.DispatchId, StringComparer.Ordinal).ToArray();
+
+        var first = Assert.Single(await queryStore.QueryAsync(new WorkflowDispatchQuery(
+            parentWorkflowExecutionId: "parent-bounded",
+            take: 1)));
+
+        Assert.Equal(ordered[0].DispatchId, first.DispatchId);
+        Assert.Single(recording.Queries);
+        Assert.All(recording.Queries, query => Assert.Equal(1, query.Take));
+        Assert.Equal(1, recording.ReturnedDocumentCounts.Sum());
+
+        recording.Queries.Clear();
+        recording.ReturnedDocumentCounts.Clear();
+        var second = Assert.Single(await queryStore.QueryAsync(new WorkflowDispatchQuery(
+            parentWorkflowExecutionId: "parent-bounded",
+            take: 1,
+            afterCreatedAt: first.CreatedAt,
+            afterDispatchId: first.DispatchId)));
+
+        Assert.Equal(ordered[1].DispatchId, second.DispatchId);
+        Assert.Equal(2, recording.Queries.Count);
+        Assert.All(recording.Queries, query => Assert.Equal(1, query.Take));
+        Assert.InRange(recording.ReturnedDocumentCounts.Sum(), 1, 2);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -197,7 +267,8 @@ public sealed class GroundworkWorkflowDispatchStoreTests
         string parentActivityExecutionId,
         string? tenantId = null,
         WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget,
-        bool? cancellationPropagation = null)
+        bool? cancellationPropagation = null,
+        WorkflowRunKind runKind = WorkflowRunKind.PublishedRun)
     {
         var identity = new WorkflowDispatchIdentity(parentWorkflowExecutionId, parentActivityExecutionId);
         var metadata = new Dictionary<string, string> { ["safe-code"] = "dispatch" };
@@ -229,7 +300,7 @@ public sealed class GroundworkWorkflowDispatchStoreTests
             correlationId: null,
             tenantId,
             new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
-            WorkflowRunKind.PublishedRun,
+            runKind,
             new WorkflowExecutionAuthoritySnapshot(parentWorkflowExecutionId, "initiator-1"),
             [new WorkflowDispatchInputDescriptor("orderId", "string")],
             Now,

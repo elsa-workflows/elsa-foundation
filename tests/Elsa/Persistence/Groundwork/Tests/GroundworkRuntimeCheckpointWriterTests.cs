@@ -71,7 +71,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     [Fact]
     public async Task Redelivered_Commit_With_Same_CommitId_Is_Skipped()
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var writer = CreateWriter(store);
         var commit = BuildCommit("commit-1", bookmarkNode: "node-v1");
 
@@ -85,7 +85,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     [Fact]
     public async Task Redelivered_Commit_With_Same_CommitId_Rejects_Conflicting_Payload()
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var writer = CreateWriter(store);
 
         await writer.CommitAsync(BuildCommit("commit-1", bookmarkNode: "node-v1"), Decision);
@@ -99,7 +99,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     [Fact]
     public async Task Commit_Rejects_Explicit_Tenant_Outside_The_Current_Scope_Before_Provider_IO()
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var writer = CreateWriter(store, GroundworkTestAccess.AccessContext("tenant-a"));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -114,7 +114,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     [Fact]
     public async Task Commit_Persists_WorkflowDispatch_And_Outbox_In_The_Checkpoint_Boundary()
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var writer = CreateWriter(store);
         var commit = BuildCommit("commit-dispatch", includeDispatch: true);
         var outbox = PendingDispatchOutbox("commit-dispatch", "wf-1");
@@ -352,7 +352,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     [Fact]
     public async Task Replayed_Commit_After_Marker_Loss_Reapplies_Without_Throwing()
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var writer = CreateWriter(store);
 
         await writer.CommitAsync(BuildCommit("commit-1"), Decision);
@@ -414,7 +414,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     public async Task UncertainCommit_ReconcilesMarker_AfterCallerTokenIsCanceled()
     {
         using var callerCancellation = new CancellationTokenSource();
-        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var store = new UncertainAfterCommitDocumentStore(inner, callerCancellation);
         var writer = CreateWriter(store);
 
@@ -430,7 +430,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     [Fact]
     public async Task UncertainCommit_ReconciliationTimeout_PreservesMayHaveCommittedFailure()
     {
-        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var store = new UncertainWithoutCommitDocumentStore(inner);
         var timeProvider = new ManualTimerTimeProvider();
         var writer = CreateWriter(store, timeProvider: timeProvider);

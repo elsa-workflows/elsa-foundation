@@ -128,7 +128,8 @@ public sealed class RuntimePostCommitOutboxClaimRequest
         if (limit <= 0)
             throw new ArgumentOutOfRangeException(nameof(limit), "Outbox claim limit must be greater than zero.");
         ValidateOptional(workflowExecutionId, nameof(workflowExecutionId));
-        ValidateOptional(intentKind, nameof(intentKind));
+        if (intentKind is not null)
+            RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
 
         OwnerId = ownerId;
         Now = now;
@@ -293,6 +294,14 @@ public sealed class PostCommitFailureProjection
 public static class RuntimePostCommitOutboxClaimTransitions
 {
     public const string FirstDeliveryAttemptedAtMetadataKey = "runtime.delivery.firstAttemptedAt";
+
+    public static DateTimeOffset ClaimableAt(RuntimePostCommitOutboxItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Status == RuntimePostCommitOutboxStatus.Delivering
+            ? item.DeliveryVisibleAfter ?? DateTimeOffset.MaxValue
+            : item.AvailableAt ?? DateTimeOffset.MinValue;
+    }
 
     public static DateTimeOffset? ReadFirstDeliveryAttemptedAt(RuntimePostCommitOutboxItem item)
     {
@@ -539,8 +548,8 @@ public sealed class RuntimePostCommitOutboxQuery
         if (ownerId is not null && string.IsNullOrWhiteSpace(ownerId))
             throw new ArgumentException("Outbox owner filter cannot be blank.", nameof(ownerId));
 
-        if (intentKind is not null && string.IsNullOrWhiteSpace(intentKind))
-            throw new ArgumentException("Outbox intent kind filter cannot be blank.", nameof(intentKind));
+        if (intentKind is not null)
+            RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
 
         Now = now;
         Limit = limit;

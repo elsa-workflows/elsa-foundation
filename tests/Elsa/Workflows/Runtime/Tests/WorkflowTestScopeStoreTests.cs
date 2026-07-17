@@ -220,6 +220,45 @@ public sealed class WorkflowTestScopeStoreTests
     }
 
     [Fact]
+    public async Task Cleanup_fails_closed_for_hostile_context_and_isolates_cross_context_legacy_and_nested_dispatches()
+    {
+        var stores = NewStores();
+        var scope = NewScope("scope-hostile");
+        var crossTenantScope = NewScope("scope-cross-tenant", tenantId: "tenant-other");
+        var crossPartitionScope = NewScope("scope-cross-partition", partition: "partition-other");
+        var target = NewDispatch("hostile-target", scope);
+        var nested = NewDispatch("hostile-nested", scope, dispatchNestingDepth: 2);
+        var crossTenant = NewDispatch("hostile-cross-tenant", crossTenantScope);
+        var crossPartition = NewDispatch("hostile-cross-partition", crossPartitionScope);
+        var legacyUnscoped = NewDispatch("hostile-legacy", null);
+        await stores.Scopes.CreateAsync(scope, CreatedAt);
+        foreach (var dispatch in new[] { target, nested, crossTenant, crossPartition, legacyUnscoped })
+            await stores.Dispatches.SaveAsync(dispatch);
+        await CloseAsync(stores.Scopes, scope);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => stores.Scopes.CleanupAsync(
+            NewScope(scope.ScopeId, tenantId: "tenant-other"),
+            ClosedAt,
+            10,
+            EmptyIntents).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => stores.Scopes.CleanupAsync(
+            NewScope(scope.ScopeId, partition: "partition-other"),
+            ClosedAt,
+            10,
+            EmptyIntents).AsTask());
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await stores.Dispatches.FindAsync(target.DispatchId))!.Status);
+
+        var result = await stores.Scopes.CleanupAsync(scope, ClosedAt, 10, EmptyIntents);
+
+        Assert.Equal(2, result.CancelledBeforeAdmission);
+        Assert.Equal(WorkflowDispatchStatus.Cancelled, (await stores.Dispatches.FindAsync(target.DispatchId))!.Status);
+        Assert.Equal(WorkflowDispatchStatus.Cancelled, (await stores.Dispatches.FindAsync(nested.DispatchId))!.Status);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await stores.Dispatches.FindAsync(crossTenant.DispatchId))!.Status);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await stores.Dispatches.FindAsync(crossPartition.DispatchId))!.Status);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await stores.Dispatches.FindAsync(legacyUnscoped.DispatchId))!.Status);
+    }
+
+    [Fact]
     public async Task One_hundred_duplicate_cleanup_attempts_converge_on_one_pending_cancellation()
     {
         var stores = NewStores();
@@ -298,7 +337,8 @@ public sealed class WorkflowTestScopeStoreTests
         string suffix,
         WorkflowTestScope? scope,
         WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget,
-        WorkflowRunKind runKind = WorkflowRunKind.TestRun)
+        WorkflowRunKind runKind = WorkflowRunKind.TestRun,
+        int dispatchNestingDepth = 0)
     {
         var parentId = $"parent-{suffix}";
         var activityId = $"activity-{suffix}";
@@ -336,6 +376,8 @@ public sealed class WorkflowTestScopeStoreTests
             [],
             CreatedAt,
             CreatedAt,
+            metadata: null,
+            dispatchNestingDepth,
             testScope: scope);
     }
 

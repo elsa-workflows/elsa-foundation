@@ -15,7 +15,7 @@ public sealed class RuntimePostCommitIntentHandlerContribution
         Type handlerType,
         RuntimePostCommitRetryPolicy retryPolicy)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind);
+        RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
         ArgumentNullException.ThrowIfNull(handlerType);
         ArgumentNullException.ThrowIfNull(retryPolicy);
 

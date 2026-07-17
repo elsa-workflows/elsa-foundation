@@ -37,6 +37,22 @@ public sealed class RuntimePostCommitPolicyTests
     }
 
     [Fact]
+    public void Intent_kind_is_bounded_consistently_across_persistence_entry_points()
+    {
+        var tooLong = new string('k', RuntimePostCommitIntent.MaximumKindLength + 1);
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitIntent(
+            "intent-1", "workflow-1", tooLong, now, null, null, null));
+        Assert.Throws<ArgumentException>(() =>
+            new RuntimePostCommitIntentHandlerContribution(tooLong, typeof(MarkerHandler)));
+        Assert.Throws<ArgumentException>(() =>
+            new RuntimePostCommitOutboxQuery(now, 1, intentKind: tooLong));
+        Assert.Throws<ArgumentException>(() =>
+            new RuntimePostCommitOutboxClaimRequest("owner-1", now, TimeSpan.FromMinutes(1), 1, intentKind: tooLong));
+    }
+
+    [Fact]
     public void PendingOutboxItems_SelectContributedPolicyAndDefaultMissingKindToNone()
     {
         var now = new DateTimeOffset(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);

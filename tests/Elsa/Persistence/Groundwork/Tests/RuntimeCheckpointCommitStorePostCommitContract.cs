@@ -98,7 +98,7 @@ public sealed class GroundworkRuntimeCheckpointCommitStorePostCommitContractTest
 {
     protected override (IRuntimeCheckpointCommitStore Writer, IRuntimePostCommitOutboxStore Outbox) Create()
     {
-        IDocumentStore store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        IDocumentStore store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var writer = new GroundworkRuntimeCheckpointWriter(
             store,
             GroundworkTestSerialization.Serializer,
