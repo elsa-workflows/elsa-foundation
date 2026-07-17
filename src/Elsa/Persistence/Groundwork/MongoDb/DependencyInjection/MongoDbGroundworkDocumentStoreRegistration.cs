@@ -47,6 +47,7 @@ public static class MongoDbGroundworkDocumentStoreRegistration
             autoApplyOnStartup,
             serviceProvider.GetRequiredService<GroundworkStoreSessionSource>(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            serviceProvider.GetRequiredService<IMongoDbGroundworkRuntimeAdmission>(),
             serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MongoDbGroundworkDocumentStoreInitializer>>()));
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>());

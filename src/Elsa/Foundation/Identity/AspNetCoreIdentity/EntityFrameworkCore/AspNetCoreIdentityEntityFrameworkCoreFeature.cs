@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

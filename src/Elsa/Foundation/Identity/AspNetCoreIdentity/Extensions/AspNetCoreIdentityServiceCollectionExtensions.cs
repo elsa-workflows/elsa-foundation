@@ -2,7 +2,10 @@ using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
+using Elsa.Persistence.Core.DependencyInjection;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -29,6 +32,7 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
     public static IServiceCollection AddFoundationAspNetCoreIdentity(this IServiceCollection services, Action<AspNetCoreIdentityOptions>? configure = null)
     {
         services.AddFoundationIdentityAbstractions();
+        services.AddPersistenceCore();
 
         if (configure is not null)
             services.Configure(configure);
@@ -50,6 +54,7 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
         services.TryAddScoped<IPrincipalFactory, AspNetCoreIdentityPrincipalFactory>();
         services.TryAddScoped<IAuthSessionService, DefaultAuthSessionService>();
         services.TryAddScoped<IIdentitySignInService, AspNetCoreIdentitySignInService>();
+        services.TryAddScoped<IdentitySeedCoordinator>();
 
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthenticationProviderModule, AspNetCoreIdentityAuthenticationProviderModule>());
 

@@ -1,13 +1,6 @@
 using CShells.Lifecycle;
-using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Stores;
-using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -67,16 +60,5 @@ internal static class GroundworkProviderRegistrationAssertions
         var diagnostics = string.Join(Environment.NewLine, services.Select(descriptor => descriptor.ToString()));
         Assert.DoesNotContain(registrationSecret, diagnostics, StringComparison.Ordinal);
         Assert.DoesNotContain(connectionString, diagnostics, StringComparison.Ordinal);
-    }
-
-    public static void SelectAllGroundworkFamilies(IServiceCollection services)
-    {
-        services.AddGroundworkRuntimeStores();
-        services.AddGroundworkIdentityStores();
-        services.AddGroundworkSecretsStore();
-        services.AddGroundworkDistributedRuntimeStores();
-        services.AddGroundworkWorkflowsDesignStores();
-        services.AddGroundworkActivitiesDesignStores();
-        services.AddGroundworkPublishingStores();
     }
 }

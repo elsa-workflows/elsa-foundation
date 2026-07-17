@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
@@ -140,7 +141,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var compositionFactory = scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>();
         var provider = SqlServerGroundworkCapabilities.Runtime();
-        var capabilities = GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
+        var capabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
             provider,
             new GroundworkProviderTopologySnapshot(
                 provider.Provider.Name,
@@ -149,8 +150,8 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                 {
                     RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
                 }),
-            RuntimeGroundworkStorageManifestSource.FeatureName,
-            [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]);
+            scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+            cancellationToken);
         return await compositionFactory.CreateSourceAsync(
             capabilities,
             SqlServerGroundworkCapabilities.PhysicalNames,

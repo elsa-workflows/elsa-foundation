@@ -1,0 +1,663 @@
+{
+  "artifactSchemaVersion": 1,
+  "sourceAuthority": "#644",
+  "testedCandidate": {
+    "commitSha": "1aed4f5989b9aed0ddb9837a61597d4cb584fbaa",
+    "treeSha": "00f5f518c79429dcd1e175ca71e38e719004dc65",
+    "groundworkPackageFamilyVersion": "0.0.1-preview.60",
+    "groundworkToolVersion": "0.0.1-preview.60",
+    "identityManifestVersion": "1.0.4",
+    "groundworkProviderAssemblyVersion": "0.0.1-preview.60"
+  },
+  "provider": {
+    "key": "mongodb",
+    "identity": "groundwork-mongodb",
+    "topology": "transaction-capable-replica-set",
+    "capabilities": [
+      "ExternalProcessRestart",
+      "IndependentClients",
+      "MultiDocumentTransactions",
+      "PersistentStorage",
+      "TransactionCapableMongoTopology"
+    ],
+    "diagnosticsSha256": "ecc6c5cc3a1aa49dc006de8f0b9bd37161bc873e14265f7fc6517c9592e4bb22",
+    "topologyRejectionSha256": "db90ee68dff595c4e0b262b194a32ec29b1d6b2d70600e8fe4a1a8044a5fe163"
+  },
+  "acceptance": {
+    "objectiveCount": 25,
+    "objectiveIds": [
+      "atomicity.injected-failure-does-not-leave-partial-state",
+      "cancellation.pre-cancelled-load-is-cancelled",
+      "concurrency.duplicate-normalized-user-name-has-one-winner",
+      "concurrency.external-login-owner-has-one-winner",
+      "delete.user-delete-removes-relationships-after-success",
+      "failure-window.lost-acknowledgement-reconciles-committed-result",
+      "framework-capability.role-claim-store",
+      "framework-capability.role-store",
+      "framework-capability.user-authentication-token-store",
+      "framework-capability.user-authenticator-key-store",
+      "framework-capability.user-claim-store",
+      "framework-capability.user-email-store",
+      "framework-capability.user-lockout-store",
+      "framework-capability.user-login-store",
+      "framework-capability.user-password-store",
+      "framework-capability.user-phone-number-store",
+      "framework-capability.user-role-store",
+      "framework-capability.user-security-stamp-store",
+      "framework-capability.user-store",
+      "framework-capability.user-two-factor-recovery-code-store",
+      "framework-capability.user-two-factor-store",
+      "lifecycle.close-reopen-preserves-authority",
+      "lifecycle.expired-mutation-receipt-is-cleaned",
+      "lifecycle.process-restart-preserves-authority",
+      "tenancy.cross-scope-read-is-not-disclosed"
+    ],
+    "objectiveResultDigest": "e4b9f360288bffc56c09050d21e9f431119a907fc0d118e40ed3ff018ede9583",
+    "advertisedCapabilityCount": 15,
+    "advertisedCapabilityIds": [
+      "role-claim-store",
+      "role-store",
+      "user-authentication-token-store",
+      "user-authenticator-key-store",
+      "user-claim-store",
+      "user-email-store",
+      "user-lockout-store",
+      "user-login-store",
+      "user-password-store",
+      "user-phone-number-store",
+      "user-role-store",
+      "user-security-stamp-store",
+      "user-store",
+      "user-two-factor-recovery-code-store",
+      "user-two-factor-store"
+    ],
+    "externalProcessesConfirmed": true,
+    "processLaunchFingerprint": "0e1761a3045d7909415d2298dbd4e50ff25a64601354a4808561cfdd916adda4"
+  },
+  "nativeRoutes": {
+    "routeCount": 10,
+    "physicalTableCount": 6,
+    "cardinalityPerPhysicalTable": 100000,
+    "routes": [
+      {
+        "queryIdentity": "find-role-by-normalized-name",
+        "documentKind": "identityRole",
+        "physicalName": "identity_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 1,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-role-by-normalized-name",
+        "indexName": "identity-role-by-normalized-name",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "9df05bd1ba1931efeef0bae00b988fc404d5bd343b6bdaf6b4f419f854e3ddbb",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-role-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedRoleNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "29f5b563bcc5136650b704cfd58b83ed618571a34680bf0715cb7a3b3748feb1"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-role-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedRoleNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "a50b81251693c8f684da4bbc1e3f232f3dec4ae1139d95e7df21d859ce660da2"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "find-user-by-normalized-email",
+        "documentKind": "identityUser",
+        "physicalName": "identity_users",
+        "physicalCardinality": 100000,
+        "finiteLimit": 2,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-by-normalized-email",
+        "indexName": "identity-user-by-normalized-email",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "08bb0f91cbe6fbb8a662022e1ac505874d22993eb2ed67967feccb71f0d737f8",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-by-normalized-email"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedEmailKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "84666e2dc0c592a56c678d8dd74d3506652bbf3b7b06c653f4d3ab5ef54e950a"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-by-normalized-email"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedEmailKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "7b44555989433e64096fc4942308f7ac1f5356f129c96eded8ae94c7327e23f8"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "find-user-by-normalized-name",
+        "documentKind": "identityUser",
+        "physicalName": "identity_users",
+        "physicalCardinality": 100000,
+        "finiteLimit": 1,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-by-normalized-name",
+        "indexName": "identity-user-by-normalized-name",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "bab02e31163c0fb7c795478dc6564aa3ce1a2fb590e844f7b65469e46cbc90e5",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedUserNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "148c7af97e0761c99a4597e5a88ee9f7a27b77a0385b65a9c21c92c2646a1897"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedUserNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "57ede249b5191ca29a336079fba23f2d762e0d3d29a143757157df57ba52c1c9"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "find-users-by-claim",
+        "documentKind": "identityUserClaim",
+        "physicalName": "identity_user_claims",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-claim-by-claim",
+        "indexName": "identity-user-claim-by-claim",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "a1717b1122f7ea7d47e0aa5851208bb48b5c3715370d60367bb1b7fcb70f6ca6",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-claim-by-claim"
+            ],
+            "predicateFieldIdentifiers": [
+              "claimKey",
+              "document_kind",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "6df241e89283e29426e00700a6f87889a021c626827ce84dbd091283f6f78c4b"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-claim-by-claim"
+            ],
+            "predicateFieldIdentifiers": [
+              "claimKey",
+              "document_kind",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "33222e5d84de86c420e7d8dabe798263c3c95937f6bbeee07f2903a4340f8daf"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-role-claims",
+        "documentKind": "identityRoleClaim",
+        "physicalName": "identity_role_claims",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-role-claim-by-role",
+        "indexName": "identity-role-claim-by-role",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "24e90e6157fa25093b5fd581e39093e9abb3a379dee4f555eeac44bb08c2e18f",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-role-claim-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "fd6a24826c7f1842f6d3ab911fef1b7c2ee99df190e3720b63fb094bc161abc6"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-role-claim-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "3665e4499fd5dc7bf50c448501226b0aae9c439ca478f6381951151471e56fd3"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-role-users",
+        "documentKind": "identityUserRole",
+        "physicalName": "identity_user_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-role-by-role",
+        "indexName": "identity-user-role-by-role",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "f042489af42d40575dd9d2a59ed6d7108f1e50707053596b30224139255f317d",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-role-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "1923c4c7b7df9fdc5911290dd662a1f46450ad0117d98008270676a065894fdd"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-role-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "ce27ec90936041d26a11f8495291580f7a1d89ac983db1215f59e110d72dbaf3"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-roles-by-tenant",
+        "documentKind": "identityRole",
+        "physicalName": "identity_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-role-by-tenant",
+        "indexName": "identity-role-by-tenant",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "bbcaca94eaa573e9afc25a79d0174c7618503139183e707e31c308d8d71592ef",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-role-by-tenant"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "tenantId"
+            ],
+            "nativePlanSha256": "ace62fcd73a77487b919701a4c8a1229c4764e57bdb30fcbf9d698f50eda3b53"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-role-by-tenant"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "tenantId"
+            ],
+            "nativePlanSha256": "bd223ee3a643915ceb557e541e7b6651a5833eac7d043b97beefb5c1e4ecb79d"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-user-claims",
+        "documentKind": "identityUserClaim",
+        "physicalName": "identity_user_claims",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-claim-by-user",
+        "indexName": "identity-user-claim-by-user",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "206dcca79c81ce98fc52611bcdb5c24fe2bd712c47434c211bc9308ad3de8055",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-claim-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "b16f48c766b078c3b1c29ef5595b4003f1787d13502b85008a4165d0351914a5"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-claim-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "ddf09c62655fa2fb8040846a5c00d8d17a93bbea83104128cfa8d7654f431918"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-user-logins",
+        "documentKind": "identityExternalLogin",
+        "physicalName": "identity_external_logins",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-login-by-user",
+        "indexName": "identity-login-by-user",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "0c9c618e3dd4f379ccc692f999ca5aeed294dff8a208eb5b79de6e3f0ab6b66d",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-login-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "f34df71ea30bd04400bea6b71a3140862ba35233ed669e979d31c38c1c7df46d"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-login-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "dc107116d113a58e4e672a31e71380aa1329fdd5a85fb2ccc985f83f91b98b6d"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-user-roles",
+        "documentKind": "identityUserRole",
+        "physicalName": "identity_user_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-role-by-user",
+        "indexName": "identity-user-role-by-user",
+        "planClassification": "index-scan",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "aa718fe6025042b8479081f0138135f9578fda139f84d9612694876f21c4623c",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-role-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "ea111a5dcae08f560231684262e20cbf6aac4298193dc99a6965a4b8755ad93f"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "mongodb-json",
+            "planClassification": "index-scan",
+            "indexNames": [
+              "identity-user-role-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "ef08405aa3849061e83f7a49c1d7d0df21b05fadf4f2d1588df8aa5bb82f23d0"
+          }
+        ]
+      }
+    ]
+  },
+  "schema": {
+    "compositionFingerprint": "d2eee52924fa0397c89292b07da8204a7e32f086f4dfcfc43921cd2a40b64d72",
+    "targetFingerprint": "ce18b85d4502dd6048857b85050658119f18a1d1c008565118e8e19cb5623260",
+    "pendingState": {
+      "fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonicalItemCount": 0
+    },
+    "appliedState": {
+      "fingerprint": "9d179827fa7dd93d95628f060c98596ee335f7206cd91ff4b0cd829203e6b3b5",
+      "canonicalItemCount": 568
+    },
+    "toolReceipts": [
+      {
+        "operation": "validate-offline",
+        "exitCode": 0,
+        "inspectionMode": "offline",
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "validate-pending",
+        "exitCode": 0,
+        "inspectionMode": "live",
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "plan-pending",
+        "exitCode": 2,
+        "outcome": "pending",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "status-pending",
+        "exitCode": 2,
+        "outcome": "pending",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "apply-safe",
+        "exitCode": 0,
+        "outcome": "applied",
+        "targetMutated": true,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "9d179827fa7dd93d95628f060c98596ee335f7206cd91ff4b0cd829203e6b3b5",
+        "stateUnchanged": false
+      },
+      {
+        "operation": "validate-ready",
+        "exitCode": 0,
+        "inspectionMode": "live",
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "9d179827fa7dd93d95628f060c98596ee335f7206cd91ff4b0cd829203e6b3b5",
+        "afterFingerprint": "9d179827fa7dd93d95628f060c98596ee335f7206cd91ff4b0cd829203e6b3b5",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "status-ready",
+        "exitCode": 0,
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "9d179827fa7dd93d95628f060c98596ee335f7206cd91ff4b0cd829203e6b3b5",
+        "afterFingerprint": "9d179827fa7dd93d95628f060c98596ee335f7206cd91ff4b0cd829203e6b3b5",
+        "stateUnchanged": true
+      }
+    ],
+    "pendingAdmission": {
+      "isReady": false,
+      "pendingOperationCount": 370,
+      "targetFingerprint": "ce18b85d4502dd6048857b85050658119f18a1d1c008565118e8e19cb5623260"
+    },
+    "readyAdmission": {
+      "isReady": true,
+      "pendingOperationCount": 0,
+      "targetFingerprint": "ce18b85d4502dd6048857b85050658119f18a1d1c008565118e8e19cb5623260",
+      "appliedTargetFingerprint": "ce18b85d4502dd6048857b85050658119f18a1d1c008565118e8e19cb5623260"
+    }
+  },
+  "workload": {
+    "version": "1.1.0",
+    "workloadId": "iam-normalized-lookup-update",
+    "scenarioId": "identity-authority-baseline",
+    "inputFingerprint": "5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9",
+    "resultDigest": "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc",
+    "nativeRouteReferenceCount": 5
+  }
+}

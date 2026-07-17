@@ -10,15 +10,31 @@ namespace Elsa.Persistence.Groundwork.ReferenceComposition;
 
 /// <summary>
 /// The public, parameterless deployment schema for the shipped unified provider leaves. It selects
-/// Runtime, Identity, Secrets, Distributed Runtime, Workflows Design, Activities Design and
-/// Publishing with the identity host naming policy.
+/// Runtime, Secrets, Distributed Runtime, Workflows Design, Activities Design and Publishing with
+/// the identity host naming policy. Identity is intentionally explicit: ASP.NET Core Identity hosts
+/// opt in through the Groundwork Identity feature rather than through substrate provider selection.
 /// </summary>
 public sealed class GroundworkAllFeaturesDeploymentSchema : GroundworkDeploymentSchemaManifestSource
 {
-    private static readonly IReadOnlyCollection<Type> Sources = Array.AsReadOnly<Type>(
+    protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
+        GroundworkReferenceDeploymentSchemaSources.WithoutIdentity;
+}
+
+/// <summary>
+/// Public, parameterless deployment schema for hosts that explicitly select the Groundwork-backed
+/// ASP.NET Core Identity feature in addition to the shipped unified provider leaves.
+/// </summary>
+public sealed class GroundworkAllFeaturesWithIdentityDeploymentSchema : GroundworkDeploymentSchemaManifestSource
+{
+    protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
+        GroundworkReferenceDeploymentSchemaSources.WithIdentity;
+}
+
+internal static class GroundworkReferenceDeploymentSchemaSources
+{
+    public static readonly IReadOnlyCollection<Type> WithoutIdentity = Array.AsReadOnly<Type>(
     [
         typeof(RuntimeGroundworkStorageManifestSource),
-        typeof(IdentityGroundworkStorageManifestSource),
         typeof(SecretsGroundworkStorageManifestSource),
         typeof(DistributedGroundworkStorageManifestSource),
         typeof(WorkflowsDesignGroundworkStorageManifestSource),
@@ -26,5 +42,9 @@ public sealed class GroundworkAllFeaturesDeploymentSchema : GroundworkDeployment
         typeof(PublishingGroundworkStorageManifestSource)
     ]);
 
-    protected override IReadOnlyCollection<Type> ManifestSourceTypes => Sources;
+    public static readonly IReadOnlyCollection<Type> WithIdentity = Array.AsReadOnly<Type>(
+    [
+        .. WithoutIdentity,
+        typeof(IdentityGroundworkStorageManifestSource)
+    ]);
 }

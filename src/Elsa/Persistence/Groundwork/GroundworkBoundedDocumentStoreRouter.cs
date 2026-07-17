@@ -1,3 +1,5 @@
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork;
@@ -7,7 +9,7 @@ namespace Elsa.Persistence.Groundwork;
 /// admitted physical route. Query identities are intentionally resolved inside the selected route,
 /// so different storage units may safely use the same stable identity.
 /// </summary>
-public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore
+public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore, IPhysicalDocumentQueryExplainer
 {
     private readonly IReadOnlyDictionary<string, IBoundedDocumentStore> stores;
 
@@ -47,6 +49,16 @@ public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore
     public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
         Resolve(query).AnyAsync(query, cancellationToken);
 
+    public PhysicalQueryPlan ResolvePlan(
+        DocumentQuery query,
+        BoundedQueryResultOperation operation = BoundedQueryResultOperation.Documents) =>
+        ResolveExplainer(query).ResolvePlan(query, operation);
+
+    public Task<PhysicalDocumentQueryExplanation> ExplainAsync(
+        DocumentQuery query,
+        CancellationToken cancellationToken = default) =>
+        ResolveExplainer(query).ExplainAsync(query, cancellationToken);
+
     private IBoundedDocumentStore Resolve(DocumentQuery query)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -54,5 +66,13 @@ public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore
             ? store
             : throw new InvalidOperationException(
                 $"No bounded document-query runtime was admitted for document kind '{query.DocumentKind}'.");
+    }
+
+    private IPhysicalDocumentQueryExplainer ResolveExplainer(DocumentQuery query)
+    {
+        var store = Resolve(query);
+        return store as IPhysicalDocumentQueryExplainer
+               ?? throw new NotSupportedException(
+                   $"The bounded document-query runtime for document kind '{query.DocumentKind}' does not expose native query explanations.");
     }
 }

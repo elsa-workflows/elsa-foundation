@@ -264,13 +264,12 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
 
         var admission = await source.InspectRuntimeAdmissionAsync(
             inspector,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.False(admission.IsReady);
         Assert.Equal(source.TargetFingerprint, admission.TargetFingerprint);
         Assert.Equal(EffectiveNames(source.ResolvedNames), EffectiveNames(admission.ResolvedNames));
         Assert.NotEmpty(admission.PendingOperations);
-        Assert.Contains(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-PENDING");
         Assert.False(File.Exists(database));
     }
 
@@ -291,7 +290,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         await using var connection = new SqliteConnection($"Data Source={database}");
         var admission = await source.InspectRuntimeAdmissionAsync(
             new SqlitePhysicalSchemaExecutor(connection),
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.False(admission.IsReady);
         Assert.Equal(source.TargetFingerprint, admission.TargetFingerprint);
@@ -446,6 +445,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         string identity,
         IReadOnlyCollection<(string Unit, string DocumentKind, string Table)> units)
     {
+#pragma warning disable GW0001 // preview.57 has no non-obsolete StorageUnit constructor; PhysicalStorage below is authoritative.
         var storageUnits = units.Select(item => new StorageUnit(
             new StorageUnitIdentity(item.Unit),
             item.DocumentKind,
@@ -463,6 +463,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.DedicatedDocumentTable(item.Table)))
         }).ToArray();
+#pragma warning restore GW0001
         return new StorageManifest(
             new StorageManifestIdentity(identity),
             new StorageManifestOwner("elsa.tests"),

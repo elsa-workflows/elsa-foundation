@@ -68,6 +68,7 @@ public sealed class IdentityGroundworkStoreTests
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
         var external = IdentityGroundworkFixtures.ExternalIdentity();
+        await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
 
         await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).SaveAsync(external);
 
@@ -85,6 +86,7 @@ public sealed class IdentityGroundworkStoreTests
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
         var membership = IdentityGroundworkFixtures.TenantMembership();
+        await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
 
         await IdentityGroundworkFixtures.TenantMembershipStore(docStore).SaveAsync(membership);
 

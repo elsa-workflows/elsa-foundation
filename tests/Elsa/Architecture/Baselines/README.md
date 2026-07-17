@@ -44,3 +44,9 @@ Resolved dependency failures identify the consuming project and EF package; use
 
 The final zero-EF cleanup tracked by GitHub issue #647 deletes this baseline and update switch. It
 retains the scanner with every category required to be empty, including all transitive consumers.
+
+`frozen-aspnetcore-identity-ef-oracle.json` is stricter than the repository-wide surface inventory:
+it fingerprints every source, project, and migration file in the temporary ASP.NET Core Identity EF
+oracle. The fingerprint is immutable until issue #647 removes that oracle; there is intentionally no
+environment-variable update path. Paths and line endings are normalized before hashing so the same
+reviewed tree produces the same SHA-256 values on every supported checkout platform.

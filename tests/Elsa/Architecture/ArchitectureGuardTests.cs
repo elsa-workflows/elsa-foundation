@@ -203,7 +203,7 @@ public sealed class ArchitectureGuardTests
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
-            $"{fileName} must select one Groundwork SQLite target for all seven persistence families.");
+            $"{fileName} must select one Groundwork SQLite target for the six provider-level persistence families.");
         Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
             $"{fileName} must not compose a second Groundwork provider leaf.");
         Assert.False(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),

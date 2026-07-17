@@ -1,13 +1,8 @@
-using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using CShells.Features;
 using Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
@@ -20,21 +15,49 @@ public static class GroundworkMongoDbUnifiedRegistration
         this IServiceCollection services,
         string connectionString,
         string databaseName,
+        bool autoApplyOnStartup = false) =>
+        services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            databaseName,
+            autoApplyOnStartup);
+
+    /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
+    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        string databaseName,
+        ShellFeatureContext context,
         bool autoApplyOnStartup = false)
+    {
+        services.AddGroundworkReferenceDeploymentSchema(context);
+        return services.AddGroundworkMongoDbUnifiedPersistenceCore(connectionString, databaseName, autoApplyOnStartup);
+    }
+
+    /// <summary>
+    /// Registers the unified MongoDB substrate against an explicitly selected deployment schema.
+    /// Feature services, including Identity, remain independently selected by the host.
+    /// </summary>
+    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence<TDeploymentSource>(
+        this IServiceCollection services,
+        string connectionString,
+        string databaseName,
+        bool autoApplyOnStartup = false)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
+    {
+        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        return services.AddGroundworkMongoDbUnifiedPersistenceCore(connectionString, databaseName, autoApplyOnStartup);
+    }
+
+    private static IServiceCollection AddGroundworkMongoDbUnifiedPersistenceCore(
+        this IServiceCollection services,
+        string connectionString,
+        string databaseName,
+        bool autoApplyOnStartup)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
-
-        services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>();
-        services.AddGroundworkRuntimeStores();
-        services.AddGroundworkIdentityStores();
-        services.AddGroundworkSecretsStore();
-        services.AddGroundworkDistributedRuntimeStores();
-        services.AddGroundworkWorkflowsDesignStores();
-        services.AddGroundworkActivitiesDesignStores();
-        services.AddGroundworkPublishingStores();
         services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
-        return services;
+        return services.AddGroundworkUnifiedStoreFamilies();
     }
 }
