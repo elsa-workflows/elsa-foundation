@@ -77,16 +77,19 @@ public static class ElsaRuntimeStorageManifest
 
     /// <summary>
     /// Cross-execution index used by <c>IBookmarkStimulusIndex.ListByStimulusAsync</c> (W7, E3-5) so a
-    /// single stimulus can fan in to bookmarks waiting in any workflow execution. Keyed by stimulus hash
-    /// alone; the caller post-filters by stimulus type (the hash is already type-derived in practice).
+    /// single stimulus can fan in to bookmarks waiting in any workflow execution.
     /// </summary>
     public const string BookmarkStateByStimulus = ByStimulusIndex;
+
+    /// <summary>Composite bounded route used by <c>IBookmarkStimulusIndex.ListByStimulusAsync</c>.</summary>
+    public const string BookmarkStateByStimulusAndType = ByStimulusAndTypeIndex;
 
     /// <summary>Bounded route used to rebuild stimulus-type bookmark indexes at startup.</summary>
     public const string BookmarkStateByStimulusType = ByStimulusTypeIndex;
 
     public const string ListBookmarksByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
     public const string ListBookmarksByStimulusQuery = "list-by-stimulus";
+    public const string ListBookmarksByStimulusAndTypeQuery = "list-by-stimulus-and-type";
     public const string ListBookmarksByStimulusTypeQuery = "list-by-stimulus-type";
 
     public const string WorkflowExecutableDocumentKind = "workflowExecutable";

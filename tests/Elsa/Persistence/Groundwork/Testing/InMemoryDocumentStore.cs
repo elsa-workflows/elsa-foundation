@@ -198,7 +198,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             .Where(document => document.DocumentKind == query.DocumentKind);
         foreach (var clause in query.Clauses)
         {
-            matches = matches.Where(document => clause.Comparisons.Any(comparison =>
+            matches = matches.Where(document => clause.Comparisons.All(comparison =>
                 Matches(ReadField(document.ContentJson, comparison.Path), comparison)));
         }
 
