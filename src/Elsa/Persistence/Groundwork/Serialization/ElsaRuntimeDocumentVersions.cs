@@ -22,6 +22,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 2,

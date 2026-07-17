@@ -43,7 +43,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
         {
             ["IBookmarkStateStore"] = ["BookmarkStateDocumentKind"],
             ["IWorkflowExecutableStore"] = ["WorkflowExecutableDocumentKind"],
-            ["IExecutableActivityTemplateStore"] = ["ExecutableActivityTemplateDocumentKind"],
+            ["IExecutableActivityTemplateStore"] =
+                ["ExecutableActivityTemplateDocumentKind", "ExecutableActivityTemplateHashClaimDocumentKind"],
             ["IWorkflowExecutableSourceReferenceStore"] = ["WorkflowExecutableSourceReferenceDocumentKind"],
             ["IActivityExecutionStateStore"] = ["ActivityExecutionStateDocumentKind"],
             ["IActivityExecutionInspectionStore"] = ["ActivityExecutionInspectionDocumentKind"],

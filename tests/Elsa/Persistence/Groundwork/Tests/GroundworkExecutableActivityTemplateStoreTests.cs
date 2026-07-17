@@ -83,6 +83,67 @@ public sealed class GroundworkExecutableActivityTemplateStoreTests
         Assert.Single(documents.Snapshot(ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind));
     }
 
+    [Fact]
+    public async Task SaveAsync_RejectsConcurrentHashWinnerWithDifferentId()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var competingStore = new GroundworkExecutableActivityTemplateStore(documents, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(documents)
+        {
+            OnBeforeBegin = async _ =>
+            {
+                await competingStore.SaveAsync(Template("template-1", "sha256:one", "node-1"));
+            }
+        };
+        IExecutableActivityTemplateStore store =
+            new GroundworkExecutableActivityTemplateStore(interceptingStore, GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.SaveAsync(Template("template-2", "sha256:one", "node-2")));
+
+        Assert.Contains("already bound to id 'template-1'", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("template-1", (await competingStore.FindByHashAsync("sha256:one"))!.TemplateId);
+        Assert.Null(await competingStore.FindAsync("template-2"));
+    }
+
+    [Fact]
+    public async Task Delete_Removes_Template_And_Hash_Claim()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        IExecutableActivityTemplateStore store =
+            new GroundworkExecutableActivityTemplateStore(documents, GroundworkTestSerialization.Serializer);
+
+        await store.SaveAsync(Template("template-1", "sha256:one", "node-1"));
+        Assert.True(await store.DeleteAsync("template-1"));
+        await store.SaveAsync(Template("template-2", "sha256:one", "node-2"));
+
+        Assert.Null(await store.FindAsync("template-1"));
+        Assert.Equal("template-2", (await store.FindByHashAsync("sha256:one"))!.TemplateId);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_DoesNotRemoveConcurrentSuccessorHashClaim()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var competingStore = new GroundworkExecutableActivityTemplateStore(documents, GroundworkTestSerialization.Serializer);
+        await competingStore.SaveAsync(Template("template-1", "sha256:one", "node-1"));
+        var interceptingStore = new InterceptingDocumentStore(documents)
+        {
+            OnBeforeBegin = async _ =>
+            {
+                Assert.True(await competingStore.DeleteAsync("template-1"));
+                await competingStore.SaveAsync(Template("template-2", "sha256:one", "node-2"));
+            }
+        };
+        IExecutableActivityTemplateStore store =
+            new GroundworkExecutableActivityTemplateStore(interceptingStore, GroundworkTestSerialization.Serializer);
+
+        Assert.False(await store.DeleteAsync("template-1"));
+
+        Assert.Equal("template-2", (await competingStore.FindByHashAsync("sha256:one"))!.TemplateId);
+        Assert.NotNull(await competingStore.FindAsync("template-2"));
+    }
+
     private static ExecutableActivityTemplate Template(
         string id,
         string hash,

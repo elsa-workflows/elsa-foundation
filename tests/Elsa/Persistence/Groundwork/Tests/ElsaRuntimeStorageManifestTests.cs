@@ -43,6 +43,16 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public void ExecutableActivityTemplateHashClaim_Declares_Atomic_Claim_Unit()
+    {
+        var manifest = ElsaRuntimeStorageManifest.Create();
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind);
+
+        Assert.Empty(unit.Indexes);
+        Assert.Empty(unit.Queries);
+    }
+
+    [Fact]
     public void WorkflowExecutableSourceReference_Declares_Bounded_Scope_Gc_And_Artifact_Routes()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();

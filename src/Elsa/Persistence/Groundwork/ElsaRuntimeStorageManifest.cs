@@ -108,6 +108,7 @@ public static class ElsaRuntimeStorageManifest
     // thin envelope { collection, templateHash, template }; indexes therefore target the lifted flat
     // envelope fields, never the nested template payload.
     public const string ExecutableActivityTemplateDocumentKind = "executableActivityTemplate";
+    public const string ExecutableActivityTemplateHashClaimDocumentKind = "executableActivityTemplateHashClaim";
     public const string ExecutableActivityTemplateCollection = "executableActivityTemplate";
     public const string ExecutableActivityTemplateByCollection = ByCollectionIndex;
     public const string ExecutableActivityTemplateByHash = ByTemplateHashIndex;
@@ -308,6 +309,11 @@ public static class ElsaRuntimeStorageManifest
                     Query("list-all", ByCollectionIndex),
                     Query("find-by-template-hash", ByTemplateHashIndex)
                 ]),
+            Unit(
+                ExecutableActivityTemplateHashClaimDocumentKind,
+                "Executable activity template hash claim",
+                [],
+                []),
             Unit(
                 WorkflowExecutableSourceReferenceDocumentKind,
                 "Workflow executable source reference",
