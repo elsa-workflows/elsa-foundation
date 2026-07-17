@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 
@@ -11,6 +12,7 @@ public sealed class DefaultActivityTypeKeyPolicy : IActivityTypeKeyPolicy
 
     public ActivityTypeKeyRules Rules { get; } = new(
         ServerGenerated: true,
+        AllowsPreCreationOverride: true,
         Immutable: true,
         Prefix,
         "^elsa\\.user\\.[a-z0-9]+(?:-[a-z0-9]+)*\\.[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -29,6 +31,21 @@ public sealed class DefaultActivityTypeKeyPolicy : IActivityTypeKeyPolicy
         if (display.Length > availableDisplayLength)
             display = display[..availableDisplayLength].TrimEnd('-');
         return $"{Prefix}.{display}.{identity}";
+    }
+
+    public string NormalizeAndValidateOverride(string activityTypeKey)
+    {
+        if (string.IsNullOrWhiteSpace(activityTypeKey))
+            throw new ArgumentException("An activity type key is required.", nameof(activityTypeKey));
+
+        var normalized = activityTypeKey.Trim().Normalize(NormalizationForm.FormC).ToLowerInvariant();
+        if (normalized.Length > Rules.MaximumLength)
+            throw new ArgumentException($"The activity type key must not exceed {Rules.MaximumLength} characters.", nameof(activityTypeKey));
+        if (!normalized.StartsWith($"{Rules.Prefix}.", StringComparison.Ordinal))
+            throw new ArgumentException($"The activity type key must use the '{Rules.Prefix}' prefix.", nameof(activityTypeKey));
+        if (!Regex.IsMatch(normalized, Rules.Pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+            throw new ArgumentException("The activity type key does not match the required pattern.", nameof(activityTypeKey));
+        return normalized;
     }
 
     private static string Slug(string value)

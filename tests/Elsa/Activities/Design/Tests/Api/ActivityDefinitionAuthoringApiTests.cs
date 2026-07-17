@@ -146,7 +146,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
     }
 
     [Fact]
-    public void Create_request_uses_the_contract_shape_and_accepts_opaque_provider_payload()
+    public void Create_request_accepts_an_optional_activity_type_key_and_opaque_provider_payload()
     {
         var request = new CreateReusableActivityDefinition(
             "Orders",
@@ -154,14 +154,31 @@ public sealed class ActivityDefinitionAuthoringApiTests
             null,
             new("elsa.activity-graph", "1", Json("{\"secret\":42}")),
             new("1", [], [], [new("done", "Done", true)]),
+            [],
+            "elsa.user.calculate-order-total.custom");
+
+        var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"activityTypeKey\":\"elsa.user.calculate-order-total.custom\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"providerKey\":\"elsa.activity-graph\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"payload\":{\"secret\":42}", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenantId", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Create_request_omits_activity_type_key_when_server_generation_is_requested()
+    {
+        var request = new CreateReusableActivityDefinition(
+            "Orders",
+            "Calculate order total",
+            null,
+            new("elsa.activity-graph", "1", Json("{}")),
+            new("1", [], [], []),
             []);
 
         var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         Assert.DoesNotContain("activityTypeKey", json, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"providerKey\":\"elsa.activity-graph\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"payload\":{\"secret\":42}", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("tenantId", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

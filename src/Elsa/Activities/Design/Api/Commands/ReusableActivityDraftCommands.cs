@@ -28,7 +28,8 @@ public sealed record CreateReusableActivityDefinition(
     string? Description,
     ActivityProviderManifest Provider,
     ActivityContractView Contract,
-    IReadOnlyList<ActivityLayoutRecord> Layout) : ICommand<ReusableActivityDefinitionMutationView>;
+    IReadOnlyList<ActivityLayoutRecord> Layout,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityTypeKey = null) : ICommand<ReusableActivityDefinitionMutationView>;
 
 public sealed record ForkReusableActivityDefinition(
     [property: JsonIgnore] string DefinitionId,

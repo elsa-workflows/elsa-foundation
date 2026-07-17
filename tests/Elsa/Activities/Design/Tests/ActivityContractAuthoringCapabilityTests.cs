@@ -77,6 +77,32 @@ public sealed class ActivityContractAuthoringCapabilityTests
     }
 
     [Fact]
+    public void Activity_type_key_override_is_normalized_by_the_authoritative_policy()
+    {
+        var policy = new DefaultActivityTypeKeyPolicy();
+
+        var normalized = policy.NormalizeAndValidateOverride("  ELSA.USER.Invoice-TOTAL.Activity-DEF  ");
+
+        Assert.Equal("elsa.user.invoice-total.activity-def", normalized);
+    }
+
+    [Fact]
+    public void Activity_type_key_override_rejects_values_outside_the_advertised_rules()
+    {
+        var policy = new DefaultActivityTypeKeyPolicy();
+        var invalid = new[]
+        {
+            "",
+            "elsa.other.invoice-total.activity-def",
+            "elsa.user.invoice_total.activity-def",
+            $"elsa.user.{new string('a', policy.Rules.MaximumLength)}.activity-def"
+        };
+
+        foreach (var activityTypeKey in invalid)
+            Assert.Throws<ArgumentException>(() => policy.NormalizeAndValidateOverride(activityTypeKey));
+    }
+
+    [Fact]
     public async Task Capability_snapshot_is_authorization_safe_deterministic_and_includes_provider_constraints()
     {
         var catalog = new Catalog([
@@ -100,6 +126,7 @@ public sealed class ActivityContractAuthoringCapabilityTests
         Assert.Equal("allowed.provider", provider.ProviderKey);
         Assert.Equal("done", Assert.Single(provider.RequiredOutcomes).ReferenceKey);
         Assert.Equal(["elsa.json"], first.StorageDriverKeys);
+        Assert.True(first.ActivityTypeKeyRules.AllowsPreCreationOverride);
         Assert.Equal(first.SnapshotFingerprint, second.SnapshotFingerprint);
     }
 

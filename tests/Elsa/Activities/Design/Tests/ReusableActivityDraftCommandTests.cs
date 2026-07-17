@@ -26,10 +26,69 @@ public sealed class ReusableActivityDraftCommandTests
 
         Assert.Equal("tenant-a", result.Definition.TenantId);
         Assert.Equal(ActivityContentAuthorityKind.Design, result.Definition.ContentAuthority.Kind);
+        Assert.Equal("elsa.user.calculate.activity-def-tenant-a-1", result.Definition.ActivityTypeKey);
         Assert.Equal(1, result.Draft.Revision);
         Assert.Single(harness.Stores.Definitions);
         Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(result.Definition.DefinitionId));
         Assert.NotNull(await harness.Stores.FindDraftLayoutAsync(result.Draft.DraftId));
+    }
+
+    [Fact]
+    public async Task Create_definition_persists_the_exact_normalized_activity_type_key_override()
+    {
+        var harness = new Harness();
+        var command = harness.CreateDefinitionCommand() with
+        {
+            ActivityTypeKey = "  ELSA.USER.Invoice-Evaluator.Custom  "
+        };
+
+        var result = await harness.Service.CreateDefinitionAsync(command, default);
+
+        Assert.Equal("elsa.user.invoice-evaluator.custom", result.Definition.ActivityTypeKey);
+        Assert.Equal("elsa.user.invoice-evaluator.custom", Assert.Single(harness.Stores.Definitions).ActivityTypeKey);
+    }
+
+    [Fact]
+    public async Task Create_definition_rejects_an_invalid_activity_type_key_override_without_writes()
+    {
+        var harness = new Harness();
+        var command = harness.CreateDefinitionCommand() with { ActivityTypeKey = "elsa.other.invoice-evaluator.custom" };
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.CreateDefinitionAsync(command, default));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.definition.key-invalid", exception.ErrorCode);
+        Assert.Empty(harness.Stores.Definitions);
+    }
+
+    [Fact]
+    public async Task Create_definition_rejects_an_override_when_the_active_key_policy_disallows_it()
+    {
+        var policy = new NonOverridableActivityTypeKeyPolicy();
+        var harness = new Harness(typeKeyPolicy: policy);
+        var command = harness.CreateDefinitionCommand() with { ActivityTypeKey = "elsa.user.invoice-evaluator.custom" };
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.CreateDefinitionAsync(command, default));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+        Assert.Equal(0, policy.NormalizeCalls);
+        Assert.Empty(harness.Stores.Definitions);
+    }
+
+    [Fact]
+    public async Task Create_definition_reports_the_existing_safe_conflict_without_suffixing_an_overridden_key()
+    {
+        var harness = new Harness();
+        var command = harness.CreateDefinitionCommand() with { ActivityTypeKey = "elsa.user.invoice-evaluator.custom" };
+        await harness.Service.CreateDefinitionAsync(command, default);
+
+        var collision = command with { ActivityTypeKey = "  ELSA.USER.Invoice-Evaluator.Custom  " };
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.CreateDefinitionAsync(collision, default));
+
+        Assert.Equal(409, exception.StatusCode);
+        Assert.Equal("activity.definition.key-conflict", exception.ErrorCode);
+        Assert.Equal("elsa.user.invoice-evaluator.custom", Assert.Single(harness.Stores.Definitions).ActivityTypeKey);
     }
 
     [Fact]
@@ -133,13 +192,15 @@ public sealed class ReusableActivityDraftCommandTests
         var tenantB = new Harness(tenantId: "tenant-b", stores: stores);
         var global = new Harness(tenantId: null, stores: stores);
 
-        var first = await tenantA.Service.CreateDefinitionAsync(tenantA.CreateDefinitionCommand(), default);
-        var second = await tenantB.Service.CreateDefinitionAsync(tenantB.CreateDefinitionCommand(), default);
-        var globalResult = await global.Service.CreateDefinitionAsync(global.CreateDefinitionCommand(), default);
+        const string activityTypeKey = "elsa.user.shared-activity.custom";
+        var first = await tenantA.Service.CreateDefinitionAsync(tenantA.CreateDefinitionCommand() with { ActivityTypeKey = activityTypeKey }, default);
+        var second = await tenantB.Service.CreateDefinitionAsync(tenantB.CreateDefinitionCommand() with { ActivityTypeKey = activityTypeKey }, default);
+        var globalResult = await global.Service.CreateDefinitionAsync(global.CreateDefinitionCommand() with { ActivityTypeKey = activityTypeKey }, default);
 
         Assert.Equal("tenant-a", first.Definition.TenantId);
         Assert.Equal("tenant-b", second.Definition.TenantId);
         Assert.Null(globalResult.Definition.TenantId);
+        Assert.All([first, second, globalResult], result => Assert.Equal(activityTypeKey, result.Definition.ActivityTypeKey));
         Assert.Equal(3, stores.Definitions.Count);
     }
 
@@ -621,7 +682,8 @@ public sealed class ReusableActivityDraftCommandTests
             InMemoryReusableActivityStores? stores = null,
             bool canReadProviderPayload = true,
             IActivityProvider? provider = null,
-            bool canAuthorProvider = true)
+            bool canAuthorProvider = true,
+            IActivityTypeKeyPolicy? typeKeyPolicy = null)
         {
             _ids = new(tenantId ?? "global");
             _context = new(tenantId, canReadProviderPayload, canAuthorProvider);
@@ -645,7 +707,7 @@ public sealed class ReusableActivityDraftCommandTests
                 registry,
                 new StubValidator(_time, invalidValidation),
                 new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()),
-                new DefaultActivityTypeKeyPolicy(),
+                typeKeyPolicy ?? new DefaultActivityTypeKeyPolicy(),
                 _ids,
                 _time,
                 _context);
@@ -786,6 +848,27 @@ public sealed class ReusableActivityDraftCommandTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class NonOverridableActivityTypeKeyPolicy : IActivityTypeKeyPolicy
+    {
+        public int NormalizeCalls { get; private set; }
+        public ActivityTypeKeyRules Rules { get; } = new(
+            ServerGenerated: true,
+            AllowsPreCreationOverride: false,
+            Immutable: true,
+            "elsa.user",
+            "^elsa\\.user\\.[a-z0-9]+\\.[a-z0-9]+$",
+            160,
+            "tenantId + activityTypeKey");
+
+        public string Generate(string displayName, string definitionId) => $"elsa.user.generated.{definitionId}";
+
+        public string NormalizeAndValidateOverride(string activityTypeKey)
+        {
+            NormalizeCalls++;
+            throw new InvalidOperationException("Override normalization must not be called.");
+        }
     }
 
     private sealed class StubValidator(TimeProvider timeProvider, bool invalid) : IActivityDraftValidator
