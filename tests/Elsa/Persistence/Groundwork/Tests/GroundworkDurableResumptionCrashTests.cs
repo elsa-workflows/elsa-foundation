@@ -128,8 +128,10 @@ public sealed class GroundworkDurableResumptionCrashTests
         }
     }
 
+    // Historical baseline identity retained for the architecture ratchet. "Dequeue" now means acquisition of a
+    // renewable claim; the test restarts after that abandoned claim expires and verifies fenced redelivery.
     [Fact]
-    public async Task WindowC_CrashAfterClaimBeforeCheckpoint_ResumptionConvergesAfterClaimExpiry()
+    public async Task WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState()
     {
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
