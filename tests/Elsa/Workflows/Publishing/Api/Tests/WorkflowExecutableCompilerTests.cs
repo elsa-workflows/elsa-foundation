@@ -98,8 +98,8 @@ public sealed class WorkflowExecutableCompilerTests
     {
         var contract = new ActivityContract("1", [new ActivityInputContract(
             "value", "Value", new TypeReference("Int32"), true,
-            new("JavaScript", JsonSerializer.SerializeToElement("40 + 2")), "elsa.json")], [new ActivityOutputContract(
-            "result", "Result", new TypeReference("Int32"), true, "elsa.json")], []);
+            false, new("JavaScript", JsonSerializer.SerializeToElement("40 + 2")), "elsa.json")], [new ActivityOutputContract(
+            "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
         var root = new ExecutableNode(
             "local-root", "local-root", "test.boundary", "1",
             new("test.boundary", "1", JsonSerializer.SerializeToElement(new { plan = 1 })),
@@ -1394,7 +1394,7 @@ public sealed class WorkflowExecutableCompilerTests
         new("Lines", new ArgumentValue(JsonSerializer.SerializeToElement(lines), "Object"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
-        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
+        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new("1.0.0", "activity-definition-1")

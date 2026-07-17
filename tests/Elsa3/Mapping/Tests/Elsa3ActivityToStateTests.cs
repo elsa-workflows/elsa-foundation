@@ -147,11 +147,11 @@ public sealed class Elsa3ActivityToStateTests
         public IActivityDefinition Definition => new FakeActivityDefinition();
 
         public IEnumerable<InputDefinition> Inputs { get; } = inputNames
-            .Select(name => new InputDefinition(name, name, new TypeReference("String"), null, name, null))
+            .Select(name => new InputDefinition(name, name, new TypeReference("String"), null, name, null, false))
             .ToArray();
 
         public IEnumerable<OutputDefinition> Outputs { get; } = outputNames
-            .Select(name => new OutputDefinition(name, name, new TypeReference("String"), null, name, null))
+            .Select(name => new OutputDefinition(name, name, new TypeReference("String"), null, name, null, false))
             .ToArray();
 
         public IEnumerable<ActivityDesignFacet> DesignFacets => [];

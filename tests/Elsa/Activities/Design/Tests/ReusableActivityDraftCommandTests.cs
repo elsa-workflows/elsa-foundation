@@ -97,7 +97,7 @@ public sealed class ReusableActivityDraftCommandTests
         var harness = new Harness();
         var contract = new ActivityContract(
             "1",
-            [new("order", "Order", new("acme.order", Elsa.Primitives.Models.CollectionKind.Single), true, null, "elsa.json")],
+            [new("order", "Order", new("acme.order", Elsa.Primitives.Models.CollectionKind.Single), true, false, null, "elsa.json")],
             [],
             []);
         var command = harness.CreateDefinitionCommand() with { Contract = contract.ToView() };
@@ -243,7 +243,7 @@ public sealed class ReusableActivityDraftCommandTests
     {
         var historicalContract = new ActivityContract(
             "legacy-contract",
-            [new("legacy", "Legacy", new("retired.alias", Elsa.Primitives.Models.CollectionKind.HashSet), false, null, "retired.driver")],
+            [new("legacy", "Legacy", new("retired.alias", Elsa.Primitives.Models.CollectionKind.HashSet), false, true, null, "retired.driver")],
             [],
             []);
         var harness = new Harness();
@@ -293,16 +293,21 @@ public sealed class ReusableActivityDraftCommandTests
     [Fact]
     public async Task Conflict_copy_uses_submitted_full_state_preserves_server_lineage_and_rechecks_source_revision()
     {
-        var harness = new Harness();
+        var harness = new Harness(capabilityCatalog: new NullableStringCapabilityCatalog());
         var seeded = await harness.SeedDefinitionAsync(
             ActivityContentAuthorityKind.Design,
             new Dictionary<string, string> { ["mode"] = "strict" });
         var source = Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(seeded.DefinitionId));
+        var recoveredContract = new ActivityContract(
+            "recovered",
+            [new("note", "Note", new("String", Elsa.Primitives.Models.CollectionKind.Single), true, true, null, "elsa.json")],
+            [new("result", "Result", new("String", Elsa.Primitives.Models.CollectionKind.Single), true, false, "elsa.json")],
+            [new("done", "Done", true)]);
 
         var copy = await harness.Service.CreateConflictCopyAsync(new(
             source.Id,
             1,
-            Harness.Contract("recovered").ToView(),
+            recoveredContract.ToView(),
             Harness.Manifest("{\"local\":true}"),
             [new("root", Harness.Json("{\"x\":42}"))],
             "Recovered local work"), default);
@@ -313,6 +318,8 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.Equal(1, copy.Revision);
         Assert.Equal("Recovered local work", copy.PresentationLabel);
         Assert.Equal("recovered", copy.Contract.ContractSchemaVersion);
+        Assert.True(Assert.Single(copy.Contract.Inputs).IsNullable);
+        Assert.False(Assert.Single(copy.Contract.Outputs).IsNullable);
         Assert.Equal(42, copy.Layout.Single().Data.GetProperty("x").GetInt32());
         var persistedCopy = await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(copy.DraftId);
         Assert.Equal("strict", persistedCopy!.State.Options["mode"]);
@@ -341,7 +348,7 @@ public sealed class ReusableActivityDraftCommandTests
         var contract = new ActivityContract(
             "1",
             [],
-            [new("result", "Result", new("acme.unknown", Elsa.Primitives.Models.CollectionKind.List), false, "unknown.driver")],
+            [new("result", "Result", new("acme.unknown", Elsa.Primitives.Models.CollectionKind.List), false, false, "unknown.driver")],
             []);
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.ReplaceDraftAsync(
@@ -421,6 +428,46 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.Contains(applied.Contract.Outcomes, x => x.ReferenceKey == "approved");
         Assert.Equal(before.Layout, applied.Layout);
         Assert.Equal(before.Provider, applied.Provider);
+    }
+
+    [Fact]
+    public async Task Provider_proposal_preserves_explicit_member_nullability_through_apply()
+    {
+        var proposedInput = new ActivityInputContract(
+            "note",
+            "Note",
+            new("String", Elsa.Primitives.Models.CollectionKind.Single),
+            true,
+            true,
+            null,
+            "elsa.json");
+        var provider = new ProposalProvider(_ => new(
+            [new("input:add:note", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Input, "note", Input: proposedInput)],
+            []));
+        var harness = new Harness(provider: provider, capabilityCatalog: new NullableStringCapabilityCatalog());
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var before = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
+
+        var proposal = await harness.Proposals.ProposeAsync(new(
+            before.DraftId,
+            before.Revision,
+            before.Provider.ProviderKey,
+            before.Provider.SchemaVersion,
+            before.Provider.ManifestFingerprint), default);
+        Assert.True(Assert.Single(proposal.Changes).Input!.IsNullable);
+
+        var applied = await harness.Proposals.ApplyAsync(new(
+            before.DraftId,
+            before.Revision,
+            before.Provider.ProviderKey,
+            before.Provider.SchemaVersion,
+            before.Provider.ManifestFingerprint,
+            proposal.ProposalFingerprint,
+            ["input:add:note"]), default);
+
+        var input = Assert.Single(applied.Contract.Inputs);
+        Assert.True(input.IsRequired);
+        Assert.True(input.IsNullable);
     }
 
     [Fact]
@@ -541,7 +588,7 @@ public sealed class ReusableActivityDraftCommandTests
     public async Task Malformed_provider_proposal_is_safely_rejected()
     {
         var provider = new ProposalProvider(_ => new(
-            [new("bad", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Outcome, "approved", Input: new("input", "Input", new("System.String", Elsa.Primitives.Models.CollectionKind.Single), false, null, "elsa.json"))],
+            [new("bad", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Outcome, "approved", Input: new("input", "Input", new("System.String", Elsa.Primitives.Models.CollectionKind.Single), false, false, null, "elsa.json"))],
             []));
         var harness = new Harness(provider: provider);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
@@ -683,12 +730,14 @@ public sealed class ReusableActivityDraftCommandTests
             bool canReadProviderPayload = true,
             IActivityProvider? provider = null,
             bool canAuthorProvider = true,
-            IActivityTypeKeyPolicy? typeKeyPolicy = null)
+            IActivityTypeKeyPolicy? typeKeyPolicy = null,
+            IActivityContractCapabilityCatalog? capabilityCatalog = null)
         {
             _ids = new(tenantId ?? "global");
             _context = new(tenantId, canReadProviderPayload, canAuthorProvider);
             Stores = stores ?? new();
             var registry = new ActivityProviderRegistry([provider ?? new MigratingProvider("elsa.activity-graph"), new MigratingProvider("target.provider")]);
+            var contractCapabilities = capabilityCatalog ?? new EmptyCapabilityCatalog();
             Service = new(
                 Stores,
                 Stores,
@@ -706,12 +755,12 @@ public sealed class ReusableActivityDraftCommandTests
                 Stores,
                 registry,
                 new StubValidator(_time, invalidValidation),
-                new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()),
+                new ActivityContractAuthoringValidator(contractCapabilities),
                 typeKeyPolicy ?? new DefaultActivityTypeKeyPolicy(),
                 _ids,
                 _time,
                 _context);
-            Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()), Service, _context);
+            Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(contractCapabilities), Service, _context);
         }
 
         public InMemoryReusableActivityStores Stores { get; }
@@ -837,6 +886,22 @@ public sealed class ReusableActivityDraftCommandTests
     private sealed class EmptyCapabilityCatalog : IActivityContractCapabilityCatalog
     {
         public IReadOnlyCollection<ActivityContractTypeCapability> Types => [];
+    }
+
+    private sealed class NullableStringCapabilityCatalog : IActivityContractCapabilityCatalog
+    {
+        public IReadOnlyCollection<ActivityContractTypeCapability> Types { get; } =
+        [
+            new(
+                "String",
+                "String",
+                "Primitives",
+                "text",
+                new HashSet<Elsa.Primitives.Models.CollectionKind> { Elsa.Primitives.Models.CollectionKind.Single },
+                SupportsNull: true,
+                SupportsDurability: true,
+                new HashSet<string>(StringComparer.Ordinal) { "elsa.json" })
+        ];
     }
 
     private sealed class FixedIdentityGenerator(string prefix) : IIdentityGenerator

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
@@ -21,6 +22,7 @@ public sealed record InputDefinition(
     string? StorageDriverType,
     string DisplayName,
     string? Category,
+    [property: JsonRequired] bool IsNullable,
     bool? IsBrowsable = null,
     bool? IsSerializable = null,
     string? Description = null,

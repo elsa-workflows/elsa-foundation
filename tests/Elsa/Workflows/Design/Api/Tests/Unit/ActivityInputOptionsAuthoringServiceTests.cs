@@ -82,6 +82,7 @@ public sealed class ActivityInputOptionsAuthoringServiceTests
             null,
             "Field",
             null,
+            false,
             UISpecifications: JsonSerializer.SerializeToElement(new
             {
                 optionsProvider = new { key = "catalog.fields", dependsOn = Array.Empty<string>() }

@@ -110,6 +110,7 @@ Diff may still return contract/provider changes when candidate compilation fails
     "name": "CustomerId",
     "type": { "alias": "String", "collectionKind": "Single" },
     "isRequired": false,
+    "isNullable": false,
     "hasDefault": false,
     "storageDriverKey": "elsa.json",
     "durability": "Required"
@@ -118,6 +119,7 @@ Diff may still return contract/provider changes when candidate compilation fails
     "name": "CustomerId",
     "type": { "alias": "String", "collectionKind": "Single" },
     "isRequired": true,
+    "isNullable": false,
     "hasDefault": false,
     "storageDriverKey": "elsa.json",
     "durability": "Required"
@@ -155,6 +157,7 @@ Contract and outcome:
 - `ReferenceKeyChanged`
 - `TypeChanged`
 - `RequirednessChanged`
+- `NullabilityChanged`
 - `OutcomeEmissionChanged`
 
 Default and durability:
@@ -197,7 +200,7 @@ Providers may add namespaced kinds (for example `acme.script.ExportSignatureChan
 
 `before` and `after` use an area-specific projection:
 
-- contract members: name, type reference, requiredness, default presence/hash, storage-driver key, durability;
+- contract members: name, type reference, requiredness, nullability, default presence/hash, storage-driver key, durability;
 - defaults: syntax and a safe value summary/hash, never secret-bearing expression source when policy marks it protected;
 - outcomes: name and emitted state;
 - provider: key and schema version only;
@@ -217,6 +220,8 @@ Opaque provider manifests and Runtime descriptor payloads are never returned by 
 | Change stable reference key | Major |
 | Incompatible type change | Major |
 | Optional input becomes required without a compatible default | Major |
+| Tighten input or output nullability (`true` to `false`) | Major |
+| Relax input or output nullability (`false` to `true`) | Minor unless provider strengthens |
 | Add required output | Major |
 | Weaken durable-boundary policy or change required storage-driver semantics incompatibly | Major |
 | Remove or change an existing default | Major |

@@ -77,7 +77,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "45A2C289FF070C8D4DFBB6D3384979D246479B44318D885844E00D24941F2E95" },
-        { typeof(HttpEndpoint), "4B6DFC1C15098EE0492EE6FE8F3F82BA5930F2E3CA65A17A9B9C88322F296F86" }
+        { typeof(HttpEndpoint), "232E0DA79571EA5E42919E79F3E2046ED0BE915021B6E76FF812ED4CB82925D9" }
     };
 
     [Theory]
@@ -124,6 +124,28 @@ public sealed class ClrAssemblyScannerTests
         var input = InputFor<UnannotatedFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(UnannotatedFixtureActivity.Message));
 
         Assert.True(input.IsRequired);
+    }
+
+    [Fact]
+    public void Reconciled_members_preserve_nullability_independently_from_requiredness()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+        var requiredReferenceInput = InputFor<UnannotatedFixtureActivity>(
+            models,
+            nameof(UnannotatedFixtureActivity.Message));
+        var complex = models.Single(m => m.ActivityTypeKey == typeof(ComplexInputFixtureActivity).FullName);
+        var valueInput = complex.Inputs.Single(x => x.Name == nameof(ComplexInputFixtureActivity.Mode));
+        var output = models
+            .Single(m => m.ActivityTypeKey == typeof(UnannotatedFixtureActivity).FullName)
+            .Outputs.Single(x => x.Name == nameof(UnannotatedFixtureActivity.Result));
+
+        Assert.True(requiredReferenceInput.IsRequired);
+        Assert.True(requiredReferenceInput.IsNullable);
+        Assert.False(valueInput.IsRequired);
+        Assert.False(valueInput.IsNullable);
+        Assert.False(output.IsRequired);
+        Assert.True(output.IsNullable);
     }
 
     [Fact]

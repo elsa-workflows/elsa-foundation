@@ -139,6 +139,7 @@ public sealed class ClrAssemblyScanner(
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: metadata.Category,
+                    IsNullable: SupportsNull(valueType),
                     Order: metadata.Order,
                     UiHint: metadata.UiHint,
                     UISpecifications: metadata.UiSpecifications,
@@ -148,14 +149,18 @@ public sealed class ClrAssemblyScanner(
             }
 
             else if (DerivesFrom(property.PropertyType, OutputArgumentFullName))
+            {
+                var valueType = GetArgumentValueType(property.PropertyType);
                 outputs.Add(new OutputDefinition(
                     ReferenceKey: property.Name,
                     Name: property.Name,
-                    Type: ToTypeReference(GetArgumentValueType(property.PropertyType)),
+                    Type: ToTypeReference(valueType),
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
+                    IsNullable: SupportsNull(valueType),
                     IsRequired: HasRequired(property)));
+            }
         }
 
         return new ActivityVersionReconciliationModel(
@@ -660,6 +665,12 @@ public sealed class ClrAssemblyScanner(
 
         return null;
     }
+
+    private static bool SupportsNull(Type? valueType) =>
+        valueType is null ||
+        !valueType.IsValueType ||
+        valueType is { IsGenericType: true } &&
+        valueType.GetGenericTypeDefinition().FullName == "System.Nullable`1";
 
     // Reflection-only path: types come from a MetadataLoadContext, so the runtime well-known type
     // registry can't resolve them. The element alias is produced by the shared TypeAliasConvention —

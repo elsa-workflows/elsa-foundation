@@ -50,7 +50,7 @@ public sealed class ArgumentDefinitionSerializationTests
     [Fact]
     public void InputDefinition_Serializes_AliasAndCollectionKindOnly()
     {
-        var definition = new InputDefinition("ref-1", "Tags", new TypeReference("String", CollectionKind.HashSet), null, "Tags", null);
+        var definition = new InputDefinition("ref-1", "Tags", new TypeReference("String", CollectionKind.HashSet), null, "Tags", null, true);
 
         var json = JsonSerializer.Serialize(definition, Options);
 
@@ -60,7 +60,7 @@ public sealed class ArgumentDefinitionSerializationTests
     [Fact]
     public void OutputDefinition_Serializes_AliasAndCollectionKindOnly()
     {
-        var definition = new OutputDefinition("ref-1", "Result", new TypeReference("Int32", CollectionKind.List), null, "Result", null);
+        var definition = new OutputDefinition("ref-1", "Result", new TypeReference("Int32", CollectionKind.List), null, "Result", null, false);
 
         var json = JsonSerializer.Serialize(definition, Options);
 

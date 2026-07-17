@@ -398,6 +398,7 @@ public sealed class GraphActivityProviderTests
             "Total",
             new TypeReference("Int64"),
             true,
+            false,
             "elsa.json")],
         [new ActivityOutcomeContract("done", "Done", true)]);
 

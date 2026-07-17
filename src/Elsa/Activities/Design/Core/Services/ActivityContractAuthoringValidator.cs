@@ -15,12 +15,11 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
         for (var index = 0; index < contract.Inputs.Count; index++)
         {
             var input = contract.Inputs[index];
-            ValidateMember(input.ReferenceKey, input.Type, input.StorageDriverKey, $"/contract/inputs/{index}", subject, capabilities, diagnostics);
-            if (input.Default?.Value.ValueKind == System.Text.Json.JsonValueKind.Null &&
-                capabilities.GetValueOrDefault(input.Type.Alias) is { SupportsNull: false })
+            ValidateMember(input.ReferenceKey, input.Type, input.IsNullable, input.StorageDriverKey, $"/contract/inputs/{index}", subject, capabilities, diagnostics);
+            if (input.Default?.Value.ValueKind == System.Text.Json.JsonValueKind.Null && !input.IsNullable)
                 diagnostics.Add(Diagnostic(
-                    "activity.contract.null-default-unsupported",
-                    "The selected type does not support a null default.",
+                    "activity.contract.null-default-not-allowed",
+                    "A null default requires the contract member to allow null.",
                     subject,
                     $"/contract/inputs/{index}/default/value",
                     input.ReferenceKey));
@@ -29,7 +28,7 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
         for (var index = 0; index < contract.Outputs.Count; index++)
         {
             var output = contract.Outputs[index];
-            ValidateMember(output.ReferenceKey, output.Type, output.StorageDriverKey, $"/contract/outputs/{index}", subject, capabilities, diagnostics);
+            ValidateMember(output.ReferenceKey, output.Type, output.IsNullable, output.StorageDriverKey, $"/contract/outputs/{index}", subject, capabilities, diagnostics);
         }
 
         return ActivityDiagnosticOrderer.Order(diagnostics);
@@ -45,7 +44,7 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
     {
         var capabilities = catalog.Types.ToDictionary(x => x.Alias, StringComparer.Ordinal);
         var diagnostics = new List<ActivityDiagnostic>();
-        ValidateMember(referenceKey, type, storageDriverKey, jsonPointer, subject, capabilities, diagnostics);
+        ValidateMember(referenceKey, type, false, storageDriverKey, jsonPointer, subject, capabilities, diagnostics);
         if (hasNullValue && capabilities.GetValueOrDefault(type.Alias) is { SupportsNull: false })
             diagnostics.Add(Diagnostic(
                 "activity.contract.null-default-unsupported",
@@ -59,6 +58,7 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
     private static void ValidateMember(
         string referenceKey,
         Elsa.Primitives.Models.TypeReference type,
+        bool isNullable,
         string storageDriverKey,
         string pointer,
         ActivityDiagnosticSubject subject,
@@ -82,6 +82,13 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
                 "The selected collection kind is not supported for this type.",
                 subject,
                 $"{pointer}/type/collectionKind",
+                referenceKey));
+        if (isNullable && !capability.SupportsNull)
+            diagnostics.Add(Diagnostic(
+                "activity.contract.nullability-unavailable",
+                "The selected type does not support nullable contract members.",
+                subject,
+                $"{pointer}/isNullable",
                 referenceKey));
         if (!capability.SupportsDurability || !capability.CompatibleStorageDriverKeys.Contains(storageDriverKey))
             diagnostics.Add(Diagnostic(

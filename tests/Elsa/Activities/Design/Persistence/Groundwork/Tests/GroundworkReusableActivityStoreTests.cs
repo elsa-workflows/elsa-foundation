@@ -141,7 +141,11 @@ public sealed class GroundworkReusableActivityStoreTests
         await harness.Stores.ExecuteAsync(CreateRequest());
         var before = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!;
         var fingerprint = ActivityProviderManifestFingerprint.Compute(before.State.Provider);
-        var contract = new ActivityContract("proposal", [], [], [new("done", "Done", true)]);
+        var contract = new ActivityContract(
+            "proposal",
+            [new("note", "Note", new("String", Elsa.Primitives.Models.CollectionKind.Single), true, true, null, "elsa.json")],
+            [new("result", "Result", new("String", Elsa.Primitives.Models.CollectionKind.Single), true, false, "elsa.json")],
+            [new("done", "Done", true)]);
 
         var applied = await harness.Stores.ExecuteAsync(new ApplyActivityContractProposalRequest(
             before.Id,
@@ -155,6 +159,8 @@ public sealed class GroundworkReusableActivityStoreTests
         var layout = await harness.Stores.FindDraftLayoutAsync(before.Id);
         Assert.Equal(1, applied.Revision);
         Assert.Equal("proposal", applied.State.Contract.ContractSchemaVersion);
+        Assert.True(Assert.Single(applied.State.Contract.Inputs).IsNullable);
+        Assert.False(Assert.Single(applied.State.Contract.Outputs).IsNullable);
         Assert.Equal(before.State.Provider.ProviderKey, applied.State.Provider.ProviderKey);
         Assert.Equal(before.State.Provider.SchemaVersion, applied.State.Provider.SchemaVersion);
         Assert.Equal(before.State.Provider.Payload.GetRawText(), applied.State.Provider.Payload.GetRawText());

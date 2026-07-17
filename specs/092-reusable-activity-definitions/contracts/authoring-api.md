@@ -218,6 +218,7 @@ echo an action map for a hidden target.
       "name": "Order",
       "type": { "alias": "acme.orders.order", "collectionKind": "Single" },
       "isRequired": true,
+      "isNullable": false,
       "default": null,
       "storageDriverKey": "elsa.json",
       "durability": "Required",
@@ -235,6 +236,7 @@ echo an action map for a hidden target.
       "name": "Total",
       "type": { "alias": "Decimal", "collectionKind": "Single" },
       "isRequired": true,
+      "isNullable": false,
       "storageDriverKey": "elsa.json",
       "durability": "Required",
       "displayName": "Total",
@@ -479,7 +481,9 @@ Rules:
 - `providerKey` may change only for a Design-owned lineage; changing it is a behavioral change later classified by the version diff.
 - A stale revision returns `409 activity.draft.stale-revision` with typed `ActivityRecoveryView`
   metadata. The source draft is unchanged.
-- Every mutable contract write accepts only activated catalog aliases, canonical collection-kind names, compatible storage drivers, nullability, and durability. Unsupported facts return `422 activity.contract.capability-rejected`; immutable historical reads remain exact.
+- Every input and output member carries required boolean `isNullable`; omission is a malformed
+  canonical request rather than an implicit default. Requiredness and nullability remain independent.
+- Every mutable contract write accepts only activated catalog aliases, canonical collection-kind names, compatible storage drivers, nullability, and durability. `isNullable: true` is admitted only when the selected type advertises `supportsNull: true`; a null default additionally requires `isNullable: true`. Unsupported facts return `422 activity.contract.capability-rejected`; immutable historical reads remain exact.
 
 ### Presentation-label update
 

@@ -16,7 +16,7 @@ namespace Elsa.Activities.Design.Tests;
 public sealed class ActivityContractAuthoringCapabilityTests
 {
     [Fact]
-    public void Mutable_contract_validation_rejects_alias_collection_driver_and_nullability_outside_the_catalog()
+    public void Mutable_contract_validation_rejects_alias_collection_driver_and_explicit_nullability_outside_the_catalog()
     {
         var validator = new ActivityContractAuthoringValidator(new Catalog([
             new(
@@ -45,7 +45,8 @@ public sealed class ActivityContractAuthoringCapabilityTests
                 Input("unknown", "Unknown", CollectionKind.Single, "elsa.json"),
                 Input("list", "String", CollectionKind.List, "elsa.json"),
                 Input("driver", "String", CollectionKind.Single, "custom.driver"),
-                Input("null", "Int32", CollectionKind.Single, "elsa.json", Json("null"))
+                Input("nullable", "Int32", CollectionKind.Single, "elsa.json", isNullable: true),
+                Input("null-default", "String", CollectionKind.Single, "elsa.json", Json("null"))
             ],
             [],
             []);
@@ -54,7 +55,8 @@ public sealed class ActivityContractAuthoringCapabilityTests
 
         Assert.Equal([
             "activity.contract.collection-kind-unavailable",
-            "activity.contract.null-default-unsupported",
+            "activity.contract.null-default-not-allowed",
+            "activity.contract.nullability-unavailable",
             "activity.contract.storage-driver-unavailable",
             "activity.contract.type-unavailable"
         ], diagnostics.Select(x => x.Code).Order(StringComparer.Ordinal));
@@ -193,11 +195,13 @@ public sealed class ActivityContractAuthoringCapabilityTests
         string alias,
         CollectionKind collectionKind,
         string storageDriver,
-        JsonElement? defaultValue = null) => new(
+        JsonElement? defaultValue = null,
+        bool isNullable = false) => new(
         referenceKey,
         referenceKey,
         new(alias, collectionKind),
         false,
+        isNullable,
         defaultValue is null ? null : new("Literal", defaultValue.Value),
         storageDriver);
 
