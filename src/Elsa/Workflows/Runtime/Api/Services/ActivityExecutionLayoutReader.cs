@@ -35,8 +35,7 @@ public sealed class ActivityExecutionLayoutReader(
         var layoutByNodeId = layoutRecords
             .Where(x => executable.NodesById.ContainsKey(x.ExecutableNodeId))
             .ToDictionary(x => x.ExecutableNodeId, StringComparer.Ordinal);
-        var structuralNodes = executable.Nodes
-            .Where(x => NodeBelongsToBoundary(x, boundary.InvocationOrigin))
+        var structuralNodes = ReadBoundaryNodes(executable, boundary)
             .OrderBy(x => x.ExecutableNodeId, StringComparer.Ordinal)
             .ToArray();
         var nodes = structuralNodes
@@ -118,7 +117,31 @@ public sealed class ActivityExecutionLayoutReader(
         left.Segments.Count == right.Segments.Count &&
         left.Segments.Zip(right.Segments).All(x => x.First.Kind == x.Second.Kind && StringComparer.Ordinal.Equals(x.First.Id, x.Second.Id));
 
-    private static bool NodeBelongsToBoundary(ExecutableNode node, ActivityInvocationOrigin boundaryOrigin)
+    private static IReadOnlyList<ExecutableNode> ReadBoundaryNodes(
+        WorkflowExecutable executable,
+        ActivityExecutionBoundary boundary)
+    {
+        if (string.IsNullOrWhiteSpace(boundary.ExecutableNodeId) ||
+            !executable.NodesById.TryGetValue(boundary.ExecutableNodeId, out var root) ||
+            !NodeMatchesOrigin(root, boundary.InvocationOrigin))
+            return executable.Nodes.Where(x => NodeMatchesOrigin(x, boundary.InvocationOrigin)).ToArray();
+
+        var result = new List<ExecutableNode>();
+        var pending = new Stack<(ExecutableNode Node, bool IsRoot)>();
+        pending.Push((root, true));
+        while (pending.TryPop(out var current))
+        {
+            result.Add(current.Node);
+            if (!current.IsRoot && IsReusableBoundary(current.Node))
+                continue;
+
+            foreach (var child in current.Node.ChildSlots.SelectMany(x => x.Activities).Reverse())
+                pending.Push((child, false));
+        }
+        return result;
+    }
+
+    private static bool NodeMatchesOrigin(ExecutableNode node, ActivityInvocationOrigin boundaryOrigin)
     {
         if (!node.Metadata.TryGetValue("activity.invocationOrigin", out var encoded))
             return false;
@@ -128,9 +151,7 @@ public sealed class ActivityExecutionLayoutReader(
             if (segments is null)
                 return false;
 
-            var nodeOrigin = new ActivityInvocationOrigin(segments);
-            return OriginsEqual(nodeOrigin, boundaryOrigin)
-                   || IsDirectNestedBoundaryNode(node, nodeOrigin, boundaryOrigin);
+            return OriginsEqual(new(segments), boundaryOrigin);
         }
         catch (System.Text.Json.JsonException)
         {
@@ -138,24 +159,11 @@ public sealed class ActivityExecutionLayoutReader(
         }
     }
 
-    private static bool IsDirectNestedBoundaryNode(
-        ExecutableNode node,
-        ActivityInvocationOrigin nodeOrigin,
-        ActivityInvocationOrigin parentOrigin)
-    {
-        if (!HasValue(node.Metadata, "activity.definitionId") ||
-            !HasValue(node.Metadata, "activity.definitionVersionId") ||
-            !HasValue(node.Metadata, "activity.version") ||
-            !HasValue(node.Metadata, "activity.templateHash"))
-            return false;
-
-        var parentLength = parentOrigin.Segments.Count;
-        return nodeOrigin.Segments.Count == parentLength + 2
-               && nodeOrigin.Segments.Take(parentLength).Zip(parentOrigin.Segments)
-                   .All(x => x.First.Kind == x.Second.Kind && StringComparer.Ordinal.Equals(x.First.Id, x.Second.Id))
-               && nodeOrigin.Segments[parentLength].Kind == ActivityInvocationOriginSegmentKind.NestedPlacement
-               && nodeOrigin.Segments[parentLength + 1].Kind == ActivityInvocationOriginSegmentKind.TemplateBoundary;
-    }
+    private static bool IsReusableBoundary(ExecutableNode node) =>
+        HasValue(node.Metadata, "activity.definitionId") &&
+        HasValue(node.Metadata, "activity.definitionVersionId") &&
+        HasValue(node.Metadata, "activity.version") &&
+        HasValue(node.Metadata, "activity.templateHash");
 
     private static bool HasValue(IReadOnlyDictionary<string, string> metadata, string key) =>
         metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value);

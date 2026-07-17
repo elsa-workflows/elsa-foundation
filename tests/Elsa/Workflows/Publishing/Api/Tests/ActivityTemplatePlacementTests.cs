@@ -4,8 +4,12 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -31,6 +35,64 @@ public sealed class ActivityTemplatePlacementTests
             x => Assert.Equal(x.AuthoredActivityId, x.Metadata["activity.templateNodeId"]));
         Assert.Equal(graphRoot.ExecutableNodeId, placement.Root.Descriptor.Payload.GetProperty("entryNodeId").GetString());
         Assert.Equal(4, placement.LayoutSidecar.BoundarySegments.Count);
+    }
+
+    [Fact]
+    public async Task Parent_layout_includes_only_immediate_boundary_from_real_parent_occurrence_structure()
+    {
+        var fixture = Fixture.Create(includeInternalNodes: true);
+        var placement = await fixture.Placer.PlaceAsync(fixture.Request);
+        var immediateBoundary = Assert.Single(placement.Root.ChildSlots.Single(x => x.Name == "activity-graph").Activities);
+        var thenBoundary = Assert.Single(immediateBoundary.ChildSlots.Single(x => x.Name == "If.Then").Activities);
+        var elseBoundary = Assert.Single(immediateBoundary.ChildSlots.Single(x => x.Name == "If.Else").Activities);
+        var immediateInternal = Assert.Single(immediateBoundary.ChildSlots.Single(x => x.Name == "Activities").Activities);
+        var deeperInternal = Assert.Single(thenBoundary.ChildSlots.Single(x => x.Name == "Activities").Activities);
+        var thenDependency = fixture.Request.Template.DirectDependencies.Single(x => x.OccurrenceId == "then");
+        Assert.Equal("if", thenDependency.ParentOccurrenceId);
+        Assert.Equal(ReadOrigin(immediateBoundary).Segments.Count, ReadOrigin(thenBoundary).Segments.Count);
+
+        var artifactId = fixture.Request.SourceReference.ArtifactId;
+        var workflowStates = new InMemoryWorkflowExecutionStateStore();
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await workflowStates.SaveAsync(WorkflowState(artifactId, fixture.Request.SourceReference.SourceReferenceId));
+        await executables.SaveAsync(new(
+            new(artifactId, "workflow-def", "workflow-version", "1.0.0", "workflow-hash"),
+            placement.Root,
+            placement.ResumeTargets,
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>()));
+        await references.SaveAsync(fixture.Request.SourceReference with { LayoutSidecar = placement.LayoutSidecar });
+        var hierarchy = new BoundaryHierarchyStore(new(
+            "ActivityGraph",
+            fixture.Request.Publication.DefinitionId,
+            fixture.Request.Publication.DefinitionVersionId,
+            fixture.Request.Publication.Version,
+            fixture.Request.Template.TemplateHash,
+            fixture.Request.InvocationOrigin,
+            "outer",
+            false,
+            0,
+            0,
+            EmptyAggregate(),
+            true,
+            placement.Root.ExecutableNodeId));
+        var reader = new ActivityExecutionLayoutReader(
+            workflowStates,
+            hierarchy,
+            executables,
+            references,
+            new AllowStructureAuthorization());
+
+        var view = await reader.ReadAsync("wf", "outer", default);
+
+        Assert.Equal(
+            new[] { immediateBoundary.ExecutableNodeId, placement.Root.ExecutableNodeId }.Order(StringComparer.Ordinal),
+            view!.Nodes.Select(x => x.ExecutableNodeId));
+        Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == immediateInternal.ExecutableNodeId);
+        Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == thenBoundary.ExecutableNodeId);
+        Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == elseBoundary.ExecutableNodeId);
+        Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == deeperInternal.ExecutableNodeId);
     }
 
     [Fact]
@@ -172,11 +234,18 @@ public sealed class ActivityTemplatePlacementTests
         public static Fixture Create(
             IActivityPlacementHasher? hasher = null,
             bool includeUnrelatedRoot = false,
-            ActivityDefinitionVersionLifecycle nestedLifecycle = ActivityDefinitionVersionLifecycle.Active)
+            ActivityDefinitionVersionLifecycle nestedLifecycle = ActivityDefinitionVersionLifecycle.Active,
+            bool includeInternalNodes = false)
         {
-            var thenTemplate = Template("template-then", "hash-then", Node("then"));
+            var thenTemplate = Template(
+                "template-then",
+                "hash-then",
+                includeInternalNodes ? Node("then", Node("then-internal")) : Node("then"));
             var elseTemplate = Template("template-else", "hash-else", Node("else"));
-            var ifTemplate = Template("template-if", "hash-if", Node("if"));
+            var ifTemplate = Template(
+                "template-if",
+                "hash-if",
+                includeInternalNodes ? Node("if", Node("if-internal")) : Node("if"));
             var unrelatedTemplate = Template("template-unrelated", "hash-unrelated", Node("unrelated"));
             var graphDescriptor = new RuntimeActivityDescriptor("elsa.graph-activity", "1", Json("""{"entryOccurrenceId":"if"}"""));
             var graphRoot = new ExecutableNode("graph", "graph", "elsa.graph-activity", "1", graphDescriptor,
@@ -224,9 +293,10 @@ public sealed class ActivityTemplatePlacementTests
         id, hash, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], "fingerprint",
         new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
 
-    private static ExecutableNode Node(string id) => new(
+    private static ExecutableNode Node(string id, params ExecutableNode[] children) => new(
         id, id, "local", "1", new("local", "1", Json("{}")),
-        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
+        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+        children.Length == 0 ? [] : [new ExecutableChildSlot("Activities", children)]);
 
     private static ActivityDefinitionVersionPublication Publication(
         string definitionId,
@@ -259,6 +329,36 @@ public sealed class ActivityTemplatePlacementTests
         DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, WorkflowExecutableReferenceScope.Published, LayoutSidecar: sidecar);
 
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
+
+    private static ActivityInvocationOrigin ReadOrigin(ExecutableNode node) => new(
+        JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(node.Metadata["activity.invocationOrigin"]) ?? []);
+
+    private static WorkflowExecutionState WorkflowState(string artifactId, string sourceReferenceId) => new(
+        "wf",
+        new(artifactId, "workflow-def", "workflow-version", "1.0.0", "workflow-hash"),
+        WorkflowExecutionStatus.Completed,
+        null,
+        DateTimeOffset.UnixEpoch,
+        DateTimeOffset.UnixEpoch,
+        DateTimeOffset.UnixEpoch,
+        DateTimeOffset.UnixEpoch,
+        null,
+        null,
+        "tenant-a",
+        new Dictionary<string, string> { [RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId });
+
+    private static ActivityExecutionHierarchyAggregate EmptyAggregate() => new(
+        ActivityExecutionHierarchyAggregateStatus.Empty,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0);
 
     private static IReadOnlyList<ExecutableNode> Flatten(ExecutableNode root)
     {
@@ -302,5 +402,45 @@ public sealed class ActivityTemplatePlacementTests
         public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(_values.Values.Where(x => x.ArtifactId == artifactId).ToArray());
         public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(_values.Values.ToArray());
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+    }
+
+    private sealed class BoundaryHierarchyStore(ActivityExecutionBoundary boundary) : IActivityExecutionHierarchyStore
+    {
+        public ValueTask<ActivityExecutionHierarchyPage?> ReadPageAsync(
+            ActivityExecutionHierarchyQuery query,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivityExecutionHierarchyPage?>(null);
+
+        public ValueTask<ActivityExecutionBoundary?> FindBoundaryAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivityExecutionBoundary?>(boundary);
+
+        public ValueTask<ActivityExecutionAttemptNavigation?> FindAttemptNavigationAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivityExecutionAttemptNavigation?>(null);
+
+        public ValueTask<ActivityExecutionLayout?> FindLayoutAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivityExecutionLayout?>(null);
+
+        public ValueTask SaveAsync(ActivityExecutionHierarchyRecord record, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+    }
+
+    private sealed class AllowStructureAuthorization : IActivityExecutionInspectionAuthorizationContext
+    {
+        public string TenantScope => "tenant:a";
+        public string AuthorizationProfile => "structure:true";
+        public string AuditSubject => "test";
+        public string RequestCorrelationId => "test-request";
+        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
+        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => false;
+        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
     }
 }

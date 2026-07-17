@@ -161,46 +161,6 @@ public class ActivityExecutionLayoutInspectionTests
     }
 
     [Fact]
-    public async Task Parent_pinned_structure_includes_an_unexecuted_nested_boundary_without_preloading_its_descendants()
-    {
-        var workflowStates = new InMemoryWorkflowExecutionStateStore();
-        var executables = new InMemoryWorkflowExecutableStore();
-        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
-        var hierarchy = HierarchyStore();
-        var parentOrigin = Origin();
-        var nestedOrigin = ExtendOrigin(parentOrigin, "nested-occurrence", "nested-version");
-        var deeperOrigin = ExtendOrigin(nestedOrigin, "deeper-occurrence", "deeper-version");
-        var nestedLeaf = Node("node-nested-leaf", "authored-nested-leaf", metadata: OriginMetadata(nestedOrigin));
-        var deeperBoundary = Node("node-deeper-boundary", "authored-deeper-boundary", metadata: BoundaryMetadata(deeperOrigin, "deeper"));
-        var nestedBoundary = Node(
-            "node-nested-boundary",
-            "authored-nested-boundary",
-            children: [nestedLeaf, deeperBoundary],
-            metadata: BoundaryMetadata(nestedOrigin, "nested"));
-        var root = Node(
-            "node-outer",
-            "authored-outer",
-            children: [nestedBoundary],
-            metadata: OriginMetadata(parentOrigin));
-        await workflowStates.SaveAsync(WorkflowState("source-executed"));
-        await executables.SaveAsync(WorkflowExecutable(root));
-        await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(
-            ActivityExecutionInspectionProjectionTests.Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true)));
-        await references.SaveAsync(Reference("source-executed", parentOrigin, x: 100));
-
-        var reader = new ActivityExecutionLayoutReader(workflowStates, hierarchy, executables, references, new Authorization(true, false));
-        var view = await reader.ReadAsync("wf", "outer", default);
-
-        Assert.Equal(
-            new[] { "node-nested-boundary", "node-outer" },
-            view!.Nodes.Select(x => x.ExecutableNodeId).ToArray());
-        Assert.False(view.Nodes.Single(x => x.ExecutableNodeId == "node-nested-boundary").HasPinnedGeometry);
-        Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == "node-nested-leaf");
-        Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == "node-deeper-boundary");
-        Assert.Empty(view.NestedBoundaries);
-    }
-
-    [Fact]
     public async Task Pinned_structure_remains_available_when_the_optional_layout_sidecar_is_missing()
     {
         var workflowStates = new InMemoryWorkflowExecutionStateStore();
@@ -479,34 +439,6 @@ public class ActivityExecutionLayoutInspectionTests
         new ActivityInvocationOriginSegment(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-ver"),
         new ActivityInvocationOriginSegment(ActivityInvocationOriginSegmentKind.AuthoredNode, "node-boundary")
     });
-
-    private static ActivityInvocationOrigin ExtendOrigin(
-        ActivityInvocationOrigin parent,
-        string occurrenceId,
-        string definitionVersionId) => new(
-        [
-            .. parent.Segments,
-            new(ActivityInvocationOriginSegmentKind.NestedPlacement, occurrenceId),
-            new(ActivityInvocationOriginSegmentKind.TemplateBoundary, definitionVersionId)
-        ]);
-
-    private static IReadOnlyDictionary<string, string> OriginMetadata(ActivityInvocationOrigin origin) =>
-        new Dictionary<string, string>
-        {
-            ["activity.invocationOrigin"] = JsonSerializer.Serialize(origin.Segments)
-        };
-
-    private static IReadOnlyDictionary<string, string> BoundaryMetadata(
-        ActivityInvocationOrigin origin,
-        string identity)
-    {
-        var metadata = OriginMetadata(origin).ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-        metadata["activity.definitionId"] = $"definition-{identity}";
-        metadata["activity.definitionVersionId"] = $"version-{identity}";
-        metadata["activity.version"] = "1.0.0";
-        metadata["activity.templateHash"] = $"hash-{identity}";
-        return metadata;
-    }
 
     private sealed class Authorization(bool structure, bool values) : IActivityExecutionInspectionAuthorizationContext
     {
