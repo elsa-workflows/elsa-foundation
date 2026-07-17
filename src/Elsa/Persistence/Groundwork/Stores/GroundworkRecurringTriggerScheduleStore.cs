@@ -69,15 +69,12 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var schedules = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ListAllQuery,
-            ElsaRuntimeStorageManifest.CollectionField,
-            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
+        return await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
+            ElsaRuntimeStorageManifest.ListRecurringTriggerSchedulesByPublicationQuery,
+            ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField,
+            publicationId,
             envelope => envelope.Schedule,
             cancellationToken);
-        return schedules
-            .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
-            .ToArray();
     }
 
     public async ValueTask ActivatePublicationAsync(
