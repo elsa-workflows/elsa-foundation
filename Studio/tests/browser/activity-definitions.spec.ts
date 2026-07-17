@@ -60,20 +60,30 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await page.getByRole("textbox", { name: "Member name" }).fill("Customer note");
+  await page.getByRole("button", { name: "Add input" }).click();
+  const contractInput = page.getByRole("group", { name: "Input 1: Customer note" });
+  await expect(contractInput).toBeVisible();
+  await contractInput.getByRole("checkbox", { name: /Allows null/ }).check();
+  await contractInput.getByRole("combobox", { name: "Default" }).selectOption("literal");
+  await contractInput.getByRole("textbox", { name: "Literal JSON value" }).fill("null");
+  await contractInput.getByRole("button", { name: "Apply default" }).click();
+  await expect(page.getByText("Saved revision 2")).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Root activity" }).locator("option", { hasText: "Flowchart" })).toHaveCount(0);
   await page.getByRole("combobox", { name: "Root activity" }).selectOption("sequence-v1");
-  await expect(page.getByText("Saved revision 2")).toBeVisible();
+  await expect(page.getByText("Saved revision 3")).toBeVisible();
   await page.getByRole("combobox", { name: "Activity for Activities" }).selectOption("write-line-v1");
   await page.getByRole("button", { name: "Add activity" }).click();
-  await expect(page.getByText("Saved revision 3")).toBeVisible();
+  await expect(page.getByText("Saved revision 4")).toBeVisible();
   await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Activity for Activities" }).selectOption("delay-v1");
   await page.getByRole("button", { name: "Add activity" }).click();
-  await expect(page.getByText("Saved revision 4")).toBeVisible();
+  await expect(page.getByText("Saved revision 5")).toBeVisible();
   await expect(page.locator(".ad-graph-node").getByText("Delay", { exact: true })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText("Saved revision 4")).toBeVisible();
+  await expect(page.getByText("Saved revision 5")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Input 1: Customer note" }).getByRole("textbox", { name: "Literal JSON value" })).toHaveValue("null");
   await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
   await expect(page.locator(".ad-graph-node").getByText("Delay", { exact: true })).toBeVisible();
   page.once("dialog", dialog => dialog.dismiss());
@@ -82,7 +92,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
   await page.locator(".ad-graph-node").filter({ hasText: "Write line" }).click();
   page.once("dialog", dialog => dialog.dismiss());
-  await page.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
 
   state.conflictNextSave = true;
@@ -90,7 +100,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.getByRole("textbox", { name: "Activity inputs JSON" }).fill('[{"name":"Duration","value":"00:00:05"}]');
   await page.getByRole("button", { name: "Apply inputs" }).click();
   await expect(page.getByText("Local work preserved")).toBeVisible();
-  await expect(page.getByText(/server draft advanced to revision 5/i)).toBeVisible();
+  await expect(page.getByText(/server draft advanced to revision 6/i)).toBeVisible();
   await expect(page.locator(".ad-graph-node").getByText("Delay", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Create parallel recovery draft" }).click();
 
@@ -101,6 +111,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
     { activityVersionId: "write-line-v1" },
     { activityVersionId: "delay-v1", inputs: [{ name: "Duration", value: "00:00:05" }] }
   ] } } } });
+  expect(state.draft.contract).toMatchObject({ inputs: [{ referenceKey: "customer-note", isRequired: false, isNullable: true, default: { syntax: "Literal", value: null }, storageDriverKey: "elsa.json", durability: "Required" }] });
 });
 
 async function mockActivityDefinitions(page: Page, collectionHandler?: Parameters<Page["route"]>[1]) {
@@ -139,6 +150,7 @@ async function mockActivityDefinitionAuthoring(page: Page) {
   await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(authoringApiCapabilities()) }));
   await page.route(/\/design\/activities\/definitions\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([])) }));
   await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(authoringCapabilities()) }));
+  await page.route("**/expressions/descriptors", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [{ type: "Python", displayName: "Python", editingMode: "text" }] }) }));
   await page.route("**/design/activities/catalog", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ activities: [catalogActivity("sequence-v1", "Sequence"), catalogActivity("flowchart-v1", "Flowchart"), catalogActivity("write-line-v1", "Write line"), catalogActivity("delay-v1", "Delay")] }) }));
   await page.route("**/design/activities/definitions", async route => {
     if (route.request().method() !== "POST") return route.fallback();
@@ -152,7 +164,7 @@ async function mockActivityDefinitionAuthoring(page: Page) {
       const body = route.request().postDataJSON() as { expectedRevision: number; provider: { payload: unknown }; layout: unknown[]; contract: unknown; presentationLabel?: string | null };
       if (state.conflictNextSave) {
         state.conflictNextSave = false;
-        return route.fulfill({ status: 409, contentType: "application/problem+json", body: JSON.stringify({ title: "Stale revision", status: 409, errorCode: "activity.draft.stale-revision", recovery: { currentRevision: 5, relation: "activity-draft-conflict-copies" } }) });
+        return route.fulfill({ status: 409, contentType: "application/problem+json", body: JSON.stringify({ title: "Stale revision", status: 409, errorCode: "activity.draft.stale-revision", recovery: { currentRevision: state.draft.revision + 1, relation: "activity-draft-conflict-copies" } }) });
       }
       state.draft = { ...state.draft, revision: body.expectedRevision + 1, provider: { ...state.draft.provider, payload: body.provider.payload }, layout: body.layout, contract: body.contract, presentationLabel: body.presentationLabel ?? null, updatedAt: new Date().toISOString() };
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) });
@@ -177,6 +189,8 @@ function authoringApiCapabilities() {
     { rel: "activity-draft-validation", href: "design/activities/drafts/{draftId}/validate", templated: true },
     { rel: "activity-draft-conflict-copies", href: "design/activities/drafts/{draftId}/conflict-copies", templated: true },
     { rel: "activity-catalog", href: "design/activities/catalog" }
+  ] }, { id: "elsa.api.expressions", contractVersion: "1", links: [
+    { rel: "expression-descriptors", href: "expressions/descriptors" }
   ] }] };
 }
 
@@ -185,7 +199,16 @@ function authoringCapabilities() {
     contractSchemaVersions: ["1"],
     activityTypeKeyRules: { serverGenerated: true, allowsPreCreationOverride: true, immutable: true, prefix: "elsa.user", pattern: "^elsa\\.user\\..+$", maximumLength: 160, collisionScope: "tenantId + activityTypeKey" },
     providers: [{ providerKey: "elsa.activity-graph", displayName: "Activity Graph", manifestSchemas: [{ schemaVersion: "1", isAuthorable: true, migratableFromSchemaVersions: ["1"] }], requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] }],
-    types: [], storageDriverKeys: [], snapshotFingerprint: "sha256:browser"
+    types: [{
+      alias: "String",
+      displayName: "Text",
+      category: "Primitives",
+      defaultEditor: "text",
+      supportedCollectionKinds: ["Single"],
+      supportsNull: true,
+      supportsDurability: true,
+      compatibleStorageDriverKeys: ["elsa.json"]
+    }], storageDriverKeys: ["elsa.json"], snapshotFingerprint: "sha256:browser"
   };
 }
 

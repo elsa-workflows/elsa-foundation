@@ -76,6 +76,7 @@ export interface ActivityDefinitionVersionManagementView {
   providerSchemaVersion: string;
   isRecommended: boolean;
   actions: ActivityActionAvailability[];
+  contract?: ActivityContract;
 }
 
 export interface ActivityManagementSnapshot {
@@ -117,18 +118,61 @@ export interface ActivityTypeKeyRules {
   collisionScope: string;
 }
 
+export interface ActivityTypeReference {
+  alias: string;
+  collectionKind: string;
+  [key: string]: unknown;
+}
+
+export interface ActivityInputDefault {
+  syntax: string;
+  value: unknown;
+  [key: string]: unknown;
+}
+
+interface ActivityContractMemberPresentation {
+  referenceKey: string;
+  name: string;
+  displayName?: string | null;
+  description?: string | null;
+  category?: string | null;
+  order?: number;
+  uiHint?: string | null;
+  uiSpecifications?: unknown | null;
+  [key: string]: unknown;
+}
+
+export interface ActivityInputContract extends ActivityContractMemberPresentation {
+  type: ActivityTypeReference;
+  isRequired: boolean;
+  isNullable: boolean;
+  default: ActivityInputDefault | null;
+  storageDriverKey: string;
+  durability: string;
+}
+
+export interface ActivityOutputContract extends ActivityContractMemberPresentation {
+  type: ActivityTypeReference;
+  isRequired: boolean;
+  isNullable: boolean;
+  storageDriverKey: string;
+  durability: string;
+}
+
 export interface ActivityOutcomeContract {
   referenceKey: string;
   name: string;
   isEmitted: boolean;
   description?: string | null;
+  [key: string]: unknown;
 }
 
 export interface ActivityContract {
   contractSchemaVersion: string;
-  inputs: unknown[];
-  outputs: unknown[];
+  inputs: ActivityInputContract[];
+  outputs: ActivityOutputContract[];
   outcomes: ActivityOutcomeContract[];
+  [key: string]: unknown;
 }
 
 export interface ActivityProviderAuthoringCapability {
@@ -146,9 +190,22 @@ export interface ActivityAuthoringCapabilities {
   contractSchemaVersions: string[];
   activityTypeKeyRules: ActivityTypeKeyRules;
   providers: ActivityProviderAuthoringCapability[];
-  types: unknown[];
+  types: ActivityContractTypeCapability[];
   storageDriverKeys: string[];
   snapshotFingerprint: string;
+  [key: string]: unknown;
+}
+
+export interface ActivityContractTypeCapability {
+  alias: string;
+  displayName: string;
+  category: string;
+  defaultEditor: string;
+  supportedCollectionKinds: string[];
+  supportsNull: boolean;
+  supportsDurability: boolean;
+  compatibleStorageDriverKeys: string[];
+  [key: string]: unknown;
 }
 
 export interface ActivityProviderManifest {
@@ -181,6 +238,7 @@ export interface ActivityDefinitionDraftView {
   createdAt: string;
   updatedAt: string;
   presentationLabel?: string | null;
+  [key: string]: unknown;
 }
 
 export interface CreateActivityDefinitionRequest {
@@ -212,4 +270,23 @@ export interface ActivityDraftValidationView {
   isValid: boolean;
   validatedAt: string;
   diagnostics: unknown[];
+}
+
+export interface ActivityDefinitionVersionView {
+  definition: ActivityDefinitionIdentity;
+  versionId: string;
+  version: string;
+  sourceDraftId?: string | null;
+  sourceVersionId?: string | null;
+  contract: ActivityContract;
+  provider: {
+    providerKey: string;
+    schemaVersion: string;
+    manifestFingerprint: string;
+    payload?: unknown;
+    [key: string]: unknown;
+  };
+  lifecycle: string;
+  publishedAt: string;
+  [key: string]: unknown;
 }

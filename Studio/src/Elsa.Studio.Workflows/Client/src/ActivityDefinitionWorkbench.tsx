@@ -39,9 +39,8 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const draftsQuery = useActivityDefinitionDrafts(context, draftRequest, childEnabled && activeSection === "drafts");
   const versionsQuery = useActivityDefinitionVersions(context, versionRequest, childEnabled && activeSection === "versions");
   const selectedDraftIsOnPage = Boolean(selectedDraftId && draftsQuery.data?.items.some(item => item.draft.draftId === selectedDraftId));
-  const selectedVersionIsOnPage = Boolean(selectedVersionId && versionsQuery.data?.items.some(item => item.version.versionId === selectedVersionId));
   const exactDraftQuery = useActivityDefinitionDraft(context, definitionId, selectedDraftId, childEnabled && activeSection === "drafts" && !selectedDraftIsOnPage);
-  const exactVersionQuery = useActivityDefinitionVersion(context, definitionId, selectedVersionId, childEnabled && activeSection === "versions" && !selectedVersionIsOnPage);
+  const exactVersionQuery = useActivityDefinitionVersion(context, definitionId, selectedVersionId, childEnabled && activeSection === "versions");
   const draftDirectFailure = draftsQuery.error ? classifyActivityDefinitionReadFailure(draftsQuery.error) : null;
   const versionDirectFailure = versionsQuery.error ? classifyActivityDefinitionReadFailure(versionsQuery.error) : null;
   const exactDraftFailure = exactDraftQuery.error ? classifyActivityDefinitionReadFailure(exactDraftQuery.error) : null;
@@ -146,7 +145,7 @@ function DraftsSection({ query, exactQuery, exactFailure, privacyFailure, select
 
 function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, selectedVersionId, page, onPrevious, onNext, onRetry, onSelect }: { query: ReturnType<typeof useActivityDefinitionVersions>; exactQuery: ReturnType<typeof useActivityDefinitionVersion>; exactFailure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; selectedVersionId: string | null; page: number; onPrevious(): void; onNext(): void; onRetry(): void; onSelect(versionId: string): void }) {
   const data = privacyFailure ? undefined : query.data;
-  const selected = privacyFailure || exactFailure ? undefined : data?.items.find(item => item.version.versionId === selectedVersionId) ?? exactQuery.data;
+  const selected = privacyFailure || exactFailure ? undefined : exactQuery.data ?? data?.items.find(item => item.version.versionId === selectedVersionId);
   return <div><SectionHeading icon={<Layers3 size={18} />} title="Versions" description="Every row is an immutable semantic version. Recommendation remains an explicit definition-level decision." />{selected ? <SelectedVersion item={selected} /> : <ExactSelectionState kind="version" selected={Boolean(selectedVersionId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized versions are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition versions">{data.items.map(item => <button key={item.version.versionId} type="button" className={item.version.versionId === selectedVersionId ? "is-selected" : ""} onClick={() => onSelect(item.version.versionId)}><span><strong>{item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong><small>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</small></span><span><strong>{item.providerKey}</strong><small>Schema {item.providerSchemaVersion}</small></span></button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
 }
 
@@ -177,7 +176,23 @@ function CursorPager({ page, data, onPrevious, onNext }: { page: number; data: {
 
 function SectionHeading({ icon, title, description }: { icon: ReactNode; title: string; description: string }) { return <header className="ad-section-heading"><span aria-hidden>{icon}</span><div><h2>{title}</h2><p>{description}</p></div></header>; }
 function SelectedDraft({ item, onEdit }: { item: ActivityDefinitionDraftManagementView; onEdit(): void }) { return <div className="ad-selected-record" aria-label="Selected exact draft"><strong>{draftLabel(item)}</strong><span><code>{item.draft.draftId}</code> · revision {item.draft.revision} · {item.draft.providerKey}</span><button type="button" onClick={onEdit}>Open implementation editor</button></div>; }
-function SelectedVersion({ item }: { item: ActivityDefinitionVersionManagementView }) { return <div className="ad-selected-record" aria-label="Selected exact version"><strong>Version {item.version.version}</strong><span><code>{item.version.versionId}</code> · {item.version.lifecycle} · {item.providerKey}</span></div>; }
+function SelectedVersion({ item }: { item: ActivityDefinitionVersionManagementView }) {
+  return <div className="ad-selected-version"><div className="ad-selected-record" aria-label="Selected exact version"><strong>Version {item.version.version}</strong><span><code>{item.version.versionId}</code> · {item.version.lifecycle} · {item.providerKey}</span></div>{item.contract ? <HistoricalContract contract={item.contract} /> : <div className="ad-inline-status" role="status">Loading the exact immutable public contract…</div>}</div>;
+}
+
+function HistoricalContract({ contract }: { contract: NonNullable<ActivityDefinitionVersionManagementView["contract"]> }) {
+  return <section className="ad-historical-contract" aria-labelledby="historical-contract-title"><header><h3 id="historical-contract-title">Immutable public contract</h3><span>Schema {contract.contractSchemaVersion}</span></header><p>Stored aliases remain visible even when they are no longer available in the current authoring catalog.</p>
+    <div className="ad-historical-contract-groups">
+      <HistoricalMembers title="Inputs" members={contract.inputs.map(member => ({ key: member.referenceKey, name: member.displayName || member.name, detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Required effective value" : "Optional effective value"} · ${member.isNullable ? "Allows null" : "Non-null"}` }))} />
+      <HistoricalMembers title="Outputs" members={contract.outputs.map(member => ({ key: member.referenceKey, name: member.displayName || member.name, detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Must be produced" : "Optional production"} · ${member.isNullable ? "Allows null" : "Non-null"}` }))} />
+      <HistoricalMembers title="Outcomes" members={contract.outcomes.map(member => ({ key: member.referenceKey, name: member.name, detail: member.isEmitted ? "Emitted" : "Not emitted" }))} />
+    </div>
+  </section>;
+}
+
+function HistoricalMembers({ title, members }: { title: string; members: Array<{ key: string; name: string; detail: string }> }) {
+  return <section><h4>{title}</h4>{members.length ? <ul>{members.map(member => <li key={member.key}><strong>{member.name}</strong><code>{member.key}</code><span>{member.detail}</span></li>)}</ul> : <p>None</p>}</section>;
+}
 function draftLabel(item: ActivityDefinitionDraftManagementView) { return item.draft.presentationLabel?.trim() || `Draft updated ${formatDate(item.draft.updatedAt)}`; }
 function normalizeSection(value: string | null): Section { return value === "drafts" || value === "versions" || value === "relationships" ? value : "overview"; }
 

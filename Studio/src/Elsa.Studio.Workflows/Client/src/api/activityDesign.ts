@@ -20,6 +20,7 @@ import type {
   ActivityDefinitionDraftManagementView,
   ActivityDefinitionManagementView,
   ActivityDefinitionVersionManagementView,
+  ActivityDefinitionVersionView,
   ActivityManagementPage,
   CreateActivityDefinitionRequest,
   CreateActivityDefinitionResponse,
@@ -31,6 +32,7 @@ import {
   capabilityIds,
   resolveCapabilityLink
 } from "./capabilities";
+import { listExpressionDescriptors } from "./expressions";
 
 export const activityDesignKeys = {
   all: ["activity-design"] as const,
@@ -40,11 +42,13 @@ export const activityDesignKeys = {
   definitionCollections: ["activity-design", "definitions"] as const,
   definitionResources: ["activity-design", "definition"] as const,
   authoringCapabilities: ["activity-design", "authoring-capabilities"] as const,
+  contractExpressionDescriptors: ["activity-design", "contract-expression-descriptors"] as const,
   definitionCollection: (request: ActivityDefinitionCollectionRequest) => ["activity-design", "definitions", request] as const,
   definition: (definitionId: string) => ["activity-design", "definition", definitionId] as const,
   definitionDrafts: (request: ActivityDefinitionChildCollectionRequest) => ["activity-design", "definition", request.definitionId, "drafts", request] as const,
   definitionDraft: (definitionId: string, draftId: string) => ["activity-design", "definition", definitionId, "draft", draftId] as const,
   fullDefinitionDraft: (draftId: string) => ["activity-design", "authoring-draft", draftId] as const,
+  fullDefinitionVersion: (versionId: string) => ["activity-design", "authoring-version", versionId] as const,
   definitionVersions: (request: ActivityDefinitionChildCollectionRequest) => ["activity-design", "definition", request.definitionId, "versions", request] as const,
   definitionVersion: (definitionId: string, versionId: string) => ["activity-design", "definition", definitionId, "version", versionId] as const
 };
@@ -80,6 +84,16 @@ export function useActivityAuthoringCapabilities(context: StudioEndpointContext,
   });
 }
 
+export function useActivityContractExpressionDescriptors(context: StudioEndpointContext, enabled = true) {
+  return useQuery({
+    queryKey: activityDesignKeys.contractExpressionDescriptors,
+    queryFn: () => listExpressionDescriptors(context),
+    enabled,
+    staleTime: 60_000,
+    retry: false
+  });
+}
+
 export function useFullActivityDefinitionDraft(context: StudioEndpointContext, draftId: string | null, enabled = true) {
   return useQuery({
     queryKey: activityDesignKeys.fullDefinitionDraft(draftId ?? ""),
@@ -88,6 +102,16 @@ export function useFullActivityDefinitionDraft(context: StudioEndpointContext, d
     refetchOnMount: "always",
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
+    retry: false
+  });
+}
+
+export function useFullActivityDefinitionVersion(context: StudioEndpointContext, versionId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: activityDesignKeys.fullDefinitionVersion(versionId ?? ""),
+    queryFn: ({ signal }) => getActivityDefinitionVersion(context, versionId!, signal),
+    enabled: enabled && Boolean(versionId),
+    staleTime: Infinity,
     retry: false
   });
 }
@@ -219,6 +243,15 @@ export async function getActivityDefinitionDraft(
   return context.http.getJson<ActivityDefinitionDraftView>(path, { signal });
 }
 
+export async function getActivityDefinitionVersion(
+  context: StudioEndpointContext,
+  versionId: string,
+  signal?: AbortSignal
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-version", { versionId });
+  return context.http.getJson<ActivityDefinitionVersionView>(path, { signal });
+}
+
 export async function replaceActivityDefinitionDraft(
   context: StudioEndpointContext,
   draftId: string,
@@ -321,7 +354,8 @@ export async function getActivityDefinitionVersionSummary(
     providerKey: version.provider.providerKey,
     providerSchemaVersion: version.provider.schemaVersion,
     isRecommended: version.definition.recommendedVersionId === version.versionId,
-    actions: []
+    actions: [],
+    contract: version.contract
   };
 }
 
@@ -387,6 +421,7 @@ type ReusableActivityVersionSummarySource = {
   version: string;
   lifecycle: string;
   provider: { providerKey: string; schemaVersion: string };
+  contract: ActivityDefinitionVersionView["contract"];
   publishedAt: string;
 };
 
