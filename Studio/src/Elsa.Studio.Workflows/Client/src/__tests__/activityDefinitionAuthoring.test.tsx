@@ -17,7 +17,8 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { activityDesignKeys } from "../api/activityDesign";
 import { clearActivityDefinitionRecoveryForIdentity, createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 import { activityDefinitionsObservationEvent, type ActivityDefinitionsObservation } from "../activityDefinitionObservability";
-import type { ActivityDefinitionDraftView } from "../activityDefinitionTypes";
+import type { ActivityDefinitionDraftView, ActivityDefinitionManagementView } from "../activityDefinitionTypes";
+import { isExactVersionAtLeast, safeChangeValue } from "../ActivityDefinitionPublicationReview";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -1272,6 +1273,203 @@ describe("Activity Definition authoring", () => {
   });
 });
 
+describe("Activity Definition publication", () => {
+  it("flushes autosave, binds preflight to the exact revision and head, and publishes a higher exact version once", async () => {
+    const putJson = vi.fn(async (_url: string, body: unknown) => fullDraft({
+      revision: 4,
+      payload: (body as { provider: { payload: unknown } }).provider.payload
+    }));
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/publication-preflight")) return publicationPreflight({
+        draftRevision: (body as { expectedDraftRevision: number }).expectedDraftRevision,
+        definitionHeadVersionId: "version-head",
+        hasBaseline: true,
+        minimumVersion: "2.0.0"
+      });
+      if (url.endsWith("/publish")) {
+        const request = body as { version: string; idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string };
+        return publicationReceipt({
+          idempotencyKey: request.idempotencyKey,
+          expectedDraftRevision: request.expectedDraftRevision,
+          expectedDefinitionHeadVersionId: request.expectedDefinitionHeadVersionId ?? null,
+          reviewToken: request.reviewToken,
+          requestedVersion: request.version,
+          outcome: {
+            ...publicationReceipt().outcome!,
+            version: request.version
+          }
+        });
+      }
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const detail: ActivityDefinitionManagementView = managementDefinition();
+    detail.definition.headVersionId = "version-head";
+    detail.definition.recommendedVersionId = "version-recommended";
+    detail.lifecycle.head = { versionId: "version-head", version: "1.4.0", lifecycle: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" };
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()],
+      putJson,
+      postJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
+        if (url === "/design/activities/definitions/activity-def-1") return detail;
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    click(buttonByText(rendered.container, "Prepare publication"));
+    await waitFor(() => expect(postJson).toHaveBeenCalledWith(
+      "/design/activities/drafts/activity-draft-1/publication-preflight",
+      { expectedDraftRevision: 4, expectedDefinitionHeadVersionId: "version-head" }
+    ));
+    await waitForText(rendered.container, "Compared with published head");
+    expect((controlByLabel<HTMLInputElement>(rendered.container, "Publication version")).value).toBe("2.0.0");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Publication version"), "3.2.1");
+    click(buttonByText(rendered.container, "Publish 3.2.1"));
+    await waitForText(rendered.container, "Published immutable version 3.2.1");
+    expect(rendered.container.textContent).toContain("existing recommended version was not moved");
+    expect(postJson.mock.calls.filter(([url]) => String(url).endsWith("/publish"))).toHaveLength(1);
+    expect(postJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1/publish", expect.objectContaining({
+      expectedDraftRevision: 4,
+      expectedDefinitionHeadVersionId: "version-head",
+      version: "3.2.1",
+      reviewToken: "sha256:review"
+    }));
+    await rendered.unmount();
+  });
+
+  it("renders first-publication baseline, impact ordering, redaction, and blocking readiness honestly", async () => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async (url: string) => {
+        if (url.endsWith("/publication-preflight")) return publicationPreflight({
+          impactFirstChanges: [
+            publicationChange({ changeId: "secret", impact: "Breaking", area: "Provider", kind: "provider.secret-rotated", before: { redacted: true }, after: { kind: "Redacted" } }),
+            publicationChange({ changeId: "future", impact: "ProviderFutureImpact", area: "FutureArea", kind: "<future-kind>", message: "A provider-specific change was reported." })
+          ],
+          provider: { kind: "Provider", key: "elsa.activity-graph", schemaVersion: "1", status: "Unavailable", supportedSchemaVersions: [] },
+          isPublishable: false,
+          diagnostics: [{
+            code: "activity.runtime.consumer-missing",
+            severity: "Error",
+            message: "Required Runtime consumer is missing.",
+            subject: { kind: "ActivityDraft", id: "activity-draft-1", revision: 3 },
+            location: null,
+            remediation: "Install the required Runtime consumer.",
+            metadata: {}
+          }]
+        });
+        throw new Error(`Unexpected POST ${url}`);
+      }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Prepare publication"));
+    await waitForText(rendered.container, "First publication · no published baseline exists");
+    expect(rendered.container.textContent).toContain("Protected value redacted");
+    expect(rendered.container.textContent).not.toContain("raw-secret");
+    expect(rendered.container.textContent).toContain("Provider-specific change");
+    expect(rendered.container.textContent).toContain("Other impact · ProviderFutureImpact");
+    expect(rendered.container.textContent).toContain("Publication blocked");
+    expect((buttonByText(rendered.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
+    await rendered.unmount();
+  });
+
+  it("discards a stale review without retrying publication writes", async () => {
+    let publishCalls = 0;
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async (url: string) => {
+        if (url.endsWith("/publication-preflight")) return publicationPreflight();
+        if (url.endsWith("/publish")) {
+          publishCalls += 1;
+          throw new StudioHttpError(409, "hidden stale detail", null, { errorCode: "activity.publication.review-stale" });
+        }
+        throw new Error(`Unexpected POST ${url}`);
+      }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Prepare publication"));
+    await waitForText(rendered.container, "Minimum valid version: 1.0.0");
+    click(buttonByText(rendered.container, "Publish 1.0.0"));
+    await waitForText(rendered.container, "reopened preflight without publishing");
+    expect(publishCalls).toBe(1);
+    expect(rendered.container.textContent).not.toContain("hidden stale detail");
+    expect(rendered.container.textContent).not.toContain("Published immutable version");
+    await rendered.unmount();
+  });
+
+  it("reconciles an ambiguous publish response through the authoritative receipt without resubmitting", async () => {
+    let publishCalls = 0;
+    let receiptCalls = 0;
+    let publishRequest: { version: string; idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string } | null = null;
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async (url: string, body: unknown) => {
+        if (url.endsWith("/publication-preflight")) return publicationPreflight();
+        if (url.endsWith("/publish")) {
+          publishCalls += 1;
+          publishRequest = body as typeof publishRequest;
+          throw new TypeError("ambiguous transport outcome");
+        }
+        throw new Error(`Unexpected POST ${url}`);
+      }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        if (url.startsWith("/design/activities/publications/")) {
+          receiptCalls += 1;
+          return publicationReceipt({
+            idempotencyKey: publishRequest!.idempotencyKey,
+            expectedDraftRevision: publishRequest!.expectedDraftRevision,
+            expectedDefinitionHeadVersionId: publishRequest!.expectedDefinitionHeadVersionId ?? null,
+            reviewToken: publishRequest!.reviewToken,
+            requestedVersion: publishRequest!.version
+          });
+        }
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Prepare publication"));
+    await waitForText(rendered.container, "Minimum valid version: 1.0.0");
+    click(buttonByText(rendered.container, "Publish 1.0.0"));
+    await waitForText(rendered.container, "Published immutable version 1.0.0");
+    expect(publishCalls).toBe(1);
+    expect(receiptCalls).toBe(1);
+    await rendered.unmount();
+  });
+
+  it("validates exact semantic-version precedence and keeps protected values opaque", () => {
+    expect(isExactVersionAtLeast("2.0.0", "2.0.0")).toBe(true);
+    expect(isExactVersionAtLeast("7.3.2+build.4", "2.0.0")).toBe(true);
+    expect(isExactVersionAtLeast("2.0.0-rc.1", "2.0.0")).toBe(false);
+    expect(isExactVersionAtLeast("02.0.0", "2.0.0")).toBe(false);
+    expect(safeChangeValue(publicationChange({ kind: "provider.credential-changed" }), { token: "raw" })).toBe("Protected value withheld");
+    expect(safeChangeValue(publicationChange(), { nested: "opaque" })).toBe("Structured value changed");
+    expect(safeChangeValue(publicationChange(), { redacted: true, nested: "must-not-render" })).toBe("Protected value redacted");
+  });
+});
+
 describe("Activity Definition local recovery policy", () => {
   it("is disabled by default and expires within the configured identity scope", () => {
     const draft = fullDraft({ revision: 3, payload: { edit: 1 } });
@@ -1389,7 +1587,85 @@ function capabilities() {
     id: "elsa.api.expressions",
     contractVersion: "1",
     links: [{ rel: "expression-descriptors", href: "expressions/descriptors" }]
+  }, {
+    id: "elsa.api.publishing",
+    contractVersion: "1",
+    links: [
+      { rel: "activity-publication-preflight", href: "design/activities/drafts/{draftId}/publication-preflight", templated: true },
+      { rel: "activity-publication", href: "design/activities/drafts/{draftId}/publish", templated: true },
+      { rel: "activity-publication-receipt", href: "design/activities/publications/{idempotencyKey}", templated: true }
+    ]
   }] };
+}
+
+function publicationChange(overrides: Partial<{
+  changeId: string;
+  area: string;
+  kind: string;
+  before: unknown;
+  after: unknown;
+  impact: string;
+  message: string;
+}> = {}) {
+  return {
+    changeId: overrides.changeId ?? "change-1",
+    area: overrides.area ?? "Contract",
+    kind: overrides.kind ?? "input-added",
+    subject: { memberKind: "Input", referenceKey: "customer-id", dependencyVersionId: null, occurrenceId: null },
+    before: overrides.before,
+    after: overrides.after,
+    impact: overrides.impact ?? "Additive",
+    requiredBump: overrides.impact === "Breaking" ? "Major" : "Minor",
+    message: overrides.message ?? "Input customer-id was added."
+  };
+}
+
+function publicationPreflight(overrides: Record<string, unknown> = {}) {
+  return {
+    draftId: "activity-draft-1",
+    draftRevision: 3,
+    definitionId: "activity-def-1",
+    definitionHeadVersionId: null,
+    hasBaseline: false,
+    reviewToken: "sha256:review",
+    isPublishable: true,
+    minimumVersion: "1.0.0",
+    validVersions: ["1.0.0"],
+    diff: { compatibility: "Compatible", requiredBump: "Minor", behaviorChanged: true, summary: { breaking: 0, additive: 1, nonBehavioral: 0, warnings: 0 } },
+    impactFirstChanges: [publicationChange()],
+    dependencies: [],
+    provider: { kind: "Provider", key: "elsa.activity-graph", schemaVersion: "1", status: "Available", supportedSchemaVersions: ["1"] },
+    storage: [],
+    runtime: [{ kind: "Runtime", key: "elsa.activity-graph", schemaVersion: "1", status: "Available", supportedSchemaVersions: ["1"] }],
+    diagnostics: [],
+    ...overrides
+  };
+}
+
+function publicationReceipt(overrides: Record<string, unknown> = {}) {
+  return {
+    idempotencyKey: "operation-1",
+    status: "Applied",
+    draftId: "activity-draft-1",
+    expectedDraftRevision: 3,
+    expectedDefinitionHeadVersionId: null,
+    reviewToken: "sha256:review",
+    requestedVersion: "1.0.0",
+    outcome: {
+      definitionId: "activity-def-1",
+      definitionVersionId: "version-published",
+      draftId: "activity-draft-1",
+      version: "1.0.0",
+      templateId: "template-1",
+      templateHash: "sha256:template",
+      sourceReferenceId: "source-1",
+      publishedAt: "2026-07-17T11:00:00Z"
+    },
+    errorCode: null,
+    diagnostics: [],
+    updatedAt: "2026-07-17T11:00:00Z",
+    ...overrides
+  };
 }
 
 function authoringCapabilities() {

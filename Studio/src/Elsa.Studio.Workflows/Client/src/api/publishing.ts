@@ -1,4 +1,4 @@
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDiagnostic, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire } from "../activityInputWire";
 import type {
   DesignMetadataRecord,
@@ -54,6 +54,96 @@ export interface PublicationPreflight {
   triggers?: PublicationTriggerChange[];
   changes?: PublicationTriggerChange[];
   conflicts: PublicationTriggerConflict[];
+}
+
+export type ActivityVersionChangeImpact = "Breaking" | "Additive" | "NonBehavioral" | string;
+
+export interface ActivityPublicationChange {
+  changeId: string;
+  area: "Contract" | "Default" | "Outcome" | "Durability" | "Provider" | "Implementation" | "Dependency" | "Presentation" | string;
+  kind: string;
+  subject: {
+    memberKind?: string | null;
+    referenceKey?: string | null;
+    dependencyVersionId?: string | null;
+    occurrenceId?: string | null;
+  };
+  before?: unknown;
+  after?: unknown;
+  impact: ActivityVersionChangeImpact;
+  requiredBump: string;
+  message: string;
+}
+
+export interface ActivityPublicationReadiness {
+  kind: string;
+  key: string;
+  schemaVersion?: string | null;
+  status: string;
+  supportedSchemaVersions: string[];
+}
+
+export interface ActivityPublicationPreflight {
+  draftId: string;
+  draftRevision: number;
+  definitionId: string;
+  definitionHeadVersionId?: string | null;
+  hasBaseline: boolean;
+  reviewToken: string;
+  isPublishable: boolean;
+  minimumVersion: string;
+  validVersions: string[];
+  diff?: {
+    compatibility: string;
+    requiredBump: string;
+    behaviorChanged: boolean;
+    summary: { breaking: number; additive: number; nonBehavioral: number; warnings: number };
+  } | null;
+  impactFirstChanges: ActivityPublicationChange[];
+  dependencies: Array<{
+    definitionId: string;
+    versionId: string;
+    version: string;
+    templateHash: string;
+    occurrenceId: string;
+  }>;
+  provider: ActivityPublicationReadiness;
+  storage: ActivityPublicationReadiness[];
+  runtime: ActivityPublicationReadiness[];
+  diagnostics: StudioActivityDiagnostic[];
+}
+
+export interface ActivityPublicationOutcome {
+  definitionId: string;
+  definitionVersionId: string;
+  draftId: string;
+  version: string;
+  templateId: string;
+  templateHash: string;
+  sourceReferenceId: string;
+  publishedAt: string;
+}
+
+export interface ActivityPublicationReceipt {
+  idempotencyKey: string;
+  status: "Applied" | "Rejected" | "Stale" | "Failed" | "OutcomeUnknown" | string;
+  draftId: string;
+  expectedDraftRevision: number;
+  expectedDefinitionHeadVersionId?: string | null;
+  reviewToken: string;
+  requestedVersion: string;
+  outcome?: ActivityPublicationOutcome | null;
+  errorCode?: string | null;
+  diagnostics: StudioActivityDiagnostic[];
+  updatedAt: string;
+}
+
+export interface PublishActivityDraftRequest {
+  expectedDraftRevision: number;
+  expectedDefinitionHeadVersionId?: string | null;
+  version: string;
+  reviewToken: string;
+  idempotencyKey: string;
 }
 
 export async function preflightPublicationSnapshot(
@@ -140,6 +230,48 @@ export async function publishVersion(
     "workflow-publish",
     { versionId });
   return context.http.postJson<Publication>(path, intent);
+}
+
+export async function preflightActivityDraftPublication(
+  context: StudioEndpointContext,
+  draftId: string,
+  expectedDraftRevision: number,
+  expectedDefinitionHeadVersionId?: string | null
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-publication-preflight",
+    { draftId });
+  return context.http.postJson<ActivityPublicationPreflight>(path, {
+    expectedDraftRevision,
+    expectedDefinitionHeadVersionId: expectedDefinitionHeadVersionId ?? null
+  });
+}
+
+export async function publishActivityDraft(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: PublishActivityDraftRequest
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-publication",
+    { draftId });
+  return context.http.postJson<ActivityPublicationReceipt>(path, request);
+}
+
+export async function getActivityPublicationReceipt(
+  context: StudioEndpointContext,
+  idempotencyKey: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-publication-receipt",
+    { idempotencyKey });
+  return context.http.getJson<ActivityPublicationReceipt>(path);
 }
 
 async function publicationSlotsPath(context: StudioEndpointContext, definitionId: string) {
