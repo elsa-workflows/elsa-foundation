@@ -44,3 +44,60 @@ public interface IReusableActivityImportCommand
         ReusableActivityImportMutation mutation,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Durable, immutable storage for bounded Elsa 3 collection uploads and completed import receipts.
+/// Implementations must apply access-scope checks before returning either resource.
+/// </summary>
+public interface IReusableActivityImportOperationStore
+{
+    ValueTask<bool> TryCreateCollectionAsync(
+        ReusableActivityImportCollectionHandle collection,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<ReusableActivityImportCollectionHandle?> FindCollectionAsync(
+        string handle,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(
+        string idempotencyKey,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IReusableActivityImportOperationService
+{
+    ValueTask<ReusableActivityImportUploadResult> UploadAsync(
+        Stream json,
+        long? contentLength,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<ReusableActivityImportAnalysisPage> AnalyzeAsync(
+        string collectionHandle,
+        int offset,
+        int limit,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<ReusableActivityImportSelectionReadiness> ExpandSelectionAsync(
+        string collectionHandle,
+        string planId,
+        IReadOnlyCollection<string> selectedSourceVersionIds,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<ReusableActivityImportReceipt> ApplyAsync(
+        string collectionHandle,
+        string planId,
+        IReadOnlyCollection<string> selectedSourceVersionIds,
+        string idempotencyKey,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<ReusableActivityImportReceipt> GetStatusAsync(
+        string idempotencyKey,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+}

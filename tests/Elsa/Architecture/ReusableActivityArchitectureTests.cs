@@ -58,6 +58,7 @@ public sealed class ReusableActivityArchitectureTests
             "src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj",
             "Elsa.Activities.Design.Persistence.Core",
             "Elsa.Activities.Design.Persistence.Groundwork",
+            "Elsa.Persistence.Groundwork.Composition",
             "Elsa.Persistence.Groundwork.Querying",
             "Elsa.Serialization.Core",
             "Elsa.Workflows.Design.Persistence.Core",

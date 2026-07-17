@@ -19,13 +19,35 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Kind:** atomic persistence command.
 - **Purpose:** commits one selected dependency closure across Activity Design and Workflow Design.
 - **Default implementation:** `GroundworkReusableActivityImportCommand`, registered by `Elsa3ImportActivitiesGroundworkFeature`.
-- **Invariant:** all candidate documents are preflighted before one cross-kind commit; identical reapply is a no-op.
+- **Invariant:** all candidate documents and the durable receipt are preflighted before one cross-kind commit; identical reapply is an `AlreadyImported` no-op.
+
+### `IReusableActivityImportOperationStore`
+
+- **Kind:** scoped durable operation store.
+- **Purpose:** stores immutable expiring collection handles and reads completed apply receipts.
+- **Default implementation:** `GroundworkReusableActivityImportOperationStore`.
+- **Invariant:** collection and receipt reads are bound to the exact tenant and user scope; authorization mismatches are indistinguishable from absence.
 
 ### `IReusableActivityCollectionAnalyzer`
 
 - **Kind:** replaceable pure analysis strategy.
 - **Default implementation:** `ReusableActivityCollectionAnalyzer`.
 - **Output:** deterministic identities, exact rewrites, direct-start wrapper facts, missing/unsupported diagnostics, and complete cycle paths.
+
+## Authorized HTTP contract
+
+`Elsa3ImportActivitiesFeature` exposes these permission-guarded routes:
+
+- `POST migration/elsa3/reusable-activities/collections` — bounded authored-definition array upload.
+- `GET .../collections/{collectionHandle}/analysis` — deterministic, side-effect-free, offset-paged analysis.
+- `POST .../collections/{collectionHandle}/selection` — authoritative dependency-closure expansion and readiness.
+- `POST .../collections/{collectionHandle}/apply` — exact Plan ID, selection, scope, and idempotency binding.
+- `GET .../imports/{idempotencyKey}` — durable lost-response reconciliation.
+
+Uploads default to 16 MiB, 20,000 source versions, a 24-hour lifetime, and analysis pages of at
+most 500 rows. Hosts may lower or raise these finite bounds through `ReusableActivityImportOptions`.
+Apply never falls back to `ExecuteWorkflow`; recursive reusable composition remains a blocking
+diagnostic with a complete typed cycle.
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*
 - **Kind:** Source (opens a stream of activity JSON — pull pattern).

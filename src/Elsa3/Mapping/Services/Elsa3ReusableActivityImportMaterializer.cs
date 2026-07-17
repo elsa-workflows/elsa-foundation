@@ -166,7 +166,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             CreatedAt = source.CreatedAt,
             LastModifiedAt = source.CreatedAt
         };
-        return new(definition, version);
+        return new(item.SourceDefinitionId, item.SourceVersionId, definition, version);
     }
 
     private static WorkflowDefinitionState BuildWrapperState(
