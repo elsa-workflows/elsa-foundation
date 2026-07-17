@@ -48,4 +48,3 @@ public sealed record PublicationPreflightResult(
     bool CanActivate,
     IReadOnlyCollection<PublicationTriggerChange> Changes,
     IReadOnlyCollection<PublicationTriggerConflict> Conflicts);
-

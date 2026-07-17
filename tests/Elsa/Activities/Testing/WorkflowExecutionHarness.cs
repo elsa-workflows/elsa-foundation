@@ -303,7 +303,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             .ToArray();
 
         if (node.IntrinsicKind is not null || node.ActivityContract is not null)
-            return CopyNode(node, childSlots, node.DescriptorType, node.DescriptorPayload, node.InputBindings, node.ActivityContract);
+            return CopyNode(node, childSlots, node.DescriptorPayload, node.InputBindings, node.ActivityContract);
 
         var activityType = ResolveActivityType(node.ActivityType);
         var descriptor = NewClrDescriptor(activityType);
@@ -330,30 +330,36 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var outcomes = ResolveOutcomes(node, activityType);
         var contract = NewActivityContract(activityType, descriptor, inputs, outcomes);
 
-        return CopyNode(node, childSlots, descriptor.Kind, descriptor.Payload, bindings, contract);
+        return CopyNode(node, childSlots, descriptor.Payload, bindings, contract);
     }
 
     private static ExecutableNode CopyNode(
         ExecutableNode node,
         IReadOnlyCollection<ExecutableChildSlot> childSlots,
-        string descriptorType,
         JsonElement descriptorPayload,
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
-        ActivityContract? contract) =>
-        new(
+        ActivityContract? contract)
+    {
+        var consumerKey = StringComparer.Ordinal.Equals(
+            contract?.DescriptorKind,
+            typeof(ClrActivityDescriptor).FullName)
+                ? WellKnownRuntimeActivityConsumers.ClrActivity
+                : node.DescriptorType;
+        return new(
             node.ExecutableNodeId,
             node.AuthoredActivityId,
             node.ActivityType,
             node.ActivityTypeVersion,
-            descriptorType,
-            descriptorPayload,
+            new RuntimeActivityDescriptor(consumerKey, node.DescriptorSchemaVersion, descriptorPayload),
             inputBindings,
+            node.OutputCaptures,
             node.Metadata,
             childSlots,
             node.Structure,
             contract,
             node.IntrinsicKind,
             node.IntrinsicVariable);
+    }
 
     private static Type ResolveActivityType(string activityType)
     {

@@ -1,15 +1,26 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Core;
+using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore
+/// <summary>Application-wide state shared by scoped in-memory checkpoint-store adapters.</summary>
+public sealed class InMemoryRuntimeCheckpointStoreState
 {
-    private readonly object _syncRoot = new();
-    private readonly SemaphoreSlim _writeGate = new(1, 1);
-    private readonly Dictionary<string, RuntimeCheckpointCommitRecord> _commits = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
+    internal object SyncRoot { get; } = new();
+    internal SemaphoreSlim WriteGate { get; } = new(1, 1);
+    internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, WorkflowTestScopeRecord> WorkflowTestScopes { get; } = new(StringComparer.Ordinal);
+}
+
+public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+{
+    private readonly InMemoryRuntimeCheckpointStoreState _state;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IActivityExecutionInspectionWriter? _activityExecutionInspectionWriter;
@@ -18,7 +29,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IIncidentStateStore? _incidentStateStore;
     private readonly IExecutionLivenessStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
+    private readonly IActivityScopeCleanupStore? _activityScopeCleanupStore;
+    private readonly IActivityExecutionHierarchyWriter? _activityExecutionHierarchyWriter;
+    private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Creates the in-memory commit store. RT-8: the seven telescoping constructors collapsed into this single primary
@@ -26,6 +41,34 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     /// constructions and the DI activation (which injects every registered backing store, unchanged) resolve to the same
     /// shape — W9's coalescing decorators keep wrapping this registration without modification.
     /// </summary>
+    public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore,
+        IIncidentStateStore? incidentStateStore,
+        IExecutionLivenessStateStore? operationalStateStore,
+        ISchedulerStateStore? schedulerStateStore,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager,
+        InMemoryRuntimeCheckpointStoreState? state,
+        TimeProvider? timeProvider)
+        : this(
+            workflowExecutionStateStore,
+            activityExecutionStateStore,
+            bookmarkStateStore,
+            durableValueStateStore,
+            incidentStateStore,
+            operationalStateStore,
+            schedulerStateStore,
+            activityExecutionInspectionWriter,
+            rootWriteLeaseManager,
+            state,
+            timeProvider,
+            workflowDispatchStore: null)
+    {
+    }
+
     public InMemoryRuntimeCheckpointCommitStore(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
@@ -35,8 +78,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IExecutionLivenessStateStore? operationalStateStore = null,
         ISchedulerStateStore? schedulerStateStore = null,
         IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
-        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null)
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
+        InMemoryRuntimeCheckpointStoreState? state = null,
+        TimeProvider? timeProvider = null,
+        IActivityScopeCleanupStore? activityScopeCleanupStore = null,
+        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter = null,
+        IWorkflowDispatchStore? workflowDispatchStore = null)
     {
+        _state = state ?? new InMemoryRuntimeCheckpointStoreState();
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
         _activityExecutionInspectionWriter = activityExecutionInspectionWriter;
@@ -45,7 +94,71 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _incidentStateStore = incidentStateStore;
         _operationalStateStore = operationalStateStore;
         _schedulerStateStore = schedulerStateStore;
+        _activityScopeCleanupStore = activityScopeCleanupStore;
+        _activityExecutionHierarchyWriter = activityExecutionHierarchyWriter;
         _rootWriteLeaseManager = rootWriteLeaseManager;
+        _workflowDispatchStore = workflowDispatchStore;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore,
+        IIncidentStateStore? incidentStateStore,
+        IExecutionLivenessStateStore? operationalStateStore,
+        ISchedulerStateStore? schedulerStateStore,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager,
+        InMemoryRuntimeCheckpointStoreState? state,
+        TimeProvider? timeProvider,
+        IActivityScopeCleanupStore? activityScopeCleanupStore,
+        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter)
+        : this(
+            workflowExecutionStateStore,
+            activityExecutionStateStore,
+            bookmarkStateStore,
+            durableValueStateStore,
+            incidentStateStore,
+            operationalStateStore,
+            schedulerStateStore,
+            activityExecutionInspectionWriter,
+            rootWriteLeaseManager,
+            state,
+            timeProvider,
+            activityScopeCleanupStore,
+            activityExecutionHierarchyWriter,
+            workflowDispatchStore: null)
+    {
+    }
+
+    public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore,
+        IIncidentStateStore? incidentStateStore,
+        IExecutionLivenessStateStore? operationalStateStore,
+        ISchedulerStateStore? schedulerStateStore,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
+        IActivityScopeCleanupStore? activityScopeCleanupStore,
+        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter)
+        : this(
+            workflowExecutionStateStore,
+            activityExecutionStateStore,
+            bookmarkStateStore,
+            durableValueStateStore,
+            incidentStateStore,
+            operationalStateStore,
+            schedulerStateStore,
+            activityExecutionInspectionWriter,
+            rootWriteLeaseManager: null,
+            state: null,
+            timeProvider: null,
+            activityScopeCleanupStore: activityScopeCleanupStore,
+            activityExecutionHierarchyWriter: activityExecutionHierarchyWriter)
+    {
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -54,62 +167,149 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(decision);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _writeGate.WaitAsync(cancellationToken);
+        await _state.WriteGate.WaitAsync(cancellationToken);
         try
         {
-            lock (_syncRoot)
+            var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+            lock (_state.SyncRoot)
             {
-                if (_commits.TryGetValue(commit.CommitId, out var existing))
+                if (_state.Commits.TryGetValue(commit.CommitId, out var existing))
+                {
+                    if (!StringComparer.Ordinal.Equals(
+                            RuntimeCheckpointCommitFingerprint.Compute(existing.Commit),
+                            fingerprint))
+                    {
+                        throw new RuntimeCheckpointReplayConflictException(commit.CommitId);
+                    }
                     return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds);
+                }
             }
 
-            var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
-            ValidatePendingOutboxItems(pendingOutboxItems);
-            ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
-            ValidateSchedulerStateChange(commit);
-            ValidateActivityExecutionStateChanges(commit);
-            ValidateActivityExecutionInspectionChanges(commit);
-            ValidateBookmarkStateChanges(commit);
-            ValidateDurableValueStateChanges(commit);
-            ValidateIncidentStateChanges(commit);
-            ValidateOperationalStateChanges(commit);
-            await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
+            if (commit.ExpectedFence is null)
+                return await CommitNewAsync(commit, decision, cancellationToken);
+
+            if (_operationalStateStore is not InMemoryExecutionLivenessStateStore inMemoryOperationalStateStore)
             {
-                await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
-                await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
-                await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
-                await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
-                await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
-                await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
-                await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
-                await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+                throw new InvalidOperationException(
+                    "A fenced in-memory checkpoint requires the in-memory execution liveness-state store so ownership validation and checkpoint writes share one atomic boundary.");
+            }
 
-                try
-                {
-                    // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
-                    // are serialized by the write gate), so an exception here is a genuine partial-persistence
-                    // risk — the projections above have been applied but the commit record/outbox may not be
-                    // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
-                    lock (_syncRoot)
-                    {
-                        foreach (var item in pendingOutboxItems)
-                            SavePendingOutboxItem(item);
-
-                        _commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
-                    }
-                }
-                catch (Exception exception)
-                {
-                    throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
-                }
-            }, cancellationToken);
-
-            return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray());
+            return await inMemoryOperationalStateStore.ExecuteOwnershipAtomicAsync(
+                ct => CommitNewAsync(commit, decision, ct),
+                cancellationToken);
         }
         finally
         {
-            _writeGate.Release();
+            _state.WriteGate.Release();
         }
+    }
+
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken)
+    {
+        await EnsureExpectedFenceAsync(commit, cancellationToken);
+
+        var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
+        ValidatePendingOutboxItems(pendingOutboxItems);
+        ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+        await ValidateWorkflowTestScopesAsync(commit, cancellationToken);
+        ValidateSchedulerStateChange(commit);
+        ValidateActivityExecutionStateChanges(commit);
+        ValidateActivityExecutionInspectionChanges(commit);
+        ValidateBookmarkStateChanges(commit);
+        ValidateDurableValueStateChanges(commit);
+        ValidateIncidentStateChanges(commit);
+        ValidateOperationalStateChanges(commit);
+        await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
+        await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
+        await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
+        {
+            await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
+            await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
+            await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
+            await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
+            await ApplyActivityExecutionHierarchyChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
+            await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
+            await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
+            await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
+            await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+            await ApplyActivityScopeCleanupsAsync(commit.StateChanges.ActivityScopeCleanups, ct);
+            await ApplyWorkflowDispatchChangesAsync(commit.StateChanges.WorkflowDispatches, ct);
+            await ApplyWorkflowDispatchCancellationsAsync(commit.StateChanges.WorkflowDispatchCancellations, ct);
+
+            try
+            {
+                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
+                // are serialized by the write gate), so an exception here is a genuine partial-persistence
+                // risk — the projections above have been applied but the commit record/outbox may not be
+                // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
+                lock (_state.SyncRoot)
+                {
+                    foreach (var item in pendingOutboxItems)
+                        SavePendingOutboxItem(item);
+
+                    _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
+                }
+            }
+            catch (Exception exception)
+            {
+                throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
+            }
+        }, cancellationToken);
+
+        return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray());
+    }
+
+    private async ValueTask EnsureExpectedFenceAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.ExpectedFence is not { } expectedFence)
+            return;
+        if (_operationalStateStore is null)
+        {
+            throw new InvalidOperationException(
+                "A checkpoint carrying an execution fence requires an execution liveness-state store.");
+        }
+
+        var state = await _operationalStateStore.FindAsync(
+            commit.WorkflowExecutionId,
+            InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId),
+            cancellationToken);
+        var currentToken = ReadHighestIssuedToken(state);
+        var current = state?.ExecutionLease;
+        var reason = current is null
+            ? RuntimeFencingRejectionReason.NoActiveLease
+            : current.IsExpired(_timeProvider.GetUtcNow())
+                ? RuntimeFencingRejectionReason.ExpiredLease
+                : RuntimeFencingRejectionReason.StaleToken;
+        if (current is null ||
+            current.IsExpired(_timeProvider.GetUtcNow()) ||
+            !StringComparer.Ordinal.Equals(current.LeaseId, expectedFence.LeaseId) ||
+            !StringComparer.Ordinal.Equals(current.OwnerId, expectedFence.OwnerId) ||
+            current.FencingToken != expectedFence.FencingToken)
+        {
+            throw new RuntimeStaleFencingTokenException(
+                commit.WorkflowExecutionId,
+                expectedFence.FencingToken,
+                currentToken,
+                reason);
+        }
+    }
+
+    private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
+    {
+        if (state is null)
+            return 0;
+        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
+            long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token))
+        {
+            return token;
+        }
+
+        return state.ExecutionLease?.FencingToken ?? 0;
     }
 
     private async ValueTask ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
@@ -127,7 +327,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             throw new InvalidOperationException("A workflow executable root-write lease manager is required before workflow execution state can be persisted.");
 
         await _rootWriteLeaseManager.ExecuteAsync(
-            workflowExecutionChange.State.PinnedExecutable.ArtifactId,
+            workflowExecutionChange.State.PinnedExecutable,
             $"checkpoint:{commit.CommitId}",
             write,
             cancellationToken);
@@ -135,9 +335,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     public IReadOnlyCollection<RuntimeCheckpointCommitRecord> ListCommits()
     {
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            return _commits.Values.ToArray();
+            return _state.Commits.Values.ToArray();
         }
     }
 
@@ -147,7 +347,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(item);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
             SavePendingOutboxItem(item);
         }
@@ -163,9 +363,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (query.OwnerId is not null)
             throw new NotSupportedException("The in-memory post-commit outbox store does not implement delivery ownership filtering.");
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            var items = _outboxItems.Values
+            var items = _state.OutboxItems.Values
                 .Where(item => IsDeliverable(item, query))
                 .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
                 .ThenBy(item => item.RecordedAt)
@@ -177,26 +377,42 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
+        string outboxItemId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            return new ValueTask<RuntimePostCommitOutboxItem?>(
+                _state.OutboxItems.TryGetValue(outboxItemId, out var item) ? item : null);
+        }
+    }
+
     public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(result);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
-            if (!_outboxItems.TryGetValue(result.OutboxItemId, out var existing))
+            if (!_state.OutboxItems.TryGetValue(result.OutboxItemId, out var existing))
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found.");
 
             if (existing.IsTerminal)
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
+            if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
+                throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
-            var deliveryAttemptCount = existing.DeliveryAttemptCount + 1;
+            var deliveryAttemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
             var status = NormalizeDeliveryStatus(existing, result.Status, deliveryAttemptCount);
             DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? NextRetryAvailableAt(existing, result.RecordedAt)
                 : null;
 
-            _outboxItems[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
+            _state.OutboxItems[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
                 outboxItemId: existing.OutboxItemId,
                 intent: existing.Intent,
                 status: status,
@@ -208,10 +424,173 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 deliveryStartedAt: null,
                 deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
                 lastFailureMessage: result.FailureMessage,
-                metadata: existing.Metadata);
+                metadata: existing.Metadata,
+                deliveryFencingToken: existing.DeliveryFencingToken);
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
+        RuntimePostCommitOutboxClaimRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            var claimable = _state.OutboxItems.Values
+                .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+                .OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
+                .ThenBy(item => item.RecordedAt)
+                .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
+                .Take(request.Limit)
+                .ToArray();
+            var claims = new RuntimePostCommitOutboxClaim[claimable.Length];
+            for (var index = 0; index < claimable.Length; index++)
+            {
+                var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], request);
+                _state.OutboxItems[claim.OutboxItemId] = claim.Item;
+                claims[index] = claim;
+            }
+
+            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>>(claims);
+        }
+    }
+
+    public ValueTask RecordDeliveryResultAsync(
+        RuntimePostCommitOutboxClaim claim,
+        RuntimePostCommitOutboxDeliveryResult result,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        ArgumentNullException.ThrowIfNull(result);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.OutboxItems.TryGetValue(claim.OutboxItemId, out var existing))
+                throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found.");
+
+            _state.OutboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask CompleteClaimAsync(
+        RuntimePostCommitOutboxClaimCompletion completion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _state.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            var childExecution = completion.WorkflowDispatch is { } projectedDispatch &&
+                                 _workflowExecutionStateStore is not null
+                ? await _workflowExecutionStateStore.FindAsync(
+                    projectedDispatch.ChildWorkflowExecutionId,
+                    cancellationToken)
+                : null;
+
+            lock (_state.SyncRoot)
+            {
+                if (!_state.OutboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
+                    throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
+
+                // Validate the claim/fence before considering lifecycle precedence. A stale claimant cannot turn a
+                // newer generation into an acknowledgement merely because the deterministic child is now visible.
+                var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+                    existingOutbox,
+                    completion.Claim,
+                    completion.DeliveryResult);
+                WorkflowDispatchRecord? winningDispatch = null;
+                var admissionWins = false;
+                if (completion.WorkflowDispatch is { } dispatch)
+                {
+                    if (!_state.WorkflowDispatches.TryGetValue(dispatch.DispatchId, out var existingDispatch))
+                        throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the atomic checkpoint store.");
+
+                    winningDispatch = WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
+                        existingDispatch,
+                        childExecution,
+                        completion.DeliveryResult.RecordedAt);
+                    admissionWins = winningDispatch is not null;
+                    if (admissionWins)
+                    {
+                        completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+                            existingOutbox,
+                            completion.Claim,
+                            new RuntimePostCommitOutboxDeliveryResult(
+                                completion.Claim.OutboxItemId,
+                                RuntimePostCommitOutboxStatus.Delivered,
+                                completion.DeliveryResult.RecordedAt));
+                    }
+                    else
+                    {
+                        WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
+                        winningDispatch = dispatch;
+                    }
+                }
+
+                if (!admissionWins && completion.FollowUpOutboxItem is { } followUp)
+                {
+                    if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
+                        throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+                    if (_state.OutboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
+                        !PendingOutboxItemsEquivalent(existingFollowUp, followUp))
+                    {
+                        throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
+                    }
+                }
+
+                _state.OutboxItems[completion.Claim.OutboxItemId] = completedOutbox;
+                if (winningDispatch is not null)
+                    _state.WorkflowDispatches[winningDispatch.DispatchId] = winningDispatch;
+                if (!admissionWins && completion.FollowUpOutboxItem is { } followUpOutboxItem)
+                    _state.OutboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem);
+            }
+        }
+        finally
+        {
+            _state.WriteGate.Release();
+        }
+    }
+
+    internal ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
+        WorkflowDispatchRedriveRequest request,
+        CancellationToken cancellationToken = default)
+        => RedriveAsync(request, accessContext: null, cancellationToken);
+
+    internal ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
+        WorkflowDispatchRedriveRequest request,
+        PersistenceAccessContext? accessContext,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            _state.WorkflowDispatches.TryGetValue(request.DispatchId, out var dispatch);
+            if (dispatch is not null)
+                accessContext?.EnsureTenantScope(dispatch.TenantId);
+            RuntimePostCommitOutboxItem? deadLetter = null;
+            var deadLetterId = dispatch is null ? null : WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch);
+            if (deadLetterId is not null)
+                _state.OutboxItems.TryGetValue(deadLetterId, out deadLetter);
+
+            var transition = WorkflowDispatchRedriveTransitions.Evaluate(request, dispatch, deadLetter);
+            if (transition.HasMutation)
+            {
+                _state.WorkflowDispatches[request.DispatchId] = transition.WorkflowDispatch!;
+                _state.OutboxItems[transition.OutboxItem!.OutboxItemId] = transition.OutboxItem;
+            }
+            return ValueTask.FromResult(transition.Result);
+        }
     }
 
     private async ValueTask ApplyWorkflowExecutionStateChangeAsync(
@@ -235,7 +614,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     /// </summary>
     private void ValidatePendingOutboxItems(IReadOnlyCollection<RuntimePostCommitOutboxItem> items)
     {
-        lock (_syncRoot)
+        lock (_state.SyncRoot)
         {
             var seen = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
 
@@ -244,7 +623,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 if (item.Status != RuntimePostCommitOutboxStatus.Pending)
                     throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
 
-                if (_outboxItems.TryGetValue(item.OutboxItemId, out var existing) && !IsSamePendingIntent(existing, item))
+                if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing) && !IsSamePendingIntent(existing, item))
                     throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
 
                 if (seen.TryGetValue(item.OutboxItemId, out var duplicate) && !IsSamePendingIntent(duplicate, item))
@@ -260,7 +639,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
             throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
 
-        if (_outboxItems.TryGetValue(item.OutboxItemId, out var existing))
+        if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing))
         {
             if (IsSamePendingIntent(existing, item))
                 return;
@@ -268,7 +647,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
         }
 
-        _outboxItems.Add(item.OutboxItemId, item);
+        _state.OutboxItems.Add(item.OutboxItemId, item);
     }
 
     private async ValueTask ApplySchedulerStateChangeAsync(
@@ -308,6 +687,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             }
 
             throw new InvalidOperationException($"Unexpected activity execution inspection state change operation '{stateChange.Operation}' reached apply phase.");
+        }
+    }
+
+    private async ValueTask ApplyActivityExecutionHierarchyChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (_activityExecutionHierarchyWriter is null)
+            return;
+        foreach (var stateChange in stateChanges)
+        {
+            var projection = stateChange.State;
+            if (!string.IsNullOrWhiteSpace(projection.ExecutionScopeId ?? projection.Provenance.ExecutionScopeId))
+                await _activityExecutionHierarchyWriter.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection), cancellationToken);
         }
     }
 
@@ -414,6 +807,50 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    private async ValueTask ApplyActivityScopeCleanupsAsync(
+        IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups,
+        CancellationToken cancellationToken)
+    {
+        if (_activityScopeCleanupStore is null)
+        {
+            if (cleanups.Count != 0)
+                throw new InvalidOperationException("The checkpoint contains activity-scope cleanup but no cleanup store is configured.");
+            return;
+        }
+
+        foreach (var cleanup in cleanups)
+            await _activityScopeCleanupStore.ApplyAsync(cleanup, cancellationToken);
+    }
+
+    private async ValueTask ApplyWorkflowDispatchChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (stateChanges.Count == 0)
+            return;
+        if (_workflowDispatchStore is null)
+            throw new InvalidOperationException("Workflow dispatch checkpoint changes require an IWorkflowDispatchStore.");
+
+        foreach (var stateChange in stateChanges)
+            await _workflowDispatchStore.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private async ValueTask ApplyWorkflowDispatchCancellationsAsync(
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        if (requests.Count == 0)
+            return;
+        if (_workflowDispatchStore is not IWorkflowDispatchCancellationStore cancellationStore)
+        {
+            throw new InvalidOperationException(
+                "Workflow dispatch cancellation requests require an IWorkflowDispatchCancellationStore.");
+        }
+
+        foreach (var request in requests)
+            await cancellationStore.ApplyCancellationAsync(request, cancellationToken);
+    }
+
     private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
     {
         if (_workflowExecutionStateStore is null || stateChange is null)
@@ -424,6 +861,43 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.WorkflowExecutionId))
             throw new InvalidOperationException("Workflow execution state change StateId must match WorkflowExecutionState.WorkflowExecutionId.");
+    }
+
+    private async ValueTask ValidateWorkflowTestScopesAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        var execution = commit.StateChanges.WorkflowExecution?.State;
+        var existingExecution = execution is { TestScope: not null, ParentWorkflowExecutionId: null } &&
+                                _workflowExecutionStateStore is not null
+            ? await _workflowExecutionStateStore.FindAsync(execution.WorkflowExecutionId, cancellationToken)
+            : null;
+        lock (_state.SyncRoot)
+        {
+            if (execution is { TestScope: { } rootScope, ParentWorkflowExecutionId: null } &&
+                existingExecution is null)
+            {
+                AssertOpenScope(rootScope, commit.Checkpoint.OccurredAt);
+            }
+
+            foreach (var change in commit.StateChanges.WorkflowDispatches)
+            {
+                var dispatch = change.State;
+                if (dispatch.TestScope is { } scope && !_state.WorkflowDispatches.ContainsKey(dispatch.DispatchId))
+                    AssertOpenScope(scope, commit.Checkpoint.OccurredAt);
+            }
+        }
+    }
+
+    private void AssertOpenScope(WorkflowTestScope scope, DateTimeOffset observedAt)
+    {
+        if (!_state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var record) ||
+            record.State != WorkflowTestScopeState.Open ||
+            record.Scope.IsExpired(observedAt) ||
+            !WorkflowTestScope.ContextEquals(record.Scope, scope))
+        {
+            throw new InvalidOperationException("The workflow test scope is not open in the current persistence context.");
+        }
     }
 
     private void ValidateSchedulerStateChange(RuntimeCheckpointCommit commit)
@@ -552,6 +1026,77 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Operational state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            if (StringComparer.Ordinal.Equals(
+                    stateChange.State.OperationalStateId,
+                    InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId)))
+            {
+                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
+            }
+        }
+    }
+
+    private async ValueTask ValidateWorkflowDispatchChangesAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.WorkflowDispatches.Count == 0)
+            return;
+        if (_workflowDispatchStore is null)
+            throw new InvalidOperationException("Workflow dispatch checkpoint changes require an IWorkflowDispatchStore.");
+
+        var seen = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
+        foreach (var stateChange in commit.StateChanges.WorkflowDispatches)
+        {
+            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
+                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project workflow dispatch '{RuntimeStateChangeOperation.Upsert}' changes.");
+            WorkflowDispatchLifecycle.ValidateCheckpointOwnership(commit.WorkflowExecutionId, stateChange.State);
+
+            if (seen.TryGetValue(stateChange.StateId, out var duplicate) && !WorkflowDispatchLifecycle.RecordsEqual(duplicate, stateChange.State))
+                throw new InvalidOperationException($"Workflow dispatch '{stateChange.StateId}' occurs more than once with conflicting state in the same checkpoint.");
+            seen[stateChange.StateId] = stateChange.State;
+
+            var existing = await _workflowDispatchStore.FindAsync(stateChange.StateId, cancellationToken);
+            if (existing is not null)
+                WorkflowDispatchLifecycle.ValidateTransition(existing, stateChange.State);
+            else
+                WorkflowDispatchLifecycle.ValidateNew(stateChange.State);
+        }
+    }
+
+    private async ValueTask ValidateWorkflowDispatchCancellationsAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.WorkflowDispatchCancellations.Count == 0)
+            return;
+        if (_workflowDispatchStore is not IWorkflowDispatchCancellationStore)
+        {
+            throw new InvalidOperationException(
+                "Workflow dispatch cancellation requests require an IWorkflowDispatchCancellationStore.");
+        }
+
+        foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
+        {
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, request.ParentWorkflowExecutionId))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow dispatch cancellation request '{request.DispatchId}' must be committed by its parent workflow execution.");
+            }
+
+            var existing = await _workflowDispatchStore.FindAsync(request.DispatchId, cancellationToken);
+            if (existing is null)
+                throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
+            if (!StringComparer.Ordinal.Equals(existing.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
+                !StringComparer.Ordinal.Equals(existing.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
+            }
+            if (!WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(existing))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow dispatch '{request.DispatchId}' does not permit parent cancellation propagation.");
+            }
         }
     }
 
@@ -566,6 +1111,15 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         && existing.Intent.WaitFailurePolicy == item.Intent.WaitFailurePolicy
         && PayloadEquals(existing.Intent.Payload, item.Intent.Payload)
         && MetadataEquals(existing.Intent.Metadata, item.Intent.Metadata);
+
+    private static bool PendingOutboxItemsEquivalent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
+        IsSamePendingIntent(existing, item) &&
+        existing.RecordedAt == item.RecordedAt &&
+        existing.AvailableAt == item.AvailableAt &&
+        existing.DeliveryAttemptCount == item.DeliveryAttemptCount &&
+        existing.DeliveryFencingToken == item.DeliveryFencingToken &&
+        existing.RetryPolicy.IsEquivalentTo(item.RetryPolicy) &&
+        MetadataEquals(existing.Metadata, item.Metadata);
 
     private static bool PayloadEquals(System.Text.Json.JsonElement? left, System.Text.Json.JsonElement? right)
     {
@@ -598,7 +1152,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             return true;
 
         if (item.Status == RuntimePostCommitOutboxStatus.FailedRetryable)
-            return item.RetryPolicy.MaxAttempts > 0 && item.DeliveryAttemptCount < item.RetryPolicy.MaxAttempts;
+            return !item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount);
 
         return false;
     }
@@ -611,7 +1165,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (status != RuntimePostCommitOutboxStatus.FailedRetryable)
             return status;
 
-        return deliveryAttemptCount >= existing.RetryPolicy.MaxAttempts
+        return existing.RetryPolicy.IsExhaustedAfterAttempt(deliveryAttemptCount)
             ? RuntimePostCommitOutboxStatus.FailedFinal
             : RuntimePostCommitOutboxStatus.FailedRetryable;
     }

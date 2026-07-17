@@ -47,6 +47,35 @@ public sealed class ActivityCompletionContractTests
     }
 
     [Fact]
+    public void Opaque_projection_key_with_dot_prefers_exact_result_property()
+    {
+        var contract = new ActivityContract(
+            "Graph.Boundary",
+            "1.0.0",
+            "elsa.graph-activity",
+            System.Text.Json.JsonSerializer.SerializeToElement(new { }),
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor("Object"),
+                true,
+                ActivityValuePolicy.Default,
+                [new ActivityResultProjectionContract("order.total", "order.total", StringType, true, ActivityValuePolicy.Default)]),
+            ["Done"],
+            new ActivityActivationRequirement("elsa.graph-activity", "elsa.graph-activity"));
+
+        var projected = new ActivityCompletionProjector().Project(
+            "invocation-1",
+            Attempt(),
+            contract,
+            ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(
+                new Dictionary<string, object?> { ["order.total"] = "42" },
+                "Done"),
+            DateTimeOffset.UtcNow);
+
+        Assert.Equal("42", projected.Projections["order.total"].InlineValue!.Value.GetString());
+    }
+
+    [Fact]
     public void Undeclared_outcome_and_nonpersistable_result_are_rejected()
     {
         var projector = new ActivityCompletionProjector();

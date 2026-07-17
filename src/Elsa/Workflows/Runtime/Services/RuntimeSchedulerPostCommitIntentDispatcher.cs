@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class RuntimeSchedulerPostCommitIntentDispatcher(
     IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-    : IRuntimePostCommitIntentDispatcher
+    : IRuntimePostCommitIntentDispatcher, IRuntimePostCommitIntentHandler
 {
     public async ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
     {
@@ -38,6 +38,9 @@ public sealed class RuntimeSchedulerPostCommitIntentDispatcher(
 
         await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
+
+    ValueTask IRuntimePostCommitIntentHandler.HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken) =>
+        DispatchAsync(intent, cancellationToken);
 
     private static bool IsSchedulerWorkItemValidationException(ArgumentException exception) =>
         exception.ParamName is

@@ -93,7 +93,10 @@ public sealed class GroundworkWorkflowExecutionRetentionTests
         IGroundworkRuntimeDocumentSerializer? serializer = null) =>
         new GroundworkWorkflowExecutionStateStore(
             fixture.DocumentStore,
-            serializer ?? GroundworkTestSerialization.Serializer);
+            serializer ?? GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            null,
+            fixture.BoundedDocumentStore);
 
     private static WorkflowExecutionState State(
         string workflowExecutionId,
@@ -122,7 +125,8 @@ public sealed class GroundworkWorkflowExecutionRetentionTests
 
     /// <summary>
     /// Proves the retained-root query uses the provider/index partial-read path instead of loading full execution
-    /// records. Current-version fragment reads remain allowed; historical records still require normal upcasting.
+    /// records. Current-version fragment reads remain allowed; non-current records still require normal
+    /// schema-version enforcement.
     /// </summary>
     private sealed class DeserializeCountingSerializer(IGroundworkRuntimeDocumentSerializer inner)
         : IGroundworkRuntimeDocumentSerializer

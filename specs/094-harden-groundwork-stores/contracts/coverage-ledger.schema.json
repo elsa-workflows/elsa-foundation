@@ -8,8 +8,10 @@
     "$schema",
     "schemaVersion",
     "feature",
+    "groundworkVersion",
     "baselineRef",
     "mandatoryProviders",
+    "compositionEvidence",
     "entries"
   ],
   "properties": {
@@ -24,6 +26,10 @@
     "feature": {
       "type": "string",
       "const": "094-harden-groundwork-stores"
+    },
+    "groundworkVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
     },
     "baselineRef": {
       "type": "string",
@@ -42,6 +48,9 @@
       ],
       "items": false
     },
+    "compositionEvidence": {
+      "$ref": "#/$defs/compositionEvidence"
+    },
     "entries": {
       "type": "array",
       "minItems": 1,
@@ -49,20 +58,175 @@
     }
   },
   "$defs": {
-    "evidenceLinks": {
+    "compositionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "outcome",
+        "selectedFeatureIdentities",
+        "coveredEntryIds",
+        "externalAuthorityLinks",
+        "artifact",
+        "artifactSha256"
+      ],
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "const": "host-selection-all32"
+        },
+        "outcome": {
+          "type": "string",
+          "const": "pass"
+        },
+        "selectedFeatureIdentities": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "prefixItems": [
+            { "type": "string", "const": "elsa-activities-design" },
+            { "type": "string", "const": "elsa-identity" },
+            { "type": "string", "const": "elsa-secrets" },
+            { "type": "string", "const": "elsa-workflows-design" },
+            { "type": "string", "const": "elsa-workflows-publishing" },
+            { "type": "string", "const": "elsa-workflows-runtime" },
+            { "type": "string", "const": "elsa-workflows-runtime-distributed" }
+          ],
+          "items": false
+        },
+        "coveredEntryIds": {
+          "type": "array",
+          "minItems": 32,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "externalAuthorityLinks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/externalAuthorityLink" }
+        },
+        "artifact": {
+          "type": "string",
+          "const": "evidence/composition/host-selection-all32.json"
+        },
+        "artifactSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "externalAuthorityLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "relationship", "coverageRows"],
+      "properties": {
+        "authority": {
+          "type": "string",
+          "enum": ["#644", "#660"]
+        },
+        "relationship": {
+          "type": "string",
+          "enum": ["adapter-only", "linked-source-evidence"]
+        },
+        "coverageRows": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        }
+      }
+    },
+    "evidenceRecords": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": { "$ref": "#/$defs/providerEvidenceRecord" },
       "uniqueItems": true
+    },
+    "providerEvidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenarioId",
+        "coverageEntryId",
+        "provider",
+        "providerIdentity",
+        "providerVersion",
+        "topology",
+        "manifestFingerprint",
+        "executionPath",
+        "clients",
+        "resultHash",
+        "outcome",
+        "evidence",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "scenarioId": { "type": "string", "minLength": 1 },
+        "coverageEntryId": { "type": "string", "minLength": 1 },
+        "provider": {
+          "type": "string",
+          "enum": ["sqlite", "sqlserver", "postgresql", "mongodb"]
+        },
+        "providerIdentity": {
+          "type": "string",
+          "enum": ["groundwork-sqlite", "groundwork-sqlserver", "groundwork-postgresql", "groundwork-mongodb"]
+        },
+        "providerVersion": { "type": "string", "minLength": 1 },
+        "topology": {
+          "type": "string",
+          "enum": [
+            "file-backed-distinct-connections",
+            "real-sqlserver-container",
+            "real-postgresql-container",
+            "transaction-capable-replica-set",
+            "transaction-capable-sharded-cluster"
+          ]
+        },
+        "manifestFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "executionPath": {
+          "type": "string",
+          "pattern": "^provider-driver/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}$"
+        },
+        "clients": { "type": "integer", "minimum": 1 },
+        "queryShape": { "type": "string", "minLength": 1 },
+        "concurrencySemantic": { "type": "string", "minLength": 1 },
+        "failureWindow": { "type": "string", "minLength": 1 },
+        "restartScenario": { "type": "string", "minLength": 1 },
+        "resultHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "nativeEvidence": {
+          "type": "string",
+          "pattern": "^evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.plan\\.txt$"
+        },
+        "nativeEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "outcome": {
+          "type": "string",
+          "enum": ["pass", "classified-readiness-failure"]
+        },
+        "evidence": {
+          "type": "string",
+          "pattern": "^evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.json$"
+        },
+        "evidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
     },
     "providerEvidence": {
       "type": "object",
       "additionalProperties": false,
       "required": ["sqlite", "sqlserver", "postgresql", "mongodb"],
       "properties": {
-        "sqlite": { "$ref": "#/$defs/evidenceLinks" },
-        "sqlserver": { "$ref": "#/$defs/evidenceLinks" },
-        "postgresql": { "$ref": "#/$defs/evidenceLinks" },
-        "mongodb": { "$ref": "#/$defs/evidenceLinks" }
+        "sqlite": { "$ref": "#/$defs/evidenceRecords" },
+        "sqlserver": { "$ref": "#/$defs/evidenceRecords" },
+        "postgresql": { "$ref": "#/$defs/evidenceRecords" },
+        "mongodb": { "$ref": "#/$defs/evidenceRecords" }
       }
     },
     "performanceVerdict": {

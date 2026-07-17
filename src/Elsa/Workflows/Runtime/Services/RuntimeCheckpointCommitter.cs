@@ -11,13 +11,14 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
-    private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IWorkflowEngineTracer _tracer;
+    private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
+    private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor: null, ownershipService: null)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor: null)
     {
     }
 
@@ -25,17 +26,45 @@ public sealed class RuntimeCheckpointCommitter
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeExecutionOwnershipService? ownershipService,
         IWorkflowEngineTracer? tracer = null)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, [])
+    {
+    }
+
+    public RuntimeCheckpointCommitter(
+        IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IWorkflowEngineTracer? tracer,
+        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, enrichers, [])
+    {
+    }
+
+    public RuntimeCheckpointCommitter(
+        IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IWorkflowEngineTracer? tracer,
+        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
+        ArgumentNullException.ThrowIfNull(enrichers);
+        ArgumentNullException.ThrowIfNull(intentHandlerContributions);
 
         _persistencePolicy = persistencePolicy;
         _checkpointCommitStore = checkpointCommitStore;
         _ownershipContextAccessor = ownershipContextAccessor;
-        _ownershipService = ownershipService;
         _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
+        _enrichers = enrichers
+            .Select((enricher, index) => new { Enricher = enricher, Index = index })
+            .OrderBy(item => item.Enricher.Order)
+            .ThenBy(item => item.Index)
+            .Select(item => item.Enricher)
+            .ToArray();
+        _intentHandlerContributions = intentHandlerContributions.ToArray();
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -44,16 +73,18 @@ public sealed class RuntimeCheckpointCommitter
     {
         ArgumentNullException.ThrowIfNull(commit);
 
+        foreach (var enricher in _enrichers)
+            commit = await enricher.EnrichAsync(commit, cancellationToken);
+
         // MS-9: the checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace
         // context, not service location). No new awaits are inserted between the fenced awaits below — attribute writes
         // are synchronous and happen after their source values are already computed.
         using var activity = _tracer.StartCheckpointCommit(commit);
 
-        // Single-writer fencing (RT-2): if an ownership scope is active for this workflow execution, reject a commit
-        // whose fencing token is not the current owner's before any state is persisted. Unwired (both null) or no
-        // active scope leaves the commit path byte-for-byte unchanged.
-        await EnsureOwnershipAsync(commit, cancellationToken);
+        // Carry the ambient ownership identity into the provider-facing envelope. Durable stores decide replay first,
+        // then validate this fence inside the same atomic decision as state, outbox, and the commit marker.
+        commit = AttachExpectedFence(commit);
 
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
 
@@ -82,7 +113,7 @@ public sealed class RuntimeCheckpointCommitter
 
         // Fold post-commit intents into the applied change set so the provider persists them atomically with
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
-        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit);
+        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
         var commitToPersist = postCommitOutbox.Count == 0
             ? commit
             : commit with { StateChanges = commit.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
@@ -103,14 +134,14 @@ public sealed class RuntimeCheckpointCommitter
         checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 
-    private async ValueTask EnsureOwnershipAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {
-        if (_ownershipContextAccessor?.Current is not { } lease || _ownershipService is null)
-            return;
+        if (_ownershipContextAccessor?.Current is not { } lease)
+            return commit;
 
         if (!StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))
-            return;
+            return commit;
 
-        await _ownershipService.EnsureCurrentAsync(commit.WorkflowExecutionId, lease.FencingToken, cancellationToken);
+        return commit with { ExpectedFence = lease.ToFence() };
     }
 }

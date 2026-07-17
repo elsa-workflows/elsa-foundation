@@ -54,10 +54,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
-        var now = _timeProvider.GetUtcNow();
+        var dispatchId = workItem.CommandMetadata.GetValueOrDefault(RuntimeMetadataKeys.WorkflowDispatchId);
+        var now = dispatchId is null ? _timeProvider.GetUtcNow() : workItem.EnqueuedAt;
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
-        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, now, commandMetadata);
+        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
@@ -89,20 +90,40 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     public static bool IsStartPayloadValidationException(ArgumentException exception) =>
         exception.ParamName is
             "pinnedExecutable" or
-            "requestedArtifactId";
+            "requestedArtifactId" or
+            "parentWorkflowExecutionId" or
+            "correlationId" or
+            "tenantId" or
+            "dispatchNestingDepth";
 
     private RuntimeSchedulerWorkItem NewRootActivityWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
         WorkflowExecutableIdentity pinnedExecutable,
         string rootActivityId,
+        string? dispatchId,
         DateTimeOffset now,
         IReadOnlyDictionary<string, string> commandMetadata)
     {
+        var activityExecutionId = dispatchId is null
+            ? _idGenerator.NewActivityExecutionId()
+            : $"{dispatchId}:activity:root";
+        var attempt = new ActivityExecutionAttemptLineage(1, activityExecutionId, null);
+        var provenance = ActivitySchedulingProvenance.From(
+            startWorkItem.WorkflowExecutionId,
+            parentActivityExecutionId: null,
+            schedulingActivityExecutionId: null,
+            branchId: null,
+            iterationId: null,
+            executionPathId: null,
+            executionScopeId: null,
+            schedulingCause: RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
+            attempt: attempt);
         var payload = new RuntimeScheduleActivityCommandPayload(
             pinnedExecutable,
             rootActivityId,
-            _idGenerator.NewActivityExecutionId(),
-            RuntimeScheduleActivityCommandPayload.WorkflowStartReason);
+            activityExecutionId,
+            RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
+            schedulingProvenance: provenance);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:schedule:{rootActivityId}",
@@ -112,11 +133,13 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             envelopeId: startWorkItem.EnvelopeId,
             idempotencyKey: $"{startWorkItem.IdempotencyKey}:schedule:{rootActivityId}",
             enqueuedAt: now,
-            recordedAt: now,
+            recordedAt: startWorkItem.RecordedAt,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 2 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: commandMetadata,
-            envelopeMetadata: startWorkItem.EnvelopeMetadata);
+            envelopeMetadata: startWorkItem.EnvelopeMetadata,
+            executionScopeId: null,
+            attempt: attempt);
     }
 
     private RuntimePostCommitIntent NewRootActivityPostCommitIntent(
@@ -159,7 +182,14 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             seedStimulusInput: startPayload.StimulusInput,
             seedTriggerNodeId: startPayload.TriggerNodeId,
             runKind: startPayload.RunKind,
-            pinnedSource: startPayload.PinnedSource);
+            pinnedSource: startPayload.PinnedSource,
+            parentWorkflowExecutionId: startPayload.ParentWorkflowExecutionId,
+            correlationId: startPayload.CorrelationId,
+            tenantId: startPayload.TenantId,
+            partition: startPayload.Partition,
+            authority: startPayload.Authority,
+            dispatchNestingDepth: startPayload.DispatchNestingDepth,
+            testScope: startPayload.TestScope);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
@@ -169,7 +199,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             envelopeId: startWorkItem.EnvelopeId,
             idempotencyKey: $"{startWorkItem.IdempotencyKey}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
             enqueuedAt: now,
-            recordedAt: now,
+            // The checkpoint is causally after the currently dispatched start item. A delayed outbox
+            // redelivery may preserve an older semantic start time in `now`; using the source item's
+            // durable queue-recorded time prevents the follow-up from sorting ahead of the item whose
+            // handler is still awaiting its ack-delete.
+            recordedAt: startWorkItem.RecordedAt,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: commandMetadata,

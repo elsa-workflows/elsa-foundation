@@ -18,7 +18,8 @@ internal static class StatefulActivitySuspensionProjector
         ActivityExecutionState state,
         ActivityAttempt attempt,
         IStatefulActivitySuspensionTransition transition,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        Func<string, string>? resumeTargetKeyResolver = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(attempt);
@@ -34,7 +35,7 @@ internal static class StatefulActivitySuspensionProjector
             .Select((registration, index) => new RuntimeTriggerRegistration(
                 registrationId: $"{attempt.AttemptId}:trigger:{index + 1}",
                 invocationId: state.InvocationId,
-                resumeTargetKey: registration.ResumeTargetKey,
+                resumeTargetKey: resumeTargetKeyResolver?.Invoke(registration.ResumeTargetKey) ?? registration.ResumeTargetKey,
                 payloadType: registration.PayloadType,
                 stimulusType: registration.StimulusType,
                 stimulusHash: registration.StimulusHash,

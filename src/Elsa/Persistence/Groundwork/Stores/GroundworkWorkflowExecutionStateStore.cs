@@ -1,8 +1,10 @@
 using System.Text.Json;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -14,26 +16,39 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentStore, IWorkflowExecutionStateStore
 {
+    private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
     private readonly IGroundworkWorkflowExecutionStatePageQuery? _pageQuery;
+    private readonly IBoundedDocumentStore? _queries;
 
-    public GroundworkWorkflowExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-        : this(store, serializer, null)
+    public GroundworkWorkflowExecutionStateStore(
+        IDocumentStore store,
+        IGroundworkRuntimeDocumentSerializer serializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(store, serializer, accessContextAccessor, null, null)
     {
     }
 
     public GroundworkWorkflowExecutionStateStore(
         IDocumentStore store,
         IGroundworkRuntimeDocumentSerializer serializer,
-        IGroundworkWorkflowExecutionStatePageQuery? pageQuery)
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        IGroundworkWorkflowExecutionStatePageQuery? pageQuery,
+        IBoundedDocumentStore? boundedStore = null)
         : base(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)
     {
+        _accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
         _pageQuery = pageQuery;
+        _queries = boundedStore ?? store as IBoundedDocumentStore;
     }
+
+    private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
+        "Workflow-execution queries require an admitted bounded document-store runtime.");
 
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
+        _accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
 
         var document = WorkflowExecutionStateDocument.From(state);
         await SaveDocumentAsync(state.WorkflowExecutionId, document, cancellationToken);
@@ -49,34 +64,48 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
             workflowExecutionId, document => document.State, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
-        await QueryDocumentsAsync<WorkflowExecutionStateDocument, WorkflowExecutionState>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
-            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-            document => document.State,
-            cancellationToken);
+    public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await QueryAllAsync(cancellationToken);
+        return result.Documents
+            .Select(Serializer.Deserialize<WorkflowExecutionStateDocument>)
+            .Select(document => document.State)
+            .ToArray();
+    }
 
     public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
-        CancellationToken cancellationToken = default) =>
-        _pageQuery?.QueryPageAsync(query, cancellationToken)
-        ?? throw new NotSupportedException("The active Groundwork provider has no bounded workflow execution history query plan.");
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        _accessContextAccessor.Current.EnsureTenantScope(query.TenantId);
+        return _pageQuery?.QueryPageAsync(query, cancellationToken)
+            ?? throw new NotSupportedException("The active Groundwork provider has no bounded workflow execution history query plan.");
+    }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {
-        var envelopes = await Store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind),
-            cancellationToken);
+        var result = await QueryAllAsync(cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(ReadPinnedExecutableArtifactId)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
     }
+
+    private Task<DocumentQueryResult> QueryAllAsync(CancellationToken cancellationToken) =>
+        Queries.QueryAsync(
+            new DocumentQuery(
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                ElsaRuntimeStorageManifest.ListWorkflowExecutionsQuery,
+                [
+                    DocumentQueryClause.Of(
+                        DocumentQueryComparison.Equal(
+                            ElsaRuntimeStorageManifest.CollectionField,
+                            ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection))
+                ]),
+            cancellationToken);
 
     public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
@@ -90,7 +119,7 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
     {
         // Current documents all have the pinned identity at this stable JSON path. Reading only that
         // element avoids materializing the much larger workflow execution state during every GC sweep.
-        // Historical versions still use the normal serializer so their upcaster chain remains authoritative.
+        // A non-current envelope falls through to the serializer so version policy rejects it consistently.
         if (Serializer.IsCurrentVersion(envelope))
         {
             using var content = JsonDocument.Parse(envelope.ContentJson);
@@ -112,7 +141,7 @@ internal sealed record WorkflowExecutionStateDocument(
     long HistorySortTicks)
 {
     public static WorkflowExecutionStateDocument From(WorkflowExecutionState state) => new(
-        ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection,
         state,
         WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks);
 }

@@ -174,7 +174,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
         // WorkflowDefinitionState also owns the declarations at document scope. Keep the mirrored
         // authored representation until the publisher consumes the document-level declarations.
         var root = _root.Lower("root", "elsa.sequence@1");
-        return new WorkflowDefinitionState(_root.Variables.ToArray(), root, [], [], null, null);
+        return new WorkflowDefinitionState(_root.Variables.ToArray(), root, [], [], null);
     }
 
     private string AllocateNodeId(Type activityType, string? requestedNodeId)

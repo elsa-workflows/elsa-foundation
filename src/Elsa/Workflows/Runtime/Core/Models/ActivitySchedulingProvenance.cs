@@ -12,7 +12,8 @@ public sealed record ActivitySchedulingProvenance(
     string? ExecutionPathId,
     string? ExecutionScopeId,
     string? SchedulingCause,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    ActivityExecutionAttemptLineage? Attempt = null)
 {
     public static ActivitySchedulingProvenance Empty { get; } = new(
         ParentActivityExecutionId: null,
@@ -23,7 +24,8 @@ public sealed record ActivitySchedulingProvenance(
         ExecutionPathId: null,
         ExecutionScopeId: null,
         SchedulingCause: null,
-        Metadata: new Dictionary<string, string>());
+        Metadata: new Dictionary<string, string>(),
+        Attempt: null);
 
     public static ActivitySchedulingProvenance From(
         string workflowExecutionId,
@@ -34,7 +36,8 @@ public sealed record ActivitySchedulingProvenance(
         string? executionPathId,
         string? executionScopeId,
         string? schedulingCause,
-        IReadOnlyDictionary<string, string>? metadata = null) =>
+        IReadOnlyDictionary<string, string>? metadata = null,
+        ActivityExecutionAttemptLineage? attempt = null) =>
         new(
             ParentActivityExecutionId: parentActivityExecutionId,
             SchedulingActivityExecutionId: schedulingActivityExecutionId,
@@ -44,5 +47,6 @@ public sealed record ActivitySchedulingProvenance(
             ExecutionPathId: executionPathId,
             ExecutionScopeId: executionScopeId,
             SchedulingCause: schedulingCause,
-            Metadata: RuntimeModelMetadata.Snapshot(metadata));
+            Metadata: RuntimeModelMetadata.Snapshot(metadata),
+            Attempt: attempt);
 }

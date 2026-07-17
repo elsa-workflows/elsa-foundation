@@ -26,6 +26,9 @@ The coverage ledger has one row per durable public contract or inseparable inter
 | `BehavioralBaseline` | Existing test objectives frozen at the baseline commit. |
 | `Status` | Missing, Planned, Implemented, Evidence Complete, Performance Complete, Ready, Externally Blocked, or Excluded. |
 
+The ledger root also records one `GroundworkVersion`; it must match every pinned Groundwork package
+and `Groundwork.Tool` generation consumed by the work unit.
+
 ### Validation
 
 - Every baseline entry has exactly one durable outcome and one authority.
@@ -84,7 +87,9 @@ One immutable snapshot describes the host-selected target before the host serves
 - Storage-unit identity collisions identify both source features.
 - Every public store registration has a selected durable requirement.
 - Every required capability maps to a tested active provider route/transition.
-- The schema CLI and runtime composition consume the same snapshot/manifest source.
+- The schema CLI and runtime composition consume the same public parameterless deployment-source
+  type: runtime registration expands its selected manifest-source types and naming policy, while the
+  CLI activates it from the built host composition assembly.
 
 ## 5. Query Route Requirement
 
@@ -145,8 +150,13 @@ Execution ownership allocation and checkpoint admission share one durable fencin
 | `ResultHash` | Provider-independent observable outcome hash. |
 | `NativeEvidence` | Sanitized plan/command proof for bounded execution. |
 | `Outcome` | Pass or a classified domain/readiness failure. |
+| `Evidence` / `EvidenceSha256` | Catalog-bound durable scenario artifact and verified digest. |
+| `NativeEvidenceSha256` | Verified digest for the provider-native plan artifact when present. |
 
-Memory-backed stores can support unit tests but cannot create a `ProviderEvidenceRecord`.
+Provider identity, version, topology, execution path, and artifact path are closed catalog values,
+not descriptive strings. The artifact payload is checked against the ledger record and every artifact
+digest is verified. Memory-backed stores can support unit tests but cannot create a
+`ProviderEvidenceRecord`.
 
 ## 9. Capability Claim
 

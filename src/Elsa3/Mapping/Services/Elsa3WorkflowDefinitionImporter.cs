@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa3.Activities.Design.Import.Contracts;
+using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Mapping.Contracts;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Models;
@@ -11,15 +13,18 @@ public sealed class Elsa3WorkflowDefinitionImporter : IElsa3WorkflowDefinitionIm
     private readonly Elsa3WorkflowDefinitionToWorkflowDefinitionVersion _mapper;
     private readonly Elsa3MemoryReferenceGraph _memoryReferenceGraph;
     private readonly Elsa3ValueFlowLowerer _valueFlowLowerer;
+    private readonly IReusableActivityCollectionImporter? _reusableActivities;
 
     public Elsa3WorkflowDefinitionImporter(
         Elsa3WorkflowDefinitionToWorkflowDefinitionVersion mapper,
         Elsa3MemoryReferenceGraph memoryReferenceGraph,
-        Elsa3ValueFlowLowerer valueFlowLowerer)
+        Elsa3ValueFlowLowerer valueFlowLowerer,
+        IReusableActivityCollectionImporter? reusableActivities = null)
     {
         _mapper = mapper;
         _memoryReferenceGraph = memoryReferenceGraph;
         _valueFlowLowerer = valueFlowLowerer;
+        _reusableActivities = reusableActivities;
     }
 
     public async ValueTask<Elsa3MigrationResult<IWorkflowDefinitionVersion>> ImportAsync(
@@ -27,6 +32,16 @@ public sealed class Elsa3WorkflowDefinitionImporter : IElsa3WorkflowDefinitionIm
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
+
+        if (input.Definition.Options?.UsableAsActivity == true)
+        {
+            return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Failure(new Elsa3MigrationDiagnostic(
+                Elsa3MigrationDiagnosticSeverity.Error,
+                ReusableActivityImportDiagnosticCodes.SelectionInvalid,
+                $"Elsa 3 reusable workflow '{input.Definition.DefinitionId}' requires collection-aware plan/apply import.",
+                guidance: "Analyze the full reusable workflow collection so exact references, cycles, and direct-start wrappers can be reviewed before application.",
+                metadata: BuildDiagnosticMetadata(input)));
+        }
 
         try
         {
@@ -61,6 +76,16 @@ public sealed class Elsa3WorkflowDefinitionImporter : IElsa3WorkflowDefinitionIm
                 metadata: metadata));
         }
     }
+
+    public ValueTask<ReusableActivityImportPlan> AnalyzeReusableCollectionAsync(
+        ReusableActivityImportCollection collection,
+        CancellationToken cancellationToken = default) =>
+        RequireReusableImporter().AnalyzeAsync(collection, cancellationToken);
+
+    public ValueTask<ReusableActivityImportApplyResult> ApplyReusableCollectionAsync(
+        ReusableActivityImportApplyRequest request,
+        CancellationToken cancellationToken = default) =>
+        RequireReusableImporter().ApplyAsync(request, cancellationToken);
 
     public Elsa3MigrationResult<IWorkflowDefinitionVersion> RejectUnsupportedInputKind(Elsa3MigrationInputKind inputKind, string? sourceName = null) =>
         Elsa3MigrationCompatibility.IsLiveInstanceStateInput(inputKind)
@@ -98,4 +123,8 @@ public sealed class Elsa3WorkflowDefinitionImporter : IElsa3WorkflowDefinitionIm
 
         return metadata;
     }
+
+    private IReusableActivityCollectionImporter RequireReusableImporter() =>
+        _reusableActivities ?? throw new InvalidOperationException(
+            "Elsa 3 reusable collection import is not configured. Enable Elsa3ImportJsonActivities and an IReusableActivityImportCommand adapter.");
 }

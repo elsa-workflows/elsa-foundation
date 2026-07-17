@@ -5,6 +5,7 @@ using Elsa.Api.Capabilities;
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -98,10 +99,16 @@ public sealed partial class EndpointSecurityTests
         var create = typeof(Factory).GetMethods()
             .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
                               method.GetParameters() is [var first, var rest] &&
-                              first.ParameterType == typeof(Action<DefaultHttpContext>) &&
+                              first.ParameterType == typeof(DefaultHttpContext) &&
                               rest.ParameterType == typeof(object[]))
             .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
+
+        // Factory.Create otherwise falls back to FastEndpoints' process-global service resolver. The
+        // representative management host in this assembly can replace and dispose that resolver concurrently.
+        // Supplying request services keeps this configuration-only assertion isolated from the host lifecycle.
+        using var serviceProvider = new ServiceCollection().AddServicesForUnitTesting().BuildServiceProvider();
+        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider };
+        var endpoint = (BaseEndpoint)create.Invoke(null, [httpContext, dependencies])!;
         endpoint.Configure();
 
         Assert.Contains(PermissionNames.ApiCapabilitiesRead, endpoint.Definition.AllowedPermissions!);

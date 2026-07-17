@@ -28,6 +28,16 @@ internal sealed class GetWorkflowExecutableEndpoint(IRequestSender requestSender
     }
 }
 
+internal sealed class GetWorkflowExecutableInputSourcesEndpoint(IRequestSender requestSender, ILogger<GetWorkflowExecutableInputSourcesEndpoint> logger)
+    : ElsaRequestHandlerEndpoint<GetWorkflowExecutableInputSources, WorkflowExecutableInputSourcesView>(requestSender, logger)
+{
+    public override void Configure()
+    {
+        Get(RouteConstants.ExecutableInputSources);
+        ConfigurePermissions(PermissionNames.WorkflowPublishingRead);
+    }
+}
+
 internal sealed class GetWorkflowExecutableProvenanceEndpoint(IRequestSender requestSender, ILogger<GetWorkflowExecutableProvenanceEndpoint> logger)
     : ElsaRequestHandlerEndpoint<GetWorkflowExecutableProvenance, ExecutableProvenanceView>(requestSender, logger)
 {

@@ -15,13 +15,17 @@ public static class RuntimeApiCapabilities
         [
             new("workflow-executables", "runtime/workflows/executables"),
             new("workflow-executable", "runtime/workflows/executables/{artifactId}", templated: true),
+            new("workflow-executable-input-sources", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true),
             new("workflow-executable-provenance", "runtime/workflows/executables/{artifactId}/provenance", templated: true),
             new("workflow-execute", "runtime/workflows/executables/{artifactId}/execute", templated: true),
             new("workflow-instances", "runtime/workflows/instances"),
             new("workflow-instances-page", "runtime/workflows/instances/page"),
             new("workflow-instance", "runtime/workflows/instances/{workflowExecutionId}", templated: true),
             new("activity-execution", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true),
-            new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true)
+            new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true),
+            new("workflow-dispatches", "runtime/workflows/dispatches"),
+            new("workflow-dispatch", "runtime/workflows/dispatches/{dispatchId}", templated: true),
+            new("workflow-dispatch-redrive", "runtime/workflows/dispatches/{dispatchId}/redrive", templated: true)
         ],
         SourceFeatureId);
 }

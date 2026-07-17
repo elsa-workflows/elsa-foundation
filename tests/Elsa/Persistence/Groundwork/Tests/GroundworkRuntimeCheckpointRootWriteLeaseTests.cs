@@ -1,6 +1,8 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Configuration;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -18,7 +20,10 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
     public async Task CheckpointDoesNotWriteExecutionRootWhileDeletionGuardOwnsArtifact()
     {
         IDocumentStore documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var workflowStateStore = new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer);
+        var workflowStateStore = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor);
         var executableStore = new InMemoryWorkflowExecutableStore();
         await executableStore.SaveAsync(Executable());
         var deletionGuard = await executableStore.TryBeginDeletionAsync("artifact-1", "gc-test", _now.AddMinutes(1), _now);
@@ -29,6 +34,7 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
         var writer = new GroundworkRuntimeCheckpointWriter(
             documentStore,
             GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
             workflowStateStore,
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
@@ -46,11 +52,53 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
         Assert.Null(await documentStore.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));
     }
 
+    [Fact]
+    public async Task ClosureLeaseFencesEveryGroundworkArtifactAndReleasesAfterTheRootWrite()
+    {
+        IDocumentStore documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        IWorkflowExecutableStore executableStore = new GroundworkWorkflowExecutableStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer);
+        var child = Executable("artifact-child");
+        var parent = Executable("artifact-parent", child);
+        await executableStore.SaveAsync(child);
+        await executableStore.SaveAsync(parent);
+        var manager = new WorkflowExecutableRootWriteLeaseManager(
+            executableStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
+            new FixedTimeProvider(_now));
+
+        await manager.ExecuteAsync(parent.Identity, "checkpoint:closure", async _ =>
+        {
+            Assert.Null(await executableStore.TryBeginDeletionAsync(
+                child.Identity.ArtifactId,
+                "gc-child",
+                _now.AddMinutes(1),
+                _now));
+            Assert.Null(await executableStore.TryBeginDeletionAsync(
+                parent.Identity.ArtifactId,
+                "gc-parent",
+                _now.AddMinutes(1),
+                _now));
+        });
+
+        Assert.NotNull(await executableStore.TryBeginDeletionAsync(
+            child.Identity.ArtifactId,
+            "gc-child",
+            _now.AddMinutes(1),
+            _now));
+        Assert.NotNull(await executableStore.TryBeginDeletionAsync(
+            parent.Identity.ArtifactId,
+            "gc-parent",
+            _now.AddMinutes(1),
+            _now));
+    }
+
     private RuntimeCheckpointCommit Commit()
     {
         var state = new WorkflowExecutionState(
             WorkflowExecutionId: "execution-1",
-            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", Hash("artifact-1")),
             Status: WorkflowExecutionStatus.Running,
             SubStatus: null,
             CreatedAt: _now,
@@ -88,21 +136,32 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
             Metadata: new Dictionary<string, string>());
     }
 
-    private WorkflowExecutable Executable() =>
+    private WorkflowExecutable Executable() => Executable("artifact-1");
+
+    private WorkflowExecutable Executable(string artifactId, params WorkflowExecutable[] dependencies) =>
         new(
-            new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", Hash(artifactId)),
             new ExecutableNode(
                 executableNodeId: "node-root",
                 authoredActivityId: "activity-root",
                 activityType: "Test.Root",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "Test",
-                descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                descriptor: new RuntimeActivityDescriptor(
+                    "Test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 metadata: new Dictionary<string, string>()),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             _now,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: dependencies.Select(dependency => new WorkflowExecutableDependency(
+                dependency.Identity.ArtifactId,
+                dependency.Identity.ArtifactHash,
+                ["node-root"])).ToArray());
+
+    private static string Hash(string artifactId) => $"sha256:{artifactId}";
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

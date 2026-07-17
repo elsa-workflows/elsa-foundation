@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Primitives.Models;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -252,6 +254,20 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public void Authored_input_source_route_requires_publishing_read_independently_of_runtime_evidence()
+    {
+        var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(
+            "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources");
+
+        Assert.Contains(PermissionNames.WorkflowPublishingRead, endpoint.Definition.AllowedPermissions!);
+        Assert.DoesNotContain(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
+        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.Null(endpoint.Definition.AnonymousVerbs);
+        AssertProperties(RuntimeApiEndpointTestFactory.Contract(endpoint).Response,
+            "ArtifactId", "SourceReferenceId", "AccessState", "AuthoredInputs", "CompiledInputs");
+    }
+
+    [Fact]
     public void Executable_list_exposes_retention_counts_without_definition_reads()
     {
         var response = RuntimeApiEndpointTestFactory.Contract(
@@ -418,6 +434,84 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task DetailScrubsSourcePayloadWhilePublishingProjectionReturnsStructuredBindingWithoutSummaryParsing()
+    {
+        var binding = new RuntimeInputBinding(
+            "text-input-key",
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                "return variables.orderId;",
+                new RuntimeValueTypeDescriptor("clr", "System.String, System.Private.CoreLib", null)),
+            metadata: new Dictionary<string, string> { ["typeName"] = "System.String, System.Private.CoreLib" });
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding>
+        {
+            ["text-input-key"] = binding
+        }));
+        await _referenceStore.SaveAsync(Reference("source-1", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs =
+            [
+                new WorkflowExecutableAuthoredInputRecord(
+                    "executable-root",
+                    "text-input-key",
+                    "JavaScript",
+                    JsonSerializer.SerializeToElement("return variables.orderId;"))
+            ]
+        });
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        var projected = Assert.Single(detail!.RootActivity.InputBindings);
+        Assert.Equal("text-input-key", projected.InputName);
+        Assert.Equal("text-input-key", projected.InputKey);
+        Assert.False(projected.IsSensitive);
+        Assert.Equal("Expression", projected.Source);
+        Assert.Null(projected.Summary);
+        Assert.Null(projected.Expression);
+        Assert.Null(projected.LiteralValue);
+        Assert.Null(projected.Metadata);
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-1");
+        var authored = Assert.Single(sources!.AuthoredInputs);
+        Assert.Equal("allowed", authored.AccessState);
+        Assert.Equal("return variables.orderId;", authored.Value!.Value.GetString());
+        var compiled = Assert.Single(sources.CompiledInputs).Binding;
+        Assert.Equal("JavaScript", compiled.Expression!.Language);
+        Assert.Equal("return variables.orderId;", compiled.Expression.Expression);
+    }
+
+    [Fact]
+    public async Task InputSourcesRedactSensitiveAuthoredAndCompiledPayloads()
+    {
+        var binding = new RuntimeInputBinding(
+            "secret-key",
+            new ValueTypeDescriptor("String"),
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true),
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("must-not-leak"),
+                new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true)));
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["secret-key"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-sensitive", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord("executable-root", "secret-key", "Literal", JsonSerializer.SerializeToElement("must-not-leak"), true)]
+        });
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-sensitive");
+        var json = JsonSerializer.Serialize(sources, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal("redacted", Assert.Single(sources!.AuthoredInputs).AccessState);
+        Assert.Null(Assert.Single(sources.AuthoredInputs).Value);
+        Assert.Equal("redacted", Assert.Single(sources.CompiledInputs).AccessState);
+        Assert.Null(Assert.Single(sources.CompiledInputs).Binding.LiteralValue);
+        Assert.DoesNotContain("must-not-leak", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Detail_projects_immutable_flowchart_connections_with_ports()
     {
         var structure = new ExecutableActivityStructure(
@@ -447,6 +541,52 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_exposes_the_versioned_declared_input_contract_in_canonical_order()
+    {
+        var contract = new WorkflowExecutableInputContract(
+            WorkflowExecutableInputContract.CurrentVersion,
+            [
+                new WorkflowDeclaredInput("zeta", new TypeReference("String", CollectionKind.List), false),
+                new WorkflowDeclaredInput(
+                    "alpha",
+                    new TypeReference("Int32"),
+                    true,
+                    JsonSerializer.SerializeToElement(42))
+            ]);
+        await _executableStore.SaveAsync(Executable(_now, inputContract: contract));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.NotNull(detail!.InputContract);
+        Assert.Equal(WorkflowExecutableInputContract.CurrentVersion, detail.InputContract.Version);
+        Assert.Equal(["alpha", "zeta"], detail.InputContract.Inputs.Select(input => input.Name));
+        var alpha = detail.InputContract.Inputs.First();
+        Assert.Equal(new TypeReference("Int32"), alpha.Type);
+        Assert.True(alpha.IsRequired);
+        Assert.Equal(42, alpha.DefaultValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Detail_exposes_canonical_direct_dependencies_without_source_facts()
+    {
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            dependencies:
+            [
+                new WorkflowExecutableDependency("child-b", "sha256:b", ["root"]),
+                new WorkflowExecutableDependency("child-a", "sha256:a", ["root"])
+            ]));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Equal(["child-a", "child-b"], detail!.Dependencies.Select(dependency => dependency.ArtifactId));
+        Assert.DoesNotContain(
+            detail.Dependencies.SelectMany(dependency => dependency.GetType().GetProperties()),
+            property => property.Name.Contains("Source", StringComparison.Ordinal) ||
+                        property.Name.Contains("Publication", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Runtime_api_registers_the_inspector()
     {
         var services = new ServiceCollection();
@@ -458,18 +598,27 @@ public sealed class WorkflowExecutableInspectorTests
     private static WorkflowExecutable Executable(
         DateTimeOffset now,
         JsonElement? descriptor = null,
-        ExecutableActivityStructure? structure = null) =>
+        ExecutableActivityStructure? structure = null,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
+        WorkflowExecutableInputContract? inputContract = null,
+        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies = null) =>
         new(
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             new ExecutableNode(
-                "root", "root", "Test.Root", "1.0.0", "Test",
-                descriptor ?? JsonSerializer.SerializeToElement(new { }),
-                new Dictionary<string, RuntimeInputBinding>(),
+                "root", "root", "Test.Root", "1.0.0",
+                new RuntimeActivityDescriptor(
+                    "Test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    descriptor ?? JsonSerializer.SerializeToElement(new { })),
+                inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
+                new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(),
                 structure: structure),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            inputContract,
+            dependencies);
 
     private Models.ExecutableSourceReferenceView CreateVersionOneView(string? sourceType, string? sourceKind)
     {

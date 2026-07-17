@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Runtime.Api;
 /// single-writer agent-mailbox invariant is preserved (W5); the router never bypasses them.
 /// </para>
 /// <para>
-/// The <see cref="IBookmarkStimulusIndex"/> is bridged to the same <see cref="IBookmarkStateStore"/> singleton
+/// The <see cref="IBookmarkStimulusIndex"/> is bridged to the same scoped <see cref="IBookmarkStateStore"/>
 /// the runtime already owns, so no separate index document is maintained: whichever store implementation is
 /// active (in-memory here, Groundwork when a durable persistence feature is composed) also answers the
 /// cross-execution stimulus query. The concrete <see cref="IActivityTriggerStimulusProvider"/> set that lets the
@@ -48,18 +48,18 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
         // (Groundwork) swaps the store via its own registration, so this stays a TryAdd.
         services.TryAddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         services.TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
-        services.TryAddSingleton<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
+        services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
 
         // Cross-execution bookmark stimulus index (E3-5), bridged onto the same bookmark state store the runtime
         // already owns so there is no second index document to keep consistent.
-        services.TryAddSingleton<IBookmarkStimulusIndex>(serviceProvider =>
+        services.TryAddScoped<IBookmarkStimulusIndex>(serviceProvider =>
             (IBookmarkStimulusIndex)serviceProvider.GetRequiredService<IBookmarkStateStore>());
-        services.TryAddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
+        services.TryAddScoped<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
 
         // Narrow, best-effort start-path dedup for at-least-once delivery (Condition A). Not durable by design.
         services.TryAddSingleton<IStimulusStartDeduplicator, InMemoryStimulusStartDeduplicator>();
 
         // The routing spine: start (E3-1) + fan-in resume (E3-5) over the two indexes and the runtime dispatchers.
-        services.TryAddSingleton<IStimulusRouter, StimulusRouter>();
+        services.TryAddScoped<IStimulusRouter, StimulusRouter>();
     }
 }

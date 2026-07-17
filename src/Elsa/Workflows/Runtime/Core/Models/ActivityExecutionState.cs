@@ -45,7 +45,9 @@ public sealed record ActivityExecutionState(
     NormalizedActivityFault? Fault = null,
     IReadOnlyCollection<ActivityTriggerRegistration>? TriggerRegistrations = null,
     IReadOnlyCollection<ActivityTriggerDelivery>? TriggerDeliveries = null,
-    ActivityExecutionValueFlowDocumentVersionGuard? ValueFlowCompatibility = null)
+    ActivityExecutionValueFlowDocumentVersionGuard? ValueFlowCompatibility = null,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null)
 {
     public string InvocationId => Execution.ActivityExecutionId;
 

@@ -73,6 +73,43 @@ public sealed class RuntimeInProcessAgentProviderTests
     }
 
     [Fact]
+    public async Task Equal_execution_and_idempotency_ids_in_different_partitions_use_independent_actors()
+    {
+        var processor = new RecordingCommandProcessor();
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
+        var tenantA = new WorkflowExecutionPartition("tenant-a");
+        var tenantB = new WorkflowExecutionPartition("tenant-b");
+        var first = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", partition: tenantA));
+        var second = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", partition: tenantB));
+
+        var firstResult = await first.EnqueueAsync(NewEnvelope(1, idempotencyKey: "same-key", partition: tenantA));
+        var secondResult = await second.EnqueueAsync(NewEnvelope(2, idempotencyKey: "same-key", partition: tenantB));
+
+        Assert.NotSame(first, second);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, firstResult.Status);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, secondResult.Status);
+        Assert.Equal(2, processor.EnvelopeIds.Count);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_RejectsEnvelopeForDifferentPartitionWithoutMutatingIdempotencyState()
+    {
+        var processor = new RecordingCommandProcessor();
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
+        var tenantA = new WorkflowExecutionPartition("tenant-a");
+        var tenantB = new WorkflowExecutionPartition("tenant-b");
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", partition: tenantA));
+
+        var rejected = await agent.EnqueueAsync(NewEnvelope(1, idempotencyKey: "same-key", partition: tenantB));
+        var accepted = await agent.EnqueueAsync(NewEnvelope(2, idempotencyKey: "same-key", partition: tenantA));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, rejected.Status);
+        Assert.Equal("Envelope persistence scope does not match this agent.", rejected.Reason);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, accepted.Status);
+        Assert.Single(processor.EnvelopeIds);
+    }
+
+    [Fact]
     public async Task EnqueueAsync_EvictsOldProcessedIdempotencyKeysAfterConfiguredLimit()
     {
         var processor = new RecordingCommandProcessor();
@@ -201,23 +238,27 @@ public sealed class RuntimeInProcessAgentProviderTests
     private WorkflowExecutionActorActivationRequest NewActivationRequest(
         string workflowExecutionId,
         WorkflowExecutionActorActivationReason reason = WorkflowExecutionActorActivationReason.Start,
-        WorkflowExecutionActorCapabilities requiredCapabilities = WorkflowExecutionActorCapabilities.InProcessMailbox) =>
+        WorkflowExecutionActorCapabilities requiredCapabilities = WorkflowExecutionActorCapabilities.InProcessMailbox,
+        WorkflowExecutionPartition? partition = null) =>
         new(
             workflowExecutionId: workflowExecutionId,
             reason: reason,
             requestedAt: _now,
             requestedBy: "runtime-test",
-            requiredCapabilities: requiredCapabilities);
+            requiredCapabilities: requiredCapabilities,
+            partition: partition);
 
     private WorkflowExecutionActorPassivationRequest NewPassivationRequest(
         string workflowExecutionId,
         WorkflowExecutionActorPassivationBoundary boundary = WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
-        string reason = "Host drain") =>
+        string reason = "Host drain",
+        WorkflowExecutionPartition? partition = null) =>
         new(
             workflowExecutionId: workflowExecutionId,
             boundary: boundary,
             requestedAt: _now,
-            reason: reason);
+            reason: reason,
+            partition: partition);
 
     // The provider keeps its lifecycle-lock table private (public sealed type, no InternalsVisibleTo), so the
     // growth-regression assertions read its size via reflection rather than a test-only public surface.
@@ -232,7 +273,8 @@ public sealed class RuntimeInProcessAgentProviderTests
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
         string workflowExecutionId = "wfexec-1",
-        string? idempotencyKey = null)
+        string? idempotencyKey = null,
+        WorkflowExecutionPartition? partition = null)
     {
         using var document = JsonDocument.Parse("""{"workItemId":"work-1"}""");
         var command = new WorkflowExecutionCommand(
@@ -250,7 +292,8 @@ public sealed class RuntimeInProcessAgentProviderTests
             idempotencyKey: idempotencyKey ?? $"{workflowExecutionId}:command-{index}",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: _now,
-            sequence: index);
+            sequence: index,
+            partition: partition);
     }
 
     private static bool IsActorFrameworkReference(string? name) =>

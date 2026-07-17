@@ -6,8 +6,8 @@ invariants are owned by [ADR 0043](../../../../../docs/adr/0043-publication-slot
 shared terms remain in the [Elsa glossary](../../../../../docs/glossary/elsa.md) and
 [root glossary](../../../../../docs/glossary/root.md).
 
-Every contract below is on the **override** axis: one implementation owns the responsibility. Publishing does
-not currently publish a contributor interface or domain event. Runtime's trigger validators and observers are
+Most contracts below are on the **override** axis: one implementation owns the responsibility. Executable
+compilation enrichment is the documented contributor exception. Runtime's trigger validators and observers are
 separate add-don't-replace seams; see the Runtime catalog linked below.
 
 ## Overridable contracts
@@ -15,7 +15,7 @@ separate add-don't-replace seams; see the Runtime catalog linked below.
 | Contract | Built-in default | Replace when |
 |---|---|---|
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
-| `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run results need shared/durable retention. |
+| `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run projections need shared/durable retention. Runtime owns the matching scope lifecycle; expiry opens an operation scope and closes Runtime before removing the projection. |
 | `IPublicationSlotStore` | `InMemoryPublicationSlotStore` (singleton) | Slot authority and revision CAS must survive restart. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
 | `IPublicationPolicyStore` | `InMemoryPublicationPolicyStore` (singleton) | Host/workflow policy and revision CAS must survive restart. |
@@ -76,6 +76,17 @@ A new Publishing persistence package should:
 5. Prove restart behavior, stale-revision rejection, idempotent intent replay, and compensation with provider tests.
 6. Keep Runtime executable/reference/trigger/schedule stores in their owning Runtime persistence module; do not
    move those contracts into Publishing merely because the publish flow consumes them.
+
+## Executable compilation fan-in
+
+### `IExecutableCompilationSource`
+
+- **Kind:** Source. Each implementation asynchronously returns one immutable `ExecutableCompilationContribution` from `GetContributionAsync(ExecutableCompilationContext, CancellationToken)` without mutating the compiled tree.
+- **Context:** The source sees the resolved compile source, compiled root, request, and explicit optional tenant scope. It may return deterministic node-metadata claims and exact child artifact/node dependency claims.
+- **Composition:** `ExecutableNodeMetadataEnricher` publishes the named Sequential `OnExecutableCompilationCollecting` inline event. Publishing owns the single active `CollectExecutableCompilation` handler, which resolves sources in stable type-identity order, stamps source ownership, validates the complete claim set, and appends it to the event for read-back.
+- **Conflict rule:** Equal metadata or dependency duplicates are idempotent. Unequal node metadata, multiple child identities for one node, or multiple hashes for one child artifact fail with deterministically ordered owner identities. Unknown nodes, blank claims, null results, and unstamped contributions are rejected before the event result is exposed.
+- **Known implementation:** `DispatchPinSource` *(cross-domain — DispatchWorkflow Design)* contributes exact pinned child metadata and dependency claims after tenant/liveness/input-contract validation. The metadata-only source adapter is retained for compatibility and is not the extension seam for new implementations.
+- **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable child graph by full artifact ID/hash before publication can activate the candidate.
 
 ## Cross-domain seams consumed by Publishing
 

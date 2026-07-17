@@ -26,12 +26,16 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         // negative-wiring assertions prove certain contracts are deliberately NOT registered, and the scheduler
         // work-handler set + ordering below is a real composition contract.
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExecutableActivityTemplateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkQueue));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionWriter));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityExecutionInspectionAccumulator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyReader));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyWriter));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusLookup));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkResumeResolver));
@@ -81,10 +85,13 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var rootProvider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = rootProvider.CreateScope();
+        var provider = scope.ServiceProvider;
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
         provider.GetRequiredService<IWorkflowExecutionActorProvider>();
+        provider.GetRequiredService<IExecutableActivityTemplateStore>();
         provider.GetRequiredService<IWorkflowExecutionCommandExecutor>();
         provider.GetRequiredService<IWorkflowDrainOrchestrator>();
         provider.GetRequiredService<WorkflowDrainOrchestratorOptions>();
@@ -94,6 +101,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IActivityExecutionInspectionStore>();
         provider.GetRequiredService<IActivityExecutionInspectionWriter>();
         provider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>();
+        provider.GetRequiredService<IActivityExecutionHierarchyStore>();
+        provider.GetRequiredService<IActivityExecutionHierarchyReader>();
+        provider.GetRequiredService<IActivityExecutionHierarchyWriter>();
         provider.GetRequiredService<IBookmarkStateStore>();
         provider.GetRequiredService<IBookmarkStimulusLookup>();
         provider.GetRequiredService<IBookmarkResumeResolver>();
@@ -124,9 +134,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<RuntimeCheckpointCommitter>();
         provider.GetRequiredService<IRuntimePayloadCapturePolicy>();
         provider.GetRequiredService<IRuntimeInputBindingResolver>();
-        using var scope = provider.CreateScope();
-        scope.ServiceProvider.GetRequiredService<IRuntimeActivityInputMaterializer>();
-        scope.ServiceProvider.GetRequiredService<WorkflowIntrinsicExecutor>();
+        provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
+        provider.GetRequiredService<WorkflowIntrinsicExecutor>();
         provider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         provider.GetRequiredService<IWorkflowStartDispatcher>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);

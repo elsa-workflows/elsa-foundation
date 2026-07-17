@@ -1,39 +1,62 @@
-using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using CShells.Features;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
-using Elsa.Persistence.Groundwork.Unified;
-using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
-using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Store;
+using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 
 /// <summary>
-/// Registers a single SQLite-backed Groundwork <see cref="IDocumentStore"/> — materialized from the unioned
-/// runtime + workflows-design + activities-design manifest (<see cref="GroundworkUnifiedManifest"/>) — and points
-/// every Elsa persistence lane's read/write ports at it. This is the concrete realization of the host-selects-
-/// the-provider goal: domain and runtime code reference only the neutral ports, and one host choice (SQLite here)
-/// backs every module from one database.
+/// Selects the provider-level Elsa Groundwork families (runtime, secrets, distributed runtime,
+/// workflows design, activities design and publishing) and exposes one SQLite physical store for
+/// their validated host-selected composition. Runtime startup admits the exact applied target; schema
+/// application remains an operator/CLI responsibility. Identity is selected explicitly by its own feature.
 /// </summary>
 public static class GroundworkSqliteUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The SQLite connection string the single document store opens.</param>
-    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(this IServiceCollection services, string connectionString)
+    /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        bool autoApplyOnStartup = false) =>
+        services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(connectionString, autoApplyOnStartup);
+
+    /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        ShellFeatureContext context,
+        bool autoApplyOnStartup = false)
     {
-        // One store, one database, one materialized union manifest — shared by every lane.
-        services.AddSqliteGroundworkDocumentStore(
-            connectionString,
-            GroundworkUnifiedManifest.Create(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"));
+        services.AddGroundworkReferenceDeploymentSchema(context);
+        return services.AddGroundworkSqliteUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+    }
 
-        services.AddGroundworkRuntimeStores();
-        services.AddGroundworkWorkflowsDesignStores();
-        services.AddGroundworkActivitiesDesignStores();
-        services.AddGroundworkPublishingStores();
+    /// <summary>
+    /// Registers the unified SQLite substrate against an explicitly selected deployment schema.
+    /// Feature services, including Identity, remain independently selected by the host.
+    /// </summary>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(
+        this IServiceCollection services,
+        string connectionString,
+        bool autoApplyOnStartup = false)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
+    {
+        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        return services.AddGroundworkSqliteUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+    }
 
-        return services;
+    private static IServiceCollection AddGroundworkSqliteUnifiedPersistenceCore(
+        this IServiceCollection services,
+        string connectionString,
+        bool autoApplyOnStartup)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        services.AddSqliteGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        return services.AddGroundworkUnifiedStoreFamilies();
     }
 }

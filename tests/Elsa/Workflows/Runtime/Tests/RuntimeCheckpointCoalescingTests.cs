@@ -33,12 +33,40 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<CoalescingWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<CoalescingRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        Assert.Same(
+            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            provider.GetRequiredService<IPostCommitOutboxLookupStore>());
         Assert.IsType<CoalescingWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<CoalescingActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<CoalescingDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<CoalescingSchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
+    }
+
+    [Fact]
+    public async Task CoalescingOutboxLookup_ConsultsActiveOverlayBeforeDurableInner()
+    {
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var store = new CoalescingRuntimePostCommitOutboxStore(
+            new CoalescingInner<IRuntimePostCommitOutboxStore>(inner),
+            accessor);
+        var session = new RuntimeCoalescingSession(
+            "parent-dispatch",
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var commit = NewDispatchBoundaryCommit();
+        session.BufferDeferred(commit);
+        var expected = Assert.Single(commit.StateChanges.PostCommitOutbox).State;
+
+        using (accessor.Push(session))
+        {
+            var found = await store.FindAsync(expected.OutboxItemId);
+            Assert.Same(expected, found);
+        }
+
+        Assert.Null(await store.FindAsync(expected.OutboxItemId));
     }
 
     [Fact]
@@ -218,6 +246,42 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Single(innerStore.ListCommits());
     }
 
+    [Fact]
+    public async Task Coalescing_FlushesDispatchRecordAndChildStartOutboxAtomicallyAfterBufferedWork()
+    {
+        var checkpointState = new InMemoryRuntimeCheckpointStoreState();
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore(
+            workflowDispatchStore: new InMemoryWorkflowDispatchStore(checkpointState),
+            state: checkpointState);
+        var session = new RuntimeCoalescingSession(
+            "parent-dispatch",
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+
+        await store.CommitAsync(NewEmptyDeferredCommit(1) with
+        {
+            Checkpoint = new RuntimeCheckpoint(
+                "checkpoint-buffered",
+                "BufferedWork",
+                "parent-dispatch",
+                Now,
+                [],
+                new Dictionary<string, string>())
+        }, new(RuntimeCheckpointPersistenceMode.Deferred));
+
+        await store.CommitAsync(NewDispatchBoundaryCommit(), new(RuntimeCheckpointPersistenceMode.Deferred));
+
+        var persisted = Assert.Single(innerStore.ListCommits()).Commit;
+        var dispatch = Assert.Single(persisted.StateChanges.WorkflowDispatches);
+        var outbox = Assert.Single(persisted.StateChanges.PostCommitOutbox);
+        Assert.Equal(dispatch.State.ParentWorkflowExecutionId, outbox.State.Intent.WorkflowExecutionId);
+        Assert.Equal("elsa.dispatch-workflow.start-child.v1", outbox.State.Intent.Kind);
+        Assert.False(session.IsActive);
+    }
+
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount)> DriveAsync(bool coalescing)
     {
         var services = new ServiceCollection();
@@ -309,6 +373,78 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
+    private static RuntimeCheckpointCommit NewDispatchBoundaryCommit()
+    {
+        var identity = new WorkflowDispatchIdentity("parent-dispatch", "activity-dispatch");
+        var source = new WorkflowExecutableSourceProvenance(
+            "source-child",
+            "WorkflowDefinitionVersion",
+            "version-child",
+            "1.0.0",
+            "definition-child",
+            "version-child",
+            "1.0.0",
+            "publication-child",
+            "slot-child");
+        var record = new WorkflowDispatchRecord(
+            identity.DispatchId,
+            "parent-dispatch",
+            "activity-dispatch",
+            identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity("artifact-child", "definition-child", "version-child", "1.0.0", "sha256:child"),
+            source,
+            WorkflowDispatchMode.FireAndForget,
+            WorkflowDispatchStatus.Pending,
+            null,
+            null,
+            new WorkflowExecutionPartition("partition-1"),
+            WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot("parent-dispatch", "initiator-1"),
+            [],
+            Now,
+            Now);
+        var intent = new RuntimePostCommitIntent(
+            identity.StartIntentId,
+            "parent-dispatch",
+            "elsa.dispatch-workflow.start-child.v1",
+            Now,
+            "activity-dispatch",
+            identity.StartIdempotencyKey,
+            JsonSerializer.SerializeToElement(new { dispatchId = identity.DispatchId }));
+        var commit = new RuntimeCheckpointCommit(
+            "commit-dispatch",
+            new RuntimeCheckpoint(
+                "checkpoint-dispatch",
+                RuntimeCheckpointNames.ActivityCompleted,
+                "parent-dispatch",
+                Now,
+                ["activity-dispatch"],
+                new Dictionary<string, string>()),
+            new RuntimeCheckpointStateChangeSet(
+                null,
+                null,
+                [],
+                [],
+                [],
+                [],
+                [],
+                workflowDispatches:
+                [
+                    new RuntimeStateChange<WorkflowDispatchRecord>(
+                        record.DispatchId,
+                        RuntimeStateChangeOperation.Upsert,
+                        record,
+                        new Dictionary<string, string>())
+                ]),
+            [intent],
+            new Dictionary<string, string>());
+
+        return commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(commit))
+        };
+    }
+
     private static WorkflowExecutionActorActivationRequest NewSchedulerWorkActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
@@ -385,8 +521,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             authoredActivityId: "authored-node-wait",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 
@@ -413,8 +548,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             authoredActivityId: "authored-node-start",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 

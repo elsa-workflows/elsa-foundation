@@ -37,6 +37,10 @@ internal sealed class Login(IIdentitySignInService signInService, IAntiforgery a
         Post("/" + AspNetCoreIdentityDefaults.LoginRoute);
         AllowAnonymous();
         AllowFormData(urlEncoded: true);
+        // FastEndpoints otherwise replaces the default JSON metadata with the form media type when
+        // AllowFormData is enabled. Keep both binders reachable; the handler still applies its explicit
+        // Content-Type/antiforgery gate and rejects unsupported non-JSON requests safely.
+        Description(builder => builder.Accepts<LoginRequest>(), clearDefaults: true);
     }
 
     public override async Task HandleAsync(LoginRequest req, CancellationToken ct)

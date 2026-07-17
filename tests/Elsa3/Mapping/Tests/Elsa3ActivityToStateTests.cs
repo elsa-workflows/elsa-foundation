@@ -245,7 +245,10 @@ public sealed class Elsa3ActivityToStateTests
         public string Id => VersionId;
         public string Version => "1.0.0";
         public string DefinitionId => Elsa3ActivityToStateTests.DefinitionId;
-        public string DescriptorType => "Elsa.Primitives.Models.ClrActivityDescriptor";
+        public string ProviderKey => "elsa.clr";
+        public string ProviderSchemaVersion => "1";
+        public string ConsumerKey => "elsa.clr";
+        public string ConsumerSchemaVersion => "1";
         public JsonElement DescriptorPayload => JsonSerializer.SerializeToElement(new { });
         public string SourceKind => "CLR";
         public string SourceId => ActivityType;

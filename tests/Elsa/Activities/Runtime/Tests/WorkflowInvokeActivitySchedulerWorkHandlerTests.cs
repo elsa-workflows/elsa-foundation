@@ -434,6 +434,45 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CheckpointParticipantEntryChangesCommitWithChildScheduling()
+    {
+        var activity = new CheckpointParticipantStructuralActivity();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(new FixedActivityActivator(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal("hello", Assert.IsType<JsonElement>(activity.EffectiveInputs["text"]).GetString());
+        var childSchedulingCommit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointReason] == "ChildActivityScheduling").Commit;
+        var change = Assert.Single(childSchedulingCommit.StateChanges.DurableValues);
+        Assert.Equal("checkpoint:entry", change.StateId);
+        Assert.NotNull(await _durableValueStateStore.FindAsync("wfexec-1", "checkpoint:entry"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_CheckpointParticipantEntryAndCompletionChangesCommitAtomically()
+    {
+        var activity = new CompletingCheckpointParticipantActivity();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(new FixedActivityActivator(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var completionCommit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted).Commit;
+        Assert.Equal(
+            ["checkpoint:completion", "checkpoint:entry"],
+            completionCommit.StateChanges.DurableValues.Select(change => change.StateId).Order(StringComparer.Ordinal));
+        var completed = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(9, completed!.Completion!.Result.InlineValue!.Value.GetProperty("length").GetInt32());
+    }
+
+    [Fact]
     public async Task HandleAsync_DelayedReplayAfterNewerStructuralActivation_DoesNotReactivateOrClaimAnotherAttempt()
     {
         var activator = new FixedActivityActivator(new ChildSchedulingDeferringStructuralActivity());
@@ -557,6 +596,30 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(commitCount, _checkpointWriter.ListCommits().Count);
     }
 
+    [Fact]
+    public async Task ParentCallback_CheckpointParticipantCompletionChangesCommitWithParentCompletion()
+    {
+        var executable = NewCallbackExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewCallbackParentState(executable));
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState());
+        await using var provider = NewProvider(
+            new FixedActivityActivator(new CompletionCheckpointParticipantActivity()),
+            includeInspection: true);
+        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewParentCallbackWorkItem("callback-work", "callback-command"));
+
+        var completionCommit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted).Commit;
+        var change = Assert.Single(completionCommit.StateChanges.DurableValues);
+        Assert.Equal("checkpoint:completion", change.StateId);
+        Assert.NotNull(await _durableValueStateStore.FindAsync("wfexec-1", "checkpoint:completion"));
+    }
+
     private WorkflowInvokeActivitySchedulerWorkHandler NewHandler(ServiceProvider provider) =>
         new(provider.GetRequiredService<IServiceScopeFactory>(), new FixedTimeProvider(_now));
 
@@ -593,6 +656,9 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             sp.GetRequiredService<TimeProvider>(),
             sp.GetService<IRuntimeActivityExecutionInspectionAccumulator>()));
         services.AddSingleton<ActivityCompletionProjector>();
+        services.AddSingleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>();
+        services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
+        services.AddSingleton<RuntimeOutputCaptureProjector>();
         services.AddSingleton<ActivityInputHydrator>();
         services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         if (includeInspection)
@@ -1035,6 +1101,117 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             context.ScheduleChildActivity("child-node");
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
         }
+    }
+
+    private sealed class CheckpointParticipantStructuralActivity :
+        StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityCheckpointParticipant
+    {
+        public IReadOnlyDictionary<string, object?> EffectiveInputs { get; private set; } =
+            new Dictionary<string, object?>();
+
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            context.ScheduleChildActivity("child-node");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default)
+        {
+            EffectiveInputs = effectiveInputs;
+            return ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>(
+                [CheckpointChange("entry", context.WorkflowExecutionId, capturedAt)]);
+        }
+
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The deferred entry path must not prepare completion.");
+    }
+
+    private sealed class CompletionCheckpointParticipantActivity :
+        StructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeActivityCheckpointParticipant
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The parent callback path must not prepare entry.");
+
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
+                [CheckpointChange("completion", context.WorkflowExecutionId, capturedAt)],
+                ActivityTransition.Complete(ActivityUnit.Value)));
+    }
+
+    private sealed class CompletingCheckpointParticipantActivity :
+        Activity<TypedResult>,
+        IRuntimeActivityCheckpointParticipant
+    {
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(5)));
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>(
+                [CheckpointChange("entry", context.WorkflowExecutionId, capturedAt)]);
+
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default)
+        {
+            Assert.Contains(persistedValues, value => value.DurableValueId == "checkpoint:entry");
+            return ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
+                [CheckpointChange("completion", context.WorkflowExecutionId, capturedAt)],
+                ActivityTransition.Complete(new TypedResult(9))));
+        }
+    }
+
+    private static RuntimeStateChange<DurableValueState> CheckpointChange(
+        string role,
+        string workflowExecutionId,
+        DateTimeOffset capturedAt)
+    {
+        var id = $"checkpoint:{role}";
+        var state = new DurableValueState(
+            id,
+            workflowExecutionId,
+            id,
+            new RuntimeValueTypeDescriptor("object", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            JsonSerializer.SerializeToElement(role),
+            externalReference: null,
+            sourceActivityExecutionId: "actexec-1",
+            capturedAt,
+            new Dictionary<string, string>());
+        return new RuntimeStateChange<DurableValueState>(
+            id,
+            RuntimeStateChangeOperation.Upsert,
+            state,
+            state.Metadata);
     }
 
     private sealed class ThrowingDisposeStatefulDeferringStructuralActivity : StructuralActivity, IRuntimeStructuralActivity, IDisposable

@@ -23,3 +23,22 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
 
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
 }
+
+/// <summary>
+/// Narrow activity-facing capability for staging one cross-execution workflow dispatch.
+/// This is a specialized orchestration command, not a workflow-value or service-location channel.
+/// </summary>
+public interface IWorkflowDispatchStager
+{
+    void StageWorkflowDispatch(WorkflowDispatchCheckpointRequest request);
+}
+
+/// <summary>
+/// Engine-facing side of the workflow-dispatch staging seam.
+/// Requests are isolated by runtime invocation identity because transient activities can be activated in child scopes.
+/// </summary>
+public interface IWorkflowDispatchStagingAccessor
+{
+    void Reset(string workflowExecutionId, string activityExecutionId);
+    WorkflowDispatchCheckpointRequest? TakeWorkflowDispatch(string workflowExecutionId, string activityExecutionId);
+}

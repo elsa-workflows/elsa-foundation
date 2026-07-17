@@ -17,7 +17,10 @@ public interface IActivityDefinitionVersionFactory
     IActivityDefinitionVersion Create(
         IActivityDefinition definition,
         string version,
-        string descriptorType,
+        string providerKey,
+        string providerSchemaVersion,
+        string consumerKey,
+        string consumerSchemaVersion,
         JsonElement descriptorPayload,
         string sourceKind,
         string sourceId,

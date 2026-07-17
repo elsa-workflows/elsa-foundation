@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

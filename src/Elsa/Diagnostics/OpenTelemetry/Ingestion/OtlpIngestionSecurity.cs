@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Microsoft.AspNetCore.Http;
 
@@ -9,11 +10,21 @@ namespace Elsa.Diagnostics.OpenTelemetry.Ingestion;
 public static class OtlpIngestionSecurity
 {
     public static bool IsAuthorized(HttpContext httpContext, OpenTelemetryDiagnosticsOptions options)
+        => Authenticate(httpContext, options).Accepted;
+
+    internal static OtlpRequestAuthenticationResult Authenticate(HttpContext httpContext, OpenTelemetryDiagnosticsOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
-            return options.AllowUnauthenticatedLoopback && IsLoopback(httpContext);
+            return options.AllowUnauthenticatedLoopback && IsLoopback(httpContext)
+                ? OtlpRequestAuthenticationResult.AcceptedUntrusted
+                : OtlpRequestAuthenticationResult.Rejected;
 
-        return httpContext.Request.Headers.TryGetValue(options.ApiKeyHeaderName, out var value) && ApiKeysMatch(value.ToString(), options.ApiKey);
+        if (!httpContext.Request.Headers.TryGetValue(options.ApiKeyHeaderName, out var value) ||
+            !ApiKeysMatch(value.ToString(), options.ApiKey))
+            return OtlpRequestAuthenticationResult.Rejected;
+
+        var context = OpenTelemetryIngestionContext.Authenticated("elsa:otlp:configured-api-key");
+        return OtlpRequestAuthenticationResult.Accept(context);
     }
 
     private static bool IsLoopback(HttpContext httpContext)

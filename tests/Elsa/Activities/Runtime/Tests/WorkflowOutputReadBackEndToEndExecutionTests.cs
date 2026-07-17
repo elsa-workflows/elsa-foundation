@@ -4,6 +4,7 @@ using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -115,7 +116,8 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             provider.GetRequiredService<IActivityExecutionInspectionStore>(),
             provider.GetRequiredService<IIncidentStateStore>(),
             provider.GetRequiredService<IDurableValueStateStore>(),
-            provider.GetRequiredService<IRuntimePayloadCapturePolicy>());
+            provider.GetRequiredService<IRuntimePayloadCapturePolicy>(),
+            new AllowAllActivityExecutionInspectionAuthorizationContext());
         var response = await readHandler.Handle(new GetWorkflowInstance(workflowExecutionId), CancellationToken.None);
 
         Assert.NotNull(response.Instance);

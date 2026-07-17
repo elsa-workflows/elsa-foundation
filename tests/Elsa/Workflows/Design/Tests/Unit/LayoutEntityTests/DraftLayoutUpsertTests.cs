@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 /// </summary>
 public sealed class DraftLayoutUpsertTests
 {
-    private static readonly WorkflowDefinitionState EmptyState = new([], null, [], [], null, null);
+    private static readonly WorkflowDefinitionState EmptyState = new([], null, [], [], null);
 
     [Fact]
     public async Task AddWorkflowDefinition_creates_an_empty_layout_row_at_origin()

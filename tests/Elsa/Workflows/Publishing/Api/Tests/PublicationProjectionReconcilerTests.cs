@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -180,8 +181,7 @@ public sealed class PublicationProjectionReconcilerTests
                     authoredActivityId: "activity-root",
                     activityType: "Test.Root",
                     activityTypeVersion: "1.0.0",
-                    descriptorType: "Test",
-                    descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                    descriptor: new RuntimeActivityDescriptor("Test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
                     inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                     metadata: new Dictionary<string, string>()),
                 new Dictionary<string, WorkflowExecutableResumeTarget>(),

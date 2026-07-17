@@ -108,6 +108,8 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         }
 
         var metadata = CreateMetadata(request, bookmark, workflowExecution.PinnedExecutable);
+        var partition = workflowExecution.Partition
+            ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
         var commandId = _idGenerator.NewWorkflowExecutionCommandId();
         var idempotencyKey = CreateIdempotencyKey(request, bookmark);
         var triggerDelivery = request.PayloadType is null
@@ -143,14 +145,16 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             idempotencyKey: idempotencyKey,
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: now,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
         var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: request.WorkflowExecutionId,
             reason: WorkflowExecutionActorActivationReason.ResumeBookmark,
             requestedAt: now,
             requestedBy: request.RequestedBy,
             requiredCapabilities: WorkflowExecutionActorCapabilities.None,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
         var commandDispatch = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);

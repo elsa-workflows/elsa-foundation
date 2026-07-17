@@ -1,3 +1,6 @@
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,13 +20,24 @@ public static class GroundworkDistributedStoresRegistration
 {
     public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services)
     {
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, DistributedGroundworkStorageManifestSource>());
+
         // RemoveAll guarantees the bridge wins regardless of feature composition order (the distributed feature
-        // registers its in-memory defaults with TryAddSingleton, so bridge-first ordering also composes correctly).
+        // registers its in-memory defaults with TryAddScoped, so bridge-first ordering also composes correctly).
         services.RemoveAll<IExecutionPlacementStore>();
-        services.AddSingleton<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
+        services.AddScoped<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
         services.RemoveAll<IExecutionCommandTransport>();
-        services.AddSingleton<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
+        services.AddScoped<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
 
         return services;
     }
+}
+
+internal sealed class GroundworkDistributionDurabilityEvidence : IWorkflowDispatchDurabilityEvidence
+{
+    public string Component => WorkflowDispatchDurabilityComponents.DistributionPersistence;
+    public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.Durable;
 }

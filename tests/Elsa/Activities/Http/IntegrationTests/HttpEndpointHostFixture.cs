@@ -1,10 +1,10 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
-using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Testing;
 using Elsa.Events;
@@ -13,6 +13,7 @@ using Elsa.Http.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Primitives.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
@@ -87,7 +88,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     public IServiceProvider Services => _host.Services;
 
-    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
+    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null, null);
 
     /// <summary>
     /// Starts the production HTTP runtime against an isolated Groundwork SQLite database and applies the requested
@@ -100,13 +101,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
+        var connectionString = $"Data Source={databasePath}";
 
         return StartAsync(
             services =>
             {
                 new SqliteGroundworkRuntimePersistenceShellFeature
                 {
-                    ConnectionString = $"Data Source={databasePath}"
+                    ConnectionString = connectionString
                 }.ConfigureServices(services);
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
@@ -115,12 +117,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     MaxSegmentCheckpoints = maxSegmentCheckpoints
                 }.PostConfigureServices(services);
             },
-            databaseDirectory);
+            databaseDirectory,
+            connectionString);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
         Action<IServiceCollection>? configurePersistence,
-        string? databaseDirectory)
+        string? databaseDirectory,
+        string? groundworkSqliteConnectionString)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -219,6 +223,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             })
             .Build();
 
+        if (groundworkSqliteConnectionString is not null)
+            await host.Services.ApplySqliteGroundworkSchemaAsync(groundworkSqliteConnectionString);
         await host.StartAsync();
 
         RunStartupTasks(host.Services);
@@ -740,6 +746,49 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
         Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
 
+    /// <summary>
+    /// Waits for an asynchronously converging run and its committed result projection after the request that started it has
+    /// already timed out. The timeout response can win the race with the durable checkpoint becoming query-visible.
+    /// </summary>
+    public async Task<(WorkflowExecutionState Execution, JsonElement ResultProjection)>
+        WaitForSingleWorkflowExecutionWithResultProjectionAsync(
+            string projectionKey,
+            string resultFixtureKey,
+            TimeSpan timeout)
+    {
+        var executionStore = Services.GetRequiredService<IWorkflowExecutionStateStore>();
+        var deadline = DateTimeOffset.UtcNow + timeout;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var executions = await executionStore.ListAsync();
+            if (executions.Count == 1)
+            {
+                var execution = executions.Single();
+                try
+                {
+                    var projection = await ReadResultProjectionAsync(
+                        execution.WorkflowExecutionId,
+                        projectionKey,
+                        resultFixtureKey);
+                    return (execution, projection);
+                }
+                catch (InvalidOperationException)
+                {
+                    // The workflow row can become visible before its activity completion checkpoint.
+                }
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25));
+        }
+
+        var finalExecution = await SingleWorkflowExecutionAsync();
+        return (finalExecution, await ReadResultProjectionAsync(
+            finalExecution.WorkflowExecutionId,
+            projectionKey,
+            resultFixtureKey));
+    }
+
     /// <summary>Reads one persisted execution by id.</summary>
     public async Task<WorkflowExecutionState> WorkflowExecutionAsync(string workflowExecutionId) =>
         await Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId)
@@ -766,8 +815,17 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
     public async Task<int> CountPhysicalCheckpointCommitsAsync()
     {
-        var result = await Services.GetRequiredService<IDocumentStore>()
-            .QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+        var result = await Services.GetRequiredService<IBoundedDocumentStore>()
+            .QueryAsync(
+                new DocumentQuery(
+                    ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+                    ElsaRuntimeStorageManifest.ListCheckpointCommitsQuery,
+                    [
+                        DocumentQueryClause.Of(
+                            DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.CollectionField,
+                                ElsaRuntimeStorageManifest.CheckpointCommitCollection))
+                    ]));
         return checked((int)result.TotalCount);
     }
 

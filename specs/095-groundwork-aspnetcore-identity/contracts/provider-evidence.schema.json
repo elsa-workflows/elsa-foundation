@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://elsaworkflows.io/schemas/groundwork-aspnetcore-identity-provider-evidence.schema.json",
+  "title": "Groundwork ASP.NET Core Identity provider evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactSchemaVersion",
+    "sourceAuthority",
+    "testedCandidate",
+    "provider",
+    "acceptance",
+    "nativeRoutes",
+    "schema",
+    "workload"
+  ],
+  "properties": {
+    "artifactSchemaVersion": { "const": 1 },
+    "sourceAuthority": { "const": "#644" },
+    "testedCandidate": { "$ref": "#/$defs/testedCandidate" },
+    "provider": { "$ref": "#/$defs/provider" },
+    "acceptance": { "$ref": "#/$defs/acceptance" },
+    "nativeRoutes": { "$ref": "#/$defs/nativeRoutes" },
+    "schema": { "$ref": "#/$defs/schemaEvidence" },
+    "workload": { "$ref": "#/$defs/workload" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "testedCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commitSha",
+        "treeSha",
+        "groundworkPackageFamilyVersion",
+        "groundworkToolVersion",
+        "identityManifestVersion",
+        "groundworkProviderAssemblyVersion"
+      ],
+      "properties": {
+        "commitSha": { "$ref": "#/$defs/gitObjectId" },
+        "treeSha": { "$ref": "#/$defs/gitObjectId" },
+        "groundworkPackageFamilyVersion": { "const": "0.0.1-preview.60" },
+        "groundworkToolVersion": { "const": "0.0.1-preview.60" },
+        "identityManifestVersion": { "const": "1.0.4" },
+        "groundworkProviderAssemblyVersion": { "const": "0.0.1-preview.60" }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "identity", "topology", "capabilities", "diagnosticsSha256"],
+      "properties": {
+        "key": { "enum": ["sqlite", "sqlserver", "postgresql", "mongodb"] },
+        "identity": { "type": "string", "pattern": "^groundwork-[a-z]+$" },
+        "topology": { "type": "string", "minLength": 1 },
+        "capabilities": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+        "diagnosticsSha256": { "$ref": "#/$defs/sha256" },
+        "topologyRejectionSha256": { "$ref": "#/$defs/sha256" },
+        "compoundKeyBudgetSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectiveCount",
+        "objectiveIds",
+        "objectiveResultDigest",
+        "advertisedCapabilityCount",
+        "advertisedCapabilityIds",
+        "externalProcessesConfirmed",
+        "processLaunchFingerprint"
+      ],
+      "properties": {
+        "objectiveCount": { "const": 25 },
+        "objectiveIds": { "type": "array", "minItems": 25, "maxItems": 25, "uniqueItems": true, "items": { "type": "string" } },
+        "objectiveResultDigest": { "$ref": "#/$defs/sha256" },
+        "advertisedCapabilityCount": { "const": 15 },
+        "advertisedCapabilityIds": { "type": "array", "minItems": 15, "maxItems": 15, "uniqueItems": true, "items": { "type": "string" } },
+        "externalProcessesConfirmed": { "const": true },
+        "processLaunchFingerprint": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "nativeRoutes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routeCount", "physicalTableCount", "cardinalityPerPhysicalTable", "routes"],
+      "properties": {
+        "routeCount": { "const": 10 },
+        "physicalTableCount": { "const": 6 },
+        "cardinalityPerPhysicalTable": { "const": 100000 },
+        "routes": { "type": "array", "minItems": 10, "maxItems": 10, "items": { "$ref": "#/$defs/nativeRoute" } }
+      }
+    },
+    "nativeRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queryIdentity",
+        "documentKind",
+        "physicalName",
+        "physicalCardinality",
+        "finiteLimit",
+        "materializedCandidateCount",
+        "indexLogicalName",
+        "indexName",
+        "planClassification",
+        "storageScopePredicate",
+        "routePredicate",
+        "evidenceSha256",
+        "commands"
+      ],
+      "properties": {
+        "queryIdentity": { "type": "string", "minLength": 1 },
+        "documentKind": { "type": "string", "minLength": 1 },
+        "physicalName": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "physicalCardinality": { "const": 100000 },
+        "finiteLimit": { "type": "integer", "minimum": 1 },
+        "materializedCandidateCount": { "const": 1 },
+        "indexLogicalName": { "type": "string", "minLength": 1 },
+        "indexName": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$" },
+        "planClassification": { "enum": ["indexed", "index-search", "index-only-scan", "index-scan", "index-seek"] },
+        "storageScopePredicate": { "const": true },
+        "routePredicate": { "const": true },
+        "evidenceSha256": { "$ref": "#/$defs/sha256" },
+        "commands": {
+          "type": "array",
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/nativeCommand" }, { "properties": { "ordinal": { "const": 0 }, "kind": { "const": "Count" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/nativeCommand" }, { "properties": { "ordinal": { "const": 1 }, "kind": { "const": "Page" } } }] }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "nativeCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordinal", "kind", "identity", "nativePlanFormat", "planClassification", "indexNames", "predicateFieldIdentifiers", "nativePlanSha256"],
+      "properties": {
+        "ordinal": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "kind": { "enum": ["Count", "Page"] },
+        "identity": { "enum": ["count", "page"] },
+        "nativePlanFormat": { "enum": ["sqlite-query-plan", "postgresql-json", "sqlserver-statistics-xml", "mongodb-json"] },
+        "planClassification": { "enum": ["index-search", "index-only-scan", "index-scan", "index-seek"] },
+        "indexNames": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$" } },
+        "predicateFieldIdentifiers": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" } },
+        "nativePlanSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "schemaEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compositionFingerprint", "targetFingerprint", "pendingState", "appliedState", "toolReceipts", "pendingAdmission", "readyAdmission"],
+      "properties": {
+        "compositionFingerprint": { "$ref": "#/$defs/sha256" },
+        "targetFingerprint": { "$ref": "#/$defs/sha256" },
+        "pendingState": { "$ref": "#/$defs/schemaState" },
+        "appliedState": { "$ref": "#/$defs/schemaState" },
+        "toolReceipts": { "type": "array", "minItems": 7, "maxItems": 7, "items": { "$ref": "#/$defs/toolReceipt" } },
+        "pendingAdmission": { "$ref": "#/$defs/admission" },
+        "readyAdmission": { "$ref": "#/$defs/admission" }
+      }
+    },
+    "schemaState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fingerprint", "canonicalItemCount"],
+      "properties": {
+        "fingerprint": { "$ref": "#/$defs/sha256" },
+        "canonicalItemCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "toolReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "exitCode", "targetMutated", "beforeFingerprint", "afterFingerprint", "stateUnchanged"],
+      "properties": {
+        "operation": { "enum": ["validate-offline", "validate-pending", "plan-pending", "status-pending", "apply-safe", "validate-ready", "status-ready"] },
+        "exitCode": { "type": "integer", "minimum": 0 },
+        "inspectionMode": { "type": "string" },
+        "outcome": { "type": "string" },
+        "targetMutated": { "type": "boolean" },
+        "beforeFingerprint": { "$ref": "#/$defs/sha256" },
+        "afterFingerprint": { "$ref": "#/$defs/sha256" },
+        "stateUnchanged": { "type": "boolean" }
+      }
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isReady", "pendingOperationCount", "targetFingerprint"],
+      "properties": {
+        "isReady": { "type": "boolean" },
+        "pendingOperationCount": { "type": "integer", "minimum": 0 },
+        "targetFingerprint": { "$ref": "#/$defs/sha256" },
+        "appliedTargetFingerprint": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "workloadId", "scenarioId", "inputFingerprint", "resultDigest", "nativeRouteReferenceCount"],
+      "properties": {
+        "version": { "const": "1.1.0" },
+        "workloadId": { "const": "iam-normalized-lookup-update" },
+        "scenarioId": { "const": "identity-authority-baseline" },
+        "inputFingerprint": { "$ref": "#/$defs/sha256" },
+        "resultDigest": { "$ref": "#/$defs/sha256" },
+        "nativeRouteReferenceCount": { "const": 5 }
+      }
+    }
+  }
+}

@@ -273,8 +273,7 @@ public sealed class RuntimeBookmarkResumeContractTests
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
             metadata: root.Metadata,
             childSlots:
@@ -289,8 +288,7 @@ public sealed class RuntimeBookmarkResumeContractTests
             authoredActivityId: "activity-delivery",
             activityType: "Elsa.WaitForDeliveryStatus",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 
@@ -300,8 +298,7 @@ public sealed class RuntimeBookmarkResumeContractTests
             authoredActivityId: "activity-other",
             activityType: "Elsa.Other",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 

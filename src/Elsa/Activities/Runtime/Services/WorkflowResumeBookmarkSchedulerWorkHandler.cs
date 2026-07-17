@@ -222,7 +222,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
             // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery),
+                new ActivityActivationRequest(contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
                 cancellationToken);
             activity = activationLease.Activity;
 
@@ -257,6 +257,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         ActivityCompletionProjection? typedCompletion = null;
+        IActivityCompletionTransition? completionTransition = null;
         ActivityExecutionState? replacementSuspendedState = null;
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
@@ -280,10 +281,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     executionState,
                     resumeAttempt,
                     suspension,
-                    _timeProvider.GetUtcNow());
+                    _timeProvider.GetUtcNow(),
+                    key => ResolveResumeTarget(executable, executableNode, key).ResumeTargetId);
             }
             else if (transition is IActivityCompletionTransition)
             {
+                completionTransition = (IActivityCompletionTransition)transition;
                 typedCompletion = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                     workItem.WorkflowExecutionId,
                     executionState.InvocationId,
@@ -432,6 +435,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             };
         }
         completedState = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(completedState);
+        var outputCaptureChanges = typedCompletion is null
+            ? []
+            : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+                workItem.WorkflowExecutionId,
+                executionState.InvocationId,
+                executableNode,
+                completionTransition!,
+                typedCompletion,
+                _timeProvider.GetUtcNow(),
+                cancellationToken);
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(
                 workItem,
@@ -439,7 +452,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 completedState,
                 NewCompletionWorkItem(workItem, resumePayload, completedState),
                 valueSnapshots,
-                []),
+                outputCaptureChanges),
             cancellationToken);
     }
 
@@ -583,19 +596,31 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IStatefulActivitySuspensionTransition suspension)
     {
         foreach (var registration in suspension.Registrations)
-        {
-            if (!executable.ResumeTargets.TryGetValue(registration.ResumeTargetKey, out var resumeTarget))
-            {
-                throw new InvalidOperationException(
-                    $"Stateful activity '{executableNode.ExecutableNodeId}' registered missing resume target '{registration.ResumeTargetKey}'.");
-            }
+            ResolveResumeTarget(executable, executableNode, registration.ResumeTargetKey);
+    }
 
-            if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, executableNode.ExecutableNodeId))
-            {
-                throw new InvalidOperationException(
-                    $"Resume target '{registration.ResumeTargetKey}' belongs to executable node '{resumeTarget.ExecutableNodeId}', not '{executableNode.ExecutableNodeId}'.");
-            }
+    private static WorkflowExecutableResumeTarget ResolveResumeTarget(
+        WorkflowExecutable executable,
+        ExecutableNode executableNode,
+        string resumeTargetKey)
+    {
+        var resumeTarget = SchedulerWorkHandlerHelpers.FindResumeTargetForNode(
+            executable,
+            executableNode.ExecutableNodeId,
+            resumeTargetKey);
+        if (resumeTarget is null)
+        {
+            throw new InvalidOperationException(
+                $"Stateful activity '{executableNode.ExecutableNodeId}' registered missing resume target '{resumeTargetKey}'.");
         }
+
+        if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, executableNode.ExecutableNodeId))
+        {
+            throw new InvalidOperationException(
+                $"Resume target '{resumeTargetKey}' belongs to executable node '{resumeTarget.ExecutableNodeId}', not '{executableNode.ExecutableNodeId}'.");
+        }
+
+        return resumeTarget;
     }
 
     private IEnumerable<RuntimeSchedulerWorkItem> NewReplacementBookmarkWorkItems(

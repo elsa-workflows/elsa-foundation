@@ -5,10 +5,15 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the one pinned Groundwork release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.59` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at the same version as Groundwork packages.
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.59`, matching all
+  Groundwork packages.
+
+Groundwork PR #88 is the generic version-aware codec boundary in this release. Elsa-specific payload policies,
+legacy-stamp parsing, JSON options, and concrete upcasters must remain marker-gated in Elsa provider packages; core modules must not
+reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
@@ -59,6 +64,35 @@ If a listed project is renamed during implementation, update this quickstart in 
 - scoped lifetimes for logic-bearing persistence services, with every non-scoped exception documented and tested;
 - no tenant/access context or mutable operation state shared across independently created request scopes.
 
+### Storage-scope gate
+
+The provider-neutral default is one scoped `PersistenceAccessContext` using the nonblank scope `default`.
+Multi-tenant hosts replace `IPersistenceAccessContextAccessor` with their own scoped selector before resolving
+any store. Ordinary scoped, ordinary global, privileged scoped, privileged global, and privileged across-scope
+access are distinct immutable values; privileged access always has a named purpose.
+
+Run the direct scope/session evidence:
+
+```bash
+dotnet test tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName~GroundworkStoreSession|FullyQualifiedName~GroundworkPrivilegedAccessRecorder'
+
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName~StorageScopeContractTests'
+```
+
+Provider startup may retain only immutable admitted resources. SQLite, SQL Server, and PostgreSQL construct a
+fresh access-bound runtime per session. MongoDB retains one validate-only admitted handle and derives fresh
+access-bound stores from it without reopening a client or repeating topology/schema admission. Explicit units
+of work retain one session until commit/rollback/disposal; all other adapter operations acquire and release one
+session. Singleton actors and recurring pumps must open a fresh DI scope per command or tick before resolving
+logic-bearing persistence consumers.
+
 ## 4. Run the shared provider matrix
 
 After the conformance project is introduced:
@@ -84,53 +118,113 @@ Provider-specific expected domain results are a test defect.
 Run the unified-host tests for each provider leaf:
 
 ```bash
-dotnet test tests/Elsa/Persistence/Groundwork/Sqlite/Tests/Elsa.Persistence.Groundwork.Sqlite.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj \
   --configuration Release --no-build
 
-dotnet test tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/SqlServer/Tests/Elsa.Persistence.Groundwork.SqlServer.Tests.csproj \
+  --configuration Release --no-build
+
+dotnet test tests/Elsa/Persistence/Groundwork/MongoDb/Tests/Elsa.Persistence.Groundwork.MongoDb.Tests.csproj \
   --configuration Release --no-build
 ```
 
-The implementation adds equivalent SQL Server and MongoDB projects; add their exact commands here when their project files land. The combined-host scenario selects runtime, IAM, secrets, and distributed runtime, performs one public operation per family, disposes the host, opens a new host over the same database, and re-verifies state.
+The bare unified provider matrix selects the six provider-level families: workflow runtime, secrets,
+distributed runtime, workflows design, activities design, and workflows publishing. Identity is never
+selected implicitly. The same matrix separately selects the Identity deployment-schema variant and explicit
+Groundwork Identity feature, proving that all seven selected families share the exact admitted target. SQLite
+and PostgreSQL execute the restart-oriented unified-host scenarios; SQL Server proves exact registration and
+MongoDB proves the exact admission target. The MongoDB lane requires a writable transaction-capable replica set.
 
 Also run invalid compositions: missing source, duplicate unit, unsupported route/capability, wrong MongoDB topology, and scope-policy conflict. Each must fail before serving work with a stable owner-aware diagnostic.
 
 ## 6. Exercise schema tooling
 
-Build the concrete host schema-source assembly, then set the connection value only through an environment variable:
+Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped unified leaves register
+`GroundworkAllFeaturesDeploymentSchema` as their six-family runtime authority; hosts that explicitly select
+Groundwork Identity use `GroundworkAllFeaturesWithIdentityDeploymentSchema` instead. Both types live in
+`Elsa.Persistence.Groundwork.ReferenceComposition.dll`:
 
 ```bash
 dotnet groundwork validate \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork plan \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork status \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork apply \
-  --manifest-assembly <built-composition-assembly> \
-  --manifest-type <selected-schema-source> \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --safe \
   --output json
 ```
 
-For plan gates, exit codes 0 and 2 are expected outcomes; deployment apply requires 0. Destructive or semantic operations require the exact retained plan fingerprint and exact operation approvals. Runtime startup validates readiness and never silently applies pending schema.
+The source passed to `--manifest-type` must be public, parameterless, and implement
+`IPhysicalSchemaManifestSource`. Custom hosts derive a concrete source from
+`GroundworkDeploymentSchemaManifestSource`, select their exact feature manifest-source types, override
+`CreateStorageNamingPolicy` when names are transformed, and register that same source through
+`AddGroundworkStorageComposition<TDeploymentSource>()`. The source type's built assembly is then passed
+to every CLI command. Its parameterless construction must be deterministic and configuration-complete:
+all manifest and host-naming inputs must be encoded by the source type so runtime and the separate CLI
+process reconstruct the same policy definition and resolved target without shared in-memory state. The
+shipped unified leaves do this with
+`GroundworkAllFeaturesDeploymentSchema`; do not point the CLI at the constructor-bound runtime snapshot
+type or at a test fixture. Groundwork's physical target fingerprint remains the value
+reported by the CLI and compared by runtime admission. Elsa's separate composition fingerprint also
+includes the selected feature sources, their manifest versions, durable requirements, topology
+evidence, and naming-policy identity; do not substitute it for the physical target fingerprint.
+
+Use provider values `sqlite`, `postgresql`, `sqlserver`, or `mongodb`. For MongoDB, pass
+`--database <database-name>` whenever the URI supplied through `--connection-env` does not contain a
+database path; for example, a replica-set URI such as `mongodb://host1,host2/?replicaSet=rs0`
+requires `--database elsa`. The runtime host's configured database name and the CLI database must be
+identical.
+
+### Exact command outcomes
+
+| Command | Exit | Outcome | Meaning and mutation contract |
+|---|---:|---|---|
+| `validate --offline` | `0` | `ready` | Manifest, naming, and routes compile; no connection or provider inspection occurs. |
+| `validate` | `0` | `ready` | Live applied history and physical objects are compatible. The report can still list pending operations; validation never applies them. |
+| `validate` | `3` | `blocked` | Compilation, history, or live physical-state validation failed. |
+| `plan` / `status` | `0` | `ready` | The exact target has no pending operations. |
+| `plan` / `status` | `2` | `pending` | One or more operations are pending; retain the reported plan fingerprint for review/apply policy. |
+| `plan` / `status` | `3` | `blocked` | The diff is not applicable under the greenfield/additive policy. |
+| `apply` | `0` | `applied` or `ready` | The authorized plan was applied, or the target already matched. |
+| `apply` | `3` | `blocked` | Validation or application planning rejected the target. |
+| `apply` | `4` | `authorization-required` | The exact plan needs additional safe/destructive/semantic authorization; no target state was published. |
+| Any command | `5` | `invalid` | Invocation, source loading, provider selection, or connection input is invalid. |
+| Any command | `10` | `failed` | Execution failed; exception details are suppressed from output. |
+| Any command | `130` | `cancelled` | Cancellation was observed and unapplied target state was not recorded. |
+
+Exit `2` is an expected result for a plan/status deployment gate, not a tool failure. Deployment
+apply requires exit `0`. Destructive or semantic operations require the exact retained plan
+fingerprint and exact operation approvals.
+
+Runtime admission calls the provider's read-only `IPhysicalSchemaHistoryInspector`, computes the
+same Groundwork diff in memory, and never acquires an application lock or invokes schema apply. It
+blocks startup with `ELSA-GW-SCHEMA-PENDING` when an applicable plan remains and with
+`ELSA-GW-SCHEMA-DRIFT` when durable history or live physical state is incompatible. Operators then
+run and review the CLI workflow above; runtime never silently repairs or applies schema.
 
 ## 7. Supply and consume #646 evidence
 
@@ -143,6 +237,12 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 5. leave Blocked or missing verdicts incomplete.
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
+For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.59` and Identity storage manifest
+v1.0.4. Retain its provider identity, input/result digests, observable operations, and native route evidence
+captured at 100,000 physical records. The checked-in `preview.55`-`preview.58` artifacts are historical provenance,
+not current pass evidence; the ledger remains unlinked until fresh exact-head artifacts exist. The committed EF
+contract baseline is explicitly non-executed; #646 owns live EF execution, equality, and timing.
 
 ## 8. Readiness audit
 

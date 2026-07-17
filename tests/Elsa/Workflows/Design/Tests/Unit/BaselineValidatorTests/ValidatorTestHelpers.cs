@@ -1,4 +1,5 @@
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Core.Models;
@@ -41,7 +42,6 @@ internal static class ValidatorTestHelpers
         RootActivity: RootActivity(activities),
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null
     );
 
@@ -55,7 +55,6 @@ internal static class ValidatorTestHelpers
         RootActivity: rootActivity,
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null
     );
 
@@ -112,7 +111,7 @@ internal static class ValidatorTestHelpers
     public static VariableDefinition Variable(string referenceKey, string name) => new(
         ReferenceKey: referenceKey,
         Name: name,
-        Type: new Primitives.Models.TypeReference("String"),
+        Type: new TypeReference("String"),
         StorageDriverType: null,
         Default: null
     );

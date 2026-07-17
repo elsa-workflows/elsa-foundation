@@ -12,12 +12,12 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 /// shared <see cref="IdentityClaimsProjector"/>, so the cookie principal carries the same claims the OIDC
 /// path produces.
 /// </summary>
-public sealed class AspNetCoreIdentityUserClaimsPrincipalFactory(
+public class AspNetCoreIdentityUserClaimsPrincipalFactory(
     IUserStore users,
     IRoleStore roles,
     ITenantMembershipStore memberships) : IUserClaimsPrincipalFactory<AspNetCoreIdentityUser>
 {
-    public async Task<ClaimsPrincipal> CreateAsync(AspNetCoreIdentityUser user)
+    public virtual async Task<ClaimsPrincipal> CreateAsync(AspNetCoreIdentityUser user)
     {
         var identity = new ClaimsIdentity(
             authenticationType: AspNetCoreIdentityDefaults.CookieScheme,

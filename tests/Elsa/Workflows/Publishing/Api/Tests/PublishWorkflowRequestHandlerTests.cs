@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Persistence.Core;
@@ -113,6 +114,61 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task Publication_propagates_tenant_to_compilation_and_source_reference()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var (handler, compiler) = RecordingHandler(workflowVersion);
+
+        var published = await handler.Handle(
+            new PublishWorkflow(workflowVersion.Id, TenantId: "tenant-a"),
+            CancellationToken.None);
+
+        Assert.Equal("tenant-a", Assert.Single(compiler.Requests).TenantId);
+        var reference = await _referenceStore.FindAsync(published.SourceReferenceId!);
+        Assert.NotNull(reference);
+        Assert.Equal("tenant-a", reference.TenantId);
+    }
+
+    [Fact]
+    public async Task Publication_without_tenant_keeps_compilation_and_source_reference_unscoped()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var (handler, compiler) = RecordingHandler(workflowVersion);
+
+        var published = await handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None);
+
+        Assert.Null(Assert.Single(compiler.Requests).TenantId);
+        var reference = await _referenceStore.FindAsync(published.SourceReferenceId!);
+        Assert.NotNull(reference);
+        Assert.Null(reference.TenantId);
+    }
+
+    [Fact]
+    public async Task Tenant_source_fact_does_not_change_artifact_identity()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var handler = Handler(workflowVersion);
+
+        var first = await handler.Handle(
+            new PublishWorkflow(workflowVersion.Id, TenantId: "tenant-a"),
+            CancellationToken.None);
+        var second = await handler.Handle(
+            new PublishWorkflow(
+                workflowVersion.Id,
+                PublicationAction.PublishSideBySide,
+                SlotName: "blue",
+                TenantId: "tenant-b"),
+            CancellationToken.None);
+
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        Assert.Equal(first.ArtifactHash, second.ArtifactHash);
+        Assert.NotEqual(first.PublicationId, second.PublicationId);
+        Assert.NotEqual(first.SourceReferenceId, second.SourceReferenceId);
+        var references = await _referenceStore.ListByArtifactAsync(first.ArtifactId);
+        Assert.Equal(["tenant-a", "tenant-b"], references.Select(x => x.TenantId).OrderBy(x => x, StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task RepublishingIdenticalArtifactKeepsExistingPublicationAuthority()
     {
         var handler = Handler(WorkflowVersion(Node("write-one", Text("one"))));
@@ -126,6 +182,30 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(first.SourceReferenceId, second.SourceReferenceId);
         Assert.Equal(PublicationStatusView.Active, second.Status);
         Assert.Single(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+    }
+
+    [Fact]
+    public async Task Republishing_identical_artifact_to_same_slot_does_not_reuse_another_tenants_authority()
+    {
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("one"))));
+
+        var first = await handler.Handle(
+            new PublishWorkflow("version-1", TenantId: "tenant-a"),
+            CancellationToken.None);
+        var second = await handler.Handle(
+            new PublishWorkflow("version-1", TenantId: "tenant-b"),
+            CancellationToken.None);
+
+        Assert.True(first.WasCreated);
+        Assert.True(second.WasCreated);
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        Assert.NotEqual(first.PublicationId, second.PublicationId);
+        Assert.NotEqual(first.SourceReferenceId, second.SourceReferenceId);
+        var liveReference = Assert.Single(await _referenceStore.ListAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true));
+        Assert.Equal(second.SourceReferenceId, liveReference.SourceReferenceId);
+        Assert.Equal("tenant-b", liveReference.TenantId);
     }
 
     [Fact]
@@ -265,6 +345,53 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(200, record.Width);
         Assert.Equal(80, record.Height);
         Assert.Equal("blue", record.AdditionalProperties!.Value.GetProperty("color").GetString());
+    }
+
+    [Fact]
+    public async Task PublishedReferenceCarriesVerbatimAuthoredInputSourceOutsideArtifactHash()
+    {
+        const string authoredJson = "{\"code\":\"return variables.orderId;\",\"options\":{\"strict\":true}}";
+        using var document = JsonDocument.Parse(authoredJson);
+        var input = new WorkflowArgumentState(
+            "Text",
+            new ArgumentValue(document.RootElement.Clone(), "JavaScript"),
+            null,
+            null,
+            null,
+            true);
+        var version = WorkflowVersion(Node("write-one", input));
+
+        var view = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        var reference = Assert.Single(await _referenceStore.ListByArtifactAsync(view.ArtifactId));
+        var authored = Assert.Single(reference.AuthoredInputs);
+        Assert.Equal("write-one", authored.ExecutableNodeId);
+        Assert.Equal("Text", authored.InputKey);
+        Assert.Equal("JavaScript", authored.ExpressionType);
+        Assert.Equal(authoredJson, authored.Value.GetRawText());
+
+        var executable = await _store.FindAsync(view.ArtifactId);
+        Assert.Equal(view.ArtifactHash, executable!.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task CompiledInputBindingCarriesStableInputKeyAndSensitivity()
+    {
+        var input = new WorkflowArgumentState(
+            "Text",
+            new ArgumentValue("classified", "Literal"),
+            null,
+            null,
+            null,
+            true);
+
+        var view = await Handler(WorkflowVersion(Node("write-one", input)))
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        var executable = await _store.FindAsync(view.ArtifactId);
+        var binding = Assert.Single(executable!.RootActivity.InputBindings).Value;
+        Assert.Equal("Text", binding.InputKey);
+        Assert.True(binding.EffectivePolicy.IsSensitive);
     }
 
     [Fact]
@@ -530,6 +657,32 @@ public sealed class PublishWorkflowRequestHandlerTests
         WorkflowDefinitionVersionLayout? layout,
         params ActivityDefinitionVersion[] activityVersions)
     {
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var compiler = TestCompiler.Create(
+            versionStore,
+            new FakeActivityVersionStore(activityVersions.ToList()),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+        return Handler(layout, compiler, versionStore);
+    }
+
+    private (PublishWorkflowRequestHandler Handler, RecordingWorkflowExecutableCompiler Compiler) RecordingHandler(
+        WorkflowDefinitionVersion workflowVersion)
+    {
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var compiler = new RecordingWorkflowExecutableCompiler(TestCompiler.Create(
+            versionStore,
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create()));
+        return (Handler(layout: null, compiler, versionStore), compiler);
+    }
+
+    private PublishWorkflowRequestHandler Handler(
+        WorkflowDefinitionVersionLayout? layout,
+        IWorkflowExecutableCompiler compiler,
+        IWorkflowDefinitionVersionStore versionStore)
+    {
         var extractor = new WorkflowTriggerBindingExtractor([]);
         IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
         var reconciler = new PublicationProjectionReconciler(
@@ -538,13 +691,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             indexer,
             _bindingStore,
             TimeProvider.System);
-        var versionStore = new FakeVersionStore(workflowVersion);
         return new(
-            TestCompiler.Create(
-                versionStore,
-                new FakeActivityVersionStore(activityVersions.ToList()),
-                _activityStructureService,
-                TestWellKnownTypeRegistry.Create()),
+            compiler,
             _store,
             _referenceStore,
             extractor,
@@ -559,7 +707,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System),
             TimeProvider.System,
             workflowVersionStore: versionStore,
-            snapshotReviews: _snapshotReviews);
+            snapshotReviews: _snapshotReviews,
+            authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)));
     }
 
     private static WorkflowPublicationPreflightPlan SnapshotPlan() =>
@@ -583,7 +732,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         {
             Id = versionId,
             Definition = new WorkflowDefinition { Id = definitionId, Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
@@ -647,7 +796,10 @@ public sealed class PublishWorkflowRequestHandlerTests
                 ActivityTypeKey = activityTypeKey,
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = inputs
         };
@@ -680,5 +832,18 @@ public sealed class PublishWorkflowRequestHandlerTests
     {
         public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
             Task.FromResult(layout);
+    }
+
+    private sealed class RecordingWorkflowExecutableCompiler(IWorkflowExecutableCompiler inner) : IWorkflowExecutableCompiler
+    {
+        public List<WorkflowExecutableCompileRequest> Requests { get; } = [];
+
+        public ValueTask<WorkflowExecutable> CompileAsync(
+            WorkflowExecutableCompileRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return inner.CompileAsync(request, cancellationToken);
+        }
     }
 }

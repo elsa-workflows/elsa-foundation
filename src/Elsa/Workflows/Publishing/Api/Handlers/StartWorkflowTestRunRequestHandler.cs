@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core;
 using Elsa.Primitives.Identity;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -30,7 +31,13 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowTestRunStore testRunStore,
     IWorkflowStartDispatcher startDispatcher,
     IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IWorkflowDefinitionVersionStore? workflowVersionStore = null,
+    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null,
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+    IWorkflowTestScopeStore? testScopeStore = null,
+    IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
+    IPersistenceAccessContextAccessor? accessContextAccessor = null)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
 {
@@ -42,6 +49,10 @@ public sealed class StartWorkflowTestRunRequestHandler(
     private const string ArtifactPrefix = "artifact-";
     private const string DraftArtifactVersion = "draft";
 
+    /// <summary>
+    /// Preserves the original direct-construction surface with one shared process-local scope provider.
+    /// Host composition resolves the primary constructor and its configured replacement provider.
+    /// </summary>
     public StartWorkflowTestRunRequestHandler(
         IWorkflowExecutableCompiler compiler,
         IWorkflowExecutableStore executableStore,
@@ -50,7 +61,39 @@ public sealed class StartWorkflowTestRunRequestHandler(
         IWorkflowTestRunStore testRunStore,
         IWorkflowStartDispatcher startDispatcher,
         IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
-        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, rootWriteLeaseManager, TimeProvider.System)
+        : this(
+            compiler,
+            executableStore,
+            sourceReferenceStore,
+            layoutStore,
+            testRunStore,
+            startDispatcher,
+            rootWriteLeaseManager,
+            TimeProvider.System,
+            testScopeStore: TestRunCompatibilityScope.Store)
+    {
+    }
+
+    /// <summary>Preserves the injectable-time direct-construction surface with process-local scope state.</summary>
+    public StartWorkflowTestRunRequestHandler(
+        IWorkflowExecutableCompiler compiler,
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowDefinitionVersionLayoutStore layoutStore,
+        IWorkflowTestRunStore testRunStore,
+        IWorkflowStartDispatcher startDispatcher,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
+        TimeProvider timeProvider)
+        : this(
+            compiler,
+            executableStore,
+            sourceReferenceStore,
+            layoutStore,
+            testRunStore,
+            startDispatcher,
+            rootWriteLeaseManager,
+            timeProvider,
+            testScopeStore: TestRunCompatibilityScope.Store)
     {
     }
 
@@ -161,7 +204,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
         var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, cancellationToken);
         await rootWriteLeaseManager.ExecuteAsync(
-            executable.Identity.ArtifactId,
+            executable.Identity,
             $"test-run:{testRunId}",
             ct => sourceReferenceStore.SaveAsync(reference, ct),
             cancellationToken);
@@ -174,26 +217,61 @@ public sealed class StartWorkflowTestRunRequestHandler(
         // production runtime-API start path.
         var variables = VariableDeclarations.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
 
-        var dispatch = await startDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(
-                executable.Identity.ArtifactId,
-                RequestedBy,
-                metadata: new Dictionary<string, string>
-                {
-                    ["runtime.scope"] = "test-run",
-                    ["runtime.testRunId"] = testRunId,
-                    ["runtime.sourceReferenceId"] = reference.SourceReferenceId,
-                    ["runtime.sourceDefinitionId"] = executable.Identity.DefinitionId,
-                    ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
-                },
-                variables: variables,
-                inputs: inputs,
-                runKind: WorkflowRunKind.TestRun,
-                sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: reference.SourceReferenceId)),
-            WorkflowExecutableReferenceScope.TestRun,
-            cancellationToken: cancellationToken);
+        var partition = partitionAccessor?.Current ??
+                        new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+        var tenantId = accessContextAccessor?.Current.Scope?.Value;
+        var testScope = new WorkflowTestScope(testRunId, expiresAt, tenantId, partition);
+        var runtimeScopeStore = testScopeStore ?? TestRunCompatibilityScope.Store;
+        await runtimeScopeStore.CreateAsync(testScope, now, cancellationToken);
+
+        WorkflowExecutionStartDispatchResult dispatch;
+        try
+        {
+            dispatch = await startDispatcher.DispatchAsync(
+                new WorkflowExecutionStartDispatchRequest(
+                    artifactId: executable.Identity.ArtifactId,
+                    requestedBy: RequestedBy,
+                    workflowExecutionId: null,
+                    idempotencyKey: null,
+                    metadata: new Dictionary<string, string>
+                    {
+                        ["runtime.scope"] = "test-run",
+                        ["runtime.testRunId"] = testRunId,
+                        ["runtime.sourceReferenceId"] = reference.SourceReferenceId,
+                        ["runtime.sourceDefinitionId"] = executable.Identity.DefinitionId,
+                        ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
+                    },
+                    variables: variables,
+                    inputs: inputs,
+                    stimulusInput: null,
+                    triggerNodeId: null,
+                    runKind: WorkflowRunKind.TestRun,
+                    sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: reference.SourceReferenceId),
+                    provenanceRequirement: WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+                    parentWorkflowExecutionId: null,
+                    correlationId: null,
+                    tenantId: tenantId,
+                    partition: partition,
+                    authority: null,
+                    startAuthority: null,
+                    dispatchNestingDepth: 0,
+                    testScope: testScope),
+                WorkflowExecutableReferenceScope.TestRun,
+                cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            await runtimeScopeStore.CloseAsync(
+                new WorkflowTestScopeCloseRequest(testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow()),
+                CancellationToken.None);
+            throw;
+        }
 
         var status = MapStatus(dispatch.CommandDispatch.Status);
+        if (status == WorkflowTestRunStatus.DispatchRejected)
+            await runtimeScopeStore.CloseAsync(
+                new WorkflowTestScopeCloseRequest(testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow()),
+                cancellationToken);
         var testRun = new WorkflowTestRun(
             TestRunId: testRunId,
             DefinitionId: executable.Identity.DefinitionId,
@@ -254,6 +332,12 @@ public sealed class StartWorkflowTestRunRequestHandler(
     {
         var identity = executable.Identity;
         var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
+        var sourceState = source?.State ?? (workflowVersionStore is null
+            ? null
+            : (await workflowVersionStore.GetWithDefinitionAsync(identity.DefinitionVersionId, cancellationToken)).State);
+        var authoredInputs = sourceState is not null && authoredInputsSidecar is not null
+            ? authoredInputsSidecar.CopyFrom(sourceState)
+            : [];
 
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
@@ -268,7 +352,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
             PublishedAt: null,
             Scope: WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt: expiresAt,
-            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout));
+            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
+            AuthoredInputs: authoredInputs);
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

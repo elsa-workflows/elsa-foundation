@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -9,6 +10,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class ExecutableNode
 {
+    [JsonConstructor]
     public ExecutableNode(
         string executableNodeId,
         string authoredActivityId,
@@ -22,7 +24,9 @@ public sealed class ExecutableNode
         ExecutableActivityStructure? structure = null,
         ActivityContract? activityContract = null,
         WorkflowIntrinsicKind? intrinsicKind = null,
-        RuntimeVariableReference? intrinsicVariable = null)
+        RuntimeVariableReference? intrinsicVariable = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
+        string? descriptorSchemaVersion = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -33,6 +37,8 @@ public sealed class ExecutableNode
         ArgumentNullException.ThrowIfNull(metadata);
 
         var inputBindingSnapshot = inputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var outputCaptureSnapshot = (outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>())
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 
         if (intrinsicKind is not null && !Enum.IsDefined(intrinsicKind.Value))
             throw new ArgumentOutOfRangeException(nameof(intrinsicKind), intrinsicKind, "Workflow intrinsic kind is not defined.");
@@ -82,13 +88,24 @@ public sealed class ExecutableNode
                 throw new ArgumentException($"Input binding dictionary key '{inputName}' must match binding input name '{binding.InputName}'.", nameof(inputBindings));
         }
 
+        foreach (var (outputName, capture) in outputCaptureSnapshot)
+        {
+            if (!StringComparer.Ordinal.Equals(outputName, capture.OutputName))
+                throw new ArgumentException($"Output capture dictionary key '{outputName}' must match capture output name '{capture.OutputName}'.", nameof(outputCaptures));
+        }
+
         ExecutableNodeId = executableNodeId;
         AuthoredActivityId = authoredActivityId;
         ActivityType = activityType;
         ActivityTypeVersion = activityTypeVersion;
         DescriptorType = descriptorType;
+        DescriptorSchemaVersion = string.IsNullOrWhiteSpace(descriptorSchemaVersion)
+            ? RuntimeActivityDescriptor.InitialSchemaVersion
+            : descriptorSchemaVersion;
         DescriptorPayload = descriptorPayload.Clone();
+        Descriptor = new RuntimeActivityDescriptor(DescriptorType, DescriptorSchemaVersion, DescriptorPayload);
         InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindingSnapshot);
+        OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         ChildSlots = Array.AsReadOnly((childSlots ?? []).ToArray());
         Structure = structure;
@@ -97,13 +114,82 @@ public sealed class ExecutableNode
         IntrinsicVariable = intrinsicVariable;
     }
 
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures: null,
+            descriptorSchemaVersion: descriptor.SchemaVersion)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
+        IReadOnlyDictionary<string, string> metadata,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptor.SchemaVersion)
+    {
+    }
+
     public string ExecutableNodeId { get; }
     public string AuthoredActivityId { get; }
     public string ActivityType { get; }
     public string ActivityTypeVersion { get; }
+    [JsonIgnore]
+    public RuntimeActivityDescriptor Descriptor { get; }
     public string DescriptorType { get; }
+    public string DescriptorSchemaVersion { get; }
     public JsonElement DescriptorPayload { get; }
     public IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings { get; }
+    public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public IReadOnlyCollection<ExecutableChildSlot> ChildSlots { get; }
     public ExecutableActivityStructure? Structure { get; }

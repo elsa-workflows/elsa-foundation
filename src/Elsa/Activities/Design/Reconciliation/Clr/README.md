@@ -11,8 +11,9 @@ activity abstractions and the `[Version]` attribute it reads).
 
 - **`ClrActivityReconciliationSource`** — `IActivityReconciliationSource` with `SourceKind => "CLR"`.
   Its `Read` drives the scanner and emits one `ActivityVersionReconciliationModel` per activity, each
-  carrying `DescriptorType = typeof(ClrActivityDescriptor).FullName` and a `ClrActivityDescriptor`
-  wrapping the activity's stable alias (`TypeAliasConvention.CanonicalAlias(type)`).
+  carrying stable provider/consumer identity `elsa.clr-activity`, schema `1`, and a
+  `ClrActivityDescriptor` payload wrapping the activity's stable alias
+  (`TypeAliasConvention.CanonicalAlias(type)`).
 - **`ClrAssemblyScanner`** — reflection-only scanner (R5) built on `MetadataLoadContext` +
   `PathAssemblyResolver`. Discovers `IActivity` implementations by metadata, never loads author code
   into the execution context, and never pollutes the default `AssemblyLoadContext`. Resilient
@@ -66,6 +67,12 @@ shell.AddFeature(new ClrActivityReconciliationFeature
     Options = { FolderPath = "/path/to/activity/plugins" }
 });
 ```
+
+When the Publishing bridge is composed, one source-owned version is committed atomically as catalog
+version, provider-source authority, immutable executable template, publication, layout, and source
+reference. Reconciliation never reclassifies CLR-discovered content as Design-owned authoring. Repeating
+an identical scan is a no-op; if a matching catalog version predates publication, the same bridge heals
+the missing publication artifacts without changing the version identity.
 
 ## Options
 

@@ -32,9 +32,15 @@ public static class RuntimeMetadataKeys
     public const string CancellationReason = "runtime.cancellationReason";
     public const string ChildExecutableNodeId = "runtime.childExecutableNodeId";
     public const string ChildFaulted = "runtime.childFaulted";
+    public const string CausalActivityExecutionId = "runtime.causalActivityExecutionId";
+    public const string CausalExecutableNodeId = "runtime.causalExecutableNodeId";
+    public const string CausalIncidentId = "runtime.causalIncidentId";
+    public const string CausationKind = "runtime.causationKind";
     public const string CommandId = "runtime.commandId";
     public const string CommandKind = "runtime.commandKind";
     public const string CompletedChildActivityExecutionId = "runtime.completedChildActivityExecutionId";
+    public const string DispatchId = "runtime.dispatchId";
+    public const string ChildWorkflowExecutionId = "runtime.childWorkflowExecutionId";
     public const string CreateBookmarkSchedulerWorkItemId = "runtime.createBookmarkSchedulerWorkItemId";
     public const string ExecutableArtifactHash = "runtime.executableArtifactHash";
     public const string ExecutableArtifactId = "runtime.executableArtifactId";
@@ -52,6 +58,7 @@ public static class RuntimeMetadataKeys
     public const string InvokeSchedulerWorkItemId = "runtime.invokeSchedulerWorkItemId";
     public const string InvokeSkipped = "runtime.invokeSkipped";
     public const string OutputName = "runtime.outputName";
+    public const string StorageDriverKey = "runtime.storageDriverKey";
 
     /// <summary>
     /// Passive correlation identifier threaded through stimulus routing (W7). Stamped as metadata on bookmarks,
@@ -59,6 +66,7 @@ public static class RuntimeMetadataKeys
     /// engine owning a correlation subsystem. Absent when no correlation was supplied.
     /// </summary>
     public const string CorrelationId = "runtime.correlationId";
+    public const string WorkflowDispatchId = "runtime.workflowDispatchId";
 
     /// <summary>
     /// Operational-state metadata key carrying the highest execution-ownership fencing token ever issued for a
@@ -181,6 +189,16 @@ public static class RuntimeMetadataKeys
     public const string ParentCompletionReason = "runtime.parentCompletionReason";
     public const string ParentCompletionSchedulerWorkItemId = "runtime.parentCompletionSchedulerWorkItemId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
+    public const string PinnedArtifactVersion = "runtime.pinnedArtifactVersion";
+    public const string PinnedArtifactHash = "runtime.pinnedArtifactHash";
+    public const string SourceReferenceId = "runtime.sourceReferenceId";
+    public const string BoundaryInputName = "runtime.boundaryInputName";
+    public const string BoundaryExecutionScopeId = "runtime.boundaryExecutionScopeId";
+    public const string BoundaryValueRole = "runtime.boundaryValueRole";
+    public const string BoundaryReferenceKey = "runtime.boundaryReferenceKey";
+    public const string RetrySourceActivityExecutionId = "runtime.retrySourceActivityExecutionId";
+    public const string RetryReason = "runtime.retryReason";
+    public const string ScopeCancellationReason = "runtime.scopeCancellationReason";
     public const string Reason = "runtime.reason";
     public const string ResumeReason = "runtime.resumeReason";
     public const string ResumeSchedulerWorkItemId = "runtime.resumeSchedulerWorkItemId";

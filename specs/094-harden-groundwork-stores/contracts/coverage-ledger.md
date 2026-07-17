@@ -19,6 +19,46 @@ Each `behavioralBaseline` path means every discovered test case in that file at 
 
 Missing mandatory-provider evidence keeps the row incomplete. A memory-backed fixture is never provider or restart evidence.
 
+Provider evidence is a set of structured scenario records, not a list of free-form links. Every
+record identifies its ledger row, provider and provider version, topology, manifest fingerprint,
+execution path, independent-client count, result hash, outcome, and durable evidence location. A
+record that exercises a query shape also carries provider-native plan evidence; concurrency,
+failure-window, and restart records name the exact obligation they cover.
+
+The ledger's `groundworkVersion` must equal every pinned Groundwork package and `Groundwork.Tool`
+version. Provider identity, substrate/topology, scenario identity, and provider-driver execution path
+use the closed provider-conformance catalog. SQLite evidence is file-backed with distinct connections;
+SQL Server and PostgreSQL use real server containers; MongoDB uses a transaction-capable replica set
+or sharded cluster. `in-memory`, an arbitrary topology label, or an unrecognized execution route is
+invalid.
+
+Each scenario references a deterministic checked-in artifact path under `evidence/` plus its SHA-256
+digest. The artifact payload must exactly reproduce the structured ledger record, excluding only the
+artifact digest fields. Query scenarios additionally reference a digest-verified provider-native plan
+artifact. Missing, relocated, modified, or payload-mismatched artifacts fail the gate. Scenario IDs
+are limited to `ordinary-round-trip` and the query, concurrency, failure, and restart obligations
+declared by that row.
+
+For an `evidence-complete`, `performance-complete`, or `ready` row, all four providers must carry
+the same scenario identifiers, every declared query/concurrency/failure/restart obligation must be
+covered, every record must pass, and each scenario's public-result hash must agree across providers.
+Concurrency, failure-window, and restart evidence requires at least two independent clients. An
+arbitrary non-empty string, a memory-backed execution, or a provider record filed under a different
+provider cannot satisfy the gate.
+
+## PR-time evidence contract
+
+The `Groundwork fast gates` job in `.github/workflows/ci.yml` is the container-free pull-request authority for this ledger. It checks out the candidate merge commit, restores `tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj`, and runs the entire architecture test project in Release mode. Running the whole project intentionally avoids a test-name filter that could silently stop selecting a renamed or newly added ratchet.
+
+The job fails when any of these evidence classes regress:
+
+- JSON Schema conformance, the exact 32-row denominator, status transitions, or evidence completeness;
+- immutable `baselineRef` test-case continuity or its exact architect-approval ledger;
+- discovered contract, Groundwork registration, manifest/storage-unit, or #644/#660 authority reconciliation;
+- provider-neutral core dependency boundaries or the reviewed shrink-only EF surface.
+
+The job is container-free and does not create provider or restart evidence. SQLite, SQL Server, PostgreSQL, MongoDB, failure/restart, native-plan, temporary-oracle, and readiness claims remain owned by the fail-closed integration lanes; a row cannot advance to `evidence-complete` or `ready` merely because this fast gate passes.
+
 ## Allowed outcomes and states
 
 **Durable outcomes**: `ordinary-document`, `operational-store`, `specialized-primitive`, `external-authority-adapter`, `explicit-exclusion`.
@@ -44,7 +84,7 @@ Missing mandatory-provider evidence keeps the row incomplete. A memory-backed fi
 | `runtime-recurring-trigger-schedule` | `IRecurringTriggerScheduleStore` | Operational store | Scoped | #645 | Client filtering / schedule race | `recurring-schedule-selection` |
 | `runtime-checkpoint-commit` | `IRuntimeCheckpointCommitStore` | Specialized primitive | Scoped | #645 | Fence TOCTOU / process-local locks | `checkpoint-commit` |
 | `runtime-diagnostics-settings` | `IRuntimeDiagnosticsSettingsStore` | External authority adapter | Classified by #660 | #660 | Draft PR not landed | Diagnostics workload owned by #660/#646 |
-| `runtime-post-commit-outbox` | `IRuntimePostCommitOutboxStore` | Operational store | Scoped | #645 | No atomic claim/stale-ack token | `outbox-drain` |
+| `runtime-post-commit-outbox` | `IRuntimePostCommitOutboxStore`, `IPostCommitOutboxLookupStore` | Operational store | Scoped | #645 | No atomic claim/stale-ack token | `outbox-drain` |
 | `runtime-scheduler-state` | `ISchedulerStateStore` | Operational store | Scoped | #645 | Provider/restart/OCC evidence | Recovery representative |
 | `runtime-executable-source-reference` | `IWorkflowExecutableSourceReferenceStore` | Ordinary document + bounded route | Scoped | #645 | Client filtering / matrix | Trigger/bookmark representative |
 | `runtime-workflow-executable` | `IWorkflowExecutableStore` | Ordinary document | Scoped | #645 | Provider/restart/OCC evidence | Checkpoint representative |
@@ -82,10 +122,13 @@ The implementation-phase validator must fail when:
 - a discovered durable contract or registered memory-only store has no row;
 - a Groundwork implementation registration has no manifest/storage unit;
 - a row claims `ready` without every mandatory provider and restart scenario;
+- provider evidence is unstructured, incomplete, misfiled, non-passing, single-client where
+  independent clients are required, or produces non-equivalent public-result hashes;
 - a scale-bearing query lacks a finite bound or native evidence;
 - an explicitly global row lacks its scope reason, or a privileged access policy lacks its authorization reason and audit scenario;
 - a capability has no active-path scenario;
 - a #644/#660 authority row points to a local parallel document;
+- a #644/#660 composition link changes its reviewed relationship (`#644` adapter-only, `#660` linked-source-evidence);
 - the EF surface grows relative to the baseline commit;
 - a baseline test objective disappears without a recorded architect approval.
 - a logic-bearing persistence registration has an undocumented non-scoped lifetime or a lifetime test observes scope/mutable-state leakage between request scopes.

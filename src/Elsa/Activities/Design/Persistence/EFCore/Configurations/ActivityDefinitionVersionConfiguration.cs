@@ -18,7 +18,13 @@ public sealed class ActivityDefinitionVersionConfiguration : IEntityTypeConfigur
         builder.Property(x => x.Version).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.SemVerSortKey).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-        builder.Property(x => x.DescriptorType).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Ignore(x => x.ProviderKey);
+        builder.Ignore(x => x.ProviderSchemaVersion);
+        builder.Ignore(x => x.ConsumerKey);
+        builder.Ignore(x => x.ConsumerSchemaVersion);
+#pragma warning disable CS0618 // Compile-only mapping for the retired EF schema.
+        builder.Property(x => x.DescriptorType).HasColumnName("DescriptorType").Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+#pragma warning restore CS0618
         builder.Property(x => x.DescriptorPayloadSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.InputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.OutputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);

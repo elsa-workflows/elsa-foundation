@@ -105,6 +105,24 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ResolvesTemplateLocalTargetToCanonicalPlacedTarget()
+    {
+        const string canonicalId = "resume-placed-instance-1";
+        await _executableStore.SaveAsync(NewExecutable(
+            canonicalResumeTargetId: canonicalId,
+            localResumeTargetId: "resume-target:delivery"));
+        await _activityStateStore.SaveAsync(NewRunningState());
+
+        await NewHandler().HandleAsync(NewCreateBookmarkWorkItem());
+
+        var bookmark = await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1");
+        Assert.NotNull(bookmark);
+        Assert.Equal(canonicalId, bookmark.ResumeTargetId);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(canonicalId, state!.Metadata[RuntimeMetadataKeys.ResumeTargetId]);
+    }
+
+    [Fact]
     public async Task HandleAsync_KeepsBookmarkIdsDuplicateFreeOnReplay()
     {
         await _executableStore.SaveAsync(NewExecutable());
@@ -484,17 +502,20 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
 
     private static WorkflowExecutable NewExecutable(
         bool includeResumeTarget = true,
-        WorkflowExecutableIdentity? identity = null)
+        WorkflowExecutableIdentity? identity = null,
+        string canonicalResumeTargetId = "resume-target:delivery",
+        string? localResumeTargetId = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var resumeTargets = includeResumeTarget
             ? new Dictionary<string, WorkflowExecutableResumeTarget>
             {
-                ["resume-target:delivery"] = new(
-                    ResumeTargetId: "resume-target:delivery",
+                [canonicalResumeTargetId] = new(
+                    ResumeTargetId: canonicalResumeTargetId,
                     ExecutableNodeId: "node-wait",
                     HandlerKey: "test-handler",
-                    Metadata: new Dictionary<string, string>())
+                    Metadata: new Dictionary<string, string>(),
+                    LocalResumeTargetId: localResumeTargetId)
             }
             : new Dictionary<string, WorkflowExecutableResumeTarget>();
 

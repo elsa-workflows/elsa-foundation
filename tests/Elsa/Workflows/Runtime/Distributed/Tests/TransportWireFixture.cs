@@ -40,7 +40,8 @@ internal static class TransportWireFixture
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: FixedTimestamp,
             sequence: 1,
-            metadata: new Dictionary<string, string> { ["origin"] = "node-b" });
+            metadata: new Dictionary<string, string> { ["origin"] = "node-b" },
+            partition: new WorkflowExecutionPartition("tenant-blue"));
 
         return new ExecutionCommandTransportItem(
             transportItemId: "transport:wf-1:1",

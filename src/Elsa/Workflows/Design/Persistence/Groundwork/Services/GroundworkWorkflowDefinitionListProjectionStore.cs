@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -17,16 +18,35 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
     private readonly GroundworkWorkflowDefinitionDraftDocumentStore _drafts;
     private readonly GroundworkReadStore<WorkflowDefinitionVersion> _versions;
 
-    public GroundworkWorkflowDefinitionListProjectionStore(IDocumentStore store, IPayloadSerializer payloadSerializer)
+    public GroundworkWorkflowDefinitionListProjectionStore(
+        IDocumentStore store,
+        IBoundedDocumentStore boundedStore,
+        IPayloadSerializer payloadSerializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
     {
         var serialization = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
-        _drafts = new GroundworkWorkflowDefinitionDraftDocumentStore(store, serialization);
+        _drafts = new GroundworkWorkflowDefinitionDraftDocumentStore(store, serialization, accessContextAccessor, boundedStore);
         _versions = new GroundworkReadStore<WorkflowDefinitionVersion>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            WorkflowsDesignStorageManifest.ListAllQuery,
+            WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
-            serialization);
+            serialization,
+            boundedStore);
+    }
+
+    public GroundworkWorkflowDefinitionListProjectionStore(
+        IDocumentStore store,
+        IPayloadSerializer payloadSerializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(
+            store,
+            store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+                "Workflow-definition projection queries require an admitted bounded document-store runtime."),
+            payloadSerializer,
+            accessContextAccessor)
+    {
     }
 
     public async Task<IReadOnlyList<WorkflowDefinitionListProjection>> ListByDefinitionIdsAsync(

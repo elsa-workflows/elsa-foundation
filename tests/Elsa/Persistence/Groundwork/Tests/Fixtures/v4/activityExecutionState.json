@@ -1,29 +1,24 @@
 {
+  "attempt": {
+    "attemptNumber": 1,
+    "firstAttemptActivityExecutionId": "ae-1",
+    "previousAttemptActivityExecutionId": null
+  },
+  "executionScopeId": "scope-1",
   "state": {
     "aggregateFaultCount": 0,
-    "attempts": [
-      {
-        "attemptId": "attempt-1",
-        "endedAt": null,
-        "incidentId": null,
-        "invocationId": "ae-1",
-        "ordinal": 1,
-        "reason": 0,
-        "startedAt": "1970-01-01T00:00:00\u002B00:00",
-        "transitionKind": null,
-        "triggerDeliveryId": null
-      }
-    ],
+    "attempt": {
+      "attemptNumber": 1,
+      "firstAttemptActivityExecutionId": "ae-1",
+      "previousAttemptActivityExecutionId": null
+    },
+    "attempts": null,
     "bookmarkIds": [],
     "branchId": null,
     "callStackDepth": 0,
     "completedAt": null,
     "completion": null,
-    "contractIdentity": {
-      "activityTypeKey": "Elsa.Log",
-      "contractVersion": "1.0.0",
-      "schemaFingerprint": "sha256:activity-contract"
-    },
+    "contractIdentity": null,
     "documentVersion": 2,
     "execution": {
       "activityExecutionId": "ae-1",
@@ -33,38 +28,12 @@
       "executableNodeId": "node-ae-1",
       "workflowExecutionId": "wf-1"
     },
+    "executionScopeId": "scope-1",
     "executionSequence": 1,
     "fault": null,
     "faultCount": 0,
     "incidentIds": [],
-    "inputSnapshot": {
-      "bindingFingerprint": "sha256:bindings",
-      "contractFingerprint": "sha256:activity-contract",
-      "invocationId": "ae-1",
-      "materializedAt": "1970-01-01T00:00:00\u002B00:00",
-      "values": {
-        "message": {
-          "externalReference": null,
-          "inlineValue": "hello",
-          "policy": {
-            "isSensitive": false,
-            "lifecycle": 1,
-            "metadata": {},
-            "redactionMode": null,
-            "requiresEncryption": false,
-            "retentionPolicy": null,
-            "storage": 1
-          },
-          "presence": 2,
-          "type": {
-            "alias": "String",
-            "collectionKind": "Single",
-            "schema": null,
-            "schemaVersion": null
-          }
-        }
-      }
-    },
+    "inputSnapshot": null,
     "invocationId": "ae-1",
     "iterationFrameRequest": null,
     "iterationId": null,
@@ -75,9 +44,14 @@
     "parentActivityExecutionId": null,
     "privateState": null,
     "provenance": {
+      "attempt": {
+        "attemptNumber": 1,
+        "firstAttemptActivityExecutionId": "ae-1",
+        "previousAttemptActivityExecutionId": null
+      },
       "branchId": null,
       "executionPathId": null,
-      "executionScopeId": null,
+      "executionScopeId": "scope-1",
       "iterationId": null,
       "metadata": {},
       "parentActivityExecutionId": null,
@@ -90,15 +64,9 @@
     "startedAt": "1970-01-01T00:00:00\u002B00:00",
     "status": 1,
     "subStatus": null,
-    "triggerDeliveries": [],
-    "triggerRegistrations": [],
-    "valueFlowCompatibility": {
-      "incompatibilityCode": null,
-      "isCompatible": true,
-      "reason": null,
-      "sourceVersion": 2,
-      "targetVersion": 2
-    },
+    "triggerDeliveries": null,
+    "triggerRegistrations": null,
+    "valueFlowCompatibility": null,
     "variableFrame": null
   },
   "workflowExecutionId": "wf-1"

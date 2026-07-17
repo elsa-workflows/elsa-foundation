@@ -1,7 +1,9 @@
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 
@@ -13,12 +15,10 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Sequence allocation.</b> <see cref="SendAsync"/> allocates max+1 over the execution's items and creates the
-/// item document with <c>ExpectedVersion</c> = 0 (create-only). Because the document id embeds the sequence, two
-/// concurrent senders that allocate the same number collide on the same id and the provider's storage layer refuses
-/// the loser, which re-reads and takes the next sequence — per-execution sequences are strictly unique and
-/// monotonic, enforced by the store, never trusted from memory. Sequential sends from one node observe their own
-/// writes, so per-sender FIFO holds; the drain order is deterministic by <c>(Sequence, TransportItemId)</c>.
+/// <b>Sequence allocation.</b> <see cref="SendAsync"/> advances one per-execution stream-head document under
+/// provider-level <c>ExpectedVersion</c> compare-and-swap, then atomically commits the advanced head and create-only
+/// command item in one document unit of work. The transport never scans the execution backlog to discover max
+/// sequence; contention is decided by the stream-head CAS, and losers re-read the head and retry.
 /// </para>
 /// <para>
 /// <b>Lease/ack.</b> Delivery is at-least-once with ack-based visibility leases, exactly like the in-memory
@@ -29,23 +29,29 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// <c>workflowExecutionId</c> and constant collection partition for the declared indexes.
 /// </para>
 /// </remarks>
-public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : IExecutionCommandTransport
+public sealed class GroundworkExecutionCommandTransport(
+    IDocumentStore store,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null) : IExecutionCommandTransport
 {
     private const string Kind = DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind;
+    private const string StreamHeadKind = DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind;
     private const int MaxCreateAttempts = 16;
+
+    private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+        $"Command-transport queries for '{Kind}' require an admitted bounded document-store runtime.");
 
     public async ValueTask<ExecutionCommandTransportItem> SendAsync(string workflowExecutionId, WorkflowExecutionCommandEnvelope envelope, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(envelope);
         cancellationToken.ThrowIfCancellationRequested();
+        accessContextAccessor.Current.EnsureScope(new PersistenceScope(envelope.Partition.Value));
 
         for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
         {
-            var items = await LoadItemsAsync(workflowExecutionId, cancellationToken);
-            var sequence = items.Count == 0 ? 1 : items.Max(entry => entry.Item.Sequence) + 1;
+            var (streamHeadId, sequence, streamHeadExpectedVersion) = await LoadNextSequenceAsync(workflowExecutionId, cancellationToken);
             var transportItemId = ComposeTransportItemId(workflowExecutionId, sequence);
-
             var item = new ExecutionCommandTransportItem(
                 transportItemId: transportItemId,
                 workflowExecutionId: workflowExecutionId,
@@ -53,10 +59,26 @@ public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : 
                 sequence: sequence,
                 enqueuedAt: now);
 
-            // Create-only (ExpectedVersion 0): a concurrent sender that allocated the same sequence collides on
-            // the same document id and the provider's storage layer refuses the loser — no command can be lost to
-            // a silent overwrite, and per-execution sequences stay strictly unique.
-            var result = await store.SaveAsync(
+            await using var unitOfWork = await store.BeginAsync(DocumentCommitScope.Of(StreamHeadKind, Kind), cancellationToken);
+            var headSave = await unitOfWork.SaveAsync(
+                new SaveDocumentRequest(
+                    StreamHeadKind,
+                    streamHeadId,
+                    DistributedGroundworkStorageManifest.SchemaVersion,
+                    DistributedGroundworkDocuments.Serialize(new StreamHeadDocument(StreamHeadKind, workflowExecutionId, sequence)),
+                    ExpectedVersion: streamHeadExpectedVersion),
+                cancellationToken);
+            if (headSave.Status != DocumentStoreWriteStatus.Saved)
+            {
+                await unitOfWork.RollbackAsync(cancellationToken);
+                if (IsSequenceContention(headSave.Status))
+                    continue;
+
+                throw new InvalidOperationException(
+                    $"Advancing command stream head '{streamHeadId}' failed with status '{headSave.Status}'.");
+            }
+
+            var itemSave = await unitOfWork.SaveAsync(
                 new SaveDocumentRequest(
                     Kind,
                     transportItemId,
@@ -64,16 +86,37 @@ public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : 
                     DistributedGroundworkDocuments.Serialize(new TransportItemDocument(Kind, workflowExecutionId, item)),
                     ExpectedVersion: 0),
                 cancellationToken);
+            if (itemSave.Status != DocumentStoreWriteStatus.Saved)
+            {
+                await unitOfWork.RollbackAsync(cancellationToken);
+                throw new InvalidOperationException(
+                    $"Creating command transport item '{transportItemId}' after stream-head allocation failed with status '{itemSave.Status}'.");
+            }
 
-            if (result.Status == DocumentStoreWriteStatus.Saved)
-                return item;
-
-            // A concurrent sender created this sequence first; re-read the inbox and take the next one.
+            await unitOfWork.CommitAsync(cancellationToken);
+            return item;
         }
 
         throw new InvalidOperationException(
-            $"Sending a command to workflow execution '{workflowExecutionId}' did not settle after {MaxCreateAttempts} sequence-allocation attempts.");
+            $"Sending a command to workflow execution '{workflowExecutionId}' did not settle after {MaxCreateAttempts} stream-head compare-and-swap attempts.");
     }
+
+    private async Task<(string StreamHeadId, long Sequence, long ExpectedVersion)> LoadNextSequenceAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        var streamHeadId = ComposeStreamHeadId(workflowExecutionId);
+        var envelope = await store.LoadAsync(StreamHeadKind, streamHeadId, cancellationToken);
+        if (envelope is null)
+            return (streamHeadId, 1, 0);
+
+        var head = DistributedGroundworkDocuments.Deserialize<StreamHeadDocument>(envelope);
+        if (!string.Equals(head.WorkflowExecutionId, workflowExecutionId, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Command stream head '{streamHeadId}' belongs to workflow execution '{head.WorkflowExecutionId}', not '{workflowExecutionId}'.");
+
+        return (streamHeadId, head.LastSequence + 1, envelope.Version);
+    }
+
+    private static bool IsSequenceContention(DocumentStoreWriteStatus status) =>
+        status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound;
 
     public async ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(string workflowExecutionId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, int maxItems, CancellationToken cancellationToken = default)
     {
@@ -150,11 +193,16 @@ public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : 
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(Kind, DistributedGroundworkStorageManifest.ByCollectionIndex, Kind),
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                Kind,
+                DistributedGroundworkStorageManifest.ListAllQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    DistributedGroundworkStorageManifest.CollectionField,
+                    Kind))]),
             cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(envelope => DistributedGroundworkDocuments.Deserialize<TransportItemDocument>(envelope).Item)
             .Where(item => item.IsVisible(now))
             .Select(item => item.WorkflowExecutionId)
@@ -173,11 +221,16 @@ public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : 
 
     private async Task<IReadOnlyList<(ExecutionCommandTransportItem Item, long Version)>> LoadItemsAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(Kind, DistributedGroundworkStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId),
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                Kind,
+                DistributedGroundworkStorageManifest.ListByWorkflowExecutionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    DistributedGroundworkStorageManifest.WorkflowExecutionIdField,
+                    workflowExecutionId))]),
             cancellationToken);
 
-        return envelopes
+        return result.Documents
             .Select(envelope => (DistributedGroundworkDocuments.Deserialize<TransportItemDocument>(envelope).Item, envelope.Version))
             .OrderBy(entry => entry.Item.Sequence)
             .ThenBy(entry => entry.Item.TransportItemId, StringComparer.Ordinal)
@@ -189,6 +242,11 @@ public sealed class GroundworkExecutionCommandTransport(IDocumentStore store) : 
     // forging another execution's item id; case is preserved because execution ids are ordinal.
     private static string ComposeTransportItemId(string workflowExecutionId, long sequence) =>
         $"transport:{workflowExecutionId.Replace("%", "%25").Replace(":", "%3A")}:{sequence}";
+
+    private static string ComposeStreamHeadId(string workflowExecutionId) =>
+        $"transport-head:{workflowExecutionId.Replace("%", "%25").Replace(":", "%3A")}";
+
+    private sealed record StreamHeadDocument(string Collection, string WorkflowExecutionId, long LastSequence);
 
     // The lifted workflowExecutionId and constant collection partition serve the declared indexes; the nested item
     // is the frozen v1 executionCommandTransport wire shape, unchanged.

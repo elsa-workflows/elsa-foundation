@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -102,6 +103,58 @@ public sealed class RuntimeSchedulerWorkQueueTests
         Assert.Equal("work-1", workItem.Payload!.Value.GetProperty("workItemId").GetString());
         Assert.Equal("test", workItem.CommandMetadata["source"]);
         Assert.Equal("in-process", workItem.EnvelopeMetadata["transport"]);
+    }
+
+    [Fact]
+    public async Task WorkflowSchedulerCommandProcessor_ProjectsBookmarkResumeIntoItsActivityScope()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var states = new InMemoryActivityExecutionStateStore();
+        await states.SaveAsync(new ActivityExecutionState(
+            new ActivityExecution("child", "wfexec-1", "node-child", "authored-child", "test", "1"),
+            ActivityExecutionStatus.Suspended,
+            null,
+            1,
+            _now,
+            _now,
+            null,
+            "outer",
+            "outer",
+            null,
+            null,
+            ActivitySchedulingProvenance.From("wfexec-1", "outer", "outer", null, null, null, "outer", "test"),
+            null,
+            [],
+            [],
+            0,
+            0,
+            new Dictionary<string, string>(),
+            ExecutionScopeId: "outer"));
+        var processor = new WorkflowSchedulerCommandRouter(
+            queue,
+            DeferredSchedulerDrainPolicy.Instance,
+            new WorkflowDrainOrchestrator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []),
+            new FixedTimeProvider(_now),
+            states);
+        var command = new WorkflowExecutionCommand(
+            "command-resume",
+            "wfexec-1",
+            WorkflowExecutionCommandKind.ResumeBookmark,
+            _now,
+            Payload: null,
+            Metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.ActivityExecutionId] = "child" });
+        var envelope = new WorkflowExecutionCommandEnvelope(
+            "envelope-resume",
+            "wfexec-1",
+            command,
+            "wfexec-1:resume",
+            WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            _now);
+
+        await processor.ProcessAsync(envelope);
+
+        var workItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal("outer", workItem.ExecutionScopeId);
     }
 
     [Fact]

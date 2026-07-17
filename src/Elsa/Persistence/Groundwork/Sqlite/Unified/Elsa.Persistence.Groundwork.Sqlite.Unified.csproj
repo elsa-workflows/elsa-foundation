@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
-    <ProjectReference Include="..\..\..\..\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
   </ItemGroup>
 
 </Project>

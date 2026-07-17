@@ -117,8 +117,10 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         // Durable state remains valid (review-fix strengthening): the run persisted, its state row loads, and the
         // endpoint's captured result survived the aborted wait — the instance continues per normal runtime
         // semantics rather than merely still being counted.
-        var execution = await _fixture.SingleWorkflowExecutionAsync();
-        var capturedResult = await _fixture.ReadResultProjectionAsync(execution.WorkflowExecutionId, "Request");
+        var (_, capturedResult) = await _fixture.WaitForSingleWorkflowExecutionWithResultProjectionAsync(
+            "Request",
+            "sync-slow-result",
+            TimeSpan.FromSeconds(5));
         Assert.Equal(JsonValueKind.Object, capturedResult.ValueKind);
     }
 

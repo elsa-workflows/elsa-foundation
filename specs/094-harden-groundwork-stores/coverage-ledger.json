@@ -2,6 +2,7 @@
   "$schema": "./contracts/coverage-ledger.schema.json",
   "schemaVersion": 1,
   "feature": "094-harden-groundwork-stores",
+  "groundworkVersion": "0.0.1-preview.60",
   "baselineRef": "c9aa5fd8f7cfa6c86b2f37885a2446f3f4b82103",
   "mandatoryProviders": [
     "sqlite",
@@ -9,21 +10,89 @@
     "postgresql",
     "mongodb"
   ],
+  "compositionEvidence": {
+    "evidenceId": "host-selection-all32",
+    "outcome": "pass",
+    "selectedFeatureIdentities": [
+      "elsa-activities-design",
+      "elsa-identity",
+      "elsa-secrets",
+      "elsa-workflows-design",
+      "elsa-workflows-publishing",
+      "elsa-workflows-runtime",
+      "elsa-workflows-runtime-distributed"
+    ],
+    "coveredEntryIds": [
+      "runtime-activity-execution-inspection",
+      "runtime-activity-execution-state",
+      "runtime-bookmark-state",
+      "runtime-durable-timer",
+      "runtime-durable-value-state",
+      "runtime-execution-liveness",
+      "runtime-incident-state",
+      "runtime-recurring-trigger-schedule",
+      "runtime-checkpoint-commit",
+      "runtime-diagnostics-settings",
+      "runtime-post-commit-outbox",
+      "runtime-scheduler-state",
+      "runtime-executable-source-reference",
+      "runtime-workflow-executable",
+      "runtime-workflow-execution-state",
+      "runtime-workflow-hold-state",
+      "runtime-scheduler-poison",
+      "runtime-scheduler-work-queue",
+      "runtime-trigger-binding",
+      "runtime-publication-projection-state",
+      "iam-user",
+      "iam-role",
+      "iam-application",
+      "iam-credential",
+      "iam-external-identity",
+      "iam-claim-mapping",
+      "iam-provider-configuration-tenant",
+      "iam-provider-configuration-global",
+      "iam-tenant-membership",
+      "secrets-repository",
+      "distributed-execution-placement",
+      "distributed-command-transport"
+    ],
+    "externalAuthorityLinks": [
+      {
+        "authority": "#644",
+        "relationship": "adapter-only",
+        "coverageRows": [
+          "iam-user",
+          "iam-role",
+          "iam-external-identity"
+        ]
+      },
+      {
+        "authority": "#660",
+        "relationship": "linked-source-evidence",
+        "coverageRows": [
+          "runtime-diagnostics-settings"
+        ]
+      }
+    ],
+    "artifact": "evidence/composition/host-selection-all32.json",
+    "artifactSha256": "7aed181584844633ffd66e483c1afb2eef5548ba7a5e49da4184246029c4c9c0"
+  },
   "entries": [
     {
       "id": "runtime-activity-execution-inspection",
       "family": "runtime",
-      "contract": "IActivityExecutionInspectionStore; IActivityExecutionInspectionWriter",
+      "contract": "IActivityExecutionInspectionStore; IActivityExecutionInspectionWriter; IActivityExecutionHierarchyStore; IActivityExecutionHierarchyWriter",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
       "performanceWorkload": "not-hot-path",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "find-by-workflow-and-activity",
-        "list-summaries-by-workflow-bounded"
+        "list-summaries-by-workflow-bounded",
+        "list-descendants-by-parent-bounded"
       ],
       "concurrencySemantics": [
         "expected-version-save",
@@ -50,17 +119,18 @@
       "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkActivityExecutionInspectionStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkActivityExecutionHierarchyStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
       ]
     },
     {
       "id": "runtime-activity-execution-state",
       "family": "runtime",
-      "contract": "IActivityExecutionStateStore",
+      "contract": "IActivityExecutionStateStore; IActivityScopeCleanupStore",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
       "performanceWorkload": "checkpoint-commit",
       "accessPolicy": "ordinary",
@@ -104,13 +174,15 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Scale-bearing lookup still relies on incomplete bounded-route evidence.",
       "performanceWorkload": "bookmark-lookup",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "find-by-workflow-and-bookmark",
-        "list-by-workflow-bounded"
+        "list-by-workflow-bounded",
+        "list-by-stimulus-and-type-bounded",
+        "list-by-stimulus-type-bounded"
       ],
       "concurrencySemantics": [
         "expected-version-save",
@@ -138,6 +210,7 @@
       "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkBookmarkStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/ElsaRuntimeStorageManifestTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
       ]
     },
@@ -192,7 +265,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
       "performanceWorkload": "checkpoint-commit",
       "accessPolicy": "ordinary",
@@ -284,7 +357,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Create-once and revision behavior lacks race/restart evidence.",
       "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",
@@ -327,7 +400,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Due and publication queries filter client-side and schedule transitions race.",
       "performanceWorkload": "recurring-schedule-selection",
       "accessPolicy": "ordinary",
@@ -372,7 +445,7 @@
       "outcome": "specialized-primitive",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Fence validation has a TOCTOU window and correctness relies on process-local locks.",
       "performanceWorkload": "checkpoint-commit",
       "accessPolicy": "ordinary",
@@ -453,26 +526,37 @@
     {
       "id": "runtime-post-commit-outbox",
       "family": "runtime",
-      "contract": "IRuntimePostCommitOutboxStore",
+      "contract": "IRuntimePostCommitOutboxStore; IPostCommitOutboxLookupStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore; IWorkflowDispatchAdmissionStore; IWorkflowDispatchCancellationStore; IWorkflowDispatchRedriveStore; IWorkflowTestScopeStore; IWorkflowTestScopeAdmissionStore; IWorkflowTestScopeCleanupStore",
       "outcome": "operational-store",
       "scope": "tenant-scoped",
-      "authority": "#645",
+      "authority": "#682",
       "status": "planned",
       "initialGap": "Deliverable reads do not claim atomically and completion has no stale-ack token.",
       "performanceWorkload": "outbox-drain",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "claim-deliverable-bounded-by-due-order",
-        "find-by-outbox-id"
+        "find-by-outbox-id",
+        "find-dispatch-by-id",
+        "list-dispatch-by-parent-child-status-bounded",
+        "find-test-scope-by-id",
+        "list-expired-or-closing-test-scopes-bounded",
+        "list-dispatch-by-exact-test-scope-bounded",
+        "redrive-dispatch-and-linked-failed-final-outbox-by-id"
       ],
       "concurrencySemantics": [
         "create-only-intent",
         "expected-version-claim",
         "claim-token-completion",
         "stale-acknowledgement-rejection",
-        "conditional-retry"
+        "conditional-retry",
+        "dispatch-identity-and-lifecycle-cas",
+        "test-scope-lifecycle-and-admission-fence",
+        "detached-scope-cleanup-and-cancel-outbox-atomicity",
+        "checkpoint-bundle-write",
+        "generation-and-fence-advancing-redrive"
       ],
-      "atomicBoundary": "Each claim/completion/retry is one expected-version transition; pending items join checkpoint commit atomically.",
+      "atomicBoundary": "The #678 claim/fencing foundation and #681 recovery boundary are extended by #682: pending outbox, dispatch, and test-scope state join checkpoint commit atomically; child-start admission is fenced against scope closure; detached cleanup marks or cancels the dispatch and commits deterministic child-cancel responsibility in one cross-unit transaction; #681 failure projection and authorized redrive retain their existing atomic boundaries.",
       "failureWindows": [
         "before-provider-decision",
         "during-provider-decision",
@@ -494,6 +578,13 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxContinuityTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchCancellationTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchRedriveTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTestScopeTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/DispatchWorkflowDeliveryRecoveryCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDispatchCancellationCheckpointTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
       ]
     },
@@ -504,7 +595,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Conditional transition and restart evidence is incomplete.",
       "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",
@@ -543,11 +634,11 @@
     {
       "id": "runtime-executable-source-reference",
       "family": "runtime",
-      "contract": "IWorkflowExecutableSourceReferenceStore",
+      "contract": "IWorkflowExecutableSourceReferenceStore; IWorkflowExecutableSourceReferenceWriter",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Source-reference query shapes lack complete bounded-route/provider evidence.",
       "performanceWorkload": "trigger-binding-stimulus-lookup",
       "accessPolicy": "ordinary",
@@ -584,23 +675,25 @@
       "deliveryOwner": "#645/boundary-7-bounded-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutableStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/ElsaRuntimeStorageManifestTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionRetentionTests.cs"
       ]
     },
     {
       "id": "runtime-workflow-executable",
       "family": "runtime",
-      "contract": "IWorkflowExecutableStore",
+      "contract": "IWorkflowExecutableStore; IExecutableActivityTemplateStore; IExecutableActivityTemplateWriter",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
       "performanceWorkload": "checkpoint-commit",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "find-by-artifact",
-        "list-bounded"
+        "list-bounded",
+        "find-template-by-hash"
       ],
       "concurrencySemantics": [
         "create-only-artifact",
@@ -629,6 +722,7 @@
       "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutableStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkExecutableActivityTemplateStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointRootWriteLeaseTests.cs"
       ]
     },
@@ -686,7 +780,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Conditional hold transition and recovery evidence is incomplete.",
       "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",
@@ -729,7 +823,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "missing",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists; the current durable outcome is memory-only.",
       "performanceWorkload": "queue-drain",
       "accessPolicy": "ordinary",
@@ -741,7 +835,7 @@
         "create-only-or-expected-version-record",
         "conditional-redrive-link"
       ],
-      "atomicBoundary": "One poison record and its failed-work identity/retry relationship are committed together.",
+      "atomicBoundary": "One poison record and its failed-work identity/retry disposition are committed together.",
       "failureWindows": [
         "before-provider-decision",
         "during-provider-decision",
@@ -761,6 +855,7 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerPoisonStoreTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs"
       ]
     },
@@ -817,7 +912,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Some publication/stimulus query and activation behavior is client-side or race-prone.",
       "performanceWorkload": "trigger-binding-stimulus-lookup",
       "accessPolicy": "ordinary",
@@ -863,7 +958,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "The shared internal projection authority and conditional activation behavior need explicit evidence.",
       "performanceWorkload": "recurring-schedule-selection",
       "accessPolicy": "ordinary",
@@ -903,7 +998,7 @@
     {
       "id": "iam-user",
       "family": "iam",
-      "contract": "IUserStore",
+      "contract": "IUserStore; IRevisionAwareUserStore",
       "outcome": "external-authority-adapter",
       "scope": "tenant-scoped",
       "authority": "#644",
@@ -940,6 +1035,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
@@ -948,7 +1045,7 @@
     {
       "id": "iam-role",
       "family": "iam",
-      "contract": "IRoleStore",
+      "contract": "IRoleStore; IRevisionAwareRoleStore",
       "outcome": "external-authority-adapter",
       "scope": "tenant-scoped",
       "authority": "#644",
@@ -985,6 +1082,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
@@ -997,7 +1096,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "missing",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "accessPolicy": "ordinary",
@@ -1029,6 +1128,7 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-6-iam-secrets",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
       ]
     },
@@ -1039,7 +1139,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "missing",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "accessPolicy": "ordinary",
@@ -1077,7 +1177,7 @@
     {
       "id": "iam-external-identity",
       "family": "iam",
-      "contract": "IExternalIdentityStore",
+      "contract": "IExternalIdentityStore; IRevisionAwareExternalIdentityStore",
       "outcome": "external-authority-adapter",
       "scope": "tenant-scoped",
       "authority": "#644",
@@ -1113,6 +1213,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
@@ -1121,11 +1223,11 @@
     {
       "id": "iam-claim-mapping",
       "family": "iam",
-      "contract": "IClaimMappingStore",
+      "contract": "IClaimMappingStore; IRevisionAwareClaimMappingStore",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "missing",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "accessPolicy": "ordinary",
@@ -1156,17 +1258,19 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-6-iam-secrets",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkRevisionContractTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
       ]
     },
     {
       "id": "iam-provider-configuration-tenant",
       "family": "iam",
-      "contract": "IProviderConfigurationStore tenant path",
+      "contract": "IProviderConfigurationStore tenant path; IRevisionAwareProviderConfigurationStore tenant path",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "missing",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "accessPolicy": "ordinary",
@@ -1198,6 +1302,8 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-6-iam-secrets",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkRevisionContractTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs"
       ]
@@ -1205,12 +1311,12 @@
     {
       "id": "iam-provider-configuration-global",
       "family": "iam",
-      "contract": "IProviderConfigurationStore global path",
+      "contract": "IProviderConfigurationStore global path; IRevisionAwareProviderConfigurationStore global path",
       "outcome": "ordinary-document",
       "scope": "explicit-global",
       "scopeReason": "Host-wide authentication provider fallback is intentionally shared across tenant scopes.",
       "authority": "#645",
-      "status": "missing",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists and the privileged global path is not yet explicit.",
       "performanceWorkload": "not-hot-path",
       "accessPolicy": "ordinary-read-privileged-write",
@@ -1243,6 +1349,8 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-6-iam-secrets",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkRevisionContractTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs"
       ]
@@ -1250,11 +1358,11 @@
     {
       "id": "iam-tenant-membership",
       "family": "iam",
-      "contract": "ITenantMembershipStore",
+      "contract": "ITenantMembershipStore; IRevisionAwareTenantMembershipStore",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Writes are last-write-wins and four-provider concurrency evidence is absent.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "dependency": "#644",
@@ -1285,6 +1393,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
@@ -1293,11 +1403,11 @@
     {
       "id": "secrets-repository",
       "family": "secrets",
-      "contract": "ISecretRepository",
+      "contract": "ISecretRepository; IRevisionAwareSecretRepository; IPagedSecretRepository",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "TryAdd is read-then-save, List is unbounded, and updates carry no expected revision.",
       "performanceWorkload": "secret-create-read-list",
       "accessPolicy": "ordinary",
@@ -1338,11 +1448,11 @@
     {
       "id": "distributed-execution-placement",
       "family": "distributed-runtime",
-      "contract": "IExecutionPlacementStore",
+      "contract": "IExecutionPlacementStore; IPagedExecutionPlacementStore",
       "outcome": "specialized-primitive",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "List is unbounded and LeaseFencing is advertised before checkpoint integration proves it.",
       "performanceWorkload": "placement-takeover",
       "accessPolicy": "ordinary",
@@ -1379,6 +1489,7 @@
       "behavioralBaseline": [
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionPlacementStoreContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedCasTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedBoundedQueryTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Tests/GroundworkTwoNodeAcceptanceTests.cs"
       ]
     },
@@ -1389,7 +1500,7 @@
       "outcome": "specialized-primitive",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Sequence allocation scans maxima and claim/acknowledgement behavior lacks full provider evidence.",
       "performanceWorkload": "command-send-lease-ack",
       "accessPolicy": "ordinary",
@@ -1427,6 +1538,7 @@
       "behavioralBaseline": [
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionCommandTransportContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedCasTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedBoundedQueryTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Tests/GroundworkTwoNodeAcceptanceTests.cs"
       ]
     }

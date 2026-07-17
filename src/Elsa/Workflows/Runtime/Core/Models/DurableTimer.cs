@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -29,4 +30,6 @@ public sealed record DurableTimer(
     JsonElement? Input = null,
     IReadOnlyDictionary<string, string>? Metadata = null,
     ValueTypeDescriptor? PayloadType = null,
-    string? ProviderId = null);
+    string? ProviderId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityExecutionId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExecutionScopeId = null);

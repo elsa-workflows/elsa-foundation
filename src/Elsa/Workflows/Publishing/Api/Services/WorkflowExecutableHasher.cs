@@ -25,14 +25,45 @@ public sealed class WorkflowExecutableHasher
 
     public string ComputeHash(ExecutableNode rootActivity)
     {
+        return Hash(NodePayload(rootActivity));
+    }
+
+    public string ComputeHash(
+        ExecutableNode rootActivity,
+        WorkflowExecutableInputContract inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies)
+    {
+        ArgumentNullException.ThrowIfNull(rootActivity);
+        ArgumentNullException.ThrowIfNull(inputContract);
+        ArgumentNullException.ThrowIfNull(dependencies);
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteBehavioralPayload(writer, rootActivity, inputContract, dependencies);
+
+        return Hash(stream.ToArray());
+    }
+
+    private static string NodePayload(ExecutableNode rootActivity)
+    {
+        ArgumentNullException.ThrowIfNull(rootActivity);
         var nodes = FlattenExecutableActivities(rootActivity).ToArray();
-        var payload = string.Join(
+        return string.Join(
             '\n',
             rootActivity.ExecutableNodeId,
             string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
                 .Select(FormatNode)));
+    }
 
+    private static string Hash(string payload)
+    {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+    }
+
+    private static string Hash(byte[] payload)
+    {
+        var hash = SHA256.HashData(payload);
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
 
@@ -111,6 +142,17 @@ public sealed class WorkflowExecutableHasher
         return $"{policy.Lifecycle}:{policy.Storage}:{policy.IsSensitive}:{policy.RequiresEncryption}:{policy.RedactionMode}:{policy.RetentionPolicy}[{metadata}]";
     }
 
+    private static string FormatOutputCapture(KeyValuePair<string, RuntimeOutputCapture> output)
+    {
+        var capture = output.Value;
+        var metadata = string.Join(',', capture.Metadata
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
+        var schema = capture.Type.Schema?.GetRawText() ?? string.Empty;
+        return $"{output.Key}={capture.OutputName}:{capture.ValueId}:{capture.Type.Kind}:{capture.Type.Id}:{schema}:" +
+               $"{capture.Lifecycle}:{capture.Storage}:{capture.StorageDriverKey}:{capture.CaptureOnSuccessfulCompletion}[{metadata}]";
+    }
+
     private static string FormatNode(ExecutableNode node)
     {
         var childSlots = string.Join(',', node.ChildSlots
@@ -126,11 +168,162 @@ public sealed class WorkflowExecutableHasher
         var intrinsic = node.IntrinsicKind is null
             ? string.Empty
             : $"intrinsic:{node.IntrinsicKind}:{node.IntrinsicVariable?.DeclaringScopeId}:{node.IntrinsicVariable?.VariableKey}";
-        var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{CanonicalJson(node.DescriptorPayload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
+        var outputCaptures = string.Join(',', node.OutputCaptures
+            .OrderBy(output => output.Key, StringComparer.Ordinal)
+            .Select(FormatOutputCapture));
+        var outputCapturePayload = outputCaptures.Length == 0 ? string.Empty : $":outputs={outputCaptures}";
+        var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}";
         var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
         return node.ActivityContract is null
             ? nodeShape
             : $"{nodeShape}:contract:{node.ActivityContract.SchemaFingerprint}";
+    }
+
+    private static void WriteBehavioralPayload(
+        Utf8JsonWriter writer,
+        ExecutableNode rootActivity,
+        WorkflowExecutableInputContract inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("schemaVersion", 1);
+        writer.WriteString("rootNodeId", rootActivity.ExecutableNodeId);
+
+        writer.WriteStartArray("nodes");
+        foreach (var node in FlattenExecutableActivities(rootActivity).OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal))
+            WriteNode(writer, node);
+        writer.WriteEndArray();
+
+        writer.WriteStartObject("inputContract");
+        writer.WriteNumber("version", inputContract.Version);
+        writer.WriteStartArray("inputs");
+        foreach (var input in inputContract.Inputs.OrderBy(input => input.Name, StringComparer.Ordinal))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", input.Name);
+            writer.WriteString("typeAlias", input.Type.Alias);
+            writer.WriteString("collectionKind", input.Type.CollectionKind.ToString());
+            writer.WriteBoolean("isRequired", input.IsRequired);
+            writer.WriteBoolean("hasDefaultValue", input.DefaultValue.HasValue);
+            writer.WritePropertyName("defaultValue");
+            if (input.DefaultValue is { } defaultValue)
+                WriteCanonicalJson(writer, defaultValue);
+            else
+                writer.WriteNullValue();
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+
+        writer.WriteStartArray("dependencies");
+        foreach (var dependency in dependencies
+                     .OrderBy(dependency => dependency.ArtifactId, StringComparer.Ordinal)
+                     .ThenBy(dependency => dependency.ArtifactHash, StringComparer.Ordinal))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("artifactId", dependency.ArtifactId);
+            writer.WriteString("artifactHash", dependency.ArtifactHash);
+            writer.WriteStartArray("dispatchNodeIds");
+            foreach (var nodeId in dependency.DispatchNodeIds.Order(StringComparer.Ordinal))
+                writer.WriteStringValue(nodeId);
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
+
+    private static void WriteNode(Utf8JsonWriter writer, ExecutableNode node)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("nodeId", node.ExecutableNodeId);
+        writer.WriteString("activityType", node.ActivityType);
+        writer.WriteString("activityTypeVersion", node.ActivityTypeVersion);
+        writer.WriteStartObject("descriptor");
+        writer.WriteString("consumerKey", node.Descriptor.ConsumerKey);
+        writer.WriteString("schemaVersion", node.Descriptor.SchemaVersion);
+        writer.WritePropertyName("payload");
+        WriteCanonicalJson(writer, node.Descriptor.Payload);
+        writer.WriteEndObject();
+
+        writer.WritePropertyName("structure");
+        if (node.Structure is { } structure)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("kind", structure.Kind);
+            writer.WriteString("schemaVersion", structure.SchemaVersion);
+            writer.WritePropertyName("payload");
+            WriteCanonicalJson(writer, structure.Payload);
+            writer.WriteEndObject();
+        }
+        else
+            writer.WriteNullValue();
+
+        writer.WriteStartArray("inputBindings");
+        foreach (var (inputName, binding) in node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", inputName);
+            writer.WriteString("source", binding.Source.ToString());
+            writer.WritePropertyName("payload");
+            if (binding.Source == RuntimeInputBindingSource.Expression)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("language", binding.Expression?.Language);
+                writer.WriteString("expression", binding.Expression?.Expression);
+                writer.WriteEndObject();
+            }
+            else if (binding.LiteralValue is { } literalValue)
+                WriteCanonicalJson(writer, literalValue);
+            else
+                writer.WriteNullValue();
+
+            writer.WriteStartObject("metadata");
+            foreach (var (key, value) in binding.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal))
+                writer.WriteString(key, value);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteStartArray("childSlots");
+        foreach (var slot in node.ChildSlots.OrderBy(slot => slot.Name, StringComparer.Ordinal))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", slot.Name);
+            writer.WriteStartArray("nodeIds");
+            foreach (var activity in slot.Activities.OrderBy(activity => activity.ExecutableNodeId, StringComparer.Ordinal))
+                writer.WriteStringValue(activity.ExecutableNodeId);
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
+
+    private static void WriteCanonicalJson(Utf8JsonWriter writer, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteCanonicalJson(writer, property.Value);
+                }
+                writer.WriteEndObject();
+                break;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                    WriteCanonicalJson(writer, item);
+                writer.WriteEndArray();
+                break;
+            default:
+                element.WriteTo(writer);
+                break;
+        }
     }
 
     private static string CanonicalJson(JsonElement? element)

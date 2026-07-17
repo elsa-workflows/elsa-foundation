@@ -45,7 +45,7 @@ public sealed class Elsa3MigrationBoundaryTests
     }
 
     [Fact]
-    public void Elsa3MappingProject_DependsOnAuthoringButNotRuntimeOrPersistence()
+    public void Elsa3MappingProject_DependsOnAuthoringAndDesignPersistenceButNotRuntimeOrProviderPersistence()
     {
         var projectPath = Path.Combine(RepoRoot, "src", "Elsa3", "Mapping", "Elsa3.Mapping.csproj");
         var references = XDocument.Load(projectPath)
@@ -57,11 +57,12 @@ public sealed class Elsa3MigrationBoundaryTests
             .ToArray();
         var forbidden = references
             .Where(reference => reference.Contains(".Runtime", StringComparison.Ordinal) ||
-                                reference.Contains("Persistence", StringComparison.Ordinal) ||
                                 reference.Contains("Groundwork", StringComparison.Ordinal))
             .ToArray();
 
+        Assert.Contains("Elsa.Activities.Design.Persistence.Core", references);
         Assert.Contains("Elsa.Workflows.Design.Core", references);
+        Assert.Contains("Elsa.Workflows.Design.Persistence.Core", references);
         Assert.Contains("Elsa3.Models", references);
         Assert.Empty(forbidden);
     }

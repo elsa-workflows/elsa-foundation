@@ -57,7 +57,8 @@ public sealed class ClrActivityActivatorTests
         var request = new ActivityActivationRequest(
             contract,
             snapshot,
-            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow));
+            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
+            Descriptor: RuntimeDescriptor(contract));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => activator.ActivateAsync(request).AsTask());
         Assert.Equal(1, ScopedDependency.DisposeCount);
@@ -304,7 +305,8 @@ public sealed class ClrActivityActivatorTests
         await using var lease = await activator.ActivateAsync(new ActivityActivationRequest(
             contract,
             persistedSnapshot,
-            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow)));
+            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
+            Descriptor: RuntimeDescriptor(contract)));
 
         Assert.Equal("from-external-store", Assert.IsType<ServiceBearingActivity>(lease.Activity).Message);
         Assert.NotNull(persistedSnapshot.Values["message"].ExternalReference);
@@ -315,7 +317,7 @@ public sealed class ClrActivityActivatorTests
     private static IServiceCollection Services() =>
         new ServiceCollection().AddScoped<ScopedDependency>();
 
-    private static (ClrActivityActivator Activator, ActivityContract Contract) Activator(
+    private static (IActivityActivator Activator, ActivityContract Contract) Activator(
         IServiceProvider services,
         IExternalPayloadStore? externalPayloadStore = null)
     {
@@ -333,10 +335,12 @@ public sealed class ClrActivityActivatorTests
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, "constructor-injection"));
-        return (new ClrActivityActivator(
+        var strategy = new ClrActivityActivator(
             services.GetRequiredService<IServiceScopeFactory>(),
             registry,
-            serializer,
+            serializer);
+        return (new ActivityActivator(
+            [strategy],
             new ActivityInputHydrator(),
             externalPayloadStore), contract);
     }
@@ -345,7 +349,14 @@ public sealed class ClrActivityActivatorTests
         new(
             contract,
             Snapshot(contract, message),
-            new ActivityAttempt(attemptId, "invocation-1", attemptId == "attempt-1" ? 1 : 2, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow));
+            new ActivityAttempt(attemptId, "invocation-1", attemptId == "attempt-1" ? 1 : 2, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
+            Descriptor: RuntimeDescriptor(contract));
+
+    private static RuntimeActivityDescriptor RuntimeDescriptor(ActivityContract contract) =>
+        new(
+            WellKnownRuntimeActivityConsumers.ClrActivity,
+            RuntimeActivityDescriptor.InitialSchemaVersion,
+            contract.DescriptorPayload);
 
     private static ActivityInputSnapshot Snapshot(ActivityContract contract, string message) =>
         new(

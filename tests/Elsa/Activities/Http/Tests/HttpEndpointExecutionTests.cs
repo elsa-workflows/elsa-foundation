@@ -522,8 +522,7 @@ public sealed class HttpEndpointExecutionTests
             authoredActivityId: node.AuthoredActivityId,
             activityType: node.ActivityType,
             activityTypeVersion: node.ActivityTypeVersion,
-            descriptorType: node.DescriptorType,
-            descriptorPayload: node.DescriptorPayload,
+            descriptor: node.Descriptor,
             inputBindings: inputBindings,
             metadata: node.Metadata,
             activityContract: node.ActivityContract);
@@ -552,8 +551,7 @@ public sealed class HttpEndpointExecutionTests
             authoredActivityId: node.AuthoredActivityId,
             activityType: node.ActivityType,
             activityTypeVersion: node.ActivityTypeVersion,
-            descriptorType: node.DescriptorType,
-            descriptorPayload: node.DescriptorPayload,
+            descriptor: node.Descriptor,
             inputBindings: inputBindings,
             metadata: node.Metadata,
             activityContract: node.ActivityContract);

@@ -265,6 +265,10 @@ internal sealed class Elsa3MemoryReferenceImportFixture
         public string Id { get; }
         public string Version => "1.0.0";
         public string DefinitionId => Definition.Id;
+        public string ProviderKey => "test.provider";
+        public string ProviderSchemaVersion => "1";
+        public string ConsumerKey => "test.consumer";
+        public string ConsumerSchemaVersion => "1";
         public string DescriptorType => "test";
         public JsonElement DescriptorPayload => JsonSerializer.SerializeToElement(new { });
         public string SourceKind => "test";

@@ -13,10 +13,17 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// PostgreSQL, MongoDB) is chosen by the host through feature composition and never leaks into this bridge
 /// or into runtime domain code.
 /// </summary>
-public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+public sealed class GroundworkWorkflowTriggerBindingStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
     : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind), IWorkflowTriggerBindingStore
 {
     private const string ProjectionKind = "triggerBindings";
+    private readonly IBoundedDocumentStore? _queries = boundedStore ?? store as IBoundedDocumentStore;
+
+    private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
+        "Workflow trigger-binding queries require an admitted bounded document-store runtime.");
 
     public async ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
@@ -51,11 +58,10 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
-        return result.Documents
-            .Select(envelope => Serializer.Deserialize<WorkflowTriggerBinding>(envelope))
-            .Where(binding => StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
-            .ToArray();
+        return await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
+            [Equal(ElsaRuntimeStorageManifest.PublicationIdField, publicationId)],
+            cancellationToken);
     }
 
     public async ValueTask ActivatePublicationAsync(
@@ -67,10 +73,11 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         if (replacedPublicationId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
 
-        var candidateState = await LoadProjectionStateAsync(publicationId, cancellationToken);
-        if (candidateState is null)
+        var candidateStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
+        if (candidateStateEnvelope is null)
             throw new InvalidOperationException($"Publication '{publicationId}' has no prepared trigger-binding projection.");
 
+        var candidateState = Serializer.Deserialize<PublicationProjectionState>(candidateStateEnvelope);
         var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
         var replaced = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
             ? []
@@ -79,16 +86,21 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
             .Concat(replaced.Select(binding => binding with { IsActive = false }))
             .ToArray();
 
-        var replacedState = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
+        var replacedStateEnvelope = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
             ? null
-            : await LoadProjectionStateAsync(replacedPublicationId, cancellationToken);
+            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId, cancellationToken);
+        var replacedState = replacedStateEnvelope is null
+            ? null
+            : Serializer.Deserialize<PublicationProjectionState>(replacedStateEnvelope);
         await CommitAtomicallyAsync(
             [],
             updates,
             candidateState with { IsActive = true },
             deleteProjectionStateId: null,
             cancellationToken,
-            replacedState is null ? null : replacedState with { IsActive = false });
+            secondaryProjectionState: replacedState is null ? null : replacedState with { IsActive = false },
+            projectionStateExpectedVersion: candidateStateEnvelope.Version,
+            secondaryProjectionStateExpectedVersion: replacedStateEnvelope?.Version);
     }
 
     public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
@@ -126,11 +138,13 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
 
-        // The cross-artifact index is keyed by stimulus hash only (every provider supports single-field
-        // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
-        // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
-        var bindings = await QueryDocumentsAsync<WorkflowTriggerBinding, WorkflowTriggerBinding>(
-            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulus, stimulusHash, binding => binding, cancellationToken);
+        var bindings = await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery,
+            [
+                Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulusHash),
+                Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)
+            ],
+            cancellationToken);
 
         return bindings
             .Where(binding =>
@@ -143,26 +157,39 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
-        return await QueryDocumentsAsync<WorkflowTriggerBinding, WorkflowTriggerBinding>(
-            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByArtifact, artifactId, binding => binding, cancellationToken);
+        return await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByArtifactQuery,
+            [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, artifactId)],
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
 
-        // No stimulus-type index exists (the cross-artifact index is hash-keyed); a full type-scoped scan is
-        // acceptable because this feeds the startup/refresh route-table rebuild, not a per-request path. A
-        // clause-free PortableDocumentQuery matches every document of this kind, and we narrow to the requested
-        // stimulus type in code — the same defensive filter ListByStimulusAsync applies. No new index is added,
-        // so the persisted document shape and SchemaVersion are unchanged.
-        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
-
-        return result.Documents
-            .Select(envelope => Serializer.Deserialize<WorkflowTriggerBinding>(envelope))
-            .Where(binding => binding.IsActive && StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
-            .ToArray();
+        var bindings = await QueryBindingsAsync(
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
+            [Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)],
+            cancellationToken);
+        return bindings.Where(binding => binding.IsActive).ToArray();
     }
+
+    private async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> QueryBindingsAsync(
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        CancellationToken cancellationToken)
+    {
+        var result = await Queries.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                clauses),
+            cancellationToken);
+        return result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray();
+    }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 
     private static void ValidatePublicationBindings(
         string publicationId,
@@ -177,16 +204,13 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         }
     }
 
-    private async ValueTask<PublicationProjectionState?> LoadProjectionStateAsync(
+    private async ValueTask<DocumentEnvelope?> LoadProjectionStateEnvelopeAsync(
         string publicationId,
-        CancellationToken cancellationToken)
-    {
-        var envelope = await Store.LoadAsync(
+        CancellationToken cancellationToken) =>
+        await Store.LoadAsync(
             ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
             ProjectionStateId(publicationId),
             cancellationToken);
-        return envelope is null ? null : Serializer.Deserialize<PublicationProjectionState>(envelope);
-    }
 
     private async ValueTask CommitAtomicallyAsync(
         IEnumerable<string> deleteIds,
@@ -194,7 +218,9 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         PublicationProjectionState? projectionState,
         string? deleteProjectionStateId,
         CancellationToken cancellationToken,
-        PublicationProjectionState? secondaryProjectionState = null)
+        PublicationProjectionState? secondaryProjectionState = null,
+        long? projectionStateExpectedVersion = null,
+        long? secondaryProjectionStateExpectedVersion = null)
     {
         await using var unitOfWork = await Store.BeginAsync(
             DocumentCommitScope.Of(DocumentKind, ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind),
@@ -213,9 +239,9 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
                 cancellationToken);
         }
         if (projectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, projectionState, cancellationToken);
+            await SaveProjectionStateAsync(unitOfWork, projectionState, projectionStateExpectedVersion, cancellationToken);
         if (secondaryProjectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, cancellationToken);
+            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, secondaryProjectionStateExpectedVersion, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
     }
@@ -223,18 +249,23 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
     private async ValueTask SaveProjectionStateAsync(
         IDocumentUnitOfWork unitOfWork,
         PublicationProjectionState state,
+        long? expectedVersion,
         CancellationToken cancellationToken)
     {
         var (schemaVersion, content) = Serializer.Serialize(
             ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
             state);
-        await unitOfWork.SaveAsync(
+        var result = await unitOfWork.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
                 ProjectionStateId(state.PublicationId),
                 schemaVersion,
-                content),
+                content,
+                ExpectedVersion: expectedVersion),
             cancellationToken);
+        if (result.Status != DocumentStoreWriteStatus.Saved)
+            throw new InvalidOperationException(
+                $"Trigger-binding publication projection '{state.PublicationId}' could not be saved because the stored projection version changed.");
     }
 
     private static string ProjectionStateId(string publicationId) =>

@@ -10,8 +10,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// coordinate through provider CAS over the artifact envelope, so a root and physical deletion can
 /// never both win the same race.
 /// </summary>
-public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind), IWorkflowExecutableStore
+public sealed class GroundworkWorkflowExecutableStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, boundedStore), IWorkflowExecutableStore
 {
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
@@ -27,9 +30,13 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
 
         // Artifacts are immutable. Create-only persistence also prevents a concurrent first retention
         // transition from being overwritten by the old find-then-unconditional-save race.
-        await Store.SaveAsync(
+        var result = await Store.SaveAsync(
             new SaveDocumentRequest(DocumentKind, executable.Identity.ArtifactId, schemaVersion, content, ExpectedVersion: 0),
             cancellationToken);
+        if (result.Status is DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.ConcurrencyConflict)
+            return;
+
+        throw new InvalidOperationException($"Groundwork rejected workflow executable artifact '{executable.Identity.ArtifactId}' with status '{result.Status}'.");
     }
 
     public async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -249,7 +256,8 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
     public async ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
     {
         var executables = await QueryDocumentsAsync<ExecutableDocument, WorkflowExecutable>(
-            ElsaRuntimeStorageManifest.WorkflowExecutableByCollection,
+            ElsaRuntimeStorageManifest.ListAllQuery,
+            ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.WorkflowExecutableCollection,
             document => document.Executable,
             cancellationToken);

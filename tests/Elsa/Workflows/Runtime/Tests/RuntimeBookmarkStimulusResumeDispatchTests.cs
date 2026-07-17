@@ -122,6 +122,25 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_PropagatesPersistedWorkflowPartition()
+    {
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        var partition = new WorkflowExecutionPartition("partition-eu");
+        await store.SaveAsync(NewBookmark("bookmark-1"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution() with { Partition = partition });
+        await executableStore.SaveAsync(NewExecutable());
+
+        await dispatcher.DispatchAsync(NewDispatchRequest());
+
+        Assert.Equal(partition, Assert.Single(agentProvider.Activations).Partition);
+        Assert.Equal(partition, Assert.Single(agentProvider.Agent.Envelopes).Partition);
+    }
+
+    [Fact]
     public async Task DispatchAsync_TypedDeliveryCarriesProviderTypeAndStableDeduplicationMetadata()
     {
         var store = new InMemoryBookmarkStateStore();
@@ -372,8 +391,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
     }

@@ -52,6 +52,35 @@ public static class SchedulerWorkHandlerHelpers
     }
 
     /// <summary>
+    /// Resolves either a globally placed resume-target id or the activity-local id captured in a
+    /// reusable template. Local ids are scoped to their placed executable node.
+    /// </summary>
+    public static WorkflowExecutableResumeTarget? FindResumeTargetForNode(
+        WorkflowExecutable executable,
+        string executableNodeId,
+        string requestedResumeTargetId)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestedResumeTargetId);
+
+        if (executable.ResumeTargets.TryGetValue(requestedResumeTargetId, out var direct))
+            return direct;
+
+        var matches = executable.ResumeTargets.Values
+            .Where(target => StringComparer.Ordinal.Equals(target.ExecutableNodeId, executableNodeId))
+            .Where(target => StringComparer.Ordinal.Equals(target.LocalResumeTargetId, requestedResumeTargetId))
+            .ToArray();
+        return matches.Length switch
+        {
+            0 => null,
+            1 => matches[0],
+            _ => throw new InvalidOperationException(
+                $"Local resume target '{requestedResumeTargetId}' is ambiguous for executable node '{executableNodeId}'.")
+        };
+    }
+
+    /// <summary>
     /// Shared payload-deserialization boilerplate (#412 item 1). Reproduces, byte-for-byte, the
     /// null-guard → deserialize-or-null-throw → catch-wrap shape the handlers each duplicated. The
     /// three message fragments, the <paramref name="deserialize"/> delegate (some handlers reuse a

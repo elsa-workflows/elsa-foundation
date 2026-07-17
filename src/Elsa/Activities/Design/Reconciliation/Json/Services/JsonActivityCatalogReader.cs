@@ -15,9 +15,9 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Services;
 /// <remarks>
 /// Each model's <c>Descriptor</c> is typed <c>object</c>, so the serializer binds it to a
 /// <see cref="JsonElement"/> rather than a concrete descriptor. The reconciling handler persists that
-/// opaque payload together with the entry's <c>DescriptorType</c>; the design domain never deserializes
-/// it. The JSON file may therefore carry arbitrary author UI metadata; only the
-/// <c>descriptorType</c>/<c>descriptor</c> pair is structurally meaningful here.
+/// opaque payload together with the entry's stable provider and consumer key/schema identities; the
+/// design domain never deserializes it. The JSON file may therefore carry arbitrary provider payload;
+/// the identity fields and <c>descriptor</c> are the structurally meaningful runtime bridge here.
 /// </remarks>
 public sealed class JsonActivityCatalogReader(
     IPayloadSerializer payloadSerializer,

@@ -54,7 +54,13 @@ Domain contracts that already carry a tenant use that explicit value and verify 
 
 ## Decision 5: Use one real-provider black-box fixture
 
-**Decision**: Create a shared conformance fixture with provider drivers for file-backed SQLite, SQL Server and PostgreSQL containers, and a MongoDB replica set. The fixture owns production-shaped startup, schema application, independent clients, deterministic reset, disposal/reopen, process restart, failure injection, cancellation, native-plan capture, and topology validation. Domain suites supply public-contract scenarios and provider-independent outcome assertions.
+**Decision**: Create a shared conformance fixture with provider drivers for file-backed SQLite, SQL Server and PostgreSQL containers, and a transaction-capable MongoDB replica set. The fixture owns production-shaped startup, schema application, independent clients, deterministic reset, disposal/reopen, true child-process reconnect, provider-process restart where applicable, failure injection, cancellation, native-plan capture, and topology validation. Domain suites supply public-contract scenarios and provider-independent outcome assertions.
+
+Dispose/reopen and process restart are separate observations. Reconstructing an adapter, service provider, or generation counter in the test process does not satisfy process-restart evidence. A dedicated helper executable receives a closed manifest/provider probe request over redirected standard input, connects to the same durable target in a different operating-system process, and returns only sanitized identities, versions, process IDs, and payload digests. Connection values and credentials are never arguments or evidence.
+
+MongoDB uses the ratified `mongo:7.0.24` replica-set fixture with two independently constructed clients. Topology admission proves replica-set identity, writable-primary state, and an actual transactional begin/rollback. Standalone MongoDB is a rejection fixture, not an allowed evidence substrate. Same-container restart uses a bounded idempotent replica-set startup callback so an already-initialized set is accepted without weakening readiness checks.
+
+Native-plan evidence must represent the exact admitted Groundwork route. Groundwork preview.47 exposes this explain path for MongoDB but not through a public relational API; handwritten SQL may smoke-test a substrate but cannot satisfy route evidence. Before T084 can advance relational evidence, Groundwork must expose a public structured relational explain/execution-observer surface that retains route identity and a sanitized canonical plan without connection, database, server, or parameter values.
 
 **Rationale**: Current evidence is dominated by memory/SQLite plus targeted PostgreSQL coverage. Repeating test bodies per provider invites semantic drift; memory-backed reopen cannot prove durability.
 
@@ -63,6 +69,8 @@ Domain contracts that already carry a tenant use that explicit value and verify 
 - Provider-specific test suites with copied cases: rejected because expected domain outcomes could diverge unnoticed.
 - In-memory provider as restart evidence: rejected because it cannot prove persistence, process coordination, or native execution.
 - MongoDB standalone topology: rejected for scenarios that promise multi-document atomicity.
+- Adapter recreation or a generation counter as process-restart evidence: rejected because no independent process reconnects to durable storage.
+- Handwritten provider SQL as admitted-route evidence: rejected because it can diverge from the command Groundwork actually executes.
 
 ## Decision 6: Make ownership and checkpoint admission one durable fence decision
 
@@ -156,24 +164,29 @@ Apply the same transition discipline to the scheduler work queue, durable timers
 
 - Groundwork #32 and #43–#48 provide scope, executable routes, applied state, planning, and four-provider execution. Elsa must consume them from one released version.
 - Groundwork MongoDB bounded mutations are merged. Portable Unicode/long-value work #70 and identity case-policy work #71 must land before their dependent Elsa lanes pin a release; the plan does not hard-code preview.42 as the final version.
-- #644 remains the authoritative user/role/external-login workstream. Its final adapter/document seam is a dependency of delivery boundary 6, not a reason to create interim duplicate documents.
+- #644 remains the authoritative user/role/external-login workstream. Spec 095 completes the ASP.NET Core Identity correctness lane with one Groundwork authority, four-provider/schema/highest-seam evidence, and the #646 `iam-normalized-lookup-update` handoff digest `719708f5192bc589a05bd319468b55e62c25801b9c45b6a02c5ec4770b4a9c49`; this does not complete #646 timing or #647 EF deletion.
 - #660 owns diagnostics-settings persistence and remains a coverage-ledger external-authority row.
 - #646 owns performance measurement and physical-form verdicts; this feature owns workload definitions and correctness baselines.
 - MongoDB atomic multi-document scenarios require a replica-set or sharded transaction-capable topology and fail startup clearly otherwise.
 
 ## Test-removal approval ledger
 
-No existing test is approved for removal by this plan. Delivery boundary 1 records every baseline test objective in the machine ledger. A later implementation PR may remove a test only after adding an exact row here with its objective, replacement evidence or invalid-objective rationale, named architect, decision, and date.
+Delivery boundary 1 records every baseline test objective in the machine ledger. An implementation PR
+may remove or rename a test only after adding an exact row here with its objective, replacement
+evidence or invalid-objective rationale, named architect, decision, and date.
 
 | Existing test | Objective | Replacement evidence / rationale | Architect | Decision | Date |
 |---|---|---|---|---|---|
-| None | No removal requested | Not applicable | Not applicable | No approval | 2026-07-14 |
+| tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionStatePagingTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkWorkflowExecutionStatePagingTests.Sqlite_startup_upgrades_v2_history_before_the_first_page_query | Prove the runtime upgrades stored execution-history documents before serving the first page query. | Replaced by `Sqlite_startup_does_not_rewrite_v2_history`, which proves the ratified deployment-owned schema boundary: runtime startup is read-only and preserves the existing v2 document; schema changes belong to the CLI. This is greenfield software, so no released runtime-upgrade behavior is being withdrawn. | Sipke Schoorstra | Approved | 2026-07-15 |
+| tests/Elsa/Persistence/Groundwork/Tests/GroundworkDocumentStoreHolderTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkDocumentStoreHolderTests.Concurrent_publication_selects_one_complete_state_and_disposes_every_owner_once | Prove concurrent provider publication selects exactly one complete state, disposes every losing owner once, and disposes the winning owner exactly once across repeated shutdown calls. | Replaced by `tests/Elsa/Persistence/Groundwork/Tests/GroundworkStoreSessionSourceTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkStoreSessionSourceTests.Concurrent_publication_selects_one_complete_state_and_disposes_every_owner_once`, which preserves the objective against the scoped session-source seam that supersedes the application-wide holder. `Disposal_waits_for_an_inflight_open_and_rejects_every_later_open` and `Disposed_uninitialized_source_rejects_publication_and_open` add disposal/open race and terminal-state coverage. | Sipke Schoorstra | Approved | 2026-07-15 |
+| tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkRuntimeDocumentFixtureTests.Committed_Fixture_Loads_Through_The_Bridge_Under_The_Legacy_Stamp | Prove every admitted runtime fixture loads through the versioned bridge. | Replaced by `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkRuntimeDocumentFixtureTests.Every_Supported_Fixture_Version_Loads_Through_The_Bridge` plus `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentSerializerTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkRuntimeDocumentSerializerTests.Deserialize_Rejects_Versions_Below_A_Kinds_Minimum_Readable_Boundary`, which together prove every current fixture loads and every pre-GA historical version is rejected before content parsing. | Sipke Schoorstra | Approved | 2026-07-16 |
+| tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkRuntimeDocumentFixtureTests.Workflow_execution_state_shape_is_explicitly_versioned_at_v3 | Prove the workflow-execution-state fixture is explicitly versioned rather than drifting silently. | Replaced by `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs::Elsa.Persistence.Groundwork.Tests.GroundworkRuntimeDocumentFixtureTests.Dispatch_dependency_shapes_are_explicitly_versioned_at_v4` and `Version_4_runtime_shapes_use_a_clean_contract`, which preserve explicit version evidence for workflow execution state while ratifying v4 as the sole readable pre-GA baseline. | Sipke Schoorstra | Approved | 2026-07-16 |
 
 ## Primary Affected Paths
 
 - `Directory.Packages.props`
 - `src/Elsa/Persistence/Core/`
-- `src/Elsa/Persistence/Groundwork/GroundworkDocumentStoreHolder.cs`
+- `src/Elsa/Persistence/Groundwork/Scoping/GroundworkStoreSessionSource.cs`
 - `src/Elsa/Persistence/Groundwork/Unified/GroundworkUnifiedManifest.cs`
 - `src/Elsa/Persistence/Groundwork/{Stores,Querying,Serialization}/`
 - `src/Elsa/Persistence/Groundwork/{Sqlite,SqlServer,PostgreSql,MongoDb}/`

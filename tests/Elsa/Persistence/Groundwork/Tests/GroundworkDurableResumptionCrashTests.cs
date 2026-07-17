@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Api;
@@ -43,7 +44,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowA_CrashBeforeOutboxDelivery_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -87,7 +88,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowB_CrashAfterOutboxDeliveryBeforeDrain_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -130,7 +131,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -269,8 +270,7 @@ public sealed class GroundworkDurableResumptionCrashTests
             authoredActivityId: "authored-node-start",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 

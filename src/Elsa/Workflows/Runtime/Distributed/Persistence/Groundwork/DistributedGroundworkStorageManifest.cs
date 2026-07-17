@@ -25,6 +25,8 @@ public static class DistributedGroundworkStorageManifest
     public const string ByCollectionIndex = "by-collection";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
+    public const string ListAllQuery = "list-all";
+    public const string ListByWorkflowExecutionQuery = "list-by-workflow-execution";
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime-distributed"),
@@ -35,7 +37,12 @@ public static class DistributedGroundworkStorageManifest
                 DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
                 "Execution placement lease",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            Unit(
+                DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind,
+                "Execution command stream head",
+                [],
+                []),
             Unit(
                 DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
                 "Execution command transport item",
@@ -44,8 +51,8 @@ public static class DistributedGroundworkStorageManifest
                     Keyword(ByCollectionIndex, CollectionField)
                 ],
                 [
-                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
-                    Query("list-all", ByCollectionIndex)
+                    Query(ListByWorkflowExecutionQuery, ByWorkflowExecutionIndex),
+                    Query(ListAllQuery, ByCollectionIndex)
                 ])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
@@ -61,7 +68,7 @@ public static class DistributedGroundworkStorageManifest
         StorageIntent.PortableDocument(),
         LifecyclePolicy.Mutable,
         IdentityPolicy.StringId(),
-        TenancyPolicy.Global,
+        TenancyPolicy.Scoped,
         ConcurrencyPolicy.Optimistic(),
         SerializationPolicy.Json(),
         indexes,
@@ -82,5 +89,6 @@ public static class DistributedGroundworkStorageManifest
         false,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
 }

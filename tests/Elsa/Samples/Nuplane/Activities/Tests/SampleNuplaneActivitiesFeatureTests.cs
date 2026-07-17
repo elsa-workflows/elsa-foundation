@@ -1,4 +1,5 @@
 using global::Elsa.Activities.Design.Reconciliation.Core;
+using global::Elsa.Activities.Runtime.Core.Models;
 using global::Elsa.Primitives.Models;
 using global::Elsa.Samples.Nuplane.Activities;
 using global::Elsa.Samples.Nuplane.Activities.Activities;
@@ -31,7 +32,7 @@ public sealed class SampleNuplaneActivitiesFeatureTests
         var activity = Assert.Single(await source.Read(CancellationToken.None));
 
         Assert.Equal(typeof(SayHelloFromNuplane).FullName, activity.ActivityTypeKey);
-        Assert.Equal(typeof(ClrActivityDescriptor).FullName, activity.DescriptorType);
+        Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, activity.ConsumerKey);
         Assert.Equal("Say Hello From Nuplane", activity.DisplayName);
         Assert.Contains(activity.Inputs, x => x.Name == nameof(SayHelloFromNuplane.Recipient));
     }

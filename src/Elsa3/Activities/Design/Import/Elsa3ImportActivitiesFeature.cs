@@ -4,6 +4,7 @@ using Elsa.Events.Core.Extensions;
 using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa3.Activities.Design.Import.Services;
 
 namespace Elsa3.Activities.Design.Import;
 
@@ -32,6 +33,9 @@ public class Elsa3ImportActivitiesFeature : IShellFeature
 
             services.AddScoped(typeof(IActivityCollectionJsonSource), type);
         }
+
+        services.AddScoped<IReusableActivityCollectionAnalyzer, ReusableActivityCollectionAnalyzer>();
+        services.AddScoped<IReusableActivityCollectionImporter, ReusableActivityCollectionImporter>();
 
         services.AddEventHandlersFrom(GetType().Assembly);
     }

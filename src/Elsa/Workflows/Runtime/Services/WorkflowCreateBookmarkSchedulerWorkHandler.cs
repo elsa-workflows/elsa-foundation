@@ -99,8 +99,8 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!executable.NodesById.ContainsKey(payload.ExecutableNodeId))
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{payload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
 
-        if (!executable.ResumeTargets.TryGetValue(payload.ResumeTargetId, out var resumeTarget))
-            throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references resume target '{payload.ResumeTargetId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+        var requestedResumeTargetId = payload.ResumeTargetId;
+        var resumeTarget = ResolveResumeTarget(executable, payload.ExecutableNodeId, requestedResumeTargetId, workItem.WorkItemId);
 
         if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, payload.ExecutableNodeId))
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{payload.ExecutableNodeId}', but resume target '{payload.ResumeTargetId}' points at executable node '{resumeTarget.ExecutableNodeId}'.");
@@ -123,6 +123,9 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!IsLiveTypedRegistration(state, payload))
             return null;
 
+        if (!StringComparer.Ordinal.Equals(requestedResumeTargetId, resumeTarget.ResumeTargetId))
+            payload = WithResumeTargetId(payload, resumeTarget.ResumeTargetId);
+
         if (state.Status is not ActivityExecutionStatus.Running and not ActivityExecutionStatus.Suspended)
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' cannot create a durable bookmark for activity execution '{payload.ActivityExecutionId}' while it is '{state.Status}'.");
 
@@ -130,6 +133,44 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var suspendedState = SuspendActivity(workItem, payload, state);
         return await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
     }
+
+    private static WorkflowExecutableResumeTarget ResolveResumeTarget(
+        WorkflowExecutable executable,
+        string executableNodeId,
+        string requestedResumeTargetId,
+        string workItemId)
+    {
+        if (executable.ResumeTargets.TryGetValue(requestedResumeTargetId, out var direct))
+            return direct;
+
+        var matches = executable.ResumeTargets.Values
+            .Where(x => StringComparer.Ordinal.Equals(x.ExecutableNodeId, executableNodeId))
+            .Where(x => StringComparer.Ordinal.Equals(x.LocalResumeTargetId, requestedResumeTargetId))
+            .ToArray();
+        return matches.Length switch
+        {
+            1 => matches[0],
+            0 => throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItemId}' references resume target '{requestedResumeTargetId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'."),
+            _ => throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItemId}' references local resume target '{requestedResumeTargetId}' ambiguously for executable node '{executableNodeId}'.")
+        };
+    }
+
+    private static RuntimeCreateBookmarkCommandPayload WithResumeTargetId(
+        RuntimeCreateBookmarkCommandPayload payload,
+        string resumeTargetId) => new(
+        payload.PinnedExecutable,
+        payload.BookmarkId,
+        payload.ActivityExecutionId,
+        payload.ExecutableNodeId,
+        resumeTargetId,
+        payload.StimulusType,
+        payload.StimulusHash,
+        payload.Payload,
+        payload.ExpiresAt,
+        payload.Reason,
+        payload.Metadata,
+        payload.ValueSnapshots,
+        payload.DurableValueChanges);
 
     private static bool IsLiveTypedRegistration(
         ActivityExecutionState state,

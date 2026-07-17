@@ -158,7 +158,7 @@ public sealed class ValueFlowValidatorTests
     private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> Validate(ActivityNode root)
     {
         var validator = new ValueFlowValidator(StructureService());
-        var draft = new StubDraft(new WorkflowDefinitionState([], root, [], [], null, null));
+        var draft = new StubDraft(new WorkflowDefinitionState([], root, [], [], null));
         return [.. await validator.Validate(draft, CancellationToken.None)];
     }
 

@@ -453,8 +453,7 @@ public sealed class StimulusRouterTests
                 authoredActivityId: "authored-node-wait",
                 activityType: "Elsa.Event",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "test",
-                descriptorPayload: document.RootElement.Clone(),
+                descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 metadata: new Dictionary<string, string>());
         }

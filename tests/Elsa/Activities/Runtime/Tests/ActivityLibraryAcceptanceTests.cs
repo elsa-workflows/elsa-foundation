@@ -86,7 +86,6 @@ public sealed class ActivityLibraryAcceptanceTests
             typeof(SequenceActivity).Assembly,
             typeof(ForEachActivity).Assembly,
             typeof(Elsa.Activities.Flowchart.Activities.Flowchart).Assembly,
-            typeof(Elsa.Activities.Composition.Runtime.Activities.WorkflowDefinitionActivity).Assembly,
             typeof(Elsa.Activities.Http.Activities.HttpEndpoint).Assembly,
             typeof(Elsa.Activities.Scheduling.Activities.Timer).Assembly,
             typeof(Elsa.Activities.Scripting.Activities.RunJavaScript).Assembly

@@ -11,9 +11,17 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// chosen by the host through feature composition and never leaks into this bridge or into runtime
 /// domain code.
 /// </summary>
-public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+public sealed class GroundworkBookmarkStateStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
     : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.BookmarkStateDocumentKind), IBookmarkStateStore, IBookmarkStimulusIndex
 {
+    private readonly IBoundedDocumentStore? _queries = boundedStore ?? store as IBoundedDocumentStore;
+
+    private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
+        "Bookmark-state queries require an admitted bounded document-store runtime.");
+
     public async ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -48,8 +56,11 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundwo
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        return await QueryDocumentsAsync<BookmarkState, BookmarkState>(
-            ElsaRuntimeStorageManifest.BookmarkStateByWorkflowExecution, workflowExecutionId, state => state, cancellationToken);
+        return await QueryBookmarksAsync(
+            ElsaRuntimeStorageManifest.ListBookmarksByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)
@@ -57,11 +68,13 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundwo
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
 
-        // The cross-execution index is keyed by stimulus hash only (every provider supports single-field
-        // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
-        // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
-        var bookmarks = await QueryDocumentsAsync<BookmarkState, BookmarkState>(
-            ElsaRuntimeStorageManifest.BookmarkStateByStimulus, stimulusHash, state => state, cancellationToken);
+        var bookmarks = await QueryBookmarksAsync(
+            ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery,
+            [
+                Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulusHash),
+                Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)
+            ],
+            cancellationToken);
 
         return bookmarks
             .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
@@ -72,18 +85,33 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundwo
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
 
-        // Type-scoped scan (spec 089 D). The cross-execution index is hash-keyed, so it cannot serve a type-only
-        // query; rather than add a new index (and its Condition-7 backfill), a full type-scoped scan is used —
-        // identical to the sibling GroundworkWorkflowTriggerBindingStore.ListByStimulusTypeAsync (spec 089 B). This
-        // feeds the route-table refresh/rebuild, not a hot per-request path. A clause-free PortableDocumentQuery
-        // matches every bookmark document; we narrow to the requested stimulus type in code. Raw snapshots (incl.
-        // Metadata) are returned; expiry filtering stays in the lookup layer per the index's documented contract.
-        // No new index means the persisted document shape and SchemaVersion are unchanged.
-        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
-
-        return result.Documents
-            .Select(envelope => Serializer.Deserialize<BookmarkState>(envelope))
-            .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
-            .ToArray();
+        return await QueryBookmarksAsync(
+            ElsaRuntimeStorageManifest.ListBookmarksByStimulusTypeQuery,
+            [Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)],
+            cancellationToken);
     }
+
+    private async ValueTask<IReadOnlyCollection<BookmarkState>> QueryBookmarksAsync(
+        string queryIdentity,
+        string fieldPath,
+        string value,
+        CancellationToken cancellationToken) =>
+        await QueryBookmarksAsync(queryIdentity, [Equal(fieldPath, value)], cancellationToken);
+
+    private async ValueTask<IReadOnlyCollection<BookmarkState>> QueryBookmarksAsync(
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        CancellationToken cancellationToken)
+    {
+        var result = await Queries.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                clauses),
+            cancellationToken);
+        return result.Documents.Select(Serializer.Deserialize<BookmarkState>).ToArray();
+    }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 }

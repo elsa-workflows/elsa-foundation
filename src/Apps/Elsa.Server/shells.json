@@ -6,11 +6,11 @@
         "Features": {
           "ActivitiesControlFlow": {},
           "ActivitiesDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
+          "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesSequence": {},
           "ApiCapabilities": {},
@@ -61,8 +61,7 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkPublishingPersistenceSqlite": {},
-          "GroundworkRuntimePersistenceSqlite": {},
+          "GroundworkUnifiedPersistenceSqlite": {},
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
@@ -146,8 +145,8 @@
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {

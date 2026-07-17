@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.Core" />
+    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Groundwork.MongoDb" />
+    <PackageReference Include="Groundwork.PostgreSql" />
+    <PackageReference Include="Groundwork.Sqlite" />
+    <PackageReference Include="Groundwork.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" NoWarn="NU1510" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Conformance\Tests\Probes\AspNetCoreIdentityRestartProbe.cs"
+             Link="Probes\AspNetCoreIdentityRestartProbe.cs" />
+  </ItemGroup>
+
+</Project>

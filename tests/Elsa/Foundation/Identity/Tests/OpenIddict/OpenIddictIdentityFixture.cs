@@ -29,7 +29,7 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
                 options.IsDevelopmentOrDemo = true;
                 configure?.Invoke(options);
             },
-            configureDbContext: builder => builder.UseInMemoryDatabase(databaseName));
+            configureDbContext: builder => ConfigureInMemoryStore(builder, databaseName));
 
         Services = services.BuildServiceProvider();
 
@@ -43,6 +43,9 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
     public ValueTask<TokenIssueResult> IssueAsync(
         string subject = "user-1", string tenant = "tenant-a", params string[] scopes) =>
         TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, scopes.Length is 0 ? ["identity.users.read"] : scopes));
+
+    internal static void ConfigureInMemoryStore(DbContextOptionsBuilder builder, string databaseName) =>
+        builder.UseInMemoryDatabase(databaseName);
 
     public async ValueTask DisposeAsync() => await Services.DisposeAsync();
 }

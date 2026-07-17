@@ -355,7 +355,9 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: startWorkItem.CommandMetadata,
-            envelopeMetadata: startWorkItem.EnvelopeMetadata);
+            envelopeMetadata: startWorkItem.EnvelopeMetadata,
+            executionScopeId: startWorkItem.ExecutionScopeId,
+            attempt: startWorkItem.Attempt);
     }
 
 }

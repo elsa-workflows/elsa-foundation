@@ -1,9 +1,7 @@
 using CShells.Features;
-using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Groundwork.Core.Capabilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
@@ -34,14 +32,17 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeatu
         Secret = true)]
     public string? ConnectionString { get; set; }
 
+    [ManifestSetting(
+        DisplayName = "Auto-apply schema on startup",
+        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Category = "Persistence")]
+    public bool AutoApplySchemaOnStartup { get; set; } = true;
+
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
 
-        services.AddSqliteGroundworkDocumentStore(
-            connectionString,
-            ElsaRuntimeStorageManifest.Create(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"));
+        services.AddSqliteGroundworkDocumentStore(connectionString, AutoApplySchemaOnStartup);
 
         services.AddGroundworkRuntimeStores();
     }

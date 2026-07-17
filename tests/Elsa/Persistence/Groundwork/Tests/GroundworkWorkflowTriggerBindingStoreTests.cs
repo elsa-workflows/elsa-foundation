@@ -1,6 +1,8 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Manifests;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -16,19 +18,24 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     [InlineData("memory")]
     public async Task SaveAndQuery_ByStimulusAndArtifact_RoundTrips(string provider)
     {
-        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
-        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
 
         await store.SaveAsync(Binding("artifact-1", "node-a", "Event", "hash-order"));
         await store.SaveAsync(Binding("artifact-2", "node-b", "Event", "hash-order"));
         await store.SaveAsync(Binding("artifact-3", "node-c", "Event", "hash-other"));
+        await store.SaveAsync(Binding("artifact-4", "node-d", "Signal", "hash-order"));
 
         // Cross-artifact by-stimulus lookup returns every published artifact waiting on the same stimulus.
         var byStimulus = await store.ListByStimulusAsync("Event", "hash-order");
         Assert.Equal(new[] { "artifact-1", "artifact-2" }, byStimulus.Select(b => b.ArtifactId).OrderBy(x => x));
 
-        // Type post-filter narrows a shared hash so it can never cross-match a different stimulus type.
-        Assert.Empty(await store.ListByStimulusAsync("Signal", "hash-order"));
+        // The composite route narrows a shared hash by stimulus type before documents are returned.
+        var bySharedHashOtherType = await store.ListByStimulusAsync("Signal", "hash-order");
+        Assert.Equal("artifact-4", Assert.Single(bySharedHashOtherType).ArtifactId);
 
         // Per-artifact lookup is scoped to the one artifact.
         var byArtifact = await store.ListByArtifactAsync("artifact-1");
@@ -42,8 +49,11 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     [InlineData("memory")]
     public async Task DeleteByArtifact_RemovesOnlyThatArtifact(string provider)
     {
-        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
-        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
 
         await store.SaveAsync(Binding("artifact-1", "node-a", "Event", "hash-order"));
         await store.SaveAsync(Binding("artifact-1", "node-b", "Event", "hash-order2"));
@@ -62,8 +72,11 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     [InlineData("memory")]
     public async Task ListByStimulusType_ReturnsEveryBindingOfType_AcrossArtifacts(string provider)
     {
-        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
-        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
 
         // Two HTTP bindings on different artifacts + hashes, plus one of another type.
         await store.SaveAsync(Binding("artifact-1", "node-a", "HttpEndpoint", "hash-1"));
@@ -75,6 +88,41 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         Assert.Equal(new[] { "artifact-1", "artifact-2" }, http.Select(b => b.ArtifactId).OrderBy(x => x));
 
         Assert.Empty(await store.ListByStimulusTypeAsync("Signal"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ActivatePublication_StagesProjectionStateWithLoadedVersions(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        var observingStore = new GroundworkFailureInjectingDocumentStore(
+            fixture.DocumentStore,
+            fixture.BoundedDocumentStore,
+            fixture.DocumentStore.Access,
+            new GroundworkFailureController());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            observingStore,
+            GroundworkTestSerialization.Serializer,
+            observingStore);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [PublicationBinding("publication-1", "artifact-1", "node-a", "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-2",
+            [PublicationBinding("publication-2", "artifact-2", "node-b", "slot-b")]);
+
+        await store.ActivatePublicationAsync("publication-2", "publication-1");
+
+        var activationProjectionSaves = observingStore.StagedSaves
+            .Where(request =>
+                request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind &&
+                request.ExpectedVersion is not null)
+            .ToArray();
+        Assert.Equal([1L, 1L], activationProjectionSaves.Select(request => request.ExpectedVersion));
+        Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-2", StringComparison.Ordinal));
+        Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-1", StringComparison.Ordinal));
     }
 
     private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>
@@ -90,4 +138,24 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             "order-scope",
             new Dictionary<string, string> { ["slice"] = "w7" },
             new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero));
+
+    private static WorkflowTriggerBinding PublicationBinding(string publicationId, string artifactId, string nodeId, string slotId) =>
+        new(
+            WorkflowTriggerBinding.BuildId(publicationId, artifactId, nodeId, "hash-order"),
+            artifactId,
+            $"definition-{artifactId}",
+            "1.0.0",
+            $"hash-{artifactId}",
+            nodeId,
+            "Event",
+            "hash-order",
+            "order-scope",
+            new Dictionary<string, string> { ["slice"] = "w7" },
+            new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero),
+            PublicationId: publicationId,
+            SlotId: slotId,
+            IsActive: false);
+
+    private static StorageManifest RuntimeManifest() =>
+        new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync().GetAwaiter().GetResult().Manifest;
 }

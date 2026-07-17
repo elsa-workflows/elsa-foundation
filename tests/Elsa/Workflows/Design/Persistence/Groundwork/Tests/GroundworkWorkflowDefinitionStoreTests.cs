@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -126,5 +128,80 @@ public class GroundworkWorkflowDefinitionStoreTests
     {
         var store = await SeededStoreAsync();
         Assert.Empty(await store.ListAsync(new WorkflowDefinitionFilter()));
+    }
+
+    [Fact]
+    public async Task Tenant_agnostic_query_requires_explicit_across_scope_privilege_and_records_outcome()
+    {
+        var manifest = WorkflowsDesignStorageManifest.Create();
+        var ordinaryStore = new InMemoryDocumentStore(manifest);
+        var accessor = new MutableAccessContextAccessor
+        {
+            Current = PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))
+        };
+        var source = new SeededSessionSource(Sample()[..2]);
+        var auditSink = new GroundworkPrivilegedAccessSink();
+        var sessions = new GroundworkStoreSessionFactory(
+            accessor,
+            source,
+            new GroundworkPrivilegedAccessRecorder(auditSink));
+        var store = new GroundworkWorkflowDefinitionStore(ordinaryStore, ordinaryStore, sessions);
+        var filter = new WorkflowDefinitionFilter { TenantAgnostic = true };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListAsync(filter));
+        Assert.Equal(0, source.OpenCount);
+
+        accessor.Current = PersistenceAccessContext.PrivilegedScoped(
+            new PersistenceScope("tenant-a"),
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListAsync(filter));
+        Assert.Equal(0, source.OpenCount);
+
+        accessor.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants"));
+        var results = await store.ListAsync(filter);
+
+        Assert.Equal(["a", "b"], results.Select(definition => definition.Id).Order(StringComparer.Ordinal));
+        Assert.Equal(1, source.OpenCount);
+        var records = auditSink.Snapshot();
+        Assert.Equal(2, records.Count);
+        Assert.Equal(GroundworkPrivilegedAccessEventKind.Acquisition, records[0].EventKind);
+        Assert.Equal(GroundworkPrivilegedAccessEventKind.Outcome, records[1].EventKind);
+        Assert.Equal(records[0].AuditId, records[1].AuditId);
+        Assert.Equal(GroundworkPrivilegedAccessOutcome.Succeeded, records[1].Outcome);
+    }
+
+    private sealed class MutableAccessContextAccessor : IPersistenceAccessContextAccessor
+    {
+        public required PersistenceAccessContext Current { get; set; }
+    }
+
+    private sealed class SeededSessionSource(IReadOnlyList<WorkflowDefinition> definitions)
+        : IGroundworkStoreSessionSource
+    {
+        public int OpenCount { get; private set; }
+
+        public async ValueTask<GroundworkStoreSessionResources> OpenAsync(
+            global::Groundwork.Documents.Scoping.DocumentStoreAccess access,
+            CancellationToken cancellationToken = default)
+        {
+            OpenCount++;
+            var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create(), access);
+            foreach (var definition in definitions)
+            {
+                var document = new GroundworkDocument<WorkflowDefinition>(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                    definition);
+                await store.SaveAsync(
+                    new SaveDocumentRequest(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                        definition.Id,
+                        SchemaVersion,
+                        JsonSerializer.Serialize(document, GroundworkDesignJson.Options)),
+                    cancellationToken);
+            }
+
+            return new GroundworkStoreSessionResources(store, store);
+        }
     }
 }

@@ -1,5 +1,11 @@
 {
   "SchemaVersion": 1,
+  "ProtectedProviderNeutralProjects": [
+    "Elsa.Workflows.Runtime.Core",
+    "Elsa.Foundation.Identity.Abstractions",
+    "Elsa.Secrets.Core",
+    "Elsa.Workflows.Runtime.Distributed"
+  ],
   "Surface": {
     "EfProjects": [
       "src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
@@ -60,7 +66,6 @@
     ],
     "SharedBuildPackageReferences": [],
     "DirectEfProjectReferences": [
-      "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
@@ -99,8 +104,6 @@
       "tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj -\u003E src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj"
     ],
     "TransitiveEfProjectConsumers": [
-      "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
-      "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj",
       "src/Apps/Elsa.Server/Elsa.Server.csproj -\u003E src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj",
@@ -141,8 +144,6 @@
       "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj -\u003E src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj",
       "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj -\u003E src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj",
       "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj -\u003E src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
-      "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
-      "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj",
       "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj",
       "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj",
       "tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj -\u003E src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj",
@@ -468,19 +469,14 @@
       "tests/Elsa/Persistence/EFCore/Tests/UpsertCommandGeneratorSqlServerTests.cs -\u003E UseSqlServer x 1",
       "tests/Elsa/Persistence/EFCore/Tests/UpsertCommandGeneratorTests.cs -\u003E UseSqlite x 1",
       "tests/Elsa/Workflows/Design/Tests/Infrastructure/WorkflowsDesignTestHost.cs -\u003E UseSqlite x 3",
-      "tests/Elsa/Workflows/Design/Tests/Unit/MigrationSmokeTests.cs -\u003E UseSqlite x 2",
-      "tests/Elsa/Workflows/Design/Tests/Unit/PublishingGroundworkSqliteUpgradeTests.cs -\u003E UseSqlite x 1"
+      "tests/Elsa/Workflows/Design/Tests/Unit/MigrationSmokeTests.cs -\u003E UseSqlite x 2"
     ],
     "HostConfigurationFiles": [
       "src/Apps/Elsa.Server/appsettings.json -\u003E json:$.Logging.LogLevel.Microsoft.EntityFrameworkCore -\u003E EntityFrameworkCore",
       "src/Apps/Elsa.Server/shells.Production.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore",
-      "src/Apps/Elsa.Server/shells.baseline.json -\u003E json:$.CShells.Shells.default.Features.ActivitiesDesignPersistenceEFCoreSqlite -\u003E EFCore",
-      "src/Apps/Elsa.Server/shells.baseline.json -\u003E json:$.CShells.Shells.default.Features.WorkflowsDesignPersistenceEFCoreSqlite -\u003E EFCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.ActivitiesDesignPersistenceEFCoreSqlite -\u003E EFCore",
       "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.DiagnosticsOpenTelemetryPersistenceEFCoreSqlite -\u003E EFCore",
       "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.DiagnosticsStructuredLogsPersistenceEFCoreSqlite -\u003E EFCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore",
-      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.WorkflowsDesignPersistenceEFCoreSqlite -\u003E EFCore"
+      "src/Apps/Elsa.Server/shells.json -\u003E json:$.CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore -\u003E EntityFrameworkCore"
     ],
     "EfFreeBoundaryViolations": []
   }

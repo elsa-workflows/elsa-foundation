@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <para>
 /// This is a contribution (fan-in) seam, the pre-write counterpart of <see cref="IWorkflowTriggerIndexObserver"/>:
 /// register implementations with
-/// <c>services.TryAddEnumerable(ServiceDescriptor.Singleton&lt;IWorkflowTriggerIndexValidator, MyValidator&gt;())</c>;
+/// <c>services.TryAddEnumerable(ServiceDescriptor.Scoped&lt;IWorkflowTriggerIndexValidator, MyValidator&gt;())</c>;
 /// the indexer resolves them as <c>IEnumerable&lt;IWorkflowTriggerIndexValidator&gt;</c>. There is no default
 /// implementation — an unvalidated index is valid.
 /// </para>

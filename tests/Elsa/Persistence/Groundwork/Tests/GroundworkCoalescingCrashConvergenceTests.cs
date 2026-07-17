@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -35,7 +36,7 @@ public sealed class GroundworkCoalescingCrashConvergenceTests
     [Fact]
     public async Task Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
 
         // Reference: a crash-free Immediate run establishes the terminal state the recovered run must converge to.
         var controlSnapshot = await RunControlAsync(manifest);
@@ -178,8 +179,7 @@ public sealed class GroundworkCoalescingCrashConvergenceTests
             authoredActivityId: "authored-node-start",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 

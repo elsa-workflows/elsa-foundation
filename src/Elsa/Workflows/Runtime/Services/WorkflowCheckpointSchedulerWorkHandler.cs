@@ -231,17 +231,21 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: null,
-            CorrelationId: priorWorkflowState?.CorrelationId,
-            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
-            TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
+            CorrelationId: priorWorkflowState?.CorrelationId ?? payload.CorrelationId,
+            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId ?? payload.ParentWorkflowExecutionId,
+            TenantId: priorWorkflowState?.TenantId ?? payload.TenantId,
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }, priorWorkflowState)))
+            }, priorWorkflowState, workItem)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            Partition = priorWorkflowState?.Partition ?? payload.Partition,
+            Authority = priorWorkflowState?.Authority ?? payload.Authority,
+            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
+            TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
         };
 
@@ -252,10 +256,17 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     // builders rebuild SystemMetadata from scratch, so without this a SetName assignment folded into an
     // activity-completed checkpoint would be wiped by the subsequent workflow-completed checkpoint — mirroring
     // how the dedicated CorrelationId field is carried forward via priorWorkflowState.
-    private static Dictionary<string, string> PreserveInstanceName(Dictionary<string, string> metadata, WorkflowExecutionState? priorWorkflowState)
+    private static Dictionary<string, string> PreserveSystemMetadata(
+        Dictionary<string, string> metadata,
+        WorkflowExecutionState? priorWorkflowState,
+        RuntimeSchedulerWorkItem? workItem = null)
     {
         if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var instanceName) == true)
             metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var existingReferenceId) == true)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = existingReferenceId;
+        else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
 
         return metadata;
     }
@@ -279,7 +290,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
@@ -287,6 +298,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            Partition = priorWorkflowState?.Partition ?? payload.Partition,
+            Authority = priorWorkflowState?.Authority ?? payload.Authority,
+            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
+            TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame
                 ? rootFrame.Status == VariableFrameStatus.Active ? rootFrame.Close(rootFrame.Revision) : rootFrame
                 : null

@@ -76,6 +76,13 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, schedulePayload.PinnedExecutable, executable.Identity);
 
+        if (workItem.ExecutionScopeId is { } executionScopeId)
+        {
+            var scopeOwner = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, executionScopeId, cancellationToken);
+            if (scopeOwner?.Status == ActivityExecutionStatus.Cancelled)
+                return null;
+        }
+
         var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, schedulePayload.ExecutableNodeId, "ScheduleActivity");
 
         var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
@@ -128,6 +135,9 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     {
         var scheduledAt = _timeProvider.GetUtcNow();
         var provenance = NormalizeProvenance(workItem.WorkflowExecutionId, schedulePayload);
+        var executionScopeId = executableNode.Metadata.ContainsKey("activity.definitionVersionId")
+            ? schedulePayload.ActivityExecutionId
+            : provenance.ExecutionScopeId;
         var execution = new ActivityExecution(
             ActivityExecutionId: schedulePayload.ActivityExecutionId,
             WorkflowExecutionId: workItem.WorkflowExecutionId,
@@ -135,6 +145,18 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             AuthoredActivityId: executableNode.AuthoredActivityId,
             ActivityType: executableNode.ActivityType,
             ActivityTypeVersion: executableNode.ActivityTypeVersion);
+
+        var metadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.ScheduleReason] = schedulePayload.Reason,
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.PinnedArtifactVersion] = schedulePayload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.PinnedArtifactHash] = schedulePayload.PinnedExecutable.ArtifactHash
+        };
+        foreach (var key in BoundaryInspectionMetadataKeys)
+            if (executableNode.Metadata.TryGetValue(key, out var value))
+                metadata[key] = value;
 
         return new ActivityExecutionState(
             Execution: execution,
@@ -154,12 +176,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             IncidentIds: [],
             FaultCount: 0,
             AggregateFaultCount: 0,
-            Metadata: new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.ScheduleReason] = schedulePayload.Reason,
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
-                [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId
-            },
+            Metadata: metadata,
             DocumentVersion: ActivityExecutionValueFlowDocumentVersions.Current,
             ContractIdentity: executableNode.IntrinsicKind is null
                 ? new ActivityInvocationContractIdentity(
@@ -174,9 +191,23 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 ActivityExecutionValueFlowDocumentVersions.Current,
                 ActivityExecutionValueFlowDocumentVersions.Current))
         {
-            IterationFrameRequest = schedulePayload.IterationFrame
+            IterationFrameRequest = schedulePayload.IterationFrame,
+            ExecutionScopeId = executionScopeId,
+            Attempt = provenance.Attempt
         };
     }
+
+    private static readonly string[] BoundaryInspectionMetadataKeys =
+    [
+        "activity.definitionId",
+        "activity.definitionVersionId",
+        "activity.version",
+        "activity.templateHash",
+        "activity.sourceReferenceId",
+        "activity.invocationOrigin",
+        "activity.placementNamespace",
+        "graph.templateHash"
+    ];
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
         RuntimeSchedulerWorkItem workItem,
@@ -269,7 +300,9 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             sequence: scheduleWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: scheduleWorkItem.CommandMetadata,
-            envelopeMetadata: scheduleWorkItem.EnvelopeMetadata);
+            envelopeMetadata: scheduleWorkItem.EnvelopeMetadata,
+            executionScopeId: scheduleWorkItem.ExecutionScopeId ?? schedulePayload.SchedulingProvenance.ExecutionScopeId,
+            attempt: scheduleWorkItem.Attempt ?? schedulePayload.SchedulingProvenance.Attempt);
     }
 
     private static ActivitySchedulingProvenance NormalizeProvenance(

@@ -97,7 +97,10 @@ public sealed class ClrAssemblyScannerTests
         var version = new ActivityDefinitionVersionFactory(identityGenerator, new DefaultActivityDefinitionHasher()).Create(
             definition,
             model.Version,
-            model.DescriptorType,
+            model.ProviderKey,
+            model.ProviderSchemaVersion,
+            model.ConsumerKey,
+            model.ConsumerSchemaVersion,
             descriptorPayload,
             "CLR",
             activityType.Assembly.GetName().Name!,

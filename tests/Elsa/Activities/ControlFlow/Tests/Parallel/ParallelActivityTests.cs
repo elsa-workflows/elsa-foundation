@@ -238,8 +238,7 @@ public sealed class ParallelActivityTests : IDisposable
             authoredActivityId: "authored-parallel",
             activityType: typeof(ParallelActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
@@ -259,8 +258,7 @@ public sealed class ParallelActivityTests : IDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 

@@ -74,6 +74,7 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
 
     private static ActivityInputDescriptorView ToView(InputDefinition input) =>
         new(
+            input.ReferenceKey,
             input.Name,
             input.Type.Alias,
             input.DisplayName,

@@ -14,32 +14,70 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
     private const string ImportedStructureKind = "elsa3.imported-activity.structure";
     private const string ImportedStructureSchemaVersion = "1.0.0";
 
-    public async ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken)
+    public ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken) =>
+        Map(source, new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal), cancellationToken);
+
+    public async ValueTask<ActivityNode> Map(
+        Elsa3Activity source,
+        IReadOnlyDictionary<string, Elsa3ActivityExactReplacement> replacements,
+        CancellationToken cancellationToken)
     {
-        var version = await GetVersion(source, cancellationToken);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(replacements);
+        var mapped = new Dictionary<Elsa3Activity, ActivityNode>(ReferenceEqualityComparer.Instance);
+        var stack = new Stack<(Elsa3Activity Activity, bool ChildrenVisited)>();
+        stack.Push((source, false));
+        while (stack.TryPop(out var frame))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!frame.ChildrenVisited)
+            {
+                stack.Push((frame.Activity, true));
+                var children = frame.Activity.Activities ?? [];
+                for (var index = children.Count - 1; index >= 0; index--)
+                    stack.Push((children[index], false));
+                continue;
+            }
 
-        var inputs = new List<ArgumentState>();
-        var outputs = new List<ArgumentState>();
-        ExtractInputsAndOutputs(inputs, outputs, version, source.AdditionalProperties);
+            if (frame.Activity.Connections?.Any() == true)
+                throw new NotSupportedException("Elsa 3 activity graph connections require a Flowchart-owned importer module.");
 
-        var childActivities = (await GetChildActivities(source, cancellationToken)).ToArray();
-        if (source.Connections?.Any() == true)
-            throw new NotSupportedException("Elsa 3 activity graph connections require a Flowchart-owned importer module.");
+            string activityVersionId;
+            IReadOnlySet<string> inputNames;
+            IReadOnlySet<string> outputNames;
+            if (replacements.TryGetValue(frame.Activity.NodeId, out var replacement))
+            {
+                activityVersionId = replacement.ActivityVersionId;
+                inputNames = replacement.InputNames;
+                outputNames = replacement.OutputNames;
+            }
+            else
+            {
+                var version = await GetVersion(frame.Activity, cancellationToken);
+                activityVersionId = version.Id;
+                inputNames = version.Inputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                outputNames = version.Outputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
 
-        var structure = childActivities.Length == 0
-            ? null
-            : new ActivityNodeStructure(
-                ImportedStructureKind,
-                ImportedStructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = childActivities }));
+            var inputs = new List<ArgumentState>();
+            var outputs = new List<ArgumentState>();
+            ExtractInputsAndOutputs(inputs, outputs, inputNames, outputNames, frame.Activity.AdditionalProperties);
+            var childActivities = (frame.Activity.Activities ?? []).Select(x => mapped[x]).ToArray();
+            var structure = childActivities.Length == 0
+                ? null
+                : new ActivityNodeStructure(
+                    ImportedStructureKind,
+                    ImportedStructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { activities = childActivities }));
+            mapped.Add(frame.Activity, new ActivityNode(
+                frame.Activity.NodeId,
+                activityVersionId,
+                inputs,
+                outputs,
+                structure));
+        }
 
-        return new ActivityNode(
-            source.NodeId,
-            version.Id,                 // FR-011: single ActivityVersionId : string (Unit B catalog row id)
-            inputs,
-            outputs,
-            structure
-        );
+        return mapped[source];
         // NOTE (Unit C, 2026-05-28): Elsa3 per-activity designer position/size in
         // source.Metadata.Designer is no longer carried into ActivityNode — display metadata
         // now lives on WorkflowDefinitionVersionLayout sibling as DesignMetadataRecord (§E2.9.2).
@@ -47,22 +85,11 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         // separate task — flagged in the Unit C follow-up as Elsa3-import layout-carryover.
     }
 
-    private async ValueTask<IEnumerable<ActivityNode>> GetChildActivities(Elsa3Activity source, CancellationToken cancellationToken)
-    {
-        var result = new List<ActivityNode>();
-        foreach (var activity in source?.Activities ?? [])
-        {
-            var child = await Map(activity, cancellationToken);
-            result.Add(child);
-        }
-
-        return result;
-    }
-
     private static void ExtractInputsAndOutputs(
         List<ArgumentState> inputs,
         List<ArgumentState> outputs,
-        IActivityDefinitionVersion version,
+        IReadOnlySet<string> inputNames,
+        IReadOnlySet<string> outputNames,
         IDictionary<string, JsonElement> properties
     )
     {
@@ -79,8 +106,8 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
                 continue;
             }
 
-            var isInput = version.Inputs.Any(i => i.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
-            var isOutput = version.Outputs.Any(i => i.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
+            var isInput = inputNames.Contains(propertyName);
+            var isOutput = outputNames.Contains(propertyName);
 
             if (isInput && value.ValueKind != JsonValueKind.Null)
                 inputs.Add(argument);
@@ -138,3 +165,8 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         return true;
     }
 }
+
+public sealed record Elsa3ActivityExactReplacement(
+    string ActivityVersionId,
+    IReadOnlySet<string> InputNames,
+    IReadOnlySet<string> OutputNames);

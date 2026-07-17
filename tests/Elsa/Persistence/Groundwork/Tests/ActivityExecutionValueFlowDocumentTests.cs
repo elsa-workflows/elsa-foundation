@@ -1,6 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
-using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -175,39 +173,6 @@ public sealed class ActivityExecutionValueFlowDocumentTests
         Assert.Contains("missing-input-snapshot", exception.Message, StringComparison.Ordinal);
         Assert.Throws<ArgumentException>(() => new ActivityExecutionValueFlowDocumentVersionGuard(
             1, 3, false, null, null));
-    }
-
-    [Theory]
-    [InlineData(ActivityExecutionStatus.Running, "input snapshot")]
-    [InlineData(ActivityExecutionStatus.Completed, "input snapshot")]
-    public void Legacy_started_or_completed_document_upcasts_for_inspection_but_fails_execution_compatibility(
-        ActivityExecutionStatus status,
-        string expectedReason)
-    {
-        var document = new JsonObject
-        {
-            ["workflowExecutionId"] = "workflow-1",
-            ["state"] = new JsonObject
-            {
-                ["status"] = (int)status,
-                ["execution"] = new JsonObject
-                {
-                    ["activityExecutionId"] = "invocation-1",
-                    ["activityType"] = "Tests.LegacyActivity",
-                    ["activityTypeVersion"] = "1.0.0"
-                }
-            }
-        };
-
-        var upcasted = new ActivityExecutionStateDocumentV1ToV2Upcaster().Upcast(document);
-        var state = upcasted["state"]!.AsObject();
-        var guard = state["valueFlowCompatibility"]!.Deserialize<ActivityExecutionValueFlowDocumentVersionGuard>(JsonOptions)!;
-
-        Assert.Equal(ActivityExecutionValueFlowDocumentVersions.Current, state["documentVersion"]!.GetValue<int>());
-        Assert.False(guard.IsCompatible);
-        Assert.Equal("VF-ACT-009", guard.IncompatibilityCode);
-        Assert.Contains(expectedReason, guard.Reason!, StringComparison.OrdinalIgnoreCase);
-        Assert.Throws<InvalidOperationException>(guard.EnsureCompatible);
     }
 
     private static ValueEnvelope Inline(ValueTypeDescriptor type, object value) =>

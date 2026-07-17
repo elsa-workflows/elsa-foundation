@@ -4,8 +4,15 @@ using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
-public sealed class GroundworkPublicationProjectionIntentStore(IDocumentStore store, PublishingGroundworkDocumentSerializer serializer)
-    : GroundworkPublishingStore(store, serializer, PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind), IPublicationProjectionIntentStore
+public sealed class GroundworkPublicationProjectionIntentStore(
+    IDocumentStore store,
+    PublishingGroundworkDocumentSerializer serializer,
+    IBoundedDocumentStore queries)
+    : GroundworkPublishingStore(
+        store,
+        serializer,
+        PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind,
+        queries ?? throw new ArgumentNullException(nameof(queries))), IPublicationProjectionIntentStore
 {
     public async ValueTask SaveAsync(PublicationProjectionIntent intent, CancellationToken cancellationToken = default)
     {
@@ -27,7 +34,11 @@ public sealed class GroundworkPublicationProjectionIntentStore(IDocumentStore st
 
     public async ValueTask<IReadOnlyCollection<PublicationProjectionIntent>> ListByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
-        var docs = await QueryAsync<IntentDocument>(PublishingGroundworkStorageManifest.ByPublicationIndex, publicationId, cancellationToken);
+        var docs = await QueryAsync<IntentDocument>(
+            PublishingGroundworkStorageManifest.ListByPublicationQuery,
+            PublishingGroundworkStorageManifest.PublicationIdField,
+            publicationId,
+            cancellationToken);
         return docs.Select(x => x.Intent).OrderBy(x => x.IntentId, StringComparer.Ordinal).ToArray();
     }
 

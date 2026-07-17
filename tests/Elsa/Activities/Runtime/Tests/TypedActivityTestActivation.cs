@@ -80,12 +80,16 @@ internal static class TypedActivityTestActivation
         var request = new ActivityActivationRequest(
             contract,
             snapshot,
-            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow));
-        var activator = new ClrActivityActivator(
+            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
+            Descriptor: new RuntimeActivityDescriptor(
+                WellKnownRuntimeActivityConsumers.ClrActivity,
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                contract.DescriptorPayload));
+        var strategy = new ClrActivityActivator(
             services.GetRequiredService<IServiceScopeFactory>(),
             registry,
-            serializer,
-            new ActivityInputHydrator());
+            serializer);
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator());
         return await activator.ActivateAsync(request);
     }
 }

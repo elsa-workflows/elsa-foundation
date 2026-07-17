@@ -22,6 +22,8 @@ service and a recurring pump that re-drives interrupted executions. See the work
 - **Schedule:** `AdaptiveIntervalSchedule` re-evaluates the interval each run from `RuntimeResumptionOptions.SweepInterval` and the current backoff.
 - **Register:** provided by `WorkflowsRuntimeResumptionFeature`; not intended for standalone registration.
 
+Post-commit intent kinds can contribute their own retry policy. Parent-resume delivery uses an unbounded positive-backoff policy because acknowledgement is safe only after durable bookmark consumption is observable. The outbox processor persists each failed attempt before logging a payload-free structured warning, allowing operators to alert on an indefinitely retrying stable item/kind/attempt tuple without exposing intent payloads or exception text. Unsupported kinds continue through the existing policy-selected failed/final path and are never silently acknowledged.
+
 ## Options
 
 ### `RuntimeResumptionOptions` *(`Elsa.Workflows.Runtime.Resumption`)*
@@ -31,7 +33,7 @@ service and a recurring pump that re-drives interrupted executions. See the work
 
 ## Cross-references
 
-- Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor` — see [`../EXTENSION_POINTS.md`](../EXTENSION_POINTS.md).
+- Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor`, `IPostCommitOutboxLookupStore`, and `IWorkflowOutputSource` — see [`../EXTENSION_POINTS.md`](../EXTENSION_POINTS.md).
 - Durable queue bridge: `GroundworkWorkflowSchedulerWorkQueue` (`Elsa.Persistence.Groundwork`).
 - Worked reference: [docs/runtime-durable-resumption.md](../../../../../docs/runtime-durable-resumption.md).
 - Repo-wide index: [`../../../EXTENSION_POINTS.md`](../../../EXTENSION_POINTS.md).

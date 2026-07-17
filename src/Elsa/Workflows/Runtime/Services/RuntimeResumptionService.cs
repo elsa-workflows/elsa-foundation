@@ -24,7 +24,8 @@ public sealed class RuntimeResumptionService(
     IRuntimeRecoveryScanner recoveryScanner,
     IWorkflowExecutionActorProvider agentProvider,
     IRuntimeExecutionIdGenerator idGenerator,
-    TimeProvider timeProvider) : IRuntimeResumptionService
+    TimeProvider timeProvider,
+    IWorkflowExecutionPartitionAccessor? partitionAccessor = null) : IRuntimeResumptionService
 {
     private const string DispatchSource = "runtime-resumption";
 
@@ -37,7 +38,7 @@ public sealed class RuntimeResumptionService(
             new RuntimePostCommitOutboxProcessRequest(
                 limit: request.OutboxBatchSize,
                 workflowExecutionId: null,
-                intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork),
+                intentKind: null),
             cancellationToken);
 
         var executionIds = await DiscoverExecutionIdsAsync(request, cancellationToken);
@@ -84,13 +85,15 @@ public sealed class RuntimeResumptionService(
         try
         {
             var now = timeProvider.GetUtcNow();
+            var partition = CurrentPartition();
             var agent = await agentProvider.GetAgentAsync(
                 new WorkflowExecutionActorActivationRequest(
                     workflowExecutionId: workflowExecutionId,
                     reason: WorkflowExecutionActorActivationReason.Recovery,
                     requestedAt: now,
                     requestedBy: DispatchSource,
-                    requiredCapabilities: agentProvider.Capabilities),
+                    requiredCapabilities: agentProvider.Capabilities,
+                    partition: partition),
                 cancellationToken);
 
             var commandId = idGenerator.NewWorkflowExecutionCommandId();
@@ -109,7 +112,8 @@ public sealed class RuntimeResumptionService(
                 idempotencyKey: $"{DispatchSource}:{workflowExecutionId}:{envelopeId}",
                 deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
                 enqueuedAt: now,
-                metadata: metadata);
+                metadata: metadata,
+                partition: partition);
 
             var dispatchResult = await agent.EnqueueAsync(envelope, cancellationToken);
 
@@ -133,6 +137,14 @@ public sealed class RuntimeResumptionService(
                 EnvelopeId: null,
                 Failure: exception.Message);
         }
+    }
+
+    private WorkflowExecutionPartition CurrentPartition()
+    {
+        if (partitionAccessor is null)
+            return new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+
+        return partitionAccessor.Current;
     }
 
     private static RuntimeResumptionDispatchOutcome MapOutcome(WorkflowExecutionCommandDispatchStatus status) => status switch

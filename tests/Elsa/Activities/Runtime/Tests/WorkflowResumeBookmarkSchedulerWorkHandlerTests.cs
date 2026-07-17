@@ -80,6 +80,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             DefaultRuntimeFaultCapturePolicy.CreateDefault()));
         services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         services.AddSingleton<ActivityCompletionProjector>();
+        services.AddSingleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>();
+        services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
+        services.AddSingleton<RuntimeOutputCaptureProjector>();
         return services.BuildServiceProvider();
     }
 

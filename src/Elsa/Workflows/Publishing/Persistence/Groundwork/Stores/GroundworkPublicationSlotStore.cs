@@ -4,8 +4,15 @@ using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
-public sealed class GroundworkPublicationSlotStore(IDocumentStore store, PublishingGroundworkDocumentSerializer serializer)
-    : GroundworkPublishingStore(store, serializer, PublishingGroundworkStorageManifest.PublicationSlotDocumentKind), IPublicationSlotStore
+public sealed class GroundworkPublicationSlotStore(
+    IDocumentStore store,
+    PublishingGroundworkDocumentSerializer serializer,
+    IBoundedDocumentStore queries)
+    : GroundworkPublishingStore(
+        store,
+        serializer,
+        PublishingGroundworkStorageManifest.PublicationSlotDocumentKind,
+        queries ?? throw new ArgumentNullException(nameof(queries))), IPublicationSlotStore
 {
     public async ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
     {
@@ -16,7 +23,11 @@ public sealed class GroundworkPublicationSlotStore(IDocumentStore store, Publish
     public async ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
-        var docs = await QueryAsync<SlotDocument>(PublishingGroundworkStorageManifest.ByDefinitionIndex, workflowDefinitionId, cancellationToken);
+        var docs = await QueryAsync<SlotDocument>(
+            PublishingGroundworkStorageManifest.ListByDefinitionQuery,
+            PublishingGroundworkStorageManifest.WorkflowDefinitionIdField,
+            workflowDefinitionId,
+            cancellationToken);
         return docs.Select(x => x.Slot).OrderBy(x => x.SlotName, StringComparer.Ordinal).ToArray();
     }
 
@@ -45,7 +56,8 @@ public sealed class GroundworkPublicationSlotStore(IDocumentStore store, Publish
         if (publicationId is not null)
         {
             var owners = await QueryAsync<SlotDocument>(
-                PublishingGroundworkStorageManifest.ByActivePublicationIndex,
+                PublishingGroundworkStorageManifest.FindByActivePublicationQuery,
+                PublishingGroundworkStorageManifest.ActivePublicationIdField,
                 publicationId,
                 cancellationToken);
             if (owners.Any(owner => !StringComparer.Ordinal.Equals(owner.Slot.SlotId, slotId)))

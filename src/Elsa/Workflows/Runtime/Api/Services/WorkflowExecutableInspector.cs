@@ -85,7 +85,7 @@ public sealed class WorkflowExecutableInspector(
             executable.ResumeTargets.Count,
             references.Count(reference => reference.IsLive(now)),
             retained,
-            Node(executable.RootActivity),
+            Node(executable.RootActivity, includeSourceDetails: false),
             executable.CompatibilityMetadata,
             chosen is null
                 ? null
@@ -93,7 +93,52 @@ public sealed class WorkflowExecutableInspector(
                     chosen.SourceReferenceId,
                     requested is null ? chosen.IsLive(now) ? "newest-live" : "newest" : "requested",
                     chosen.Layout),
-            ordered.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray());
+            ordered.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray())
+        {
+            InputContract = InputContract(executable.InputContract),
+            Dependencies = executable.Dependencies
+                .OrderBy(dependency => dependency.ArtifactId, StringComparer.Ordinal)
+                .Select(dependency => new WorkflowExecutableDependencyView(
+                    dependency.ArtifactId,
+                    dependency.ArtifactHash,
+                    dependency.DispatchNodeIds.Order(StringComparer.Ordinal).ToArray()))
+                .ToArray()
+        };
+    }
+
+    public async ValueTask<WorkflowExecutableInputSourcesView?> GetInputSourcesAsync(
+        string artifactId,
+        string sourceReferenceId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
+
+        var executable = await executableStore.FindAsync(artifactId, cancellationToken);
+        var reference = await referenceStore.FindAsync(sourceReferenceId, cancellationToken);
+        if (executable is null || reference is null || !StringComparer.Ordinal.Equals(reference.ArtifactId, artifactId))
+            return null;
+
+        var authoredInputs = reference.AuthoredInputs.Select(input => new WorkflowExecutableAuthoredInputView(
+            input.ExecutableNodeId,
+            input.InputKey,
+            input.ExpressionType,
+            input.IsSensitive ? null : input.Value,
+            input.IsSensitive,
+            input.IsSensitive ? "redacted" : "allowed")).ToArray();
+        var compiledInputs = executable.Nodes
+            .SelectMany(node => node.InputBindings.Values.Select(binding => new WorkflowExecutableCompiledInputView(
+                node.ExecutableNodeId,
+                Binding(binding, includeSourceDetails: !binding.EffectivePolicy.IsSensitive),
+                binding.EffectivePolicy.IsSensitive ? "redacted" : "allowed")))
+            .ToArray();
+
+        return new WorkflowExecutableInputSourcesView(
+            artifactId,
+            sourceReferenceId,
+            "allowed",
+            authoredInputs,
+            compiledInputs);
     }
 
     public async ValueTask<ExecutableProvenanceView?> GetProvenanceAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -159,15 +204,15 @@ public sealed class WorkflowExecutableInspector(
             .OrderByDescending(reference => reference.PublishedAt ?? reference.CreatedAt)
             .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal);
 
-    private static WorkflowExecutableNodeView Node(ExecutableNode node) =>
+    private static WorkflowExecutableNodeView Node(ExecutableNode node, bool includeSourceDetails) =>
         new(
             node.ExecutableNodeId,
             node.AuthoredActivityId,
             node.ActivityType,
             node.ActivityTypeVersion,
             node.Structure?.Kind,
-            node.InputBindings.Values.OrderBy(binding => binding.InputName, StringComparer.Ordinal).Select(Binding).ToArray(),
-            node.ChildSlots.Select(slot => new WorkflowExecutableChildSlotView(slot.Name, slot.Activities.Select(Node).ToArray())).ToArray(),
+            node.InputBindings.Values.OrderBy(binding => binding.InputName, StringComparer.Ordinal).Select(binding => Binding(binding, includeSourceDetails)).ToArray(),
+            node.ChildSlots.Select(slot => new WorkflowExecutableChildSlotView(slot.Name, slot.Activities.Select(child => Node(child, includeSourceDetails)).ToArray())).ToArray(),
             ProjectConnections(node));
 
     // The immutable executable structure is activity-owned, so Runtime API does not deserialize it through an
@@ -213,8 +258,33 @@ public sealed class WorkflowExecutableInspector(
         return new(nodeIdValue.GetString()!, port);
     }
 
-    private static WorkflowExecutableInputBindingView Binding(RuntimeInputBinding binding) =>
-        new(binding.InputName, binding.Source.ToString(), Preview(binding));
+    private static WorkflowExecutableInputBindingView Binding(RuntimeInputBinding binding, bool includeSourceDetails) =>
+        new(
+            binding.InputName,
+            binding.Source.ToString(),
+            includeSourceDetails ? Preview(binding) : null,
+            binding.InputKey,
+            binding.EffectivePolicy.IsSensitive,
+            includeSourceDetails ? binding.LiteralValue : null,
+            includeSourceDetails ? binding.Expression : null,
+            includeSourceDetails ? binding.WorkflowRequest : null,
+            includeSourceDetails ? binding.Variable : null,
+            includeSourceDetails ? binding.ActivityResult : null,
+            includeSourceDetails ? binding.Metadata : null);
+
+    private static WorkflowExecutableInputContractView? InputContract(WorkflowExecutableInputContract? contract) =>
+        contract is null
+            ? null
+            : new WorkflowExecutableInputContractView(
+                contract.Version,
+                contract.Inputs
+                    .OrderBy(input => input.Name, StringComparer.Ordinal)
+                    .Select(input => new WorkflowExecutableDeclaredInputView(
+                        input.Name,
+                        input.Type,
+                        input.IsRequired,
+                        input.DefaultValue?.Clone()))
+                    .ToArray());
 
     private static string? Preview(RuntimeInputBinding binding)
     {

@@ -29,7 +29,10 @@ public sealed class AddVersionCommandHandler(
         var version = versionFactory.Create(
             definition,
             command.Version,
-            command.DescriptorType,
+            command.ProviderKey,
+            command.ProviderSchemaVersion,
+            command.ConsumerKey,
+            command.ConsumerSchemaVersion,
             command.DescriptorPayload,
             sourceKind: "Api",
             sourceId: definition.ActivityTypeKey,

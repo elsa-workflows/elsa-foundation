@@ -1,5 +1,7 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -7,6 +9,8 @@ using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 
@@ -45,6 +49,7 @@ public sealed class WorkflowsRuntimeReferenceGarbageCollectionFeature : IShellFe
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddPersistenceCore();
         services.Configure<WorkflowExecutableReferenceGarbageCollectionOptions>(options =>
         {
             options.SweepInterval = TimeSpan.FromMinutes(SweepIntervalMinutes);
@@ -56,7 +61,10 @@ public sealed class WorkflowsRuntimeReferenceGarbageCollectionFeature : IShellFe
             options.ArtifactCreationGracePeriod = TimeSpan.FromMinutes(ArtifactCreationGracePeriodMinutes);
         });
 
-        services.TryAddSingleton<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
-        services.AddSingleton<IRecurringTask, WorkflowExecutableReferenceGarbageCollectionPumpTask>();
+        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
+        services.AddSingleton<IRecurringTask>(sp => new WorkflowExecutableReferenceGarbageCollectionPumpTask(
+            sp.GetRequiredService<IPersistenceScopeRunner>(),
+            sp.GetRequiredService<IOptions<WorkflowExecutableReferenceGarbageCollectionOptions>>(),
+            sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask>>()));
     }
 }

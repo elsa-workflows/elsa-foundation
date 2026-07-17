@@ -1,0 +1,12 @@
+<Project>
+
+  <!--
+    Groundwork's GW0004 diagnostic marks legacy query overloads that bypass an admitted bounded-query
+    route. Production Elsa code treats that diagnostic as an error; compatibility-only interface stubs
+    must suppress it at the exact declaration site.
+  -->
+  <PropertyGroup>
+    <WarningsAsErrors>$(WarningsAsErrors);GW0004</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

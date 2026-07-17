@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -17,6 +19,8 @@ public sealed record WorkflowExecutionState(
     string? TenantId,
     IReadOnlyDictionary<string, string> SystemMetadata)
 {
+    private int _dispatchNestingDepth;
+
     /// <summary>
     /// The durable classification pinned when this execution starts. States written before run-kind tracking
     /// deserialize to <see cref="WorkflowRunKind.Unknown"/> and remain distinguishable as legacy history.
@@ -27,6 +31,32 @@ public sealed record WorkflowExecutionState(
     /// Immutable source attribution selected when this execution started. Null only for legacy state.
     /// </summary>
     public WorkflowExecutableSourceProvenance? PinnedSource { get; init; }
+
+    /// <summary>Partition selected when the execution was dispatched. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionPartition? Partition { get; init; }
+
+    /// <summary>Immutable runtime-owned authority and root-initiator attribution. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionAuthoritySnapshot? Authority { get; init; }
+
+    /// <summary>
+    /// Number of cross-workflow dispatch edges from the root execution. Root and legacy states default to zero.
+    /// </summary>
+    public int DispatchNestingDepth
+    {
+        get => _dispatchNestingDepth;
+        init
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Dispatch nesting depth cannot be negative.");
+            _dispatchNestingDepth = value;
+        }
+    }
+
+    /// <summary>Authoritative finite test-run scope. Null for non-test and legacy execution state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestScope? TestScope { get; init; }
 
     /// <summary>
     /// The workflow activation's lexical variable frame. Null only for legacy states that predate

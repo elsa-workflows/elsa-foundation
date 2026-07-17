@@ -1,7 +1,9 @@
 using Elsa.Tasks.Core;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Scheduling.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -39,14 +41,28 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
 {
     private const string PumpRequestedBy = "runtime.recurring-trigger";
 
-    private readonly IRecurringTriggerScheduleStore _store;
-    private readonly IStimulusRouter _router;
-    private readonly IRecurringScheduleCalculator _calculator;
+    private readonly IPersistenceScopeRunner? _scopeRunner;
+    private readonly IRecurringTriggerScheduleStore? _store;
+    private readonly IStimulusRouter? _router;
+    private readonly IRecurringScheduleCalculator? _calculator;
     private readonly IOptions<RecurringTriggerPumpOptions> _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<RecurringTriggerPumpTask> _logger;
     private int _consecutiveSweepFailures;
 
+    [ActivatorUtilitiesConstructor]
+    public RecurringTriggerPumpTask(
+        IPersistenceScopeRunner scopeRunner,
+        IOptions<RecurringTriggerPumpOptions> options,
+        TimeProvider timeProvider,
+        ILogger<RecurringTriggerPumpTask> logger)
+        : this(options, timeProvider, logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeRunner);
+        _scopeRunner = scopeRunner;
+    }
+
+    /// <summary>Direct-construction seam retained for focused pump tests and custom hosts.</summary>
     public RecurringTriggerPumpTask(
         IRecurringTriggerScheduleStore store,
         IStimulusRouter router,
@@ -54,17 +70,26 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         IOptions<RecurringTriggerPumpOptions> options,
         TimeProvider timeProvider,
         ILogger<RecurringTriggerPumpTask> logger)
+        : this(options, timeProvider, logger)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(router);
         ArgumentNullException.ThrowIfNull(calculator);
-        ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(logger);
 
         _store = store;
         _router = router;
         _calculator = calculator;
+    }
+
+    private RecurringTriggerPumpTask(
+        IOptions<RecurringTriggerPumpOptions> options,
+        TimeProvider timeProvider,
+        ILogger<RecurringTriggerPumpTask> logger)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+
         _options = options;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -80,20 +105,25 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
 
         try
         {
-            var due = await _store.ListDueAsync(now, options.MaxSchedulesPerTick, cancellationToken);
-            var fired = 0;
-
-            foreach (var schedule in due)
+            if (_scopeRunner is null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (await FireAsync(schedule, now, cancellationToken))
-                    fired++;
+                await SweepAsync(_store!, _router!, _calculator!, options, now, cancellationToken);
+            }
+            else
+            {
+                await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
+                {
+                    await SweepAsync(
+                        operationScope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
+                        operationScope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
+                        operationScope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
+                        options,
+                        now,
+                        operationCancellationToken);
+                }, cancellationToken);
             }
 
             _consecutiveSweepFailures = 0;
-
-            if (fired > 0 && _logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug("Recurring-trigger sweep fired {Fired}/{DueCount} due schedule(s)", fired, due.Count);
         }
         catch (OperationCanceledException)
         {
@@ -110,6 +140,28 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         }
     }
 
+    private async Task SweepAsync(
+        IRecurringTriggerScheduleStore store,
+        IStimulusRouter router,
+        IRecurringScheduleCalculator calculator,
+        RecurringTriggerPumpOptions options,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var due = await store.ListDueAsync(now, options.MaxSchedulesPerTick, cancellationToken);
+        var fired = 0;
+
+        foreach (var schedule in due)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await FireAsync(store, router, calculator, schedule, now, cancellationToken))
+                fired++;
+        }
+
+        if (fired > 0 && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Recurring-trigger sweep fired {Fired}/{DueCount} due schedule(s)", fired, due.Count);
+    }
+
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -118,31 +170,37 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
 
     // Returns true when the schedule's occurrence was claimed and a start dispatched. A per-schedule failure
     // never escapes the sweep.
-    private async Task<bool> FireAsync(RecurringTriggerSchedule schedule, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<bool> FireAsync(
+        IRecurringTriggerScheduleStore store,
+        IStimulusRouter router,
+        IRecurringScheduleCalculator calculator,
+        RecurringTriggerSchedule schedule,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         DateTimeOffset? next;
         try
         {
-            next = _calculator.ComputeNext(schedule.Kind, schedule.Expression, now);
+            next = calculator.ComputeNext(schedule.Kind, schedule.Expression, now);
         }
         catch (Exception exception)
         {
             // A schedule whose expression no longer parses cannot advance; drop it so it does not jam the sweep.
             _logger.LogError(exception, "Recurring schedule '{ScheduleId}' has an invalid expression; deleting it", schedule.ScheduleId);
-            await _store.DeleteAsync(schedule.ScheduleId, cancellationToken);
+            await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
             return false;
         }
 
         if (next is null)
         {
             // Cron exhausted (no future occurrence): remove the schedule rather than leave it perpetually due.
-            await _store.DeleteAsync(schedule.ScheduleId, cancellationToken);
+            await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
             return false;
         }
 
         // Claim-first: advance the cursor via CAS before dispatching, so a concurrent sweep cannot double-fire
         // this occurrence.
-        var claimed = await _store.TryAdvanceAsync(schedule.ScheduleId, schedule.NextOccurrence, next.Value, cancellationToken);
+        var claimed = await store.TryAdvanceAsync(schedule.ScheduleId, schedule.NextOccurrence, next.Value, cancellationToken);
         if (!claimed)
             return false;
 
@@ -155,7 +213,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
                 idempotencyKey: $"recurring:{schedule.ScheduleId}:{schedule.NextOccurrence.UtcTicks}",
                 requestedBy: PumpRequestedBy);
 
-            await _router.RouteAsync(request, cancellationToken);
+            await router.RouteAsync(request, cancellationToken);
             return true;
         }
         catch (OperationCanceledException)

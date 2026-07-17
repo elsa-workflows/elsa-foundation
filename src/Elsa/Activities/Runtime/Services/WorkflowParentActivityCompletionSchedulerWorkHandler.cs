@@ -166,6 +166,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         IReadOnlyCollection<RuntimeSchedulerWorkItem> callbackBypassContinuationWorkItems = [];
         ActivityActivationLease? activationLease = null;
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots = [];
+        RuntimeActivityCompletionCheckpointPreparation? completionCheckpointPreparation = null;
         try
         {
             if (checkpointCommitter is null)
@@ -257,6 +258,22 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 var scheduledChildren = context.GetChildActivityScheduleRequests();
                 if (!continuation.IsDeferred && scheduledChildren.Count > 0)
                     throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same child-completion evaluation.");
+
+                if (continuation.IsComplete && parentActivity is IRuntimeActivityCheckpointParticipant checkpointParticipant)
+                {
+                    var persistedValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+                    completionCheckpointPreparation = await checkpointParticipant.PrepareCompletionCheckpointAsync(
+                        context,
+                        persistedValues,
+                        _timeProvider.GetUtcNow(),
+                        cancellationToken);
+                    var completionTransition = (IActivityCompletionTransition)completionCheckpointPreparation.Transition;
+                    if (!StringComparer.Ordinal.Equals(completionTransition.Outcome, continuation.OutcomeName))
+                    {
+                        throw new InvalidOperationException(
+                            $"Checkpoint participant completion outcome '{completionTransition.Outcome}' does not match structural continuation outcome '{continuation.OutcomeName}'.");
+                    }
+                }
             }
 
         }
@@ -424,6 +441,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
         ActivityExecutionState completedParentState;
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> completionDurableValueChanges;
         try
         {
             var completedAt = _timeProvider.GetUtcNow();
@@ -431,14 +449,29 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 ?? throw new InvalidOperationException($"VF-ACT-001: Executable structural activity node '{parentExecutableNode.ExecutableNodeId}' has no pinned activity contract.");
             var openAttempt = currentParentState.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)
                 ?? throw new InvalidOperationException($"VF-ACT-009: Running structural activity invocation '{currentParentState.InvocationId}' has no open committed attempt.");
+            var completionTransition = completionCheckpointPreparation?.Transition
+                                       ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.OutcomeName!);
             var completionProjection = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId,
                 currentParentState.InvocationId,
                 openAttempt,
                 contract,
-                ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.OutcomeName!),
+                completionTransition,
                 completedAt,
                 cancellationToken);
+            var outputCaptureChanges = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+                workItem.WorkflowExecutionId,
+                currentParentState.InvocationId,
+                parentExecutableNode,
+                (IActivityCompletionTransition)completionTransition,
+                completionProjection,
+                completedAt,
+                cancellationToken);
+            completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
+                .Concat(outputCaptureChanges)
+                .GroupBy(change => change.StateId, StringComparer.Ordinal)
+                .Select(group => group.Last())
+                .ToArray();
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId,
                 openAttempt.InvocationId,
@@ -522,7 +555,16 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (checkpointCommitter is null)
             throw new InvalidOperationException("A checkpoint committer is required to atomically persist structural activity completion.");
 
-        await CommitCompletedParentActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, payload, completedParentState, ReadCompletionOutcomeNames(completedParentState), containerVariableSnapshots, cancellationToken);
+        await CommitCompletedParentActivityAsync(
+            checkpointCommitter,
+            inspectionAccumulator,
+            workItem,
+            payload,
+            completedParentState,
+            ReadCompletionOutcomeNames(completedParentState),
+            containerVariableSnapshots,
+            completionDurableValueChanges,
+            cancellationToken);
     }
 
     private async ValueTask RecordParentFaultAsync(
@@ -583,7 +625,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         var attempt = state.Attempts?.LastOrDefault(item => item.EndedAt is null)
             ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
         var activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-            new ActivityActivationRequest(contract, snapshot, attempt, state.PrivateState),
+            new ActivityActivationRequest(contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
             cancellationToken);
         return new ConstructedActivity(activationLease.Activity, snapshot, activationLease);
     }
@@ -759,6 +801,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         ActivityExecutionState completedParentState,
         IReadOnlyCollection<string> outcomeNames,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
@@ -807,7 +850,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         Metadata: metadata)
                 ],
                 bookmarks: [],
-                durableValues: [],
+                durableValues: durableValueChanges,
                 incidents: [],
                 operational: [],
                 activityExecutionInspections: inspection is null

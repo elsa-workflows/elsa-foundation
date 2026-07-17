@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
@@ -31,6 +32,8 @@ public sealed class ClrAssemblyScanner(
     IActivityTypeCategoryResolver categoryResolver,
     ILogger<ClrAssemblyScanner> logger) : IClrAssemblyScanner
 {
+    public const string ProviderKey = "elsa.clr-activity";
+    public const string SchemaVersion = "1";
     private const long MaxJavaScriptSafeInteger = 9007199254740991L;
     private static readonly string ActivityInterfaceFullName = typeof(IActivity).FullName!;
     private static readonly string ActivityResultInterfaceFullName = typeof(IActivityResult<>).FullName!;
@@ -180,7 +183,10 @@ public sealed class ClrAssemblyScanner(
             DisplayName: null,
             Category: category,
             Description: null,
-            DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey: ProviderKey,
+            ProviderSchemaVersion: SchemaVersion,
+            ConsumerKey: WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion: RuntimeActivityDescriptor.InitialSchemaVersion,
             Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type)),
             Inputs: inputs,
             Outputs: outputs,

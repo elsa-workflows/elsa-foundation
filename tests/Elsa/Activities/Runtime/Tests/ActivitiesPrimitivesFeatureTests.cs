@@ -11,12 +11,12 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class ActivitiesPrimitivesFeatureTests
 {
     [Fact]
-    public void ConfigureServices_RegistersClrActivator()
+    public void ConfigureServices_RegistersClrActivationStrategy()
     {
         var services = new ServiceCollection();
 
         new ActivitiesPrimitivesFeature().ConfigureServices(services);
 
-        Assert.Contains(services, d => d.ServiceType == typeof(IActivityActivator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityActivationStrategy));
     }
 }

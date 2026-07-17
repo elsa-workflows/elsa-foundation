@@ -2,6 +2,9 @@ using System.Text.Json;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -50,6 +53,69 @@ public sealed class GroundworkDurableTimerStoreTests
 
         var limited = await store.ListDueAsync(Now, limit: 2);
         Assert.Equal(new[] { "timer-early", "timer-a" }, limited.Select(timer => timer.TimerId));
+    }
+
+    [Fact]
+    public async Task ListDue_UsesDeclaredDueTimeRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IDurableTimerStore store = new GroundworkDurableTimerStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListDueAsync(Now, limit: 17);
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListDueDurableTimersQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
+        Assert.Equal(Now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
+        var order = Assert.Single(query.Order);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, order.Path);
+        Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+        Assert.Null(query.Take);
+    }
+
+    [Fact]
+    public async Task ListAsync_UsesDeclaredWorkflowExecutionRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IDurableTimerStore store = new GroundworkDurableTimerStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListAsync("wfexec-1");
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        Assert.Equal("wfexec-1", Assert.Single(comparison.Values));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListAsync_ReturnsOnlyWorkflowTimers_OrderedByTimerId(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IDurableTimerStore store = NewStore(fixture);
+
+        await store.SaveAsync(NewTimer("timer-b", workflowExecutionId: "wfexec-1", dueOffset: TimeSpan.FromMinutes(-1)));
+        await store.SaveAsync(NewTimer("timer-a", workflowExecutionId: "wfexec-1", dueOffset: TimeSpan.FromMinutes(-1)));
+        await store.SaveAsync(NewTimer("timer-other", workflowExecutionId: "wfexec-2", dueOffset: TimeSpan.FromMinutes(-1)));
+
+        var timers = await store.ListAsync("wfexec-1");
+
+        Assert.Equal(new[] { "timer-a", "timer-b" }, timers.Select(timer => timer.TimerId));
     }
 
     [Theory]
@@ -146,4 +212,24 @@ public sealed class GroundworkDurableTimerStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(new DocumentQueryResult([], 0));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 }

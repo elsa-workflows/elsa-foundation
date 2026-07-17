@@ -1,6 +1,6 @@
 # Extension points — Persistence.Groundwork (runtime) domain
 
-The Groundwork document-store bridge that persists Elsa runtime state (bookmarks, executables, activity/workflow execution state, durable values, scheduler/operational/control-plane/incident state, checkpoint commits, the post-commit outbox, the durable scheduler work queue, and workflow trigger bindings) for shells that select Groundwork runtime persistence. Contracts are defined and defaulted in this feature; the store implementations map the runtime `.Core` state records onto provider-neutral `Groundwork.Documents` envelopes.
+The Groundwork document-store bridge that persists Elsa runtime state (bookmarks, executables, activity/workflow execution state, durable values, scheduler/operational/control-plane/incident state, checkpoint commits, detached workflow-dispatch lifecycles, the post-commit outbox, the durable scheduler work queue, and workflow trigger bindings) for shells that select Groundwork runtime persistence. Contracts are defined and defaulted in this feature; the store implementations map the runtime `.Core` state records onto provider-neutral `Groundwork.Documents` envelopes.
 
 This catalog covers the **schema-versioning** seams added so persisted runtime state can evolve without silently breaking suspended workflows. See [`../../../../docs/serialization.md`](../../../../docs/serialization.md) (**Schema evolution**) for the contract and the sanctioned-exception rationale.
 
@@ -8,34 +8,52 @@ This catalog covers the **schema-versioning** seams added so persisted runtime s
 
 The runtime persistence seams are backed by a Groundwork document store only when a host composes a
 provider shell feature. The provider choice is the host's; runtime and domain code reference only the
-neutral ports. Each provider feature registers the concrete `IDocumentStore` and calls
+neutral ports. Each provider feature registers a scoped access-bound `IDocumentStore` adapter and calls
 `AddGroundworkRuntimeStores()` (runtime-only) or the unified registration (all lanes).
 
 | Shell feature | Provider | Scope | Registration |
 |---|---|---|---|
 | `GroundworkRuntimePersistenceSqlite` | SQLite | Runtime only | `SqliteGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceSqlite` | SQLite | Runtime + workflows-design + activities-design | `AddGroundworkSqliteUnifiedPersistence` |
+| `GroundworkUnifiedPersistenceSqlite` | SQLite | Six provider-level families; Identity explicit | `AddGroundworkSqliteUnifiedPersistence` |
 | `GroundworkRuntimePersistencePostgreSql` | PostgreSQL | Runtime only | `PostgreSqlGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | Runtime + workflows-design + activities-design | `AddGroundworkPostgreSqlUnifiedPersistence` |
+| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | Six provider-level families; Identity explicit | `AddGroundworkPostgreSqlUnifiedPersistence` |
+| `GroundworkRuntimePersistenceSqlServer` | SQL Server | Runtime only | `SqlServerGroundworkRuntimePersistenceShellFeature` |
+| `GroundworkUnifiedPersistenceSqlServer` | SQL Server | Six provider-level families; Identity explicit | `AddGroundworkSqlServerUnifiedPersistence` |
+| `GroundworkRuntimePersistenceMongoDb` | MongoDB replica set | Runtime only | `MongoDbGroundworkRuntimePersistenceShellFeature` |
+| `GroundworkUnifiedPersistenceMongoDb` | MongoDB replica set | Six provider-level families; Identity explicit | `AddGroundworkMongoDbUnifiedPersistence` |
 
-The unified features share one provider-neutral union manifest (`GroundworkUnifiedManifest` in
-`Elsa.Persistence.Groundwork.Unified`), so the composition of the three lanes' document kinds is defined
-once and materialized per provider. SQLite stays the default composition; PostgreSQL is opt-in via
+The unified features share one host-selected provider-neutral manifest snapshot for Runtime, Secrets,
+Distributed Runtime, Workflows Design, Activities Design, and Publishing. Identity contributes its own
+manifest only when the host explicitly selects it and uses the matching deployment schema. SQLite stays the default composition; PostgreSQL is opt-in via
 `shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
 
-**Startup materialization — async initialization.** Materializing the document store (opening the connection
-and applying the manifest schema) is async, so it is not done inside the synchronous `ConfigureServices`
-factory. Instead each provider registers a document-store initializer as **both** an `IHostedService` (plain
+**Startup admission — async initialization.** Runtime startup inspects the deployment-applied physical schema
+and publishes immutable provider resources, so it is not done inside the synchronous `ConfigureServices`
+factory. Each provider registers a document-store initializer as **both** an `IHostedService` (plain
 hosts / tests) and a CShells `IShellInitializer` in the `LifecyclePhase.Prepare` phase (shell-composed hosts,
-where shell-scoped hosted services do not run). The initializer awaits store creation once at host startup and
-populates a shared, provider-neutral `GroundworkDocumentStoreHolder`; the registered `IDocumentStore` resolves
-from that holder, so consumers still resolve a fully-initialized singleton with no synchronous block on the
-resolving thread. The `Prepare` phase guarantees the store is ready before any other shell initializer that
-reads it, and both host lifecycles await the initializer before request handling begins. The
-`AddGroundwork{Sqlite,PostgreSql}UnifiedPersistence` and provider shell-feature signatures are unchanged. A
+where shell-scoped hosted services do not run). The initializer admits the selected manifest once and publishes
+a provider-owned `GroundworkStoreSessionSource`. Each scoped adapter invocation acquires a fresh immutable
+Groundwork session bound to the current provider-neutral `PersistenceAccessContext`; no mutable ambient scope or
+application-wide store instance is retained. The `Prepare` phase guarantees the source is ready before any
+initializer reads it, and both host lifecycles await the initializer before request handling begins. The
+four unified provider registrations and provider shell-feature signatures are unchanged. A
 bare `IServiceProvider` built without a host lifecycle (e.g. some tests) has no hook to run the initializer, so
-it must drive it explicitly before resolving `IDocumentStore` — resolving beforehand throws a descriptive
-`InvalidOperationException` rather than silently blocking.
+it must drive it explicitly before the first provider operation. `IDocumentStore` resolves beforehand as a
+`GroundworkScopedDocumentStore`; its first operation throws a descriptive `InvalidOperationException` until the
+session source is admitted. Resolution itself never blocks or performs provider I/O.
+
+**Atomic runtime admission.** The runtime manifest declares the logical `runtime-checkpoint-commit` path on
+the `checkpointCommit` storage unit as requiring `AtomicCommit` plus observed
+`multi-document-transactions` topology. The unit is the stable admission anchor; the capability covers the
+cross-unit checkpoint transaction that fence-touches ownership and commits checkpoint state, outbox state, and
+the idempotency marker together. Every provider initializer must activate that exact feature/unit/path tuple.
+SQLite, PostgreSQL, and SQL Server report transactional storage as a provider invariant. MongoDB reports atomic
+commit evidence only after the initializer has observed a matching writable replica set and completed a real
+transaction round trip; configured intent alone is never admission evidence.
+
+MongoDB keeps one validate-only admitted handle for the provider lifetime and derives access-bound stores from
+that immutable runtime. It does not create a client, probe topology, or repeat schema admission for each scoped
+operation. Disposing the session source drains an in-flight store binding before it releases the provider handle.
 
 **Query-shape validation (PostgreSQL).** The PostgreSQL Groundwork provider serves the same query shapes
 Elsa already relies on for SQLite: `PostgreSqlDocumentStore` derives from the shared
@@ -47,24 +65,36 @@ workarounds — no equality-only restriction applies to this provider's publishe
 
 ## Override — replacement contracts
 
-Exactly one implementation is active per runtime host (registered with `TryAddSingleton` in `AddGroundworkRuntimeStores()`, so a host may replace either default).
+Exactly one implementation is active per runtime host. Logic-bearing runtime stores are scoped so request
+access cannot cross DI scopes; immutable serializers, manifests, and admitted provider resources use their
+reviewed longer-lived registrations.
 
 | Contract | Default implementation | Responsibility |
 |---|---|---|
-| `IGroundworkRuntimeDocumentSerializer` | `GroundworkRuntimeDocumentSerializer` | Owns the frozen bridge `JsonSerializerOptions`; stamps each document with its kind's current schema version on write and enforces the stamp on read (deserialize current, upcast older, fail loudly on unknown/future). The single sanctioned serialization surface for runtime documents — stores must not call `System.Text.Json` directly. |
-| `IGroundworkRuntimeDocumentUpcasterRegistry` | `GroundworkRuntimeDocumentUpcasterRegistry` | Indexes contributed upcasters per kind and applies them one version at a time; validates the chain **eagerly at construction** (duplicate step, chain gap, step at/beyond a kind's current version, or an incomplete known-kind chain all fail at startup). |
+| `IGroundworkRuntimeDocumentSerializer` | `GroundworkRuntimeDocumentSerializer` | Elsa facade over Groundwork's `VersionedJsonDocumentCodec`. Owns the frozen bridge `JsonSerializerOptions` and Elsa's per-kind policies; Groundwork stamps and enforces versions and rejects below-minimum/unknown/future versions. This is the single sanctioned serialization surface for Runtime stores. |
+| `IGroundworkStoreSessionFactory` | `GroundworkStoreSessionFactory` | Maps the current provider-neutral context to one immutable access-bound session. `ExecutePrivilegedAcrossScopesAsync` rejects every non-across-scope context before provider acquisition, records acquisition, disposes the provider lease, then records exactly one terminal outcome. |
+| `IGroundworkPrivilegedAccessEmitter` | Scoped `GroundworkPrivilegedAccessRecorder` writing to the singleton bounded `GroundworkPrivilegedAccessSink` | Emits correlated, sanitized acquisition/outcome records. Scoped tenant identities are represented by a stable SHA-256 reference; raw tenants and exception messages never become metric labels or retained event fields. |
+| `IWorkflowDispatchStore`, `IWorkflowDispatchQueryStore`, `IWorkflowDispatchDeleteStore`, `IWorkflowDispatchRetentionRootStore`, `IWorkflowDispatchAdmissionStore`, `IWorkflowDispatchCancellationStore` | Scoped `GroundworkWorkflowDispatchStore` | Persists immutable dispatch identity/provenance plus monotonic lifecycle state, serves declared parent/child/status inspection routes, deletes retention-approved terminal records, exposes every Pending/Started child artifact as a garbage-collection root, conditionally admits child materialization, and resolves parent cancellation inside the checkpoint transaction. |
+| `IWorkflowTestScopeStore`, `IWorkflowTestScopeAdmissionStore`, `IWorkflowTestScopeCleanupStore` | Scoped `GroundworkWorkflowTestScopeStore` plus `GroundworkTestScopeCleanupStore` | Persists finite test-scope lifecycle and exact-scope indexes. Detached admission touches Open scope with the dispatch transition; cleanup touches Closing scope and commits cancellation state plus any deterministic cancel outbox item in one cross-unit transaction. |
+| `IRuntimePostCommitOutboxStore`, `IRuntimePostCommitOutboxClaimStore`, `IRuntimePostCommitOutboxClaimCompletionStore`, `IPostCommitOutboxLookupStore`, `IWorkflowDispatchRedriveStore` | Scoped `GroundworkRuntimePostCommitOutboxStore` | Persists post-checkpoint intents, supports exact committed-item lookup, grants visibility-bounded fenced claims, rejects stale completions, and atomically records a final outbox result with its optional dispatch-failure projection. The same transaction owner performs separately authorized fire-and-forget redrive over the linked dispatch and failed-final item, advancing generation/fencing without changing logical identity. Exact lookup lets replay reuse an already committed parent-resume intent rather than recapturing outputs. |
 
-## Extend — contribution (fan-in)
+Tenant-agnostic design-store query flags are query intent only. They never grant authority: the caller must
+already hold a named `PersistenceAccessContext.PrivilegedAcrossScopes` context, and the adapter executes only
+the admitted bounded collection route. Ordinary and privileged-but-scoped contexts fail before provider
+resources are opened.
 
-| Interface | Kind | What to register |
-|---|---|---|
-| `IGroundworkRuntimeDocumentUpcaster` | Source (per-version migration step) | One implementation per `(DocumentKind, FromVersion)` step. Register any number in the service collection; the registry discovers them all via `IEnumerable<IGroundworkRuntimeDocumentUpcaster>`. Each rewrites content JSON from `FromVersion` to `FromVersion + 1`. |
+## Schema migration contributions
 
-Adding an upcaster never removes another. When bumping a kind's current version in `ElsaRuntimeDocumentVersions`, register an upcaster for the previous version in the same change (see the evolution checklist in `docs/serialization.md`).
+There is no Elsa-owned upcaster contribution surface. Runtime kinds use clean current-only baselines except
+for the explicitly supported `workflowExecutable` v5-to-v6 rolling window. Its migration is a Groundwork
+`IDocumentJsonUpcaster` contribution; compatible future windows must likewise retain every supported fixture
+and extend serializer composition deliberately rather than reintroducing an Elsa-specific codec or registry.
 
 ## Schema-version model
 
-Versions live in the Groundwork **envelope** `SchemaVersion` field (already persisted per document), not inside content JSON and not on the domain state records. Per-kind current versions are integers declared in `ElsaRuntimeDocumentVersions`; `workflowExecutable`, `workflowExecutableSourceReference`, `workflowTriggerBinding`, and `recurringTriggerSchedule` are version `2` with complete production v1-to-v2 upcasters, while unchanged kinds remain at version `1`. The legacy manifest-wide stamp `"1.0.0"` parses as version `1` for every kind. Committed versioned golden fixtures make any unversioned change to a persisted state-record shape a test failure.
+Versions live in the Groundwork **envelope** `SchemaVersion` field (already persisted per document), not inside content JSON and not on the domain state records. Elsa declares per-kind current/minimum-readable policy in `ElsaRuntimeDocumentVersions`; Groundwork's `VersionedJsonDocumentCodec` owns the generic parser/formatter lifecycle, chain validation, upcasting capability, and structured `DocumentSchemaVersionException`. Only positive-integer document stamps are accepted. `workflowExecutable` is current version `6`, minimum-readable version `5`, and contributes the single required v5-to-v6 `IDocumentJsonUpcaster`; missing `isNullable` remains absent and therefore hydrates as unknown. `workflowExecutableSourceReference` and `workflowExecutionState` are current-only version `4`; activity-execution state is current-only version `4`; activity-execution inspection, scheduler work items, workflow trigger bindings, recurring schedules, and durable timers are current-only version `2`; `postCommitOutbox` is version `3`; `workflowDispatch` starts at version `1`; unchanged kinds remain at version `1`. Each kind has a current golden fixture, and workflow executables additionally retain the supported v5 fixtures, making any unversioned persisted-shape change a test failure.
+
+Groundwork checkpoint commits keep the child Completed projection, policy-safe output snapshot, and deterministic parent-resume outbox item in the same admitted transaction. Effective-final child-start delivery checks deterministic child-execution visibility and then either acknowledges the already-admitted child or commits the failed-final dead letter, safe `DispatchFailed` projection, and optional wait-parent resume together. Fire-and-forget redrive uses one cross-unit transaction over the existing dispatch and outbox document kinds; no new persisted kind or index is introduced. Restart tests recreate runtime services around checkpoint, claim, exhaustion, redrive, acknowledgement, and bookmark-consumption boundaries to prove claim expiry and uncertain acknowledgement converge without leaking redacted values.
 
 ## Cross-references
 

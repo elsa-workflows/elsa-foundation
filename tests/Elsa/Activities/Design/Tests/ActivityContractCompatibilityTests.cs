@@ -1,8 +1,13 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Xunit;
+using ActivityActivationRequirement = Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement;
+using ActivityContract = Elsa.Activities.Runtime.Core.Models.ActivityContract;
+using ActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
+using ActivityResultContract = Elsa.Activities.Runtime.Core.Models.ActivityResultContract;
+using ActivityResultProjectionContract = Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract;
+using ActivityValuePolicy = Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy;
 
 namespace Elsa.Activities.Design.Tests;
 

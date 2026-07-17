@@ -1,6 +1,12 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using System.Text.Json;
 using Xunit;
 
@@ -11,6 +17,40 @@ namespace Elsa.Persistence.Groundwork.Tests;
 // bridges are provider-neutral, and round-tripping proves the runtime state survives serialization.
 public sealed class GroundworkRuntimeStateStoreTests
 {
+    [Fact]
+    public async Task Workflow_execution_write_rejects_explicit_wrong_tenant_before_store_io()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"));
+        var state = WorkflowState("wf-1", WorkflowExecutionStatus.Running) with { TenantId = "tenant-b" };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(state).AsTask());
+
+        Assert.Equal(0, documentStore.SaveCount);
+        Assert.Empty(documentStore.Snapshot(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+    }
+
+    [Fact]
+    public async Task Workflow_execution_query_rejects_explicit_wrong_tenant_before_provider_query()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var pageQuery = new RecordingPageQuery();
+        var store = new GroundworkWorkflowExecutionStateStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            pageQuery,
+            documentStore);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10, TenantId: "tenant-b")).AsTask());
+
+        Assert.Equal(0, pageQuery.QueryCount);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -34,6 +74,36 @@ public sealed class GroundworkRuntimeStateStoreTests
         var forWf1 = await store.ListAsync("wf-1");
         Assert.Equal(new[] { "ae-1", "ae-2" }, forWf1.Select(x => x.Execution.ActivityExecutionId).OrderBy(x => x));
         Assert.Single(await store.ListAsync("wf-2"));
+    }
+
+    [Fact]
+    public async Task ActivityExecutionState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IActivityExecutionStateStore seedStore = new GroundworkActivityExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(ActivityState("wf-1", "ae-1"));
+
+        var competingStore = new GroundworkActivityExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "ae-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(ActivityState("wf-1", "ae-1", ActivityExecutionStatus.Completed));
+            }
+        };
+        IActivityExecutionStateStore store = new GroundworkActivityExecutionStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(ActivityState("wf-1", "ae-1", ActivityExecutionStatus.Faulted)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "ae-1");
+        Assert.Equal(ActivityExecutionStatus.Completed, winner!.Status);
     }
 
     [Theory]
@@ -74,7 +144,12 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task WorkflowExecutionState_RoundTrips_Replaces_And_Lists_All(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            null,
+            fixture.BoundedDocumentStore);
 
         await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Running));
         await store.SaveAsync(WorkflowState("wf-2", WorkflowExecutionStatus.Pending));
@@ -115,6 +190,66 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Single(await store.ListAsync("wf-1"));
     }
 
+    [Fact]
+    public async Task DurableValueState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IDurableValueStateStore seedStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 42));
+
+        var competingStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableValueStateDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "dv-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 84));
+            }
+        };
+        IDurableValueStateStore store = new GroundworkDurableValueStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(DurableValue("wf-1", "dv-1", value: 126)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "dv-1");
+        Assert.Equal(84, winner!.InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task DurableValueState_Delete_RejectsProviderVersionChangeBetweenLoadAndDelete()
+    {
+        await using var fixture = CreateStore("memory");
+        IDurableValueStateStore seedStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 42));
+
+        var competingStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeDelete = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableValueStateDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "dv-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 84));
+            }
+        };
+        IDurableValueStateStore store = new GroundworkDurableValueStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.DeleteAsync("wf-1", "dv-1").AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "dv-1");
+        Assert.Equal(84, winner!.InlineValue!.Value.GetInt32());
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -137,6 +272,36 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(2, (await store.ListAsync()).Count);
     }
 
+    [Fact]
+    public async Task SchedulerState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        ISchedulerStateStore seedStore = new GroundworkSchedulerStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(Scheduler("wf-1", version: 1));
+
+        var competingStore = new GroundworkSchedulerStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.SchedulerStateDocumentKind, request.DocumentKind);
+                Assert.Equal("wf-1", request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(Scheduler("wf-1", version: 5));
+            }
+        };
+        ISchedulerStateStore store = new GroundworkSchedulerStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Scheduler("wf-1", version: 2)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1");
+        Assert.Equal(5, winner!.Version);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -156,6 +321,38 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(2, (await store.ListAsync("wf-1")).Count);
         Assert.Equal(3, (await store.ListAllAsync()).Count);
         Assert.Null(await store.FindAsync("wf-1", "missing"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task OperationalState_ConditionalWrites_PreserveWinnerAndRevision(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IExecutionLivenessStateStore store = new GroundworkExecutionLivenessStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer);
+        var first = OperationalWithValue("wf-1", "ownership:wf-1", "first");
+        var second = OperationalWithValue("wf-1", "ownership:wf-1", "second");
+
+        var created = await store.TrySaveAsync(first, expectedRevision: 0);
+        var duplicate = await store.TrySaveAsync(second, expectedRevision: 0);
+        var loaded = await store.FindVersionedAsync("wf-1", "ownership:wf-1");
+        var updated = await store.TrySaveAsync(second, expectedRevision: loaded!.Revision);
+        var stale = await store.TrySaveAsync(first, expectedRevision: loaded.Revision);
+        var missing = await store.TrySaveAsync(
+            OperationalWithValue("wf-1", "missing", "missing"),
+            expectedRevision: 1);
+
+        Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, created.Status);
+        Assert.Equal(1, created.Revision);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, duplicate.Status);
+        Assert.Equal("first", loaded.State.Metadata["value"]);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, updated.Status);
+        Assert.Equal(2, updated.Revision);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, stale.Status);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.NotFound, missing.Status);
+        Assert.Equal("second", (await store.FindAsync("wf-1", "ownership:wf-1"))!.Metadata["value"]);
     }
 
     [Theory]
@@ -183,6 +380,36 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(3, (await store.ListAllAsync()).Count);
     }
 
+    [Fact]
+    public async Task ControlPlaneState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IWorkflowHoldStateStore seedStore = new GroundworkWorkflowHoldStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(WorkflowHold("cp-1", "wf-1", "first"));
+
+        var competingStore = new GroundworkWorkflowHoldStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, request.DocumentKind);
+                Assert.Equal("cp-1", request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(WorkflowHold("cp-1", "wf-1", "competing"));
+            }
+        };
+        IWorkflowHoldStateStore store = new GroundworkWorkflowHoldStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(WorkflowHold("cp-1", "wf-1", "caller")).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("cp-1");
+        Assert.Equal("competing", winner!.Metadata["value"]);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -204,9 +431,92 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(new[] { "inc-1", "inc-2" }, blocking.Select(x => x.IncidentId).OrderBy(x => x));
     }
 
-    private static ActivityExecutionState ActivityState(string workflowExecutionId, string activityExecutionId) => new(
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task IncidentState_LongFaultIdentity_RoundTrips_And_Remains_InsertOnly(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var workItemId = $"work:{new string('x', 450)}";
+        var incidentId = $"incident:{workItemId}:activity-1:Faulted";
+        Assert.True(incidentId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {incidentId.Length}.");
+
+        Assert.True(await store.TryAddAsync(Incident("wf-1", incidentId, IncidentStatus.Open)));
+        Assert.False(await store.TryAddAsync(Incident("wf-1", incidentId, IncidentStatus.Blocking)));
+        Assert.Equal(IncidentStatus.Open, (await store.FindAsync("wf-1", incidentId))!.Status);
+
+        await store.SaveAsync(Incident("wf-1", incidentId, IncidentStatus.Blocking));
+
+        Assert.Equal(IncidentStatus.Blocking, (await store.FindAsync("wf-1", incidentId))!.Status);
+        Assert.Equal(incidentId, Assert.Single(await store.ListAsync("wf-1")).IncidentId);
+    }
+
+    [Fact]
+    public async Task IncidentState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IIncidentStateStore seedStore = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(Incident("wf-1", "inc-1", IncidentStatus.Open, "first"));
+
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(1, request.ExpectedVersion);
+                var (schemaVersion, content) = GroundworkTestSerialization.Serializer.Serialize(
+                    ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+                    Incident("wf-1", "inc-1", IncidentStatus.Blocking, "competing"));
+                var competingWrite = await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                    request.DocumentKind,
+                    request.Id,
+                    schemaVersion,
+                    content));
+                Assert.Equal(DocumentStoreWriteStatus.Saved, competingWrite.Status);
+            }
+        };
+        IIncidentStateStore store = new GroundworkIncidentStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Incident("wf-1", "inc-1", IncidentStatus.Blocking, "caller")).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "inc-1");
+        Assert.Equal(IncidentStatus.Blocking, winner!.Status);
+        Assert.Equal("competing", winner.Message);
+    }
+
+    [Fact]
+    public async Task IncidentState_PhysicalIdentityCollision_FailsClosed()
+    {
+        await using var fixture = CreateStore("sqlite");
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var incidentId = $"incident:work:{new string('x', 450)}:activity-1:Faulted";
+        var logicalDocumentId = DocumentId.Compose("wf-1", incidentId);
+        var physicalDocumentId = GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(logicalDocumentId);
+        var wrongState = Incident("wf-wrong", "incident-wrong", IncidentStatus.Open);
+        var (schemaVersion, content) = GroundworkTestSerialization.Serializer.Serialize(
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            wrongState);
+        await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            physicalDocumentId,
+            schemaVersion,
+            content));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.FindAsync("wf-1", incidentId));
+
+        Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static ActivityExecutionState ActivityState(
+        string workflowExecutionId,
+        string activityExecutionId,
+        ActivityExecutionStatus status = ActivityExecutionStatus.Running) => new(
         new ActivityExecution(activityExecutionId, workflowExecutionId, $"node-{activityExecutionId}", "authored", "Elsa.Log", "1.0.0"),
-        ActivityExecutionStatus.Running,
+        status,
         SubStatus: null,
         ScheduledAt: DateTimeOffset.UnixEpoch,
         StartedAt: DateTimeOffset.UnixEpoch,
@@ -261,22 +571,52 @@ public sealed class GroundworkRuntimeStateStoreTests
         ParentWorkflowExecutionId: null,
         TenantId: null,
         SystemMetadata: new Dictionary<string, string>())
-    {
-        RunKind = runKind
-    };
+        {
+            RunKind = runKind
+        };
 
-    private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId) => new(
+    private sealed class RecordingPageQuery : IGroundworkWorkflowExecutionStatePageQuery
+    {
+        public int QueryCount { get; private set; }
+
+        public void Bind(global::Groundwork.Core.PhysicalStorage.ExecutableStorageRoute route)
+        {
+        }
+
+        public ValueTask PrepareAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+            WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            QueryCount++;
+            throw new InvalidOperationException("The provider query should not run for a mismatched tenant.");
+        }
+    }
+
+    private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId, int value = 42) => new(
         durableValueId,
         workflowExecutionId,
         $"value-{durableValueId}",
         new RuntimeValueTypeDescriptor("int", null, null),
         DurableValueLifecycle.Instance,
         DurableValueStorage.Inline,
-        Json("42"),
+        Json(value.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         externalReference: null,
         sourceActivityExecutionId: null,
         capturedAt: DateTimeOffset.UnixEpoch,
         metadata: new Dictionary<string, string>());
+
+    private static WorkflowHoldState WorkflowHold(string controlPlaneStateId, string? workflowExecutionId, string value) =>
+        new(
+            controlPlaneStateId,
+            workflowExecutionId,
+            activeHolds: null,
+            releasedHolds: null,
+            metadata: new Dictionary<string, string>
+            {
+                ["value"] = value
+            });
 
     private static SchedulerState Scheduler(string workflowExecutionId, long version) => new(
         workflowExecutionId,
@@ -303,7 +643,24 @@ public sealed class GroundworkRuntimeStateStoreTests
         drain: null,
         interruptedExecution: null);
 
-    private static IncidentState Incident(string workflowExecutionId, string incidentId, IncidentStatus status) => new(
+    private static ExecutionLivenessState OperationalWithValue(
+        string workflowExecutionId,
+        string operationalStateId,
+        string value) =>
+        new(
+            operationalStateId,
+            workflowExecutionId,
+            executionLease: null,
+            heartbeat: null,
+            drain: null,
+            interruptedExecution: null,
+            metadata: new Dictionary<string, string> { ["value"] = value });
+
+    private static IncidentState Incident(
+        string workflowExecutionId,
+        string incidentId,
+        IncidentStatus status,
+        string message = "boom") => new(
         incidentId,
         workflowExecutionId,
         activityExecutionId: null,
@@ -312,7 +669,7 @@ public sealed class GroundworkRuntimeStateStoreTests
         status,
         IncidentResolutionAction.None,
         failureType: "System.Exception",
-        message: "boom",
+        message: message,
         createdAt: DateTimeOffset.UnixEpoch,
         resolvedAt: null);
 
@@ -324,4 +681,72 @@ public sealed class GroundworkRuntimeStateStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
+    {
+        public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+        public Func<DeleteDocumentRequest, Task>? OnBeforeDelete { get; set; }
+        public DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            if (OnBeforeSave is { } hook)
+            {
+                OnBeforeSave = null;
+                await hook(request);
+            }
+
+            return await inner.SaveAsync(request, cancellationToken);
+        }
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public async Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            if (OnBeforeDelete is { } hook)
+            {
+                OnBeforeDelete = null;
+                await hook(request);
+            }
+
+            return await inner.DeleteAsync(request, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.QueryAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.CountAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.FirstOrDefaultAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.AnyAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            inner.BeginAsync(scope, cancellationToken);
+    }
 }

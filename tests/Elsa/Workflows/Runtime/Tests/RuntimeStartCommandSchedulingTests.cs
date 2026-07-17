@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -69,6 +70,28 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal("node-a", payload.ExecutableNodeId);
         Assert.Equal("actexec-1", payload.ActivityExecutionId);
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
+    }
+
+    [Fact]
+    public async Task DelayedStart_RecordsDirectCheckpointFollowUpAfterTheSourceQueueItem()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var handler = NewHandler(store, queue);
+        var delayedRecordedAt = _now.AddMinutes(2);
+
+        await handler.HandleAsync(NewStartWorkItem(executable.Identity, recordedAt: delayedRecordedAt));
+
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(_now, checkpointWork.EnqueuedAt);
+        Assert.Equal(delayedRecordedAt, checkpointWork.RecordedAt);
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var rootWork = Assert.Single(checkpointPayload.PostCommitIntents).Payload!.Value
+            .Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(_now, rootWork.EnqueuedAt);
+        Assert.Equal(delayedRecordedAt, rootWork.RecordedAt);
     }
 
     [Fact]
@@ -216,14 +239,16 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
 
-        var list = await new ListWorkflowInstancesRequestHandler(workflowStore, activityStore, incidentStore)
+        var authorization = new AllowAllActivityExecutionInspectionAuthorizationContext();
+        var list = await new ListWorkflowInstancesRequestHandler(workflowStore, activityStore, incidentStore, authorization)
             .Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
         var detail = await new GetWorkflowInstanceRequestHandler(
                 workflowStore,
                 inspectionStore,
                 incidentStore,
                 durableValueStore,
-                new DefaultRuntimePayloadCapturePolicy())
+                new DefaultRuntimePayloadCapturePolicy(),
+                authorization)
             .Handle(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
         var summary = Assert.Single(list.Items);
         Assert.Equal("version-2", summary.DefinitionVersionId);
@@ -361,6 +386,12 @@ public sealed class RuntimeStartCommandSchedulingTests
             new ArgumentException("boom", "pinnedExecutable")));
         Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
             new ArgumentException("boom", "requestedArtifactId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "parentWorkflowExecutionId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "correlationId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "tenantId")));
     }
 
     [Fact]
@@ -392,7 +423,8 @@ public sealed class RuntimeStartCommandSchedulingTests
         WorkflowExecutableIdentity? pinnedExecutable = null,
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.Start,
         JsonElement? payload = null,
-        bool includePayload = true)
+        bool includePayload = true,
+        DateTimeOffset? recordedAt = null)
     {
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
@@ -408,7 +440,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             envelopeId: "envelope-1",
             idempotencyKey: "wfexec-1:start:artifact-1",
             enqueuedAt: _now,
-            recordedAt: _now,
+            recordedAt: recordedAt ?? _now,
             sequence: 10,
             payload: resolvedPayload,
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
@@ -454,8 +486,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
             metadata: root.Metadata,
             childSlots:
@@ -475,8 +506,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
     }

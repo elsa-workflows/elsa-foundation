@@ -27,7 +27,10 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
             Version("version-2", "definition-1", "2.0.0"));
 
-        var projections = await new GroundworkWorkflowDefinitionListProjectionStore(store, new FakePayloadSerializer())
+        var projections = await new GroundworkWorkflowDefinitionListProjectionStore(
+                store,
+                new FakePayloadSerializer(),
+                GroundworkTestAccess.DefaultAccessContextAccessor)
             .ListByDefinitionIdsAsync(["definition-1", "definition-2"]);
 
         var populated = Assert.Single(projections, x => x.WorkflowDefinitionId == "definition-1");
@@ -66,5 +69,5 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
     private static WorkflowDefinitionVersion Version(string id, string definitionId, string version) =>
         new(definitionId, version) { Id = id, State = EmptyState() };
 
-    private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null, null);
+    private static WorkflowDefinitionState EmptyState() => WorkflowDefinitionState.Empty;
 }

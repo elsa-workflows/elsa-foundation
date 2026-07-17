@@ -168,6 +168,17 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
 
     private static bool TrySelect(JsonElement root, string path, out JsonElement selected)
     {
+        if (StringComparer.Ordinal.Equals(path, "$"))
+        {
+            selected = root;
+            return true;
+        }
+
+        // Stable projection keys are opaque identifiers and may themselves contain dots. Prefer an
+        // exact top-level property before interpreting the path as nested member navigation.
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty(path, out selected))
+            return true;
+
         selected = root;
         foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {

@@ -2,17 +2,22 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
+using Elsa.Secrets.Core.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using global::Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -22,22 +27,33 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests;
 /// <summary>
 /// End-to-end proof of the headline goal against <b>PostgreSQL</b>: one host-selected database backs every Elsa
 /// module. The host composes a single feature (<c>AddGroundworkPostgreSqlUnifiedPersistence</c>) which
-/// materializes the unioned runtime + workflows-design + activities-design manifest into <b>one</b> PostgreSQL
-/// database and points every lane's neutral ports at it. Elsa's runtime and design code reference only the
-/// provider-neutral ports; nothing here is PostgreSQL- or Groundwork-specific except the one host registration
-/// call. Skips gracefully when Docker is unavailable.
+/// materializes the six provider-level feature manifests into <b>one</b> PostgreSQL database and points every
+/// family's neutral ports at it. Nothing here is PostgreSQL- or Groundwork-specific except the one host
+/// registration call. Skips gracefully when Docker is unavailable.
 /// </summary>
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixture fixture)
 {
-    private async Task<ServiceProvider> BuildHostAsync()
+    private async Task<ServiceProvider> BuildHostAsync(bool withIdentity = false)
     {
-        var provider = new ServiceCollection()
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        var services = new ServiceCollection()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
-            .AddSingleton<ISystemClock, FakeSystemClock>()
-            .AddGroundworkPostgreSqlUnifiedPersistence(await fixture.CreateIsolatedDatabaseAsync())
-            .BuildServiceProvider();
-        // A bare provider has no host lifecycle; drive the startup initializer that materializes the store.
+            .AddSingleton<ISystemClock, FakeSystemClock>();
+        if (withIdentity)
+        {
+            services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+                connectionString);
+            services.AddFoundationAspNetCoreIdentityGroundwork();
+        }
+        else
+        {
+            services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString);
+        }
+
+        var provider = services.BuildServiceProvider();
+        await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
+        // A bare provider has no host lifecycle; drive runtime admission after explicit schema application.
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
@@ -55,13 +71,29 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
         // One provider instance backs everything.
         Assert.Same(store1, store2);
 
-        // Runtime lane port resolves.
+        // Runtime, secrets and distributed-runtime lanes resolve from the standalone unified registration.
         Assert.NotNull(provider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore>());
+        Assert.Null(provider.GetService<IUserStore>());
+        Assert.NotNull(provider.GetRequiredService<ISecretRepository>());
+        Assert.NotNull(provider.GetRequiredService<IExecutionPlacementStore>());
 
         // Design lane ports resolve (scoped).
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
+    }
+
+    [SkippableFact]
+    public async Task Explicit_identity_schema_and_feature_admit_and_resolve_on_the_unified_PostgreSQL_target()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+
+        await using var provider = await BuildHostAsync(withIdentity: true);
+        await using var scope = provider.CreateAsyncScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
+        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
     }
 
     [SkippableFact]
@@ -148,7 +180,7 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
         {
             Id = "draft-write",
             WorkflowDefinitionId = "wf-write",
-            State = new WorkflowDefinitionState([], null, [], [], null, null),
+            State = new WorkflowDefinitionState([], null, [], [], null),
         };
 
         // Write through the neutral command; it is backed by the single host-selected Groundwork store.

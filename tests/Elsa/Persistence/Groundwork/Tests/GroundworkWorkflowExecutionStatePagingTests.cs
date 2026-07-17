@@ -1,11 +1,14 @@
 using Elsa.Persistence.Groundwork.Sqlite;
-using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -38,22 +41,22 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'ix_elsa_workflow_history_%';";
-        Assert.Equal(7L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        Assert.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync()));
     }
 
     [Fact]
-    public async Task Sqlite_startup_upgrades_v2_history_before_the_first_page_query()
+    public async Task Sqlite_startup_does_not_rewrite_current_history_document()
     {
         await using var database = new TemporarySqliteDatabase();
         await using (var provider = await BuildProviderAsync(database.ConnectionString))
         {
             var contentJson = await File.ReadAllTextAsync(
-                Path.Combine(AppContext.BaseDirectory, "Fixtures", "v2", "workflowExecutionState.json"));
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "v4", "workflowExecutionState.json"));
             var store = provider.GetRequiredService<IDocumentStore>();
             var result = await store.SaveAsync(new SaveDocumentRequest(
                 "workflowExecutionState",
                 "wf-1",
-                "2",
+                "4",
                 contentJson));
             Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
         }
@@ -66,12 +69,8 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
         await using var reader = await command.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync());
-        Assert.Equal(
-            ElsaRuntimeDocumentVersions.Stamp(
-                ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)),
-            reader.GetString(0));
+        Assert.Equal("4", reader.GetString(0));
         Assert.Contains("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
-        Assert.Contains("\"rootVariableFrame\"", reader.GetString(1), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -83,11 +82,55 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         await WorkflowExecutionHistoryProviderConformance.VerifyAllFiltersAsync(store, _timestamp);
     }
 
+    [Fact]
+    public async Task Sqlite_query_rejects_an_explicit_tenant_outside_the_current_scope()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await using var provider = await BuildProviderAsync(database.ConnectionString);
+        var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10, TenantId: "tenant-b")));
+
+        Assert.DoesNotContain("tenant-1", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Sqlite_history_query_uses_host_transformed_table_and_envelope_names()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
+        services.AddSingleton(new GroundworkStorageNamingPolicyOptions(
+            "history-prefix-v1",
+            context => $"host_{context.FeatureDefaultLogicalName}"));
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
+        await provider.InitializeGroundworkStoreAsync();
+
+        var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+        await store.SaveAsync(State("wf-transformed", _timestamp));
+        var page = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10));
+
+        Assert.Equal("wf-transformed", Assert.Single(page.Items).WorkflowExecutionId);
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM host_groundwork_documents WHERE host_document_kind = 'workflowExecutionState' AND host_id = 'wf-transformed' AND host_content_json IS NOT NULL;";
+        Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+    }
+
     private static async Task<ServiceProvider> BuildProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
+        await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
@@ -105,6 +148,14 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         null,
         "tenant-1",
         new Dictionary<string, string>());
+
+    private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor
+    {
+        public static TenantAccessContextAccessor Instance { get; } = new();
+
+        public PersistenceAccessContext Current { get; } =
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1"));
+    }
 
     private sealed class TemporarySqliteDatabase : IAsyncDisposable
     {

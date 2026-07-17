@@ -52,9 +52,13 @@ public sealed class WorkflowExecutionRun(IReadOnlyCollection<ActivityExecutionSt
             .Where(state => state.Status == ActivityExecutionStatus.Faulted)
             .Select(state => $"{state.Execution.ExecutableNodeId}={state.SubStatus}: {state.Fault?.Message}")
             .ToArray();
+        var states = ActivityStates
+            .Select(state => $"{state.Execution.ExecutableNodeId}={state.Status}/{state.SubStatus}")
+            .ToArray();
         Assert.True(
             WorkflowState?.Status == WorkflowExecutionStatus.Completed,
-            $"Workflow ended as {WorkflowState?.Status}/{WorkflowState?.SubStatus}. Faults: {string.Join(" | ", faults)}");
+            $"Workflow ended as {WorkflowState?.Status}/{WorkflowState?.SubStatus}. " +
+            $"Activities: {string.Join(" | ", states)}. Faults: {string.Join(" | ", faults)}");
     }
 
     /// <summary>Asserts the listed nodes ran and the rest of the listed-as-absent nodes did not.</summary>

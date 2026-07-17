@@ -1,17 +1,36 @@
 using System.Linq.Expressions;
+using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
+using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Publishing.Api.Contracts;
+using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
+
+internal sealed class TestActivityPublishingAuthorizationContext(string? tenantId = null)
+    : IActivityPublishingAuthorizationContext
+{
+    public string? TenantId { get; } = tenantId;
+
+    public bool CanAccessTenant(string? candidateTenantId) =>
+        candidateTenantId is null || StringComparer.Ordinal.Equals(candidateTenantId, TenantId);
+}
 
 /// <summary>Builds an <see cref="IWellKnownTypeRegistry"/> seeded with the primitives these tests rely on.</summary>
 internal static class TestWellKnownTypeRegistry
@@ -28,8 +47,28 @@ internal static class TestWellKnownTypeRegistry
         registry.RegisterType(typeof(decimal), "Decimal");
         registry.RegisterType(typeof(DateTime), "DateTime");
         registry.RegisterType(typeof(Guid), "Guid");
+        registry.RegisterType(typeof(TestWriteLineActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)));
+        registry.RegisterType(typeof(TestWriteLinesActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)));
         return registry;
     }
+}
+
+internal sealed class TestWriteLineActivity : Activity<ActivityUnit>
+{
+    [ActivityInput(Key = "Text")]
+    public string? Text { get; set; }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
+
+internal sealed class TestWriteLinesActivity : Activity<ActivityUnit>
+{
+    [ActivityInput(Key = "Lines")]
+    public IReadOnlyCollection<string>? Lines { get; set; }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 }
 
 /// <summary>
@@ -42,16 +81,58 @@ internal static class TestCompiler
         Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore workflowVersions,
         Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore activityVersions,
         Elsa.Workflows.Design.Core.Contracts.IActivityStructureService activityStructureService,
-        IWellKnownTypeRegistry wellKnownTypeRegistry) =>
-        new(
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IActivityDefinitionVersionPublicationStore? activityPublications = null,
+        IExecutableActivityTemplateReader? activityTemplates = null,
+        IWorkflowExecutableSourceReferenceReader? sourceReferences = null,
+        WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+        IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null)
+    {
+        var publications = activityPublications ?? new EmptyActivityPublicationStore();
+        var templates = activityTemplates ?? new EmptyActivityTemplateReader();
+        var references = sourceReferences ?? new EmptySourceReferenceReader();
+        var inputCompiler = new RuntimeInputBindingCompiler(wellKnownTypeRegistry);
+        var outputCompiler = new RuntimeOutputCaptureCompiler(storageDrivers ?? new RuntimeDurableValueStorageDriverRegistry(
+            [new JsonRuntimeDurableValueStorageDriver()]));
+        return new(
             workflowVersions,
             activityVersions,
-            new Elsa.Workflows.Publishing.Api.Services.WorkflowExecutableHasher(),
-            new Elsa.Workflows.Publishing.Api.Services.ActivityTreeProjector(activityStructureService),
-            new Elsa.Workflows.Publishing.Api.Services.ExecutableNodeCompiler(
+            publications,
+            templates,
+            references,
+            new ActivityTemplatePlacer(publications, templates, references, new Sha256ActivityPlacementHasher()),
+            inputCompiler,
+            outputCompiler,
+            new WorkflowExecutableHasher(),
+            new ActivityTreeProjector(activityStructureService),
+            new ExecutableNodeCompiler(
                 activityStructureService,
                 wellKnownTypeRegistry,
-                new Elsa.Workflows.Publishing.Api.Services.RuntimeInputBindingCompiler(wellKnownTypeRegistry)));
+                inputCompiler),
+            placementSidecars,
+            metadataEnricher);
+    }
+
+    private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore
+    {
+        public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) => Task.FromResult<ActivityDefinitionVersionPublication?>(null);
+        public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>([]);
+    }
+
+    private sealed class EmptyActivityTemplateReader : IExecutableActivityTemplateReader
+    {
+        public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+        public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+    }
+
+    private sealed class EmptySourceReferenceReader : IWorkflowExecutableSourceReferenceReader
+    {
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => ValueTask.FromResult<WorkflowExecutableSourceReference?>(null);
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+    }
 }
 
 internal static class TestRootWriteLeases
@@ -63,6 +144,40 @@ internal static class TestRootWriteLeases
             executableStore,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
             timeProvider ?? TimeProvider.System);
+}
+
+/// <summary>Reusable immutable executable/dependency builders for compiler and publication tests.</summary>
+internal static class TestExecutable
+{
+    public static WorkflowExecutableIdentity Identity(
+        string artifactId,
+        string artifactHash,
+        string definitionId = "definition-child",
+        string definitionVersionId = "version-child") =>
+        new(artifactId, definitionId, definitionVersionId, "1.0.0", artifactHash);
+
+    public static WorkflowExecutable Create(
+        WorkflowExecutableIdentity identity,
+        params WorkflowExecutableDependency[] dependencies) =>
+        new(
+            identity,
+            new ExecutableNode(
+                executableNodeId: "node-root",
+                authoredActivityId: "stored-root",
+                activityType: "Test.Stored",
+                activityTypeVersion: "1.0.0",
+                descriptor: new RuntimeActivityDescriptor(
+                    "Test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { })),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+                metadata: new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UtcNow,
+            new Dictionary<string, string>(),
+            inputContract: new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []),
+            dependencies);
 }
 
 /// <summary>Minimal in-memory activity version read port: only the routes the bridge uses are real.</summary>

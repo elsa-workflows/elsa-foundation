@@ -3,53 +3,42 @@
 ### Run the host:  dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
 ### Use with the REST Client (VS Code / Visual Studio / Rider).
 ###
-### On boot, the CLR reconciliation source scans the host output folder and catalogs the two CLR
-### activities (WriteLine + WorkflowDefinitionActivity, DescriptorType = ClrActivityDescriptor). Steps 1–2
-### below add a *workflow-as-activity* row (DescriptorType = WorkflowIdentity). Step 3 lists the mix;
-### step 4 crosses the construction seam for any row.
+### On boot, the CLR reconciliation source scans the host output folder. With the Publishing Groundwork
+### bridge composed, each source-owned CLR version is committed with stable provider/consumer identity
+### and its immutable executable template. The requests below add another provider-neutral CLR activity,
+### list the catalog, then cross the construction seam.
 ###
 ### NOTE: CShells path-routing mounts the default shell under "/default" (see appsettings
 ### CShells:Shells:default). All routes below are therefore under {{host}}/default/...
 
 @host = http://localhost:5095/default
 
-### 1. Create a workflow definition (Workflows.Design). Note the returned `id` + `version`.
-###    (A real workflow would carry a WriteLine node; construct-only doesn't require it yet.)
-POST {{host}}/design/workflows/definitions
-Content-Type: application/json
-
-{
-  "name": "Greeting workflow",
-  "description": "A workflow we will expose as an activity."
-}
-
-### 2. Catalog that workflow AS an activity (Activities.Design) — descriptor type = WorkflowIdentity.
-###    Paste the DefinitionId / VersionId / Version from step 1's response into DescriptorPayload.
-###    (Construct-only: placeholder identity values are fine — they just round-trip through the constructor.)
-###    KNOWN ISSUE: this currently returns HTTP 400 (a pre-existing IObjectMapper failure mapping the
-###    response DetailsView) but the row IS persisted — confirm with step 3's list. Tracked separately.
+### 1. Add a provider-neutral CLR activity catalog row.
 POST {{host}}/design/activities/definitions
 Content-Type: application/json
 
 {
-  "activityTypeKey": "Acme.Workflows.GreetingWorkflow",
-  "sourceKind": "Workflow",
-  "sourceId": "greeting-workflow",
-  "descriptorType": "Elsa.Workflows.Primitives.Models.WorkflowIdentity",
+  "activityTypeKey": "Acme.Activities.SendGreeting",
+  "sourceKind": "Json",
+  "sourceId": "example-catalog",
+  "providerKey": "elsa.clr-activity",
+  "providerSchemaVersion": "1",
+  "consumerKey": "elsa.clr-activity",
+  "consumerSchemaVersion": "1",
   "descriptorPayload": {
-    "DefinitionId": "<paste DefinitionId>",
-    "VersionId": "<paste VersionId>",
-    "Version": "1.0.0"
+    "typeAlias": "Acme.Activities.SendGreeting"
   },
-  "category": "Composed",
-  "displayName": "Greeting workflow (as activity)"
+  "category": "Examples",
+  "displayName": "Send greeting"
 }
 
-### 3. List what the publishing surface can construct — see the descriptor-type mix:
-###    the WorkflowIdentity row from step 2 + the two CLR (ClrActivityDescriptor) rows from reconciliation.
+### 2. List constructable versions and inspect their stable provider/consumer key/schema identity.
 GET {{host}}/publishing/activities
 
-### 4. Inspect the compiled contract surface for one row. Paste an ActivityVersionId from step 3.
+### 3. Inspect the compiled contract surface for one row. Paste an ActivityVersionId from step 2.
 ###    CLR rows expose canonical type aliases and stable plain-property inputs. WorkflowIdentity rows remain
 ###    discovery metadata until the typed child-workflow execution boundary is implemented.
 GET {{host}}/publishing/activities/<paste ActivityVersionId>/construct
+
+### Starting another workflow remains the separate ExecuteWorkflow API/activity behavior. Reusable graph
+### activities use the `elsa.graph-activity` consumer and execute inside the current workflow execution.

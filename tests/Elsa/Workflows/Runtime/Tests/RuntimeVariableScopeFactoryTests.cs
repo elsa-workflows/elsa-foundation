@@ -37,8 +37,7 @@ public sealed class RuntimeVariableScopeFactoryTests
             authoredActivityId: "authored-container",
             activityType: "test/container",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test/descriptor",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor("test/descriptor", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
             structure: new ExecutableActivityStructure(

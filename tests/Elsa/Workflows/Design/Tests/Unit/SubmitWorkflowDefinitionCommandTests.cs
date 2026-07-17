@@ -26,7 +26,6 @@ public sealed class SubmitWorkflowDefinitionCommandTests
                 Outputs: []),
             Inputs: [],
             Outputs: [],
-            WorkflowActivityOptions: null,
             StrategyOptions: null);
 
         using var scope = host.Services.CreateScope();
@@ -59,7 +58,6 @@ public sealed class SubmitWorkflowDefinitionCommandTests
             RootActivity: new ActivityNode("root", string.Empty, [], []),
             Inputs: [],
             Outputs: [],
-            WorkflowActivityOptions: null,
             StrategyOptions: null);
 
         using var scope = host.Services.CreateScope();
@@ -75,7 +73,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
     public async Task Execute_rejects_missing_root_activity()
     {
         using var host = WorkflowsDesignTestHost.Create();
-        var state = new WorkflowDefinitionState([], null, [], [], null, null);
+        var state = new WorkflowDefinitionState([], null, [], [], null);
 
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();

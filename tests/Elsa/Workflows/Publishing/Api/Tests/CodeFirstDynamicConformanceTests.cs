@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Expressions.Core.Models;
@@ -151,7 +152,7 @@ public sealed class CodeFirstDynamicConformanceTests
                 "elsa.sequence.structure",
                 "1.0.0",
                 JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables), JsonOptions)));
-        return new WorkflowDefinitionState(variables, root, [], [], null, null);
+        return new WorkflowDefinitionState(variables, root, [], [], null);
     }
 
     private static ActivityNode Node(string nodeId, string activityVersionId, params ArgumentState[] inputs) =>
@@ -200,7 +201,10 @@ public sealed class CodeFirstDynamicConformanceTests
                 ActivityTypeKey = activityTypeKey,
                 Category = "Tests"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = inputs
         };

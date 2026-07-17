@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
@@ -22,7 +23,8 @@ public sealed class GroundworkCreateDraftCommand(
     IPayloadSerializer payloadSerializer,
     IInlineEventPublisher inlineEventPublisher,
     IDeferredEventPublisher deferredEventPublisher,
-    ISystemClock clock)
+    ISystemClock clock,
+    IPersistenceAccessContextAccessor accessContextAccessor)
     : ICreateDraftCommand
 {
     public async Task<string> Execute(
@@ -66,13 +68,12 @@ public sealed class GroundworkCreateDraftCommand(
     }
 
     private GroundworkWorkflowDefinitionDraftDocumentStore DraftDocuments() =>
-        new(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer));
+        new(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer), accessContextAccessor);
 
     private static WorkflowDefinitionState EmptyState() => new(
         Variables: [],
         RootActivity: null,
         Inputs: [],
         Outputs: [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null);
 }
