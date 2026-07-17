@@ -6,8 +6,9 @@ This project owns the Design-time provider for reusable activity graphs. The can
 
 | Contribution | Stable identity | Registration | Status |
 |---|---|---|---|
-| Activity graph Design provider | `elsa.activity-graph` | `GraphActivityProvider : IActivityProvider`; feature registration remains in T033 | Implemented by T026; registration planned by T033 |
-| Provider manifest schema | `1` | `ActivityGraphManifest` parsing and canonical serialization | Implemented by T024 |
+| Activity graph Design provider | `elsa.activity-graph` | `GraphActivityProvider : IActivityProvider` from `GraphActivitiesDesignFeature` | Implemented |
+| Provider manifest schema | `1` | `ActivityGraphManifest` parsing and canonical serialization | Implemented |
+| Runtime boundary contract | `elsa.graph-activity` / `1` | Pinned `RuntimeActivityDescriptor` and value-flow `ActivityContract` | Implemented |
 
 The provider may reference provider-neutral Design and Runtime Core contracts to compile executable material. It must not reference the graph Runtime implementation, Runtime API, or a concrete persistence provider.
 
@@ -18,4 +19,6 @@ The provider may reference provider-neutral Design and Runtime Core contracts to
 - `IActivityProviderRegistry.Resolve(providerKey, manifestSchemaVersion)` resolves an exact provider/schema pair and returns a guarded provider adapter.
 - `ActivityDiagnosticOrderer.Order(IEnumerable<ActivityDiagnostic>)` applies the stable public diagnostic ordering before results leave the provider boundary.
 
-`ActivityTemplateCompilation.ExecutableRoot` is currently a `JsonElement`. The graph provider returns a canonical authored root through that seam; Publishing must reconcile it to the reviewed typed executable-node model before the seam is considered final.
+`ActivityTemplateCompilation.ExecutableRoot` is a typed `ExecutableNode`. The graph provider pins its
+stable descriptor, value-flow contract, dynamic input/result projection schema, and exact runtime
+requirements before Publishing hashes and places the immutable template.

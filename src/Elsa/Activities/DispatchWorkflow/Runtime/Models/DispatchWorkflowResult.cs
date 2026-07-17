@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Models;
@@ -52,16 +53,32 @@ public sealed class DispatchWorkflowResult
         if (outputSnapshot.Select(output => output.Name).Distinct(StringComparer.Ordinal).Count() != outputSnapshot.Length)
             throw new ArgumentException("Captured child output names must be unique.", nameof(outputs));
 
+        var diagnosticSnapshot = (diagnosticMetadata ?? new Dictionary<string, string>())
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        switch (status)
+        {
+            case WorkflowDispatchStatus.Faulted:
+                DispatchWorkflowDiagnostics.ValidateFaulted(diagnosticSnapshot);
+                break;
+            case WorkflowDispatchStatus.Cancelled:
+                DispatchWorkflowDiagnostics.ValidateCancelled(diagnosticSnapshot);
+                break;
+            case WorkflowDispatchStatus.DispatchFailed:
+                DispatchWorkflowDiagnostics.ValidateDispatchFailed(diagnosticSnapshot);
+                break;
+        }
+
         ChildWorkflowExecutionId = childWorkflowExecutionId.Trim();
         Status = status;
         Outputs = Array.AsReadOnly(outputSnapshot);
-        DiagnosticMetadata = new ReadOnlyDictionary<string, string>(
-            (diagnosticMetadata ?? new Dictionary<string, string>())
-            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        DiagnosticMetadata = new ReadOnlyDictionary<string, string>(diagnosticSnapshot);
     }
 
     public string ChildWorkflowExecutionId { get; }
     public WorkflowDispatchStatus Status { get; }
     public IReadOnlyCollection<DispatchWorkflowOutput> Outputs { get; }
     public IReadOnlyDictionary<string, string> DiagnosticMetadata { get; }
+
+    internal static bool SupportsParentResume(WorkflowDispatchStatus status) =>
+        status is WorkflowDispatchStatus.Completed or WorkflowDispatchStatus.Faulted or WorkflowDispatchStatus.Cancelled or WorkflowDispatchStatus.DispatchFailed;
 }

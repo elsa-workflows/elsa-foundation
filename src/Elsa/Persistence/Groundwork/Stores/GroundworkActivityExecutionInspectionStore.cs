@@ -31,7 +31,21 @@ public sealed class GroundworkActivityExecutionInspectionStore(
                 ActivityExecutionInspectionSummaryProjection.FromProjection(projection),
                 projection);
 
-            await SaveDocumentAsync(DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId), document, cancellationToken);
+            var existing = await LoadByLogicalIdentityAsync(
+                projection.WorkflowExecutionId,
+                projection.ActivityExecutionId,
+                cancellationToken);
+            var result = await SaveDocumentAsync(
+                DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId),
+                document,
+                cancellationToken,
+                existing?.Version ?? 0);
+            if (result.Status != DocumentStoreWriteStatus.Saved)
+            {
+                if (result.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                    await LoadByLogicalIdentityAsync(projection.WorkflowExecutionId, projection.ActivityExecutionId, cancellationToken);
+                throw new InvalidOperationException($"Groundwork rejected activity execution inspection projection '{projection.ActivityExecutionId}' in workflow execution '{projection.WorkflowExecutionId}' with status '{result.Status}'.");
+            }
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -47,8 +61,7 @@ public sealed class GroundworkActivityExecutionInspectionStore(
 
         try
         {
-            return await LoadDocumentAsync<ActivityExecutionInspectionProjectionDocument, ActivityExecutionInspectionProjection>(
-                DocumentId.Compose(workflowExecutionId, activityExecutionId), document => document.Projection, cancellationToken);
+            return (await LoadByLogicalIdentityAsync(workflowExecutionId, activityExecutionId, cancellationToken))?.Projection;
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -103,6 +116,26 @@ public sealed class GroundworkActivityExecutionInspectionStore(
             Serializer.Deserialize<ActivityExecutionInspectionProjectionDocument>(envelope).Projection);
     }
 
+    private async ValueTask<LoadedActivityExecutionInspectionProjection?> LoadByLogicalIdentityAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await Store.LoadAsync(DocumentKind, DocumentId.Compose(workflowExecutionId, activityExecutionId), cancellationToken);
+        if (envelope is null)
+            return null;
+
+        var projection = Serializer.Deserialize<ActivityExecutionInspectionProjectionDocument>(envelope).Projection;
+        if (!StringComparer.Ordinal.Equals(projection.WorkflowExecutionId, workflowExecutionId)
+            || !StringComparer.Ordinal.Equals(projection.ActivityExecutionId, activityExecutionId))
+        {
+            throw new InvalidOperationException(
+                $"Groundwork physical document identity collision detected for activity execution inspection projection '{activityExecutionId}' in workflow execution '{workflowExecutionId}'.");
+        }
+
+        return new LoadedActivityExecutionInspectionProjection(projection, envelope.Version);
+    }
+
     private sealed record ActivityExecutionInspectionProjectionDocument(
         string WorkflowExecutionId,
         string AuthoredActivityId,
@@ -110,4 +143,6 @@ public sealed class GroundworkActivityExecutionInspectionStore(
         ActivityExecutionAttemptLineage? Attempt,
         ActivityExecutionInspectionSummaryProjection? Summary,
         ActivityExecutionInspectionProjection Projection);
+
+    private sealed record LoadedActivityExecutionInspectionProjection(ActivityExecutionInspectionProjection Projection, long Version);
 }

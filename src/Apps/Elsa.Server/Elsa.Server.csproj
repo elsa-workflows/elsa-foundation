@@ -61,13 +61,13 @@
 		<ProjectReference Include="..\..\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
-		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Libraries\Elsa.Expressions.JavaScript.Libraries.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Http\Elsa.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />

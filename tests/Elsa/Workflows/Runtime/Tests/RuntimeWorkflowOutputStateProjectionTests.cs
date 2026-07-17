@@ -21,7 +21,7 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
     [Fact]
     public void Project_ReturnsOnlyWorkflowOutputs_ExcludingVariablesInputsAndActivityCaptures()
     {
-        // Variables and inputs live under their own reserved prefixes; an activity-output capture shares the
+        // Variables and inputs live under their own reserved prefixes; another durable producer can share the
         // OutputName tag but derives its value id from the authored output reference. None may leak into the
         // workflow-output read surface.
         var durableValues = new List<DurableValueState>();

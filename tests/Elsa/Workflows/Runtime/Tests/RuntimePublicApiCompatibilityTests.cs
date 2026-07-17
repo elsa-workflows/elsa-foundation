@@ -48,6 +48,18 @@ public sealed class RuntimePublicApiCompatibilityTests
             typeof(IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>),
             typeof(IReadOnlyCollection<ActivityScopeCleanupRequest>));
         AssertConstructor(
+            typeof(RuntimeCheckpointStateChangeSet),
+            typeof(RuntimeStateChange<WorkflowExecutionState>), typeof(RuntimeStateChange<SchedulerState>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<BookmarkState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<DurableValueState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<IncidentState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>),
+            typeof(IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>),
+            typeof(IReadOnlyCollection<ActivityScopeCleanupRequest>));
+        AssertConstructor(
             typeof(InMemoryRuntimeCheckpointCommitStore),
             typeof(IWorkflowExecutionStateStore), typeof(IActivityExecutionStateStore), typeof(IBookmarkStateStore),
             typeof(IDurableValueStateStore), typeof(IIncidentStateStore), typeof(IExecutionLivenessStateStore),
@@ -75,6 +87,23 @@ public sealed class RuntimePublicApiCompatibilityTests
         Assert.Null(command.StartAuthority);
         Assert.Equal(0, command.DispatchNestingDepth);
         Assert.Equal(0, checkpoint.DispatchNestingDepth);
+    }
+
+    [Fact]
+    public async Task Dispatch_retention_preserves_legacy_delete_without_compatibility_diagnostics()
+    {
+        var legacyDelete = typeof(IWorkflowDispatchDeleteStore).GetMethod(
+            "DeleteAsync",
+            [typeof(string), typeof(CancellationToken)]);
+        Assert.NotNull(legacyDelete);
+        Assert.Empty(legacyDelete.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false));
+        Assert.NotNull(typeof(IWorkflowDispatchDeleteStore).GetMethod(
+            nameof(IWorkflowDispatchDeleteStore.TryDeleteAsync),
+            [typeof(WorkflowDispatchRecord), typeof(CancellationToken)]));
+
+        IWorkflowDispatchDeleteStore legacyStore = new LegacyWorkflowDispatchDeleteStore();
+        await legacyStore.DeleteAsync("dispatch-legacy");
+        Assert.Equal("dispatch-legacy", Assert.IsType<LegacyWorkflowDispatchDeleteStore>(legacyStore).DeletedDispatchId);
     }
 
     [Fact]
@@ -126,10 +155,22 @@ public sealed class RuntimePublicApiCompatibilityTests
             .Select(member => member.Name)
             .ToArray();
 
-        Assert.DoesNotContain(nameof(IWorkflowDispatchStagingContext.StageWorkflowDispatch), declaredNames);
-        Assert.DoesNotContain(nameof(IWorkflowDispatchStagingContext.WorkflowDispatchRequest), declaredNames);
+        Assert.DoesNotContain(nameof(IWorkflowDispatchStager.StageWorkflowDispatch), declaredNames);
+        Assert.DoesNotContain("WorkflowDispatchRequest", declaredNames);
     }
 
     private static void AssertConstructor(Type type, params Type[] parameterTypes) =>
         Assert.NotNull(type.GetConstructor(parameterTypes));
+
+    private sealed class LegacyWorkflowDispatchDeleteStore : IWorkflowDispatchDeleteStore
+    {
+        public string? DeletedDispatchId { get; private set; }
+
+        public ValueTask DeleteAsync(string dispatchId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DeletedDispatchId = dispatchId;
+            return ValueTask.CompletedTask;
+        }
+    }
 }

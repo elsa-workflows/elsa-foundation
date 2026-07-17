@@ -30,9 +30,13 @@ public sealed class GroundworkWorkflowExecutableStore(
 
         // Artifacts are immutable. Create-only persistence also prevents a concurrent first retention
         // transition from being overwritten by the old find-then-unconditional-save race.
-        await Store.SaveAsync(
+        var result = await Store.SaveAsync(
             new SaveDocumentRequest(DocumentKind, executable.Identity.ArtifactId, schemaVersion, content, ExpectedVersion: 0),
             cancellationToken);
+        if (result.Status is DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.ConcurrencyConflict)
+            return;
+
+        throw new InvalidOperationException($"Groundwork rejected workflow executable artifact '{executable.Identity.ArtifactId}' with status '{result.Status}'.");
     }
 
     public async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)

@@ -206,9 +206,9 @@ public sealed record WorkflowExecutableInputBindingView(
     bool IsSensitive = false,
     JsonElement? LiteralValue = null,
     RuntimeExpressionBinding? Expression = null,
-    RuntimeActivityOutputReference? ActivityOutput = null,
-    RuntimeDurableValueReference? DurableValue = null,
-    RuntimeReferenceValue? Reference = null,
+    RuntimeWorkflowRequestReference? WorkflowRequest = null,
+    RuntimeVariableReference? Variable = null,
+    RuntimeActivityResultReference? ActivityResult = null,
     IReadOnlyDictionary<string, string>? Metadata = null);
 
 public sealed record WorkflowExecutableAuthoredInputView(

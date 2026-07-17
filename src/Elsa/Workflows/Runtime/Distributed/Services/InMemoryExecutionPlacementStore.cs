@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// under a lock so the compare-and-swap that grants or denies placement is atomic across nodes. The opt-in Groundwork
 /// persistence feature replaces this adapter with its durable scoped implementation.
 /// </summary>
-public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
+public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore, IPagedExecutionPlacementStore
 {
     private readonly InMemoryExecutionPlacementState _state;
     private readonly string _partition;
@@ -102,14 +102,29 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyCollection<ExecutionPlacementLease> leases = _state.Leases
-            .Where(pair => StringComparer.Ordinal.Equals(pair.Key.Partition, _partition))
-            .Select(pair => pair.Value)
-            .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
-            .ToArray();
+        IReadOnlyCollection<ExecutionPlacementLease> leases = OrderedLeases().ToArray();
 
         return new ValueTask<IReadOnlyCollection<ExecutionPlacementLease>>(leases);
     }
+
+    public ValueTask<ExecutionPlacementLeasePage> ListPageAsync(ExecutionPlacementLeasePageRequest request, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var all = OrderedLeases().ToArray();
+        var page = all
+            .Skip(request.NormalizedSkip)
+            .Take(request.NormalizedTake)
+            .ToArray();
+
+        return new ValueTask<ExecutionPlacementLeasePage>(new ExecutionPlacementLeasePage(page, all.Length));
+    }
+
+    private IEnumerable<ExecutionPlacementLease> OrderedLeases() =>
+        _state.Leases
+            .Where(pair => StringComparer.Ordinal.Equals(pair.Key.Partition, _partition))
+            .Select(pair => pair.Value)
+            .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal);
 
     private InMemoryExecutionPlacementKey Key(string workflowExecutionId) => new(_partition, workflowExecutionId);
 }

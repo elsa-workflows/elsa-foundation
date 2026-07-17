@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <!--
-    The bridge feature. It depends DOWN on two seams' .Core contracts and connects them:
+    The bridge feature. It depends DOWN on stable Design and Runtime contracts and connects them:
       - the Design seam:  Elsa.Activities.Design.Core / .Persistence.Core (read the catalog row)
-      - the Runtime seam: Elsa.Activities.Runtime.Core               (IActivityFactory construction)
+      - the Runtime seam: Elsa.Activities.Runtime.Core               (compile pinned activity contracts)
     It references NEITHER the Runtime impl (Elsa.Activities.Runtime) NOR any *.Api feature, which is
     exactly why §E2.2 (Runtime must not depend on Design) is preserved — the bridge is a third party.
   -->

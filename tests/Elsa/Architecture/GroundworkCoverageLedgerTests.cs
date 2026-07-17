@@ -7,6 +7,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.60";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
 
@@ -73,7 +74,7 @@ public sealed class GroundworkCoverageLedgerTests
 
         Assert.Equal(1, ledger.SchemaVersion);
         Assert.Equal("094-harden-groundwork-stores", ledger.Feature);
-        Assert.Equal("0.0.1-preview.58", ledger.GroundworkVersion);
+        Assert.Equal(ExpectedGroundworkVersion, ledger.GroundworkVersion);
         Assert.Equal(ExpectedEntryIds, ledger.Entries.Select(entry => entry.Id));
         Assert.Equal(["sqlite", "sqlserver", "postgresql", "mongodb"], ledger.MandatoryProviders);
         Assert.Equal("host-selection-all32", ledger.CompositionEvidence.EvidenceId);
@@ -125,6 +126,25 @@ public sealed class GroundworkCoverageLedgerTests
             findings);
         Assert.Contains(
             "composition evidence: artifact 'evidence/composition/host-selection-all32.json' digest does not match its contents.",
+            findings);
+    }
+
+    [Fact]
+    public void Composition_evidence_rejects_external_authority_relationship_drift()
+    {
+        var ledger = ReadLedger();
+        var evidence = ledger["compositionEvidence"]!.AsObject();
+        var links = evidence["externalAuthorityLinks"]!.AsArray().OfType<JsonObject>().ToArray();
+        Assert.Single(links, link => link["authority"]!.GetValue<string>() == "#644")["relationship"] = "linked-source-evidence";
+        Assert.Single(links, link => link["authority"]!.GetValue<string>() == "#660")["relationship"] = "adapter-only";
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition evidence: external authority '#644' must use relationship 'adapter-only', not 'linked-source-evidence'.",
+            findings);
+        Assert.Contains(
+            "composition evidence: external authority '#660' must use relationship 'linked-source-evidence', not 'adapter-only'.",
             findings);
     }
 
@@ -491,7 +511,7 @@ public sealed class GroundworkCoverageLedgerTests
             $"{EntryId}: sqlserver evidence record '{scenarioId}' requires provider identity 'groundwork-sqlserver'; found 'groundwork-sqlite'.",
             findings);
         Assert.Contains(
-            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '0.0.1-preview.58'.",
+            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '{ExpectedGroundworkVersion}'.",
             findings);
         Assert.Contains(
             $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its catalog-bound provider-driver execution path.",
@@ -711,7 +731,7 @@ public sealed class GroundworkCoverageLedgerTests
             ["coverageEntryId"] = entryId,
             ["provider"] = provider,
             ["providerIdentity"] = $"groundwork-{provider}",
-            ["providerVersion"] = "0.0.1-preview.58",
+            ["providerVersion"] = ExpectedGroundworkVersion,
             ["topology"] = provider switch
             {
                 "sqlite" => "file-backed-distinct-connections",

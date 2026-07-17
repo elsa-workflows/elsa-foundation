@@ -7,13 +7,14 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// part can never forge a different composite key. This mirrors the runtime bridge's composite-id helper
 /// without taking a cross-domain project reference on it.
 /// </summary>
-internal static class IdentityCompositeDocumentId
+public static class IdentityCompositeDocumentId
 {
     public static string From(params string[] parts) =>
         string.Join(':', parts.Select(Escape));
 
     /// <summary>Normalizes a single key part for case-insensitive index/equality lookups.</summary>
-    public static string Normalize(string? value) => (value ?? string.Empty).ToLowerInvariant();
+    public static string Normalize(string? value) =>
+        IdentityUnicodeCaseCompatibility.ToLowerInvariant(value ?? string.Empty);
 
     private static string Escape(string value) =>
         Normalize(value).Replace("%", "%25").Replace(":", "%3A");

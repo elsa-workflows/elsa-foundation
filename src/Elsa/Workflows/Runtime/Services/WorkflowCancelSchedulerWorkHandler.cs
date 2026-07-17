@@ -76,19 +76,19 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         if (workflowState.Status.IsTerminal())
             return null;
 
-        var cancelledWorkflowState = workflowState with
+        var cancelledWorkflowState = RuntimeContainerScopeService.CloseRootFrame(workflowState with
         {
             Status = WorkflowExecutionStatus.Cancelled,
             UpdatedAt = occurredAt,
             CompletedAt = occurredAt
-        };
+        });
         var cancellableStates = (await _activityExecutionStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken))
             .Where(IsCancellable)
-            .Select(state => state with
+            .Select(state => RuntimeContainerScopeService.CloseOwnedFrames(state with
             {
                 Status = ActivityExecutionStatus.Cancelled,
                 CompletedAt = occurredAt
-            })
+            }))
             .OrderBy(state => state.ExecutionSequence)
             .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
             .ToArray();

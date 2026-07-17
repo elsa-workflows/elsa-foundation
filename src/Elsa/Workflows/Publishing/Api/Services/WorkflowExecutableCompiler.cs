@@ -133,8 +133,12 @@ public sealed class WorkflowExecutableCompiler(
             foreach (var activity in projection.Nodes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (activity.Intrinsic is not null)
+                    continue;
+
                 var publication = await activityPublications.FindAsync(activity.ActivityVersionId, cancellationToken);
-                if (publication is null)
+                if (publication is null ||
+                    publication.ResolveWorkflowResolutionKind() == ActivityDefinitionVersionResolutionKind.AuthorableActivity)
                 {
                     if (!activityRows.ContainsKey(activity.ActivityVersionId))
                         activityRows[activity.ActivityVersionId] = await activityVersions.GetWithDefinitionAsync(activity.ActivityVersionId, cancellationToken);
@@ -244,7 +248,7 @@ public sealed class WorkflowExecutableCompiler(
 
     private static IReadOnlyDictionary<string, RuntimeInputBinding> CompileBoundaryInputs(
         Elsa.Workflows.Design.Core.Models.ActivityNode activity,
-        ActivityContract contract,
+        Elsa.Activities.Design.Core.Models.ActivityContract contract,
         RuntimeInputBindingCompiler compiler)
     {
         var definitions = contract.Inputs.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
@@ -286,7 +290,7 @@ public sealed class WorkflowExecutableCompiler(
                 IsRequired: input.IsRequired,
                 DefaultValue: input.Default?.Value,
                 DefaultSyntax: input.Default?.Syntax);
-            result[input.Name] = compiler.Compile(activity.NodeId, definition, inputState);
+            result[input.ReferenceKey] = compiler.Compile(activity.NodeId, definition, inputState);
         }
         return result;
     }

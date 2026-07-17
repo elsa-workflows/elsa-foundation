@@ -1,6 +1,13 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -66,6 +73,31 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
             limited.Select(s => s.ScheduleId));
     }
 
+    [Fact]
+    public async Task ListDue_UsesDeclaredNextOccurrenceRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListDueAsync(Now, limit: 17);
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
+        Assert.Equal(Now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
+        var order = Assert.Single(query.Order);
+        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, order.Path);
+        Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+        Assert.Null(query.Take);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -81,6 +113,40 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         var found = await store.FindAsync(RecurringTriggerSchedule.BuildId("art", "node"));
         Assert.Equal("PT9M", found!.Expression);
         Assert.Equal(Now + TimeSpan.FromMinutes(9), found.NextOccurrence);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListByPublication_UsesPublicationScopedRoute(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRecurringTriggerScheduleStore store = NewStore(fixture);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [
+                NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), publicationId: "publication-1", slotId: "slot-a"),
+                NewSchedule("artifact-1", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-1", slotId: "slot-a")
+            ]);
+        await store.PreparePublicationAsync(
+            "publication-2",
+            [NewSchedule("artifact-1", "node-c", TimeSpan.FromMinutes(3), publicationId: "publication-2", slotId: "slot-b")]);
+
+        var schedules = await store.ListByPublicationAsync("publication-1");
+
+        Assert.Equal(
+            new[]
+            {
+                RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-a"),
+                RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-b")
+            },
+            schedules.Select(schedule => schedule.ScheduleId).OrderBy(x => x));
+        Assert.All(schedules, schedule =>
+        {
+            Assert.Equal("publication-1", schedule.PublicationId);
+            Assert.False(schedule.IsActive);
+        });
     }
 
     [Theory]
@@ -104,6 +170,181 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
 
         // Re-claiming the already-advanced occurrence loses (at-most-once).
         Assert.False(await store.TryAdvanceAsync(schedule.ScheduleId, expected, advanced));
+    }
+
+    [Fact]
+    public async Task TryAdvance_ReturnsFalse_WhenProviderVersionChangesBetweenReadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IRecurringTriggerScheduleStore seedStore = NewStore(fixture);
+        var schedule = await seedStore.SaveAsync(NewSchedule("art", "node", nextOffset: TimeSpan.FromMinutes(-1)));
+        var expected = schedule.NextOccurrence;
+        var advanced = expected + TimeSpan.FromMinutes(5);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(1, request.ExpectedVersion);
+                var competingWrite = await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                    request.DocumentKind,
+                    request.Id,
+                    request.SchemaVersion,
+                    request.ContentJson));
+                Assert.Equal(DocumentStoreWriteStatus.Saved, competingWrite.Status);
+            }
+        };
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        Assert.False(await store.TryAdvanceAsync(schedule.ScheduleId, expected, advanced));
+
+        var found = await seedStore.FindAsync(schedule.ScheduleId);
+        Assert.Equal(advanced, found!.NextOccurrence);
+    }
+
+    [Fact]
+    public async Task Save_RejectsACompetingRepublishThatChangesAfterRead()
+    {
+        await using var fixture = CreateStore("memory");
+        IRecurringTriggerScheduleStore seedStore = NewStore(fixture);
+        var original = await seedStore.SaveAsync(
+            NewSchedule("art", "node", nextOffset: TimeSpan.FromMinutes(1), expression: "PT1M"));
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(1, request.ExpectedVersion);
+                var competitor = NewSchedule(
+                    "art",
+                    "node",
+                    nextOffset: TimeSpan.FromMinutes(2),
+                    expression: "PT2M");
+                await seedStore.SaveAsync(competitor);
+            }
+        };
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.SaveAsync(original with
+            {
+                Expression = "PT3M",
+                NextOccurrence = Now.AddMinutes(3)
+            }));
+
+        Assert.Equal("PT2M", (await seedStore.FindAsync(original.ScheduleId))!.Expression);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task PreparePublication_StagesCreateOnlyProjectionState(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var observingStore = new GroundworkFailureInjectingDocumentStore(
+            fixture.DocumentStore,
+            fixture.BoundedDocumentStore,
+            fixture.DocumentStore.Access,
+            new GroundworkFailureController());
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            observingStore,
+            GroundworkTestSerialization.Serializer,
+            observingStore);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [NewSchedule(
+                "artifact-1",
+                "node-a",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-1",
+                slotId: "slot-a")]);
+
+        var projectionSave = Assert.Single(observingStore.StagedSaves.Where(request =>
+            request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind));
+        Assert.Equal(0, projectionSave.ExpectedVersion);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ActivatePublication_StagesProjectionStateWithLoadedVersions(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var observingStore = new GroundworkFailureInjectingDocumentStore(
+            fixture.DocumentStore,
+            fixture.BoundedDocumentStore,
+            fixture.DocumentStore.Access,
+            new GroundworkFailureController());
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            observingStore,
+            GroundworkTestSerialization.Serializer,
+            observingStore);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), publicationId: "publication-1", slotId: "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-2",
+            [NewSchedule("artifact-2", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-2", slotId: "slot-b")]);
+
+        await store.ActivatePublicationAsync("publication-1", replacedPublicationId: null);
+        var stagedBeforeReplacement = observingStore.StagedSaves.Count;
+        await store.ActivatePublicationAsync("publication-2", "publication-1");
+
+        var activationProjectionSaves = observingStore.StagedSaves
+            .Skip(stagedBeforeReplacement)
+            .Where(request =>
+                request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind &&
+                request.ExpectedVersion is not null)
+            .ToArray();
+        Assert.Equal([1L, 2L], activationProjectionSaves.Select(request => request.ExpectedVersion).Order());
+        Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-2", StringComparison.Ordinal));
+        Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-1", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ActivatePublication_RejectsDelayedReplacementOfInactivePredecessor(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRecurringTriggerScheduleStore store = NewStore(fixture);
+
+        await store.PreparePublicationAsync(
+            "publication-old",
+            [NewSchedule(
+                "artifact-old",
+                "node-old",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-old",
+                slotId: "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-a",
+            [NewSchedule(
+                "artifact-a",
+                "node-a",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-a",
+                slotId: "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-b",
+            [NewSchedule(
+                "artifact-b",
+                "node-b",
+                TimeSpan.FromMinutes(1),
+                publicationId: "publication-b",
+                slotId: "slot-a")]);
+        await store.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await store.ActivatePublicationAsync("publication-a", "publication-old");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.ActivatePublicationAsync("publication-b", "publication-old").AsTask());
+
+        Assert.True(Assert.Single(await store.ListByPublicationAsync("publication-a")).IsActive);
+        Assert.False(Assert.Single(await store.ListByPublicationAsync("publication-b")).IsActive);
     }
 
     [Theory]
@@ -167,16 +408,81 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         string artifactId,
         string executableNodeId,
         TimeSpan nextOffset,
-        string expression = "PT5M") => new(
-        ScheduleId: RecurringTriggerSchedule.BuildId(artifactId, executableNodeId),
+        string expression = "PT5M",
+        string? publicationId = null,
+        string? slotId = null) => new(
+        ScheduleId: publicationId is null
+            ? RecurringTriggerSchedule.BuildId(artifactId, executableNodeId)
+            : RecurringTriggerSchedule.BuildId(publicationId, artifactId, executableNodeId),
         ArtifactId: artifactId,
         StimulusType: "Timer",
         StimulusHash: $"sha256:{executableNodeId}",
         Kind: RecurringScheduleKind.Interval,
         Expression: expression,
         NextOccurrence: Now + nextOffset,
-        CreatedAt: Now);
+        CreatedAt: Now,
+        PublicationId: publicationId,
+        SlotId: slotId);
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
+    {
+        public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+        public DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            if (OnBeforeSave is { } hook)
+            {
+                OnBeforeSave = null;
+                await hook(request);
+            }
+
+            return await inner.SaveAsync(request, cancellationToken);
+        }
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            inner.BeginAsync(scope, cancellationToken);
+    }
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(new DocumentQueryResult([], 0));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 }

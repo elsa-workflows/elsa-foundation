@@ -13,6 +13,11 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimeDownstreamSchedulingTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
+    private readonly InMemoryWorkflowExecutableStore _checkpointExecutableStore = new();
+
+    public RuntimeDownstreamSchedulingTests() =>
+        _checkpointExecutableStore.SaveAsync(NewExecutable(["node-source"]))
+            .AsTask().GetAwaiter().GetResult();
 
     [Fact]
     public async Task CompleteActivityHandler_DoesNotTraverseWorkflowLevelEdges()
@@ -423,7 +428,8 @@ public sealed class RuntimeDownstreamSchedulingTests
                 checkpointWriter),
             inspectionAccumulator: null,
             timeProvider: new FixedTimeProvider(_now),
-            workflowExecutionStateStore: workflowExecutionStateStore);
+            workflowExecutionStateStore: workflowExecutionStateStore,
+            workflowExecutableStore: _checkpointExecutableStore);
 
     private RuntimeSchedulerWorkItem NewCompleteWorkItem(
         WorkflowExecutableIdentity pinnedExecutable,
@@ -570,7 +576,6 @@ public sealed class RuntimeDownstreamSchedulingTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "root" })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots:
             [
@@ -588,7 +593,6 @@ public sealed class RuntimeDownstreamSchedulingTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
+using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
@@ -27,6 +29,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     private readonly StorageManifest manifest;
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
     private readonly Lock _gate = new();
+    private readonly SemaphoreSlim _unitOfWorkGate = new(1, 1);
     private int _saveCount;
     private int _loadCount;
     private int _deleteCount;
@@ -142,7 +145,12 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
                 return null;
         }
 
-        return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String => element.GetString(),
+            _ => element.ToString()
+        };
     }
 
     // --- Closed-query (PortableDocumentQuery) surface. Only the clause-free "all documents of a kind" form
@@ -179,6 +187,10 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         var indexIdentity = declaration?.IndexIdentity ?? legacyDeclaration?.IndexIdentity
             ?? throw new InvalidOperationException(
                 $"Document kind '{query.DocumentKind}' does not declare bounded query '{query.QueryIdentity}'.");
+        var indexFields = declaration is null
+            ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields
+            : unit.PhysicalStorage!.LogicalIndexes.Single(index => index.Identity == indexIdentity).Fields;
+        var fieldKinds = indexFields.ToDictionary(field => field.Path, field => field.ValueKind, StringComparer.Ordinal);
         var predicatePaths = declaration is null || declaration.PredicateFields.Count == 0
             ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields.Select(field => field.Path)
             : declaration.PredicateFields.Select(field => field.Path);
@@ -192,19 +204,64 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             .Where(document => document.DocumentKind == query.DocumentKind);
         foreach (var clause in query.Clauses)
         {
-            matches = matches.Where(document => clause.Comparisons.Any(comparison =>
-                comparison.Operator == QueryComparisonOperator.Equal &&
-                string.Equals(
+            matches = matches.Where(document => clause.Comparisons.All(comparison =>
+                Matches(
                     ReadField(document.ContentJson, comparison.Path),
-                    comparison.Values.Single(),
-                    StringComparison.Ordinal)));
+                    comparison,
+                    fieldKinds[comparison.Path])));
         }
 
-        var all = matches.OrderBy(document => document.Id, StringComparer.Ordinal).ToArray();
+        IOrderedEnumerable<DocumentEnvelope> ordered = query.Order.Count > 0
+            ? matches.OrderBy(
+                document => Comparable(
+                    ReadField(document.ContentJson, query.Order[0].Path),
+                    fieldKinds[query.Order[0].Path]),
+                StringComparer.Ordinal)
+            : matches.OrderBy(document => document.Id, StringComparer.Ordinal);
+        foreach (var order in query.Order.Skip(1))
+        {
+            ordered = ordered.ThenBy(
+                document => Comparable(ReadField(document.ContentJson, order.Path), fieldKinds[order.Path]),
+                StringComparer.Ordinal);
+        }
+        var all = ordered.ThenBy(document => document.Id, StringComparer.Ordinal).ToArray();
         var window = all.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
             window = window.Take(take);
         return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
+    }
+
+    private static bool Matches(
+        string? actual,
+        DocumentQueryComparison comparison,
+        IndexValueKind? valueKind)
+    {
+        var expected = comparison.Values.SingleOrDefault();
+        if (comparison.Operator != QueryComparisonOperator.Equal && (actual is null || expected is null))
+            return false;
+
+        var order = StringComparer.Ordinal.Compare(
+            Comparable(actual, valueKind),
+            Comparable(expected, valueKind));
+        return comparison.Operator switch
+        {
+            QueryComparisonOperator.Equal => order == 0,
+            QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.Ordinal),
+            QueryComparisonOperator.GreaterThan => order > 0,
+            QueryComparisonOperator.GreaterThanOrEqual => order >= 0,
+            QueryComparisonOperator.LessThan => order < 0,
+            QueryComparisonOperator.LessThanOrEqual => order <= 0,
+            _ => throw new NotSupportedException($"The in-memory bounded-query test double does not support {comparison.Operator}.")
+        };
+    }
+
+    private static string? Comparable(string? value, IndexValueKind? valueKind)
+    {
+        if (value is null || valueKind != IndexValueKind.DateTime)
+            return value;
+
+        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            .UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
     }
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
@@ -229,10 +286,11 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     // provider's CrossUnitAtomic boundary (stage Save/Delete, read-your-writes, all-or-nothing commit). ---
     public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
 
-    public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
+    public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _beginCount);
-        return Task.FromResult<IDocumentUnitOfWork>(new InMemoryDocumentUnitOfWork(this));
+        await _unitOfWorkGate.WaitAsync(cancellationToken);
+        return new InMemoryDocumentUnitOfWork(this);
     }
 
     private sealed class InMemoryDocumentUnitOfWork(InMemoryDocumentStore store) : IDocumentUnitOfWork
@@ -240,6 +298,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         private readonly List<Func<Task>> _pending = new();
         private readonly Dictionary<(string Kind, string Id), DocumentEnvelope?> _staged = new();
         private bool _completed;
+        private int _disposed;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
         {
@@ -295,8 +354,11 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
 
         public ValueTask DisposeAsync()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return ValueTask.CompletedTask;
             // Dispose-without-commit rolls back: simply drop the staged operations.
             _completed = true;
+            store._unitOfWorkGate.Release();
             return ValueTask.CompletedTask;
         }
 

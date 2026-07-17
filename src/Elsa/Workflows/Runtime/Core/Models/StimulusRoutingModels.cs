@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -36,7 +37,9 @@ public sealed class StimulusDispatchRequest
         string requestedBy = "runtime.stimulus",
         IReadOnlyDictionary<string, string>? metadata = null,
         IReadOnlyCollection<WorkflowTriggerBinding>? matchedTriggerBindings = null,
-        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null)
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+        ValueTypeDescriptor? payloadType = null,
+        string? providerId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
@@ -47,6 +50,10 @@ public sealed class StimulusDispatchRequest
 
         if (idempotencyKey is not null && string.IsNullOrWhiteSpace(idempotencyKey))
             throw new ArgumentException("Idempotency key cannot be blank when provided.", nameof(idempotencyKey));
+        if ((payloadType is null) != (providerId is null))
+            throw new ArgumentException("Typed stimulus delivery metadata requires both a payload type and provider ID.");
+        if (providerId is not null && string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Typed stimulus provider ID cannot be blank.", nameof(providerId));
 
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
@@ -58,6 +65,8 @@ public sealed class StimulusDispatchRequest
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         MatchedTriggerBindings = matchedTriggerBindings;
         DispatchOptions = dispatchOptions;
+        PayloadType = payloadType;
+        ProviderId = providerId;
     }
 
     public string StimulusType { get; }
@@ -110,6 +119,12 @@ public sealed class StimulusDispatchRequest
     /// options). <c>null</c> ⇒ the dispatchers fall back to <see cref="WorkflowExecutionCommandDispatchOptions.Default"/>.
     /// </remarks>
     public WorkflowExecutionCommandDispatchOptions? DispatchOptions { get; }
+
+    /// <summary>The declared typed payload contract forwarded only to resume delivery validation.</summary>
+    public ValueTypeDescriptor? PayloadType { get; }
+
+    /// <summary>The adapter identity that validated and produced <see cref="Input"/>.</summary>
+    public string? ProviderId { get; }
 
     public IReadOnlyDictionary<string, string> BuildDispatchMetadata()
     {

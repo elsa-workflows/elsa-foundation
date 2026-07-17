@@ -3,8 +3,6 @@ using Elsa.Activities.ControlFlow;
 using Elsa.Activities.ForEach;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
-using Elsa.Activities.Primitives.Binding;
-using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
@@ -121,7 +119,6 @@ public sealed class ForEachRuntimeTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ForEachActivityConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
@@ -130,7 +127,6 @@ public sealed class ForEachRuntimeTests
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithConstructor<ForEachActivityConstructor>()
             .Build(activityExecutionIds);
 
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string>? collection, bool breakOnEntry = false)
@@ -143,16 +139,12 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(ForEachActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForEachDescriptor())),
+            descriptorType: typeof(ForEachDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Collection"] = new RuntimeInputBinding(
-                    inputName: "Collection",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(collection),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" })
+                ["Collection"] = CollectionBinding(collection)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode(BodyNodeId, bodyOutcomes)])],
             structure: new ExecutableActivityStructure(
@@ -170,16 +162,12 @@ public sealed class ForEachRuntimeTests
             authoredActivityId: "authored-foreach",
             activityType: typeof(ForEachActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(ForEachActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForEachDescriptor())),
+            descriptorType: typeof(ForEachDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Collection"] = new RuntimeInputBinding(
-                    inputName: "Collection",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(collection),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" })
+                ["Collection"] = CollectionBinding(collection)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [NewWriteLineNode(BodyNodeId, text)])],
             structure: new ExecutableActivityStructure(
@@ -190,23 +178,55 @@ public sealed class ForEachRuntimeTests
         return WorkflowExecutionHarness.NewExecutable(root);
     }
 
-    private static ExecutableNode NewWriteLineNode(string nodeId, string text) =>
-        new(
+    private static RuntimeInputBinding CollectionBinding(IReadOnlyCollection<string>? collection)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        var envelope = collection is null
+            ? ValueEnvelope.Null(type, policy)
+            : ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(collection), policy);
+        return new RuntimeInputBinding(
+            nameof(ForEachActivity.Collection),
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: envelope);
+    }
+
+    private static ExecutableNode NewWriteLineNode(string nodeId, string text)
+    {
+        var descriptor = Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine))));
+        var contract = new ActivityContract(
+            typeof(WriteLine).FullName!,
+            "1.0.0",
+            typeof(ClrActivityDescriptor).FullName!,
+            descriptor,
+            [new ActivityInputContract("text", nameof(WriteLine.Text), new ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(typeof(WriteLine))));
+        return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(WriteLine).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, RuntimeActivityDescriptor.InitialSchemaVersion, Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine))))),
+            descriptorType: typeof(ClrActivityDescriptor).FullName!,
+            descriptorPayload: descriptor,
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Text"] = new RuntimeInputBinding(
-                    inputName: "Text",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(text),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" })
+                ["text"] = new RuntimeInputBinding(
+                    "text",
+                    new ValueTypeDescriptor("String"),
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        new ValueTypeDescriptor("String"),
+                        JsonSerializer.SerializeToElement(text),
+                        ValueProtectionPolicy.InstanceInline))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
+    }
 
     private static async Task<(WorkflowExecutionRun Run, string Output)> CaptureConsoleAsync(Func<Task<WorkflowExecutionRun>> action)
     {
@@ -228,31 +248,6 @@ public sealed class ForEachRuntimeTests
         output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
     private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-
-    private sealed class ForEachActivityConstructor : IActivityConstructor<ForEachDescriptor>
-    {
-        public static string ConsumerKeyValue => typeof(ForEachDescriptor).FullName!;
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new ForEachDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            ForEachDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-        {
-            var activity = new ForEachActivity();
-            if (inputs is not null && inputs.TryGetValue("Collection", out var collectionInput))
-                activity.Collection = (InputArgument<object>)collectionInput;
-            return new(activity);
-        }
-    }
 
     private sealed record ForEachDescriptor;
 }

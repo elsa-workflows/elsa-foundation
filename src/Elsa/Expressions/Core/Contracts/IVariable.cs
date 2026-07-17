@@ -1,7 +1,12 @@
 namespace Elsa.Expressions.Core.Contracts;
 
-public interface IVariable : IMemoryBlockReference
+public interface IVariable
 {
+    /// <summary>
+    /// The stable key of the variable declaration within its declaring scope.
+    /// </summary>
+    string Id { get; set; }
+
     /// <summary>
     /// The name of the variable.
     /// </summary>

@@ -1,53 +1,36 @@
 # Extension points — Expressions domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions` — the composition root where `ExpressionsFeature` builds `ExpressionDescriptorRegistry` by aggregating all `IExpressionDescriptorProvider` implementations at startup.
-
----
+`ExpressionsFeature` builds the authoring descriptor registry and the portable evaluator. Expression
+descriptors are metadata only; they do not carry runtime handler factories.
 
 ## Implementable contributor interfaces
 
-### `IExpressionHandler` *(Core — `Elsa.Expressions.Core`)*
-- **Kind:** Contributor (handles evaluation for a specific expression type).
-- **Signature:** `ValueTask<object?> EvaluateAsync(IExpression expression, Type returnType, IExpressionExecutionContext context, IExpressionEvaluatorOptions options);`
-- **Register:** `services.AddScoped<IExpressionHandler, MyHandler>()`. One registered handler per expression kind; `ExpressionEvaluator` resolves the matching handler by expression type at call time (not a fan-in aggregator — handlers are independent per expression kind).
+### `IPortableExpressionHandler` *(Core — `Elsa.Expressions.Core`)*
 
-**Known implementations (shipped):**
-- `Elsa.Expressions` — `VariableExpressionHandler` *(intra-domain — handles variable-reference expressions)*
-- `Elsa.Expressions.JavaScript` — `JavaScriptExpressionHandler` *(cross-domain — evaluates JS expressions via Jint)*
-- `Elsa.Expressions.Liquid` — `LiquidExpressionHandler` *(cross-domain — evaluates Liquid templates)*
+- **Kind:** Language evaluator for one explicit capability profile.
+- **Signature:** `ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)`.
+- **Register:** `services.AddScoped<IPortableExpressionHandler, MyPortableHandler>()`.
+- **Boundary:** The request contains portable source/options and immutable declared parameters. It
+  exposes no workflow context, variable frame, service provider, delegate, or mutation callback.
+
+Shipped implementations are `PortableJavaScriptExpressionHandler` and
+`PortableLiquidExpressionHandler`, both restricted to `binding-pure-v1`.
 
 ### `IExpressionDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
-- **Kind:** Source (returns a set of expression descriptors — pull pattern).
-- **Signature:** `IEnumerable<IExpressionDescriptor> GetDescriptors();`
-- **Register:** `services.AddScoped<IExpressionDescriptorProvider, MyProvider>()`.
-- **Consumed by:** `ExpressionDescriptorRegistry` (this feature) — aggregates all providers in its constructor (once, at DI build time). Not event-driven; the registry is a startup snapshot.
 
-**Known implementations (shipped):**
-- `Elsa.Expressions` — `DefaultExpressionDescriptorProvider` *(intra-domain — registers built-in expression types)*
-- `Elsa.Expressions.JavaScript` — `JavaScriptExpressionDescriptorProvider` *(cross-domain — registers JS expression descriptor)*
-- `Elsa.Expressions.Liquid` — `LiquidExpressionDescriptorProvider` *(cross-domain — registers Liquid expression descriptor)*
+- **Kind:** Authoring metadata source.
+- **Signature:** `IEnumerable<IExpressionDescriptor> GetDescriptors()`.
+- **Consumed by:** `ExpressionDescriptorRegistry`, which creates a startup snapshot.
 
 ### `IVariableTypeDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
-- **Kind:** Source (returns a set of selectable argument-type descriptors — pull pattern).
-- **Signature:** `IEnumerable<TypeDescriptor> GetDescriptors();` where `TypeDescriptor` is `{ Alias, ClrType, DisplayName, Category, DefaultEditor }`.
-- **Register:** `services.AddSingleton<IVariableTypeDescriptorProvider, MyProvider>()`.
-- **Consumed by:** `VariableTypeDescriptorCatalog` (this feature) — aggregates all providers in its constructor (once, at DI build time; design-time presentation snapshot). Duplicate alias across providers throws `DuplicateTypeAliasException`. Separately, `SeedWellKnownTypesStartupTask` (`Elsa.Serialization.SystemText`) seeds the runtime `IWellKnownTypeRegistry` (alias ↔ CLR type) from the same providers' `(Alias, ClrType)` — the §2.6.4 design-time/runtime split sharing one `TypeDescriptor` shape record.
-- **Alias rule:** framework primitives use bare aliases (reserved); module types use dotted/reverse-DNS aliases (e.g. `Elsa.Http.HttpRequest`). The alias is a frozen contract — the CLR type behind it may be renamed/moved, the alias may not.
 
-**Known implementations (shipped):**
-- `Elsa.Expressions` — `DefaultVariableTypeDescriptorProvider` *(intra-domain — registers framework primitive types)*
-
-### `IScopedVariableProvider` *(Core — `Elsa.Expressions.Core`)*
-- **Kind:** Optional capability implemented by an `IExpressionExecutionContext` (not DI-registered).
-- **Signature:** `bool TryGetScopedVariableValue(VariableReference reference, out object? value);` and `bool TrySetScopedVariableValue(VariableReference reference, object? value);`
-- **Purpose:** Lets `VariableExpressionHandler` read (and authoring/runtime code assign) a structured `VariableReference` (reference key + declaring scope identity) through the context's visible scope chain — workflow scope plus visible ancestor container scopes — honouring nearest-scope visibility and shadowing, and rejecting assignment to sibling/unrelated scopes (ADR 0027). Contexts that do not implement it fall back to workflow-scope name lookup, preserving prior behaviour. The reusable `VariableScope` chain (`Elsa.Expressions.Core.Models`) provides the resolution, assignment, and sibling-sharing primitives.
-
----
+- **Kind:** Authoring/schema type source.
+- **Signature:** `IEnumerable<TypeDescriptor> GetDescriptors()`.
+- **Consumed by:** `VariableTypeDescriptorCatalog` and alias-registry seeding.
 
 ## Cross-references
 
-- JavaScript expression extension points (pre/post processors, declaration contributors): [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
+- JavaScript binding boundary: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
+- Liquid binding boundary: [`Elsa.Expressions.Liquid/EXTENSION_POINTS.md`](../Elsa.Expressions.Liquid/EXTENSION_POINTS.md).
 - JS rendering declaration contributors: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).
-- Liquid extension points: [`Elsa.Expressions.Liquid/EXTENSION_POINTS.md`](../Elsa.Expressions.Liquid/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
-- Constitutional basis: §2.6.1 + §2.22.1.

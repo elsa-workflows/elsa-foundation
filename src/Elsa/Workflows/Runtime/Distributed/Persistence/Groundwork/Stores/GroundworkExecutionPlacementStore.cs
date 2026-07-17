@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// </remarks>
 public sealed class GroundworkExecutionPlacementStore(
     IDocumentStore store,
-    IBoundedDocumentStore? boundedStore = null) : IExecutionPlacementStore
+    IBoundedDocumentStore? boundedStore = null) : IExecutionPlacementStore, IPagedExecutionPlacementStore
 {
     private const string Kind = DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind;
     private const int MaxCasAttempts = 8;
@@ -119,12 +119,7 @@ public sealed class GroundworkExecutionPlacementStore(
         cancellationToken.ThrowIfCancellationRequested();
 
         var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                Kind,
-                DistributedGroundworkStorageManifest.ListAllQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                    DistributedGroundworkStorageManifest.CollectionField,
-                    Kind))]),
+            ListQuery(skip: null, take: null),
             cancellationToken);
 
         return result.Documents
@@ -132,6 +127,33 @@ public sealed class GroundworkExecutionPlacementStore(
             .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
             .ToArray();
     }
+
+    public async ValueTask<ExecutionPlacementLeasePage> ListPageAsync(ExecutionPlacementLeasePageRequest request, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var count = await BoundedStore.CountAsync(ListQuery(skip: null, take: null), cancellationToken);
+        var result = await BoundedStore.QueryAsync(
+            ListQuery(request.NormalizedSkip, request.NormalizedTake),
+            cancellationToken);
+
+        var items = result.Documents
+            .Select(envelope => DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease)
+            .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ExecutionPlacementLeasePage(items, count);
+    }
+
+    private static DocumentQuery ListQuery(int? skip, int? take) => new(
+        Kind,
+        DistributedGroundworkStorageManifest.ListAllQuery,
+        [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            DistributedGroundworkStorageManifest.CollectionField,
+            Kind))],
+        [],
+        skip,
+        take);
 
     // The constant collection partition lets the list sweep use a keyword equality index instead of a provider-wide
     // scan; the nested lease is the frozen v1 executionPlacement wire shape, unchanged.

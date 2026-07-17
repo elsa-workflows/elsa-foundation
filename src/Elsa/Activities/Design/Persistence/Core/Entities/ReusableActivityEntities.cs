@@ -69,6 +69,8 @@ public sealed class ActivityDefinitionVersionPublication : TenantEntity
 
     public string ActivityTypeKey { get; init; } = null!;
 
+    public ActivityDefinitionVersionResolutionKind ResolutionKind { get; init; }
+
     public string? SourceDraftId { get; init; }
 
     public string? SourceVersionId { get; init; }
@@ -98,6 +100,21 @@ public sealed class ActivityDefinitionVersionPublication : TenantEntity
     public ActivityDefinitionVersionLifecycle Lifecycle { get; set; } = ActivityDefinitionVersionLifecycle.Active;
 
     public DateTimeOffset PublishedAt { get; init; }
+
+    /// <summary>
+    /// Resolves how an authored workflow node uses this exact activity version. Older publication
+    /// documents predate the explicit discriminator, so their existing draft provenance supplies
+    /// the compatibility classification without relying on provider-specific keys.
+    /// </summary>
+    public ActivityDefinitionVersionResolutionKind ResolveWorkflowResolutionKind() => ResolutionKind switch
+    {
+        ActivityDefinitionVersionResolutionKind.AuthorableActivity => ActivityDefinitionVersionResolutionKind.AuthorableActivity,
+        ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary => ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+        ActivityDefinitionVersionResolutionKind.Unspecified when !string.IsNullOrWhiteSpace(SourceDraftId) =>
+            ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+        ActivityDefinitionVersionResolutionKind.Unspecified => ActivityDefinitionVersionResolutionKind.AuthorableActivity,
+        _ => throw new InvalidOperationException($"Activity definition version publication '{DefinitionVersionId}' has unsupported resolution kind '{ResolutionKind}'.")
+    };
 }
 
 public sealed class ActivityDefinitionVersionLayout : TenantEntity

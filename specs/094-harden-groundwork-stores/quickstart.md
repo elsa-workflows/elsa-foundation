@@ -5,10 +5,15 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the one pinned Groundwork release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.59` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at the same version as Groundwork packages.
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.59`, matching all
+  Groundwork packages.
+
+Groundwork PR #88 is the generic version-aware codec boundary in this release. Elsa-specific payload policies,
+legacy-stamp parsing, JSON options, and concrete upcasters must remain marker-gated in Elsa provider packages; core modules must not
+reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
@@ -126,18 +131,20 @@ dotnet test tests/Elsa/Persistence/Groundwork/MongoDb/Tests/Elsa.Persistence.Gro
   --configuration Release --no-build
 ```
 
-The provider matrix selects all seven shipped families: workflow runtime, identity, secrets,
-distributed runtime, workflows design, activities design, and workflows publishing. SQLite and
-PostgreSQL execute the restart-oriented unified-host scenarios; the SQL Server and MongoDB projects
-prove their complete seven-family registration and exact admission target. The MongoDB lane requires
-a writable transaction-capable replica set.
+The bare unified provider matrix selects the six provider-level families: workflow runtime, secrets,
+distributed runtime, workflows design, activities design, and workflows publishing. Identity is never
+selected implicitly. The same matrix separately selects the Identity deployment-schema variant and explicit
+Groundwork Identity feature, proving that all seven selected families share the exact admitted target. SQLite
+and PostgreSQL execute the restart-oriented unified-host scenarios; SQL Server proves exact registration and
+MongoDB proves the exact admission target. The MongoDB lane requires a writable transaction-capable replica set.
 
 Also run invalid compositions: missing source, duplicate unit, unsupported route/capability, wrong MongoDB topology, and scope-policy conflict. Each must fail before serving work with a stable owner-aware diagnostic.
 
 ## 6. Exercise schema tooling
 
-Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped all-seven-feature unified leaves register
-`GroundworkAllFeaturesDeploymentSchema` as their runtime authority; its assembly is
+Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped unified leaves register
+`GroundworkAllFeaturesDeploymentSchema` as their six-family runtime authority; hosts that explicitly select
+Groundwork Identity use `GroundworkAllFeaturesWithIdentityDeploymentSchema` instead. Both types live in
 `Elsa.Persistence.Groundwork.ReferenceComposition.dll`:
 
 ```bash
@@ -230,6 +237,12 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 5. leave Blocked or missing verdicts incomplete.
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
+For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.59` and Identity storage manifest
+v1.0.4. Retain its provider identity, input/result digests, observable operations, and native route evidence
+captured at 100,000 physical records. The checked-in `preview.55`-`preview.58` artifacts are historical provenance,
+not current pass evidence; the ledger remains unlinked until fresh exact-head artifacts exist. The committed EF
+contract baseline is explicitly non-executed; #646 owns live EF execution, equality, and timing.
 
 ## 8. Readiness audit
 

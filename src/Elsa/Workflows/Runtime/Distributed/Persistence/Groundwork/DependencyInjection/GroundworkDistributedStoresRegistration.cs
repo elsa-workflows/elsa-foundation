@@ -1,4 +1,6 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +29,15 @@ public static class GroundworkDistributedStoresRegistration
         services.AddScoped<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
         services.RemoveAll<IExecutionCommandTransport>();
         services.AddScoped<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
 
         return services;
     }
+}
+
+internal sealed class GroundworkDistributionDurabilityEvidence : IWorkflowDispatchDurabilityEvidence
+{
+    public string Component => WorkflowDispatchDurabilityComponents.DistributionPersistence;
+    public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.Durable;
 }

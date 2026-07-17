@@ -2,10 +2,6 @@
 
 public sealed class FeatureOptions
 {
-    public bool AllowClrAccess { get; set; }
-
-    public TimeSpan? ScriptCacheTimeout { get; set; } = TimeSpan.FromDays(1);
-
     /// <summary>
     /// Sandbox limit (DS-9): the wall-clock execution timeout applied to a single script evaluation via
     /// a Jint timeout constraint. A pathological script (e.g. an infinite loop) is aborted once this
@@ -28,4 +24,28 @@ public sealed class FeatureOptions
     /// recursion constraint. Default 300.
     /// </summary>
     public int? MaxRecursionDepth { get; set; } = 300;
+
+    /// <summary>Maximum managed memory, in bytes, that Jint may allocate during one evaluation.</summary>
+    public long? MaxMemoryBytes { get; set; } = 64 * 1024 * 1024;
+
+    /// <summary>Maximum length of a JavaScript array, including sparse arrays.</summary>
+    public uint? MaxArrayLength { get; set; } = 100_000;
+
+    /// <summary>Maximum aggregate UTF-8 size of declared JSON parameter values.</summary>
+    public int MaxInputBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>Maximum nesting depth of a declared JSON parameter value.</summary>
+    public int MaxInputDepth { get; set; } = 64;
+
+    /// <summary>Maximum aggregate number of JSON values across declared parameters.</summary>
+    public int MaxInputNodes { get; set; } = 100_000;
+
+    /// <summary>Maximum UTF-8 size of a materialized JSON result.</summary>
+    public int MaxResultBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>Maximum nesting depth of a materialized JSON result.</summary>
+    public int MaxResultDepth { get; set; } = 64;
+
+    /// <summary>Maximum number of JSON values in a materialized result.</summary>
+    public int MaxResultNodes { get; set; } = 100_000;
 }

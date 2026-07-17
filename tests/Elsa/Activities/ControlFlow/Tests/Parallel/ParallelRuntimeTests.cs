@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Parallel;
-using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
@@ -125,8 +124,6 @@ public sealed class ParallelRuntimeTests
         // own join never fires — the composite stays Running — because Finish short-circuits the run.
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ParallelConstructor>()
-            .WithConstructor<FinishConstructor>()
             .WithProbeLeaf()
             .Build("actexec-parallel", "actexec-finish", "actexec-b", "actexec-c");
 
@@ -180,14 +177,12 @@ public sealed class ParallelRuntimeTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ParallelConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
     private static WorkflowExecutionHarness NewFaultAwareHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ParallelConstructor>()
             .WithProbeLeaf()
             .WithFaultingLeaf()
             .Build(activityExecutionIds);
@@ -218,12 +213,24 @@ public sealed class ParallelRuntimeTests
         var finishNode = new ExecutableNode(
             executableNodeId: "node-finish",
             authoredActivityId: "authored-finish",
-            activityType: typeof(Finish).FullName!,
+            activityType: "elsa.intrinsic.finish",
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(FinishDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new FinishDescriptor())),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = "Finish", schemaVersion = "1.0.0" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Outcome] = new(
+                    WorkflowIntrinsicInputKeys.Outcome,
+                    new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+                        JsonSerializer.SerializeToElement(ActivityOutcomes.Done),
+                        ValueProtectionPolicy.InstanceInline))
+            },
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Finish);
 
         var branches = new (string Name, string Node)[] { ("a", "node-finish"), ("b", "node-b"), ("c", "node-c") };
         var childSlots = new List<ExecutableChildSlot>
@@ -245,9 +252,9 @@ public sealed class ParallelRuntimeTests
             authoredActivityId: "authored-parallel",
             activityType: typeof(ParallelActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(ParallelConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ParallelDescriptor())),
+            descriptorType: typeof(ParallelDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ParallelDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(
@@ -261,31 +268,4 @@ public sealed class ParallelRuntimeTests
 
     private sealed record ParallelDescriptor;
 
-    private sealed class ParallelConstructor : IActivityConstructor<ParallelDescriptor>
-    {
-        public static string ConsumerKeyValue => typeof(ParallelDescriptor).FullName!;
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new ParallelActivity());
-
-        public ValueTask<IActivity> Construct(ParallelDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new ParallelActivity());
-    }
-
-    private sealed record FinishDescriptor
-    {
-        public static string ConsumerKeyValue => typeof(FinishDescriptor).FullName!;
-    }
-
-    private sealed class FinishConstructor : IActivityConstructor<FinishDescriptor>
-    {
-        public string ConsumerKey => FinishDescriptor.ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new Finish());
-
-        public ValueTask<IActivity> Construct(FinishDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new Finish());
-    }
 }

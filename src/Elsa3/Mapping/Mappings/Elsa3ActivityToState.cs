@@ -145,12 +145,17 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
             return false;
         if (!expression.TryGetProperty("type", out var expressionType) || expressionType.ValueKind != JsonValueKind.String)
             return false;
-        if (!expression.TryGetProperty("value", out var expressionValue) || expressionValue.ValueKind != JsonValueKind.String)
+        if (!expression.TryGetProperty("value", out var expressionValue) ||
+            expressionValue.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
             return false;
+
+        object value = expressionValue.ValueKind == JsonValueKind.String
+            ? expressionValue.GetString()!
+            : expressionValue.Clone();
 
         argument = new ArgumentState(
             objectKey,
-            new ArgumentValue(expressionValue.GetString(), expressionType.GetString()),
+            new ArgumentValue(value, expressionType.GetString()),
             null,
             null,
             null,

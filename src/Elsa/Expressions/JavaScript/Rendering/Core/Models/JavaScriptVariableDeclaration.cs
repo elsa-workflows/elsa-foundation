@@ -9,12 +9,14 @@ public sealed class JavaScriptVariableDeclaration
     {
     }
 
-    public JavaScriptVariableDeclaration(string name, string type)
+    public JavaScriptVariableDeclaration(string name, string type, string declarationKeyword = "var")
     {
         Name = name;
         Type = type;
+        DeclarationKeyword = declarationKeyword;
     }
 
     public string Name { get; set; } = default!;
     public string Type { get; set; } = default!;
+    public string DeclarationKeyword { get; set; } = "var";
 }

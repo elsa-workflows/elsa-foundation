@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -5,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
 /// <summary>
-/// Per-drain in-memory working set for a coalesced checkpoint segment (E3-6, RT-10). Buffers the deferred checkpoint
+/// Per-drain in-memory working set for coalesced checkpoint segments (E3-6, RT-10). Buffers deferred checkpoint
 /// change-sets, holds an overlay of the mutated continuation state so intra-segment reads see prior hops, mirrors the
 /// scheduler work queue and post-commit outbox so the drain advances without touching durable stores, and folds
 /// everything into a single atomic commit at a flush boundary.
@@ -21,6 +22,8 @@ public sealed class RuntimeCoalescingSession
     private readonly IWorkflowSchedulerWorkQueue _innerQueue;
     private readonly InMemoryWorkflowSchedulerWorkQueue _overlayQueue = new();
     private readonly List<string> _seededWorkItemIds = [];
+    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
+        new(ReferenceEqualityComparer.Instance);
     private bool _queueSeeded;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
@@ -32,6 +35,7 @@ public sealed class RuntimeCoalescingSession
     private readonly Dictionary<string, DurableValueState> _durableValueUpserts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durableValueTombstones = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityExecutionInspectionProjection> _inspectionUpserts = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, WorkflowDispatchRecord> _workflowDispatchUpserts = new(StringComparer.Ordinal);
 
     private readonly List<string> _outboxOrder = [];
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
@@ -57,9 +61,9 @@ public sealed class RuntimeCoalescingSession
     public int MaxSegmentCheckpoints { get; }
 
     /// <summary>
-    /// <see langword="true"/> while the session is coalescing. Set to <see langword="false"/> once the segment has
-    /// flushed (at a boundary, cap, or quiescence); the decorators then pass through to the durable inner stores so the
-    /// remainder of the drain runs with Immediate semantics.
+    /// <see langword="true"/> while the session is coalescing. An activity-attempt boundary may durably close one
+    /// segment and start another in the same drain; terminal/external boundaries, the cap, and quiescence deactivate
+    /// the session.
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
@@ -72,6 +76,13 @@ public sealed class RuntimeCoalescingSession
     public bool AppliesTo(string workflowExecutionId) =>
         IsActive && StringComparer.Ordinal.Equals(WorkflowExecutionId, workflowExecutionId);
 
+    /// <summary>Returns whether this exact claim was issued by the overlay queue.</summary>
+    public bool OwnsOverlayClaim(RuntimeSchedulerWorkClaim claim)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        return _overlayClaims.ContainsKey(claim);
+    }
+
     // ---- Buffering -------------------------------------------------------------------------------------------------
 
     /// <summary>Applies a deferred commit to the overlay working set and buffers its change-set for the eventual fold.</summary>
@@ -79,12 +90,22 @@ public sealed class RuntimeCoalescingSession
     {
         ArgumentNullException.ThrowIfNull(commit);
 
-        ApplyToOverlay(commit.StateChanges);
+        ApplyToOverlay(commit.StateChanges, includeOutbox: true);
         _bufferedChangeSets.Add(commit.StateChanges);
         HopCount++;
     }
 
-    private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes)
+    /// <summary>
+    /// Advances the state overlay to a boundary that has already committed durably. Boundary-owned outbox items remain
+    /// with the durable provider; only deferred outbox items belong to the in-memory segment overlay.
+    /// </summary>
+    public void RecordDurableBoundaryState(RuntimeCheckpointStateChangeSet changes)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+        ApplyToOverlay(changes, includeOutbox: false);
+    }
+
+    private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes, bool includeOutbox)
     {
         if (changes.WorkflowExecution is { } workflowExecutionChange)
             _workflowExecution = workflowExecutionChange.State;
@@ -123,8 +144,14 @@ public sealed class RuntimeCoalescingSession
         foreach (var change in changes.ActivityExecutionInspections)
             _inspectionUpserts[change.StateId] = change.State;
 
-        foreach (var change in changes.PostCommitOutbox)
-            RecordOutboxItem(change.State);
+        foreach (var change in changes.WorkflowDispatches)
+            _workflowDispatchUpserts[change.StateId] = change.State;
+
+        if (includeOutbox)
+        {
+            foreach (var change in changes.PostCommitOutbox)
+                RecordOutboxItem(change.State);
+        }
     }
 
     private void RecordOutboxItem(RuntimePostCommitOutboxItem item)
@@ -265,6 +292,10 @@ public sealed class RuntimeCoalescingSession
         if (item.Status is not (RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.FailedRetryable))
             return false;
 
+        if (item.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
+            item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount))
+            return false;
+
         if (query.WorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, query.WorkflowExecutionId))
             return false;
 
@@ -276,27 +307,145 @@ public sealed class RuntimeCoalescingSession
 
     public bool OwnsOutboxItem(string outboxItemId) => _outboxItems.ContainsKey(outboxItemId);
 
+    public bool TryFindOutboxItem(string outboxItemId, out RuntimePostCommitOutboxItem? item)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        return _outboxItems.TryGetValue(outboxItemId, out item);
+    }
+
+    public IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var claimable = _outboxOrder
+            .Select(id => _outboxItems[id])
+            .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+            .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
+            .ThenBy(item => item.RecordedAt)
+            .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
+            .Take(request.Limit)
+            .ToArray();
+        var claims = new RuntimePostCommitOutboxClaim[claimable.Length];
+        for (var index = 0; index < claimable.Length; index++)
+        {
+            var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], request);
+            _outboxItems[claim.OutboxItemId] = claim.Item;
+            claims[index] = claim;
+        }
+
+        return claims;
+    }
+
     public void RecordOutboxDelivery(RuntimePostCommitOutboxDeliveryResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
 
         if (!_outboxItems.TryGetValue(result.OutboxItemId, out var existing))
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found in the coalescing session.");
+        if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
+            throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
+        var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
+        var status = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
+                     existing.RetryPolicy.IsExhaustedAfterAttempt(attemptCount)
+            ? RuntimePostCommitOutboxStatus.FailedFinal
+            : result.Status;
         _outboxItems[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
             outboxItemId: existing.OutboxItemId,
             intent: existing.Intent,
-            status: result.Status,
+            status: status,
             recordedAt: existing.RecordedAt,
-            availableAt: result.Status == RuntimePostCommitOutboxStatus.FailedRetryable ? result.RecordedAt : existing.AvailableAt,
+            availableAt: status == RuntimePostCommitOutboxStatus.FailedRetryable
+                ? result.RecordedAt.Add(existing.RetryPolicy.Delay ?? TimeSpan.Zero)
+                : null,
             retryPolicy: existing.RetryPolicy,
-            deliveryAttemptCount: existing.DeliveryAttemptCount + 1,
+            deliveryAttemptCount: attemptCount,
             deliveringOwnerId: null,
             deliveryStartedAt: null,
-            deliveredAt: result.Status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
+            deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             lastFailureMessage: result.FailureMessage,
-            metadata: existing.Metadata);
+            metadata: existing.Metadata,
+            deliveryFencingToken: existing.DeliveryFencingToken);
     }
+
+    public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (!_outboxItems.TryGetValue(claim.OutboxItemId, out var existing))
+            throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found in the coalescing session.");
+
+        _outboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+    }
+
+    public void CompleteOutboxClaim(RuntimePostCommitOutboxClaimCompletion completion)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        if (!_outboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
+            throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found in the coalescing session.");
+
+        var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+            existingOutbox,
+            completion.Claim,
+            completion.DeliveryResult);
+        if (completion.WorkflowDispatch is { } dispatch)
+        {
+            if (!_workflowDispatchUpserts.TryGetValue(dispatch.DispatchId, out var existingDispatch))
+                throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the coalescing session.");
+            WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
+        }
+        if (completion.FollowUpOutboxItem is { } followUp)
+        {
+            if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
+                throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+            if (_outboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
+                !PendingOutboxItemsEquivalent(existingFollowUp, followUp))
+            {
+                throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
+            }
+        }
+
+        _outboxItems[completion.Claim.OutboxItemId] = completedOutbox;
+        if (completion.WorkflowDispatch is { } workflowDispatch)
+            _workflowDispatchUpserts[workflowDispatch.DispatchId] = workflowDispatch;
+        if (completion.FollowUpOutboxItem is { } followUpOutboxItem)
+        {
+            if (_outboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem))
+                _outboxOrder.Add(followUpOutboxItem.OutboxItemId);
+        }
+    }
+
+    private static bool PendingOutboxItemsEquivalent(
+        RuntimePostCommitOutboxItem left,
+        RuntimePostCommitOutboxItem right) =>
+        left.Status == RuntimePostCommitOutboxStatus.Pending &&
+        right.Status == RuntimePostCommitOutboxStatus.Pending &&
+        left.RecordedAt == right.RecordedAt &&
+        left.AvailableAt == right.AvailableAt &&
+        left.DeliveryAttemptCount == right.DeliveryAttemptCount &&
+        left.DeliveryFencingToken == right.DeliveryFencingToken &&
+        left.RetryPolicy.IsEquivalentTo(right.RetryPolicy) &&
+        StringComparer.Ordinal.Equals(left.Intent.IntentId, right.Intent.IntentId) &&
+        StringComparer.Ordinal.Equals(left.Intent.WorkflowExecutionId, right.Intent.WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(left.Intent.Kind, right.Intent.Kind) &&
+        StringComparer.Ordinal.Equals(left.Intent.ActivityExecutionId, right.Intent.ActivityExecutionId) &&
+        StringComparer.Ordinal.Equals(left.Intent.IdempotencyKey, right.Intent.IdempotencyKey) &&
+        StringComparer.Ordinal.Equals(left.Intent.DependsOnWaitRegistrationId, right.Intent.DependsOnWaitRegistrationId) &&
+        left.Intent.WaitFailurePolicy == right.Intent.WaitFailurePolicy &&
+        NullableJsonEquals(left.Intent.Payload, right.Intent.Payload) &&
+        MetadataEquals(left.Intent.Metadata, right.Intent.Metadata) &&
+        MetadataEquals(left.Metadata, right.Metadata);
+
+    private static bool NullableJsonEquals(System.Text.Json.JsonElement? left, System.Text.Json.JsonElement? right) =>
+        left.HasValue == right.HasValue &&
+        (!left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText()));
+
+    private static bool MetadataEquals(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right) =>
+        left.Count == right.Count &&
+        left.All(item => right.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
 
     // ---- Queue overlay ---------------------------------------------------------------------------------------------
 
@@ -334,16 +483,78 @@ public sealed class RuntimeCoalescingSession
         return await _overlayQueue.DequeueAsync(WorkflowExecutionId, cancellationToken);
     }
 
+    public async ValueTask<RuntimeSchedulerWorkClaim?> ClaimOverlayAsync(
+        RuntimeSchedulerWorkClaimRequest request,
+        CancellationToken cancellationToken)
+    {
+        await EnsureQueueSeededAsync(cancellationToken);
+        var claim = await _overlayQueue.ClaimAsync(request, cancellationToken);
+        if (claim is not null)
+            _overlayClaims.TryAdd(claim, 0);
+        return claim;
+    }
+
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewOverlayClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken)
+    {
+        var result = await _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+        _overlayClaims.TryRemove(claim, out _);
+        if (result.Claim is not null)
+            _overlayClaims.TryAdd(result.Claim, 0);
+        return result;
+    }
+
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteOverlayClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        CancellationToken cancellationToken)
+    {
+        var result = await _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
+        _overlayClaims.TryRemove(claim, out _);
+        return result;
+    }
+
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseOverlayClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken)
+    {
+        var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+        _overlayClaims.TryRemove(claim, out _);
+        return result;
+    }
+
     // ---- Flush -----------------------------------------------------------------------------------------------------
 
     /// <summary>Folds the buffered change-sets (state only) into one change-set. Callers set the outbox separately.</summary>
-    public RuntimeCheckpointStateChangeSet FoldBufferedStateChanges() => RuntimeCheckpointFold.Fold(_bufferedChangeSets);
+    public RuntimeCheckpointStateChangeSet FoldBufferedStateChanges() =>
+        WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold(_bufferedChangeSets));
 
     /// <summary>Folds the buffered change-sets with a trailing boundary change-set applied last (state only).</summary>
     public RuntimeCheckpointStateChangeSet FoldBufferedStateChangesWith(RuntimeCheckpointStateChangeSet trailing)
     {
         ArgumentNullException.ThrowIfNull(trailing);
-        return RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]);
+        return WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]));
+    }
+
+    private RuntimeCheckpointStateChangeSet WithWorkflowDispatchOverlay(RuntimeCheckpointStateChangeSet folded)
+    {
+        if (_workflowDispatchUpserts.Count == 0)
+            return folded;
+
+        var merged = folded.WorkflowDispatches.ToDictionary(change => change.StateId, StringComparer.Ordinal);
+        foreach (var record in _workflowDispatchUpserts.Values)
+        {
+            merged[record.DispatchId] = new RuntimeStateChange<WorkflowDispatchRecord>(
+                record.DispatchId,
+                RuntimeStateChangeOperation.Upsert,
+                record,
+                new Dictionary<string, string>());
+        }
+
+        return folded.WithWorkflowDispatches(merged.Values.ToArray());
     }
 
     /// <summary>The still-undelivered outbox items, as change-set entries, to persist atomically in the flush commit.</summary>
@@ -388,5 +599,10 @@ public sealed class RuntimeCoalescingSession
             if (!seeded.Contains(item.WorkItemId))
                 await _innerQueue.EnqueueAsync(item, cancellationToken);
         }
+
+        // The durable queue now matches the overlay's remaining frontier. Treat that frontier as the entry point for
+        // a possible next coalesced segment in this drain so a later boundary advances only work consumed since here.
+        _seededWorkItemIds.Clear();
+        _seededWorkItemIds.AddRange(remaining.Select(item => item.WorkItemId));
     }
 }

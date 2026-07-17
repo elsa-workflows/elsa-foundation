@@ -441,7 +441,10 @@ public class GroundworkStorageCompositionTests
 
         Assert.NotEmpty(projectedStrings);
         Assert.All(projectedStrings, column =>
-            Assert.Equal(LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength, column.Length));
+            Assert.InRange(
+                column.Length ?? 0,
+                1,
+                LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength));
     }
 
     [Fact]
@@ -705,19 +708,44 @@ public class GroundworkStorageCompositionTests
             typeof(IActivityExecutionInspectionStore),
             typeof(IActivityExecutionInspectionWriter),
             typeof(IWorkflowExecutionStateStore),
+            typeof(IWorkflowTestScopeStore),
+            typeof(IWorkflowTestScopeAdmissionStore),
+            typeof(IWorkflowTestScopeCleanupStore),
             typeof(IDurableValueStateStore),
             typeof(ISchedulerStateStore),
             typeof(IExecutionLivenessStateStore),
+            typeof(IRuntimeRecoveryScanner),
             typeof(IWorkflowHoldStateStore),
             typeof(IIncidentStateStore),
+            typeof(IPostCommitOutboxLookupStore),
             typeof(IRuntimeCheckpointCommitStore),
+            typeof(IRuntimePostCommitOutboxClaimStore),
+            typeof(IRuntimePostCommitOutboxClaimCompletionStore),
             typeof(IRuntimePostCommitOutboxStore),
+            typeof(IWorkflowDispatchStore),
+            typeof(IWorkflowDispatchQueryStore),
+            typeof(IWorkflowDispatchDeleteStore),
+            typeof(IWorkflowDispatchRetentionRootStore),
+            typeof(IWorkflowDispatchAdmissionStore),
+            typeof(IWorkflowDispatchCancellationStore),
+            typeof(IWorkflowDispatchRedriveStore),
+            typeof(IWorkflowSchedulerPoisonStore),
             typeof(IWorkflowSchedulerWorkQueue),
             typeof(IDurableTimerStore),
             typeof(IWorkflowTriggerBindingStore),
             typeof(IRecurringTriggerScheduleStore)
         ],
-        "iam" => [typeof(IUserStore), typeof(IRoleStore), typeof(IExternalIdentityStore), typeof(ITenantMembershipStore)],
+        "iam" =>
+        [
+            typeof(IUserStore),
+            typeof(IRoleStore),
+            typeof(IApplicationStore),
+            typeof(ICredentialStore),
+            typeof(IClaimMappingStore),
+            typeof(IProviderConfigurationStore),
+            typeof(IExternalIdentityStore),
+            typeof(ITenantMembershipStore)
+        ],
         "secrets" => [typeof(ISecretRepository)],
         "distributed-runtime" => [typeof(IExecutionPlacementStore), typeof(IExecutionCommandTransport)],
         "workflows-design" =>

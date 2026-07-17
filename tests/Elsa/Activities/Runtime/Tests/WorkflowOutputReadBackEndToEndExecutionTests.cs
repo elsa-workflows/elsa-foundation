@@ -1,8 +1,5 @@
 using System.Text.Json;
-using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Serialization.SystemText;
@@ -151,8 +148,6 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
         services.AddLogging();
         services.AddMemoryCache();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        services.AddSingleton<IActivityConstructor, SetOutputConstructor>();
-
         // Register before the features: runtime core TryAdds the default policy, so a test-supplied policy
         // registered first wins — the same way a host opts in to exposing workflow-output payloads.
         if (payloadCapturePolicy is not null)
@@ -181,16 +176,17 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
         var node = new ExecutableNode(
             executableNodeId: "node-set-output",
             authoredActivityId: "authored-node-set-output",
-            activityType: typeof(SetOutput).FullName!,
+            activityType: "elsa.intrinsic.set-output",
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(TestDescriptor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new TestDescriptor())),
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = "SetOutput", schemaVersion = "1.0.0" }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["OutputName"] = Literal("OutputName", JsonSerializer.SerializeToElement(OutputName), "System.String"),
-                ["OutputValue"] = Literal("OutputValue", JsonSerializer.SerializeToElement(OutputValue), "System.Object")
+                [WorkflowIntrinsicInputKeys.Name] = Literal(WorkflowIntrinsicInputKeys.Name, OutputName),
+                [WorkflowIntrinsicInputKeys.Value] = Literal(WorkflowIntrinsicInputKeys.Value, OutputValue)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.SetOutput);
 
         return new(
             identity: new WorkflowExecutableIdentity(artifactId, $"definition-{artifactId}", $"version-{artifactId}", "1.0.0", $"sha256:{artifactId}"),
@@ -200,39 +196,16 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
-    private static RuntimeInputBinding Literal(string inputName, JsonElement value, string typeName) =>
+    private static RuntimeInputBinding Literal(string inputName, string value) =>
         new(
-            inputName: inputName,
+            inputKey: inputName,
+            targetType: new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Literal,
-            literalValue: value,
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName,
-                ["referenceKey"] = inputName
-            });
-
-    private sealed record TestDescriptor
-    {
-        public static string ConsumerKeyValue => typeof(TestDescriptor).FullName!;
-    }
-
-    private sealed class SetOutputConstructor : IActivityConstructor<TestDescriptor>
-    {
-        public string ConsumerKey => TestDescriptor.ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            Construct(new TestDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(TestDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
-        {
-            var activity = new SetOutput();
-            if (inputs is not null && inputs.TryGetValue("OutputName", out var nameInput))
-                activity.OutputName = (InputArgument<string>)nameInput;
-            if (inputs is not null && inputs.TryGetValue("OutputValue", out var valueInput))
-                activity.OutputValue = (InputArgument<object>)valueInput;
-            return new(activity);
-        }
-    }
+            literal: ValueEnvelope.Inline(
+                new Elsa.Primitives.Models.ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement(value),
+                ValueProtectionPolicy.InstanceInline));
 
     /// <summary>The opt-in shape a host registers to expose workflow-output payloads: capture unless sensitive.</summary>
     private sealed class CaptureUnlessSensitivePolicy : IRuntimePayloadCapturePolicy

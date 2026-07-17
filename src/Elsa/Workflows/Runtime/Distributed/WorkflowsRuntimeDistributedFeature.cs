@@ -4,6 +4,7 @@ using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Options;
@@ -88,6 +89,8 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         services.TryAddScoped<IExecutionCommandTransport>(sp => new InMemoryExecutionCommandTransport(
             sp.GetRequiredService<InMemoryExecutionCommandTransportState>(),
             sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalDistributionEvidence>());
 
         // Compose the in-process provider as the local-drain engine, then replace the single active actor provider
         // registration with the distributed one (S=2.6 single active provider). Keeping the in-process provider as a
@@ -106,5 +109,11 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
             sp.GetRequiredService<IOptions<ExecutionPlacementPumpOptions>>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<ExecutionPlacementPumpTask>>()));
+    }
+
+    private sealed class ProcessLocalDistributionEvidence : IWorkflowDispatchDurabilityEvidence
+    {
+        public string Component => WorkflowDispatchDurabilityComponents.Distribution;
+        public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.ProcessLocal;
     }
 }

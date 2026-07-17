@@ -1,1 +1,3 @@
-{"feature_directory":"specs/097-dispatch-dependency-hardening"}
+{
+  "feature_directory": "specs/095-value-flow-redesign"
+}

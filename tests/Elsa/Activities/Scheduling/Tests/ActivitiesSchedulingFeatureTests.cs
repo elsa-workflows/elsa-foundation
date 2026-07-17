@@ -1,5 +1,4 @@
 using CShells.Features;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,23 +8,13 @@ namespace Elsa.Activities.Scheduling.Tests;
 
 /// <summary>
 /// Feature-registration coverage for <see cref="ActivitiesSchedulingFeature"/> (constitution §2.23.1). The
-/// activity types themselves are constructed by the runtime's CLR activity constructor, so the feature registers
-/// no per-type activity services; it does register the Timer/Cron publish-time providers (trigger stimulus +
+/// activity types themselves are transiently activated from compiled CLR contracts, so the feature registers
+/// no per-type activity instances; it does register the Timer/Cron publish-time providers (trigger stimulus +
 /// recurring schedule), and pins the shell metadata that brings the durable timer store (Delay) and the
 /// recurring-trigger pump (Timer/Cron) into the composition.
 /// </summary>
 public sealed class ActivitiesSchedulingFeatureTests
 {
-    [Fact]
-    public void ConfigureServices_RegistersNoActivityConstructor()
-    {
-        var services = new ServiceCollection();
-
-        new ActivitiesSchedulingFeature().ConfigureServices(services);
-
-        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IActivityConstructor));
-    }
-
     [Fact]
     public void ConfigureServices_RegistersTimerAndCronTriggerStimulusProviders()
     {

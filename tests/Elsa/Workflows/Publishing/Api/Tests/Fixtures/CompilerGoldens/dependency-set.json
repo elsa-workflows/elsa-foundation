@@ -18,8 +18,8 @@
     }
   ],
   "identity": {
-    "artifactHash": "sha256:f39caae60bb64bc6c76a22afbab4dbf293fecca1ce284694938b86873927150d",
-    "artifactId": "artifact-f39caae60bb6",
+    "artifactHash": "sha256:c954f0464b3aca9c65ce8d705fd9e90c2945b32f5f15eb0d431c51d61fea6ab9",
+    "artifactId": "artifact-c954f0464b3a",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -49,7 +49,21 @@
               "schemaVersion": "1"
             },
             "executableNodeId": "dispatch-b",
-            "inputBindings": [],
+            "inputBindings": [
+              {
+                "expression": null,
+                "inputName": "Text",
+                "key": "Text",
+                "literalValue": null,
+                "metadata": [
+                  {
+                    "Key": "referenceKey",
+                    "Value": "Text"
+                  }
+                ],
+                "source": "Literal"
+              }
+            ],
             "metadata": [
               {
                 "Key": "authoredNodeId",
@@ -75,7 +89,21 @@
               "schemaVersion": "1"
             },
             "executableNodeId": "dispatch-a",
-            "inputBindings": [],
+            "inputBindings": [
+              {
+                "expression": null,
+                "inputName": "Text",
+                "key": "Text",
+                "literalValue": null,
+                "metadata": [
+                  {
+                    "Key": "referenceKey",
+                    "Value": "Text"
+                  }
+                ],
+                "source": "Literal"
+              }
+            ],
             "metadata": [
               {
                 "Key": "authoredNodeId",

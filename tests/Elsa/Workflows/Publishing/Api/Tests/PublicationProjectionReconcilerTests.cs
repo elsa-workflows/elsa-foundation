@@ -183,7 +183,6 @@ public sealed class PublicationProjectionReconcilerTests
                     activityTypeVersion: "1.0.0",
                     descriptor: new RuntimeActivityDescriptor("Test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
                     inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                    outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                     metadata: new Dictionary<string, string>()),
                 new Dictionary<string, WorkflowExecutableResumeTarget>(),
                 now,

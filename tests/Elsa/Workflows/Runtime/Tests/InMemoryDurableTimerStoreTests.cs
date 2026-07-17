@@ -89,6 +89,50 @@ public sealed class InMemoryDurableTimerStoreTests
     }
 
     [Fact]
+    public async Task ClaimDue_ExpiryRenewalReleaseAndCompletionAreFenced()
+    {
+        var store = new InMemoryDurableTimerStore();
+        await store.SaveAsync(Timer("timer-1", TimeSpan.FromMinutes(-1)));
+
+        var initial = Assert.Single(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-a", Now, TimeSpan.FromMinutes(1), limit: 1)));
+        Assert.Empty(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-b", Now.AddSeconds(30), TimeSpan.FromMinutes(1), limit: 1)));
+
+        var reclaimed = Assert.Single(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-b", Now.AddMinutes(1), TimeSpan.FromMinutes(1), limit: 1)));
+        Assert.True(reclaimed.FencingToken > initial.FencingToken);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Stale,
+            (await store.CompleteClaimAsync(initial)).Status);
+
+        var renewal = await store.RenewClaimAsync(
+            reclaimed,
+            Now.AddMinutes(1),
+            TimeSpan.FromMinutes(2));
+        var renewed = Assert.IsType<RuntimeDurableTimerClaim>(renewal.Claim);
+        Assert.True(renewed.Revision > reclaimed.Revision);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Stale,
+            (await store.ReleaseClaimAsync(reclaimed, Now.AddMinutes(4))).Status);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Succeeded,
+            (await store.ReleaseClaimAsync(renewed, Now.AddMinutes(4))).Status);
+
+        Assert.Empty(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-c", Now.AddMinutes(4).AddTicks(-1), TimeSpan.FromMinutes(1), limit: 1)));
+        var released = Assert.Single(await store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("owner-c", Now.AddMinutes(4), TimeSpan.FromMinutes(1), limit: 1)));
+        Assert.Equal(1, released.FailureCount);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.Succeeded,
+            (await store.CompleteClaimAsync(released)).Status);
+        Assert.Equal(
+            RuntimeDurableTimerClaimTransitionStatus.AlreadyApplied,
+            (await store.CompleteClaimAsync(released)).Status);
+    }
+
+    [Fact]
     public async Task Save_RejectsNullTimer()
     {
         var store = new InMemoryDurableTimerStore();

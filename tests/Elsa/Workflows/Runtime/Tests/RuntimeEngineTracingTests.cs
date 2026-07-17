@@ -23,7 +23,7 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
         using var activitySource = new ActivitySource(WorkflowEngineTelemetry.ActivitySourceName);
         var tracer = new ActivitySourceWorkflowEngineTracer(activitySource);
 
-        var recorded = new List<Activity>();
+        var recorded = new List<System.Diagnostics.Activity>();
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == WorkflowEngineTelemetry.ActivitySourceName,
@@ -78,7 +78,7 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
 
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(result.Items).Status);
-        Assert.Null(Activity.Current);
+        Assert.Null(System.Diagnostics.Activity.Current);
     }
 
     private WorkflowSchedulerDrainer BuildDrainer(

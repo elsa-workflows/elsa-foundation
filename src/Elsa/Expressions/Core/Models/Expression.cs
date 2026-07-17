@@ -1,5 +1,4 @@
-﻿using Elsa.Expressions.Core.Contracts;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace Elsa.Expressions.Core.Models;
 
@@ -44,46 +43,4 @@ public partial class Expression
     /// <returns>An expression that represents a literal value.</returns>
     public static Expression LiteralExpression(object? value) => new("Literal", value);
 
-    /// <summary>
-    /// Creates an expression that represents a delegate.
-    /// </summary>
-    /// <param name="value">The delegate.</param>
-    /// <returns>An expression that represents a delegate.</returns>
-    public static Expression DelegateExpression(Func<IExpressionExecutionContext, ValueTask<object?>> value) => new()
-    {
-        Type = "Delegate",
-        Value = value
-    };
-
-    /// <summary>
-    /// Creates an expression that represents a delegate.
-    /// </summary>
-    /// <param name="value">The delegate.</param>
-    /// <typeparam name="T">The return type of the delegate.</typeparam>
-    /// <returns>An expression that represents a delegate.</returns>
-    public static Expression DelegateExpression<T>(Func<IExpressionExecutionContext, ValueTask<T>> value) => DelegateExpression(async context => (object?)await value(context));
-
-    /// <summary>
-    /// Creates an expression that represents a delegate.
-    /// </summary>
-    /// <param name="value">The delegate.</param>
-    /// <typeparam name="T">The return type of the delegate.</typeparam>
-    /// <returns>An expression that represents a delegate.</returns>
-    public static Expression DelegateExpression<T>(Func<ValueTask<T>> value) => DelegateExpression(_ => ValueTask.FromResult<object?>(value()));
-
-    /// <summary>
-    /// Creates an expression that represents a delegate.
-    /// </summary>
-    /// <param name="value">The delegate.</param>
-    /// <typeparam name="T">The return type of the delegate.</typeparam>
-    /// <returns>An expression that represents a delegate.</returns>
-    public static Expression DelegateExpression<T>(Func<IExpressionExecutionContext, T> value) => DelegateExpression(context => ValueTask.FromResult<object?>(value(context)));
-
-    /// <summary>
-    /// Creates an expression that represents a delegate.
-    /// </summary>
-    /// <param name="value">The delegate.</param>
-    /// <typeparam name="T">The return type of the delegate.</typeparam>
-    /// <returns>An expression that represents a delegate.</returns>
-    public static Expression DelegateExpression<T>(Func<T> value) => DelegateExpression(_ => ValueTask.FromResult<object?>(value()));
 }

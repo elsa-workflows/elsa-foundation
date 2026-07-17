@@ -81,6 +81,22 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         Assert.Null(await queue.DequeueAsync("wfexec-1"));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Delete_RemovesWorkItemIdBeyondPortableDocumentLimit(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var workItemId = $"work:{new string('x', 450)}";
+
+        await queue.EnqueueAsync(NewWorkItem(1, workItemId: workItemId));
+
+        Assert.True(await queue.DeleteAsync("wfexec-1", workItemId));
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.False(await queue.DeleteAsync("wfexec-1", workItemId));
+    }
+
     [Fact]
     public async Task Physical_identity_collision_fails_closed()
     {
@@ -106,6 +122,35 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
             content));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await queue.EnqueueAsync(workItem));
+
+        Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Delete_physical_identity_collision_fails_closed()
+    {
+        await using var fixture = CreateStore("sqlite");
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var workItem = NewWorkItem(1, workItemId: $"work:{new string('x', 450)}");
+        var logicalDocumentId = DocumentId.Compose(workItem.WorkflowExecutionId, workItem.WorkItemId);
+        var physicalDocumentId = GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(logicalDocumentId);
+        var wrongItem = NewWorkItem(2, workflowExecutionId: "wfexec-wrong", workItemId: "work-wrong");
+        var wrongEnvelope = new
+        {
+            Collection = ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            WorkflowExecutionId = wrongItem.WorkflowExecutionId,
+            Item = wrongItem
+        };
+        var (schemaVersion, content) = GroundworkTestSerialization.Serializer.Serialize(
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            wrongEnvelope);
+        await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            physicalDocumentId,
+            schemaVersion,
+            content));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await queue.DeleteAsync(workItem.WorkflowExecutionId, workItem.WorkItemId));
 
         Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
     }
@@ -161,6 +206,29 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => queue.ListPendingWorkflowExecutionIdsAsync(0).AsTask());
     }
 
+    [Fact]
+    public async Task ListPendingWorkflowExecutionIds_UsesOneBoundedOrderedProviderQuery()
+    {
+        await using var fixture = CreateStore("memory");
+        var boundedStore = new EmptyRecordingBoundedDocumentStore();
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            boundedStore);
+
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(7));
+
+        var query = Assert.Single(boundedStore.Queries);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery, query.QueryIdentity);
+        Assert.Equal(7, query.Take);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.StartsWith, comparison.Operator);
+        Assert.Equal(string.Empty, Assert.Single(comparison.Values));
+        var order = Assert.Single(query.Order);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, order.Path);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -175,6 +243,94 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
 
         Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("a:b")));
         Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("a")));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ConcurrentClaim_GrantsExactlyOneOwnerAndKeepsLaterWorkBehindTheHead(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue first = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowSchedulerWorkQueue second = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await first.EnqueueAsync(NewWorkItem(1));
+        await first.EnqueueAsync(NewWorkItem(2));
+
+        var claims = await Task.WhenAll(
+            first.ClaimAsync(new("wfexec-1", "owner-a", Now, TimeSpan.FromMinutes(1))).AsTask(),
+            second.ClaimAsync(new("wfexec-1", "owner-b", Now, TimeSpan.FromMinutes(1))).AsTask());
+
+        var winner = Assert.Single(claims.Where(claim => claim is not null))!;
+        Assert.Equal("work-1", winner.Item.WorkItemId);
+        Assert.Null(await first.ClaimAsync(new("wfexec-1", "owner-c", Now.AddSeconds(1), TimeSpan.FromMinutes(1))));
+        Assert.Equal(new[] { "work-1", "work-2" }, (await first.ListAsync(new("wfexec-1"))).Select(item => item.WorkItemId));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ExpiredClaim_IsReclaimedWithNewFence_AndStaleCompletionCannotRemoveSuccessorWork(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var first = await queue.ClaimAsync(new("wfexec-1", "owner-a", Now, TimeSpan.FromSeconds(10)));
+        var second = await queue.ClaimAsync(new("wfexec-1", "owner-b", Now.AddSeconds(11), TimeSpan.FromMinutes(1)));
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+
+        Assert.True(second!.FencingToken > first!.FencingToken);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await queue.CompleteClaimAsync(first)).Status);
+        Assert.Single(await queue.ListAsync(new("wfexec-1")));
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, (await queue.CompleteClaimAsync(second)).Status);
+        Assert.Empty(await queue.ListAsync(new("wfexec-1")));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task RenewalAdvancesRevision_AndOnlyTheRefreshedClaimCanComplete(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await queue.EnqueueAsync(NewWorkItem(1));
+        var claim = await queue.ClaimAsync(new("wfexec-1", "owner-a", Now, TimeSpan.FromSeconds(10)));
+        Assert.NotNull(claim);
+
+        var renewal = await queue.RenewClaimAsync(claim!, Now.AddSeconds(5), TimeSpan.FromMinutes(1));
+        var renewed = renewal.Claim;
+        Assert.NotNull(renewed);
+
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, renewal.Status);
+        Assert.True(renewed!.Revision > claim.Revision);
+        Assert.Equal(claim.FencingToken, renewed.FencingToken);
+        Assert.Null(await queue.ClaimAsync(new("wfexec-1", "owner-b", Now.AddSeconds(11), TimeSpan.FromMinutes(1))));
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await queue.CompleteClaimAsync(claim)).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, (await queue.CompleteClaimAsync(renewed)).Status);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ReleaseCanDelayRetry_AndCompletionIsIdempotentAcrossBridgeRestart(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await queue.EnqueueAsync(NewWorkItem(1));
+        var claim = await queue.ClaimAsync(new("wfexec-1", "owner-a", Now, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(claim);
+
+        Assert.Equal(
+            RuntimeSchedulerWorkClaimTransitionStatus.Succeeded,
+            (await queue.ReleaseClaimAsync(claim!, Now.AddMinutes(2))).Status);
+        Assert.Null(await queue.ClaimAsync(new("wfexec-1", "owner-b", Now.AddMinutes(1), TimeSpan.FromMinutes(1))));
+
+        IWorkflowSchedulerWorkQueue restarted = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var retried = await restarted.ClaimAsync(new("wfexec-1", "owner-b", Now.AddMinutes(2), TimeSpan.FromMinutes(1)));
+        Assert.NotNull(retried);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, (await restarted.CompleteClaimAsync(retried!)).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.AlreadyApplied, (await queue.CompleteClaimAsync(retried)).Status);
     }
 
     private static RuntimeSchedulerWorkItem NewWorkItem(

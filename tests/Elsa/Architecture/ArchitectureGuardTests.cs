@@ -203,7 +203,7 @@ public sealed class ArchitectureGuardTests
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
-            $"{fileName} must select one Groundwork SQLite target for all seven persistence families.");
+            $"{fileName} must select one Groundwork SQLite target for the six provider-level persistence families.");
         Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
             $"{fileName} must not compose a second Groundwork provider leaf.");
         Assert.False(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),
@@ -221,11 +221,11 @@ public sealed class ArchitectureGuardTests
         var warningsAsErrors = productionTargets.Descendants("WarningsAsErrors").Single().Value;
         Assert.Contains("GW0004", warningsAsErrors.Split(';', StringSplitOptions.RemoveEmptyEntries));
 
-        const string checkpointAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs";
-        var checkpointSource = File.ReadAllText(Path.Combine(RepoRoot, checkpointAdapterPath));
-        Assert.Single(Regex.Matches(checkpointSource, @"\bDocumentStoreQuery\b").Cast<Match>());
-        Assert.Equal(3, Regex.Matches(checkpointSource, @"\bPortableDocumentQuery\b").Count);
-        Assert.Equal(4, Regex.Matches(checkpointSource, "Runtime checkpoint commit unit-of-work does not query documents.").Count);
+        const string unitOfWorkAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkDocumentUnitOfWorkStore.cs";
+        var unitOfWorkSource = File.ReadAllText(Path.Combine(RepoRoot, unitOfWorkAdapterPath));
+        Assert.Single(Regex.Matches(unitOfWorkSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(unitOfWorkSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Single(Regex.Matches(unitOfWorkSource, "Groundwork document unit-of-work adapter does not query documents.").Cast<Match>());
 
         const string scopedAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkScopedDocumentStore.cs";
         var scopedAdapterSource = File.ReadAllText(Path.Combine(RepoRoot, scopedAdapterPath));
@@ -242,7 +242,7 @@ public sealed class ArchitectureGuardTests
             })
             .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
             .Where(candidate =>
-                !StringComparer.Ordinal.Equals(candidate.RelativePath, checkpointAdapterPath) &&
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, unitOfWorkAdapterPath) &&
                 !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterPath))
             .SelectMany(candidate =>
             {
@@ -329,6 +329,10 @@ public sealed class ArchitectureGuardTests
         Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);
         Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(PackageReferences(design), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
 
         var sourceFiles = new[] { runtime, design }
             .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories));
@@ -337,6 +341,26 @@ public sealed class ArchitectureGuardTests
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .ToArray();
         Assert.Empty(workflowDefinitionActivityReferences);
+
+        var forbiddenContractTerms = new[]
+        {
+            "MassTransit",
+            "ServiceBus",
+            "RoutingChannel",
+            "TransportSelection",
+            "Priority",
+            "Affinity"
+        };
+        var transportContractReferences = sourceFiles
+            .SelectMany(file =>
+            {
+                var text = StripCommentsAndStringLiterals(File.ReadAllText(file));
+                return forbiddenContractTerms
+                    .Where(term => text.Contains(term, StringComparison.Ordinal))
+                    .Select(term => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {term}");
+            })
+            .ToArray();
+        Assert.Empty(transportContractReferences);
     }
 
     [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
@@ -449,47 +473,20 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Fact] // spec 006 T051 (SC-004) — construction + reconciliation dispatch on stable keys; no per-provider branch.
-    public void Construction_and_reconciliation_contain_no_per_provider_or_consumer_branch()
+    [Fact]
+    public void Legacy_activity_factory_and_constructor_registry_are_absent()
     {
-        string[] relativePaths =
+        string[] removedPaths =
         [
             "src/Elsa/Activities/Runtime/Services/ActivityFactory.cs",
             "src/Elsa/Activities/Runtime/Services/ActivityConstructorRegistry.cs",
-            // The task's "ActivityVersionsReconcilingHandler" is CollectActivityVersions in the current tree.
-            "src/Elsa/Activities/Design/Reconciliation/Handlers/CollectActivityVersions.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
         ];
-
-        // A per-provider branch would surface as a switch, an equality test against the key/kind
-        // string, or a reference to a concrete descriptor type / the deleted kind discriminator. These three
-        // dispatchers use provider-neutral contracts and the runtime registry, never branch on a provider value.
-        // NB: a lexical scan can't catch every conceivable rewrite (e.g. `.Equals(...)` or a lookup table
-        // keyed on kind); it pins the common forms and the concrete-type references.
-        string[] forbiddenTokens =
-        [
-            "switch",
-            "descriptorType ==",
-            "DescriptorType ==",
-            "ImplementationKind",
-            "ImplementationDescriptor",
-            "ClrActivityDescriptor",
-            "WorkflowIdentity",
-            "TypeInformation",
-        ];
-
-        var violations = new List<string>();
-        foreach (var relativePath in relativePaths)
-        {
-            var fullPath = Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-            Assert.True(File.Exists(fullPath), $"Expected source file '{relativePath}' to exist.");
-
-            var code = StripCommentsAndStringLiterals(File.ReadAllText(fullPath));
-            violations.AddRange(forbiddenTokens
-                .Where(token => code.Contains(token, StringComparison.Ordinal))
-                .Select(token => $"{relativePath}: {token}"));
-        }
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+        var violations = removedPaths.Where(relativePath =>
+            File.Exists(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Empty(violations);
     }
 
     private static bool IsDesignReference(ProjectInfo reference) =>

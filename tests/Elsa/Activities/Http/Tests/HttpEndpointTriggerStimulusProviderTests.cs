@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Http.Core;
+using Elsa.Http.Services;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -57,14 +59,12 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_StableActivityIdentity_RecognizesOnlyHttpEndpoint()
     {
-        var activity = new HttpEndpoint();
-        var endpointNode = EndpointNode(path: "hello-world", activityType: activity.Type);
+        var endpointNode = EndpointNode(path: "hello-world", activityType: HttpEndpoint.ActivityType);
         var otherClrNode = EndpointNode(path: "hello-world", activityType: typeof(WriteHttpResponse).FullName!);
 
         var result = _provider.Describe(endpointNode);
 
         Assert.Equal("Elsa.HttpEndpoint", HttpEndpoint.ActivityType);
-        Assert.Equal(HttpEndpoint.ActivityType, activity.Type);
         Assert.True(result.IsRecognized);
         Assert.Single(result.Descriptors);
         Assert.False(_provider.Describe(otherClrNode).IsRecognized);
@@ -441,34 +441,49 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: effectiveBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 
     private static RuntimeInputBinding LiteralBinding(string name, string value)
     {
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(value));
-        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+        return CanonicalLiteral(name, document.RootElement, "String");
     }
 
     private static RuntimeInputBinding LiteralJsonBinding(string name, string rawJson)
     {
         using var document = JsonDocument.Parse(rawJson);
-        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+        return CanonicalLiteral(name, document.RootElement, "Elsa.Any");
     }
 
     private static RuntimeInputBinding LiteralCollectionBinding(string name, IReadOnlyCollection<string> values)
     {
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(values));
-        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+        return CanonicalLiteral(name, document.RootElement, "Elsa.Any");
     }
 
     private static RuntimeInputBinding RawLiteralBinding(string name, string rawJson)
     {
         using var document = JsonDocument.Parse(rawJson);
-        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+        return CanonicalLiteral(name, document.RootElement, "Elsa.Any");
     }
 
     private static RuntimeInputBinding ExpressionBinding(string name) =>
-        new(name, RuntimeInputBindingSource.Expression, expression: new RuntimeExpressionBinding("JavaScript", "input.foo"));
+        new(
+            name,
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", "input.foo"));
+
+    private static RuntimeInputBinding CanonicalLiteral(string name, JsonElement value, string typeAlias)
+    {
+        var type = new ValueTypeDescriptor(typeAlias);
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, value, ValueProtectionPolicy.InstanceInline));
+    }
 }

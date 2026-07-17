@@ -1,13 +1,11 @@
 using Elsa.Expressions.Core.Contracts;
-using Elsa.Primitives.Extensions;
-using Elsa.Serialization.Core;
 
 namespace Elsa.Expressions.Models;
 
 /// <summary>
-/// Represents a variable that references a memory block.
+/// Describes a variable declaration. Runtime values are owned by variable frames/scopes.
 /// </summary>
-public class Variable : MemoryBlockReference, IVariable
+public class Variable : IVariable
 {
     /// <inheritdoc />
     public Variable()
@@ -41,24 +39,26 @@ public class Variable : MemoryBlockReference, IVariable
     public string Name { get; set; } = null!;
 
     /// <summary>
+    /// The stable key of the declaration within its declaring scope.
+    /// </summary>
+    public string Id { get; set; } = null!;
+
+    /// <summary>
     /// A default value for the variable.
     /// </summary>
     public object? DefaultValue { get; set; }
 
     /// <summary>
     /// The storage driver type to use for persistence.
-    /// If no driver is specified, the referenced memory block will remain in memory for as long as the expression execution context exists.
+    /// If no driver is specified, the owning runtime frame uses its configured persistence policy.
     /// </summary>
     public Type? StorageDriverType { get; set; }
 
-    /// <inheritdoc />
-    public override IMemoryBlock Declare() => new MemoryBlock(DefaultValue, new VariableBlockMetadata(this, StorageDriverType, false));
-
-    private string GetIdFromName(string? name) => $"{name?.Camelize() ?? "Unnamed"}{nameof(Variable)}";
+    private static string GetIdFromName(string? name) => $"{name ?? "Unnamed"}{nameof(Variable)}";
 }
 
 /// <summary>
-/// Represents a variable that references a memory block.
+/// Describes a strongly typed variable declaration.
 /// </summary>
 /// <typeparam name="T">The type of the variable.</typeparam>
 public sealed class Variable<T> : Variable, IVariable<T>
@@ -82,17 +82,6 @@ public sealed class Variable<T> : Variable, IVariable<T>
 
     public Variable(string name, T value, string? id = null) : base(name, value, id)
     {
-    }
-
-    /// <summary>
-    /// Gets the value of the variable.
-    /// </summary>
-    public new T? Get(IExpressionExecutionContext context)
-    {
-        var result = base.Get(context);
-        var objectConverter = context.GetRequiredService<IObjectConverter>();
-        return objectConverter.ConvertTo<T?>(result);
-
     }
 
     /// <summary>
@@ -122,8 +111,3 @@ public sealed class Variable<T> : Variable, IVariable<T>
         return this;
     }
 }
-
-/// <summary>
-/// Provides metadata about the variable block.
-/// </summary>
-public sealed record VariableBlockMetadata(Variable Variable, Type? StorageDriverType, bool IsInitialized);

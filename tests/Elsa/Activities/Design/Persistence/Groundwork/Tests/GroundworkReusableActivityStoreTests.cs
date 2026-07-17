@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
@@ -19,6 +21,28 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkReusableActivityStoreTests
 {
+    [Theory]
+    [InlineData(null, ActivityDefinitionVersionResolutionKind.AuthorableActivity)]
+    [InlineData("draft-legacy", ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary)]
+    public void Legacy_publication_without_resolution_kind_uses_existing_draft_provenance(
+        string? sourceDraftId,
+        ActivityDefinitionVersionResolutionKind expected)
+    {
+        var document = JsonSerializer.SerializeToNode(
+            Publication("publication-legacy", "version-legacy", "definition-legacy", "1.0.0", 0),
+            GroundworkActivitiesDesignJson.Options)!.AsObject();
+        document.Remove("resolutionKind");
+        if (sourceDraftId is null)
+            document.Remove("sourceDraftId");
+        else
+            document["sourceDraftId"] = sourceDraftId;
+
+        var publication = document.Deserialize<ActivityDefinitionVersionPublication>(GroundworkActivitiesDesignJson.Options)!;
+
+        Assert.Equal(ActivityDefinitionVersionResolutionKind.Unspecified, publication.ResolutionKind);
+        Assert.Equal(expected, publication.ResolveWorkflowResolutionKind());
+    }
+
     [Fact]
     public async Task CreateDefinition_Commits_Definition_Authoring_Draft_And_Layout()
     {
@@ -374,6 +398,8 @@ public sealed class GroundworkReusableActivityStoreTests
         DefinitionVersionId = versionId,
         DefinitionId = definitionId,
         Version = version,
+        ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+        SourceDraftId = $"draft-{versionId}",
         Contract = Contract(),
         Provider = Provider(),
         TemplateId = $"template-{versionId}",

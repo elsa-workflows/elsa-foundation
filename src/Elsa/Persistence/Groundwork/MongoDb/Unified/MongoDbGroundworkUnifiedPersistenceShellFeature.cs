@@ -6,9 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.Groundwork.MongoDb.Unified;
 
 /// <summary>
-/// Chooses one admission-gated MongoDB target for all seven shipped Elsa persistence families:
-/// workflow runtime, identity, secrets, distributed runtime, workflows design, activities design,
-/// and workflows publishing.
+/// Chooses one admission-gated MongoDB target for the six provider-level Elsa persistence families:
+/// workflow runtime, secrets, distributed runtime, workflows design, activities design, and workflows
+/// publishing. Identity remains an explicit host selection.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -17,10 +17,15 @@ namespace Elsa.Persistence.Groundwork.MongoDb.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceMongoDb",
     DisplayName = "Groundwork MongoDB Unified Persistence",
-    Description = "Backs all seven shipped Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, identity, secrets, distributed runtime, workflows design, activities design and workflows publishing. A writable transaction-capable replica set and the exact pre-applied schema are required at startup.",
+    Description = "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set and the exact pre-applied schema are required at startup.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class MongoDbGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
+    private readonly ShellFeatureContext _context;
+
+    public MongoDbGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context) =>
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+
     public const string DefaultConnectionString = "mongodb://localhost:27017/?replicaSet=rs0";
     public const string DefaultDatabaseName = "elsa";
 
@@ -51,6 +56,6 @@ public class MongoDbGroundworkUnifiedPersistenceShellFeature : IShellFeature
         var databaseName = string.IsNullOrWhiteSpace(DatabaseName)
             ? DefaultDatabaseName
             : DatabaseName;
-        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName, AutoApplySchemaOnStartup);
+        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName, _context, AutoApplySchemaOnStartup);
     }
 }

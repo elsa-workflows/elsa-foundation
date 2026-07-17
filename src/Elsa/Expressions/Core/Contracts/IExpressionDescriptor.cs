@@ -8,7 +8,6 @@ public interface IExpressionDescriptor
 
     string DisplayName { get; }
     ExpressionEditingMode EditingMode { get; }
-    Func<IServiceProvider, IExpressionHandler> HandlerFactory { get; }
 
     IDictionary<string, object> Properties { get; }
 }

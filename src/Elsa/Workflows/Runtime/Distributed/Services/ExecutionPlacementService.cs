@@ -12,6 +12,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// </summary>
 public sealed class ExecutionPlacementService : IExecutionPlacementService
 {
+    private const int PlacementListPageSize = 500;
+
     private readonly IExecutionPlacementStore _store;
     private readonly TimeProvider _timeProvider;
     private readonly ExecutionPlacementOptions _options;
@@ -62,10 +64,26 @@ public sealed class ExecutionPlacementService : IExecutionPlacementService
     public async ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListOwnedAsync(CancellationToken cancellationToken = default)
     {
         var now = _timeProvider.GetUtcNow();
-        var all = await _store.ListAsync(cancellationToken);
+        var all = await ListLeasesAsync(cancellationToken);
 
         return all
             .Where(lease => StringComparer.Ordinal.Equals(lease.OwnerId, _options.NodeId) && !lease.IsExpired(now))
             .ToArray();
+    }
+
+    private async ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListLeasesAsync(CancellationToken cancellationToken)
+    {
+        if (_store is not IPagedExecutionPlacementStore pagedStore)
+            return await _store.ListAsync(cancellationToken);
+
+        var leases = new List<ExecutionPlacementLease>();
+        for (var skip = 0;; skip += PlacementListPageSize)
+        {
+            var page = await pagedStore.ListPageAsync(new ExecutionPlacementLeasePageRequest(skip, PlacementListPageSize), cancellationToken);
+            leases.AddRange(page.Items);
+
+            if (leases.Count >= page.TotalCount || page.Items.Count == 0)
+                return leases;
+        }
     }
 }

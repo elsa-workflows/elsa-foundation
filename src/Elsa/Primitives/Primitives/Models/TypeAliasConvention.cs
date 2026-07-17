@@ -74,6 +74,9 @@ public static class TypeAliasConvention
     /// </summary>
     public static string CanonicalAlias(Type type)
     {
+        if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "System.Nullable`1")
+            return $"{CanonicalAlias(type.GetGenericArguments()[0])}?";
+
         var fullName = type.FullName;
 
         if (fullName is not null && PrimitiveAliasesByFullName.TryGetValue(fullName, out var bareAlias))

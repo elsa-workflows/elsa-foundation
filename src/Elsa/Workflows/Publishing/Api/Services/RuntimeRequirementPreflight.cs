@@ -19,7 +19,7 @@ public sealed class RuntimeRequirementPreflight(
     IWorkflowExecutableSourceReferenceReader sourceReferences,
     IWorkflowExecutableStore workflowExecutables,
     IExecutableActivityTemplateReader activityTemplates,
-    IActivityConstructorRegistry activityConstructors,
+    IEnumerable<IRuntimeActivityConsumerCapability> activityConsumers,
     IRuntimeDurableValueStorageDriverRegistry storageDrivers,
     TimeProvider timeProvider)
 {
@@ -108,13 +108,23 @@ public sealed class RuntimeRequirementPreflight(
         IReadOnlyCollection<RuntimeStorageDriverRequirement> storageDriverRequirements)
     {
         var result = new List<RuntimeCapabilityPreflight>();
+        var consumersByKey = activityConsumers
+            .GroupBy(capability => capability.ConsumerKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .SelectMany(capability => capability.SupportedSchemaVersions)
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
         foreach (var requirement in consumerRequirements
                      .Distinct()
                      .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
                      .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal))
         {
-            var supported = activityConstructors.GetSupportedSchemaVersions(requirement.ConsumerKey);
-            var status = activityConstructors.TryResolve(requirement.ConsumerKey, requirement.SchemaVersion, out _)
+            IReadOnlyCollection<string> supported = consumersByKey.GetValueOrDefault(requirement.ConsumerKey) ?? [];
+            var status = supported.Contains(requirement.SchemaVersion, StringComparer.Ordinal)
                 ? RuntimeCapabilityStatus.Available
                 : supported.Count == 0 ? RuntimeCapabilityStatus.Missing : RuntimeCapabilityStatus.UnsupportedSchema;
             result.Add(new(

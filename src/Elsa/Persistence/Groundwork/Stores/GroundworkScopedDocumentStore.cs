@@ -14,13 +14,15 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkScopedDocumentStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IGroundworkStoreSessionFactory sessions) : IDocumentStore, IBoundedDocumentStore
+    IGroundworkStoreSessionFactory sessions,
+    GroundworkStoreSessionSource? sessionSource = null) : IDocumentStore, IBoundedDocumentStore
 {
     public DocumentStoreAccess Access => GroundworkPersistenceAccessMapper.Map(
         accessContextAccessor.Current,
         PersistenceAccessPolicy.Ordinary);
 
-    public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
+    public TransactionBoundary TransactionBoundary =>
+        sessionSource?.AdmittedTransactionBoundary ?? TransactionBoundary.PerOperation;
 
     public Task<DocumentStoreWriteResult> SaveAsync(
         SaveDocumentRequest request,

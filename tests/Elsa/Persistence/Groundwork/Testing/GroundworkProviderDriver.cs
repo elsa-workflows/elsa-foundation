@@ -1,7 +1,12 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text.Json;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using ElsaRuntimeSchemaAdmissionResult = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionResult;
 
 namespace Elsa.Persistence.Groundwork.Testing;
 
@@ -162,7 +167,10 @@ public sealed record GroundworkProcessLaunchDescriptor
 public enum GroundworkProcessProbeOperation
 {
     Save,
-    Load
+    Load,
+    IdentityCreateUser,
+    IdentityFindByNormalizedUserName,
+    IdentityDuplicateCreate
 }
 
 public sealed record GroundworkProcessProbeRequest
@@ -176,8 +184,12 @@ public sealed record GroundworkProcessProbeRequest
         EvidenceCatalog.EnsureSlug(probeId, nameof(probeId));
         if (string.IsNullOrWhiteSpace(documentId))
             throw new ArgumentException("A probe document ID is required.", nameof(documentId));
-        if (operation == GroundworkProcessProbeOperation.Save && value is null)
-            throw new ArgumentException("A save probe requires a value.", nameof(value));
+        var requiresValue = operation is GroundworkProcessProbeOperation.Save or
+            GroundworkProcessProbeOperation.IdentityCreateUser or
+            GroundworkProcessProbeOperation.IdentityFindByNormalizedUserName or
+            GroundworkProcessProbeOperation.IdentityDuplicateCreate;
+        if (requiresValue && value is null)
+            throw new ArgumentException("The selected process-probe operation requires a value.", nameof(value));
         ProbeId = probeId;
         Operation = operation;
         DocumentId = documentId;
@@ -247,24 +259,33 @@ public sealed class GroundworkProviderClient : IAsyncDisposable
 {
     private Func<ValueTask>? _disposeAsync;
     private Action? _onDisposed;
+    private GroundworkProviderDescriptor? _ownerDescriptor;
 
     public GroundworkProviderClient(
         Guid clientId,
         IServiceProvider services,
         IDocumentStore documentStore,
-        Func<ValueTask> disposeAsync)
+        Func<ValueTask> disposeAsync,
+        IBoundedDocumentStore? boundedDocumentStore = null)
     {
         if (clientId == Guid.Empty)
             throw new ArgumentException("A non-empty client ID is required.", nameof(clientId));
         ClientId = clientId;
         Services = services ?? throw new ArgumentNullException(nameof(services));
         DocumentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
+        BoundedDocumentStore = boundedDocumentStore ?? documentStore as IBoundedDocumentStore;
+        PhysicalDocumentQueryExplainer = BoundedDocumentStore as IPhysicalDocumentQueryExplainer;
         _disposeAsync = disposeAsync ?? throw new ArgumentNullException(nameof(disposeAsync));
     }
 
     public Guid ClientId { get; }
     public IServiceProvider Services { get; }
     public IDocumentStore DocumentStore { get; }
+    public IBoundedDocumentStore? BoundedDocumentStore { get; }
+    public IPhysicalDocumentQueryExplainer? PhysicalDocumentQueryExplainer { get; }
+    public GroundworkProviderDescriptor OwnerDescriptor =>
+        Volatile.Read(ref _ownerDescriptor)
+        ?? throw new InvalidOperationException("The provider client was not opened and owned by a Groundwork provider driver.");
 
     public async ValueTask DisposeAsync()
     {
@@ -286,6 +307,13 @@ public sealed class GroundworkProviderClient : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(onDisposed);
         if (Interlocked.CompareExchange(ref _onDisposed, onDisposed, null) is not null)
             throw new InvalidOperationException("A provider-client disposal callback is already registered.");
+    }
+
+    internal void StampOwnerDescriptor(GroundworkProviderDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (Interlocked.CompareExchange(ref _ownerDescriptor, descriptor, null) is not null)
+            throw new InvalidOperationException("A provider client owner descriptor can only be stamped once.");
     }
 }
 
@@ -347,7 +375,12 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         }
     }
 
-    public async ValueTask ResetPhysicalAsync(CancellationToken cancellationToken = default)
+    public ValueTask ResetPhysicalAsync(CancellationToken cancellationToken = default) =>
+        ResetPhysicalAsync(manifestSources: null, cancellationToken);
+
+    public async ValueTask ResetPhysicalAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken = default)
     {
         await _lifecycleGate.WaitAsync(cancellationToken);
         try
@@ -355,7 +388,7 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
             EnsureInitialized();
             if (!_clients.IsEmpty)
                 throw new InvalidOperationException("A provider driver cannot reset while client leases are active.");
-            await ResetPhysicalCoreAsync(cancellationToken);
+            await ResetPhysicalCoreAsync(manifestSources, cancellationToken);
             _storeMode = StoreMode.Physical;
             Failures.Reset();
         }
@@ -382,7 +415,18 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
     }
 
     public ValueTask<GroundworkProviderClient> OpenPhysicalClientAsync(CancellationToken cancellationToken = default) =>
-        OpenTrackedClientAsync(StoreMode.Physical, OpenPhysicalClientCoreAsync, cancellationToken);
+        OpenPhysicalClientAsync(GroundworkTestAccess.DefaultScoped, cancellationToken);
+
+    public ValueTask<GroundworkProviderClient> OpenPhysicalClientAsync(
+        DocumentStoreAccess access,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        return OpenTrackedClientAsync(
+            StoreMode.Physical,
+            (clientId, token) => OpenPhysicalClientCoreAsync(clientId, access, token),
+            cancellationToken);
+    }
 
     private async ValueTask<GroundworkProviderClient> OpenTrackedClientAsync(
         StoreMode requiredMode,
@@ -402,6 +446,10 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
                 client = await openClientAsync(clientId, cancellationToken);
                 if (client.ClientId != clientId)
                     throw new InvalidOperationException("The provider returned a client with a different identity.");
+                var ownerDescriptor = Descriptor;
+                client.StampOwnerDescriptor(ownerDescriptor);
+                if (!ReferenceEquals(client.OwnerDescriptor, ownerDescriptor))
+                    throw new InvalidOperationException("The provider client owner descriptor does not match its opening driver.");
                 if (_clients.Values.Any(existing =>
                         ReferenceEquals(existing.Services, client.Services) ||
                         ReferenceEquals(existing.DocumentStore, client.DocumentStore)))
@@ -478,11 +526,150 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         return CaptureNativePlanCoreAsync(executionPath, scenarioId, cancellationToken);
     }
 
+    public ValueTask PrepareNativeRoutePlanDatasetAsync(
+        IReadOnlyCollection<GroundworkNativeRoutePlanRequest> requests,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureInitialized();
+        ArgumentNullException.ThrowIfNull(requests);
+        if (_storeMode != StoreMode.Physical)
+            throw new InvalidOperationException("Native route plans require an applied physical target.");
+        if (requests.Count == 0)
+            throw new ArgumentException("At least one native route is required to seed a physical evidence dataset.", nameof(requests));
+        return PrepareNativeRoutePlanDatasetCoreAsync(requests, cancellationToken);
+    }
+
+    public ValueTask<GroundworkNativeRoutePlanResult> CaptureNativeRoutePlanAsync(
+        GroundworkNativeRoutePlanRequest request,
+        PhysicalDocumentQueryExplanation explanation,
+        int materializedCandidateCount,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureInitialized();
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(explanation);
+        if (_storeMode != StoreMode.Physical)
+            throw new InvalidOperationException("Native route plans require an applied physical target.");
+        if (!string.Equals(explanation.Plan.StorageUnit.Value, request.DocumentKind, StringComparison.Ordinal) ||
+            !string.Equals(explanation.Plan.QueryIdentity, request.QueryIdentity, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Native route evidence must describe the exact requested document kind and bounded-query identity.");
+        }
+        return CaptureNativeRoutePlanCoreAsync(
+            request,
+            explanation,
+            materializedCandidateCount,
+            cancellationToken);
+    }
+
+    public async ValueTask<GroundworkPhysicalSchemaManifestSource> PrepareSchemaParityAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(manifestSources);
+        if (manifestSources.Count == 0)
+            throw new ArgumentException("At least one shell-selected manifest source is required.", nameof(manifestSources));
+        await _lifecycleGate.WaitAsync(cancellationToken);
+        try
+        {
+            EnsureInitialized();
+            if (!_clients.IsEmpty)
+                throw new InvalidOperationException("Schema parity cannot reset a provider while client leases are active.");
+            return await PrepareSchemaParityCoreAsync(manifestSources, cancellationToken);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    public ValueTask<GroundworkProviderSchemaStateSnapshot> CaptureSchemaStateAsync(
+        CancellationToken cancellationToken = default)
+    {
+        EnsureInitialized();
+        return CaptureSchemaStateCoreAsync(cancellationToken);
+    }
+
+    public ValueTask<ElsaRuntimeSchemaAdmissionResult> InspectSchemaParityAdmissionAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureInitialized();
+        ArgumentNullException.ThrowIfNull(source);
+        return InspectSchemaParityAdmissionCoreAsync(source, cancellationToken);
+    }
+
+    public async Task<GroundworkSchemaToolResult> RunSchemaToolAsync(
+        string command,
+        Type manifestSourceType,
+        CancellationToken cancellationToken = default,
+        params string[] extraArguments)
+    {
+        EnsureInitialized();
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        ArgumentNullException.ThrowIfNull(manifestSourceType);
+        ArgumentNullException.ThrowIfNull(extraArguments);
+        var connection = SchemaToolConnectionCore();
+        const string connectionEnvironmentVariable = "ELSA_GROUNDWORK_SCHEMA_PARITY_CONNECTION";
+        var start = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = FindRepositoryRoot(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in new[]
+                 {
+                     "tool", "run", "groundwork", "--", command,
+                     "--manifest-assembly", manifestSourceType.Assembly.Location,
+                     "--manifest-type", manifestSourceType.FullName!,
+                     "--provider", Descriptor.ProviderKey,
+                     "--output", "json"
+                 })
+            start.ArgumentList.Add(argument);
+        if (!extraArguments.Contains("--offline", StringComparer.Ordinal))
+        {
+            start.Environment[connectionEnvironmentVariable] = connection.ConnectionString;
+            start.ArgumentList.Add("--connection-env");
+            start.ArgumentList.Add(connectionEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(connection.DatabaseName))
+            {
+                start.ArgumentList.Add("--database");
+                start.ArgumentList.Add(connection.DatabaseName);
+            }
+        }
+        foreach (var argument in extraArguments)
+            start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Groundwork.Tool.");
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        var output = (await outputTask).Replace(connection.ConnectionString, "<redacted>", StringComparison.Ordinal);
+        var error = (await errorTask).Replace(connection.ConnectionString, "<redacted>", StringComparison.Ordinal);
+        try
+        {
+            using var document = JsonDocument.Parse(output);
+            return new GroundworkSchemaToolResult(process.ExitCode, document.RootElement.Clone(), error);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidOperationException(
+                $"Groundwork.Tool returned invalid JSON ({exception.GetType().Name}); process output was suppressed.");
+        }
+    }
+
     protected abstract ValueTask InitializeCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask ResetCoreAsync(CancellationToken cancellationToken);
-    protected abstract ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken);
+    protected abstract ValueTask ResetPhysicalCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(Guid clientId, CancellationToken cancellationToken);
-    protected abstract ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(Guid clientId, CancellationToken cancellationToken);
+    protected abstract ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
+        Guid clientId,
+        DocumentStoreAccess access,
+        CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
         Guid clientId,
         StorageManifest manifest,
@@ -496,7 +683,34 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         GroundworkExecutionPath executionPath,
         string scenarioId,
         CancellationToken cancellationToken);
+    protected abstract ValueTask PrepareNativeRoutePlanDatasetCoreAsync(
+        IReadOnlyCollection<GroundworkNativeRoutePlanRequest> requests,
+        CancellationToken cancellationToken);
+    protected abstract ValueTask<GroundworkNativeRoutePlanResult> CaptureNativeRoutePlanCoreAsync(
+        GroundworkNativeRoutePlanRequest request,
+        PhysicalDocumentQueryExplanation explanation,
+        int materializedCandidateCount,
+        CancellationToken cancellationToken);
+    protected abstract ValueTask<GroundworkPhysicalSchemaManifestSource> PrepareSchemaParityCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        CancellationToken cancellationToken);
+    protected abstract ValueTask<GroundworkProviderSchemaStateSnapshot> CaptureSchemaStateCoreAsync(
+        CancellationToken cancellationToken);
+    protected abstract ValueTask<ElsaRuntimeSchemaAdmissionResult> InspectSchemaParityAdmissionCoreAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken);
+    protected abstract SchemaToolConnection SchemaToolConnectionCore();
     protected abstract ValueTask DisposeCoreAsync();
+
+    protected sealed record SchemaToolConnection(string ConnectionString, string? DatabaseName = null);
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+            directory = directory.Parent;
+        return directory?.FullName ?? throw new DirectoryNotFoundException("Could not locate the repository root.");
+    }
 
     public async ValueTask DisposeAsync()
     {

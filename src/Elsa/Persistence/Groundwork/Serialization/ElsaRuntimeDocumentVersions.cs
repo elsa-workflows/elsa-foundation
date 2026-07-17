@@ -5,37 +5,42 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// <summary>
 /// The per-document-kind schema versions of the runtime persistence bridge. Every document saved
 /// through the bridge is stamped with the current version of its kind, and every load enforces the
-/// stamp: before GA only the current version of each kind is readable, while older, unknown, or future
-/// versions fail loudly instead of silently deserializing with default values.
+/// stamp: only explicitly retained compatible versions are readable, while versions below a kind's
+/// minimum-readable boundary plus unknown or future versions fail loudly instead of silently
+/// deserializing with default values.
 /// </summary>
 /// <remarks>
-/// The pre-GA policy deliberately resets every changed kind to its current fixture and retains no Elsa
-/// upcasters. After release, compatible shape evolution may require a version bump, Groundwork upcasters,
-/// a new golden fixture, and retention of supported historical fixtures. The
-/// fixture drift test in <c>Elsa.Persistence.Groundwork.Tests</c> fails on unversioned shape changes.
-/// See <c>docs/serialization.md</c> for the full evolution contract.
+/// The clean-baseline policy resets changed kinds to their current fixture unless an explicitly supported
+/// rolling window is required. Workflow executables retain v5 as the first such window and migrate through
+/// Groundwork's <c>IDocumentJsonUpcaster</c> contract. The fixture drift test in
+/// <c>Elsa.Persistence.Groundwork.Tests</c> fails on unversioned shape changes. See
+/// <c>docs/serialization.md</c> for the full evolution contract.
 /// </remarks>
 public static class ElsaRuntimeDocumentVersions
 {
     private static readonly IReadOnlyDictionary<string, int> Current = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 4,
-        [ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 6,
+        [ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 4,
-        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 4,
+        [ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.DurableValueStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.IncidentStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 2,
-        [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1
@@ -61,7 +66,13 @@ public static class ElsaRuntimeDocumentVersions
     /// <exception cref="ArgumentException">The document kind is not a runtime document kind.</exception>
     public static int MinimumReadableFor(string documentKind)
     {
-        return CurrentFor(documentKind);
+        var currentVersion = CurrentFor(documentKind);
+        return documentKind switch
+        {
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind => 5,
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
+            _ => currentVersion
+        };
     }
 
     /// <summary>

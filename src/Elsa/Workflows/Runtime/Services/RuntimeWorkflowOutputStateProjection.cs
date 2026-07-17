@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// projects as an explicit redacted marker — name present, no value, policy reason attached — never silently
 /// dropped. The same never-absent rule holds for a matching value whose payload is not stored inline (external
 /// or custom storage): it projects as a marker with <see cref="NotStoredInlineReason"/> rather than vanishing.
-/// Activity-output captures share the <see cref="RuntimeMetadataKeys.OutputName"/> tag but derive their
+/// Other durable-value producers may share the <see cref="RuntimeMetadataKeys.OutputName"/> tag but derive their
 /// value ids from the authored output reference, so the prefix filter keeps them out of this projection.
 /// </summary>
 public static class RuntimeWorkflowOutputStateProjection

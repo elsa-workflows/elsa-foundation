@@ -3,7 +3,6 @@ using CShells.Features;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Testing;
 using Elsa.Http;
 using Elsa.Http.Core.Contracts;
@@ -23,8 +22,8 @@ namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
 /// Feature-registration coverage for <see cref="ActivitiesHttpFeature"/> (constitution §2.23.1). The HTTP
-/// activities are constructed by the runtime's CLR activity constructor, so the feature registers no per-type
-/// activity services; it does own the outbound transport (the named client), contributes the
+/// activities are transiently activated from their compiled CLR contracts, so the feature registers no per-type
+/// activity instances; it does own the outbound transport (the named client), contributes the
 /// <see cref="HttpEndpoint"/> start-trigger's stimulus provider on the W7 seam, and registers the inbound
 /// request middleware.
 /// </summary>
@@ -42,7 +41,7 @@ public sealed class ActivitiesHttpFeatureTests
     }
 
     [Fact]
-    public void ConfigureServices_RegistersHttpClientFactory_AndNoActivityConstructor()
+    public void ConfigureServices_RegistersHttpClientFactory()
     {
         var services = new ServiceCollection();
 
@@ -50,7 +49,6 @@ public sealed class ActivitiesHttpFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.NotNull(provider.GetService<IHttpClientFactory>());
-        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IActivityConstructor));
     }
 
     [Fact]

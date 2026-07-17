@@ -22,6 +22,7 @@
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Groundwork.Core" />
     <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="JsonSchema.Net" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
@@ -34,6 +35,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\SqlServer\Elsa.Persistence.Groundwork.SqlServer.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
     <ProjectReference Include="..\..\ProcessProbe\Elsa.Persistence.Groundwork.ProcessProbe.csproj"

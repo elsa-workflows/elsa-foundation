@@ -1,11 +1,13 @@
 using System.Text.Json;
 using Elsa.Activities.Graph.Runtime;
+using Elsa.Activities.Graph.Runtime.Activation;
 using Elsa.Activities.Graph.Runtime.Activities;
-using Elsa.Activities.Graph.Runtime.Constructors;
 using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Graph.Runtime.Services;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -22,21 +24,19 @@ public sealed class GraphActivityExecutionTests : IDisposable
     private readonly ServiceProvider _serviceProvider = CreateServiceProvider();
 
     [Fact]
-    public async Task Constructor_UsesStableConsumerAndSchema()
+    public async Task ActivationStrategy_CreatesATransientActivityFromThePinnedGraphDescriptor()
     {
         var descriptor = Descriptor();
-        var runtimeDescriptor = new RuntimeActivityDescriptor(
-            WellKnownRuntimeActivityConsumers.GraphActivity,
-            RuntimeActivityDescriptor.InitialSchemaVersion,
-            JsonSerializer.SerializeToElement(descriptor, WebJson));
+        var runtimeDescriptor = RuntimeDescriptor(descriptor);
+        var contract = RuntimeContract(runtimeDescriptor);
+        var strategy = Assert.Single(
+            _serviceProvider.GetServices<IActivityActivationStrategy>(),
+            item => item is GraphActivityActivationStrategy);
 
-        var activity = await new GraphActivityConstructor().ConstructAsync(
-            runtimeDescriptor,
-            new Dictionary<string, InputArgument>(),
-            new Dictionary<string, OutputArgument>(),
-            CancellationToken.None);
+        await using var lease = await strategy.ActivateAsync(
+            new ActivityActivationStrategyRequest(contract, runtimeDescriptor));
+        var graph = Assert.IsType<GraphActivity>(lease.Activity);
 
-        var graph = Assert.IsType<GraphActivity>(activity);
         Assert.Equal("definition-version-1", graph.Descriptor.DefinitionVersionId);
         Assert.Equal("sha256:template-1", graph.Descriptor.TemplateHash);
     }
@@ -51,33 +51,32 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var boundary = BoundaryNode(descriptor, [entry]);
         var context = Context(graph, boundary, State("outer-execution"));
 
-        await ((IActivity)graph).ExecuteAsync(context);
+        var start = await graph.ExecuteStructureAsync(context);
 
+        Assert.True(start.IsDeferred);
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("entry", request.ExecutableNodeId);
         Assert.Equal("outer-execution", request.SchedulingActivityExecutionId);
         Assert.Equal("outer-execution", request.SchedulingProvenance.ParentActivityExecutionId);
         Assert.Equal("outer-execution", request.SchedulingProvenance.ExecutionScopeId);
         Assert.Equal("graph-entry", request.SchedulingProvenance.SchedulingCause);
-        Assert.True(context.CompositeCompletionDeferred);
-        Assert.False(context.CompositeCompletionRequested);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => graph.OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "leaf-execution", "nested-leaf", [ActivityOutcomes.Done])).AsTask());
-        Assert.False(context.CompositeCompletionRequested);
 
-        await graph.OnChildCompletedAsync(
+        var completion = await graph.OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "entry-execution", "entry", [ActivityOutcomes.Done]));
-        Assert.False(context.CompositeCompletionRequested);
 
-        var changes = await graph.PrepareCompletionCheckpointAsync(
+        Assert.True(completion.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, completion.OutcomeName);
+        var preparation = await graph.PrepareCompletionCheckpointAsync(
             context,
             [],
             DateTimeOffset.UnixEpoch);
 
-        Assert.Empty(changes);
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.Empty(preparation.DurableValueChanges);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result));
     }
 
     [Fact]
@@ -91,7 +90,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         ]);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => ((IActivity)graph).ExecuteAsync(Context(graph, boundary, State("outer-execution"))).AsTask());
+            () => graph.ExecuteStructureAsync(Context(graph, boundary, State("outer-execution"))).AsTask());
 
         Assert.Contains("direct child", exception.Message, StringComparison.Ordinal);
     }
@@ -216,6 +215,28 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareCompletion_ReturnsTypedObjectResultForContractProjection()
+    {
+        var descriptor = Descriptor(
+            outputs: [Output("result")],
+            outputMappings: [Mapping("result", Default("completed"))],
+            requiredOutputReferenceKeys: ["result"]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var preparation = await graph.PrepareCompletionCheckpointAsync(
+            context,
+            [],
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Single(preparation.DurableValueChanges);
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition);
+        Assert.Equal(ActivityOutcomes.Done, completion.Outcome);
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(completion.Result);
+        Assert.Equal("completed", Assert.IsType<JsonElement>(result["result"]).GetString());
+    }
+
+    [Fact]
     public async Task ExternalDriver_RehydratesAndReadsANonSerializableInputAfterSuspension()
     {
         var externalDriver = new TestExternalStorageDriver();
@@ -302,15 +323,19 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
-    public void RuntimeFeature_RegistersConstructorAndScopeFactoryWithWorkflowRuntime()
+    public void RuntimeFeature_RegistersGraphRuntimeServices()
     {
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<GraphActivityConstructor>(Assert.Single(provider.GetServices<IActivityConstructor>()));
+        var capability = Assert.Single(
+            provider.GetServices<IRuntimeActivityConsumerCapability>(),
+            item => item.ConsumerKey == WellKnownRuntimeActivityConsumers.GraphActivity);
+        Assert.Equal([RuntimeActivityDescriptor.InitialSchemaVersion], capability.SupportedSchemaVersions);
         Assert.NotNull(provider.GetRequiredService<GraphActivityScopeFactory>());
+        Assert.NotNull(provider.GetRequiredService<GraphActivityRecovery>());
         Assert.IsType<JsonRuntimeDurableValueStorageDriver>(
             provider.GetRequiredService<IRuntimeDurableValueStorageDriverRegistry>()
                 .GetRequired(WellKnownRuntimeDurableValueStorageDrivers.Json));
@@ -339,21 +364,20 @@ public sealed class GraphActivityExecutionTests : IDisposable
         ExecutableNode node,
         ActivityExecutionState state) =>
         new(
-            _serviceProvider,
             graph,
             CancellationToken.None,
             "workflow-execution",
             new WorkflowExecutableIdentity("artifact", "workflow", "workflow-version", "1", "sha256:workflow"),
             schedulerWorkItem: null,
-            node,
-            state);
+            executableNode: node,
+            activityExecutionState: state);
 
-    private static GraphActivity NewGraph(GraphActivityDescriptor descriptor) =>
-        new(descriptor, new Dictionary<string, InputArgument>(), new Dictionary<string, OutputArgument>())
-        {
-            Id = "outer-execution",
-            NodeId = "boundary"
-        };
+    private GraphActivity NewGraph(GraphActivityDescriptor descriptor) =>
+        new(
+            descriptor,
+            _serviceProvider.GetRequiredService<GraphActivityScopeFactory>(),
+            _serviceProvider.GetRequiredService<GraphActivityRecovery>(),
+            _serviceProvider.GetRequiredService<IDurableValueStateStore>());
 
     private static ExecutableNode BoundaryNode(
         GraphActivityDescriptor descriptor,
@@ -389,6 +413,24 @@ public sealed class GraphActivityExecutionTests : IDisposable
             RuntimeActivityDescriptor.InitialSchemaVersion,
             JsonSerializer.SerializeToElement(descriptor, WebJson));
 
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContract(
+        RuntimeActivityDescriptor descriptor) =>
+        new(
+            "graph",
+            "1.0.0",
+            WellKnownRuntimeActivityConsumers.GraphActivity,
+            descriptor.Payload,
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor("Object"),
+                true,
+                ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+                []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(
+                WellKnownRuntimeActivityConsumers.GraphActivity,
+                WellKnownRuntimeActivityConsumers.GraphActivity));
+
     private static ActivityExecutionState State(string activityExecutionId, string? executionScopeId = null) =>
         new(
             new ActivityExecution(activityExecutionId, "workflow-execution", "boundary", "authored-boundary", "graph", "1.0.0"),
@@ -419,7 +461,10 @@ public sealed class GraphActivityExecutionTests : IDisposable
             Metadata: new Dictionary<string, string>());
 
     private static GraphActivityDescriptor Descriptor(
-        IReadOnlyList<GraphActivityInputDescriptor>? inputs = null) =>
+        IReadOnlyList<GraphActivityInputDescriptor>? inputs = null,
+        IReadOnlyList<GraphActivityOutputDescriptor>? outputs = null,
+        IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null,
+        IReadOnlyCollection<string>? requiredOutputReferenceKeys = null) =>
         new(
             "definition-1",
             "definition-version-1",
@@ -429,10 +474,10 @@ public sealed class GraphActivityExecutionTests : IDisposable
             entryOccurrenceId: null,
             inputs ?? [],
             variables: [],
-            outputs: [],
-            outputMappings: [],
+            outputs: outputs ?? [],
+            outputMappings: outputMappings ?? [],
             requiredInputReferenceKeys: [],
-            requiredOutputReferenceKeys: []);
+            requiredOutputReferenceKeys: requiredOutputReferenceKeys?.ToArray() ?? []);
 
     private static GraphActivityInputDescriptor Input(
         string referenceKey,

@@ -86,7 +86,10 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             input.UiHint,
             input.DefaultValue,
             input.DefaultSyntax,
-            input.UISpecifications);
+            input.UISpecifications)
+        {
+            IsNullable = input.IsNullable
+        };
 
     private static ActivityOutputDescriptorView ToView(OutputDefinition output) =>
         new(

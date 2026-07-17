@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.Core.Transactions;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -93,7 +94,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
             if (!_sessionSource.IsInitialized)
             {
                 var manifest = schemaSource.CreateManifest();
-                _sessionSource.TrySet((access, ct) =>
+                _sessionSource.TrySetAdmitted((access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     var store = new SqlServerPhysicalDocumentStore(
@@ -111,7 +112,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                                     route,
                                     admission.PhysicalTarget.Provider))));
                     return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
-                });
+                }, TransactionBoundary.CrossUnitAtomic);
             }
 
             _initialized = true;
@@ -141,7 +142,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var compositionFactory = scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>();
         var provider = SqlServerGroundworkCapabilities.Runtime();
-        var capabilities = GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
+        var capabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
             provider,
             new GroundworkProviderTopologySnapshot(
                 provider.Provider.Name,
@@ -150,8 +151,8 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                 {
                     RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
                 }),
-            RuntimeGroundworkStorageManifestSource.FeatureName,
-            [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]);
+            scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+            cancellationToken);
         return await compositionFactory.CreateSourceAsync(
             capabilities,
             SqlServerGroundworkCapabilities.PhysicalNames,

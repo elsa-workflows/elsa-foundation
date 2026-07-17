@@ -34,3 +34,20 @@ public interface IExecutionPlacementStore
     /// <summary>Lists all currently stored placement leases (used by a node's pump to discover the executions it owns).</summary>
     ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListAsync(CancellationToken cancellationToken = default);
 }
+
+public interface IPagedExecutionPlacementStore
+{
+    /// <summary>
+    /// Lists stored placement leases through a provider-bounded deterministic page. The page is scoped by the current
+    /// persistence operation scope and ordered by workflow execution id.
+    /// </summary>
+    ValueTask<ExecutionPlacementLeasePage> ListPageAsync(ExecutionPlacementLeasePageRequest request, CancellationToken cancellationToken = default);
+}
+
+public sealed record ExecutionPlacementLeasePageRequest(int Skip = 0, int Take = 100)
+{
+    public int NormalizedSkip => Math.Max(Skip, 0);
+    public int NormalizedTake => Math.Clamp(Take, 1, 500);
+}
+
+public sealed record ExecutionPlacementLeasePage(IReadOnlyCollection<ExecutionPlacementLease> Items, long TotalCount);

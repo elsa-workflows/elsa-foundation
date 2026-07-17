@@ -64,10 +64,85 @@ public sealed class IdentityGroundworkStoreTests
     }
 
     [Fact]
+    public async Task Application_RoundTrips_And_Survives_Restart()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var application = IdentityGroundworkFixtures.Application();
+
+        await IdentityGroundworkFixtures.ApplicationStore(docStore).SaveAsync(application);
+
+        var reloaded = await IdentityGroundworkFixtures.ApplicationStore(docStore)
+            .FindAsync(application.TenantId, application.Id);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal(application.ClientId, reloaded!.ClientId);
+        Assert.Equal(application.AllowedGrantTypes, reloaded.AllowedGrantTypes);
+        Assert.Equal(application.Scopes, reloaded.Scopes);
+    }
+
+    [Fact]
+    public async Task Credential_RoundTrips_And_Survives_Restart()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var credential = IdentityGroundworkFixtures.Credential();
+
+        await IdentityGroundworkFixtures.CredentialStore(docStore).SaveAsync(credential);
+
+        var reloaded = await IdentityGroundworkFixtures.CredentialStore(docStore)
+            .FindAsync(credential.TenantId, credential.Id);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal(credential.SubjectId, reloaded!.SubjectId);
+        Assert.Equal(credential.HashedSecret, reloaded.HashedSecret);
+        Assert.Equal(credential.ExpiresAt, reloaded.ExpiresAt);
+    }
+
+    [Fact]
+    public async Task ClaimMapping_Lists_By_Provider_In_Deterministic_Order()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ClaimMappingStore(docStore);
+        var later = IdentityGroundworkFixtures.ClaimMappingRule() with { Id = "claim-map-2", Order = 20 };
+        var earlier = IdentityGroundworkFixtures.ClaimMappingRule() with { Id = "claim-map-1", Order = 10 };
+        var otherProvider = IdentityGroundworkFixtures.ClaimMappingRule() with { Id = "claim-map-3", Provider = "github" };
+
+        await store.SaveAsync(later);
+        await store.SaveAsync(otherProvider);
+        await store.SaveAsync(earlier);
+
+        var rules = await IdentityGroundworkFixtures.ClaimMappingStore(docStore)
+            .ListForProviderAsync("tenant-1", "google");
+
+        Assert.Equal(["claim-map-1", "claim-map-2"], rules.Select(rule => rule.Id));
+    }
+
+    [Fact]
+    public async Task ProviderConfiguration_RoundTrips_Tenant_And_Global_Records()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var tenantConfiguration = IdentityGroundworkFixtures.TenantProviderConfiguration();
+        var globalConfiguration = IdentityGroundworkFixtures.GlobalProviderConfiguration();
+
+        await IdentityGroundworkFixtures.ProviderConfigurationStore(docStore).SaveAsync(tenantConfiguration);
+        await IdentityGroundworkFixtures.GlobalProviderConfigurationStore(docStore).SaveAsync(globalConfiguration);
+
+        var tenantReloaded = await IdentityGroundworkFixtures.ProviderConfigurationStore(docStore)
+            .FindForTenantAsync("tenant-1", "google");
+        var globalReloaded = await IdentityGroundworkFixtures.GlobalProviderConfigurationStore(docStore)
+            .FindGlobalAsync("google");
+
+        Assert.NotNull(tenantReloaded);
+        Assert.Equal("tenant-1", tenantReloaded!.TenantId);
+        Assert.NotNull(globalReloaded);
+        Assert.Null(globalReloaded!.TenantId);
+    }
+
+    [Fact]
     public async Task ExternalIdentity_RoundTrips_By_Subject_And_Lists_For_User()
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
         var external = IdentityGroundworkFixtures.ExternalIdentity();
+        await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
 
         await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).SaveAsync(external);
 
@@ -85,6 +160,7 @@ public sealed class IdentityGroundworkStoreTests
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
         var membership = IdentityGroundworkFixtures.TenantMembership();
+        await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
 
         await IdentityGroundworkFixtures.TenantMembershipStore(docStore).SaveAsync(membership);
 
@@ -109,6 +185,20 @@ public sealed class IdentityGroundworkStoreTests
     }
 
     [Fact]
+    public async Task Application_Save_Is_An_Upsert()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ApplicationStore(docStore);
+        var application = IdentityGroundworkFixtures.Application();
+
+        await store.SaveAsync(application);
+        await store.SaveAsync(application with { DisplayName = "Renamed Client" });
+
+        var reloaded = await store.FindAsync(application.TenantId, application.Id);
+        Assert.Equal("Renamed Client", reloaded!.DisplayName);
+    }
+
+    [Fact]
     public async Task Explicit_tenant_mismatch_fails_before_provider_io()
     {
         var documentStore = new ThrowingDocumentStore();
@@ -119,6 +209,61 @@ public sealed class IdentityGroundworkStoreTests
 
         Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, documentStore.CallCount);
+    }
+
+    [Fact]
+    public async Task Application_tenant_mismatch_fails_before_provider_io()
+    {
+        var documentStore = new ThrowingDocumentStore();
+        var store = IdentityGroundworkFixtures.ApplicationStore(documentStore, "tenant-a");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.FindAsync("tenant-b", "app-1"));
+
+        Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, documentStore.CallCount);
+    }
+
+    [Fact]
+    public async Task Credential_tenant_mismatch_fails_before_provider_io()
+    {
+        var documentStore = new ThrowingDocumentStore();
+        var store = IdentityGroundworkFixtures.CredentialStore(documentStore, "tenant-a");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.FindAsync("tenant-b", "credential-1"));
+
+        Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, documentStore.CallCount);
+    }
+
+    [Fact]
+    public async Task ClaimMapping_tenant_mismatch_fails_before_provider_io()
+    {
+        var documentStore = new ThrowingDocumentStore();
+        var store = IdentityGroundworkFixtures.ClaimMappingStore(documentStore, "tenant-a");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.ListForProviderAsync("tenant-b", "google"));
+
+        Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, documentStore.CallCount);
+    }
+
+    [Fact]
+    public async Task ProviderConfiguration_global_write_requires_privileged_global_access_before_provider_io()
+    {
+        var documentStore = new ThrowingDocumentStore();
+        var store = IdentityGroundworkFixtures.ProviderConfigurationStore(documentStore, "tenant-a");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.SaveAsync(IdentityGroundworkFixtures.GlobalProviderConfiguration()));
+
+        Assert.Contains("privileged global", exception.Message, StringComparison.Ordinal);
         Assert.Equal(0, documentStore.CallCount);
     }
 

@@ -7,8 +7,8 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Runtime;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
-using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Mediator.Core.Contracts;
@@ -16,6 +16,7 @@ using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
@@ -77,7 +78,7 @@ public sealed class ActivityDraftTestRunTests
     [Fact]
     public async Task Draft_test_run_denies_a_foreign_exact_draft_before_compilation_without_disclosure()
     {
-        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var authoring = AuthoringState.Create("tenant-b");
         await using var provider = BuildProvider(
             documents,
@@ -198,7 +199,13 @@ public sealed class ActivityDraftTestRunTests
                 await using var generation2 = BuildRuntimeOnlyProvider(generation2Documents, clock);
                 await ResumeAsync(generation2, first.WorkflowExecutionId);
                 await ResumeAsync(generation2, second.WorkflowExecutionId);
-                Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(generation2, first.WorkflowExecutionId));
+                var resumedFirstStatus = await StatusAsync(generation2, first.WorkflowExecutionId);
+                if (resumedFirstStatus != WorkflowExecutionStatus.Completed)
+                {
+                    var poison = await generation2.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(first.WorkflowExecutionId);
+                    var incidents = await generation2.GetRequiredService<IIncidentStateStore>().ListAsync(first.WorkflowExecutionId);
+                    throw new Xunit.Sdk.XunitException($"Expected completed run after restart. Status={resumedFirstStatus} Poison={JsonSerializer.Serialize(poison)} Incidents={JsonSerializer.Serialize(incidents)}");
+                }
                 Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(generation2, second.WorkflowExecutionId));
 
                 var resumedExecutions = await generation2.GetRequiredService<IActivityExecutionStateStore>().ListAsync(first.WorkflowExecutionId);
@@ -280,7 +287,12 @@ public sealed class ActivityDraftTestRunTests
             workflowExecutionId,
             SuspendingActivity.StimulusType,
             SuspendingActivity.StimulusHash,
-            requestedBy: "restart-test"));
+            JsonSerializer.SerializeToElement(new SuspendingTrigger("ready")),
+            requestedBy: "restart-test",
+            payloadType: new ValueTypeDescriptor(
+                TypeAliasConvention.CanonicalAlias(typeof(SuspendingTrigger)),
+                schemaVersion: 1),
+            providerId: SuspendingActivityActivationStrategy.ConsumerKeyValue));
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, result.Status);
         await RedriveAsync(provider);
     }
@@ -316,7 +328,7 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton<IActivityDefinitionLayoutStore>(authoring.Layouts);
         services.AddSingleton<IActivityDefinitionVersionPublicationStore, EmptyPublicationStore>();
         services.AddSingleton<IActivityTemplateCompiler, SuspendingTemplateCompiler>();
-        services.AddSingleton<IActivityConstructor, SuspendingActivityConstructor>();
+        services.AddScoped<IActivityActivationStrategy, SuspendingActivityActivationStrategy>();
         if (authorization is not null)
             services.AddSingleton(authorization);
         services.AddSingleton<IActivityExecutionInspectionAuthorizationContext, AllowAllActivityExecutionInspectionAuthorizationContext>();
@@ -328,9 +340,7 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
         services.AddGroundworkRuntimeStores();
 
-        var provider = services.BuildServiceProvider();
-        RegisterConstructors(provider);
-        return provider;
+        return services.BuildServiceProvider();
     }
 
     private static ServiceProvider BuildRuntimeOnlyProvider(IDocumentStore documents, TimeProvider clock)
@@ -339,7 +349,7 @@ public sealed class ActivityDraftTestRunTests
         services.AddLogging();
         services.AddSingleton(clock);
         services.AddSingleton<TimeProvider>(clock);
-        services.AddSingleton<IActivityConstructor, SuspendingActivityConstructor>();
+        services.AddScoped<IActivityActivationStrategy, SuspendingActivityActivationStrategy>();
         services.AddSingleton<IActivityExecutionInspectionAuthorizationContext, AllowAllActivityExecutionInspectionAuthorizationContext>();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
@@ -348,22 +358,13 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
         services.AddGroundworkRuntimeStores();
 
-        var provider = services.BuildServiceProvider();
-        RegisterConstructors(provider);
-        return provider;
-    }
-
-    private static void RegisterConstructors(ServiceProvider provider)
-    {
-        var registry = provider.GetRequiredService<IActivityConstructorRegistry>();
-        foreach (var constructor in provider.GetServices<IActivityConstructor>())
-            registry.Add(constructor);
+        return services.BuildServiceProvider();
     }
 
     private static async Task<IDocumentStore> OpenSqliteAsync(string connectionString) =>
         await SqliteDocumentStoreFactory.CreateAsync(
             connectionString,
-            ElsaRuntimeStorageManifest.Create(),
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
             GroundworkTestAccess.DefaultScoped);
 
@@ -411,10 +412,11 @@ public sealed class ActivityDraftTestRunTests
                 "suspending-root",
                 "test.suspending-activity",
                 "1",
-                new(SuspendingActivityConstructor.ConsumerKeyValue, "1", JsonSerializer.SerializeToElement(new { })),
+                new(SuspendingActivityActivationStrategy.ConsumerKeyValue, "1", JsonSerializer.SerializeToElement(new { })),
                 new Dictionary<string, RuntimeInputBinding>(),
                 new Dictionary<string, RuntimeOutputCapture>(),
-                new Dictionary<string, string>());
+                new Dictionary<string, string>(),
+                activityContract: SuspendingActivityContract());
             var descriptor = new GraphActivityDescriptor(
                 request.Definition.Id,
                 request.CandidateDefinitionVersionId,
@@ -440,13 +442,14 @@ public sealed class ActivityDraftTestRunTests
                 new Dictionary<string, RuntimeInputBinding>(),
                 new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string> { ["graph.templateHash"] = descriptor.TemplateHash },
-                [new ExecutableChildSlot("Graph.Entry", [child])]);
+                [new ExecutableChildSlot("Graph.Entry", [child])],
+                activityContract: GraphActivityContract(descriptor));
             var targets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal)
             {
                 [SuspendingActivity.ResumeTargetId] = new(
                     SuspendingActivity.ResumeTargetId,
                     child.ExecutableNodeId,
-                    nameof(SuspendingActivity.Resume),
+                    "test-handler",
                     new Dictionary<string, string>())
             };
             var template = new ExecutableActivityTemplate(
@@ -458,7 +461,7 @@ public sealed class ActivityDraftTestRunTests
                 [],
                 [
                     new(WellKnownRuntimeActivityConsumers.GraphActivity, RuntimeActivityDescriptor.InitialSchemaVersion),
-                    new(SuspendingActivityConstructor.ConsumerKeyValue, "1")
+                    new(SuspendingActivityActivationStrategy.ConsumerKeyValue, "1")
                 ],
                 "test-provider/1",
                 new Dictionary<string, string>(),
@@ -471,35 +474,80 @@ public sealed class ActivityDraftTestRunTests
         }
 
         private static JsonElement Type() => JsonSerializer.SerializeToElement(new { alias = "object" });
+
+        private static Elsa.Activities.Runtime.Core.Models.ActivityContract SuspendingActivityContract() => new(
+            SuspendingActivityActivationStrategy.ConsumerKeyValue,
+            "1",
+            SuspendingActivityActivationStrategy.ConsumerKeyValue,
+            JsonSerializer.SerializeToElement(new { }),
+            [],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(
+                SuspendingActivityActivationStrategy.ConsumerKeyValue,
+                SuspendingActivityActivationStrategy.ConsumerKeyValue));
+
+        private static Elsa.Activities.Runtime.Core.Models.ActivityContract GraphActivityContract(
+            GraphActivityDescriptor descriptor)
+        {
+            var objectType = new ValueTypeDescriptor("object");
+            var payload = JsonSerializer.SerializeToElement(
+                descriptor,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return new(
+                "test.graph-activity",
+                "1",
+                WellKnownRuntimeActivityConsumers.GraphActivity,
+                payload,
+                [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                    "order", "Order", objectType, true, false, null, ActivityValuePolicy.Default)],
+                new ActivityResultContract(
+                    objectType,
+                    true,
+                    ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+                    [new ActivityResultProjectionContract("result", "result", objectType, true, ActivityValuePolicy.Default)]),
+                [ActivityOutcomes.Done],
+                new ActivityActivationRequirement(
+                    WellKnownRuntimeActivityConsumers.GraphActivity,
+                    WellKnownRuntimeActivityConsumers.GraphActivity));
+        }
     }
 
-    private sealed record SuspendingDescriptor;
-
-    private sealed class SuspendingActivityConstructor : IActivityConstructor<SuspendingDescriptor>
+    private sealed class SuspendingActivityActivationStrategy : IActivityActivationStrategy
     {
         public const string ConsumerKeyValue = "test.suspending-activity";
         public string ConsumerKey => ConsumerKeyValue;
+        public IReadOnlyCollection<string> SupportedSchemaVersions => [RuntimeActivityDescriptor.InitialSchemaVersion];
+        public bool RequiresInputHydration => false;
 
-        public ValueTask<IActivity> Construct(
-            SuspendingDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) => new(new SuspendingActivity());
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationStrategyRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Assert.Equal(ConsumerKeyValue, request.Descriptor.ConsumerKey);
+            return ValueTask.FromResult(new ActivityActivationLease(new SuspendingActivity()));
+        }
     }
 
-    private sealed class SuspendingActivity : CodeActivity
+    private sealed record SuspendingState(string Status);
+    private sealed record SuspendingTrigger(string Status);
+
+    private sealed class SuspendingActivity : StatefulActivity<ActivityUnit, SuspendingState, SuspendingTrigger>
     {
         public const string ResumeTargetId = "resume-target:test-run";
         public const string StimulusType = "activity-test-run-signal";
         public const string StimulusHash = "activity-test-run-signal:ready";
 
-        protected override void Execute(IActivityExecutionContext context) =>
-            context.CreateBookmark(new("bookmark:test-run", ResumeTargetId, StimulusType, StimulusHash));
+        protected override ValueTask<ActivityTransition<ActivityUnit, SuspendingState>> ExecuteAsync(
+            ActivityExecutionContext context) =>
+            ValueTask.FromResult(Suspend(
+                new SuspendingState("waiting"),
+                [new ActivityTriggerRegistration<SuspendingTrigger>(ResumeTargetId, StimulusType, StimulusHash)]));
 
-        [ResumeTarget(ResumeTargetId)]
-        public void Resume()
-        {
-        }
+        protected override ValueTask<ActivityTransition<ActivityUnit, SuspendingState>> ResumeAsync(
+            ActivityResumeContext<SuspendingState, SuspendingTrigger> context) =>
+            ValueTask.FromResult(Complete(ActivityUnit.Value));
     }
 
     private sealed class SequentialIdentityGenerator : IIdentityGenerator

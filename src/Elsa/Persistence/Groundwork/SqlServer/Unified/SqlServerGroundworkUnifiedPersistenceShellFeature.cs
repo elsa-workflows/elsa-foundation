@@ -6,9 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.Groundwork.SqlServer.Unified;
 
 /// <summary>
-/// Chooses one SQL Server Groundwork target for all seven shipped Elsa persistence families:
-/// workflow runtime, identity, secrets, distributed runtime, workflows design, activities design,
-/// and workflows publishing.
+/// Chooses one SQL Server Groundwork target for the six provider-level Elsa persistence families:
+/// workflow runtime, secrets, distributed runtime, workflows design, activities design, and workflows
+/// publishing. Identity remains an explicit host selection.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -17,10 +17,15 @@ namespace Elsa.Persistence.Groundwork.SqlServer.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceSqlServer",
     DisplayName = "Groundwork SQL Server Unified Persistence",
-    Description = "Backs all seven shipped Elsa persistence families with one admission-gated Groundwork SQL Server target: workflow runtime, identity, secrets, distributed runtime, workflows design, activities design and workflows publishing. Apply schema through Groundwork.Tool before host startup.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQL Server target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. Apply schema through Groundwork.Tool before host startup.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class SqlServerGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
+    private readonly ShellFeatureContext _context;
+
+    public SqlServerGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context) =>
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+
     public const string DefaultConnectionString =
         "Server=localhost,1433;Database=elsa;Integrated Security=True;TrustServerCertificate=True";
 
@@ -42,6 +47,6 @@ public class SqlServerGroundworkUnifiedPersistenceShellFeature : IShellFeature
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString)
             ? DefaultConnectionString
             : ConnectionString;
-        services.AddGroundworkSqlServerUnifiedPersistence(connectionString, AutoApplySchemaOnStartup);
+        services.AddGroundworkSqlServerUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
     }
 }

@@ -1,5 +1,6 @@
 {
   "collection": "operationalState",
+  "hasOperationalOwner": true,
   "state": {
     "drain": null,
     "executionLease": {

@@ -1,7 +1,12 @@
 using System.Text.Json;
+using Elsa.Activities.DispatchWorkflow.Runtime;
+using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
+using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -86,6 +91,95 @@ public sealed class WorkflowDispatchStateTests
     }
 
     [Fact]
+    public void CheckpointRequest_PreservesFireAndForgetConstructorAndValidatesWaitBookmark()
+    {
+        var fireAndForget = NewRecord();
+        var fireRequest = new WorkflowDispatchCheckpointRequest(fireAndForget, NewStartIntent());
+        Assert.Null(fireRequest.WaitBookmark);
+
+        var waitRecord = NewRecord(mode: WorkflowDispatchMode.WaitForCompletion);
+        Assert.Throws<ArgumentNullException>(() => new WorkflowDispatchCheckpointRequest(waitRecord, NewStartIntent()));
+
+        var bookmark = new ActivityBookmarkRequest(
+            DispatchIdentity.WaitBookmarkId,
+            DispatchWorkflowConstants.CompletionResumeTargetId,
+            DispatchWorkflowConstants.WaitStimulusType,
+            DispatchIdentity.WaitStimulusHash,
+            expiresAt: null);
+        var waitRequest = NewWaitRequest(waitRecord, bookmark);
+
+        var waitBookmark = Assert.IsType<ActivityBookmarkRequest>(waitRequest.WaitBookmark);
+        Assert.Same(bookmark, waitBookmark);
+        Assert.Equal(WorkflowDispatchMode.WaitForCompletion, waitRequest.Record.Mode);
+        Assert.Null(waitBookmark.ExpiresAt);
+    }
+
+    [Fact]
+    public void CheckpointRequest_FailsClosedOnConflictingOrExpiringWaitBookmark()
+    {
+        var waitRecord = NewRecord(mode: WorkflowDispatchMode.WaitForCompletion);
+        var wrongIdentity = new ActivityBookmarkRequest(
+            "bookmark:wrong",
+            DispatchWorkflowConstants.CompletionResumeTargetId,
+            DispatchWorkflowConstants.WaitStimulusType,
+            DispatchIdentity.WaitStimulusHash);
+        var expiring = new ActivityBookmarkRequest(
+            DispatchIdentity.WaitBookmarkId,
+            DispatchWorkflowConstants.CompletionResumeTargetId,
+            DispatchWorkflowConstants.WaitStimulusType,
+            DispatchIdentity.WaitStimulusHash,
+            expiresAt: Now.AddMinutes(1));
+        var wrongResumeTarget = new ActivityBookmarkRequest(
+            DispatchIdentity.WaitBookmarkId,
+            "resume-target:wrong",
+            DispatchWorkflowConstants.WaitStimulusType,
+            DispatchIdentity.WaitStimulusHash);
+        var wrongStimulusType = new ActivityBookmarkRequest(
+            DispatchIdentity.WaitBookmarkId,
+            DispatchWorkflowConstants.CompletionResumeTargetId,
+            "Wrong.Stimulus",
+            DispatchIdentity.WaitStimulusHash);
+
+        Assert.Throws<ArgumentException>(() => NewWaitRequest(waitRecord, wrongIdentity));
+        Assert.Throws<ArgumentException>(() => NewWaitRequest(waitRecord, expiring));
+        Assert.Throws<ArgumentException>(() => NewWaitRequest(waitRecord, wrongResumeTarget));
+        Assert.Throws<ArgumentException>(() => NewWaitRequest(waitRecord, wrongStimulusType));
+    }
+
+    [Fact]
+    public void Dispatch_staging_crosses_activity_child_scope_and_is_consumed_by_exact_invocation()
+    {
+        var services = new ServiceCollection();
+        new DispatchWorkflowRuntimeFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        using var activityScope = provider.CreateScope();
+        var stager = activityScope.ServiceProvider.GetRequiredService<IWorkflowDispatchStager>();
+        var accessor = provider.GetRequiredService<IWorkflowDispatchStagingAccessor>();
+        var request = new WorkflowDispatchCheckpointRequest(NewRecord(), NewStartIntent());
+
+        stager.StageWorkflowDispatch(request);
+
+        Assert.Same(stager, accessor);
+        Assert.Null(accessor.TakeWorkflowDispatch("parent-1", "activity-other"));
+        Assert.Same(request, accessor.TakeWorkflowDispatch("parent-1", "activity-1"));
+        Assert.Null(accessor.TakeWorkflowDispatch("parent-1", "activity-1"));
+    }
+
+    [Fact]
+    public void Dispatch_staging_rejects_competing_request_for_the_same_invocation_until_reset()
+    {
+        var buffer = new WorkflowDispatchStagingBuffer();
+        var request = new WorkflowDispatchCheckpointRequest(NewRecord(), NewStartIntent());
+        buffer.StageWorkflowDispatch(request);
+
+        Assert.Throws<InvalidOperationException>(() => buffer.StageWorkflowDispatch(request));
+
+        buffer.Reset("parent-1", "activity-1");
+        buffer.StageWorkflowDispatch(request);
+        Assert.Same(request, buffer.TakeWorkflowDispatch("parent-1", "activity-1"));
+    }
+
+    [Fact]
     public async Task InMemoryCheckpoint_ProjectsDispatchAndConvergesEquivalentReplay()
     {
         var sharedState = new InMemoryRuntimeCheckpointStoreState();
@@ -149,9 +243,13 @@ public sealed class WorkflowDispatchStateTests
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: $"checkpoint:{commitId}",
                 Name: "ActivityCompleted",
-                WorkflowExecutionId: record.ParentWorkflowExecutionId,
+                WorkflowExecutionId: record.Status == WorkflowDispatchStatus.Pending
+                    ? record.ParentWorkflowExecutionId
+                    : record.ChildWorkflowExecutionId,
                 OccurredAt: Now,
-                ActivityExecutionIds: [record.ParentActivityExecutionId],
+                ActivityExecutionIds: record.Status == WorkflowDispatchStatus.Pending
+                    ? [record.ParentActivityExecutionId]
+                    : [],
                 Metadata: new Dictionary<string, string>()),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
@@ -179,7 +277,8 @@ public sealed class WorkflowDispatchStateTests
         DateTimeOffset? updatedAt = null,
         string? dispatchId = null,
         string? childWorkflowExecutionId = null,
-        string? correlationId = "correlation-1") =>
+        string? correlationId = "correlation-1",
+        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget) =>
         new(
             dispatchId: dispatchId ?? DispatchIdentity.DispatchId,
             parentWorkflowExecutionId: "parent-1",
@@ -189,7 +288,7 @@ public sealed class WorkflowDispatchStateTests
             childSource: new WorkflowExecutableSourceProvenance(
                 "source-1", "WorkflowDefinitionVersion", "version-1", "1.0.0",
                 "definition-1", "version-1", "1.0.0", "publication-1", "slot-1"),
-            mode: WorkflowDispatchMode.FireAndForget,
+            mode: mode,
             status: status,
             correlationId: correlationId,
             tenantId: "tenant-1",
@@ -200,4 +299,24 @@ public sealed class WorkflowDispatchStateTests
             createdAt: Now,
             updatedAt: updatedAt ?? Now,
             metadata: new Dictionary<string, string> { ["runtime.source"] = "DispatchWorkflow" });
+
+    private static RuntimePostCommitIntent NewStartIntent() =>
+        new(
+            intentId: DispatchIdentity.StartIntentId,
+            workflowExecutionId: "parent-1",
+            kind: DispatchWorkflowConstants.StartChildIntentKind,
+            recordedAt: Now,
+            activityExecutionId: "activity-1",
+            idempotencyKey: DispatchIdentity.StartIdempotencyKey,
+            payload: null);
+
+    private static WorkflowDispatchCheckpointRequest NewWaitRequest(
+        WorkflowDispatchRecord record,
+        ActivityBookmarkRequest bookmark) =>
+        new(
+            record,
+            NewStartIntent(),
+            bookmark,
+            DispatchWorkflowConstants.CompletionResumeTargetId,
+            DispatchWorkflowConstants.WaitStimulusType);
 }

@@ -3,6 +3,8 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Locking.Core;
 using Elsa.Serialization.Core;
@@ -108,11 +110,16 @@ public sealed class TestInfraFeature : IShellFeature
 }
 
 /// <summary>Stands in for a dynamically-loaded extension-builder activity surfaced via IFeatureAssemblyProvider.</summary>
-public sealed class ShellExtensionActivity : ActivityBase
+public sealed class ShellExtensionActivity : Activity<ActivityUnit>
 {
-    public InputArgument<ShellExtensionPayload> Payload { get; set; } = null!;
+    [ActivityInput]
+    public ShellExtensionPayload Payload { get; set; } = null!;
 
-    public InputArgument<ShellExtensionMode> Mode { get; set; } = null!;
+    [ActivityInput]
+    public ShellExtensionMode Mode { get; set; }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 }
 
 public sealed class ShellExtensionPayload

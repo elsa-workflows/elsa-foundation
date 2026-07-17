@@ -187,8 +187,8 @@ public sealed class HttpEndpointMidFlowResumeEndToEndTests : IAsyncLifetime
 
     private async Task<HttpRequestModel> ReadResultAsync(string workflowExecutionId, string valueId)
     {
-        var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, valueId);
-        return captured.Deserialize<HttpRequestModel>(JsonSerializerOptions.Web)!;
+        var captured = await _fixture.ReadResultProjectionAsync(workflowExecutionId, "Request", valueId);
+        return HttpEndpointHostFixture.DeserializeRequest(captured);
     }
 
     private static async Task<IReadOnlyList<string>> ReadStartedIdsAsync(HttpResponseMessage response) =>

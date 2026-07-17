@@ -4,29 +4,31 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence.Exceptions;
 using Elsa.Activities.Sequence.Internal;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Sequence.Activities;
 
 [ActivityStructure("elsa.sequence.structure", "1.0.0", Mode = "sequence", SupportsScopedVariables = true)]
 [ActivityChildSlot("Sequence.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
-public sealed class Sequence : ActivityBase, IActivityChildCompletionHandler
+[ActivityOutcome(ActivityOutcomes.Done)]
+[ActivityOutcome(ActivityOutcomes.Break)]
+public sealed class Sequence : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string ActivitiesSlotName = "Sequence.Activities";
     public const string StructureKind = "elsa.sequence.structure";
     public const string StructureSchemaVersion = "1.0.0";
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
         var navigator = SequenceNavigator.From(runtimeContext.ExecutableNode);
         var firstChild = navigator.SelectFirst();
 
         if (firstChild is null)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         runtimeContext.ScheduleChildActivity(
@@ -37,9 +39,11 @@ public sealed class Sequence : ActivityBase, IActivityChildCompletionHandler
                 ["sequence.parentActivityExecutionId"] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
                 ["sequence.targetNodeId"] = firstChild.ExecutableNodeId
             });
+
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -52,16 +56,14 @@ public sealed class Sequence : ActivityBase, IActivityChildCompletionHandler
         // (separate) Break activity module.
         if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Break]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(ActivityOutcomes.Break));
         }
 
         var nextChild = navigator.SelectAfter(context.CompletedChildExecutableNodeId);
 
         if (nextChild is null)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         runtimeContext.ScheduleChildActivity(
@@ -75,7 +77,7 @@ public sealed class Sequence : ActivityBase, IActivityChildCompletionHandler
                 ["sequence.targetNodeId"] = nextChild.ExecutableNodeId
             });
 
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)

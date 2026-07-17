@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 
 namespace Elsa.Foundation.Identity.Tests;
 

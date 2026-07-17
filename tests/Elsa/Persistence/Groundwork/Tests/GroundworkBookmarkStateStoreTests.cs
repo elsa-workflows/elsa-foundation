@@ -3,6 +3,8 @@ using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -109,6 +111,55 @@ public sealed class GroundworkBookmarkStateStoreTests
         Assert.Empty(await index.ListByStimulusTypeAsync("Signal"));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListByStimulus_ReturnsOnlyMatchingTypeAndHash_AcrossExecutions(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IBookmarkStimulusIndex index = CreateBridge(fixture);
+        var store = (IBookmarkStateStore)index;
+
+        await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "HttpEndpoint", stimulusHash: "shared"));
+        await store.SaveAsync(Bookmark("wf-2", "bm-b", stimulus: "Signal", stimulusHash: "shared"));
+        await store.SaveAsync(Bookmark("wf-3", "bm-c", stimulus: "HttpEndpoint", stimulusHash: "other"));
+
+        var bookmarks = await index.ListByStimulusAsync("HttpEndpoint", "shared");
+
+        Assert.Equal("bm-a", Assert.Single(bookmarks).BookmarkId);
+    }
+
+    [Fact]
+    public async Task ListByStimulus_UsesDeclaredCompositeRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IBookmarkStimulusIndex index = new GroundworkBookmarkStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await index.ListByStimulusAsync("HttpEndpoint", "hash-1");
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.BookmarkStateDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery, query.QueryIdentity);
+        Assert.Collection(
+            query.Clauses.SelectMany(clause => clause.Comparisons),
+            stimulus =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path);
+                Assert.Equal(QueryComparisonOperator.Equal, stimulus.Operator);
+                Assert.Equal("hash-1", Assert.Single(stimulus.Values));
+            },
+            type =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path);
+                Assert.Equal(QueryComparisonOperator.Equal, type.Operator);
+                Assert.Equal("HttpEndpoint", Assert.Single(type.Values));
+            });
+    }
+
     private static BookmarkState Bookmark(string workflowExecutionId, string bookmarkId, string stimulus, object? payload = null, string stimulusHash = "hash-1")
     {
         JsonElement? payloadElement = payload is null ? null : JsonSerializer.SerializeToElement(payload);
@@ -127,11 +178,38 @@ public sealed class GroundworkBookmarkStateStoreTests
     }
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
-        GroundworkDocumentStoreFixture.Create(provider);
+        GroundworkDocumentStoreFixture.Create(
+            provider,
+            new RuntimeGroundworkStorageManifestSource()
+                .CreateDeclarationAsync()
+                .AsTask()
+                .GetAwaiter()
+                .GetResult()
+                .Manifest);
 
     private static GroundworkBookmarkStateStore CreateBridge(GroundworkDocumentStoreFixture fixture) =>
         new(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
             fixture.BoundedDocumentStore);
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(new DocumentQueryResult([], 0));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 }

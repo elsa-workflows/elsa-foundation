@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -22,7 +23,8 @@ internal static class TestSchedulerDrainer
         IRuntimeExecutionPipelineDispatcher? pipelineDispatcher = null,
         IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
         IWorkflowSchedulerPoisonStore? poisonStore = null,
-        IRuntimeDomainRetryPolicy? retryPolicy = null) =>
+        IRuntimeDomainRetryPolicy? retryPolicy = null,
+        RuntimeSchedulerWorkClaimOptions? claimOptions = null) =>
         new(
             schedulerWorkQueue,
             handlers,
@@ -32,5 +34,6 @@ internal static class TestSchedulerDrainer
             pipelineDispatcher,
             faultCapturePolicy,
             poisonStore,
-            retryPolicy);
+            retryPolicy,
+            claimOptions: claimOptions);
 }

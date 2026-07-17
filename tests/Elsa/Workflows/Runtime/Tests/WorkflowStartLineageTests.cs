@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -9,6 +10,58 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class WorkflowStartLineageTests
 {
+    [Fact]
+    public void New_root_test_run_rejects_missing_authoritative_scope()
+    {
+        Assert.Throws<ArgumentException>(() => new WorkflowExecutionStartDispatchRequest(
+            artifactId: "artifact-test-root",
+            requestedBy: "test-runner",
+            workflowExecutionId: null,
+            idempotencyKey: null,
+            metadata: null,
+            variables: null,
+            inputs: null,
+            stimulusInput: null,
+            triggerNodeId: null,
+            runKind: WorkflowRunKind.TestRun,
+            sourceSelection: null,
+            provenanceRequirement: WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+            parentWorkflowExecutionId: null,
+            correlationId: null,
+            tenantId: null,
+            partition: null,
+            authority: null,
+            startAuthority: null,
+            dispatchNestingDepth: 0));
+    }
+
+    [Fact]
+    public void Legacy_child_test_run_request_without_scope_remains_compatible()
+    {
+        var request = new WorkflowExecutionStartDispatchRequest(
+            artifactId: "artifact-legacy-child",
+            requestedBy: "legacy-parent",
+            workflowExecutionId: "legacy-child",
+            idempotencyKey: "legacy-dispatch",
+            metadata: null,
+            variables: null,
+            inputs: null,
+            stimulusInput: null,
+            triggerNodeId: null,
+            runKind: WorkflowRunKind.TestRun,
+            sourceSelection: null,
+            provenanceRequirement: WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+            parentWorkflowExecutionId: "legacy-parent",
+            correlationId: null,
+            tenantId: null,
+            partition: null,
+            authority: null,
+            startAuthority: null,
+            dispatchNestingDepth: 1);
+
+        Assert.Null(request.TestScope);
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -42,6 +95,59 @@ public sealed class WorkflowStartLineageTests
 
         Assert.DoesNotContain("\"partition\"", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("\"authority\"", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"testScope\"", serialized, StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<WorkflowExecutionState>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.TestScope);
+
+        var legacyStart = new WorkflowExecutionStartCommandPayload(
+            NewExecutable().Identity,
+            "artifact-1",
+            runKind: WorkflowRunKind.TestRun);
+        var restoredStart = JsonSerializer.Deserialize<WorkflowExecutionStartCommandPayload>(
+            JsonSerializer.Serialize(legacyStart),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Null(restoredStart!.TestScope);
+
+        var legacyCheckpoint = new RuntimeCheckpointCommandPayload(
+            NewExecutable().Identity,
+            RuntimeCheckpointNames.WorkflowStarted,
+            [],
+            RuntimeCheckpointCommandPayload.WorkflowStartReason,
+            runKind: WorkflowRunKind.TestRun);
+        var restoredCheckpoint = JsonSerializer.Deserialize<RuntimeCheckpointCommandPayload>(
+            JsonSerializer.Serialize(legacyCheckpoint),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Null(restoredCheckpoint!.TestScope);
+    }
+
+    [Theory]
+    [InlineData(WorkflowRunKind.Unknown)]
+    [InlineData(WorkflowRunKind.PublishedRun)]
+    [InlineData(WorkflowRunKind.BackgroundWeaverRun)]
+    public void Non_test_run_request_rejects_test_scope(WorkflowRunKind runKind)
+    {
+        var scope = NewTestScope();
+
+        Assert.Throws<ArgumentException>(() => new WorkflowExecutionStartDispatchRequest(
+            artifactId: "artifact-1",
+            requestedBy: "parent-1",
+            workflowExecutionId: "child-1",
+            idempotencyKey: "start-1",
+            metadata: null,
+            variables: null,
+            inputs: null,
+            stimulusInput: null,
+            triggerNodeId: null,
+            runKind: runKind,
+            sourceSelection: null,
+            provenanceRequirement: WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+            parentWorkflowExecutionId: "parent-1",
+            correlationId: "correlation-1",
+            tenantId: scope.TenantId,
+            partition: scope.Partition,
+            authority: new WorkflowExecutionAuthoritySnapshot("parent-1", "initiator-1"),
+            startAuthority: null,
+            dispatchNestingDepth: 1,
+            testScope: scope));
     }
 
     [Fact]
@@ -64,6 +170,7 @@ public sealed class WorkflowStartLineageTests
             systemIdentity: "parent-1",
             rootInitiator: "initiator-1",
             metadata: new Dictionary<string, string> { ["authority.source"] = "parent" });
+        var testScope = NewTestScope();
 
         await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
             artifactId: "artifact-1",
@@ -75,7 +182,7 @@ public sealed class WorkflowStartLineageTests
             inputs: new Dictionary<string, object?> { ["message"] = "hello" },
             stimulusInput: null,
             triggerNodeId: null,
-            runKind: WorkflowRunKind.PublishedRun,
+            runKind: WorkflowRunKind.TestRun,
             sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: "source-1"),
             provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
             parentWorkflowExecutionId: "parent-1",
@@ -84,7 +191,8 @@ public sealed class WorkflowStartLineageTests
             partition: new WorkflowExecutionPartition("partition-1"),
             authority: authority,
             startAuthority: null,
-            dispatchNestingDepth: 7));
+            dispatchNestingDepth: 7,
+            testScope: testScope));
 
         var activation = Assert.Single(actorProvider.Activations);
         var envelope = Assert.Single(actorProvider.Actor.Envelopes);
@@ -95,10 +203,11 @@ public sealed class WorkflowStartLineageTests
         Assert.Equal("correlation-override", payload.CorrelationId);
         Assert.Equal("tenant-1", payload.TenantId);
         Assert.Equal("partition-1", payload.Partition!.Value);
-        Assert.Equal(WorkflowRunKind.PublishedRun, payload.RunKind);
+        Assert.Equal(WorkflowRunKind.TestRun, payload.RunKind);
         Assert.Equal("parent-1", payload.Authority!.SystemIdentity);
         Assert.Equal("initiator-1", payload.Authority.RootInitiator);
         Assert.Equal(7, payload.DispatchNestingDepth);
+        AssertScopeEqual(testScope, payload.TestScope);
         Assert.Equal("hello", payload.Inputs["message"].GetString());
         Assert.DoesNotContain("ParentWorkflowExecutionId", payload.Inputs.Keys, StringComparer.Ordinal);
         Assert.DoesNotContain("Authority", payload.Inputs.Keys, StringComparer.Ordinal);
@@ -127,8 +236,10 @@ public sealed class WorkflowStartLineageTests
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore),
             inspectionAccumulator: null,
             timeProvider: new FixedTimeProvider(Now),
-            workflowExecutionStateStore: workflowStore);
+            workflowExecutionStateStore: workflowStore,
+            workflowExecutableStore: executableStore);
         var authority = new WorkflowExecutionAuthoritySnapshot("parent-1", "initiator-1");
+        var testScope = NewTestScope();
         var payload = new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: executable.Identity,
             requestedArtifactId: executable.Identity.ArtifactId,
@@ -136,7 +247,7 @@ public sealed class WorkflowStartLineageTests
             inputs: null,
             stimulusInput: null,
             triggerNodeId: null,
-            runKind: WorkflowRunKind.PublishedRun,
+            runKind: WorkflowRunKind.TestRun,
             pinnedSource: WorkflowExecutableSourceProvenance.From(NewSourceReference()),
             parentWorkflowExecutionId: "parent-1",
             correlationId: "correlation-1",
@@ -144,10 +255,15 @@ public sealed class WorkflowStartLineageTests
             partition: new WorkflowExecutionPartition("partition-1"),
             authority: authority,
             startAuthority: null,
-            dispatchNestingDepth: 7);
+            dispatchNestingDepth: 7,
+            testScope: testScope);
 
         await startHandler.HandleAsync(NewStartWorkItem(payload));
         var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("child-1")));
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(7, checkpointPayload.DispatchNestingDepth);
+        Assert.Equal(WorkflowRunKind.TestRun, checkpointPayload.RunKind);
+        AssertScopeEqual(testScope, checkpointPayload.TestScope);
         await checkpointHandler.HandleAsync(checkpointWork);
 
         var state = await workflowStore.FindAsync("child-1");
@@ -156,10 +272,11 @@ public sealed class WorkflowStartLineageTests
         Assert.Equal("correlation-1", state.CorrelationId);
         Assert.Equal("tenant-1", state.TenantId);
         Assert.Equal("partition-1", state.Partition!.Value);
-        Assert.Equal(WorkflowRunKind.PublishedRun, state.RunKind);
+        Assert.Equal(WorkflowRunKind.TestRun, state.RunKind);
         Assert.Equal("parent-1", state.Authority!.SystemIdentity);
         Assert.Equal("initiator-1", state.Authority.RootInitiator);
         Assert.Equal(7, state.DispatchNestingDepth);
+        AssertScopeEqual(testScope, state.TestScope);
     }
 
     [Fact]
@@ -167,6 +284,18 @@ public sealed class WorkflowStartLineageTests
     {
         Assert.Equal(0, new WorkflowExecutionStartDispatchRequest("artifact-1", "caller").DispatchNestingDepth);
         Assert.Equal(0, new WorkflowExecutionStartCommandPayload(NewExecutable().Identity, "artifact-1").DispatchNestingDepth);
+    }
+
+    private static WorkflowTestScope NewTestScope() =>
+        new("scope-1", Now.AddHours(1), "tenant-1", new WorkflowExecutionPartition("partition-1"));
+
+    private static void AssertScopeEqual(WorkflowTestScope expected, WorkflowTestScope? actual)
+    {
+        Assert.NotNull(actual);
+        Assert.Equal(expected.ScopeId, actual.ScopeId);
+        Assert.Equal(expected.ExpiresAt, actual.ExpiresAt);
+        Assert.Equal(expected.TenantId, actual.TenantId);
+        Assert.Equal(expected.Partition.Value, actual.Partition.Value);
     }
 
     private static RuntimeSchedulerWorkItem NewStartWorkItem(WorkflowExecutionStartCommandPayload payload) =>

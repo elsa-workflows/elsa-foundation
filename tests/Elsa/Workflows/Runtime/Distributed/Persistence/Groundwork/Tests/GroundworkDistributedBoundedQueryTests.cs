@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -18,9 +19,18 @@ public sealed class GroundworkDistributedBoundedQueryTests
             GroundworkDistributedTestAccess.Scoped(),
             queries);
 
-        await placements.ListAsync();
+        await placements.ListPageAsync(new ExecutionPlacementLeasePageRequest(10, 25));
         await transport.ListPendingExecutionIdsAsync(DateTimeOffset.UtcNow);
         await transport.CountPendingAsync("execution-1");
+
+        Assert.Collection(
+            queries.CountObserved,
+            query => AssertQuery(
+                query,
+                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
+                DistributedGroundworkStorageManifest.ListAllQuery,
+                DistributedGroundworkStorageManifest.CollectionField,
+                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind));
 
         Assert.Collection(
             queries.Observed,
@@ -29,7 +39,9 @@ public sealed class GroundworkDistributedBoundedQueryTests
                 DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
                 DistributedGroundworkStorageManifest.ListAllQuery,
                 DistributedGroundworkStorageManifest.CollectionField,
-                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind),
+                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
+                10,
+                25),
             query => AssertQuery(
                 query,
                 DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
@@ -70,15 +82,43 @@ public sealed class GroundworkDistributedBoundedQueryTests
         Assert.Empty(documents.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind));
     }
 
+    [Fact]
+    public async Task SendAllocatesSequenceThroughStreamHeadWithoutBacklogQuery()
+    {
+        var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var transport = new GroundworkExecutionCommandTransport(
+            documents,
+            GroundworkDistributedTestAccess.Scoped(),
+            queries);
+        var now = DateTimeOffset.UtcNow;
+
+        var first = await transport.SendAsync("execution-1", DistributedStoreHarness.Envelope("execution-1", "envelope-1", now), now);
+        var second = await transport.SendAsync("execution-1", DistributedStoreHarness.Envelope("execution-1", "envelope-2", now), now);
+
+        Assert.Equal(1, first.Sequence);
+        Assert.Equal(2, second.Sequence);
+        Assert.Empty(queries.Observed);
+        Assert.Empty(queries.CountObserved);
+        Assert.Equal(2, documents.LoadCount);
+        Assert.Equal(2, documents.BeginCount);
+        Assert.Single(documents.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind));
+        Assert.Equal(2, documents.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind).Count);
+    }
+
     private static void AssertQuery(
         DocumentQuery query,
         string documentKind,
         string identity,
         string path,
-        string value)
+        string value,
+        int? skip = null,
+        int? take = null)
     {
         Assert.Equal(documentKind, query.DocumentKind);
         Assert.Equal(identity, query.QueryIdentity);
+        Assert.Equal(skip, query.Skip);
+        Assert.Equal(take, query.Take);
         var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
         Assert.Equal(path, comparison.Path);
         Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
@@ -88,6 +128,7 @@ public sealed class GroundworkDistributedBoundedQueryTests
     private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
     {
         public List<DocumentQuery> Observed { get; } = [];
+        public List<DocumentQuery> CountObserved { get; } = [];
 
         public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         {
@@ -95,8 +136,11 @@ public sealed class GroundworkDistributedBoundedQueryTests
             return Task.FromResult(DocumentQueryResult.Empty);
         }
 
-        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            CountObserved.Add(query);
+            return Task.FromResult(0L);
+        }
 
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();

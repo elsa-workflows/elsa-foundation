@@ -43,7 +43,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
         {
             ["IBookmarkStateStore"] = ["BookmarkStateDocumentKind"],
             ["IWorkflowExecutableStore"] = ["WorkflowExecutableDocumentKind"],
-            ["IExecutableActivityTemplateStore"] = ["ExecutableActivityTemplateDocumentKind"],
+            ["IExecutableActivityTemplateStore"] =
+                ["ExecutableActivityTemplateDocumentKind", "ExecutableActivityTemplateHashClaimDocumentKind"],
             ["IWorkflowExecutableSourceReferenceStore"] = ["WorkflowExecutableSourceReferenceDocumentKind"],
             ["IActivityExecutionStateStore"] = ["ActivityExecutionStateDocumentKind"],
             ["IActivityExecutionInspectionStore"] = ["ActivityExecutionInspectionDocumentKind"],
@@ -51,6 +52,10 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IActivityExecutionHierarchyStore"] = ["ActivityExecutionHierarchyDocumentKind"],
             ["IActivityExecutionHierarchyWriter"] = ["ActivityExecutionHierarchyDocumentKind"],
             ["IWorkflowExecutionStateStore"] = ["WorkflowExecutionStateDocumentKind"],
+            ["IWorkflowTestScopeStore"] = ["WorkflowTestScopeDocumentKind"],
+            ["IWorkflowTestScopeAdmissionStore"] = ["WorkflowTestScopeDocumentKind", "WorkflowDispatchDocumentKind"],
+            ["IWorkflowTestScopeCleanupStore"] =
+                ["WorkflowTestScopeDocumentKind", "WorkflowDispatchDocumentKind", "PostCommitOutboxDocumentKind"],
             ["IDurableValueStateStore"] = ["DurableValueStateDocumentKind"],
             ["ISchedulerStateStore"] = ["SchedulerStateDocumentKind"],
             ["IExecutionLivenessStateStore"] = ["ExecutionLivenessStateDocumentKind"],
@@ -60,26 +65,39 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IIncidentStateStore"] = ["IncidentStateDocumentKind"],
             ["IRuntimeCheckpointCommitStore"] = ["CheckpointCommitDocumentKind"],
             ["IRuntimePostCommitOutboxStore"] = ["PostCommitOutboxDocumentKind"],
+            ["IPostCommitOutboxLookupStore"] = ["PostCommitOutboxDocumentKind"],
+            ["IRuntimePostCommitOutboxClaimStore"] = ["PostCommitOutboxDocumentKind"],
+            ["IRuntimePostCommitOutboxClaimCompletionStore"] =
+                ["PostCommitOutboxDocumentKind", "WorkflowDispatchDocumentKind", "WorkflowExecutionStateDocumentKind"],
+            ["IWorkflowDispatchStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchQueryStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchDeleteStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchRetentionRootStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchAdmissionStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchCancellationStore"] = ["WorkflowDispatchDocumentKind"],
+            ["IWorkflowDispatchRedriveStore"] = ["WorkflowDispatchDocumentKind", "PostCommitOutboxDocumentKind"],
             ["IWorkflowSchedulerPoisonStore"] = ["SchedulerPoisonDocumentKind"],
             ["IWorkflowSchedulerWorkQueue"] = ["SchedulerWorkItemDocumentKind"],
             ["IDurableTimerStore"] = ["DurableTimerDocumentKind"],
             ["IWorkflowTriggerBindingStore"] = ["WorkflowTriggerBindingDocumentKind"],
             ["IRecurringTriggerScheduleStore"] = ["RecurringTriggerScheduleDocumentKind"],
-            ["IUserStore"] = ["UserDocumentKind"],
-            ["IRoleStore"] = ["RoleDocumentKind"],
-            ["IApplicationStore"] = ["ApplicationDocumentKind"],
-            ["ICredentialStore"] = ["CredentialDocumentKind"],
-            ["IExternalIdentityStore"] = ["ExternalIdentityDocumentKind"],
-            ["IClaimMappingStore"] = ["ClaimMappingDocumentKind"],
+            ["IUserStore"] = ["IdentityUserDocumentKind"],
+            ["IRoleStore"] = ["IdentityRoleDocumentKind"],
+            ["IApplicationStore"] = ["IdentityApplicationDocumentKind"],
+            ["ICredentialStore"] = ["IdentityCredentialDocumentKind"],
+            ["IExternalIdentityStore"] = ["ExternalLoginDocumentKind"],
+            ["IClaimMappingStore"] = ["IdentityClaimMappingDocumentKind"],
             ["IProviderConfigurationStore"] =
             [
-                "ProviderConfigurationTenantDocumentKind",
-                "ProviderConfigurationGlobalDocumentKind"
+                "IdentityProviderConfigurationDocumentKind"
             ],
-            ["ITenantMembershipStore"] = ["TenantMembershipDocumentKind"],
+            ["ITenantMembershipStore"] = ["IdentityTenantMembershipDocumentKind"],
             ["ISecretRepository"] = ["SecretDocumentKind"],
+            ["IRevisionAwareSecretRepository"] = ["SecretDocumentKind"],
+            ["IPagedSecretRepository"] = ["SecretDocumentKind"],
             ["IExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
-            ["IExecutionCommandTransport"] = ["ExecutionCommandTransportDocumentKind"]
+            ["IPagedExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
+            ["IExecutionCommandTransport"] = ["ExecutionCommandTransportDocumentKind", "ExecutionCommandStreamHeadDocumentKind"]
         };
 
     private static readonly string[] ContractSources =

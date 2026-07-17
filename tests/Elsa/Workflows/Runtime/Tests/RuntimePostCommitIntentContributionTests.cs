@@ -25,7 +25,26 @@ public sealed class RuntimePostCommitIntentContributionTests
             .OfType<RuntimePostCommitIntentHandlerContribution>());
         Assert.Equal(MarkerKind, contribution.IntentKind);
         Assert.Equal(typeof(FirstMarkerHandler), contribution.HandlerType);
+        Assert.Same(RuntimePostCommitRetryPolicy.None, contribution.RetryPolicy);
         Assert.Single(services.Where(descriptor => descriptor.ServiceType == typeof(FirstMarkerHandler)));
+    }
+
+    [Fact]
+    public void PolicyBearingRegistration_IsIdempotentAndRejectsPolicyConflict()
+    {
+        var services = new ServiceCollection();
+        var retry = RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5));
+
+        services.AddRuntimePostCommitIntentHandler<FirstMarkerHandler>(MarkerKind, retry);
+        services.AddRuntimePostCommitIntentHandler<FirstMarkerHandler>(MarkerKind, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)));
+
+        var contribution = Assert.Single(services
+            .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<RuntimePostCommitIntentHandlerContribution>());
+        Assert.True(contribution.RetryPolicy.RetryUntilAcknowledged);
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddRuntimePostCommitIntentHandler<FirstMarkerHandler>(MarkerKind, RuntimePostCommitRetryPolicy.None));
     }
 
     [Fact]

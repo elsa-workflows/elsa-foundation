@@ -23,6 +23,13 @@ public enum ActivityDefinitionVersionLifecycle
     Revoked
 }
 
+public enum ActivityDefinitionVersionResolutionKind
+{
+    Unspecified = 0,
+    AuthorableActivity = 1,
+    ReusableTemplateBoundary = 2
+}
+
 public enum ActivityBoundaryDurability
 {
     Required
