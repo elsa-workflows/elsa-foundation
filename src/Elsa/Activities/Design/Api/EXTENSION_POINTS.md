@@ -14,6 +14,16 @@
 
 These are single-owner seams. Replace them through DI; do not register competing implementations and rely on resolution order.
 
+## Provider contributors
+
+| Contract | Kind and registration | Consumer | Known implementation |
+|---|---|---|---|
+| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
+| `IActivityProviderReferenceRewriter` | Enumerable, provider/schema-aware contributor. Opaque manifests are never rewritten by universal JSON guessing. | Publishing upgrade-plan persistence invokes the matching provider rewriter for exact occurrence replacements. | `GraphActivityProviderReferenceRewriter` *(cross-domain — Activities Graph Design)* |
+
+Provider packages own these implementations and their feature registrations. The Activity Graph contribution is
+documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_POINTS.md).
+
 ## Sources and reconciliation
 
 Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Server`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). EF Core and Groundwork persistence-specific seams are documented in their own catalogs:

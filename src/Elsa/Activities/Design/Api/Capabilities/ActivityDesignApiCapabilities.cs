@@ -17,6 +17,7 @@ public static class ActivityDesignApiCapabilities
             new("activity-definition", "design/activities/definitions/{definitionId}", true),
             new("activity-definition-drafts", "design/activities/definitions/{definitionId}/drafts", true),
             new("activity-definition-draft", "design/activities/drafts/{draftId}", true),
+            new("activity-draft-validation", "design/activities/drafts/{draftId}/validate", true),
             new("activity-definition-versions", "design/activities/definitions/{definitionId}/versions", true),
             new("activity-definition-version", "design/activities/versions/{versionId}", true),
             new("activity-draft-conflict-copies", "design/activities/drafts/{draftId}/conflict-copies", true),
