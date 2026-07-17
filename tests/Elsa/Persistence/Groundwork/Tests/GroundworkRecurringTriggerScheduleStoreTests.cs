@@ -1,6 +1,11 @@
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -106,6 +111,37 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         Assert.False(await store.TryAdvanceAsync(schedule.ScheduleId, expected, advanced));
     }
 
+    [Fact]
+    public async Task TryAdvance_ReturnsFalse_WhenProviderVersionChangesBetweenReadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IRecurringTriggerScheduleStore seedStore = NewStore(fixture);
+        var schedule = await seedStore.SaveAsync(NewSchedule("art", "node", nextOffset: TimeSpan.FromMinutes(-1)));
+        var expected = schedule.NextOccurrence;
+        var advanced = expected + TimeSpan.FromMinutes(5);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(1, request.ExpectedVersion);
+                var competingWrite = await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                    request.DocumentKind,
+                    request.Id,
+                    request.SchemaVersion,
+                    request.ContentJson));
+                Assert.Equal(DocumentStoreWriteStatus.Saved, competingWrite.Status);
+            }
+        };
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        Assert.False(await store.TryAdvanceAsync(schedule.ScheduleId, expected, advanced));
+
+        var found = await seedStore.FindAsync(schedule.ScheduleId);
+        Assert.Equal(advanced, found!.NextOccurrence);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -179,4 +215,43 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
+    {
+        public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+        public DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            if (OnBeforeSave is { } hook)
+            {
+                OnBeforeSave = null;
+                await hook(request);
+            }
+
+            return await inner.SaveAsync(request, cancellationToken);
+        }
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            inner.BeginAsync(scope, cancellationToken);
+    }
 }

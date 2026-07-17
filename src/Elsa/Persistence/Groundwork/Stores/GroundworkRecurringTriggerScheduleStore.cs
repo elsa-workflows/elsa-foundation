@@ -21,11 +21,9 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// per-tick limit bounds fires, not this load.
 /// </para>
 /// <para>
-/// <b>Compare-and-swap (W20 hook).</b> <see cref="TryAdvanceAsync"/> reads the current schedule, checks the
-/// cursor still equals the caller's expected value, then writes the advanced schedule. On a single node this is
-/// the at-most-once claim the pump relies on; a future clustered store (W20) keeps the same contract but makes
-/// the read-check-write atomic through the provider's optimistic-concurrency token so concurrent nodes cannot
-/// both claim the same occurrence.
+/// <b>Compare-and-swap.</b> <see cref="TryAdvanceAsync"/> reads the current schedule envelope, checks the cursor
+/// still equals the caller's expected value, then writes the advanced schedule with the loaded Groundwork document
+/// version as the expected version. Concurrent nodes therefore cannot both claim the same occurrence.
 /// </para>
 /// </remarks>
 public sealed class GroundworkRecurringTriggerScheduleStore(
@@ -161,15 +159,17 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Read-check-write compare-and-swap. Single-node hosts get an at-most-once claim from this; the W20
-        // clustered store makes the same check atomic via the provider's concurrency token.
-        var current = await LoadScheduleAsync(scheduleId, cancellationToken);
+        var envelope = await Store.LoadAsync(DocumentKind, scheduleId, cancellationToken);
+        if (envelope is null)
+            return false;
+
+        var current = Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule;
         if (current is null || !current.IsActive || current.NextOccurrence != expectedNextOccurrence)
             return false;
 
         var advanced = current with { NextOccurrence = newNextOccurrence };
-        await SaveDocumentAsync(scheduleId, ToEnvelope(advanced), cancellationToken);
-        return true;
+        var result = await SaveDocumentAsync(scheduleId, ToEnvelope(advanced), cancellationToken, envelope.Version);
+        return result.Status == DocumentStoreWriteStatus.Saved;
     }
 
     public async ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
