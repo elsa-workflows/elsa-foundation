@@ -60,8 +60,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
         return await QueryBindingsAsync(
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
-            ElsaRuntimeStorageManifest.PublicationIdField,
-            publicationId,
+            [Equal(ElsaRuntimeStorageManifest.PublicationIdField, publicationId)],
             cancellationToken);
     }
 
@@ -133,13 +132,12 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
 
-        // The cross-artifact index is keyed by stimulus hash only (every provider supports single-field
-        // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
-        // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
         var bindings = await QueryBindingsAsync(
-            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusQuery,
-            ElsaRuntimeStorageManifest.StimulusHashField,
-            stimulusHash,
+            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery,
+            [
+                Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulusHash),
+                Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)
+            ],
             cancellationToken);
 
         return bindings
@@ -155,8 +153,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
 
         return await QueryBindingsAsync(
             ElsaRuntimeStorageManifest.ListTriggerBindingsByArtifactQuery,
-            ElsaRuntimeStorageManifest.ArtifactIdField,
-            artifactId,
+            [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, artifactId)],
             cancellationToken);
     }
 
@@ -166,26 +163,27 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
 
         var bindings = await QueryBindingsAsync(
             ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
-            ElsaRuntimeStorageManifest.StimulusTypeField,
-            stimulusType,
+            [Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)],
             cancellationToken);
         return bindings.Where(binding => binding.IsActive).ToArray();
     }
 
     private async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> QueryBindingsAsync(
         string queryIdentity,
-        string fieldPath,
-        string value,
+        IReadOnlyList<DocumentQueryClause> clauses,
         CancellationToken cancellationToken)
     {
         var result = await Queries.QueryAsync(
             new DocumentQuery(
                 DocumentKind,
                 queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+                clauses),
             cancellationToken);
         return result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray();
     }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 
     private static void ValidatePublicationBindings(
         string publicationId,

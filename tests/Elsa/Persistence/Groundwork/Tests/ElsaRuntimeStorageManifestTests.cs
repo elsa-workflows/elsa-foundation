@@ -162,6 +162,35 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public async Task Workflow_trigger_binding_declares_composite_stimulus_type_route()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind);
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
+
+        var logical = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex);
+        Assert.Collection(
+            logical.Fields,
+            stimulus => Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path),
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path));
+
+        var route = Assert.Single(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex, route.IndexIdentity);
+        Assert.Collection(
+            route.PredicateFields,
+            stimulus => Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path),
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path));
+        Assert.Contains(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex && index.Columns.Count == 3);
+    }
+
+    [Fact]
     public async Task Workflow_test_scope_declares_bounded_open_expiry_route()
     {
         var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
