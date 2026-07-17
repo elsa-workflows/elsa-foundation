@@ -18,10 +18,11 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 /// <summary>
 /// Registers the Groundwork (document) implementations of the activity-design read ports. A provider
 /// feature is responsible for registering the concrete <see cref="Groundwork.Documents.Store.IDocumentStore"/>
-/// (and the host's <see cref="Elsa.Serialization.Core.IPayloadSerializer"/>) these adapters consume; this
-/// method only swaps the read-port contracts over to the document-backed implementations, mirroring the
-/// runtime lane's <c>AddGroundworkRuntimeStores</c> and the workflows-design lane's
-/// <c>AddGroundworkWorkflowsDesignStores</c>.
+/// and <see cref="Groundwork.Documents.Store.IBoundedDocumentStore"/> supplied by the same provider boundary
+/// (plus the host's <see cref="Elsa.Serialization.Core.IPayloadSerializer"/>). The bounded store is required
+/// for the admitted activity-management and reusable-activity queries; this method only swaps the read-port
+/// contracts over to the document-backed implementations, mirroring the runtime lane's
+/// <c>AddGroundworkRuntimeStores</c> and the workflows-design lane's <c>AddGroundworkWorkflowsDesignStores</c>.
 /// </summary>
 public static class GroundworkActivitiesDesignStoreRegistration
 {

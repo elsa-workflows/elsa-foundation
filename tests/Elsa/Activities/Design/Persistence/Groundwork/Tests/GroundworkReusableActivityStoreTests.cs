@@ -100,7 +100,7 @@ public sealed class GroundworkReusableActivityStoreTests
             racingStore,
             new FakeClock(),
             new ImmediateDistributedLockProvider(),
-            new TestBoundedDocumentStore(racingStore),
+            new ActivityDesignTestBoundedDocumentStore(racingStore),
             new GroundworkActivityManagementProjectionWriter(
                 racingStore,
                 new ImmediateDistributedLockProvider(),
@@ -187,7 +187,7 @@ public sealed class GroundworkReusableActivityStoreTests
 
         var persisted = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(before.Id))!;
         Assert.Equal(before.Revision, persisted.Revision);
-        Assert.Equal(before.State.Contract, persisted.State.Contract);
+        AssertContractEqual(before.State.Contract, persisted.State.Contract);
         Assert.Equal(before.Revision, (await harness.Stores.FindDraftLayoutAsync(before.Id))!.Revision);
     }
 
@@ -233,6 +233,19 @@ public sealed class GroundworkReusableActivityStoreTests
     public async Task Publication_Layout_Edge_Lifecycle_And_Dependency_Reads_RoundTrip()
     {
         var harness = Harness.Create();
+        await harness.SaveAsync(new ActivityDefinition
+        {
+            Id = "definition-parent",
+            ActivityTypeKey = "Acme.Parent",
+            Category = "Samples"
+        });
+        await harness.SaveAsync(new ActivityDefinitionAuthoringState
+        {
+            Id = "authoring-parent",
+            DefinitionId = "definition-parent",
+            ContentAuthority = new(ActivityContentAuthorityKind.Design, "design"),
+            HeadVersionId = "version-parent"
+        });
         await harness.SaveAsync(Publication("publication-parent", "version-parent", "definition-parent", "1.0.0", 1));
         await harness.SaveAsync(Publication("publication-child", "version-child", "definition-child", "2.0.0", 0));
         await harness.SaveAsync(new ActivityDefinitionVersionLayout
@@ -393,7 +406,7 @@ public sealed class GroundworkReusableActivityStoreTests
             racingStore,
             new FakeClock(),
             new ImmediateDistributedLockProvider(),
-            new TestBoundedDocumentStore(racingStore),
+            new ActivityDesignTestBoundedDocumentStore(racingStore),
             new GroundworkActivityManagementProjectionWriter(
                 racingStore,
                 new ImmediateDistributedLockProvider(),
@@ -500,6 +513,14 @@ public sealed class GroundworkReusableActivityStoreTests
 
     private static ActivityContract Contract() => new("1", [], [], []);
 
+    private static void AssertContractEqual(ActivityContract expected, ActivityContract actual)
+    {
+        Assert.Equal(expected.ContractSchemaVersion, actual.ContractSchemaVersion);
+        Assert.Equal(expected.Inputs, actual.Inputs);
+        Assert.Equal(expected.Outputs, actual.Outputs);
+        Assert.Equal(expected.Outcomes, actual.Outcomes);
+    }
+
     private static ActivityProviderManifest Provider() => new("workflow", "1", Json("{}"));
 
     private static ActivityLayoutRecord LayoutRecord(string nodeId) => new(nodeId, Json("{}"));
@@ -531,7 +552,7 @@ public sealed class GroundworkReusableActivityStoreTests
                 documents,
                 new FakeClock(),
                 new ImmediateDistributedLockProvider(),
-                new TestBoundedDocumentStore(documents),
+                new ActivityDesignTestBoundedDocumentStore(documents),
                 new GroundworkActivityManagementProjectionWriter(
                     documents,
                     new ImmediateDistributedLockProvider(),
@@ -542,6 +563,12 @@ public sealed class GroundworkReusableActivityStoreTests
         {
             var (kind, collection) = entity switch
             {
+                ActivityDefinition => (
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionCollection),
+                ActivityDefinitionAuthoringState => (
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection),
                 ActivityDefinitionVersionPublication => (
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection),
@@ -612,7 +639,7 @@ public sealed class GroundworkReusableActivityStoreTests
         }
     }
 
-    private sealed class TestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
+    internal sealed class ActivityDesignTestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
     {
         public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         {

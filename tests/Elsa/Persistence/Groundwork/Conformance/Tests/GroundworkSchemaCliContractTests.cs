@@ -264,13 +264,13 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
 
         var admission = await source.InspectRuntimeAdmissionAsync(
             inspector,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.False(admission.IsReady);
         Assert.Equal(source.TargetFingerprint, admission.TargetFingerprint);
         Assert.Equal(EffectiveNames(source.ResolvedNames), EffectiveNames(admission.ResolvedNames));
         Assert.NotEmpty(admission.PendingOperations);
-        Assert.Contains(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-PENDING");
+        Assert.Single(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-PENDING");
         Assert.False(File.Exists(database));
     }
 
@@ -291,11 +291,11 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         await using var connection = new SqliteConnection($"Data Source={database}");
         var admission = await source.InspectRuntimeAdmissionAsync(
             new SqlitePhysicalSchemaExecutor(connection),
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.False(admission.IsReady);
         Assert.Equal(source.TargetFingerprint, admission.TargetFingerprint);
-        Assert.Contains(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-DRIFT");
+        Assert.Single(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-DRIFT");
         Assert.False(await TableExistsAsync(database, "host_orders"));
     }
 

@@ -112,7 +112,9 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
             executor,
             cancellationToken: cancellationToken);
         EnsureSchemaApplied(applied);
-        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken);
+        var admission = await source.InspectRuntimeAdmissionAsync(
+            executor,
+            cancellationToken: cancellationToken);
         if (!admission.IsReady)
             throw new InvalidOperationException("PostgreSQL physical provider driver did not admit its applied runtime target.");
         _physicalSource = source;

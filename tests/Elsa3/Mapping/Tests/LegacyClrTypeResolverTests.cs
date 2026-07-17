@@ -1,6 +1,8 @@
 using System.Text;
 using Elsa.Serialization.SystemText.Services;
 using Elsa3.Mapping;
+using Elsa3.Mapping.Mappings;
+using Elsa3.Models;
 using Xunit;
 
 namespace Elsa3.Mapping.Tests;
@@ -36,4 +38,45 @@ public sealed class LegacyClrTypeResolverTests
 
         Assert.Equal(typeof(object), LegacyClrTypeResolver.Resolve(registry, "No.Such.Type, No.Such.Assembly"));
     }
+
+    [Theory]
+    [InlineData("Int32", false)]
+    [InlineData("Int32?", true)]
+    [InlineData("String", true)]
+    public void MapInput_UsesResolvedClrNullSupport(string alias, bool expected)
+    {
+        var mapper = CreateArgumentMapper();
+
+        var mapped = mapper.MapInput(Argument(alias));
+
+        Assert.Equal(expected, mapped.IsNullable);
+    }
+
+    [Theory]
+    [InlineData("Int32", false)]
+    [InlineData("Int32?", true)]
+    [InlineData("String", true)]
+    public void MapOutput_UsesResolvedClrNullSupport(string alias, bool expected)
+    {
+        var mapper = CreateArgumentMapper();
+
+        var mapped = mapper.MapOutput(Argument(alias));
+
+        Assert.Equal(expected, mapped.IsNullable);
+    }
+
+    private static Elsa3ArgumentDefinitionToInputOutput CreateArgumentMapper()
+    {
+        var registry = new WellKnownTypeRegistry();
+        registry.RegisterType(typeof(int), "Int32");
+        registry.RegisterType(typeof(string), "String");
+        return new(registry);
+    }
+
+    private static Elsa3WorkflowArgumentDefinition Argument(string type) => new()
+    {
+        Name = "Value",
+        DisplayName = "Value",
+        Type = type
+    };
 }
