@@ -111,7 +111,7 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         {
             var admission = await source.InspectRuntimeAdmissionAsync(
                 new SqlitePhysicalSchemaExecutor(inspectionConnection),
-                cancellationToken);
+                cancellationToken: cancellationToken);
             if (!admission.IsReady)
                 throw new InvalidOperationException("SQLite physical provider driver did not admit its applied runtime target.");
         }

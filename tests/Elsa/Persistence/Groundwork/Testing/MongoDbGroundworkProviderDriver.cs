@@ -192,7 +192,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             executor,
             cancellationToken: cancellationToken);
         EnsureSchemaApplied(applied);
-        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken);
+        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken: cancellationToken);
         if (!admission.IsReady)
             throw new InvalidOperationException("MongoDB physical provider driver did not admit its applied runtime target.");
         _physicalSource = source;
