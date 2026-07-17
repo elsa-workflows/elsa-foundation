@@ -357,7 +357,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Create-once and revision behavior lacks race/restart evidence.",
       "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",

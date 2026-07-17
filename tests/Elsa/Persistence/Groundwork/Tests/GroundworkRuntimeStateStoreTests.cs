@@ -2,7 +2,11 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using System.Text.Json;
 using Xunit;
 
@@ -299,6 +303,42 @@ public sealed class GroundworkRuntimeStateStoreTests
     }
 
     [Fact]
+    public async Task IncidentState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IIncidentStateStore seedStore = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(Incident("wf-1", "inc-1", IncidentStatus.Open, "first"));
+
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(1, request.ExpectedVersion);
+                var (schemaVersion, content) = GroundworkTestSerialization.Serializer.Serialize(
+                    ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+                    Incident("wf-1", "inc-1", IncidentStatus.Blocking, "competing"));
+                var competingWrite = await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                    request.DocumentKind,
+                    request.Id,
+                    schemaVersion,
+                    content));
+                Assert.Equal(DocumentStoreWriteStatus.Saved, competingWrite.Status);
+            }
+        };
+        IIncidentStateStore store = new GroundworkIncidentStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Incident("wf-1", "inc-1", IncidentStatus.Blocking, "caller")).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "inc-1");
+        Assert.Equal(IncidentStatus.Blocking, winner!.Status);
+        Assert.Equal("competing", winner.Message);
+    }
+
+    [Fact]
     public async Task IncidentState_PhysicalIdentityCollision_FailsClosed()
     {
         await using var fixture = CreateStore("sqlite");
@@ -452,7 +492,11 @@ public sealed class GroundworkRuntimeStateStoreTests
             interruptedExecution: null,
             metadata: new Dictionary<string, string> { ["value"] = value });
 
-    private static IncidentState Incident(string workflowExecutionId, string incidentId, IncidentStatus status) => new(
+    private static IncidentState Incident(
+        string workflowExecutionId,
+        string incidentId,
+        IncidentStatus status,
+        string message = "boom") => new(
         incidentId,
         workflowExecutionId,
         activityExecutionId: null,
@@ -461,7 +505,7 @@ public sealed class GroundworkRuntimeStateStoreTests
         status,
         IncidentResolutionAction.None,
         failureType: "System.Exception",
-        message: "boom",
+        message: message,
         createdAt: DateTimeOffset.UnixEpoch,
         resolvedAt: null);
 
@@ -473,4 +517,63 @@ public sealed class GroundworkRuntimeStateStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
+    {
+        public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+        public DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            if (OnBeforeSave is { } hook)
+            {
+                OnBeforeSave = null;
+                await hook(request);
+            }
+
+            return await inner.SaveAsync(request, cancellationToken);
+        }
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.QueryAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.CountAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.FirstOrDefaultAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner is IBoundedDocumentStore boundedStore
+                ? boundedStore.AnyAsync(query, cancellationToken)
+                : throw new NotSupportedException();
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            inner.BeginAsync(scope, cancellationToken);
+    }
 }
