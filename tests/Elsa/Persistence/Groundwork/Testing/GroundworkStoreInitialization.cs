@@ -12,6 +12,8 @@ using Groundwork.Sqlite;
 using Groundwork.Sqlite.PhysicalStorage;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.Testing;
 
@@ -37,6 +39,7 @@ public static class GroundworkStoreInitialization
         ArgumentNullException.ThrowIfNull(providerNameNormalizer);
 
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkStorageComposition();
         await using var provider = services.BuildServiceProvider();
@@ -71,6 +74,7 @@ public static class GroundworkStoreInitialization
             throw new ArgumentException("At least one manifest source is required.", nameof(manifestSources));
 
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddGroundworkStorageComposition();
         foreach (var manifestSource in manifestSources)
         {

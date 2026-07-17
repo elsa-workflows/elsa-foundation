@@ -7,6 +7,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -99,6 +101,7 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         services.AddSingleton(new GroundworkStorageNamingPolicyOptions(
             "history-prefix-v1",
@@ -123,6 +126,7 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
     private static async Task<ServiceProvider> BuildProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();

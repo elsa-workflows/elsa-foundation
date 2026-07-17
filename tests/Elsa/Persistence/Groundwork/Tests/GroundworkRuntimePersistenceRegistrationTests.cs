@@ -18,6 +18,8 @@ using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -56,6 +58,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     public void AddGroundworkRuntimeStores_Registers_Logic_Bearing_Services_As_Scoped()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
         services.AddGroundworkRuntimeStores();
 
@@ -70,6 +73,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     public void Independent_Request_Scopes_Do_Not_Share_Runtime_Adapter_Instances()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         services.AddSingleton<IDocumentStore>(documentStore);
         services.AddSingleton<IBoundedDocumentStore>(documentStore);
@@ -92,6 +96,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     public void Default_Runtime_Composition_Keeps_InMemory_Store()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
@@ -107,6 +112,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     public void AddGroundworkRuntimeStores_Replaces_InMemory_Store()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
@@ -147,6 +153,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     public void AddGroundworkRuntimeStores_Registers_Default_Serializer_Without_Consuming_Foreign_Upcasters()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
@@ -183,6 +190,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddWorkflowRuntime();
@@ -212,6 +220,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
@@ -239,13 +248,14 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString, AutoApplySchemaOnStartup = false }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
         var exception = await Assert.ThrowsAsync<GroundworkRuntimeSchemaAdmissionException>(
             () => provider.InitializeGroundworkStoreAsync());
 
-        Assert.Contains(exception.Result.Diagnostics, diagnostic => diagnostic.Code == "ELSA-GW-SCHEMA-PENDING");
+        Assert.NotEmpty(exception.Result.PendingOperations);
         Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
         Assert.False(File.Exists(database.FilePath));
     }
@@ -256,6 +266,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         const string secret = "sqlite-admission-secret";
         var connectionString = $"Data Source=:memory:;Unsupported={secret}";
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
@@ -273,6 +284,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
@@ -290,6 +302,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     public void Sqlite_Provider_Registration_Is_Idempotent()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         var feature = new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=registration.db" };
 
         feature.ConfigureServices(services);
@@ -306,6 +319,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     public void Sqlite_Provider_Prepare_Metadata_Matches_By_Type_After_Earlier_Initializers()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<IShellInitializer, EarlierInitializer>();
 
         new SqliteGroundworkRuntimePersistenceShellFeature
@@ -355,6 +369,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     private static async Task<ServiceProvider> BuildComposedProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
         await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
