@@ -3,8 +3,8 @@ import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
-import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import { getActivityExecutionDescendants, getActivityExecutionInspection, getActivityExecutionLayout, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
+import type { ActivityCatalogItem, ActivityExecutionHierarchyPage, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionLayout, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -40,6 +40,7 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { observeReusableActivity } from "../reusableActivityObservability";
 
 const runHistoryPageSizes = [10, 25, 50, 100] as const;
 
@@ -1060,6 +1061,7 @@ export function WorkflowActivityExecutionDetails({
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
+      <ReusableBoundaryExecutionEvidence context={context} state={inspectionState} />
       <WorkflowActivityInputEvidence
         state={inspectionState}
         declarations={declaredInputs}
@@ -1089,6 +1091,138 @@ export function WorkflowActivityExecutionDetails({
         </details>
       </section>
     </>
+  );
+}
+
+function ReusableBoundaryExecutionEvidence({
+  context,
+  state
+}: {
+  context: StudioEndpointContext;
+  state: ActivityExecutionInspectionState;
+}) {
+  const boundary = state.inspection?.boundary;
+  const [evidence, setEvidence] = useState<{
+    status: "idle" | "loading" | "ready" | "failed";
+    descendants: ActivityExecutionHierarchyPage | null;
+    layout: ActivityExecutionLayout | null;
+  }>({ status: "idle", descendants: null, layout: null });
+
+  useEffect(() => {
+    const inspection = state.inspection;
+    if (!inspection?.boundary) {
+      setEvidence({ status: "idle", descendants: null, layout: null });
+      return;
+    }
+
+    let cancelled = false;
+    setEvidence({
+      status: "loading",
+      descendants: null,
+      layout: null
+    });
+    Promise.all([
+      getActivityExecutionDescendants(context, inspection.workflowExecutionId, inspection.activityExecutionId),
+      inspection.boundary.layoutAvailable
+        ? getActivityExecutionLayout(context, inspection.workflowExecutionId, inspection.activityExecutionId)
+        : Promise.resolve(null)
+    ]).then(
+      ([descendants, layout]) => {
+        if (!cancelled) {
+          setEvidence({
+            status: "ready",
+            descendants,
+            layout
+          });
+          observeReusableActivity({
+            event: "boundary-inspection",
+            surface: "run-workbench",
+            outcome: "ready",
+            layoutMode: layout
+              ? layout.nodes.some(node => node.hasPinnedGeometry) ? "pinned" : "automatic"
+              : "unavailable"
+          });
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setEvidence({
+            status: "failed",
+            descendants: null,
+            layout: null
+          });
+          observeReusableActivity({
+            event: "boundary-inspection",
+            surface: "run-workbench",
+            outcome: "failed",
+            layoutMode: "unavailable"
+          });
+        }
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [boundary, context, state.inspection]);
+
+  if (!boundary || state.status !== "ready") return null;
+  const aggregate = boundary.aggregate;
+  return (
+    <section className="wf-instance-section wf-boundary-evidence" aria-label="Reusable boundary evidence">
+      <h4>Boundary lifecycle</h4>
+      <dl className="wf-activity-detail-list">
+        <dt>Status</dt>
+        <dd>{[state.inspection?.status, state.inspection?.subStatus].filter(Boolean).join(" · ")}</dd>
+        <dt>Definition</dt>
+        <dd>{boundary.definitionId}</dd>
+        <dt>Exact version</dt>
+        <dd>{boundary.version} <small>{boundary.definitionVersionId}</small></dd>
+        <dt>Execution scope</dt>
+        <dd>{boundary.executionScopeId}</dd>
+      </dl>
+      <h4>Descendant aggregate</h4>
+      <dl className="wf-activity-summary-grid">
+        <ActivityMetadataValue label="Status" value={aggregate.status} copiedLabel="descendant status" onCopied={() => undefined} onCopyFailed={() => undefined} />
+        <ActivityMetadataValue label="Committed" value={String(boundary.committedDescendantCount)} copiedLabel="descendant count" onCopied={() => undefined} onCopyFailed={() => undefined} />
+        <ActivityMetadataValue label="Completed" value={String(aggregate.completed)} copiedLabel="completed descendant count" onCopied={() => undefined} onCopyFailed={() => undefined} />
+        <ActivityMetadataValue label="Faulted" value={String(aggregate.faulted)} copiedLabel="faulted descendant count" onCopied={() => undefined} onCopyFailed={() => undefined} />
+      </dl>
+      {evidence.status === "loading" ? <p className="wf-muted" role="status">Loading pinned boundary evidence…</p> : null}
+      {evidence.status === "failed" ? <p className="wf-muted" role="status">Authorized boundary structure is unavailable.</p> : null}
+      {evidence.status === "ready" ? (
+        <>
+          <div className="wf-boundary-layout">
+            <strong>Pinned historical layout</strong>
+            {evidence.layout ? (
+              <>
+                <small>{evidence.layout.selection} · {evidence.layout.sourceReferenceId}</small>
+                <ul>
+                  {evidence.layout.nodes.map(node => (
+                    <li key={node.executableNodeId}>
+                      <code>{node.executableNodeId}</code>
+                      <span>{node.hasPinnedGeometry ? `${node.x}, ${node.y}` : "Automatic position"}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : <small>No historical layout was captured for this boundary.</small>}
+          </div>
+          <div className="wf-boundary-descendants">
+            <strong>Committed descendants</strong>
+            {evidence.descendants?.items.length ? (
+              <ul>
+                {evidence.descendants.items.map(item => (
+                  <li key={item.activityExecutionId}>
+                    <span>{shortTypeName(item.activityType) ?? item.activityType}</span>
+                    <WorkflowStatusBadge status={item.status} subStatus={item.subStatus} />
+                  </li>
+                ))}
+              </ul>
+            ) : <small>No committed descendant rows are available.</small>}
+          </div>
+        </>
+      ) : null}
+    </section>
   );
 }
 

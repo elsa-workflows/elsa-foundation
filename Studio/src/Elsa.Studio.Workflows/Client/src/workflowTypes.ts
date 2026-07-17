@@ -127,6 +127,10 @@ export interface ActivityCatalogItem {
   ports?: unknown[];
   containerStructure?: Record<string, unknown> | null;
   authoringTemplate?: ActivityNode;
+  /** Transient reusable identity derived from catalog and recommendation data; never part of ActivityNode wire state. */
+  activityDefinitionId?: string;
+  activityDefinitionVersionId?: string;
+  activityDefinitionVersion?: string;
 }
 
 export type ActivityDescriptor = StudioActivityDescriptor;
@@ -667,7 +671,137 @@ export interface ActivityExecutionInspection {
   bookmarks: ActivityExecutionBookmarkSummary[];
   incidents: ActivityExecutionIncidentSummary[];
   valueSnapshots: ActivityExecutionInspectionValueSnapshot[];
+  attempt?: ActivityExecutionAttempt | null;
+  boundary?: ActivityExecutionBoundary | null;
   metadata: Record<string, string>;
+}
+
+export interface ActivityExecutionAttempt {
+  attemptNumber: number;
+  firstAttemptActivityExecutionId: string;
+  previousAttemptActivityExecutionId?: string | null;
+  nextAttemptActivityExecutionId?: string | null;
+  totalAttempts?: number | null;
+}
+
+export interface ActivityInvocationOriginSegment {
+  kind: string;
+  id: string;
+}
+
+export interface ActivityExecutionHierarchyAggregate {
+  status: string;
+  total: number;
+  scheduled: number;
+  running: number;
+  suspended: number;
+  completed: number;
+  faulted: number;
+  cancelled: number;
+  blockingIncidentCount: number;
+  retryCount: number;
+  lastExecutionSequence: number;
+}
+
+export interface ActivityExecutionBoundary {
+  kind: string;
+  definitionId: string;
+  definitionVersionId: string;
+  version: string;
+  templateHash: string;
+  invocationOrigin: ActivityInvocationOriginSegment[];
+  executionScopeId: string;
+  hasChildren: boolean;
+  directChildCount: number;
+  committedDescendantCount: number;
+  aggregate: ActivityExecutionHierarchyAggregate;
+  layoutAvailable: boolean;
+}
+
+export interface ActivityExecutionHierarchyRoot {
+  workflowExecutionId: string;
+  activityExecutionId: string;
+  executionScopeId: string;
+  definitionVersionId: string;
+  templateHash: string;
+}
+
+export interface ActivityExecutionHierarchyItem {
+  activityExecutionId: string;
+  workflowExecutionId: string;
+  executableNodeId: string;
+  authoredActivityId: string;
+  activityType: string;
+  activityTypeVersion: string;
+  status: string;
+  subStatus?: string | null;
+  executionSequence: number;
+  scheduledAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  parentActivityExecutionId?: string | null;
+  schedulingActivityExecutionId?: string | null;
+  relativeDepth: number;
+  branchId?: string | null;
+  iterationId?: string | null;
+  outcomeNames: string[];
+  bookmarkCount: number;
+  incidentCount: number;
+  blockingIncidentCount: number;
+  attempt?: ActivityExecutionAttempt | null;
+  boundary?: ActivityExecutionBoundary | null;
+  metadata: Record<string, string>;
+}
+
+export interface ActivityExecutionHierarchyPage {
+  root: ActivityExecutionHierarchyRoot;
+  committedThroughSequence: number;
+  effectiveLimit: number;
+  items: ActivityExecutionHierarchyItem[];
+  nextCursor?: string | null;
+}
+
+export interface ActivityExecutionLayoutNode {
+  templateNodeId: string;
+  authoredActivityId: string;
+  executableNodeId: string;
+  x: number;
+  y: number;
+  width?: number | null;
+  height?: number | null;
+  additionalProperties?: unknown;
+  activityType?: string | null;
+  activityTypeVersion?: string | null;
+  hasPinnedGeometry: boolean;
+}
+
+export interface ActivityExecutionLayoutEndpoint {
+  executableNodeId: string;
+  port?: string | null;
+}
+
+export interface ActivityExecutionLayoutConnection {
+  source: ActivityExecutionLayoutEndpoint;
+  target: ActivityExecutionLayoutEndpoint;
+  vertices?: Array<{ x: number; y: number }> | null;
+}
+
+export interface ActivityExecutionLayout {
+  workflowExecutionId: string;
+  activityExecutionId: string;
+  artifactId: string;
+  sourceReferenceId: string;
+  selection: string;
+  boundaryOrigin: ActivityInvocationOriginSegment[];
+  templateHash: string;
+  nodes: ActivityExecutionLayoutNode[];
+  connections: ActivityExecutionLayoutConnection[];
+  nestedBoundaries: Array<{
+    activityExecutionId: string;
+    executableNodeId: string;
+    templateHash: string;
+    layoutAvailable: boolean;
+  }>;
 }
 
 export interface ActivitySchedulingProvenance {

@@ -52,6 +52,7 @@ import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
 import { useDialogFocus } from "./useDialogFocus";
+import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 
 export function WorkflowEditor({
   context,
@@ -125,6 +126,8 @@ export function WorkflowEditor({
     details,
     setDetails,
     catalog,
+    paletteCatalog,
+    recommendedDefinitions,
     activityDescriptors,
     availabilityDiagnostics,
     expressionDescriptors,
@@ -157,18 +160,30 @@ export function WorkflowEditor({
     isFlowchartDesigner,
     canAddActivitiesToCanvas
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
+  const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
+  const inspectedReusableDefinitionId = inspectedCatalogItem?.activityDefinitionId ?? null;
+  const inspectedReusableVersion = useFullActivityDefinitionVersion(
+    context,
+    inspectedNode?.activityVersionId ?? null,
+    Boolean(inspectedReusableDefinitionId)
+  );
+  const inspectedRecommendationDefinitionId = inspectedReusableVersion.data?.definition.definitionId
+    ?? inspectedReusableDefinitionId;
+  const inspectedRecommendation = inspectedRecommendationDefinitionId
+    ? recommendedDefinitions.find(item => item.definitionId === inspectedRecommendationDefinitionId) ?? null
+    : null;
 
-  const paletteGroups = useMemo(() => groupActivityPalette(catalog), [catalog]);
+  const paletteGroups = useMemo(() => groupActivityPalette(paletteCatalog), [paletteCatalog]);
   const filteredPaletteGroups = useMemo(() => {
     const term = paletteSearch.trim().toLowerCase();
     if (!term) return paletteGroups;
-    const matches = catalog.filter(activity =>
+    const matches = paletteCatalog.filter(activity =>
       getActivityDisplay(activity).toLowerCase().includes(term) ||
       activity.activityTypeKey.toLowerCase().includes(term) ||
       (activity.category ?? "").toLowerCase().includes(term) ||
       (activity.description ?? "").toLowerCase().includes(term));
     return groupActivityPalette(matches);
-  }, [catalog, paletteSearch, paletteGroups]);
+  }, [paletteCatalog, paletteSearch, paletteGroups]);
   const busy = operation !== "idle";
   const canRunTest = !!draft?.state.rootActivity && !busy;
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
@@ -475,7 +490,6 @@ export function WorkflowEditor({
 
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
-  const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : undefined;
   const inspectedLabel = inspectedNode
     ? (nodes.find(node => node.id === inspectedNode.nodeId)?.data.label
       ?? (inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode.nodeId))
@@ -535,9 +549,20 @@ export function WorkflowEditor({
           selectedActivityType={inspectedNode ? (inspectedDescriptor?.typeName ?? catalogByVersion.get(inspectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}
           selectedDescriptor={inspectedDescriptor}
           selectedNodeAvailability={inspectedNodeAvailability}
+          selectedReusableDefinitionId={inspectedReusableDefinitionId}
+          selectedReusableSemanticVersion={inspectedCatalogItem?.activityDefinitionVersion}
+          selectedReusableVersion={inspectedReusableVersion.data}
+          selectedReusableVersionStatus={!inspectedReusableDefinitionId
+            ? "idle"
+            : inspectedReusableVersion.isPending
+              ? "loading"
+              : inspectedReusableVersion.isError
+                ? "failed"
+                : "ready"}
+          selectedRecommendedVersion={inspectedRecommendation}
           selectedSlots={inspectedSlots}
           inspectingScopeOwner={inspectedIsScopeOwner}
-          catalog={catalog}
+          catalog={paletteCatalog}
           catalogByVersion={catalogByVersion}
           selectedSupportsScopedVariables={inspectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
@@ -787,7 +812,7 @@ export function WorkflowEditor({
             {insideEmptySlot ? (
               <SlotEmptyState
                 slotLabel={scope?.slot.label ?? "this slot"}
-                catalog={catalog}
+                catalog={paletteCatalog}
                 onPickActivity={pickActivityForEmptySlot}
                 onBrowseAll={openEmptyConnectMenu}
               />
@@ -800,7 +825,7 @@ export function WorkflowEditor({
               <ConnectMenu
                 clientX={connectMenu.clientX}
                 clientY={connectMenu.clientY}
-                activities={catalog}
+                activities={paletteCatalog}
                 onPick={onConnectMenuPick}
                 onClose={() => setConnectMenu(null)}
               />

@@ -846,7 +846,7 @@ describe("workflows module", () => {
       if (url.includes("/activities")) return response({ activities: [
         activity({
           activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.NativeWriteLine",
           category: "Primitives",
           displayName: "Write Line",
           description: "Writes a line to the console."
@@ -889,7 +889,7 @@ describe("workflows module", () => {
 
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-root");
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-v1");
-    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.NativeWriteLine");
 
     await unmount();
   });
@@ -2190,7 +2190,8 @@ describe("workflows module", () => {
     await waitForText(container, "Add activity");
     await click(buttonByText(container, "Add activity"));
     await click(optionByText(container, "Write Line"));
-    await click(buttonByText(container, "Write Line"));
+    await click(Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
+      .find(button => button.textContent?.includes("Write Line")) ?? null);
     await click(buttonByText(container, "Run"));
     await waitForText(container, "Provide the workflow inputs for this run.");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
@@ -2953,10 +2954,12 @@ async function renderRegisteredRoute(
     });
   }
   const fetchWithoutCapabilities = globalThis.fetch;
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
-    (typeof input === "object" && input && "url" in input ? String(input.url) : String(input)).includes("/capabilities")
-      ? response(capabilityDocument())
-      : fetchWithoutCapabilities(input, init)));
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "object" && input && "url" in input ? String(input.url) : String(input);
+    if (url.includes("/capabilities")) return response(capabilityDocument());
+    if (url.includes("/design/activities/definitions/picker")) return response(recommendedActivityPicker());
+    return fetchWithoutCapabilities(input, init);
+  }));
   window.history.replaceState({}, "", path);
   const api = testApi();
   configureApi?.(api);
@@ -3081,6 +3084,7 @@ function capabilityDocument() {
         contractVersion: "1",
         links: [
           { rel: "activity-catalog", href: "design/activities/catalog" },
+          { rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" },
           { rel: "activity-availability", href: "design/activities/availability/settings" },
           { rel: "activity-availability-diagnostics", href: "design/activities/availability/diagnostics" }
         ]
@@ -3465,6 +3469,37 @@ function activity(overrides: Partial<Record<string, unknown>> = {}) {
     outputs: [],
     designFacets: [],
     ...overrides
+  };
+}
+
+function recommendedActivityPicker() {
+  const candidates = [
+    ["activity-1", "Elsa.Activities.Activity"],
+    ["write-line-v1", "Elsa.Activities.Primitives.Activities.WriteLine"],
+    ["write-line-v1", "Elsa.Activities.WriteLine"],
+    ["write-lines-v1", "Elsa.Activities.Primitives.Activities.WriteLines"],
+    ["send-email-v1", "Elsa.Activities.SendEmail"],
+    ["flowchart-v1", "Elsa.Activities.Flowchart"],
+    ["flowchart-v1", "Elsa.Activities.Flowchart.Activities.Flowchart"],
+    ["sequence-v1", "Elsa.Activities.Sequence"],
+    ["sequence-v1", "Elsa.Activities.Sequence.Activities.Sequence"],
+    ["activity-flowchart-v1", "Elsa.Activities.Flowchart.Activities.Flowchart"],
+    ["run-javascript-v1", runJavaScriptTypeKey]
+  ] as const;
+  return {
+    items: candidates.map(([versionId, activityTypeKey], index) => ({
+      definitionId: `test-definition-${index}`,
+      activityTypeKey,
+      tenantId: null,
+      category: "Tests",
+      displayName: activityTypeKey.split(".").at(-1),
+      description: null,
+      versionId,
+      version: "1.0.0",
+      isAvailable: true,
+      unavailableReason: null
+    })),
+    nextOffset: null
   };
 }
 

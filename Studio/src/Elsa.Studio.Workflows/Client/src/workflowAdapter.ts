@@ -11,6 +11,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   activityTypeKey?: string;
   category?: string;
   executionType?: string;
+  activityDefinitionVersion?: string;
   icon?: WorkflowNodeIcon;
   childSlots: ChildSlot[];
   acceptsInbound: boolean;
@@ -23,7 +24,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   onEnterSlot?(slot: ChildSlot): void;
 }
 
-export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger";
+export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger" | "reusable";
 
 export interface WorkflowPortDescriptor {
   name: string;
@@ -800,6 +801,7 @@ function createWorkflowNode(
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
+      activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
       icon: resolveActivityIcon(catalogItem),
       childSlots: getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
@@ -811,6 +813,7 @@ function createWorkflowNode(
 
 export function resolveActivityIcon(activity: ActivityCatalogItem | undefined): WorkflowNodeIcon {
   if (!activity) return "activity";
+  if (activity.activityDefinitionId) return "reusable";
 
   const configuredIcon = normalizeWorkflowNodeIcon(activity.icon);
   if (configuredIcon) return configuredIcon;
@@ -832,7 +835,7 @@ function normalizeWorkflowNodeIcon(icon: string | null | undefined): WorkflowNod
   if (!icon) return null;
 
   const normalized = icon.trim().toLowerCase();
-  if (["activity", "flowchart", "sequence", "terminal", "runtime", "trigger"].includes(normalized)) {
+  if (["activity", "flowchart", "sequence", "terminal", "runtime", "trigger", "reusable"].includes(normalized)) {
     return normalized as WorkflowNodeIcon;
   }
 

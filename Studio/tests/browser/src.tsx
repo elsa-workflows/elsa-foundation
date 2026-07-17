@@ -1,4 +1,4 @@
-import React, { lazy, useState } from "react";
+import React, { lazy, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
@@ -8,6 +8,15 @@ import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src
 import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import { createEndpointContext, type StudioActivityDescriptor, type StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/Elsa.Studio.Workflows/Client/src/api/activityDesign";
+import { runExecutable } from "../../src/Elsa.Studio.Workflows/Client/src/api/runtime";
+import { getDraft, updateDraft } from "../../src/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
+import { createActivityNode, getActivityDisplay } from "../../src/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
+import { ActivityPalettePanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
+import { InspectorPanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
+import { WorkflowActivityExecutionDetails } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
 import "./fixture.css";
@@ -18,7 +27,9 @@ const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
 const activityDefinitionsFixture = searchParams.get("mode") === "activity-definitions" || window.location.pathname.startsWith("/workflows/activity-definitions");
+const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary";
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const endpointContext = createEndpointContext(window.location.origin);
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
   window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
@@ -189,11 +200,166 @@ function RunDetailFixture() {
   );
 }
 
+function ReusableBoundaryFixture() {
+  const [palette, setPalette] = useState<ActivityCatalogItem[]>([]);
+  const [recommendations, setRecommendations] = useState<Awaited<ReturnType<typeof listRecommendedActivityDefinitions>>>([]);
+  const [selected, setSelected] = useState<ActivityNode | null>(null);
+  const [runActivity, setRunActivity] = useState<ActivityExecutionStateSummary | null>(null);
+  const [persistenceStatus, setPersistenceStatus] = useState("");
+  const [error, setError] = useState("");
+  const selectedCatalogItem = palette.find(item => item.activityVersionId === selected?.activityVersionId) ?? null;
+  const selectedRecommendation = recommendations.find(item => item.definitionId === selectedCatalogItem?.activityDefinitionId) ?? null;
+  const selectedVersion = useFullActivityDefinitionVersion(
+    endpointContext,
+    selected?.activityVersionId ?? null,
+    Boolean(selectedCatalogItem?.activityDefinitionId)
+  );
+  const groups = useMemo(() => palette.length > 0 ? [{
+    category: palette[0].category,
+    activities: palette
+  }] : [], [palette]);
+
+  useEffect(() => {
+    Promise.all([listActivities(endpointContext), listRecommendedActivityDefinitions(endpointContext)]).then(
+      ([catalog, nextRecommendations]) => {
+        setRecommendations(nextRecommendations);
+        const decoratedCatalog = decorateReusableCatalog(catalog.activities ?? [], nextRecommendations);
+        setPalette(projectRecommendedPalette(decoratedCatalog, nextRecommendations));
+      },
+      () => setError("The reusable activity picker is unavailable.")
+    );
+  }, []);
+
+  const place = async (activity: ActivityCatalogItem) => {
+    setError("");
+    setPersistenceStatus("Saving exact draft…");
+    try {
+      await updateDraft(endpointContext, {
+        id: "workflow-draft-1",
+        definitionId: "workflow-definition-1",
+        state: { rootActivity: createActivityNode(activity, "invoice-boundary") },
+        layout: [],
+        validationErrors: []
+      });
+      const reloaded = await getDraft(endpointContext, "workflow-draft-1");
+      setSelected(reloaded.state.rootActivity ?? null);
+      setRunActivity(null);
+      setPersistenceStatus("Draft saved and reloaded");
+    } catch {
+      setPersistenceStatus("");
+      setError("The exact workflow draft could not be persisted.");
+    }
+  };
+
+  const dispatch = async () => {
+    setError("");
+    try {
+      const response = await runExecutable(endpointContext, "workflow-artifact-1", {}, "workflow-source-1");
+      const workflowExecutionId = response.workflowExecutionId ?? response.runId ?? response.executionId;
+      if (!workflowExecutionId) throw new Error("No workflow execution identity was returned.");
+      setRunActivity({
+        activityExecutionId: "boundary-execution-1",
+        workflowExecutionId,
+        executableNodeId: "invoice-boundary",
+        authoredActivityId: "invoice-boundary",
+        activityType: selectedCatalogItem?.activityTypeKey ?? "",
+        activityTypeVersion: selectedCatalogItem?.version ?? "",
+        status: "Completed",
+        subStatus: null,
+        scheduledAt: "2026-07-17T10:00:00Z",
+        startedAt: "2026-07-17T10:00:01Z",
+        completedAt: "2026-07-17T10:00:02Z",
+        bookmarkIds: [],
+        incidentIds: [],
+        faultCount: 0,
+        aggregateFaultCount: 0,
+        metadata: {}
+      });
+    } catch {
+      setError("The workflow run could not be started.");
+    }
+  };
+
+  return (
+    <main className="wf-page browser-reusable-journey">
+      <header className="wf-page-header">
+        <div><span className="wf-kicker">Workflow authoring</span><h1>Reusable activity journey</h1></div>
+      </header>
+      {error ? <p role="alert">{error}</p> : null}
+      {persistenceStatus ? <p role="status">{persistenceStatus}</p> : null}
+      <div className="browser-reusable-grid">
+        <aside className="wf-palette" aria-label="Activity palette">
+          <ActivityPalettePanel
+            paletteSearch=""
+            onSearchChange={() => undefined}
+            groups={groups}
+            expandedCategories={new Set(groups.map(group => group.category))}
+            onToggleCategory={() => undefined}
+            onActivityClick={place}
+            onActivityDragStart={() => undefined}
+            onActivityDragEnd={() => undefined}
+            onActivityPointerDown={() => undefined}
+          />
+        </aside>
+        <section className="wf-instance-canvas-shell" aria-label="Workflow canvas">
+          <h2>Workflow canvas</h2>
+          {selected ? (
+            <button type="button" className="wf-node" data-icon="reusable" aria-label={`${getActivityDisplay(palette[0])} exact version ${selectedCatalogItem?.activityDefinitionVersion}`}>
+              <strong>{getActivityDisplay(palette[0])}</strong>
+              <small className="wf-node-version">v{selectedCatalogItem?.activityDefinitionVersion}</small>
+            </button>
+          ) : <p>Select the recommended reusable activity.</p>}
+          <button type="button" onClick={dispatch} disabled={!selected}>Dispatch workflow</button>
+          {runActivity ? <p role="status">One Run · {runActivity.workflowExecutionId}</p> : null}
+        </section>
+        <aside className="wf-instance-inspector" aria-label={runActivity ? "Run details" : "Activity inspector"}>
+          {runActivity ? (
+            <WorkflowActivityExecutionDetails
+              context={endpointContext}
+              activity={runActivity}
+              activityCatalog={palette}
+            />
+          ) : (
+            <InspectorPanel
+              context={endpointContext}
+              selectedNode={selected}
+              selectedNodeLabel={selected ? getActivityDisplay(palette[0]) : ""}
+              selectedActivityType={selected ? palette[0].activityTypeKey : ""}
+              selectedDescriptor={null}
+              selectedNodeAvailability={null}
+              selectedReusableDefinitionId={selectedCatalogItem?.activityDefinitionId}
+              selectedReusableSemanticVersion={selectedCatalogItem?.activityDefinitionVersion}
+              selectedReusableVersion={selectedVersion.data ?? null}
+              selectedReusableVersionStatus={!selected ? "idle" : selectedVersion.isPending ? "loading" : selectedVersion.isError ? "failed" : "ready"}
+              selectedRecommendedVersion={selectedRecommendation}
+              selectedSlots={[]}
+              catalog={palette}
+              selectedSupportsScopedVariables={false}
+              propertyEditors={[]}
+              expressionEditors={[]}
+              expressionDescriptors={[]}
+              expressionDescriptorStatus="ready"
+              descriptorStatus="ready"
+              onRetryExpressionDescriptors={() => undefined}
+              scopedVariableAnalysis={{ visibleVariables: [], shadowingWarnings: [], status: "unavailable" }}
+              onSelectedActivityChange={setSelected}
+              onEnterSlot={() => undefined}
+              onReplaceSlotActivity={() => undefined}
+            />
+          )}
+        </aside>
+      </div>
+    </main>
+  );
+}
+
 const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
   activityDefinitionsFixture
-    ? <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={createEndpointContext(window.location.origin)} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} /></QueryClientProvider>
-    : runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
+    ? <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} /></QueryClientProvider>
+    : reusableBoundaryFixture
+      ? <QueryClientProvider client={queryClient}><ReusableBoundaryFixture /></QueryClientProvider>
+      : runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
 );

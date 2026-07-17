@@ -158,6 +158,11 @@ export function ActivityPalettePanel({
                         <strong>{displayName}</strong>
                         {description ? <small id={descriptionId}>{description}</small> : null}
                       </span>
+                      {activity.activityDefinitionVersion ? (
+                        <span className="wf-palette-version" aria-label={`Exact version ${activity.activityDefinitionVersion}`}>
+                          v{activity.activityDefinitionVersion}
+                        </span>
+                      ) : null}
                       <GripVertical className="wf-palette-activity-grip" size={14} aria-hidden="true" />
                     </button>
                   );

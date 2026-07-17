@@ -94,6 +94,34 @@ body {
   padding-inline: 18px;
 }
 
+.browser-reusable-journey {
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.browser-reusable-grid {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  grid-template-columns: minmax(220px, 280px) minmax(240px, 1fr) minmax(260px, 340px);
+}
+
+.browser-reusable-grid > * {
+  min-width: 0;
+}
+
+.browser-reusable-grid .wf-instance-canvas-shell,
+.browser-reusable-grid .wf-instance-inspector {
+  grid-column: auto;
+  overflow: visible;
+}
+
+@media (max-width: 800px) {
+  .browser-reusable-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .browser-run-content {
   display: flex;
   min-height: 0;

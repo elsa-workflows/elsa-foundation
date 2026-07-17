@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getActivityDefinition, getActivityDefinitionDraftSummary, getActivityDefinitionVersionSummary, listActivityDefinitionDrafts, listActivityDefinitions, listActivityDefinitionVersions } from "../api/activityDesign";
+import { getActivityDefinition, getActivityDefinitionDraftSummary, getActivityDefinitionVersionSummary, listActivityDefinitionDrafts, listActivityDefinitions, listActivityDefinitionVersions, listRecommendedActivityDefinitions } from "../api/activityDesign";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
 afterEach(clearApiCapabilityCache);
@@ -40,6 +40,40 @@ describe("Activity Definition management client", () => {
     await expect(listActivityDefinitions(context, { limit: 25 })).rejects.toMatchObject({ name: "ApiCapabilityUnavailableError", relation: "activity-definitions" });
     expect(getJson).toHaveBeenCalledTimes(1);
   });
+
+  it("reads only the authoritative recommended version for each definition without sorting version strings", async () => {
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/picker?offset=0&limit=100") return {
+        items: [
+          {
+            definitionId: "definition/1",
+            activityTypeKey: "Contoso.Invoice",
+            tenantId: null,
+            category: "Finance",
+            displayName: "Invoice",
+            description: "Process an invoice.",
+            versionId: "version/2",
+            version: "2.0.0",
+            isAvailable: true,
+            unavailableReason: null
+          }
+        ],
+        nextOffset: null
+      };
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const context = { baseUrl: "test://recommended-activity-client", http: { getJson } } as unknown as StudioEndpointContext;
+
+    const result = await listRecommendedActivityDefinitions(context);
+
+    expect(result).toEqual([expect.objectContaining({
+      definitionId: "definition/1",
+      versionId: "version/2",
+      version: "2.0.0"
+    })]);
+    expect(getJson).toHaveBeenCalledTimes(2);
+  });
 });
 
 function capabilities() {
@@ -49,7 +83,8 @@ function capabilities() {
     { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
-    { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
+    { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
+    { rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" }
   ] }] };
 }
 
