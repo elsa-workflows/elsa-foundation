@@ -723,6 +723,8 @@ public class GroundworkStorageCompositionTests
             typeof(IRoleStore),
             typeof(IApplicationStore),
             typeof(ICredentialStore),
+            typeof(IClaimMappingStore),
+            typeof(IProviderConfigurationStore),
             typeof(IExternalIdentityStore),
             typeof(ITenantMembershipStore)
         ],

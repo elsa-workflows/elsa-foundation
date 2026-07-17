@@ -78,6 +78,8 @@ public interface IProviderConfigurationStore
 
     ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
 
+    ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default);
+
     async ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, bool allowGlobalFallback = false, CancellationToken cancellationToken = default)
     {
         var tenantConfiguration = await FindForTenantAsync(tenantId, provider, cancellationToken);

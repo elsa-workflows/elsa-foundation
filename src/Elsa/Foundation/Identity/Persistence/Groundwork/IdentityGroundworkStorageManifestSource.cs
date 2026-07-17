@@ -28,6 +28,8 @@ public sealed class IdentityGroundworkStorageManifestSource : IGroundworkStorage
                 typeof(IRoleStore),
                 typeof(IApplicationStore),
                 typeof(ICredentialStore),
+                typeof(IClaimMappingStore),
+                typeof(IProviderConfigurationStore),
                 typeof(IExternalIdentityStore),
                 typeof(ITenantMembershipStore)
             ],
@@ -36,6 +38,8 @@ public sealed class IdentityGroundworkStorageManifestSource : IGroundworkStorage
                 AtomicRoute(IdentityStorageManifest.IdentityRoleDocumentKind, "identity-role-authority"),
                 AtomicRoute(IdentityStorageManifest.IdentityApplicationDocumentKind, "identity-application"),
                 AtomicRoute(IdentityStorageManifest.IdentityCredentialDocumentKind, "identity-credential"),
+                AtomicRoute(IdentityStorageManifest.IdentityClaimMappingDocumentKind, "identity-claim-mapping"),
+                AtomicRoute(IdentityStorageManifest.IdentityProviderConfigurationDocumentKind, "identity-provider-configuration"),
                 AtomicRoute(IdentityStorageManifest.UserClaimDocumentKind, "identity-user-claim"),
                 AtomicRoute(IdentityStorageManifest.RoleClaimDocumentKind, "identity-role-claim"),
                 AtomicRoute(IdentityStorageManifest.ExternalLoginDocumentKind, "identity-external-login"),

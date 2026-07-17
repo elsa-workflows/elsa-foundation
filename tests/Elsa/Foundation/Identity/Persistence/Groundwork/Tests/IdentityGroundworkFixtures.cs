@@ -1,4 +1,6 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
@@ -54,6 +56,35 @@ internal static class IdentityGroundworkFixtures
         Status: CredentialStatus.Active,
         ExpiresAt: DateTimeOffset.UnixEpoch.AddDays(90));
 
+    public static ClaimMappingRule ClaimMappingRule() => new(
+        Id: "claim-map-1",
+        TenantId: "tenant-1",
+        Provider: "google",
+        MatchClaimType: "groups",
+        MatchValue: "admins",
+        GrantRoles: new HashSet<string> { "role-1" },
+        GrantPermissions: new HashSet<string> { "secrets:read" },
+        Order: 10,
+        StopOnMatch: true);
+
+    public static ProviderConfigurationRecord TenantProviderConfiguration() => new(
+        Provider: "google",
+        TenantId: "tenant-1",
+        Kind: "external-oidc",
+        Enabled: true,
+        IsDefault: true,
+        Capabilities: ProviderCapabilities.ExternalOidcDefault,
+        Settings: new Dictionary<string, string> { ["authority"] = "https://issuer.example" });
+
+    public static ProviderConfigurationRecord GlobalProviderConfiguration() => new(
+        Provider: "google",
+        TenantId: null,
+        Kind: "external-oidc",
+        Enabled: true,
+        IsDefault: false,
+        Capabilities: ProviderCapabilities.ExternalOidcDefault,
+        Settings: new Dictionary<string, string> { ["authority"] = "https://global-issuer.example" });
+
     public static ExternalIdentityRecord ExternalIdentity() => new(
         TenantId: "tenant-1",
         Provider: "google",
@@ -83,6 +114,16 @@ internal static class IdentityGroundworkFixtures
 
     public static GroundworkCredentialStore CredentialStore(IDocumentStore store, string scope = "tenant-1") =>
         new(store, Accessor(scope));
+
+    public static GroundworkClaimMappingStore ClaimMappingStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static GroundworkProviderConfigurationStore ProviderConfigurationStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static GroundworkProviderConfigurationStore GlobalProviderConfigurationStore(IDocumentStore store) =>
+        new(store, new FixedAccessContextAccessor(PersistenceAccessContext.PrivilegedGlobal(
+            new PersistenceAccessPurpose("seed-global-provider-configuration"))));
 
     public static GroundworkExternalIdentityStore ExternalIdentityStore(IDocumentStore store, string scope = "tenant-1") =>
         new(store, Accessor(scope));

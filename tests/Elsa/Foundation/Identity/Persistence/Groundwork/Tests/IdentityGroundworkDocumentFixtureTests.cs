@@ -27,6 +27,8 @@ public sealed class IdentityGroundworkDocumentFixtureTests
         IdentityStorageManifest.IdentityRoleDocumentKind,
         IdentityStorageManifest.IdentityApplicationDocumentKind,
         IdentityStorageManifest.IdentityCredentialDocumentKind,
+        IdentityStorageManifest.IdentityClaimMappingDocumentKind,
+        IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
         IdentityStorageManifest.ExternalLoginDocumentKind,
         IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
     };
@@ -96,6 +98,12 @@ public sealed class IdentityGroundworkDocumentFixtureTests
             case var _ when kind == IdentityStorageManifest.IdentityCredentialDocumentKind:
                 await IdentityGroundworkFixtures.CredentialStore(docStore).SaveAsync(IdentityGroundworkFixtures.Credential());
                 break;
+            case var _ when kind == IdentityStorageManifest.IdentityClaimMappingDocumentKind:
+                await IdentityGroundworkFixtures.ClaimMappingStore(docStore).SaveAsync(IdentityGroundworkFixtures.ClaimMappingRule());
+                break;
+            case var _ when kind == IdentityStorageManifest.IdentityProviderConfigurationDocumentKind:
+                await IdentityGroundworkFixtures.ProviderConfigurationStore(docStore).SaveAsync(IdentityGroundworkFixtures.TenantProviderConfiguration());
+                break;
             case var _ when kind == IdentityStorageManifest.ExternalLoginDocumentKind:
                 await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
                 await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).SaveAsync(IdentityGroundworkFixtures.ExternalIdentity());
@@ -119,6 +127,10 @@ public sealed class IdentityGroundworkDocumentFixtureTests
             return (await IdentityGroundworkFixtures.ApplicationStore(docStore).FindAsync("tenant-1", "app-1"))?.ClientId;
         if (kind == IdentityStorageManifest.IdentityCredentialDocumentKind)
             return (await IdentityGroundworkFixtures.CredentialStore(docStore).FindAsync("tenant-1", "credential-1"))?.SubjectId;
+        if (kind == IdentityStorageManifest.IdentityClaimMappingDocumentKind)
+            return (await IdentityGroundworkFixtures.ClaimMappingStore(docStore).ListForProviderAsync("tenant-1", "google")).Single().MatchClaimType;
+        if (kind == IdentityStorageManifest.IdentityProviderConfigurationDocumentKind)
+            return (await IdentityGroundworkFixtures.ProviderConfigurationStore(docStore).FindForTenantAsync("tenant-1", "google"))?.Kind;
         if (kind == IdentityStorageManifest.ExternalLoginDocumentKind)
             return (await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).FindBySubjectAsync("tenant-1", "google", "sub-123"))?.UserId;
         if (kind == IdentityStorageManifest.IdentityTenantMembershipDocumentKind)
@@ -132,6 +144,8 @@ public sealed class IdentityGroundworkDocumentFixtureTests
         if (kind == IdentityStorageManifest.IdentityRoleDocumentKind) return "Administrators";
         if (kind == IdentityStorageManifest.IdentityApplicationDocumentKind) return "client-1";
         if (kind == IdentityStorageManifest.IdentityCredentialDocumentKind) return "app-1";
+        if (kind == IdentityStorageManifest.IdentityClaimMappingDocumentKind) return "groups";
+        if (kind == IdentityStorageManifest.IdentityProviderConfigurationDocumentKind) return "external-oidc";
         if (kind == IdentityStorageManifest.ExternalLoginDocumentKind) return "user-1";
         if (kind == IdentityStorageManifest.IdentityTenantMembershipDocumentKind) return "Active";
         throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown identity document kind.");

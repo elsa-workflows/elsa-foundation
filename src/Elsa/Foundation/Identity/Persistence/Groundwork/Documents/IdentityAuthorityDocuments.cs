@@ -1,3 +1,4 @@
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 
 using System.Text.Json.Serialization;
@@ -41,6 +42,18 @@ public sealed record IdentityRoleDocument(
 public sealed record IdentityApplicationDocument(string TenantId, string ApplicationId, ApplicationRecord Application);
 
 public sealed record IdentityCredentialDocument(string TenantId, string CredentialId, CredentialRecord Credential);
+
+public sealed record IdentityClaimMappingDocument(
+    string TenantId,
+    string Provider,
+    string RuleId,
+    string ProviderLookupKey,
+    ClaimMappingRule Rule);
+
+public sealed record IdentityProviderConfigurationDocument(
+    string? TenantId,
+    string Provider,
+    ProviderConfigurationRecord Configuration);
 
 public sealed record IdentityUserClaimDocument(
     string TenantId,

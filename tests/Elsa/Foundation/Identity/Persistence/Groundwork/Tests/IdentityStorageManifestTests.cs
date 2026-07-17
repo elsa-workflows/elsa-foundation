@@ -17,6 +17,8 @@ public sealed class IdentityStorageManifestTests
         "identityRole",
         "identityApplication",
         "identityCredential",
+        "identityClaimMapping",
+        "identityProviderConfiguration",
         "identityUserClaim",
         "identityRoleClaim",
         "identityExternalLogin",
@@ -41,13 +43,14 @@ public sealed class IdentityStorageManifestTests
         "list-user-roles",
         "list-role-users",
         "list-user-logins",
+        "list-claim-mappings-by-provider",
         "list-expired-mutation-receipts"
     ];
 
     [Fact]
     public void Manifest_declares_the_exact_identity_authority_units()
     {
-        Assert.Equal("1.0.5", IdentityStorageManifest.SchemaVersion);
+        Assert.Equal("1.0.6", IdentityStorageManifest.SchemaVersion);
         var actual = IdentityStorageManifest.Create()
             .StorageUnits
             .Select(unit => unit.Identity.Value)
@@ -101,6 +104,8 @@ public sealed class IdentityStorageManifestTests
             IdentityStorageManifest.IdentityRoleDocumentKind,
             IdentityStorageManifest.IdentityApplicationDocumentKind,
             IdentityStorageManifest.IdentityCredentialDocumentKind,
+            IdentityStorageManifest.IdentityClaimMappingDocumentKind,
+            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
             IdentityStorageManifest.UserClaimDocumentKind,
             IdentityStorageManifest.RoleClaimDocumentKind,
             IdentityStorageManifest.ExternalLoginDocumentKind,
@@ -141,6 +146,7 @@ public sealed class IdentityStorageManifestTests
         {
             IdentityStorageManifest.IdentityApplicationDocumentKind,
             IdentityStorageManifest.IdentityCredentialDocumentKind,
+            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
             IdentityStorageManifest.UserTokenDocumentKind,
             IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
             IdentityStorageManifest.UserNameReservationDocumentKind,

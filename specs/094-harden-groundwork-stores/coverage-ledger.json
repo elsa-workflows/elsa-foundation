@@ -1105,6 +1105,7 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-6-iam-secrets",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
       ]
     },
@@ -1203,7 +1204,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "missing",
+      "status": "planned",
       "initialGap": "No Groundwork implementation exists.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "accessPolicy": "ordinary",
@@ -1276,6 +1277,7 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-6-iam-secrets",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs"
       ]
@@ -1288,7 +1290,7 @@
       "scope": "explicit-global",
       "scopeReason": "Host-wide authentication provider fallback is intentionally shared across tenant scopes.",
       "authority": "#645",
-      "status": "missing",
+      "status": "planned",
       "initialGap": "No Groundwork implementation exists and the privileged global path is not yet explicit.",
       "performanceWorkload": "not-hot-path",
       "accessPolicy": "ordinary-read-privileged-write",
@@ -1321,6 +1323,7 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-6-iam-secrets",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs"
       ]
