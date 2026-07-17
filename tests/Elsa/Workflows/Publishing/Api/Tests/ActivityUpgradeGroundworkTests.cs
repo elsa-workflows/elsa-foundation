@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
@@ -145,6 +146,8 @@ public sealed class ActivityUpgradeGroundworkTests
                 new EmptyWorkflowVersionStore(),
                 new EmptyWorkflowLayoutStore(),
                 new LeafStructureService(),
+                new ActivityProviderRegistry([new TestProvider()]),
+                new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()),
                 [new TestManifestRewriter()],
                 new Ids());
             return new(documents, workflowJson, payloads, versions, projection, subject, plan);
@@ -272,6 +275,19 @@ public sealed class ActivityUpgradeGroundworkTests
         public string ProviderKey => "test.provider";
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
         public ValueTask<ActivityProviderManifest> RewriteReferencesAsync(ActivityProviderManifest manifest, IReadOnlyList<ActivityUpgradeOccurrenceReplacement> replacements, CancellationToken cancellationToken = default) => ValueTask.FromResult(manifest);
+    }
+    private sealed class TestProvider : IActivityProvider
+    {
+        public string ProviderKey => "test.provider";
+        public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
+        public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new("Test", [new("1", true, new HashSet<string> { "1" })], new([]));
+        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default) => ValueTask.FromResult(new ActivityContractProposal([], []));
+        public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, ActivityContract contract, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyList<ActivityDiagnostic>>([]);
+        public ValueTask<ActivityManifestMigration> MigrateAsync(ActivityManifestMigrationRequest request, CancellationToken cancellationToken = default) => ValueTask.FromResult(new ActivityManifestMigration(request.Source, []));
+    }
+    private sealed class EmptyCapabilityCatalog : IActivityContractCapabilityCatalog
+    {
+        public IReadOnlyCollection<ActivityContractTypeCapability> Types => [];
     }
     private sealed class TestDependencyDiscoverer : IActivityTemplateDependencyDiscoverer
     {

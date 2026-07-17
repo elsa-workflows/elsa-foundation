@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -39,6 +40,7 @@ public sealed class GroundworkReusableActivityStores(
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
     IReplaceActivityDraftCommand,
+    IApplyActivityContractProposalCommand,
     IDiscardActivityDraftCommand,
     IStoreActivityDraftValidationCommand,
     IChangeActivityVersionLifecycleCommand,
@@ -398,6 +400,42 @@ public sealed class GroundworkReusableActivityStores(
             ],
             cancellationToken);
 
+        return draft.Entity;
+    }
+
+    public async Task<ActivityDefinitionDraft> ExecuteAsync(
+        ApplyActivityContractProposalRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
+        EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
+        var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
+        EnsureDesignAuthority(authoring.Entity);
+        EnsureTenant(authoring.Entity, draft.Entity);
+        if (!IsVisible(draft.Entity.TenantId, request.TenantId) ||
+            !StringComparer.Ordinal.Equals(draft.Entity.State.Provider.ProviderKey, request.ExpectedProviderKey) ||
+            !StringComparer.Ordinal.Equals(draft.Entity.State.Provider.SchemaVersion, request.ExpectedProviderSchemaVersion) ||
+            !StringComparer.Ordinal.Equals(ActivityProviderManifestFingerprint.Compute(draft.Entity.State.Provider), request.ExpectedManifestFingerprint))
+            throw Conflict($"Draft '{request.DraftId}' provider binding is stale.");
+        var layout = await RequiredDraftLayoutAsync(request.DraftId, cancellationToken);
+        if (layout.Entity.Revision != draft.Entity.Revision)
+            throw Conflict($"Draft '{request.DraftId}' and its layout do not have the same revision.");
+
+        var now = clock.UtcNow;
+        draft.Entity.Revision = checked(draft.Entity.Revision + 1);
+        draft.Entity.State = draft.Entity.State with { Contract = request.Contract };
+        draft.Entity.LastModifiedAt = now;
+        layout.Entity.Revision = draft.Entity.Revision;
+        layout.Entity.LastModifiedAt = now;
+        await store.SaveAllAsync(
+            DocumentCommitScope.Of(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+            [
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout.Entity, layout.Envelope.Version)
+            ],
+            cancellationToken);
         return draft.Entity;
     }
 

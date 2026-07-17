@@ -28,7 +28,7 @@ namespace Elsa.Activities.Design.Api;
     name: "ActivitiesDesignApi",
     DisplayName = "Activities Design API",
     Description = "Contains endpoints to manage data in the Activities Design Domain",
-    DependsOn = new object[] { "ApiCapabilities" }
+    DependsOn = new object[] { "ApiCapabilities", "Expressions" }
 )]
 public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 {
@@ -58,6 +58,9 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityUpgradePlanner, ActivityUpgradePlanner>();
         services.TryAddScoped<IActivityUpgradeDiffBuilder, ActivityUpgradeDiffBuilder>();
         services.TryAddSingleton<IActivityProviderRegistry, ActivityProviderRegistry>();
+        services.TryAddSingleton<IActivityContractCapabilityCatalog, ExpressionActivityContractCapabilityCatalog>();
+        services.TryAddSingleton<ActivityContractAuthoringValidator>();
+        services.TryAddSingleton<IActivityTypeKeyPolicy, DefaultActivityTypeKeyPolicy>();
         services.TryAddScoped<IActivityDraftValidator, ActivityDraftValidator>();
         services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();
         services.TryAddSingleton(TimeProvider.System);
@@ -73,6 +76,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IActivityDependencyCursorCodec, HmacActivityDependencyCursorCodec>();
         services.TryAddScoped<ActivityDependencyReader>();
         services.TryAddScoped<ReusableActivityAuthoringService>();
+        services.TryAddScoped<ActivityContractProposalService>();
         services.TryAddScoped<ActivityVersionLifecycleService>();
         services.TryAddScoped<ActivityDefinitionRecommendationService>();
         services.TryAddSingleton<IActivityVersionSelectionPolicy, DefaultActivityVersionSelectionPolicy>();

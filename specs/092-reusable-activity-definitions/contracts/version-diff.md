@@ -108,7 +108,7 @@ Diff may still return contract/provider changes when candidate compilation fails
   },
   "before": {
     "name": "CustomerId",
-    "type": { "alias": "string", "collectionKind": "None" },
+    "type": { "alias": "String", "collectionKind": "Single" },
     "isRequired": false,
     "hasDefault": false,
     "storageDriverKey": "elsa.json",
@@ -116,7 +116,7 @@ Diff may still return contract/provider changes when candidate compilation fails
   },
   "after": {
     "name": "CustomerId",
-    "type": { "alias": "string", "collectionKind": "None" },
+    "type": { "alias": "String", "collectionKind": "Single" },
     "isRequired": true,
     "hasDefault": false,
     "storageDriverKey": "elsa.json",

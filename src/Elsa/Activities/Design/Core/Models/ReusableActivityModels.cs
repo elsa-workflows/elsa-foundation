@@ -182,6 +182,37 @@ public sealed record ActivityContract(
     IReadOnlyList<ActivityOutputContract> Outputs,
     IReadOnlyList<ActivityOutcomeContract> Outcomes);
 
+public sealed record ActivityContractTypeCapability(
+    string Alias,
+    string DisplayName,
+    string Category,
+    string DefaultEditor,
+    IReadOnlySet<CollectionKind> SupportedCollectionKinds,
+    bool SupportsNull,
+    bool SupportsDurability,
+    IReadOnlySet<string> CompatibleStorageDriverKeys);
+
+public sealed record ActivityTypeKeyRules(
+    bool ServerGenerated,
+    bool Immutable,
+    string Prefix,
+    string Pattern,
+    int MaximumLength,
+    string CollisionScope);
+
+public sealed record ActivityProviderManifestSchemaCapabilities(
+    string SchemaVersion,
+    bool IsAuthorable,
+    IReadOnlySet<string> MigratableFromSchemaVersions);
+
+public sealed record ActivityProviderContractConstraints(
+    IReadOnlyList<ActivityOutcomeContract> RequiredOutcomes);
+
+public sealed record ActivityProviderAuthoringCapabilities(
+    string DisplayName,
+    IReadOnlyList<ActivityProviderManifestSchemaCapabilities> ManifestSchemas,
+    ActivityProviderContractConstraints ContractConstraints);
+
 public sealed record ActivityProviderManifest(
     string ProviderKey,
     string SchemaVersion,
@@ -534,9 +565,36 @@ public sealed record ActivityResourceMeasurements(
     long LayoutBytes,
     long EstimatedDurableBoundarySlots);
 
+public enum ActivityContractProposalOperation
+{
+    Add,
+    Replace,
+    Remove
+}
+
+public enum ActivityContractMemberKind
+{
+    Input,
+    Output,
+    Outcome
+}
+
+public sealed record ActivityContractProposalChange(
+    string ChangeId,
+    ActivityContractProposalOperation Operation,
+    ActivityContractMemberKind MemberKind,
+    string ReferenceKey,
+    ActivityInputContract? Input = null,
+    ActivityOutputContract? Output = null,
+    ActivityOutcomeContract? Outcome = null);
+
 public sealed record ActivityContractProposal(
-    ActivityContract Contract,
+    IReadOnlyList<ActivityContractProposalChange> Changes,
     IReadOnlyList<ActivityDiagnostic> Diagnostics);
+
+public sealed record ActivityProviderContractProposalRequest(
+    ActivityProviderManifest Manifest,
+    ActivityContract Contract);
 
 public sealed record ActivityManifestMigrationRequest(
     ActivityProviderManifest Source,

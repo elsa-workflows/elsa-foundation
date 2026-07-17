@@ -60,6 +60,22 @@ public interface IReplaceActivityDraftCommand
         CancellationToken cancellationToken = default);
 }
 
+public sealed record ApplyActivityContractProposalRequest(
+    string DraftId,
+    string? TenantId,
+    long ExpectedRevision,
+    string ExpectedProviderKey,
+    string ExpectedProviderSchemaVersion,
+    string ExpectedManifestFingerprint,
+    ActivityContract Contract);
+
+public interface IApplyActivityContractProposalCommand
+{
+    Task<ActivityDefinitionDraft> ExecuteAsync(
+        ApplyActivityContractProposalRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record DiscardActivityDraftRequest(string DraftId, long ExpectedRevision);
 
 public interface IDiscardActivityDraftCommand

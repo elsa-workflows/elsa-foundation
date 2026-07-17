@@ -80,6 +80,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<ICreateActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IReplaceActivityDraftCommand>();
         services.AddScoped<IReplaceActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IApplyActivityContractProposalCommand>();
+        services.AddScoped<IApplyActivityContractProposalCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IDiscardActivityDraftCommand>();
         services.AddScoped<IDiscardActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IStoreActivityDraftValidationCommand>();

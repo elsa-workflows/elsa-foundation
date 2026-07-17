@@ -12,8 +12,10 @@ public interface IActivityProvider
 
     IReadOnlySet<string> SupportedManifestSchemas { get; }
 
+    ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; }
+
     ValueTask<ActivityContractProposal> ProposeContractAsync(
-        ActivityProviderManifest manifest,
+        ActivityProviderContractProposalRequest request,
         CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
@@ -26,8 +28,28 @@ public interface IActivityProvider
         CancellationToken cancellationToken = default);
 }
 
+public interface IActivityContractCapabilityCatalog
+{
+    IReadOnlyCollection<ActivityContractTypeCapability> Types { get; }
+}
+
+/// <summary>Publishing bridge contribution for durable storage drivers activated by Runtime.</summary>
+public interface IActivityContractStorageDriverProvider
+{
+    IReadOnlyCollection<string> DriverKeys { get; }
+}
+
+public interface IActivityTypeKeyPolicy
+{
+    ActivityTypeKeyRules Rules { get; }
+
+    string Generate(string displayName, string definitionId);
+}
+
 public interface IActivityProviderRegistry
 {
+    IReadOnlyCollection<IActivityProvider> Providers { get; }
+
     void Add(IActivityProvider provider);
 
     IActivityProvider Resolve(string providerKey, string manifestSchemaVersion);

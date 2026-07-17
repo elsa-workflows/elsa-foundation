@@ -19,7 +19,6 @@ public interface IActivityAuthoringContext
 }
 
 public sealed record CreateReusableActivityDefinition(
-    string ActivityTypeKey,
     string Category,
     string DisplayName,
     string? Description,
@@ -30,7 +29,6 @@ public sealed record CreateReusableActivityDefinition(
 public sealed record ForkReusableActivityDefinition(
     [property: JsonIgnore] string DefinitionId,
     string SourceVersionId,
-    string ActivityTypeKey,
     string Category,
     string DisplayName,
     string? Description,
@@ -66,6 +64,22 @@ public sealed record MigrateReusableActivityDraft(
     long ExpectedRevision,
     string TargetProviderKey,
     string TargetSchemaVersion) : ICommand<ReusableActivityDraftView>;
+
+public sealed record ProposeReusableActivityContract(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedRevision,
+    string ExpectedProviderKey,
+    string ExpectedProviderSchemaVersion,
+    string ExpectedManifestFingerprint) : IRequest<ActivityContractProposalView>;
+
+public sealed record ApplyReusableActivityContractProposal(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedRevision,
+    string ExpectedProviderKey,
+    string ExpectedProviderSchemaVersion,
+    string ExpectedManifestFingerprint,
+    string ProposalFingerprint,
+    IReadOnlyList<string> SelectedChangeIds) : ICommand<ReusableActivityDraftView>;
 
 public sealed record ListReusableActivityDefinitions : IRequest<IReadOnlyList<ActivityDefinitionIdentityView>>;
 

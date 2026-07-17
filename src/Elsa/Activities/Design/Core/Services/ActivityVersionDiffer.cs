@@ -537,7 +537,7 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
     private static object TypeProjection(TypeReference type) => new
     {
         type.Alias,
-        collectionKind = type.CollectionKind == CollectionKind.Single ? "None" : type.CollectionKind.ToString()
+        collectionKind = type.CollectionKind.ToString()
     };
 
     private static JsonElement ImplementationProjection(string? templateHash, ActivityVersionImplementationFacts? facts) => Element(new

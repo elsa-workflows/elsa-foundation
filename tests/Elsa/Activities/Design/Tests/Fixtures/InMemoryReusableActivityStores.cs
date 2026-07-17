@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -34,6 +35,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
     IReplaceActivityDraftCommand,
+    IApplyActivityContractProposalCommand,
     IDiscardActivityDraftCommand,
     IStoreActivityDraftValidationCommand,
     IChangeActivityVersionLifecycleCommand,
@@ -429,6 +431,34 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             layout.Records = request.Layout.Select(Clone).ToList();
             layout.LastModifiedAt = updated.LastModifiedAt;
 
+            _drafts[request.DraftId] = updated;
+            _draftLayouts[request.DraftId] = layout;
+            _sequence++;
+            return Task.FromResult(Clone(updated));
+        }
+    }
+
+    public Task<ActivityDefinitionDraft> ExecuteAsync(
+        ApplyActivityContractProposalRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var draft = ActiveDraft(request.DraftId, request.ExpectedRevision);
+            EnsureDesignAuthority(Authoring(draft.DefinitionId));
+            if (!IsVisible(draft.TenantId, request.TenantId) ||
+                !StringComparer.Ordinal.Equals(draft.State.Provider.ProviderKey, request.ExpectedProviderKey) ||
+                !StringComparer.Ordinal.Equals(draft.State.Provider.SchemaVersion, request.ExpectedProviderSchemaVersion) ||
+                !StringComparer.Ordinal.Equals(ActivityProviderManifestFingerprint.Compute(draft.State.Provider), request.ExpectedManifestFingerprint))
+                throw Conflict($"Draft '{request.DraftId}' provider binding is stale.");
+            var updated = Clone(draft);
+            updated.Revision = checked(updated.Revision + 1);
+            updated.State = updated.State with { Contract = Clone(request.Contract) };
+            updated.LastModifiedAt = DateTimeOffset.UtcNow;
+            var layout = Clone(_draftLayouts[request.DraftId]);
+            layout.Revision = updated.Revision;
+            layout.LastModifiedAt = updated.LastModifiedAt;
             _drafts[request.DraftId] = updated;
             _draftLayouts[request.DraftId] = layout;
             _sequence++;

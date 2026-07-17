@@ -32,6 +32,25 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Create_definition_rejects_contract_types_outside_capability_catalog_without_writes()
+    {
+        var harness = new Harness();
+        var contract = new ActivityContract(
+            "1",
+            [new("order", "Order", new("acme.order", Elsa.Primitives.Models.CollectionKind.Single), true, null, "elsa.json")],
+            [],
+            []);
+        var command = harness.CreateDefinitionCommand() with { Contract = contract.ToView() };
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.CreateDefinitionAsync(command, default));
+
+        Assert.Equal(422, exception.StatusCode);
+        Assert.Equal("activity.contract.capability-rejected", exception.ErrorCode);
+        Assert.Contains(exception.Diagnostics, x => x.Code == "activity.contract.type-unavailable");
+        Assert.Empty(harness.Stores.Definitions);
+    }
+
+    [Fact]
     public async Task Update_definition_replaces_only_presentation_metadata()
     {
         var harness = new Harness();
@@ -135,6 +154,26 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Immutable_style_draft_read_preserves_unavailable_historical_type_facts()
+    {
+        var historicalContract = new ActivityContract(
+            "legacy-contract",
+            [new("legacy", "Legacy", new("retired.alias", Elsa.Primitives.Models.CollectionKind.HashSet), false, null, "retired.driver")],
+            [],
+            []);
+        var harness = new Harness();
+        var seeded = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.Design, contract: historicalContract);
+        var draft = Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(seeded.DefinitionId));
+
+        var view = await harness.Service.GetDraftViewAsync(draft.Id, default);
+
+        var input = Assert.Single(view.Contract.Inputs);
+        Assert.Equal("retired.alias", input.Type.Alias);
+        Assert.Equal("HashSet", input.Type.CollectionKind);
+        Assert.Equal("retired.driver", input.StorageDriverKey);
+    }
+
+    [Fact]
     public async Task Replace_is_full_state_atomic_and_stale_revision_has_safe_metadata()
     {
         var harness = new Harness();
@@ -162,6 +201,26 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Replace_rejects_contract_types_outside_capability_catalog_without_revision_change()
+    {
+        var harness = new Harness();
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draftId = created.Drafts[0].DraftId;
+        var contract = new ActivityContract(
+            "1",
+            [],
+            [new("result", "Result", new("acme.unknown", Elsa.Primitives.Models.CollectionKind.List), false, "unknown.driver")],
+            []);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.ReplaceDraftAsync(
+            new(draftId, 1, contract.ToView(), Harness.Manifest("{}"), []), default));
+
+        Assert.Equal("activity.contract.capability-rejected", exception.ErrorCode);
+        Assert.Contains(exception.Diagnostics, x => x.Code == "activity.contract.type-unavailable");
+        Assert.Equal(1, (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(draftId))!.Revision);
+    }
+
+    [Fact]
     public async Task Full_state_replace_preserves_provider_neutral_draft_options()
     {
         var harness = new Harness();
@@ -174,6 +233,197 @@ public sealed class ReusableActivityDraftCommandTests
 
         var persisted = await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(draft.Id);
         Assert.Equal("strict", persisted!.State.Options["mode"]);
+    }
+
+    [Fact]
+    public async Task Contract_proposal_is_exact_read_only_and_provider_neutral()
+    {
+        var provider = new ProposalProvider(_ => new(
+            [new("outcome:approved", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Outcome, "approved", Outcome: new("approved", "Approved", true))],
+            []));
+        var harness = new Harness(provider: provider);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+
+        var proposal = await harness.Proposals.ProposeAsync(new(
+            draft.DraftId,
+            draft.Revision,
+            draft.Provider.ProviderKey,
+            draft.Provider.SchemaVersion,
+            draft.Provider.ManifestFingerprint), default);
+
+        var change = Assert.Single(proposal.Changes);
+        Assert.Equal("outcome:approved", change.ChangeId);
+        Assert.Equal("Approved", change.Outcome!.Name);
+        Assert.StartsWith("sha256:", proposal.ProposalFingerprint, StringComparison.Ordinal);
+        Assert.Equal(1, provider.ProposalCalls);
+        Assert.Equal(1, (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(draft.DraftId))!.Revision);
+    }
+
+    [Fact]
+    public async Task Applying_exact_selected_proposal_changes_only_contract_and_revision()
+    {
+        var provider = new ProposalProvider(_ => new(
+            [new("outcome:approved", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Outcome, "approved", Outcome: new("approved", "Approved", true))],
+            []));
+        var harness = new Harness(provider: provider);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var before = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var proposal = await harness.Proposals.ProposeAsync(new(
+            before.DraftId,
+            before.Revision,
+            before.Provider.ProviderKey,
+            before.Provider.SchemaVersion,
+            before.Provider.ManifestFingerprint), default);
+
+        var applied = await harness.Proposals.ApplyAsync(new(
+            before.DraftId,
+            before.Revision,
+            before.Provider.ProviderKey,
+            before.Provider.SchemaVersion,
+            before.Provider.ManifestFingerprint,
+            proposal.ProposalFingerprint,
+            ["outcome:approved"]), default);
+
+        Assert.Equal(2, applied.Revision);
+        Assert.Contains(applied.Contract.Outcomes, x => x.ReferenceKey == "approved");
+        Assert.Equal(before.Layout, applied.Layout);
+        Assert.Equal(before.Provider, applied.Provider);
+    }
+
+    [Fact]
+    public async Task Stale_proposal_binding_fails_before_provider_invocation()
+    {
+        var provider = new ProposalProvider(_ => new([], []));
+        var harness = new Harness(provider: provider);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ProposeAsync(new(
+            draft.DraftId,
+            draft.Revision + 1,
+            draft.Provider.ProviderKey,
+            draft.Provider.SchemaVersion,
+            draft.Provider.ManifestFingerprint), default));
+
+        Assert.Equal("activity.contract.proposal-stale", exception.ErrorCode);
+        Assert.Equal(0, provider.ProposalCalls);
+    }
+
+    [Fact]
+    public async Task Contract_proposal_requires_provider_authorization_before_invocation()
+    {
+        var stores = new InMemoryReusableActivityStores();
+        var provider = new ProposalProvider(_ => new([], []));
+        var owner = new Harness(stores: stores, provider: provider);
+        var created = await owner.Service.CreateDefinitionAsync(owner.CreateDefinitionCommand(), default);
+        var draft = await owner.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var caller = new Harness(stores: stores, provider: provider, canAuthorProvider: false);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => caller.Proposals.ProposeAsync(new(
+            draft.DraftId,
+            draft.Revision,
+            draft.Provider.ProviderKey,
+            draft.Provider.SchemaVersion,
+            draft.Provider.ManifestFingerprint), default));
+
+        Assert.Equal(403, exception.StatusCode);
+        Assert.Equal("activity.authorization.denied", exception.ErrorCode);
+        Assert.Equal(0, provider.ProposalCalls);
+    }
+
+    [Fact]
+    public async Task Contract_proposal_rejects_an_unavailable_exact_provider_schema()
+    {
+        var harness = new Harness();
+        var seeded = await harness.SeedDefinitionAsync(
+            ActivityContentAuthorityKind.Design,
+            manifest: new("elsa.activity-graph", "missing", Harness.Json("{}")));
+        var draft = Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(seeded.DefinitionId));
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ProposeAsync(new(
+            draft.Id,
+            draft.Revision,
+            draft.State.Provider.ProviderKey,
+            draft.State.Provider.SchemaVersion,
+            ActivityProviderManifestFingerprint.Compute(draft.State.Provider)), default));
+
+        Assert.Equal(422, exception.StatusCode);
+        Assert.Equal("activity.provider.schema-unavailable", exception.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Stale_proposal_fingerprint_fails_closed_without_write()
+    {
+        var provider = new ProposalProvider(_ => new(
+            [new("outcome:approved", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Outcome, "approved", Outcome: new("approved", "Approved", true))],
+            []));
+        var harness = new Harness(provider: provider);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ApplyAsync(new(
+            draft.DraftId,
+            draft.Revision,
+            draft.Provider.ProviderKey,
+            draft.Provider.SchemaVersion,
+            draft.Provider.ManifestFingerprint,
+            "sha256:stale",
+            ["outcome:approved"]), default));
+
+        Assert.Equal("activity.contract.proposal-stale", exception.ErrorCode);
+        Assert.Equal(1, (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(draft.DraftId))!.Revision);
+    }
+
+    [Fact]
+    public async Task Changed_review_diagnostics_make_an_otherwise_identical_proposal_stale()
+    {
+        var phase = 0;
+        var provider = new ProposalProvider(_ => new(
+            [new("outcome:approved", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Outcome, "approved", Outcome: new("approved", "Approved", true))],
+            [new($"activity.test.warning.{++phase}", ActivityDiagnosticSeverity.Warning, "Review warning.", new("ActivityDraft", "draft"))]));
+        var harness = new Harness(provider: provider);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var proposal = await harness.Proposals.ProposeAsync(new(
+            draft.DraftId,
+            draft.Revision,
+            draft.Provider.ProviderKey,
+            draft.Provider.SchemaVersion,
+            draft.Provider.ManifestFingerprint), default);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ApplyAsync(new(
+            draft.DraftId,
+            draft.Revision,
+            draft.Provider.ProviderKey,
+            draft.Provider.SchemaVersion,
+            draft.Provider.ManifestFingerprint,
+            proposal.ProposalFingerprint,
+            ["outcome:approved"]), default));
+
+        Assert.Equal("activity.contract.proposal-stale", exception.ErrorCode);
+        Assert.Equal(1, (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(draft.DraftId))!.Revision);
+    }
+
+    [Fact]
+    public async Task Malformed_provider_proposal_is_safely_rejected()
+    {
+        var provider = new ProposalProvider(_ => new(
+            [new("bad", ActivityContractProposalOperation.Add, ActivityContractMemberKind.Outcome, "approved", Input: new("input", "Input", new("System.String", Elsa.Primitives.Models.CollectionKind.Single), false, null, "elsa.json"))],
+            []));
+        var harness = new Harness(provider: provider);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ProposeAsync(new(
+            draft.DraftId,
+            draft.Revision,
+            draft.Provider.ProviderKey,
+            draft.Provider.SchemaVersion,
+            draft.Provider.ManifestFingerprint), default));
+
+        Assert.Equal(502, exception.StatusCode);
+        Assert.Equal("activity.provider.proposal-invalid", exception.ErrorCode);
     }
 
     [Fact]
@@ -218,7 +468,6 @@ public sealed class ReusableActivityDraftCommandTests
         var fork = await harness.Service.ForkDefinitionAsync(new(
             source.DefinitionId,
             "source-version",
-            "acme.forked",
             "Custom",
             "Forked",
             null,
@@ -310,12 +559,14 @@ public sealed class ReusableActivityDraftCommandTests
             bool invalidValidation = false,
             string? tenantId = "tenant-a",
             InMemoryReusableActivityStores? stores = null,
-            bool canReadProviderPayload = true)
+            bool canReadProviderPayload = true,
+            IActivityProvider? provider = null,
+            bool canAuthorProvider = true)
         {
             _ids = new(tenantId ?? "global");
-            _context = new(tenantId, canReadProviderPayload);
+            _context = new(tenantId, canReadProviderPayload, canAuthorProvider);
             Stores = stores ?? new();
-            var registry = new ActivityProviderRegistry([new MigratingProvider("elsa.activity-graph"), new MigratingProvider("target.provider")]);
+            var registry = new ActivityProviderRegistry([provider ?? new MigratingProvider("elsa.activity-graph"), new MigratingProvider("target.provider")]);
             Service = new(
                 Stores,
                 Stores,
@@ -331,16 +582,19 @@ public sealed class ReusableActivityDraftCommandTests
                 Stores,
                 registry,
                 new StubValidator(_time, invalidValidation),
+                new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()),
+                new DefaultActivityTypeKeyPolicy(),
                 _ids,
                 _time,
                 _context);
+            Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()), Service, _context);
         }
 
         public InMemoryReusableActivityStores Stores { get; }
         public ReusableActivityAuthoringService Service { get; }
+        public ActivityContractProposalService Proposals { get; }
 
         public CreateReusableActivityDefinition CreateDefinitionCommand() => new(
-            "acme.calculate",
             "Orders",
             "Calculate",
             null,
@@ -351,7 +605,9 @@ public sealed class ReusableActivityDraftCommandTests
         public async Task<ActivityDefinitionAuthoringState> SeedDefinitionAsync(
             ActivityContentAuthorityKind authority,
             IReadOnlyDictionary<string, string>? options = null,
-            string? displayName = "Seed")
+            string? displayName = "Seed",
+            ActivityContract? contract = null,
+            ActivityProviderManifest? manifest = null)
         {
             var now = _time.GetUtcNow();
             var definitionId = $"seed-definition-{_ids.Generate()}";
@@ -381,7 +637,7 @@ public sealed class ReusableActivityDraftCommandTests
                 TenantId = _context.TenantId,
                 DefinitionId = definitionId,
                 Revision = 1,
-                State = new(Contract(), Manifest("{}"), options ?? new Dictionary<string, string>()),
+                State = new(contract ?? Contract(), manifest ?? Manifest("{}"), options ?? new Dictionary<string, string>()),
                 CreatedAt = now,
                 LastModifiedAt = now
             };
@@ -446,11 +702,16 @@ public sealed class ReusableActivityDraftCommandTests
         }
     }
 
-    private sealed class TestAuthoringContext(string? tenantId, bool canReadProviderPayload) : IActivityAuthoringContext
+    private sealed class TestAuthoringContext(string? tenantId, bool canReadProviderPayload, bool canAuthorProvider) : IActivityAuthoringContext
     {
         public string? TenantId => tenantId;
-        public bool CanAuthorProvider(string providerKey) => true;
+        public bool CanAuthorProvider(string providerKey) => canAuthorProvider;
         public bool CanReadProviderPayload(string providerKey) => canReadProviderPayload;
+    }
+
+    private sealed class EmptyCapabilityCatalog : IActivityContractCapabilityCatalog
+    {
+        public IReadOnlyCollection<ActivityContractTypeCapability> Types => [];
     }
 
     private sealed class FixedIdentityGenerator(string prefix) : IIdentityGenerator
@@ -479,9 +740,36 @@ public sealed class ReusableActivityDraftCommandTests
     {
         public string ProviderKey => key;
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
+        public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
+            key,
+            [new("1", true, new HashSet<string> { "1" })],
+            new([]));
 
-        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderManifest manifest, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ActivityContractProposal(Harness.Contract(), []));
+        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityContractProposal([], []));
+
+        public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, ActivityContract contract, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ActivityDiagnostic>>([]);
+
+        public ValueTask<ActivityManifestMigration> MigrateAsync(ActivityManifestMigrationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityManifestMigration(new(ProviderKey, request.TargetSchemaVersion, request.Source.Payload.Clone()), []));
+    }
+
+    private sealed class ProposalProvider(Func<ActivityProviderContractProposalRequest, ActivityContractProposal> propose) : IActivityProvider
+    {
+        public int ProposalCalls { get; private set; }
+        public string ProviderKey => "elsa.activity-graph";
+        public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
+        public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
+            "Test proposal provider",
+            [new("1", true, new HashSet<string> { "1" })],
+            new([]));
+
+        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default)
+        {
+            ProposalCalls++;
+            return ValueTask.FromResult(propose(request));
+        }
 
         public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, ActivityContract contract, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<ActivityDiagnostic>>([]);

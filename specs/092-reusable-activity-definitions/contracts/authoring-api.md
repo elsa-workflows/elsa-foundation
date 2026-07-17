@@ -7,6 +7,7 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 | Method | Route | Purpose |
 |---|---|---|
 | `GET` | `/design/activities/definitions` | List catalog definitions visible to the caller. |
+| `GET` | `/design/activities/authoring-capabilities` | Read the authorization-filtered provider, contract type, storage-driver, and server key rules snapshot. |
 | `POST` | `/design/activities/definitions` | Create a Design-owned definition and initial draft. |
 | `GET` | `/design/activities/definitions/{definitionId}` | Read definition metadata, authority, fork provenance, head, drafts, and version lifecycle summaries. |
 | `PATCH` | `/design/activities/definitions/{definitionId}` | Change presentation metadata only. |
@@ -21,6 +22,8 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 | `POST` | `/design/activities/drafts/{draftId}/validate` | Revalidate an exact draft revision. |
 | `POST` | `/design/activities/drafts/{draftId}/publish` | Atomically publish a draft as an immutable version. |
 | `POST` | `/design/activities/drafts/{draftId}/migrate-provider` | Clone/migrate a provider manifest into a new draft. |
+| `POST` | `/design/activities/drafts/{draftId}/contract-proposals` | Compute a typed, read-only provider proposal for one exact draft binding. |
+| `POST` | `/design/activities/drafts/{draftId}/contract-proposals/apply` | Apply explicitly selected changes from an unchanged exact proposal. |
 | `GET` | `/design/activities/definitions/{definitionId}/versions` | List immutable versions. |
 | `GET` | `/design/activities/versions/{versionId}` | Read one version and its public publication facts. |
 | `POST` | `/design/activities/versions/{versionId}/retire` | Block new direct selection. |
@@ -92,7 +95,7 @@ Only a tenant-visible, Design-owned definition can be updated. A blank required 
     {
       "referenceKey": "order",
       "name": "Order",
-      "type": { "alias": "acme.orders.order", "collectionKind": "None" },
+      "type": { "alias": "acme.orders.order", "collectionKind": "Single" },
       "isRequired": true,
       "default": null,
       "storageDriverKey": "elsa.json",
@@ -109,7 +112,7 @@ Only a tenant-visible, Design-owned definition can be updated. A blank required 
     {
       "referenceKey": "total",
       "name": "Total",
-      "type": { "alias": "decimal", "collectionKind": "None" },
+      "type": { "alias": "Decimal", "collectionKind": "Single" },
       "isRequired": true,
       "storageDriverKey": "elsa.json",
       "durability": "Required",
@@ -149,11 +152,14 @@ The value remains opaque to this API; the selected binding compiler owns the syn
 {
   "providerKey": "elsa.activity-graph",
   "schemaVersion": "1",
+  "manifestFingerprint": "sha256:...",
   "payload": {}
 }
 ```
 
-The payload is returned only to callers authorized to author that provider. Catalog and dependency APIs never need it.
+The payload is returned only to callers authorized to author that provider. The fingerprint is
+always returned because it safely binds proposals and updates without disclosing the payload.
+Catalog and dependency APIs never need the payload.
 
 ## 3. Create a definition and initial draft
 
@@ -164,7 +170,6 @@ Content-Type: application/json
 
 ```json
 {
-  "activityTypeKey": "acme.orders.calculate-total",
   "category": "Orders",
   "displayName": "Calculate order total",
   "description": null,
@@ -210,7 +215,7 @@ Rules:
 
 - The API always creates `ContentAuthority.Kind = Design`; source-owned definitions enter through trusted reconciliation commands, not this endpoint.
 - The definition and initial draft are created atomically.
-- Duplicate `(tenantId, activityTypeKey)` returns `409` with `activity.definition.key-conflict`.
+- `activityTypeKey` is server-generated from the display name and definition identity, tenant-scoped, collision-safe, and immutable. It is never accepted from normal authoring requests.
 
 ## 4. Fork a source-owned version
 
@@ -221,7 +226,6 @@ POST /design/activities/definitions/{definitionId}/forks
 ```json
 {
   "sourceVersionId": "activity-ver-clr-3",
-  "activityTypeKey": "tenant-a.orders.calculate-total-custom",
   "category": "Orders",
   "displayName": "Calculate order total (custom)",
   "description": null,
@@ -238,7 +242,7 @@ Rules:
 - The new definition belongs to the caller's tenant and has `ContentAuthority.Kind = Design`.
 - The source public contract is copied. Provider source is cloned or deterministically migrated through the requested target provider; if no supported conversion exists, the request returns `422 activity.provider.migration-unsupported` and creates nothing.
 - The new definition records fork provenance for audit/inspection, but it is not part of the source definition's lineage or content authority.
-- Duplicate tenant `activityTypeKey` returns `409 activity.definition.key-conflict`.
+- The fork receives a new server-generated immutable activity type key; authors do not name individual drafts or keys.
 
 ## 5. Create or clone a draft
 
@@ -334,8 +338,42 @@ Rules:
 - State, layout, revision, and derived validation outcome persist atomically.
 - `providerKey` may change only for a Design-owned lineage; changing it is a behavioral change later classified by the version diff.
 - A stale revision returns `409 activity.draft.stale-revision` with expected and actual revision in safe diagnostic metadata.
+- Every mutable contract write accepts only activated catalog aliases, canonical collection-kind names, compatible storage drivers, nullability, and durability. Unsupported facts return `422 activity.contract.capability-rejected`; immutable historical reads remain exact.
 
-## 7. Validate a draft revision
+## 7. Provider authoring capabilities and contract proposals
+
+`GET /design/activities/authoring-capabilities` returns only providers the caller may author. The
+snapshot includes provider schema authorability and migration metadata, required outcomes, the
+provider-neutral type descriptor catalog, compatible storage drivers, canonical collection kinds,
+nullability/durability facts, and server-owned activity type key rules. The deterministic
+`snapshotFingerprint` lets clients invalidate cached editor configuration without inspecting an
+opaque provider manifest.
+
+Compatible storage-driver keys are intersected with Runtime's actually activated driver registry
+through the Publishing bridge. A descriptor declaration alone cannot advertise or authorize an
+unavailable driver.
+
+Proposal requests bind all mutable facts explicitly:
+
+```json
+{
+  "expectedRevision": 7,
+  "expectedProviderKey": "elsa.activity-graph",
+  "expectedProviderSchemaVersion": "1",
+  "expectedManifestFingerprint": "sha256:..."
+}
+```
+
+The response contains typed `Add`, `Replace`, or `Remove` changes for public inputs, outputs, or
+outcomes, plus diagnostics and a deterministic `proposalFingerprint`. It never returns the opaque
+manifest and never mutates the draft. Apply submits the same exact binding, the reviewed proposal
+fingerprint, and unique `selectedChangeIds`. The server reloads and recomputes the proposal before
+applying only those changes. A stale revision, provider binding, manifest, proposal, or selection
+fails closed with `409 activity.contract.proposal-stale`; there is no implicit provider mutation.
+The proposal fingerprint covers both typed changes and the ordered safe diagnostics reviewed by the
+author.
+
+## 8. Validate a draft revision
 
 ```http
 POST /design/activities/drafts/{draftId}/validate
@@ -371,7 +409,7 @@ Response: `200 OK` whether valid or invalid:
 
 `200` is used because validation findings are the requested result. Malformed requests, stale revisions, missing drafts, authority denials, or validator infrastructure failures use Problem Details.
 
-## 8. Publish a draft
+## 9. Publish a draft
 
 ```http
 POST /design/activities/drafts/{draftId}/publish
@@ -430,7 +468,7 @@ Concurrency conflicts use `409`:
 
 No rejected publication creates a version, advances a head, or exposes partial template/reference/dependency state.
 
-## 9. Read an immutable version
+## 10. Read an immutable version
 
 ```http
 GET /design/activities/versions/{versionId}
@@ -465,7 +503,7 @@ GET /design/activities/versions/{versionId}
 
 Provider payload is omitted or redacted when the caller can read the catalog contract but cannot author the provider.
 
-## 10. Provider-manifest migration
+## 11. Provider-manifest migration
 
 ```http
 POST /design/activities/drafts/{draftId}/migrate-provider
@@ -481,7 +519,12 @@ POST /design/activities/drafts/{draftId}/migrate-provider
 
 Response: `201 Created` with a **new** active draft whose `sourceVersionId` remains the exact immutable lineage source and whose manifest is migrated deterministically. The original draft/version is not rewritten. Unsupported source schemas return `422 activity.provider.migration-unsupported`.
 
-## 11. Lifecycle commands
+Upgrade-plan updates and clones are mutable ingresses too: immediately before their atomic apply,
+they recheck exact provider-schema authorability and the current contract capability catalog. An
+immutable historical contract whose type or driver is no longer activated remains readable but
+cannot silently become a new mutable draft.
+
+## 12. Lifecycle commands
 
 Retire, restore, and revoke use an expected current lifecycle value:
 
@@ -520,7 +563,7 @@ Content-Type: application/json
 
 A null `recommendedVersionId` with a null expected target lifecycle is an explicit clear. Stale head, recommendation, or target lifecycle returns a stable `409` Problem Details code. The bounded picker never substitutes head/latest and omits null, retired, revoked, hidden, or inconsistent recommendations.
 
-## 12. Activity draft test run
+## 13. Activity draft test run
 
 ```http
 POST /publishing/activity-drafts/{draftId}/test-runs
@@ -559,7 +602,7 @@ Accepted response: `202 Accepted`.
 
 The wrapper workflow and outer activity execution are created through normal dispatch. `outerActivityExecutionId` may remain null until scheduling commits and is then discoverable through workflow-instance inspection. The expiring Source Reference, not a second artifact store, controls lifetime.
 
-## 13. Runtime requirement preflight
+## 14. Runtime requirement preflight
 
 ```http
 POST /publishing/preflight
@@ -596,6 +639,6 @@ POST /publishing/preflight
 
 Preflight is a read/validation result and returns `200 OK` when missing requirements are found. Infrastructure failure uses Problem Details.
 
-## 14. Clean-break impact
+## 15. Clean-break impact
 
 The existing public “add a definition with an immediate version” and “add arbitrary version” authoring commands are not the Design-owned authoring contract for this feature. Trusted reconciliation retains an internal source-owned creation path. Public authoring flows through definition + draft + publication so validation, SemVer, dependencies, content authority, and template creation cannot be bypassed.

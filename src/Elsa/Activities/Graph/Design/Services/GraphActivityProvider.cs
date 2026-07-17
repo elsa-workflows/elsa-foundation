@@ -17,7 +17,9 @@ namespace Elsa.Activities.Graph.Design.Services;
 /// Design-owned compiler for provider manifest schema 1. It never loads mutable definitions and
 /// receives every exact dependency identity from the publishing coordinator.
 /// </summary>
-public sealed class GraphActivityProvider(IActivityStructureService activityStructureService) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+public sealed class GraphActivityProvider(
+    IActivityStructureService activityStructureService,
+    ActivityContractAuthoringValidator contractCapabilities) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
 {
     public const string Key = "elsa.activity-graph";
     public const string Fingerprint = "elsa.activity-graph/compiler/1.0.0";
@@ -32,22 +34,33 @@ public sealed class GraphActivityProvider(IActivityStructureService activityStru
     public string ProviderKey => Key;
     public string CompilerFingerprint => Fingerprint;
     public IReadOnlySet<string> SupportedManifestSchemas => Schemas;
+    public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
+        "Activity Graph",
+        [new(ActivityGraphManifest.SchemaVersion, true, new HashSet<string>(StringComparer.Ordinal) { ActivityGraphManifest.SchemaVersion })],
+        new([new("done", "Done", true)]));
 
     public ValueTask<ActivityContractProposal> ProposeContractAsync(
-        ActivityProviderManifest manifest,
+        ActivityProviderContractProposalRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var diagnostics = ReadManifest(manifest, ProposalSubject(), out _);
+        var diagnostics = ReadManifest(request.Manifest, ProposalSubject(), out _);
 
         // Schema 1 intentionally does not duplicate public input/output types. A proposal can seed
         // the natural outcome, while the authoritative draft contract remains user/provider owned.
-        var contract = new ActivityContract(
-            "1",
-            [],
-            [],
-            [new ActivityOutcomeContract("done", "Done", true)]);
-        return ValueTask.FromResult(new ActivityContractProposal(contract, diagnostics));
+        var done = new ActivityOutcomeContract("done", "Done", true);
+        var existingDone = request.Contract.Outcomes.FirstOrDefault(x => StringComparer.Ordinal.Equals(x.ReferenceKey, done.ReferenceKey));
+        var changes = existingDone == done
+            ? Array.Empty<ActivityContractProposalChange>()
+            : [new(
+                "outcome:done",
+                existingDone is null ? ActivityContractProposalOperation.Add : ActivityContractProposalOperation.Replace,
+                ActivityContractMemberKind.Outcome,
+                "done",
+                Outcome: done)];
+        return ValueTask.FromResult(new ActivityContractProposal(
+            changes,
+            diagnostics));
     }
 
     public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
@@ -281,6 +294,19 @@ public sealed class GraphActivityProvider(IActivityStructureService activityStru
                 subject,
                 "/variables",
                 duplicate.Key));
+        }
+
+        for (var index = 0; index < graph.Variables.Count; index++)
+        {
+            var variable = graph.Variables[index];
+            foreach (var diagnostic in contractCapabilities.ValidateTypeReference(
+                         variable.Type,
+                         variable.StorageDriverKey,
+                         subject,
+                         $"/variables/{index}",
+                         variable.ReferenceKey,
+                         variable.InitialValue?.Value.ValueKind == JsonValueKind.Null))
+                diagnostics.Add(diagnostic);
         }
 
         var outputKeys = contract.Outputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
