@@ -276,6 +276,20 @@ export interface CreateActivityDefinitionResponse {
   draft: ActivityDefinitionDraftManagementView["draft"];
 }
 
+export interface CreateActivityDefinitionDraftRequest {
+  sourceVersionId: string | null;
+  presentationLabel?: string | null;
+  provider?: ActivityProviderManifest;
+  contract?: ActivityContract;
+  layout?: ActivityDefinitionLayoutRecord[];
+}
+
+export interface MigrateActivityDefinitionDraftRequest {
+  expectedRevision: number;
+  targetProviderKey: string;
+  targetSchemaVersion: string;
+}
+
 export interface ReplaceActivityDefinitionDraftRequest {
   expectedRevision: number;
   contract: ActivityContract;

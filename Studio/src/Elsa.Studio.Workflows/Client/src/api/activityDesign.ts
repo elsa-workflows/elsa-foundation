@@ -22,8 +22,10 @@ import type {
   ActivityDefinitionVersionManagementView,
   ActivityDefinitionVersionView,
   ActivityManagementPage,
+  CreateActivityDefinitionDraftRequest,
   CreateActivityDefinitionRequest,
   CreateActivityDefinitionResponse,
+  MigrateActivityDefinitionDraftRequest,
   RecommendedActivityDefinition,
   RecommendedActivityDefinitionPage,
   ReplaceActivityDefinitionDraftRequest
@@ -250,6 +252,24 @@ export async function getActivityAuthoringCapabilities(context: StudioEndpointCo
 export async function createActivityDefinition(context: StudioEndpointContext, request: CreateActivityDefinitionRequest) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definitions");
   return context.http.postJson<CreateActivityDefinitionResponse>(path, request);
+}
+
+export async function createActivityDefinitionDraft(
+  context: StudioEndpointContext,
+  definitionId: string,
+  request: CreateActivityDefinitionDraftRequest
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-drafts", { definitionId });
+  return context.http.postJson<ActivityDefinitionDraftView>(path, request);
+}
+
+export async function migrateActivityDefinitionDraft(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: MigrateActivityDefinitionDraftRequest
+) {
+  const draftPath = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-draft", { draftId });
+  return context.http.postJson<ActivityDefinitionDraftView>(`${draftPath}/migrate-provider`, request);
 }
 
 export async function getActivityDefinitionDraft(

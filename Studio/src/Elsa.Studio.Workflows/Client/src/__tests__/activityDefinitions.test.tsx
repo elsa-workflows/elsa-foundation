@@ -3,12 +3,12 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionsPage } from "../ActivityDefinitionsPage";
 import { activityDesignKeys } from "../api/activityDesign";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { activityDefinitionsObservationEvent, observeActivityDefinitions } from "../activityDefinitionObservability";
-import type { ActivityDefinitionManagementView, ActivityManagementPage } from "../activityDefinitionTypes";
+import type { ActivityDefinitionDraftManagementView, ActivityDefinitionManagementView, ActivityDefinitionVersionManagementView, ActivityManagementPage } from "../activityDefinitionTypes";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -71,8 +71,8 @@ describe("Activity Definitions experience", () => {
     expect(getJson.mock.calls.some(([url]) => String(url).includes("/drafts?"))).toBe(false);
     expect(getJson.mock.calls.some(([url]) => String(url).includes("/versions?"))).toBe(false);
     click(buttonByText(rendered.container, "Drafts"));
-    await waitForText(rendered.container, "Draft updated");
-    click(buttonByText(rendered.container, "Draft updated"));
+    await waitForText(rendered.container, "Draft draft-1");
+    click(buttonByText(rendered.container, "Draft draft-1"));
 
     expect(window.location.pathname).toBe("/workflows/activity-definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
@@ -93,6 +93,124 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Parallel review");
     expect(rendered.container.textContent).toContain("draft-2");
     expect(rendered.container.textContent).toContain("revision 3");
+    await rendered.unmount();
+  });
+
+  it("lists parallel duplicate labels with stable fallbacks and creates an unlabeled blank draft", async () => {
+    const postJson = vi.fn(async (_url: string, _body: unknown) => draftDetail({ draftId: "draft-blank" }));
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true);
+      if (url === "/design/activities/definitions/definition-1") return definition({}, [{ action: "create-draft", allowed: true }]);
+      if (url.startsWith("/design/activities/definitions/definition-1/drafts?")) return page([
+        draft({ draftId: "draft-review-a", presentationLabel: "Review" }),
+        draft({ draftId: "draft-review-b", presentationLabel: "Review" }),
+        draft({ draftId: "draft-unlabeled", presentationLabel: null })
+      ]);
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      if (url === "/design/activities/drafts/draft-blank") return draftDetail({ draftId: "draft-blank" });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=drafts", postJson, [graphContribution()]);
+
+    await waitForText(rendered.container, "Draft draft-unlabeled");
+    expect([...rendered.container.querySelectorAll("strong")].filter(element => element.textContent === "Review")).toHaveLength(2);
+    click(buttonByText(rendered.container, "Create parallel draft"));
+    await waitForText(rendered.container, "Blank");
+    await waitFor(() => expect(rendered.container.querySelector<HTMLSelectElement>(".ad-management-dialog select")?.value).toBe("visual-graph|1"));
+    click(buttonByText(rendered.container, "Create blank draft"));
+
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+    expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/definition-1/drafts", {
+      sourceVersionId: null,
+      presentationLabel: null,
+      provider: { providerKey: "visual-graph", schemaVersion: "1", payload: { root: null } },
+      contract: {
+        contractSchemaVersion: "1",
+        inputs: [],
+        outputs: [],
+        outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }]
+      },
+      layout: []
+    });
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-blank"));
+    await rendered.unmount();
+  });
+
+  it("clones one authorized exact immutable version without rewriting the source", async () => {
+    const postJson = vi.fn(async (_url: string, _body: unknown) => draftDetail({ draftId: "draft-clone", presentationLabel: "Review" }));
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true);
+      if (url === "/design/activities/definitions/definition-1") return definition({}, [{ action: "create-draft", allowed: true }]);
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return page([
+        version({ actions: [{ action: "clone-draft", allowed: true }] })
+      ]);
+      if (url === "/design/activities/versions/version-1") return versionDetail();
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      if (url === "/design/activities/drafts/draft-clone") return draftDetail({ draftId: "draft-clone", presentationLabel: "Review" });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1", postJson, [graphContribution()]);
+
+    await waitForText(rendered.container, "Create draft from this exact version");
+    click(buttonByText(rendered.container, "Create draft from this exact version"));
+    await waitForText(rendered.container, "Clone exact version");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Draft label"), "Review");
+    click(buttonByText(rendered.container, "Clone exact version"));
+
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+    expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/definition-1/drafts", {
+      sourceVersionId: "version-1",
+      presentationLabel: "Review"
+    });
+    expect(postJson.mock.calls.every(([url]) => url === "/design/activities/definitions/definition-1/drafts")).toBe(true);
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-clone"));
+    await rendered.unmount();
+  });
+
+  it("keeps source-owned history exact and read-only when fork authority is denied", async () => {
+    const source = definition({
+      contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+    }, [{ action: "fork-definition", allowed: false, unavailableCode: "activity.action.forbidden" }]);
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") return source;
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return page([
+        version({ actions: [{ action: "fork-definition", allowed: false, unavailableCode: "activity.action.forbidden" }] })
+      ]);
+      if (url === "/design/activities/versions/version-1") return versionDetail({
+        definition: source.definition,
+        provider: { providerKey: "contoso.source", schemaVersion: "7", manifestFingerprint: "source-fingerprint" }
+      });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
+
+    await waitForText(rendered.container, "Source-owned and read-only");
+    expect(rendered.container.textContent).toContain("contoso.catalog");
+    expect(rendered.container.textContent).toContain("invoice-source");
+    expect(rendered.container.textContent).toContain("contoso.source");
+    expect(rendered.container.textContent).toContain("schema 7");
+    expect(rendered.container.textContent).toContain("Immutable public contract");
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Fork"))).toBe(false);
+    await rendered.unmount();
+  });
+
+  it("does not probe a direct fork endpoint when management allows forking but preview reservation is unavailable", async () => {
+    const source = definition({
+      contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+    }, [{ action: "fork-definition", allowed: true }]);
+    const postJson = vi.fn();
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") return source;
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1", postJson);
+
+    await waitForText(rendered.container, "Fork preview unavailable");
+    expect(rendered.container.textContent).toContain("No direct endpoint fallback is used");
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Fork"))).toBe(false);
+    expect(postJson).not.toHaveBeenCalled();
     await rendered.unmount();
   });
 
@@ -249,13 +367,19 @@ describe("Activity Definitions experience", () => {
   });
 });
 
-function renderPage(getJson: (url: string) => Promise<unknown>, queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }), path = "/workflows/activity-definitions") {
+function renderPage(
+  getJson: (url: string) => Promise<unknown>,
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  path = "/workflows/activity-definitions",
+  postJson: (url: string, body: unknown) => Promise<unknown> = vi.fn(),
+  activityEditors: StudioActivityDefinitionImplementationEditorContribution[] = []
+) {
   window.history.replaceState({}, "", path);
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  const context = { baseUrl: `test://activity-definitions-${Math.random()}`, http: { getJson } } as unknown as StudioEndpointContext;
-  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} /></QueryClientProvider>));
+  const context = { baseUrl: `test://activity-definitions-${Math.random()}`, http: { getJson, postJson } } as unknown as StudioEndpointContext;
+  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} /></QueryClientProvider>));
   return {
     container,
     async unmount() {
@@ -265,9 +389,10 @@ function renderPage(getJson: (url: string) => Promise<unknown>, queryClient = ne
   };
 }
 
-function capabilities() {
+function capabilities(includeAuthoring = false) {
   return { capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
     { rel: "activity-definitions", href: "design/activities/definitions" },
+    ...(includeAuthoring ? [{ rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" }] : []),
     { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
     { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
@@ -280,26 +405,29 @@ function page<T>(items: T[], options: { continuation?: string; hasMore?: boolean
   return { items, count: items.length, totalCount: options.totalCount ?? items.length, hasMore: options.hasMore ?? false, continuation: options.continuation ?? null, snapshot: { snapshotId: "snapshot-1", asOf: "2026-07-17T10:00:00Z" } };
 }
 
-function definition(overrides: Partial<ActivityDefinitionManagementView["definition"]> = {}): ActivityDefinitionManagementView {
+function definition(overrides: Partial<ActivityDefinitionManagementView["definition"]> = {}, actions: ActivityDefinitionManagementView["actions"] = []): ActivityDefinitionManagementView {
   return {
     definition: { definitionId: "definition-1", activityTypeKey: "Contoso.InvoiceEvaluator", tenantId: null, category: "Finance", displayName: "Invoice evaluator", description: "Evaluates invoice policy.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design", sourceId: null }, forkedFrom: null, headVersionId: "version-1", recommendedVersionId: "version-1", ...overrides },
     lifecycle: { draftCount: 1, versionCount: 1, head: { versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "visual-graph", providerSchemaVersion: "1" }, recommendation: { versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "visual-graph", providerSchemaVersion: "1" } },
-    actions: [],
+    actions,
     updatedAt: "2026-07-17T10:00:00Z"
   };
 }
 
-function draft() {
-  return { draft: { draftId: "draft-1", definitionId: "definition-1", revision: 3, sourceVersionId: "version-1", status: "Active", providerKey: "visual-graph", providerSchemaVersion: "1", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }, actions: [] };
+function draft(overrides: Partial<ActivityDefinitionDraftManagementView["draft"]> = {}): ActivityDefinitionDraftManagementView {
+  return { draft: { draftId: "draft-1", definitionId: "definition-1", revision: 3, sourceVersionId: "version-1", status: "Active", providerKey: "visual-graph", providerSchemaVersion: "1", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null, ...overrides }, actions: [] };
 }
 
-function version() {
-  return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: [] };
+function version(overrides: { actions?: ActivityDefinitionVersionManagementView["actions"] } = {}): ActivityDefinitionVersionManagementView {
+  return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: overrides.actions ?? [] };
 }
 
 function draftDetail(overrides: Partial<{ draftId: string; presentationLabel: string | null }> = {}) { return { ...draftDetailBase(), ...overrides }; }
-function draftDetailBase() { return { draftId: "draft-1", definitionId: "definition-1", tenantId: null, revision: 3, sourceVersionId: "version-1", status: "Active", contract: {}, provider: { providerKey: "visual-graph", schemaVersion: "1", manifestFingerprint: "fingerprint", payload: { hidden: "not rendered" } }, layout: [], validation: null, createdAt: "2026-07-17T09:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }; }
-function versionDetail() { return { definition: definition().definition, versionId: "version-1", version: "1.0.0", sourceDraftId: "draft-1", sourceVersionId: null, contract: {}, provider: { providerKey: "visual-graph", schemaVersion: "1", manifestFingerprint: "fingerprint", payload: { hidden: "not rendered" } }, template: {}, lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }; }
+function draftDetailBase() { return { draftId: "draft-1", definitionId: "definition-1", tenantId: null, revision: 3, sourceVersionId: "version-1", status: "Active", contract: emptyContract(), provider: { providerKey: "visual-graph", schemaVersion: "1", manifestFingerprint: "fingerprint", payload: { hidden: "not rendered" } }, layout: [], validation: null, createdAt: "2026-07-17T09:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }; }
+function versionDetail(overrides: Record<string, unknown> = {}) { return { definition: definition().definition, versionId: "version-1", version: "1.0.0", sourceDraftId: "draft-1", sourceVersionId: null, contract: emptyContract(), provider: { providerKey: "visual-graph", schemaVersion: "1", manifestFingerprint: "fingerprint", payload: { hidden: "not rendered" } }, template: {}, lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z", ...overrides }; }
+function emptyContract() { return { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] }; }
+function authoringCapabilities() { return { contractSchemaVersions: ["1"], activityTypeKeyRules: { serverGenerated: true, allowsPreCreationOverride: false, immutable: true, prefix: "elsa.user", pattern: "^elsa\\\\.user\\\\..+$", maximumLength: 160, collisionScope: "tenant" }, providers: [{ providerKey: "visual-graph", displayName: "Visual graph", manifestSchemas: [{ schemaVersion: "1", isAuthorable: true, migratableFromSchemaVersions: ["1"] }], requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] }], types: [], storageDriverKeys: [], snapshotFingerprint: "sha256:test" }; }
+function graphContribution(): StudioActivityDefinitionImplementationEditorContribution { return { id: "visual-graph", providerKey: "visual-graph", providerSchemaVersion: "1", createInitialImplementation: () => ({ payload: { root: null }, layout: [] }), component: () => <div>Visual graph editor</div> }; }
 
 function buttonByText(container: HTMLElement, text: string) {
   const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent?.includes(text));
@@ -309,5 +437,11 @@ function buttonByText(container: HTMLElement, text: string) {
 
 function click(element: Element) { flushSync(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true }))); }
 function change(element: HTMLInputElement | HTMLSelectElement, value: string) { flushSync(() => { const setter = Object.getOwnPropertyDescriptor(element instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLSelectElement.prototype, "value")?.set; setter?.call(element, value); element.dispatchEvent(new Event("change", { bubbles: true })); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
+function controlByLabel<T extends HTMLInputElement | HTMLSelectElement>(container: HTMLElement, text: string) {
+  const label = [...container.querySelectorAll("label")].find(candidate => candidate.querySelector(":scope > span")?.textContent?.includes(text));
+  const control = label?.querySelector("input, select");
+  if (!control) throw new Error(`Control labelled '${text}' not found.`);
+  return control as T;
+}
 async function waitForText(container: HTMLElement, text: string) { await waitFor(() => { if (!container.textContent?.includes(text)) throw new Error(`Waiting for '${text}'.`); }); }
 async function waitFor(assertion: () => void) { await vi.waitFor(assertion, { timeout: 10_000 }); }

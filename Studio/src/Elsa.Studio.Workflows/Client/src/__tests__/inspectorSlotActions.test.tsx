@@ -163,6 +163,9 @@ describe("InspectorPanel slot actions", () => {
     expect(container.textContent).toContain("elsa.activity-graph");
     expect(container.textContent).toContain("Active");
     expect(container.textContent).toContain("Recommended v3.0.0 available");
+    expect(container.textContent).toContain("pinned and read-only");
+    expect(container.querySelector<HTMLAnchorElement>("a[href='/workflows/activity-definitions?definition=invoice-definition&section=versions&version=invoice-version-2']")).toBeTruthy();
+    expect(container.querySelector<HTMLAnchorElement>("a[href='/workflows/activity-definitions?definition=invoice-definition&section=versions&version=invoice-version-2&createDraftFrom=invoice-version-2']")).toBeTruthy();
   });
 
   it("enters the slot (with the full slot descriptor) when the slot row is clicked", () => {

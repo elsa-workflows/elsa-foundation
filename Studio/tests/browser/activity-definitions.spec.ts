@@ -47,6 +47,90 @@ test("Activity Definitions retains confirmed rows when refresh fails and keeps e
   await expect(page.getByText(/hidden definition-99 secret failure/)).toHaveCount(0);
 });
 
+test("Activity Definition draft management keeps parallel labels and supports blank plus exact clone creation", async ({ page }) => {
+  const state = await mockActivityDraftManagement(page);
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=drafts");
+
+  await expect(page.getByText("Review", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Draft draft-unlabeled", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Create parallel draft" }).click();
+  await expect(page.getByRole("dialog", { name: "Create parallel draft" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Implementation provider" })).toHaveValue("elsa.activity-graph|1");
+  await page.getByRole("button", { name: "Create blank draft" }).click();
+
+  await expect(page).toHaveURL(/definition=definition-1.*section=editor.*draft=draft-blank/);
+  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  expect(state.draftRequests[0]).toMatchObject({
+    sourceVersionId: null,
+    presentationLabel: null,
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1" },
+    contract: { contractSchemaVersion: "1", inputs: [], outputs: [] }
+  });
+
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
+  await page.getByRole("button", { name: "Create draft from this exact version" }).click();
+  const dialog = page.getByRole("dialog", { name: "Create parallel draft" });
+  await expect(dialog.getByRole("radio", { name: /Clone exact version/ })).toBeChecked();
+  await dialog.getByRole("textbox", { name: /Draft label/ }).fill("Review");
+  await dialog.getByRole("button", { name: "Clone exact version" }).click();
+
+  await expect(page).toHaveURL(/definition=definition-1.*section=editor.*draft=draft-clone/);
+  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  expect(state.draftRequests[1]).toEqual({ sourceVersionId: "version-1", presentationLabel: "Review" });
+  expect(state.sourceVersion).toEqual(sourceVersionDetail());
+});
+
+test("source-owned Activity Definition history stays exact and offers no denied mutable controls", async ({ page }) => {
+  await mockActivityDraftManagement(page, { sourceOwned: true });
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
+
+  await expect(page.getByText("Source-owned and read-only")).toBeVisible();
+  await expect(page.getByText("contoso.catalog")).toBeVisible();
+  await expect(page.getByText("invoice-source")).toBeVisible();
+  await expect(page.getByLabel("Selected exact version")).toContainText("elsa.activity-graph");
+  await expect(page.getByText("Immutable public contract")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Fork/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Create draft from/ })).toHaveCount(0);
+});
+
+test("draft management dialog traps and restores focus, supports keyboard clone submission, and fits target layouts", async ({ page }) => {
+  const state = await mockActivityDraftManagement(page);
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/workflows/activity-definitions?definition=definition-1&section=drafts");
+    const opener = page.getByRole("button", { name: "Create parallel draft" });
+    await opener.focus();
+    await opener.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Create parallel draft" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+  }
+
+  const opener = page.getByRole("button", { name: "Create parallel draft" });
+  await opener.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Create parallel draft" });
+  const clone = dialog.getByRole("radio", { name: /Clone exact version/ });
+  await clone.focus();
+  await page.keyboard.press("Space");
+  await expect(clone).toBeChecked();
+  const version = dialog.getByRole("combobox", { name: "Exact immutable version" });
+  await expect(version.locator("option")).toHaveCount(2);
+  await version.selectOption("version-1");
+  await expect(version).toHaveValue("version-1");
+  await dialog.getByRole("textbox", { name: /Draft label/ }).fill("Keyboard clone");
+  const submit = dialog.getByRole("button", { name: "Clone exact version" });
+  await submit.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(/draft=draft-clone/);
+  expect(state.draftRequests.at(-1)).toEqual({ sourceVersionId: "version-1", presentationLabel: "Keyboard clone" });
+});
+
 test("Activity Definition create, graph autosave, reload, conflict preservation, and recovery", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
@@ -338,6 +422,130 @@ function definition() { return { definition: { definitionId: "definition-1", act
 function draft() { return { draft: { draftId: "draft-1", definitionId: "definition-1", revision: 3, sourceVersionId: "version-1", status: "Active", providerKey: "visual-graph", providerSchemaVersion: "1", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }, actions: [] }; }
 function draftDetail() { return { draftId: "draft-1", definitionId: "definition-1", tenantId: null, revision: 3, sourceVersionId: "version-1", status: "Active", contract: {}, provider: { providerKey: "visual-graph", schemaVersion: "1", manifestFingerprint: "fingerprint", payload: {} }, layout: [], validation: null, createdAt: "2026-07-17T09:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }; }
 function version() { return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: [] }; }
+
+async function mockActivityDraftManagement(page: Page, options: { sourceOwned?: boolean } = {}) {
+  const draftRequests: unknown[] = [];
+  const sourceVersion = sourceVersionDetail(options.sourceOwned);
+  const managedDefinition = {
+    definition: {
+      ...definition().definition,
+      contentAuthority: options.sourceOwned
+        ? { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+        : { kind: "Design", authorityKey: "elsa.activity-design", sourceId: null }
+    },
+    lifecycle: {
+      ...definition().lifecycle,
+      draftCount: options.sourceOwned ? 0 : 3,
+      head: { ...definition().lifecycle.head, providerKey: "elsa.activity-graph" },
+      recommendation: { ...definition().lifecycle.recommendation, providerKey: "elsa.activity-graph" }
+    },
+    actions: options.sourceOwned
+      ? [{ action: "fork-definition", allowed: false, unavailableCode: "activity.action.forbidden" }]
+      : [{ action: "create-draft", allowed: true }],
+    updatedAt: definition().updatedAt
+  };
+  const managedVersion = {
+    version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" },
+    providerKey: "elsa.activity-graph",
+    providerSchemaVersion: "1",
+    isRecommended: true,
+    actions: [{
+      action: options.sourceOwned ? "fork-definition" : "clone-draft",
+      allowed: !options.sourceOwned,
+      unavailableCode: options.sourceOwned ? "activity.action.forbidden" : null
+    }]
+  };
+
+  await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
+      { rel: "activity-definitions", href: "design/activities/definitions" },
+      { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
+      { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+      { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
+      { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
+      { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
+      { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
+    ] }]
+  }) }));
+  await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(managedDefinition) }));
+  await page.route(/\/design\/activities\/definitions\/definition-1\/drafts\?.*/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf(options.sourceOwned ? [] : [
+      managedDraft("draft-review-a", "Review"),
+      managedDraft("draft-review-b", "Review"),
+      managedDraft("draft-unlabeled", null)
+    ]))
+  }));
+  await page.route(/\/design\/activities\/definitions\/definition-1\/versions\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([managedVersion])) }));
+  await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(browserAuthoringCapabilities()) }));
+  await page.route("**/design/activities/versions/version-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sourceVersion) }));
+  await page.route("**/design/activities/drafts/draft-blank", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(managementDraftDetail("draft-blank", null, null) ) }));
+  await page.route("**/design/activities/drafts/draft-clone", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(managementDraftDetail("draft-clone", "Review", "version-1")) }));
+  await page.route("**/design/activities/definitions/definition-1/drafts", async route => {
+    const request = route.request().postDataJSON();
+    draftRequests.push(request);
+    const clone = request.sourceVersionId === "version-1";
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(managementDraftDetail(clone ? "draft-clone" : "draft-blank", clone ? "Review" : null, clone ? "version-1" : null)) });
+  });
+  return { draftRequests, sourceVersion };
+}
+
+function managedDraft(draftId: string, presentationLabel: string | null) {
+  return { draft: { draftId, definitionId: "definition-1", revision: 1, sourceVersionId: null, status: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1", updatedAt: "2026-07-17T10:00:00Z", presentationLabel }, actions: [] };
+}
+
+function managementDraftDetail(draftId: string, presentationLabel: string | null, sourceVersionId: string | null) {
+  return {
+    draftId,
+    definitionId: "definition-1",
+    tenantId: null,
+    revision: 1,
+    sourceVersionId,
+    status: "Active",
+    contract: browserContract(),
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:graph", payload: { rootActivity: { nodeId: "root", activityVersionId: "", inputs: [], outputs: [], structure: null }, variables: [], outputMappings: [] } },
+    layout: [],
+    validation: null,
+    createdAt: "2026-07-17T10:00:00Z",
+    updatedAt: "2026-07-17T10:00:00Z",
+    presentationLabel
+  };
+}
+
+function sourceVersionDetail(sourceOwned = false) {
+  return {
+    definition: {
+      ...definition().definition,
+      contentAuthority: sourceOwned
+        ? { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+        : { kind: "Design", authorityKey: "elsa.activity-design", sourceId: null }
+    },
+    versionId: "version-1",
+    version: "1.0.0",
+    sourceDraftId: "draft-source",
+    sourceVersionId: null,
+    contract: browserContract(),
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:source" },
+    lifecycle: "Active",
+    publishedAt: "2026-07-17T09:00:00Z"
+  };
+}
+
+function browserContract() {
+  return { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] };
+}
+
+function browserAuthoringCapabilities() {
+  return {
+    contractSchemaVersions: ["1"],
+    activityTypeKeyRules: { serverGenerated: true, allowsPreCreationOverride: false, immutable: true, prefix: "elsa.user", pattern: "^elsa\\\\.user\\\\..+$", maximumLength: 160, collisionScope: "tenant" },
+    providers: [{ providerKey: "elsa.activity-graph", displayName: "Activity Graph", manifestSchemas: [{ schemaVersion: "1", isAuthorable: true, migratableFromSchemaVersions: ["1"] }], requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] }],
+    types: [],
+    storageDriverKeys: [],
+    snapshotFingerprint: "sha256:browser"
+  };
+}
 
 async function mockActivityDefinitionAuthoring(page: Page) {
   const state = {

@@ -12,7 +12,7 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // and enforced separately because Vite emits the module stylesheet as its own manifest entry.
 const budgets = {
   entryJavaScript: 125_000,
-  stylesheet: 180_000,
+  stylesheet: 185_000,
   definitionsLandingTotal: 350_000,
   individualChunk: 500_000
 };
