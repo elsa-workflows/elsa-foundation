@@ -39,11 +39,15 @@ public static class GroundworkIdentityStoresRegistration
 
         services.RemoveAll<IUserStore>();
         services.RemoveAll<IRoleStore>();
+        services.RemoveAll<IApplicationStore>();
+        services.RemoveAll<ICredentialStore>();
         services.RemoveAll<IExternalIdentityStore>();
         services.RemoveAll<ITenantMembershipStore>();
 
         services.AddScoped<IUserStore, GroundworkUserStore>();
         services.AddScoped<IRoleStore, GroundworkRoleStore>();
+        services.AddScoped<IApplicationStore, GroundworkApplicationStore>();
+        services.AddScoped<ICredentialStore, GroundworkCredentialStore>();
         services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();
         services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
 

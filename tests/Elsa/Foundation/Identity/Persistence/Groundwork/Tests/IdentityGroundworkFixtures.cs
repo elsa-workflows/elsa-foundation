@@ -33,6 +33,27 @@ internal static class IdentityGroundworkFixtures
         Permissions: new HashSet<string> { "secrets:read", "secrets:write" },
         System: false);
 
+    public static ApplicationRecord Application() => new(
+        Id: "app-1",
+        TenantId: "tenant-1",
+        ClientId: "client-1",
+        DisplayName: "Workflow Client",
+        Type: ApplicationType.Confidential,
+        Ownership: ResourceOwnership.Foundation,
+        AllowedGrantTypes: new HashSet<string> { "client_credentials" },
+        Scopes: new HashSet<string> { "workflows:run" });
+
+    public static CredentialRecord Credential() => new(
+        Id: "credential-1",
+        TenantId: "tenant-1",
+        SubjectType: CredentialSubjectType.Application,
+        SubjectId: "app-1",
+        Kind: CredentialKind.ClientSecret,
+        HashedSecret: "sha256:credential-hash",
+        HashAlgorithm: "SHA-256",
+        Status: CredentialStatus.Active,
+        ExpiresAt: DateTimeOffset.UnixEpoch.AddDays(90));
+
     public static ExternalIdentityRecord ExternalIdentity() => new(
         TenantId: "tenant-1",
         Provider: "google",
@@ -55,6 +76,12 @@ internal static class IdentityGroundworkFixtures
         new(store, Accessor(scope));
 
     public static GroundworkRoleStore RoleStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static GroundworkApplicationStore ApplicationStore(IDocumentStore store, string scope = "tenant-1") =>
+        new(store, Accessor(scope));
+
+    public static GroundworkCredentialStore CredentialStore(IDocumentStore store, string scope = "tenant-1") =>
         new(store, Accessor(scope));
 
     public static GroundworkExternalIdentityStore ExternalIdentityStore(IDocumentStore store, string scope = "tenant-1") =>

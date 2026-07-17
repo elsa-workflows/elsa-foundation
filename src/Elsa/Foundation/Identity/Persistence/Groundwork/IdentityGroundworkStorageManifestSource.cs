@@ -23,10 +23,19 @@ public sealed class IdentityGroundworkStorageManifestSource : IGroundworkStorage
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,
             manifest,
-            [typeof(IUserStore), typeof(IRoleStore), typeof(IExternalIdentityStore), typeof(ITenantMembershipStore)],
+            [
+                typeof(IUserStore),
+                typeof(IRoleStore),
+                typeof(IApplicationStore),
+                typeof(ICredentialStore),
+                typeof(IExternalIdentityStore),
+                typeof(ITenantMembershipStore)
+            ],
             [
                 AtomicRoute(IdentityStorageManifest.IdentityUserDocumentKind, "identity-user-authority"),
                 AtomicRoute(IdentityStorageManifest.IdentityRoleDocumentKind, "identity-role-authority"),
+                AtomicRoute(IdentityStorageManifest.IdentityApplicationDocumentKind, "identity-application"),
+                AtomicRoute(IdentityStorageManifest.IdentityCredentialDocumentKind, "identity-credential"),
                 AtomicRoute(IdentityStorageManifest.UserClaimDocumentKind, "identity-user-claim"),
                 AtomicRoute(IdentityStorageManifest.RoleClaimDocumentKind, "identity-role-claim"),
                 AtomicRoute(IdentityStorageManifest.ExternalLoginDocumentKind, "identity-external-login"),

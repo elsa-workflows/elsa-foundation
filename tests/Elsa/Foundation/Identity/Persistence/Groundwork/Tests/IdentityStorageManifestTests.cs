@@ -15,6 +15,8 @@ public sealed class IdentityStorageManifestTests
     [
         "identityUser",
         "identityRole",
+        "identityApplication",
+        "identityCredential",
         "identityUserClaim",
         "identityRoleClaim",
         "identityExternalLogin",
@@ -45,7 +47,7 @@ public sealed class IdentityStorageManifestTests
     [Fact]
     public void Manifest_declares_the_exact_identity_authority_units()
     {
-        Assert.Equal("1.0.4", IdentityStorageManifest.SchemaVersion);
+        Assert.Equal("1.0.5", IdentityStorageManifest.SchemaVersion);
         var actual = IdentityStorageManifest.Create()
             .StorageUnits
             .Select(unit => unit.Identity.Value)
@@ -97,11 +99,15 @@ public sealed class IdentityStorageManifestTests
         {
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityStorageManifest.IdentityRoleDocumentKind,
+            IdentityStorageManifest.IdentityApplicationDocumentKind,
+            IdentityStorageManifest.IdentityCredentialDocumentKind,
             IdentityStorageManifest.UserClaimDocumentKind,
             IdentityStorageManifest.RoleClaimDocumentKind,
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityStorageManifest.UserRoleDocumentKind,
             IdentityStorageManifest.UserTokenDocumentKind,
+            IdentityStorageManifest.IdentityApplicationDocumentKind,
+            IdentityStorageManifest.IdentityCredentialDocumentKind,
             IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
             IdentityStorageManifest.UserNameReservationDocumentKind,
             IdentityStorageManifest.EmailReservationDocumentKind,
@@ -133,6 +139,8 @@ public sealed class IdentityStorageManifestTests
         var units = IdentityStorageManifest.Create().StorageUnits.ToDictionary(unit => unit.Identity.Value);
         var dedicated = new HashSet<string>(StringComparer.Ordinal)
         {
+            IdentityStorageManifest.IdentityApplicationDocumentKind,
+            IdentityStorageManifest.IdentityCredentialDocumentKind,
             IdentityStorageManifest.UserTokenDocumentKind,
             IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
             IdentityStorageManifest.UserNameReservationDocumentKind,
