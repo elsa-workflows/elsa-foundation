@@ -16,6 +16,24 @@ export interface ActivityDefinitionVersionReference {
   providerSchemaVersion: string;
 }
 
+export interface RecommendedActivityDefinition {
+  definitionId: string;
+  activityTypeKey: string;
+  tenantId?: string | null;
+  category: string;
+  displayName: string;
+  description?: string | null;
+  versionId: string;
+  version: string;
+  isAvailable: boolean;
+  unavailableReason?: string | null;
+}
+
+export interface RecommendedActivityDefinitionPage {
+  items: RecommendedActivityDefinition[];
+  nextOffset?: number | null;
+}
+
 export interface ActivityDefinitionIdentity {
   definitionId: string;
   activityTypeKey: string;

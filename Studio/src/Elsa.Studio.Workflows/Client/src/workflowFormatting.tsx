@@ -1,4 +1,4 @@
-import { Boxes, GitBranch, ListTree, Play, Terminal, Zap } from "lucide-react";
+import { Boxes, GitBranch, Layers3, ListTree, Play, Terminal, Zap } from "lucide-react";
 import type { WorkflowNodeData } from "./workflowAdapter";
 
 /** Shared presentational formatters used across the workflow editor and instance views. */
@@ -44,6 +44,8 @@ export function renderActivityIcon(icon: WorkflowNodeData["icon"]) {
       return <Play size={15} />;
     case "trigger":
       return <Zap size={15} />;
+    case "reusable":
+      return <Layers3 size={15} />;
     default:
       return <Boxes size={15} />;
   }

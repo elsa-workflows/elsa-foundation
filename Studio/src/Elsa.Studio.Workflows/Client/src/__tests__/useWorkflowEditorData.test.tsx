@@ -17,14 +17,23 @@ afterEach(() => {
   active = null;
 });
 
-function createApi(expressionResponses: Array<unknown | Error>) {
+function createApi(
+  expressionResponses: Array<unknown | Error>,
+  options: {
+    activities?: unknown[];
+    recommended?: unknown[];
+  } = {}
+) {
   let expressionAttempt = 0;
   const getJson = vi.fn(async (path: string) => {
     if (path === "/capabilities") {
       return {
         capabilities: [
           { id: "elsa.api.workflow-design", contractVersion: "1", links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }] },
-          { id: "elsa.api.activity-design", contractVersion: "1", links: [{ rel: "activity-catalog", href: "design/activities/catalog" }] },
+          { id: "elsa.api.activity-design", contractVersion: "1", links: [
+            { rel: "activity-catalog", href: "design/activities/catalog" },
+            { rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" }
+          ] },
           { id: "elsa.api.expressions", contractVersion: "1", links: [{ rel: "expression-descriptors", href: "expressions/descriptors" }] }
         ]
       };
@@ -35,7 +44,8 @@ function createApi(expressionResponses: Array<unknown | Error>) {
         versions: []
       };
     }
-    if (path.includes("/design/activities/catalog")) return { activities: [] };
+    if (path.includes("/design/activities/catalog")) return { activities: options.activities ?? [] };
+    if (path.includes("/design/activities/definitions/picker")) return { items: options.recommended ?? [], nextOffset: null };
     if (path.endsWith("/expressions/descriptors")) {
       const response = expressionResponses[Math.min(expressionAttempt++, expressionResponses.length - 1)];
       if (response instanceof Error) throw response;
@@ -60,6 +70,7 @@ function Probe({ context }: { context: StudioEndpointContext }) {
       <output data-testid="expressions" data-status={data.expressionDescriptorStatus}>
         {data.expressionDescriptors.map(descriptor => descriptor.type).join(",")}
       </output>
+      <output data-testid="palette">{data.paletteCatalog.map(activity => activity.activityVersionId).join(",")}</output>
       <button type="button" onClick={() => void data.reload()}>Reload definition</button>
       <button type="button" onClick={() => void data.reloadExpressionDescriptors()}>Retry descriptors</button>
     </div>
@@ -174,6 +185,47 @@ describe("useWorkflowEditorData expression descriptor contract", () => {
     await Promise.resolve();
 
     expect(output.textContent).toBe("Ruby");
+  });
+
+  it("offers only the exact recommended catalog version while retaining historical versions for resolution", async () => {
+    const version = (activityVersionId: string, semanticVersion: string) => ({
+      activityVersionId,
+      activityTypeKey: "Contoso.Invoice",
+      version: semanticVersion,
+      displayName: "Invoice",
+      category: "Finance",
+      executionType: "Action",
+      available: true,
+      inputs: [],
+      outputs: [],
+      ports: [],
+      containerStructure: null,
+      authoringTemplate: { nodeId: "activity", activityVersionId, inputs: {}, outputs: {}, structure: null }
+    });
+    const api = createApi([[]], {
+      activities: [
+        {
+          ...version("write-line-v1", "1.0.0"),
+          activityTypeKey: "Elsa.WriteLine",
+          displayName: "Write Line",
+          category: "Primitives"
+        },
+        version("invoice-v10", "10.0.0"),
+        version("invoice-v2", "2.0.0")
+      ],
+      recommended: [{
+        definitionId: "invoice-definition",
+        activityTypeKey: "Contoso.Invoice",
+        category: "Finance",
+        displayName: "Invoice",
+        versionId: "invoice-v2",
+        version: "2.0.0",
+        isAvailable: true
+      }]
+    });
+    const container = render(api.context);
+
+    await waitFor(() => expect(container.querySelector("[data-testid='palette']")?.textContent).toBe("write-line-v1,invoice-v2"));
   });
 });
 

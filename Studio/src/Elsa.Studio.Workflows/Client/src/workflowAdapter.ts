@@ -11,6 +11,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   activityTypeKey?: string;
   category?: string;
   executionType?: string;
+  activityDefinitionVersion?: string;
   icon?: WorkflowNodeIcon;
   childSlots: ChildSlot[];
   acceptsInbound: boolean;
@@ -23,7 +24,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   onEnterSlot?(slot: ChildSlot): void;
 }
 
-export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger";
+export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger" | "reusable";
 
 export interface WorkflowPortDescriptor {
   name: string;
@@ -742,9 +743,15 @@ export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
 
 export function createActivityNode(activity: ActivityCatalogItem, nodeId: string): ActivityNode {
   const template = activity.authoringTemplate ? structuredClone(activity.authoringTemplate) : null;
+  const reusableIdentity = activity.activityDefinitionId ? {
+    activityDefinitionId: activity.activityDefinitionId,
+    activityDefinitionVersionId: activity.activityDefinitionVersionId ?? activity.activityVersionId,
+    activityDefinitionVersion: activity.activityDefinitionVersion ?? activity.version
+  } : {};
   return template
-    ? { ...template, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
+    ? { ...template, ...reusableIdentity, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
     : {
+        ...reusableIdentity,
         nodeId,
         activityVersionId: activity.activityVersionId,
         inputs: [],
@@ -800,7 +807,8 @@ function createWorkflowNode(
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
-      icon: resolveActivityIcon(catalogItem),
+      activityDefinitionVersion: activity.activityDefinitionVersion ?? catalogItem?.activityDefinitionVersion,
+      icon: activity.activityDefinitionId ? "reusable" : resolveActivityIcon(catalogItem),
       childSlots: getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
@@ -811,6 +819,7 @@ function createWorkflowNode(
 
 export function resolveActivityIcon(activity: ActivityCatalogItem | undefined): WorkflowNodeIcon {
   if (!activity) return "activity";
+  if (activity.activityDefinitionId) return "reusable";
 
   const configuredIcon = normalizeWorkflowNodeIcon(activity.icon);
   if (configuredIcon) return configuredIcon;
@@ -832,7 +841,7 @@ function normalizeWorkflowNodeIcon(icon: string | null | undefined): WorkflowNod
   if (!icon) return null;
 
   const normalized = icon.trim().toLowerCase();
-  if (["activity", "flowchart", "sequence", "terminal", "runtime", "trigger"].includes(normalized)) {
+  if (["activity", "flowchart", "sequence", "terminal", "runtime", "trigger", "reusable"].includes(normalized)) {
     return normalized as WorkflowNodeIcon;
   }
 

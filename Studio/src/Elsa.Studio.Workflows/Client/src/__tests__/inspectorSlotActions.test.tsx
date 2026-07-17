@@ -112,6 +112,49 @@ function findButton(container: HTMLElement, text: string) {
 }
 
 describe("InspectorPanel slot actions", () => {
+  it("keeps full reusable identity, provider, lifecycle, and upgrade availability in the Inspector", () => {
+    const node: ActivityNode = {
+      ...forEachNode,
+      activityVersionId: "invoice-version-2",
+      activityDefinitionId: "invoice-definition",
+      activityDefinitionVersionId: "invoice-version-2",
+      activityDefinitionVersion: "2.0.0"
+    };
+    const container = render(panelElement([], {}, {
+      selectedNode: node,
+      selectedNodeLabel: "Invoice evaluator",
+      selectedActivityType: "Contoso.InvoiceEvaluator",
+      selectedReusableVersion: {
+        version: {
+          versionId: "invoice-version-2",
+          definitionId: "invoice-definition",
+          version: "2.0.0",
+          lifecycle: "Active",
+          publishedAt: "2026-07-17T10:00:00Z"
+        },
+        providerKey: "elsa.activity-graph",
+        providerSchemaVersion: "1",
+        isRecommended: false,
+        actions: []
+      },
+      selectedRecommendedVersion: {
+        definitionId: "invoice-definition",
+        activityTypeKey: "Contoso.InvoiceEvaluator",
+        category: "Finance",
+        displayName: "Invoice evaluator",
+        versionId: "invoice-version-3",
+        version: "3.0.0",
+        isAvailable: true
+      }
+    }));
+
+    expect(container.textContent).toContain("invoice-definition");
+    expect(container.textContent).toContain("invoice-version-2");
+    expect(container.textContent).toContain("elsa.activity-graph");
+    expect(container.textContent).toContain("Active");
+    expect(container.textContent).toContain("Recommended v3.0.0 available");
+  });
+
   it("enters the slot (with the full slot descriptor) when the slot row is clicked", () => {
     const onEnterSlot = vi.fn();
     const slot = bodySlot([writeLineChild]);

@@ -24,6 +24,8 @@ import type {
   ActivityManagementPage,
   CreateActivityDefinitionRequest,
   CreateActivityDefinitionResponse,
+  RecommendedActivityDefinition,
+  RecommendedActivityDefinitionPage,
   ReplaceActivityDefinitionDraftRequest
 } from "../activityDefinitionTypes";
 import {
@@ -42,6 +44,7 @@ export const activityDesignKeys = {
   definitionCollections: ["activity-design", "definitions"] as const,
   definitionResources: ["activity-design", "definition"] as const,
   authoringCapabilities: ["activity-design", "authoring-capabilities"] as const,
+  recommendedDefinitions: ["activity-design", "recommended-definitions"] as const,
   contractExpressionDescriptors: ["activity-design", "contract-expression-descriptors"] as const,
   definitionCollection: (request: ActivityDefinitionCollectionRequest) => ["activity-design", "definitions", request] as const,
   definition: (definitionId: string) => ["activity-design", "definition", definitionId] as const,
@@ -200,6 +203,21 @@ export async function listActivities(context: StudioEndpointContext) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-catalog");
   const response = await context.http.getJson<ActivityCatalogResponse>(path);
   return { activities: (response.activities ?? []).map(normalizeActivity) } satisfies ActivityCatalogResponse;
+}
+
+export async function listRecommendedActivityDefinitions(context: StudioEndpointContext) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "recommended-activity-definitions");
+  const items: RecommendedActivityDefinition[] = [];
+  let offset = 0;
+
+  while (true) {
+    const parameters = new URLSearchParams({ offset: String(offset), limit: "100" });
+    const page = await context.http.getJson<RecommendedActivityDefinitionPage>(`${path}?${parameters.toString()}`);
+    items.push(...(Array.isArray(page?.items) ? page.items : []));
+    if (typeof page?.nextOffset !== "number") return items;
+    if (page.nextOffset <= offset) throw new Error("Recommended Activity Definition pagination did not advance.");
+    offset = page.nextOffset;
+  }
 }
 
 export async function listActivityDefinitions(

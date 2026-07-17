@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getActivityExecutionInspection } from "../api/runtime";
+import { getActivityExecutionDescendants, getActivityExecutionInspection, getActivityExecutionLayout } from "../api/runtime";
 import {
   WorkflowActivityExecutionDetails,
   WorkflowIncidentList,
@@ -25,7 +25,9 @@ import { flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNod
 
 vi.mock("../api/runtime", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/runtime")>()),
-  getActivityExecutionInspection: vi.fn()
+  getActivityExecutionInspection: vi.fn(),
+  getActivityExecutionDescendants: vi.fn(),
+  getActivityExecutionLayout: vi.fn()
 }));
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -40,6 +42,8 @@ afterEach(() => {
   restoreClipboard?.();
   restoreClipboard = null;
   vi.mocked(getActivityExecutionInspection).mockReset();
+  vi.mocked(getActivityExecutionDescendants).mockReset();
+  vi.mocked(getActivityExecutionLayout).mockReset();
 });
 
 function render(ui: React.ReactElement) {
@@ -170,6 +174,96 @@ function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"
 }
 
 describe("WorkflowActivityExecutionDetails", () => {
+  it("separates outer Boundary lifecycle from Descendant aggregate and reads its pinned historical layout", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue({
+      ...inspection([]),
+      boundary: {
+        kind: "ReusableActivity",
+        definitionId: "invoice-definition",
+        definitionVersionId: "invoice-version-2",
+        version: "2.0.0",
+        templateHash: "sha256:invoice-v2",
+        invocationOrigin: [{ kind: "TemplateBoundary", id: "invoice-version-2" }],
+        executionScopeId: "scope-invoice",
+        hasChildren: true,
+        directChildCount: 1,
+        committedDescendantCount: 2,
+        aggregate: {
+          status: "Completed",
+          total: 2,
+          scheduled: 0,
+          running: 0,
+          suspended: 0,
+          completed: 2,
+          faulted: 0,
+          cancelled: 0,
+          blockingIncidentCount: 0,
+          retryCount: 0,
+          lastExecutionSequence: 3
+        },
+        layoutAvailable: true
+      }
+    });
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue({
+      root: {
+        workflowExecutionId: "wf-1",
+        activityExecutionId: "ae-1",
+        executionScopeId: "scope-invoice",
+        definitionVersionId: "invoice-version-2",
+        templateHash: "sha256:invoice-v2"
+      },
+      committedThroughSequence: 3,
+      effectiveLimit: 100,
+      items: [{
+        activityExecutionId: "ae-child",
+        workflowExecutionId: "wf-1",
+        executableNodeId: "invoice-write",
+        authoredActivityId: "write",
+        activityType: "Elsa.WriteLine",
+        activityTypeVersion: "1",
+        status: "Completed",
+        executionSequence: 2,
+        scheduledAt: "2026-07-09T10:00:01Z",
+        relativeDepth: 1,
+        outcomeNames: [],
+        bookmarkCount: 0,
+        incidentCount: 0,
+        blockingIncidentCount: 0,
+        metadata: {}
+      }],
+      nextCursor: null
+    });
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue({
+      workflowExecutionId: "wf-1",
+      activityExecutionId: "ae-1",
+      artifactId: "artifact-workflow",
+      sourceReferenceId: "source-reference-published",
+      selection: "ExecutedReference",
+      boundaryOrigin: [{ kind: "TemplateBoundary", id: "invoice-version-2" }],
+      templateHash: "sha256:invoice-v2",
+      nodes: [{
+        templateNodeId: "template-write",
+        authoredActivityId: "write",
+        executableNodeId: "invoice-write",
+        x: 120,
+        y: 80,
+        hasPinnedGeometry: true
+      }],
+      connections: [],
+      nestedBoundaries: []
+    });
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Pinned historical layout"));
+    expect(container.textContent).toContain("Boundary lifecycle");
+    expect(container.textContent).toContain("Descendant aggregate");
+    expect(container.textContent).toContain("source-reference-published");
+    expect(container.textContent).toContain("invoice-write");
+    expect(getActivityExecutionDescendants).toHaveBeenCalledWith(context, "wf-1", "ae-1");
+    expect(getActivityExecutionLayout).toHaveBeenCalledWith(context, "wf-1", "ae-1");
+  });
+
   it("loads and renders diagnostic snapshots for selected execution inputs and outputs", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([
       {

@@ -54,6 +54,7 @@ import type { WorkflowDraftRecipe } from "./workflowDocument";
 import { planActivityDrop } from "./addActivityRouting";
 import type { ScopeFrame } from "../workflowAdapter";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { observeReusableActivity } from "../reusableActivityObservability";
 
 const rootScopeViewportKey = "root";
 
@@ -243,6 +244,14 @@ export function useWorkflowCanvas({
     }
 
     const next = createActivityNode(activity, createNodeId(activity));
+    const observeReusablePlacement = () => {
+      if (!activity.activityDefinitionVersionId) return;
+      observeReusableActivity({
+        event: "placement",
+        surface: "workflow-designer",
+        outcome: "ready"
+      });
+    };
     // Route the drop against the LIVE frame path. Being inside a slot (frames.length > 0) makes wrapping
     // or leaf-erroring the root impossible: a failed resolve there is a stale frame, not a bare root.
     const plan = planActivityDrop(draft?.state.rootActivity, frames, next, activity, catalogByVersion);
@@ -252,6 +261,7 @@ export function useWorkflowCanvas({
         ({ draft: current }) => current ? { ...current, state: { ...current.state, rootActivity: next } } : null,
         next.nodeId
       );
+      observeReusablePlacement();
       return next;
     }
 
@@ -281,6 +291,7 @@ export function useWorkflowCanvas({
       }, draft?.state.rootActivity?.nodeId ?? null);
       setError("");
       setStatus(`Wrapped root in ${getActivityDisplay(activity)}`);
+      observeReusablePlacement();
       return null;
     }
 
@@ -310,11 +321,19 @@ export function useWorkflowCanvas({
       setStatus(`Replaced ${plan.slot.label} content`);
     }
 
+    observeReusablePlacement();
     return next;
   }, [catalogByVersion, draft?.state.rootActivity, frames, isUnsupportedDesigner, editDraftAndSelect, resetToRoot, pinLayout, setError, setStatus]);
 
   const createCanvasActivity = useCallback((activity: ActivityCatalogItem, position: XYPosition) => {
     const activityNode = createActivityNode(activity, createNodeId(activity));
+    if (activity.activityDefinitionVersionId) {
+      observeReusableActivity({
+        event: "placement",
+        surface: "workflow-designer",
+        outcome: "ready"
+      });
+    }
     const node: Node<WorkflowNodeData> = {
       id: activityNode.nodeId,
       type: "workflowActivity",

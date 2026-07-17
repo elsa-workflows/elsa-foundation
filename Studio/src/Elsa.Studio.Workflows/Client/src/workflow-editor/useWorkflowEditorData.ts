@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioActivityDescriptor, StudioEndpointContext, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnostics, ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { getDefinition } from "../api/workflowDesign";
-import { listActivities } from "../api/activityDesign";
+import { listActivities, listRecommendedActivityDefinitions } from "../api/activityDesign";
+import type { RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import { listExpressionDescriptors } from "../api/expressions";
+import { observeReusableActivity } from "../reusableActivityObservability";
 
 interface WorkflowEditorDataParams {
   context: StudioEndpointContext;
@@ -23,6 +25,8 @@ interface WorkflowEditorDataParams {
 export function useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft, markSaved, setError }: WorkflowEditorDataParams) {
   const [details, setDetails] = useState<WorkflowDefinitionDetails | null>(null);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
+  const [paletteCatalog, setPaletteCatalog] = useState<ActivityCatalogItem[]>([]);
+  const [recommendedDefinitions, setRecommendedDefinitions] = useState<RecommendedActivityDefinition[]>([]);
   const [activityDescriptors, setActivityDescriptors] = useState<StudioActivityDescriptor[]>([]);
   const [availabilityDiagnostics, setAvailabilityDiagnostics] = useState<ActivityAvailabilityDiagnostics | null>(null);
   const [expressionDescriptorState, setExpressionDescriptorState] = useState<{
@@ -62,9 +66,17 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
 
   const reload = useCallback(async () => {
     setError("");
-    const [nextDetails, nextCatalog] = await Promise.all([
+    const [nextDetails, nextCatalog, nextRecommendedDefinitions] = await Promise.all([
       getDefinition(context, definitionId),
       listActivities(context),
+      listRecommendedActivityDefinitions(context).catch(error => {
+        observeReusableActivity({
+          event: "picker-load",
+          surface: "workflow-designer",
+          outcome: "failed"
+        });
+        throw error;
+      }),
       reloadExpressionDescriptors()
     ]);
     const nextDraft = nextDetails.draft ?? null;
@@ -74,6 +86,14 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     loadDraft(nextDraft);
     const activities = nextCatalog.activities ?? [];
     setCatalog(activities);
+    setRecommendedDefinitions(nextRecommendedDefinitions);
+    const nextPaletteCatalog = projectRecommendedPalette(activities, nextRecommendedDefinitions);
+    setPaletteCatalog(nextPaletteCatalog);
+    observeReusableActivity({
+      event: "picker-load",
+      surface: "workflow-designer",
+      outcome: nextPaletteCatalog.length > 0 ? "ready" : "empty"
+    });
     setActivityDescriptors(activities.map(toActivityDescriptor));
     setAvailabilityDiagnostics(null);
     setDescriptorStatus("ready");
@@ -90,6 +110,8 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     details,
     setDetails,
     catalog,
+    paletteCatalog,
+    recommendedDefinitions,
     activityDescriptors,
     availabilityDiagnostics,
     expressionDescriptors: expressionStateMatchesAuthority ? expressionDescriptorState.descriptors : [],
@@ -98,6 +120,27 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     reload,
     reloadExpressionDescriptors
   };
+}
+
+export function projectRecommendedPalette(
+  catalog: ActivityCatalogItem[],
+  recommendations: RecommendedActivityDefinition[]
+): ActivityCatalogItem[] {
+  const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
+  const reusableActivityTypeKeys = new Set(recommendations.map(recommendation => recommendation.activityTypeKey));
+  const nativeActivities = catalog.filter(activity => !reusableActivityTypeKeys.has(activity.activityTypeKey));
+  return recommendations.reduce<ActivityCatalogItem[]>((result, recommendation) => {
+    if (!recommendation.isAvailable) return result;
+    const activity = catalogByVersion.get(recommendation.versionId);
+    if (!activity || activity.activityTypeKey !== recommendation.activityTypeKey) return result;
+    result.push({
+      ...activity,
+      activityDefinitionId: recommendation.definitionId,
+      activityDefinitionVersionId: recommendation.versionId,
+      activityDefinitionVersion: recommendation.version
+    });
+    return result;
+  }, nativeActivities);
 }
 
 function toActivityDescriptor(activity: ActivityCatalogItem): StudioActivityDescriptor {

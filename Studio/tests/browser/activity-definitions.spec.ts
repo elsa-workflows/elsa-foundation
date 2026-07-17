@@ -220,6 +220,54 @@ test("Activity Definition publication keeps first and later recommendation seman
   expect(state.publicationWrites).toBe(2);
 });
 
+test("published recommendation is placed exactly, dispatched once, and inspected as one reusable boundary", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await createBrowserActivity(page);
+
+  await page.getByRole("combobox", { name: "Root activity" }).selectOption("sequence-v1");
+  await expect(page.getByText("Saved revision 2")).toBeVisible();
+  state.validationMode = "valid";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByText("Valid draft")).toBeVisible();
+  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
+  await page.getByRole("button", { name: "Publish 2.0.0" }).click();
+  await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
+  expect(state.recommendedVersionId).toBe("published-version-1");
+
+  const journey = await mockReusableBoundaryJourney(page);
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto("/?mode=reusable-boundary");
+
+  const recommended = page.getByRole("treeitem", { name: /Published browser activity.*2\.0\.0/ });
+  await expect(recommended).toBeVisible();
+  await expect(page.getByText("v10.0.0")).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: /version/i })).toHaveCount(0);
+  await recommended.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("button", { name: /Published browser activity exact version 2\.0\.0/ })).toBeVisible();
+  const inspector = page.getByRole("complementary", { name: "Activity inspector" });
+  await expect(inspector).toContainText("activity-def-browser");
+  await expect(inspector).toContainText("published-version-1");
+  await expect(inspector).toContainText("elsa.activity-graph");
+  await expect(inspector).toContainText("Active");
+
+  await page.getByRole("button", { name: "Dispatch workflow" }).click();
+  await expect(page.getByText("One Run · workflow-execution-1")).toBeVisible();
+  expect(journey.dispatchWrites).toBe(1);
+  const runDetails = page.getByRole("complementary", { name: "Run details" });
+  await expect(runDetails).toContainText("Boundary lifecycle");
+  await expect(runDetails).toContainText("Descendant aggregate");
+  await expect(runDetails).toContainText("Pinned historical layout");
+  await expect(runDetails).toContainText("workflow-source-1");
+  await expect(runDetails).toContainText("invoice-write");
+  await expect(runDetails.getByText("Boundary lifecycle")).toHaveCount(1);
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 test("Activity Definition publication reconciles an ambiguous response without duplicate writes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   state.publishMode = "ambiguous";
@@ -463,6 +511,238 @@ async function mockActivityDefinitionAuthoring(page: Page) {
   });
   await page.route("**/design/activities/drafts/activity-draft-recovery", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) }));
   return state;
+}
+
+async function mockReusableBoundaryJourney(page: Page) {
+  const state = { dispatchWrites: 0 };
+  await page.unroute("**/capabilities");
+  await page.unroute("**/design/activities/catalog");
+  await page.route("**/capabilities", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ capabilities: [
+      {
+        id: "elsa.api.activity-design",
+        contractVersion: "1",
+        links: [
+          { rel: "activity-catalog", href: "design/activities/catalog" },
+          { rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" },
+          { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
+        ]
+      },
+      {
+        id: "elsa.api.runtime",
+        contractVersion: "1",
+        links: [
+          { rel: "workflow-execute", href: "runtime/executables/{artifactId}/execute", templated: true },
+          { rel: "activity-execution", href: "runtime/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true },
+          { rel: "activity-execution-descendants", href: "runtime/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants", templated: true },
+          { rel: "activity-execution-layout", href: "runtime/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout", templated: true }
+        ]
+      }
+    ] })
+  }));
+  await page.route("**/design/activities/catalog", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ activities: [
+      reusableCatalogActivity("published-version-10", "10.0.0"),
+      reusableCatalogActivity("published-version-1", "2.0.0")
+    ] })
+  }));
+  await page.route(/\/design\/activities\/definitions\/picker\?.*/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      items: [{
+        definitionId: "activity-def-browser",
+        activityTypeKey: "elsa.user.browser-graph-activity.activity-def-browser",
+        tenantId: "browser-tenant",
+        category: "Browser tests",
+        displayName: "Published browser activity",
+        description: "A reusable activity boundary.",
+        versionId: "published-version-1",
+        version: "2.0.0",
+        isAvailable: true,
+        unavailableReason: null
+      }],
+      nextOffset: null
+    })
+  }));
+  await page.route("**/design/activities/versions/published-version-1", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      definition: {
+        definitionId: "activity-def-browser",
+        recommendedVersionId: "published-version-1"
+      },
+      versionId: "published-version-1",
+      version: "2.0.0",
+      lifecycle: "Active",
+      provider: {
+        providerKey: "elsa.activity-graph",
+        schemaVersion: "1"
+      },
+      contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] },
+      publishedAt: "2026-07-17T10:00:00Z"
+    })
+  }));
+  await page.route("**/runtime/executables/workflow-artifact-1/execute", route => {
+    state.dispatchWrites += 1;
+    return route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ workflowExecutionId: "workflow-execution-1" })
+    });
+  });
+  await page.route("**/runtime/instances/workflow-execution-1/activity-executions/boundary-execution-1", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(boundaryInspection())
+  }));
+  await page.route(/\/runtime\/instances\/workflow-execution-1\/activity-executions\/boundary-execution-1\/descendants\?limit=100$/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      root: {
+        workflowExecutionId: "workflow-execution-1",
+        activityExecutionId: "boundary-execution-1",
+        executionScopeId: "scope-invoice",
+        definitionVersionId: "published-version-1",
+        templateHash: "sha256:invoice-v2"
+      },
+      committedThroughSequence: 3,
+      effectiveLimit: 100,
+      items: [{
+        activityExecutionId: "descendant-execution-1",
+        workflowExecutionId: "workflow-execution-1",
+        executableNodeId: "invoice-write",
+        authoredActivityId: "write",
+        activityType: "Elsa.WriteLine",
+        activityTypeVersion: "1",
+        status: "Completed",
+        executionSequence: 2,
+        scheduledAt: "2026-07-17T10:00:01Z",
+        relativeDepth: 1,
+        outcomeNames: [],
+        bookmarkCount: 0,
+        incidentCount: 0,
+        blockingIncidentCount: 0,
+        metadata: {}
+      }],
+      nextCursor: null
+    })
+  }));
+  await page.route("**/runtime/instances/workflow-execution-1/activity-executions/boundary-execution-1/layout", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      workflowExecutionId: "workflow-execution-1",
+      activityExecutionId: "boundary-execution-1",
+      artifactId: "workflow-artifact-1",
+      sourceReferenceId: "workflow-source-1",
+      selection: "ExecutedReference",
+      boundaryOrigin: [{ kind: "TemplateBoundary", id: "published-version-1" }],
+      templateHash: "sha256:invoice-v2",
+      nodes: [{
+        templateNodeId: "template-write",
+        authoredActivityId: "write",
+        executableNodeId: "invoice-write",
+        x: 120,
+        y: 80,
+        hasPinnedGeometry: true
+      }],
+      connections: [],
+      nestedBoundaries: []
+    })
+  }));
+  return state;
+}
+
+function reusableCatalogActivity(activityVersionId: string, version: string) {
+  return {
+    activityVersionId,
+    activityTypeKey: "elsa.user.browser-graph-activity.activity-def-browser",
+    version,
+    category: "Browser tests",
+    displayName: "Published browser activity",
+    description: "A reusable activity boundary.",
+    executionType: "sync",
+    inputs: [],
+    outputs: [],
+    designFacets: [],
+    available: true,
+    authoringTemplate: {
+      nodeId: "template-boundary",
+      activityVersionId,
+      inputs: [],
+      outputs: [],
+      structure: null
+    }
+  };
+}
+
+function boundaryInspection() {
+  return {
+    activityExecutionId: "boundary-execution-1",
+    workflowExecutionId: "workflow-execution-1",
+    executableNodeId: "invoice-boundary",
+    authoredActivityId: "invoice-boundary",
+    activityType: "Contoso.InvoiceEvaluator",
+    activityTypeVersion: "2.0.0",
+    status: "Completed",
+    subStatus: null,
+    executionSequence: 1,
+    scheduledAt: "2026-07-17T10:00:00Z",
+    startedAt: "2026-07-17T10:00:01Z",
+    completedAt: "2026-07-17T10:00:02Z",
+    firstCheckpointId: "checkpoint:start",
+    lastCheckpointId: "checkpoint:complete",
+    lastCommittedAt: "2026-07-17T10:00:02Z",
+    provenance: {
+      parentActivityExecutionId: null,
+      schedulingActivityExecutionId: null,
+      schedulingWorkflowExecutionId: "workflow-execution-1",
+      branchId: null,
+      iterationId: null,
+      executionPathId: null,
+      executionScopeId: "scope-invoice",
+      schedulingCause: null,
+      metadata: {}
+    },
+    outcomeNames: [],
+    bookmarks: [],
+    incidents: [],
+    valueSnapshots: [],
+    metadata: {},
+    boundary: {
+      kind: "ReusableActivity",
+      definitionId: "activity-def-browser",
+      definitionVersionId: "published-version-1",
+      version: "2.0.0",
+      templateHash: "sha256:invoice-v2",
+      invocationOrigin: [{ kind: "TemplateBoundary", id: "published-version-1" }],
+      executionScopeId: "scope-invoice",
+      hasChildren: true,
+      directChildCount: 1,
+      committedDescendantCount: 1,
+      aggregate: {
+        status: "Completed",
+        total: 1,
+        scheduled: 0,
+        running: 0,
+        suspended: 0,
+        completed: 1,
+        faulted: 0,
+        cancelled: 0,
+        blockingIncidentCount: 0,
+        retryCount: 0,
+        lastExecutionSequence: 3
+      },
+      layoutAvailable: true
+    }
+  };
 }
 
 function authoringApiCapabilities() {

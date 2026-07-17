@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  ActivityExecutionHierarchyPage,
+  ActivityExecutionLayout,
   RuntimeDiagnosticsEvidenceLevel,
   RuntimeDiagnosticsSettingsView,
   RuntimeDiagnosticsSubjectOverrides,
@@ -237,6 +239,32 @@ export async function getActivityExecutionInspection(
     "activity-execution",
     { workflowExecutionId, activityExecutionId });
   return context.http.getJson<ActivityExecutionInspection>(path);
+}
+
+export async function getActivityExecutionDescendants(
+  context: StudioEndpointContext,
+  workflowExecutionId: string,
+  activityExecutionId: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "activity-execution-descendants",
+    { workflowExecutionId, activityExecutionId });
+  return context.http.getJson<ActivityExecutionHierarchyPage>(`${path}?limit=100`);
+}
+
+export async function getActivityExecutionLayout(
+  context: StudioEndpointContext,
+  workflowExecutionId: string,
+  activityExecutionId: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "activity-execution-layout",
+    { workflowExecutionId, activityExecutionId });
+  return context.http.getJson<ActivityExecutionLayout>(path);
 }
 
 export async function listWorkflowIncidents(context: StudioEndpointContext, workflowExecutionId: string) {

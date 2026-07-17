@@ -52,6 +52,7 @@ import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
 import { useDialogFocus } from "./useDialogFocus";
+import { useActivityDefinitionVersion } from "../api/activityDesign";
 
 export function WorkflowEditor({
   context,
@@ -125,6 +126,8 @@ export function WorkflowEditor({
     details,
     setDetails,
     catalog,
+    paletteCatalog,
+    recommendedDefinitions,
     activityDescriptors,
     availabilityDiagnostics,
     expressionDescriptors,
@@ -157,18 +160,27 @@ export function WorkflowEditor({
     isFlowchartDesigner,
     canAddActivitiesToCanvas
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
+  const inspectedReusableVersion = useActivityDefinitionVersion(
+    context,
+    inspectedNode?.activityDefinitionId ?? "",
+    inspectedNode?.activityDefinitionVersionId ?? null,
+    Boolean(inspectedNode?.activityDefinitionId && inspectedNode?.activityDefinitionVersionId)
+  );
+  const inspectedRecommendation = inspectedNode?.activityDefinitionId
+    ? recommendedDefinitions.find(item => item.definitionId === inspectedNode.activityDefinitionId) ?? null
+    : null;
 
-  const paletteGroups = useMemo(() => groupActivityPalette(catalog), [catalog]);
+  const paletteGroups = useMemo(() => groupActivityPalette(paletteCatalog), [paletteCatalog]);
   const filteredPaletteGroups = useMemo(() => {
     const term = paletteSearch.trim().toLowerCase();
     if (!term) return paletteGroups;
-    const matches = catalog.filter(activity =>
+    const matches = paletteCatalog.filter(activity =>
       getActivityDisplay(activity).toLowerCase().includes(term) ||
       activity.activityTypeKey.toLowerCase().includes(term) ||
       (activity.category ?? "").toLowerCase().includes(term) ||
       (activity.description ?? "").toLowerCase().includes(term));
     return groupActivityPalette(matches);
-  }, [catalog, paletteSearch, paletteGroups]);
+  }, [paletteCatalog, paletteSearch, paletteGroups]);
   const busy = operation !== "idle";
   const canRunTest = !!draft?.state.rootActivity && !busy;
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
@@ -535,9 +547,18 @@ export function WorkflowEditor({
           selectedActivityType={inspectedNode ? (inspectedDescriptor?.typeName ?? catalogByVersion.get(inspectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}
           selectedDescriptor={inspectedDescriptor}
           selectedNodeAvailability={inspectedNodeAvailability}
+          selectedReusableVersion={inspectedReusableVersion.data}
+          selectedReusableVersionStatus={!inspectedNode?.activityDefinitionId
+            ? "idle"
+            : inspectedReusableVersion.isPending
+              ? "loading"
+              : inspectedReusableVersion.isError
+                ? "failed"
+                : "ready"}
+          selectedRecommendedVersion={inspectedRecommendation}
           selectedSlots={inspectedSlots}
           inspectingScopeOwner={inspectedIsScopeOwner}
-          catalog={catalog}
+          catalog={paletteCatalog}
           catalogByVersion={catalogByVersion}
           selectedSupportsScopedVariables={inspectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
@@ -787,7 +808,7 @@ export function WorkflowEditor({
             {insideEmptySlot ? (
               <SlotEmptyState
                 slotLabel={scope?.slot.label ?? "this slot"}
-                catalog={catalog}
+                catalog={paletteCatalog}
                 onPickActivity={pickActivityForEmptySlot}
                 onBrowseAll={openEmptyConnectMenu}
               />
@@ -800,7 +821,7 @@ export function WorkflowEditor({
               <ConnectMenu
                 clientX={connectMenu.clientX}
                 clientY={connectMenu.clientY}
-                activities={catalog}
+                activities={paletteCatalog}
                 onPick={onConnectMenuPick}
                 onClose={() => setConnectMenu(null)}
               />
