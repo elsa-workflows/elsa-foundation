@@ -81,7 +81,7 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IPagedSecretRepository"] = ["SecretDocumentKind"],
             ["IExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
             ["IPagedExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
-            ["IExecutionCommandTransport"] = ["ExecutionCommandTransportDocumentKind"]
+            ["IExecutionCommandTransport"] = ["ExecutionCommandTransportDocumentKind", "ExecutionCommandStreamHeadDocumentKind"]
         };
 
     private static readonly string[] ContractSources =

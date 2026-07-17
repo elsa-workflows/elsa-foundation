@@ -82,6 +82,30 @@ public sealed class GroundworkDistributedBoundedQueryTests
         Assert.Empty(documents.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind));
     }
 
+    [Fact]
+    public async Task SendAllocatesSequenceThroughStreamHeadWithoutBacklogQuery()
+    {
+        var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var transport = new GroundworkExecutionCommandTransport(
+            documents,
+            GroundworkDistributedTestAccess.Scoped(),
+            queries);
+        var now = DateTimeOffset.UtcNow;
+
+        var first = await transport.SendAsync("execution-1", DistributedStoreHarness.Envelope("execution-1", "envelope-1", now), now);
+        var second = await transport.SendAsync("execution-1", DistributedStoreHarness.Envelope("execution-1", "envelope-2", now), now);
+
+        Assert.Equal(1, first.Sequence);
+        Assert.Equal(2, second.Sequence);
+        Assert.Empty(queries.Observed);
+        Assert.Empty(queries.CountObserved);
+        Assert.Equal(2, documents.LoadCount);
+        Assert.Equal(2, documents.BeginCount);
+        Assert.Single(documents.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind));
+        Assert.Equal(2, documents.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind).Count);
+    }
+
     private static void AssertQuery(
         DocumentQuery query,
         string documentKind,

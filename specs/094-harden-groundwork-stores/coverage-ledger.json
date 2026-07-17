@@ -1477,7 +1477,7 @@
       "outcome": "specialized-primitive",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Sequence allocation scans maxima and claim/acknowledgement behavior lacks full provider evidence.",
       "performanceWorkload": "command-send-lease-ack",
       "accessPolicy": "ordinary",
@@ -1515,6 +1515,7 @@
       "behavioralBaseline": [
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionCommandTransportContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedCasTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedBoundedQueryTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Tests/GroundworkTwoNodeAcceptanceTests.cs"
       ]
     }

@@ -401,7 +401,8 @@ internal sealed class GroundworkPersistenceReconciler
         Map("secrets", "IPagedSecretRepository", "secrets-repository", "SecretDocumentKind"),
         Map("distributed-runtime", "IExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
         Map("distributed-runtime", "IPagedExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
-        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind")
+        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind"),
+        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandStreamHeadDocumentKind")
     ];
 
     private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts =
