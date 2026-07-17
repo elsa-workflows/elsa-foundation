@@ -98,7 +98,8 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
             {
                 ElsaRuntimeStorageManifest.ByOutboxStatusIndex => column with
                 {
-                    Length = ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength
+                    Type = PortablePhysicalType.Int32,
+                    Length = null
                 },
                 ElsaRuntimeStorageManifest.ByOutboxIntentKindIndex => column with
                 {
@@ -142,7 +143,7 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
         [
             new IndexField(
                 ElsaRuntimeStorageManifest.PostCommitOutboxStatusField,
-                IndexValueKind.Keyword),
+                IndexValueKind.Number),
             .. filterFields.Select(filter => new IndexField(filter.Path)),
             new IndexField(temporalField, IndexValueKind.DateTime),
             new IndexField(ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField, IndexValueKind.DateTime)

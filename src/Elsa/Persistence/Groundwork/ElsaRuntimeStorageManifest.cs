@@ -522,7 +522,7 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
                     Keyword(ByCollectionIndex, CollectionField),
-                    Keyword(ByOutboxStatusIndex, PostCommitOutboxStatusField),
+                    Number(ByOutboxStatusIndex, PostCommitOutboxStatusField),
                     DateTime(ByOutboxAvailableAtIndex, PostCommitOutboxAvailableAtField),
                     DateTime(ByOutboxVisibleAfterIndex, PostCommitOutboxVisibleAfterField),
                     DateTime(ByOutboxRecordedAtIndex, PostCommitOutboxRecordedAtField),
@@ -701,6 +701,16 @@ public static class ElsaRuntimeStorageManifest
         [new IndexField(field)],
         IndexValueKind.Keyword,
         isUnique,
+        true,
+        MissingValueBehavior.Excluded,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
+
+    private static IndexDeclaration Number(string identity, string field) => new(
+        identity,
+        [new IndexField(field)],
+        IndexValueKind.Number,
+        false,
         true,
         MissingValueBehavior.Excluded,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
