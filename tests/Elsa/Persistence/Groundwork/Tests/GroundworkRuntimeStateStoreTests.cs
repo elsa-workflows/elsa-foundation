@@ -76,6 +76,36 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Single(await store.ListAsync("wf-2"));
     }
 
+    [Fact]
+    public async Task ActivityExecutionState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IActivityExecutionStateStore seedStore = new GroundworkActivityExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(ActivityState("wf-1", "ae-1"));
+
+        var competingStore = new GroundworkActivityExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "ae-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(ActivityState("wf-1", "ae-1", ActivityExecutionStatus.Completed));
+            }
+        };
+        IActivityExecutionStateStore store = new GroundworkActivityExecutionStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(ActivityState("wf-1", "ae-1", ActivityExecutionStatus.Faulted)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "ae-1");
+        Assert.Equal(ActivityExecutionStatus.Completed, winner!.Status);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -158,6 +188,66 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.False(await store.DeleteAsync("wf-1", "dv-1"));
         Assert.Null(await store.FindAsync("wf-1", "dv-1"));
         Assert.Single(await store.ListAsync("wf-1"));
+    }
+
+    [Fact]
+    public async Task DurableValueState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IDurableValueStateStore seedStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 42));
+
+        var competingStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableValueStateDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "dv-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 84));
+            }
+        };
+        IDurableValueStateStore store = new GroundworkDurableValueStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(DurableValue("wf-1", "dv-1", value: 126)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "dv-1");
+        Assert.Equal(84, winner!.InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task DurableValueState_Delete_RejectsProviderVersionChangeBetweenLoadAndDelete()
+    {
+        await using var fixture = CreateStore("memory");
+        IDurableValueStateStore seedStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 42));
+
+        var competingStore = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeDelete = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableValueStateDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "dv-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(DurableValue("wf-1", "dv-1", value: 84));
+            }
+        };
+        IDurableValueStateStore store = new GroundworkDurableValueStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.DeleteAsync("wf-1", "dv-1").AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "dv-1");
+        Assert.Equal(84, winner!.InlineValue!.Value.GetInt32());
     }
 
     [Theory]
@@ -391,9 +481,12 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Contains("physical document identity collision", exception.Message, StringComparison.Ordinal);
     }
 
-    private static ActivityExecutionState ActivityState(string workflowExecutionId, string activityExecutionId) => new(
+    private static ActivityExecutionState ActivityState(
+        string workflowExecutionId,
+        string activityExecutionId,
+        ActivityExecutionStatus status = ActivityExecutionStatus.Running) => new(
         new ActivityExecution(activityExecutionId, workflowExecutionId, $"node-{activityExecutionId}", "authored", "Elsa.Log", "1.0.0"),
-        ActivityExecutionStatus.Running,
+        status,
         SubStatus: null,
         ScheduledAt: DateTimeOffset.UnixEpoch,
         StartedAt: DateTimeOffset.UnixEpoch,
@@ -471,14 +564,14 @@ public sealed class GroundworkRuntimeStateStoreTests
         }
     }
 
-    private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId) => new(
+    private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId, int value = 42) => new(
         durableValueId,
         workflowExecutionId,
         $"value-{durableValueId}",
         new RuntimeValueTypeDescriptor("int", null, null),
         DurableValueLifecycle.Instance,
         DurableValueStorage.Inline,
-        Json("42"),
+        Json(value.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         externalReference: null,
         sourceActivityExecutionId: null,
         capturedAt: DateTimeOffset.UnixEpoch,
@@ -551,6 +644,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
     {
         public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+        public Func<DeleteDocumentRequest, Task>? OnBeforeDelete { get; set; }
         public DocumentStoreAccess Access => inner.Access;
         public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
 
@@ -568,8 +662,16 @@ public sealed class GroundworkRuntimeStateStoreTests
         public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
             inner.LoadAsync(documentKind, id, cancellationToken);
 
-        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
+        public async Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            if (OnBeforeDelete is { } hook)
+            {
+                OnBeforeDelete = null;
+                await hook(request);
+            }
+
+            return await inner.DeleteAsync(request, cancellationToken);
+        }
 
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             inner.QueryAsync(query, cancellationToken);
