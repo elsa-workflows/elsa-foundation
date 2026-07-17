@@ -702,6 +702,36 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
         Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
 
+    /// <summary>
+    /// Waits for an asynchronously converging run and its captured output after the request that started it has
+    /// already timed out. The timeout response can win the race with the durable checkpoint becoming query-visible.
+    /// </summary>
+    public async Task<(WorkflowExecutionState Execution, JsonElement CapturedOutput)>
+        WaitForSingleWorkflowExecutionWithCapturedOutputAsync(string valueId, TimeSpan timeout)
+    {
+        var executionStore = Services.GetRequiredService<IWorkflowExecutionStateStore>();
+        var durableValueStore = Services.GetRequiredService<IDurableValueStateStore>();
+        var deadline = DateTimeOffset.UtcNow + timeout;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var executions = await executionStore.ListAsync();
+            if (executions.Count == 1)
+            {
+                var execution = executions.Single();
+                var captured = (await durableValueStore.ListAsync(execution.WorkflowExecutionId))
+                    .SingleOrDefault(value => value.ValueId == valueId);
+                if (captured?.InlineValue is { } inlineValue)
+                    return (execution, inlineValue);
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25));
+        }
+
+        var finalExecution = await SingleWorkflowExecutionAsync();
+        return (finalExecution, await ReadCapturedOutputAsync(finalExecution.WorkflowExecutionId, valueId));
+    }
+
     /// <summary>Reads one persisted execution by id.</summary>
     public async Task<WorkflowExecutionState> WorkflowExecutionAsync(string workflowExecutionId) =>
         await Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId)
