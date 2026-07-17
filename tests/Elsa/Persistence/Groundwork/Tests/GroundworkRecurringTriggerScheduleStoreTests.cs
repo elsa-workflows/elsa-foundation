@@ -88,14 +88,40 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         var query = Assert.Single(queries.Observed);
         Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, query.DocumentKind);
         Assert.Equal(ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery, query.QueryIdentity);
-        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, comparison.Path);
-        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
-        Assert.Equal(Now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
-        var order = Assert.Single(query.Order);
-        Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, order.Path);
-        Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
-        Assert.Null(query.Take);
+        Assert.Collection(
+            query.Clauses,
+            clause =>
+            {
+                var comparison = Assert.Single(clause.Comparisons);
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField, comparison.Path);
+                Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+                Assert.Equal(bool.TrueString.ToLowerInvariant(), Assert.Single(comparison.Values));
+            },
+            clause =>
+            {
+                var comparison = Assert.Single(clause.Comparisons);
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, comparison.Path);
+                Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
+                Assert.Equal(Now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
+            });
+        Assert.Collection(
+            query.Order,
+            order =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            });
+        Assert.Equal(17, query.Take);
     }
 
     [Theory]

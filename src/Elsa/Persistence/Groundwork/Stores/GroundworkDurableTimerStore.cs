@@ -70,16 +70,13 @@ public sealed class GroundworkDurableTimerStore(
                 [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
                     ElsaRuntimeStorageManifest.DurableTimerDueTimeField,
                     asOf.ToString("O", CultureInfo.InvariantCulture)))],
-                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerDueTimeField)]),
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerDueTimeField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerIdField)
+                ],
+                take: limit),
             cancellationToken);
-        var timers = result.Documents.Select(envelope => Deserialize(envelope).Timer);
-
-        return timers
-            .Where(timer => timer.DueTime <= asOf)
-            .OrderBy(timer => timer.DueTime)
-            .ThenBy(timer => timer.TimerId, StringComparer.Ordinal)
-            .Take(limit)
-            .ToArray();
+        return result.Documents.Select(envelope => Deserialize(envelope).Timer).ToArray();
     }
 
     public async ValueTask<DurableTimer?> FindAsync(
