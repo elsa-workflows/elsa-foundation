@@ -397,6 +397,8 @@ internal sealed class GroundworkPersistenceReconciler
         Map("iam", "ITenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
         Map("iam", "IRevisionAwareTenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
         Map("secrets", "ISecretRepository", "secrets-repository", "SecretDocumentKind"),
+        Map("secrets", "IRevisionAwareSecretRepository", "secrets-repository", "SecretDocumentKind"),
+        Map("secrets", "IPagedSecretRepository", "secrets-repository", "SecretDocumentKind"),
         Map("distributed-runtime", "IExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
         Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind")
     ];
