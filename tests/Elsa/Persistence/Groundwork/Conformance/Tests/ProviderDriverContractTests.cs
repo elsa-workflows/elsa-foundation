@@ -378,6 +378,43 @@ public class ProviderDriverContractTests
             failures.ReachedWindows);
     }
 
+    [Theory]
+    [InlineData("before-provider-decision", false)]
+    [InlineData("during-provider-decision", true)]
+    [InlineData("after-durable-decision-before-caller-acknowledgement", true)]
+    public async Task Runtime_failure_profile_instruments_direct_provider_decisions(
+        string windowId,
+        bool decisionIsDurable)
+    {
+        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var failures = new GroundworkFailureController();
+        var windows = GroundworkDocumentStoreFailureWindows.OperationalRuntime;
+        var store = new GroundworkFailureInjectingDocumentStore(
+            inner,
+            inner,
+            inner.Access,
+            failures,
+            windows);
+        var window = new GroundworkFailureWindow(windowId);
+        failures.FailAt(window);
+
+        var exception = await Assert.ThrowsAsync<InjectedGroundworkFailureException>(() =>
+            store.SaveAsync(
+                new SaveDocumentRequest(
+                    IdentityStorageManifest.IdentityUserDocumentKind,
+                    "runtime-window-user",
+                    IdentityStorageManifest.SchemaVersion,
+                    "{}",
+                    ExpectedVersion: 0),
+                CancellationToken.None));
+
+        Assert.Equal(window, exception.Window);
+        Assert.Equal(decisionIsDurable, await inner.LoadAsync(
+            IdentityStorageManifest.IdentityUserDocumentKind,
+            "runtime-window-user",
+            CancellationToken.None) is not null);
+    }
+
     [Fact]
     public void Identity_failure_decorator_rejects_a_bounded_store_from_another_access_scope()
     {
