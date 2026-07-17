@@ -38,6 +38,10 @@ public sealed record IdentityRoleDocument(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyCollection<string>? UserLinkIds = null);
 
+public sealed record IdentityApplicationDocument(string TenantId, string ApplicationId, ApplicationRecord Application);
+
+public sealed record IdentityCredentialDocument(string TenantId, string CredentialId, CredentialRecord Credential);
+
 public sealed record IdentityUserClaimDocument(
     string TenantId,
     string UserId,

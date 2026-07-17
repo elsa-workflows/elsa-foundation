@@ -717,7 +717,15 @@ public class GroundworkStorageCompositionTests
             typeof(IWorkflowTriggerBindingStore),
             typeof(IRecurringTriggerScheduleStore)
         ],
-        "iam" => [typeof(IUserStore), typeof(IRoleStore), typeof(IExternalIdentityStore), typeof(ITenantMembershipStore)],
+        "iam" =>
+        [
+            typeof(IUserStore),
+            typeof(IRoleStore),
+            typeof(IApplicationStore),
+            typeof(ICredentialStore),
+            typeof(IExternalIdentityStore),
+            typeof(ITenantMembershipStore)
+        ],
         "secrets" => [typeof(ISecretRepository)],
         "distributed-runtime" => [typeof(IExecutionPlacementStore), typeof(IExecutionCommandTransport)],
         "workflows-design" =>

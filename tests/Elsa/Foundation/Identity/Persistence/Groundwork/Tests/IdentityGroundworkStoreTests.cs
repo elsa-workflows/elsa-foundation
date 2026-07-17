@@ -64,6 +64,40 @@ public sealed class IdentityGroundworkStoreTests
     }
 
     [Fact]
+    public async Task Application_RoundTrips_And_Survives_Restart()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var application = IdentityGroundworkFixtures.Application();
+
+        await IdentityGroundworkFixtures.ApplicationStore(docStore).SaveAsync(application);
+
+        var reloaded = await IdentityGroundworkFixtures.ApplicationStore(docStore)
+            .FindAsync(application.TenantId, application.Id);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal(application.ClientId, reloaded!.ClientId);
+        Assert.Equal(application.AllowedGrantTypes, reloaded.AllowedGrantTypes);
+        Assert.Equal(application.Scopes, reloaded.Scopes);
+    }
+
+    [Fact]
+    public async Task Credential_RoundTrips_And_Survives_Restart()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var credential = IdentityGroundworkFixtures.Credential();
+
+        await IdentityGroundworkFixtures.CredentialStore(docStore).SaveAsync(credential);
+
+        var reloaded = await IdentityGroundworkFixtures.CredentialStore(docStore)
+            .FindAsync(credential.TenantId, credential.Id);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal(credential.SubjectId, reloaded!.SubjectId);
+        Assert.Equal(credential.HashedSecret, reloaded.HashedSecret);
+        Assert.Equal(credential.ExpiresAt, reloaded.ExpiresAt);
+    }
+
+    [Fact]
     public async Task ExternalIdentity_RoundTrips_By_Subject_And_Lists_For_User()
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
@@ -111,6 +145,20 @@ public sealed class IdentityGroundworkStoreTests
     }
 
     [Fact]
+    public async Task Application_Save_Is_An_Upsert()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ApplicationStore(docStore);
+        var application = IdentityGroundworkFixtures.Application();
+
+        await store.SaveAsync(application);
+        await store.SaveAsync(application with { DisplayName = "Renamed Client" });
+
+        var reloaded = await store.FindAsync(application.TenantId, application.Id);
+        Assert.Equal("Renamed Client", reloaded!.DisplayName);
+    }
+
+    [Fact]
     public async Task Explicit_tenant_mismatch_fails_before_provider_io()
     {
         var documentStore = new ThrowingDocumentStore();
@@ -118,6 +166,34 @@ public sealed class IdentityGroundworkStoreTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.FindAsync("tenant-b", "user-1"));
+
+        Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, documentStore.CallCount);
+    }
+
+    [Fact]
+    public async Task Application_tenant_mismatch_fails_before_provider_io()
+    {
+        var documentStore = new ThrowingDocumentStore();
+        var store = IdentityGroundworkFixtures.ApplicationStore(documentStore, "tenant-a");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.FindAsync("tenant-b", "app-1"));
+
+        Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, documentStore.CallCount);
+    }
+
+    [Fact]
+    public async Task Credential_tenant_mismatch_fails_before_provider_io()
+    {
+        var documentStore = new ThrowingDocumentStore();
+        var store = IdentityGroundworkFixtures.CredentialStore(documentStore, "tenant-a");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.FindAsync("tenant-b", "credential-1"));
 
         Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);

@@ -18,7 +18,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 public static class IdentityStorageManifest
 {
     public const int MaxAggregateRelationshipEntries = 512;
-    public const string SchemaVersion = "1.0.4";
+    public const string SchemaVersion = "1.0.5";
     public const int ProjectedLookupColumnLength = 400;
     public const int SqlServerStorageScopeKeyBytes = 900;
     public const int SqlServerUnicodeBytesPerCodeUnit = 2;
@@ -27,6 +27,8 @@ public static class IdentityStorageManifest
 
     public const string IdentityUserDocumentKind = "identityUser";
     public const string IdentityRoleDocumentKind = "identityRole";
+    public const string IdentityApplicationDocumentKind = "identityApplication";
+    public const string IdentityCredentialDocumentKind = "identityCredential";
     public const string UserClaimDocumentKind = "identityUserClaim";
     public const string RoleClaimDocumentKind = "identityRoleClaim";
     public const string ExternalLoginDocumentKind = "identityExternalLogin";
@@ -79,6 +81,18 @@ public static class IdentityStorageManifest
                 "identity_roles",
                 [Keyword("identity-role-by-normalized-name", NormalizedRoleNameKeyField), Keyword("identity-role-by-tenant", TenantIdField)],
                 [Query(FindRoleByNormalizedNameQuery, "identity-role-by-normalized-name"), Query(ListRolesByTenantQuery, "identity-role-by-tenant")]),
+            Unit(
+                IdentityApplicationDocumentKind,
+                "Identity Application",
+                "identity_applications",
+                [],
+                []),
+            Unit(
+                IdentityCredentialDocumentKind,
+                "Identity Credential",
+                "identity_credentials",
+                [],
+                []),
             Unit(
                 UserClaimDocumentKind,
                 "Identity User Claim",
