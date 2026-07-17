@@ -131,6 +131,7 @@ not automatic constitution violations.
 | Activities design — persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Activities design — Groundwork persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Activities design API — catalog and availability services | [`src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md) |
+| Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md`](src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md) |
 
 ### Workflows
 

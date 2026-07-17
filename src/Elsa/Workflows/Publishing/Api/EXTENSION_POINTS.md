@@ -88,6 +88,16 @@ A new Publishing persistence package should:
 - **Known implementation:** `DispatchPinSource` *(cross-domain — DispatchWorkflow Design)* contributes exact pinned child metadata and dependency claims after tenant/liveness/input-contract validation. The metadata-only source adapter is retained for compatibility and is not the extension seam for new implementations.
 - **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable child graph by full artifact ID/hash before publication can activate the candidate.
 
+## Activity-template provider contributors
+
+| Contract | Kind and registration | Consumer | Known implementation |
+|---|---|---|---|
+| `IActivityTemplateProviderCompiler` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateProviderCompilerRegistry` rejects ambiguous ownership. | `ActivityTemplateCompiler` performs deterministic provider compilation before executable hashing. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
+| `IActivityTemplateDependencyDiscoverer` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateDependencyDiscovererRegistry` resolves the exact discoverer. | `ActivityTemplateCompiler` discovers exact direct dependencies before compilation. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
+
+The Activity Graph implementation and its feature registration are documented in the
+[contributing-feature catalog](../../../Activities/Graph/Design/EXTENSION_POINTS.md).
+
 ## Cross-domain seams consumed by Publishing
 
 - Runtime executable artifacts, source references, trigger extraction/indexing, projection observers, and

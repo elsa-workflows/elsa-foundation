@@ -67,18 +67,54 @@ namespace Elsa.Activities.Design.Api.Endpoints
         where TRequest : IRequest<TResponse>
         where TResponse : notnull
     {
-        public override async Task HandleAsync(TRequest request, CancellationToken cancellationToken)
+        public override Task HandleAsync(TRequest request, CancellationToken cancellationToken) =>
+            ActivityAuthoringRequestExecution.ExecuteAsync(
+                HttpContext,
+                logger,
+                typeof(TRequest),
+                () => sender.Send(request, cancellationToken),
+                response => Send.OkAsync(response, cancellationToken),
+                cancellationToken);
+    }
+
+    internal abstract class ActivityAuthoringRequestWithoutRequestEndpoint<TRequest, TResponse>(
+        IRequestSender sender,
+        ILogger logger) : ElsaEndpointWithoutRequest<TResponse>
+        where TRequest : IRequest<TResponse>
+        where TResponse : notnull
+    {
+        protected abstract TRequest CreateRequest();
+
+        public override Task HandleAsync(CancellationToken cancellationToken) =>
+            ActivityAuthoringRequestExecution.ExecuteAsync(
+                HttpContext,
+                logger,
+                typeof(TRequest),
+                () => sender.Send(CreateRequest(), cancellationToken),
+                response => Send.OkAsync(response, cancellationToken),
+                cancellationToken);
+    }
+
+    internal static class ActivityAuthoringRequestExecution
+    {
+        public static async Task ExecuteAsync<TResponse>(
+            HttpContext httpContext,
+            ILogger logger,
+            Type requestType,
+            Func<Task<TResponse>> sendRequest,
+            Func<TResponse, Task> sendResponse,
+            CancellationToken cancellationToken)
         {
             try
             {
-                await Send.OkAsync(await sender.Send(request, cancellationToken), cancellationToken);
+                await sendResponse(await sendRequest());
             }
             catch (ActivityAuthoringException exception)
             {
                 if (exception.StatusCode >= StatusCodes.Status500InternalServerError)
-                    logger.LogError(exception, "Internal activity authoring request failure for {RequestType}", typeof(TRequest));
-                var problem = ActivityProblemDetails.From(exception, HttpContext);
-                await WriteProblemAsync(problem, problem.Status, cancellationToken);
+                    logger.LogError(exception, "Internal activity authoring request failure for {RequestType}", requestType);
+                var problem = ActivityProblemDetails.From(exception, httpContext);
+                await WriteProblemAsync(httpContext, problem, problem.Status, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -86,16 +122,20 @@ namespace Elsa.Activities.Design.Api.Endpoints
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Unexpected activity authoring request failure for {RequestType}", typeof(TRequest));
-                await WriteProblemAsync(ActivityProblemDetails.Unexpected(HttpContext), 500, cancellationToken);
+                logger.LogError(exception, "Unexpected activity authoring request failure for {RequestType}", requestType);
+                await WriteProblemAsync(httpContext, ActivityProblemDetails.Unexpected(httpContext), 500, cancellationToken);
             }
         }
 
-        private async Task WriteProblemAsync(ActivityProblemDetailsView problem, int statusCode, CancellationToken cancellationToken)
+        private static async Task WriteProblemAsync(
+            HttpContext httpContext,
+            ActivityProblemDetailsView problem,
+            int statusCode,
+            CancellationToken cancellationToken)
         {
-            HttpContext.Response.StatusCode = statusCode;
-            HttpContext.Response.ContentType = "application/problem+json";
-            await HttpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+            httpContext.Response.StatusCode = statusCode;
+            httpContext.Response.ContentType = "application/problem+json";
+            await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
         }
     }
 }
@@ -218,13 +258,15 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
 namespace Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities
 {
     internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
-        : ActivityAuthoringRequestEndpoint<GetActivityAuthoringCapabilities, ActivityAuthoringCapabilitiesView>(sender, logger)
+        : ActivityAuthoringRequestWithoutRequestEndpoint<GetActivityAuthoringCapabilities, ActivityAuthoringCapabilitiesView>(sender, logger)
     {
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("authoring-capabilities"));
             ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
+
+        protected override GetActivityAuthoringCapabilities CreateRequest() => new();
     }
 }
 

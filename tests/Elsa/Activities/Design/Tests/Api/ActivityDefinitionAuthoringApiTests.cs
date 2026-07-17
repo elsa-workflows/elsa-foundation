@@ -63,6 +63,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains(links, x => x.Rel == "activity-definition" && x.Href == "design/activities/definitions/{definitionId}" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-drafts" && x.Href == "design/activities/definitions/{definitionId}/drafts" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-draft" && x.Href == "design/activities/drafts/{draftId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-draft-validation" && x.Href == "design/activities/drafts/{draftId}/validate" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-versions" && x.Href == "design/activities/definitions/{definitionId}/versions" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-version" && x.Href == "design/activities/versions/{versionId}" && x.Templated);
     }

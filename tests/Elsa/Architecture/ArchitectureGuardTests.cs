@@ -174,6 +174,29 @@ public sealed class ArchitectureGuardTests
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_graph_authoring_when_activity_design_is_enabled(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+
+        Assert.True(features.ContainsKey("ActivitiesDesignApi"));
+        Assert.True(
+            features.ContainsKey("ActivitiesGraphDesign"),
+            $"{fileName} must enable ActivitiesGraphDesign so Activity Design advertises the graph authoring provider.");
+    }
+
+    [Fact]
+    public void Docker_reference_shell_enables_graph_authoring_with_activity_design()
+    {
+        var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-server.shells.json");
+        var features = ReadDefaultShellFeatures(path);
+
+        Assert.True(features.ContainsKey("ActivitiesDesignApi"));
+        Assert.True(features.ContainsKey("ActivitiesGraphDesign"));
+    }
+
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
     public void Server_default_shell_enables_http_endpoint_activity_feature(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
@@ -266,6 +289,19 @@ public sealed class ArchitectureGuardTests
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
         Assert.Contains(".WithHostAssemblies()", program, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Server_catalogs_graph_design_separately_from_graph_runtime()
+    {
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+
+        Assert.Contains("Elsa.Activities.Graph.Design", references);
+        Assert.Contains("Elsa.Activities.Graph.Runtime", references);
+        Assert.Contains("typeof(GraphActivitiesDesignFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(GraphActivitiesRuntimeFeature).Assembly", program, StringComparison.Ordinal);
     }
 
     [Fact]
