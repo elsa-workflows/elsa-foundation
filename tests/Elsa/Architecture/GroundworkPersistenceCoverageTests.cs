@@ -94,13 +94,11 @@ public sealed class GroundworkPersistenceCoverageTests
                     "iam",
                     "IProviderConfigurationStore",
                     "GroundworkProviderConfigurationStore",
-                    "ProviderConfigurationTenantDocumentKind",
-                    "ProviderConfigurationGlobalDocumentKind")
+                    "IdentityProviderConfigurationDocumentKind")
             ],
             manifestStorageUnits:
             [
-                ManifestUnit("iam", "ProviderConfigurationTenantDocumentKind"),
-                ManifestUnit("iam", "ProviderConfigurationGlobalDocumentKind")
+                ManifestUnit("iam", "IdentityProviderConfigurationDocumentKind")
             ]);
 
         var findings = Reconcile(ledger, inventory);

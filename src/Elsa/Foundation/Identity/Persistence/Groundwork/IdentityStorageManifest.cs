@@ -18,7 +18,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 public static class IdentityStorageManifest
 {
     public const int MaxAggregateRelationshipEntries = 512;
-    public const string SchemaVersion = "1.0.5";
+    public const string SchemaVersion = "1.0.6";
     public const int ProjectedLookupColumnLength = 400;
     public const int SqlServerStorageScopeKeyBytes = 900;
     public const int SqlServerUnicodeBytesPerCodeUnit = 2;
@@ -29,6 +29,8 @@ public static class IdentityStorageManifest
     public const string IdentityRoleDocumentKind = "identityRole";
     public const string IdentityApplicationDocumentKind = "identityApplication";
     public const string IdentityCredentialDocumentKind = "identityCredential";
+    public const string IdentityClaimMappingDocumentKind = "identityClaimMapping";
+    public const string IdentityProviderConfigurationDocumentKind = "identityProviderConfiguration";
     public const string UserClaimDocumentKind = "identityUserClaim";
     public const string RoleClaimDocumentKind = "identityRoleClaim";
     public const string ExternalLoginDocumentKind = "identityExternalLogin";
@@ -48,6 +50,7 @@ public static class IdentityStorageManifest
     public const string NormalizedRoleNameKeyField = "normalizedRoleNameKey";
     public const string UserLookupKeyField = "userLookupKey";
     public const string RoleLookupKeyField = "roleLookupKey";
+    public const string ProviderLookupKeyField = "providerLookupKey";
     public const string ClaimKeyField = "claimKey";
     public const string TenantIdField = "tenantId";
     public const string MutationReceiptExpiresAtField = "expiresAt";
@@ -62,6 +65,7 @@ public static class IdentityStorageManifest
     public const string ListUserRolesQuery = "list-user-roles";
     public const string ListRoleUsersQuery = "list-role-users";
     public const string ListUserLoginsQuery = "list-user-logins";
+    public const string ListClaimMappingsByProviderQuery = "list-claim-mappings-by-provider";
     public const string ListExpiredMutationReceiptsQuery = "list-expired-mutation-receipts";
 
     public static StorageManifest Create() => new(
@@ -91,6 +95,18 @@ public static class IdentityStorageManifest
                 IdentityCredentialDocumentKind,
                 "Identity Credential",
                 "identity_credentials",
+                [],
+                []),
+            Unit(
+                IdentityClaimMappingDocumentKind,
+                "Identity Claim Mapping",
+                "identity_claim_mappings",
+                [Keyword("identity-claim-mapping-by-provider", ProviderLookupKeyField)],
+                [Query(ListClaimMappingsByProviderQuery, "identity-claim-mapping-by-provider")]),
+            Unit(
+                IdentityProviderConfigurationDocumentKind,
+                "Identity Provider Configuration",
+                "identity_provider_configurations",
                 [],
                 []),
             Unit(
