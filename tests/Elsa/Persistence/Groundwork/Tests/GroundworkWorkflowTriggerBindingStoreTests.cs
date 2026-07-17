@@ -30,11 +30,13 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         await store.SaveAsync(Binding("artifact-4", "node-d", "Signal", "hash-order"));
 
         // Cross-artifact by-stimulus lookup returns every published artifact waiting on the same stimulus.
-        var byStimulus = await store.ListByStimulusAsync("Event", "hash-order");
+        var byStimulus = (await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "hash-order"))).Items;
         Assert.Equal(new[] { "artifact-1", "artifact-2" }, byStimulus.Select(b => b.ArtifactId).OrderBy(x => x));
 
         // The composite route narrows a shared hash by stimulus type before documents are returned.
-        var bySharedHashOtherType = await store.ListByStimulusAsync("Signal", "hash-order");
+        var bySharedHashOtherType = (await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Signal", "hash-order"))).Items;
         Assert.Equal("artifact-4", Assert.Single(bySharedHashOtherType).ArtifactId);
 
         // Per-artifact lookup is scoped to the one artifact.
@@ -63,7 +65,8 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
 
         Assert.Equal(2, deleted);
         Assert.Empty(await store.ListByArtifactAsync("artifact-1"));
-        var remaining = await store.ListByStimulusAsync("Event", "hash-order");
+        var remaining = (await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "hash-order"))).Items;
         Assert.Equal("artifact-2", Assert.Single(remaining).ArtifactId);
     }
 

@@ -185,24 +185,31 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         return deleted;
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)
+    public async ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(
+        WorkflowTriggerBindingPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        ArgumentNullException.ThrowIfNull(query);
 
-        var bindings = await QueryBindingsAsync(
-            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery,
-            [
-                Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulusHash),
-                Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)
-            ],
+        var result = await Queries.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery,
+                [
+                    Equal(ElsaRuntimeStorageManifest.StimulusHashField, query.StimulusHash),
+                    Equal(ElsaRuntimeStorageManifest.StimulusTypeField, query.StimulusType),
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
+                        bool.TrueString.ToLowerInvariant())
+                ],
+                skip: query.Offset,
+                take: query.Limit),
             cancellationToken);
 
-        return bindings
-            .Where(binding =>
-                binding.IsActive &&
-                StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
-            .ToArray();
+        return new WorkflowTriggerBindingPage(
+            query,
+            result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray(),
+            result.TotalCount);
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)

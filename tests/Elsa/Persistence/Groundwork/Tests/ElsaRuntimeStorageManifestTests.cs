@@ -310,7 +310,12 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Collection(
             logical.Fields,
             stimulus => Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path),
-            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path));
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path),
+            active =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField, active.Path);
+                Assert.Equal(IndexValueKind.Boolean, active.ValueKind);
+            });
 
         var route = Assert.Single(
             unit.PhysicalStorage.BoundedQueries,
@@ -319,10 +324,18 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Collection(
             route.PredicateFields,
             stimulus => Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path),
-            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path));
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path),
+            active => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField, active.Path));
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+        Assert.True(route.SupportsTotalCount);
         Assert.Contains(
             physical.Indexes,
-            index => index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex && index.Columns.Count == 3);
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex && index.Columns.Count == 4);
+        Assert.Contains(
+            physical.ProjectedColumns,
+            column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive &&
+                column.Type == PortablePhysicalType.Boolean);
         AssertStimulusProjectionLengths(physical);
     }
 

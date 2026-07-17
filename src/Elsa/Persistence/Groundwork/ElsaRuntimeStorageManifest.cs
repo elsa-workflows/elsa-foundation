@@ -63,6 +63,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ByRecurringScheduleIdIndex = "by-recurring-schedule-id";
     public const string ByRecurringScheduleActiveIndex = "by-recurring-schedule-active";
     public const string ByStimulusAndTypeIndex = "by-stimulus-and-type";
+    public const string WorkflowTriggerBindingByActive = "by-active";
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
@@ -319,11 +320,16 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public const string WorkflowTriggerBindingByStimulus = ByStimulusIndex;
 
-    /// <summary>Composite bounded route used by stimulus dispatch to avoid loading same-hash different-type bindings.</summary>
+    /// <summary>
+    /// Composite bounded route used by stimulus dispatch to select only active, exact-type/hash bindings.
+    /// </summary>
     public const string WorkflowTriggerBindingByStimulusAndType = ByStimulusAndTypeIndex;
 
-    /// <summary>Bounded route used to resolve all active bindings for one stimulus type.</summary>
+    /// <summary>Type index used by the route-table refresh scan.</summary>
     public const string WorkflowTriggerBindingByStimulusType = ByStimulusTypeIndex;
+
+    /// <summary>Projected Boolean field used to exclude prepared or retired bindings at the persistence boundary.</summary>
+    public const string WorkflowTriggerBindingIsActiveField = "isActive";
 
     /// <summary>Index used by <c>IWorkflowTriggerBindingStore.ListByArtifactAsync</c> and the republish replace path.</summary>
     public const string WorkflowTriggerBindingByArtifact = ByArtifactIndex;
@@ -646,6 +652,7 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByStimulusIndex, StimulusHashField),
                     Keyword(ByStimulusTypeIndex, StimulusTypeField),
+                    Boolean(WorkflowTriggerBindingByActive, WorkflowTriggerBindingIsActiveField),
                     Keyword(ByArtifactIndex, ArtifactIdField),
                     Keyword(ByPublicationIndex, PublicationIdField)
                 ],

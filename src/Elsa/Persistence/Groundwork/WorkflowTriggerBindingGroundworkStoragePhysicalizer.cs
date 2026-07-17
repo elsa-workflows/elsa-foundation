@@ -28,7 +28,10 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
             ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex,
             [
                 new IndexField(ElsaRuntimeStorageManifest.StimulusHashField),
-                new IndexField(ElsaRuntimeStorageManifest.StimulusTypeField)
+                new IndexField(ElsaRuntimeStorageManifest.StimulusTypeField),
+                new IndexField(
+                    ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
+                    IndexValueKind.Boolean)
             ],
             IndexValueKind.Keyword,
             isUnique: false,
@@ -43,7 +46,8 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                     [
                         new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByStimulusIndex, 1),
-                        new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByStimulusTypeIndex, 2)
+                        new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByStimulusTypeIndex, 2),
+                        new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive, 3)
                     ])
             ]).ToArray(),
             definition.SchemaVersion,
@@ -65,6 +69,8 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
                         QuerySortSupport.None,
                         QueryPagingSupport.Offset,
+                        BoundedQueryExecutionClass.ScaleBearing,
+                        supportsTotalCount: true,
                         predicateFields:
                         [
                             new BoundedQueryPredicateField(
@@ -72,6 +78,9 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                                 new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
                             new BoundedQueryPredicateField(
                                 ElsaRuntimeStorageManifest.StimulusTypeField,
+                                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
+                            new BoundedQueryPredicateField(
+                                ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
                                 new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
                         ])
                 ]).ToArray(),

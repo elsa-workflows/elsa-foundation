@@ -94,10 +94,10 @@ public sealed class StimulusDispatchRequest
     /// The matching start-trigger bindings, when the caller already fetched them for its own purposes (e.g. the
     /// HTTP endpoint middleware fetches the claimant set for its ambiguity guard and per-endpoint options). When
     /// supplied on a start-routing request the router reuses this set instead of issuing its own identical
-    /// <c>ListByStimulusAsync(type, hash)</c> lookup — one durable read per request instead of two. Null means
-    /// the router fetches the set itself (the default for callers that do not pre-resolve it). The set must be
-    /// the complete match for <see cref="StimulusType"/>/<see cref="StimulusHash"/>; a partial set would silently
-    /// under-start.
+    /// <c>ListAllByStimulusAsync(type, hash)</c> traversal — one bounded traversal per request instead of two.
+    /// Null means the router fetches the set itself (the default for callers that do not pre-resolve it). The
+    /// set must be the complete match for <see cref="StimulusType"/>/<see cref="StimulusHash"/>; a partial set
+    /// would silently under-start.
     /// </summary>
     public IReadOnlyCollection<WorkflowTriggerBinding>? MatchedTriggerBindings { get; }
 
