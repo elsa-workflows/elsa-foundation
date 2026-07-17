@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Xunit;
 
@@ -126,6 +127,22 @@ public sealed class ExecutionPlacementStoreContractTests
         var leases = await harness.PlacementStore.ListAsync();
 
         Assert.Equal(new[] { "wf-a", "wf-b" }, leases.Select(lease => lease.WorkflowExecutionId).ToArray());
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task ListPage_ReturnsBoundedWindowAndTotalCount(string provider)
+    {
+        await using var harness = await DistributedStoreHarness.CreateAsync(provider);
+        await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now, "wf-a"), Now);
+        await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now, "wf-b"), Now);
+        await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now, "wf-c"), Now);
+        var paged = Assert.IsAssignableFrom<IPagedExecutionPlacementStore>(harness.PlacementStore);
+
+        var page = await paged.ListPageAsync(new ExecutionPlacementLeasePageRequest(1, 1));
+
+        Assert.Equal(3, page.TotalCount);
+        Assert.Equal("wf-b", Assert.Single(page.Items).WorkflowExecutionId);
     }
 
     private static ExecutionPlacementClaim Claim(string ownerId, DateTimeOffset requestedAt, string executionId = ExecutionId) =>

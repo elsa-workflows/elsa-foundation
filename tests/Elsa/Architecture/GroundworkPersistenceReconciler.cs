@@ -400,6 +400,7 @@ internal sealed class GroundworkPersistenceReconciler
         Map("secrets", "IRevisionAwareSecretRepository", "secrets-repository", "SecretDocumentKind"),
         Map("secrets", "IPagedSecretRepository", "secrets-repository", "SecretDocumentKind"),
         Map("distributed-runtime", "IExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
+        Map("distributed-runtime", "IPagedExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
         Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind")
     ];
 
