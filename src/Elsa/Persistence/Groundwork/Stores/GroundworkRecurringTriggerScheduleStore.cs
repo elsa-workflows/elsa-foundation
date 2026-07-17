@@ -40,10 +40,31 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule.ScheduleId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Upsert: republish rewrites the schedule (including a re-anchored NextOccurrence). Unlike the
-        // durable-timer store's existing-wins rule, a recurring schedule has no one-shot deadline to protect.
-        await SaveDocumentAsync(schedule.ScheduleId, ToEnvelope(schedule), cancellationToken);
-        return schedule;
+        // Republish may rewrite the schedule, but it must not silently overwrite a concurrent publication or
+        // occurrence advance. Creation is expected-version zero; replacement uses the version actually read.
+        var existing = await Store.LoadAsync(DocumentKind, schedule.ScheduleId, cancellationToken);
+        var result = await SaveDocumentAsync(
+            schedule.ScheduleId,
+            ToEnvelope(schedule),
+            cancellationToken,
+            existing?.Version ?? 0);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return schedule;
+        if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+        {
+            throw new InvalidOperationException(
+                $"Groundwork rejected recurring trigger schedule '{schedule.ScheduleId}' with status '{result.Status}'.");
+        }
+
+        var winnerEnvelope = await Store.LoadAsync(DocumentKind, schedule.ScheduleId, cancellationToken);
+        if (winnerEnvelope is not null &&
+            Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(winnerEnvelope).Schedule == schedule)
+        {
+            return schedule;
+        }
+
+        throw new InvalidOperationException(
+            $"Recurring trigger schedule '{schedule.ScheduleId}' changed concurrently and was not overwritten.");
     }
 
     public async ValueTask PreparePublicationAsync(

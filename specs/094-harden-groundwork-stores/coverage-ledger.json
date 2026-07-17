@@ -221,7 +221,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Due selection and advancement lack provider-atomic four-provider evidence.",
       "performanceWorkload": "due-timer-selection",
       "accessPolicy": "ordinary",
@@ -255,7 +255,9 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableTimerStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Workflows/Runtime/Scheduling/Tests/DurableTimerPumpTaskTests.cs"
       ]
     },
     {
@@ -309,7 +311,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Ownership transitions and recovery scans are not one bounded provider-atomic path.",
       "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",
@@ -346,6 +348,8 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeRecoveryScannerTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeRecoveryBoundedRouteTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimeExecutionOwnershipTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimeRecoveryScannerTests.cs"
       ]
@@ -435,7 +439,8 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
       ]
     },
     {
@@ -530,7 +535,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#682",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Deliverable reads do not claim atomically and completion has no stale-ack token.",
       "performanceWorkload": "outbox-drain",
       "accessPolicy": "ordinary",
@@ -585,6 +590,7 @@
         "tests/Elsa/Persistence/Groundwork/Tests/DispatchWorkflowDeliveryRecoveryCrashTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDispatchCancellationCheckpointTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
       ]
     },
@@ -856,6 +862,7 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerPoisonStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs"
       ]
     },
@@ -866,7 +873,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Claim/acknowledgement races and client-side query work remain.",
       "performanceWorkload": "queue-drain",
       "accessPolicy": "ordinary",
@@ -902,7 +909,9 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerWorkQueueTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs"
       ]
     },
     {

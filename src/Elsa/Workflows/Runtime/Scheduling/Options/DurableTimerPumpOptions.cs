@@ -23,6 +23,12 @@ public sealed class DurableTimerPumpOptions
     public int MaxTimersPerTick { get; set; } = 100;
 
     /// <summary>
+    /// Visibility lease held while a claim-capable store dispatches one timer. The pump renews the lease
+    /// while dispatch is in progress.
+    /// </summary>
+    public TimeSpan ClaimVisibilityTimeout { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// Grace period after a timer's due time before a <c>NotFound</c> dispatch (no matching bookmark)
     /// deletes the timer. Within the grace window a <c>NotFound</c> is treated as "bookmark not yet
     /// committed" (a very short delay racing its own bookmark commit) and retried; past the grace window it

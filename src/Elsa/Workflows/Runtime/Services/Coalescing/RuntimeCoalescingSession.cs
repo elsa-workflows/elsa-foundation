@@ -73,6 +73,13 @@ public sealed class RuntimeCoalescingSession
     public bool AppliesTo(string workflowExecutionId) =>
         IsActive && StringComparer.Ordinal.Equals(WorkflowExecutionId, workflowExecutionId);
 
+    /// <summary>
+    /// Returns whether this session owns the workflow execution, including after a boundary flush deactivates
+    /// coalescing. In-flight queue claims created against the overlay must still finish against that overlay.
+    /// </summary>
+    public bool Owns(string workflowExecutionId) =>
+        StringComparer.Ordinal.Equals(WorkflowExecutionId, workflowExecutionId);
+
     // ---- Buffering -------------------------------------------------------------------------------------------------
 
     /// <summary>Applies a deferred commit to the overlay working set and buffers its change-set for the eventual fold.</summary>
@@ -459,6 +466,32 @@ public sealed class RuntimeCoalescingSession
         await EnsureQueueSeededAsync(cancellationToken);
         return await _overlayQueue.DequeueAsync(WorkflowExecutionId, cancellationToken);
     }
+
+    public async ValueTask<RuntimeSchedulerWorkClaim?> ClaimOverlayAsync(
+        RuntimeSchedulerWorkClaimRequest request,
+        CancellationToken cancellationToken)
+    {
+        await EnsureQueueSeededAsync(cancellationToken);
+        return await _overlayQueue.ClaimAsync(request, cancellationToken);
+    }
+
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewOverlayClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken) =>
+        _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteOverlayClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        CancellationToken cancellationToken) =>
+        _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
+
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseOverlayClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken) =>
+        _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
 
     // ---- Flush -----------------------------------------------------------------------------------------------------
 

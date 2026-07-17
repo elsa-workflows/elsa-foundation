@@ -134,6 +134,9 @@ internal sealed class GroundworkDocumentStoreFixture(
                     ElsaRuntimeStorageManifest.DurableTimerDueTimeField,
                     "Groundwork durable timer due cursor must be non-null.",
                     cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.DurableTimerDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery)
+                return await new RuntimeTestBoundedDocumentStore(store).QueryAsync(query, cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery)
                 return await QueryDateTimeLessThanOrEqualAsync(
@@ -148,6 +151,12 @@ internal sealed class GroundworkDocumentStoreFixture(
                     ElsaRuntimeStorageManifest.ExpiresAtField,
                     "Groundwork source-reference expiry cursor must be non-null.",
                     cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery)
+                return await QuerySchedulerWorkAsync(query, cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery)
+                return await QueryPendingSchedulerExecutionsAsync(query, cancellationToken);
             if (TryGetBoundedQuery(query) is { PredicateFields.Count: > 1 } boundedQuery)
                 return await QueryCompositeEqualityAsync(
                     query,
@@ -171,6 +180,71 @@ internal sealed class GroundworkDocumentStoreFixture(
             identity.StartsWith("list-deliverable", StringComparison.Ordinal) ||
             identity.StartsWith("list-immediate", StringComparison.Ordinal) ||
             identity.StartsWith("list-expired-claims", StringComparison.Ordinal);
+
+        private async Task<DocumentQueryResult> QuerySchedulerWorkAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken)
+        {
+            var comparison = query.Clauses.SelectMany(clause => clause.Comparisons).Single();
+            if (comparison.Operator != QueryComparisonOperator.StartsWith ||
+                comparison.Path != ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField ||
+                comparison.Values.SingleOrDefault() is not { } prefix)
+            {
+                throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
+            }
+
+#pragma warning disable GW0004
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+#pragma warning restore GW0004
+            var matches = all.Documents
+                .Select(document => (Document: document, OrderKey: ReadRequiredString(document, ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField)))
+                .Where(candidate => candidate.OrderKey.StartsWith(prefix, StringComparison.Ordinal))
+                .OrderBy(candidate => candidate.OrderKey, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
+                .Select(candidate => candidate.Document)
+                .ToArray();
+            IEnumerable<DocumentEnvelope> window = matches.Skip(query.Skip ?? 0);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
+        private async Task<DocumentQueryResult> QueryPendingSchedulerExecutionsAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken)
+        {
+            var comparison = query.Clauses.SelectMany(clause => clause.Comparisons).Single();
+            if (comparison.Operator != QueryComparisonOperator.StartsWith ||
+                comparison.Path != ElsaRuntimeStorageManifest.WorkflowExecutionIdField ||
+                comparison.Values.SingleOrDefault() is not { } prefix)
+            {
+                throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
+            }
+
+#pragma warning disable GW0004
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+#pragma warning restore GW0004
+            var matches = all.Documents
+                .Select(document => (
+                    Document: document,
+                    WorkflowExecutionId: ReadRequiredString(document, ElsaRuntimeStorageManifest.WorkflowExecutionIdField)))
+                .Where(candidate => candidate.WorkflowExecutionId.StartsWith(prefix, StringComparison.Ordinal))
+                .OrderBy(candidate => candidate.WorkflowExecutionId, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
+                .Select(candidate => candidate.Document)
+                .ToArray();
+            IEnumerable<DocumentEnvelope> window = matches.Skip(query.Skip ?? 0);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
+        private static string ReadRequiredString(DocumentEnvelope envelope, string path)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            return GetPropertyPath(document.RootElement, path).GetString()
+                   ?? throw new InvalidOperationException($"Groundwork test field '{path}' must be a string.");
+        }
 
         private async Task<DocumentQueryResult> QueryCompositeEqualityAsync(
             DocumentQuery query,

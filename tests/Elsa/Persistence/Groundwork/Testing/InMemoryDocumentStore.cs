@@ -246,6 +246,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         return comparison.Operator switch
         {
             QueryComparisonOperator.Equal => order == 0,
+            QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.Ordinal),
             QueryComparisonOperator.GreaterThan => order > 0,
             QueryComparisonOperator.GreaterThanOrEqual => order >= 0,
             QueryComparisonOperator.LessThan => order < 0,

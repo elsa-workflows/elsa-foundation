@@ -45,6 +45,68 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_RenewsClaimAndCompletesWithRefreshedRevision()
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new RenewalObservingWorkQueue(innerQueue);
+        var handler = new BlockingSchedulerWorkHandler();
+        var timeProvider = new ManualTimerTimeProvider(_now);
+        var claimOptions = new RuntimeSchedulerWorkClaimOptions { VisibilityTimeout = TimeSpan.FromSeconds(9) };
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider,
+            claimOptions: claimOptions);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var drainTask = drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask();
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(5));
+        await timeProvider.TimerCreated.WaitAsync(TimeSpan.FromSeconds(5));
+        timeProvider.AdvanceAndFire(TimeSpan.FromSeconds(3));
+        await queue.FirstRenewalObserved.WaitAsync(TimeSpan.FromSeconds(5));
+        handler.Release();
+
+        var result = await drainTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, queue.RenewalAttempts);
+        Assert.Equal(1, result.DrainedCount);
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task DrainAsync_ClaimRenewalLossCancelsDispatchWithoutAcknowledgingOrPoisoning()
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new RenewalObservingWorkQueue(innerQueue, loseFirstRenewal: true);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var handler = new BlockingSchedulerWorkHandler();
+        var timeProvider = new ManualTimerTimeProvider(_now);
+        var claimOptions = new RuntimeSchedulerWorkClaimOptions { VisibilityTimeout = TimeSpan.FromSeconds(9) };
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider,
+            poisonStore: poisonStore,
+            claimOptions: claimOptions);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var drainTask = drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask();
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(5));
+        await timeProvider.TimerCreated.WaitAsync(TimeSpan.FromSeconds(5));
+        timeProvider.AdvanceAndFire(TimeSpan.FromSeconds(3));
+
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+            () => drainTask.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Contains("was lost during 'renew'", exception.Message);
+        Assert.True(handler.CancellationObserved);
+        Assert.Collection(
+            await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")),
+            item => Assert.Equal("work-1", item.WorkItemId));
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
     public async Task DrainAsync_TripsSingleWriterInvariant_WhenDequeueDoesNotMatchPeekedHead()
     {
         // Single-writer TOCTOU tripwire (RT-2): peek returns work-1 (the pause-gate decision is computed for it) but a
@@ -1207,6 +1269,165 @@ public sealed class RuntimeSchedulerDrainTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class BlockingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+    {
+        private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Name => nameof(BlockingSchedulerWorkHandler);
+        public Task Started => _started.Task;
+        public bool CancellationObserved { get; private set; }
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            _started.TrySetResult();
+            try
+            {
+                await _release.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                CancellationObserved = true;
+                throw;
+            }
+        }
+
+        public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class RenewalObservingWorkQueue(
+        IWorkflowSchedulerWorkQueue inner,
+        bool loseFirstRenewal = false) : IWorkflowSchedulerWorkQueue
+    {
+        private readonly TaskCompletionSource _firstRenewalObserved =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool SupportsClaimTransitions => true;
+        public int RenewalAttempts { get; private set; }
+        public Task FirstRenewalObserved => _firstRenewalObserved.Task;
+
+        public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(
+            RuntimeSchedulerWorkItem workItem,
+            CancellationToken cancellationToken = default) =>
+            inner.EnqueueAsync(workItem, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(
+            RuntimeSchedulerWorkQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.ListAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(
+            string workflowExecutionId,
+            CancellationToken cancellationToken = default) =>
+            inner.DequeueAsync(workflowExecutionId, cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(
+            string workflowExecutionId,
+            string workItemId,
+            CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(workflowExecutionId, workItemId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(
+            int limit,
+            CancellationToken cancellationToken = default) =>
+            inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
+
+        public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(
+            RuntimeSchedulerWorkClaimRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.ClaimAsync(request, cancellationToken);
+
+        public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewClaimAsync(
+            RuntimeSchedulerWorkClaim claim,
+            DateTimeOffset now,
+            TimeSpan visibilityTimeout,
+            CancellationToken cancellationToken = default)
+        {
+            RenewalAttempts++;
+            RuntimeSchedulerWorkClaimTransitionResult result;
+            if (loseFirstRenewal && RenewalAttempts == 1)
+                result = RuntimeSchedulerWorkClaimTransitionResult.Stale;
+            else
+                result = await inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+
+            _firstRenewalObserved.TrySetResult();
+            return result;
+        }
+
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteClaimAsync(
+            RuntimeSchedulerWorkClaim claim,
+            CancellationToken cancellationToken = default) =>
+            inner.CompleteClaimAsync(claim, cancellationToken);
+
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(
+            RuntimeSchedulerWorkClaim claim,
+            DateTimeOffset visibleAt,
+            CancellationToken cancellationToken = default) =>
+            inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+    }
+
+    private sealed class ManualTimerTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        private readonly object _syncRoot = new();
+        private readonly TaskCompletionSource _timerCreated =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private ManualTimer? _pendingTimer;
+        private DateTimeOffset _now = now;
+
+        public Task TimerCreated => _timerCreated.Task;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public override ITimer CreateTimer(
+            TimerCallback callback,
+            object? state,
+            TimeSpan dueTime,
+            TimeSpan period)
+        {
+            var timer = new ManualTimer(callback, state);
+            lock (_syncRoot)
+                _pendingTimer = timer;
+            _timerCreated.TrySetResult();
+            return timer;
+        }
+
+        public void AdvanceAndFire(TimeSpan delta)
+        {
+            ManualTimer timer;
+            lock (_syncRoot)
+            {
+                _now = _now.Add(delta);
+                timer = _pendingTimer ?? throw new InvalidOperationException("No scheduler renewal timer was created.");
+                _pendingTimer = null;
+            }
+
+            timer.Fire();
+        }
+
+        private sealed class ManualTimer(TimerCallback callback, object? state) : ITimer
+        {
+            private bool _disposed;
+
+            public bool Change(TimeSpan dueTime, TimeSpan period) => !_disposed;
+
+            public void Fire()
+            {
+                if (!_disposed)
+                    callback(state);
+            }
+
+            public void Dispose() => _disposed = true;
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 
     // Wraps a real InMemory queue but throws OperationCanceledException when the drainer/handler enqueues a follow-up

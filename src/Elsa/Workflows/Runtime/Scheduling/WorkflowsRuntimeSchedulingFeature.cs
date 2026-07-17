@@ -46,6 +46,9 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max timers per tick", Description = "Hard cap on due timers loaded and fired per sweep, bounding both the store scan and dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
     public int MaxTimersPerTick { get; set; } = 100;
 
+    [ManifestSetting(DisplayName = "Timer claim visibility (seconds)", Description = "Visibility lease renewed while a claim-capable durable timer store dispatches one timer.", Category = "Runtime", DefaultValue = "60")]
+    public double ClaimVisibilitySeconds { get; set; } = 60;
+
     [ManifestSetting(DisplayName = "Not-found grace (seconds)", Description = "Grace after a timer's due time before a no-matching-bookmark dispatch deletes the timer (covers a very short delay racing its own bookmark commit).", Category = "Runtime", DefaultValue = "30")]
     public double NotFoundGraceSeconds { get; set; } = 30;
 
@@ -57,6 +60,7 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
             options.MaxBackoffInterval = TimeSpan.FromMinutes(MaxBackoffIntervalMinutes);
             options.MaxTimersPerTick = MaxTimersPerTick;
+            options.ClaimVisibilityTimeout = TimeSpan.FromSeconds(ClaimVisibilitySeconds);
             options.NotFoundGrace = TimeSpan.FromSeconds(NotFoundGraceSeconds);
         });
 

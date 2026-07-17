@@ -97,6 +97,7 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         return comparison.Operator switch
         {
             QueryComparisonOperator.Equal => compared == 0,
+            QueryComparisonOperator.StartsWith => actual.StartsWith(expected, StringComparison.Ordinal),
             QueryComparisonOperator.GreaterThan => compared > 0,
             QueryComparisonOperator.LessThanOrEqual => compared <= 0,
             _ => throw new InvalidOperationException(
@@ -127,9 +128,15 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
             return null;
         if (DateTimeFields.Contains(path))
             return value.Value.GetDateTimeOffset().UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
-        return value.Value.ValueKind == JsonValueKind.Number
-            ? value.Value.GetRawText()
-            : value.Value.GetString();
+        return value.Value.ValueKind switch
+        {
+            JsonValueKind.Number => value.Value.GetRawText(),
+            JsonValueKind.String => value.Value.GetString(),
+            JsonValueKind.True => bool.TrueString,
+            JsonValueKind.False => bool.FalseString,
+            _ => throw new InvalidOperationException(
+                $"Runtime test query field '{path}' has unsupported JSON kind '{value.Value.ValueKind}'.")
+        };
     }
 
     private static string NormalizeComparable(string path, string value) =>
@@ -163,6 +170,13 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                 PostCommitOutboxOrderedRangeQueries.Contains(query.QueryIdentity),
             ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind =>
                 WorkflowDispatchOrderedRangeQueries.Contains(query.QueryIdentity),
+            ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind =>
+                RecoveryOrderedRangeQueries.Contains(query.QueryIdentity),
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind =>
+                query.QueryIdentity is ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery
+                    or ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery,
+            ElsaRuntimeStorageManifest.DurableTimerDocumentKind =>
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery,
             _ => false
         };
 
@@ -193,11 +207,29 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         ElsaRuntimeStorageManifest.PageWorkflowDispatchesByParentStatusAndTestScopeQuery
     ];
 
+    private static readonly HashSet<string> RecoveryOrderedRangeQueries =
+    [
+        ElsaRuntimeStorageManifest.ListRecoveryDetectedQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryDetectedByLeaseOwnerQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryDetectedByHeartbeatOwnerQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryDetectedOwnerlessQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryByLeaseExpiryQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryByLeaseExpiryAndOwnerQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryByLeaseAcquisitionQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryByLeaseAcquisitionAndOwnerQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryByHeartbeatQuery,
+        ElsaRuntimeStorageManifest.ListRecoveryByHeartbeatAndOwnerQuery
+    ];
+
     private static readonly HashSet<string> DateTimeFields =
     [
         ElsaRuntimeStorageManifest.WorkflowDispatchCreatedAtField,
         ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField,
         ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField,
-        ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField
+        ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField,
+        ElsaRuntimeStorageManifest.RecoveryInterruptedAtField,
+        ElsaRuntimeStorageManifest.RecoveryLeaseAcquiredAtField,
+        ElsaRuntimeStorageManifest.RecoveryLeaseExpiresAtField,
+        ElsaRuntimeStorageManifest.RecoveryHeartbeatRecordedAtField
     ];
 }

@@ -37,6 +37,7 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IDurableValueStateStore),
                 typeof(ISchedulerStateStore),
                 typeof(IExecutionLivenessStateStore),
+                typeof(IRuntimeRecoveryScanner),
                 typeof(IWorkflowHoldStateStore),
                 typeof(IIncidentStateStore),
                 typeof(IRuntimeCheckpointCommitStore),

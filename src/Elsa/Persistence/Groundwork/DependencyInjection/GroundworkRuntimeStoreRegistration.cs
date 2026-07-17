@@ -75,6 +75,8 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<ISchedulerStateStore, GroundworkSchedulerStateStore>();
         services.RemoveAll<IExecutionLivenessStateStore>();
         services.AddScoped<IExecutionLivenessStateStore, GroundworkExecutionLivenessStateStore>();
+        services.RemoveAll<IRuntimeRecoveryScanner>();
+        services.AddScoped<IRuntimeRecoveryScanner, GroundworkRuntimeRecoveryScanner>();
         services.RemoveAll<IWorkflowHoldStateStore>();
         services.AddScoped<IWorkflowHoldStateStore, GroundworkWorkflowHoldStateStore>();
         services.RemoveAll<IIncidentStateStore>();

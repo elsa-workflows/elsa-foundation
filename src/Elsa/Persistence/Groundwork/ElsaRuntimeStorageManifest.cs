@@ -54,6 +54,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ByOutboxRecordedAtIndex = "by-outbox-recorded-at";
     public const string ByOutboxItemIdIndex = "by-outbox-item-id";
     public const string ByOutboxIntentKindIndex = "by-outbox-intent-kind";
+    public const string BySchedulerWorkOrderIndex = "by-scheduler-work-order";
     public const string ByStimulusAndTypeIndex = "by-stimulus-and-type";
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
@@ -67,6 +68,7 @@ public static class ElsaRuntimeStorageManifest
     public const string PublicationIdField = "publicationId";
     public const string ListAllQuery = "list-all";
     public const string ListByWorkflowExecutionQuery = "list-by-workflow-execution";
+    public const string ListPendingSchedulerWorkflowExecutionsQuery = "list-pending-scheduler-workflow-executions";
     public const string ListByArtifactQuery = "list-by-artifact";
     public const string ListByParentActivityExecutionQuery = "list-by-parent-activity-execution";
     // Nested dot-path into the persisted activity-execution document: the parent id already lives under
@@ -91,6 +93,7 @@ public static class ElsaRuntimeStorageManifest
     public const string PostCommitOutboxRecordedAtField = "item.recordedAt";
     public const string PostCommitOutboxItemIdField = "item.outboxItemId";
     public const string PostCommitOutboxIntentKindField = "item.intent.kind";
+    public const string SchedulerWorkOrderKeyField = "orderKey";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
@@ -193,6 +196,36 @@ public static class ElsaRuntimeStorageManifest
     // (ExecutionLivenessState was OperationalState; WorkflowHoldState was ControlPlaneState).
     // Do not change the literal values: they are the durable Groundwork document-kind discriminators.
     public const string ExecutionLivenessStateDocumentKind = "operationalState";
+    public const string RecoveryHasOperationalOwnerField = "hasOperationalOwner";
+    public const string RecoveryInterruptionStatusField = "state.interruptedExecution.status";
+    public const string RecoveryInterruptedAtField = "state.interruptedExecution.interruptedAt";
+    public const string RecoveryLeaseOwnerIdField = "state.executionLease.ownerId";
+    public const string RecoveryLeaseAcquiredAtField = "state.executionLease.acquiredAt";
+    public const string RecoveryLeaseExpiresAtField = "state.executionLease.expiresAt";
+    public const string RecoveryHeartbeatOwnerIdField = "state.heartbeat.ownerId";
+    public const string RecoveryHeartbeatRecordedAtField = "state.heartbeat.recordedAt";
+
+    public const string RecoveryDetectedIndex = "by-recovery-detected";
+    public const string RecoveryDetectedLeaseOwnerIndex = "by-recovery-detected-lease-owner";
+    public const string RecoveryDetectedHeartbeatOwnerIndex = "by-recovery-detected-heartbeat-owner";
+    public const string RecoveryDetectedOwnerlessIndex = "by-recovery-detected-ownerless";
+    public const string RecoveryLeaseExpiryIndex = "by-recovery-lease-expiry";
+    public const string RecoveryLeaseExpiryOwnerIndex = "by-recovery-lease-expiry-owner";
+    public const string RecoveryLeaseAcquisitionIndex = "by-recovery-lease-acquisition";
+    public const string RecoveryLeaseAcquisitionOwnerIndex = "by-recovery-lease-acquisition-owner";
+    public const string RecoveryHeartbeatIndex = "by-recovery-heartbeat";
+    public const string RecoveryHeartbeatOwnerIndex = "by-recovery-heartbeat-owner";
+
+    public const string ListRecoveryDetectedQuery = "list-recovery-detected";
+    public const string ListRecoveryDetectedByLeaseOwnerQuery = "list-recovery-detected-by-lease-owner";
+    public const string ListRecoveryDetectedByHeartbeatOwnerQuery = "list-recovery-detected-by-heartbeat-owner";
+    public const string ListRecoveryDetectedOwnerlessQuery = "list-recovery-detected-ownerless";
+    public const string ListRecoveryByLeaseExpiryQuery = "list-recovery-by-lease-expiry";
+    public const string ListRecoveryByLeaseExpiryAndOwnerQuery = "list-recovery-by-lease-expiry-and-owner";
+    public const string ListRecoveryByLeaseAcquisitionQuery = "list-recovery-by-lease-acquisition";
+    public const string ListRecoveryByLeaseAcquisitionAndOwnerQuery = "list-recovery-by-lease-acquisition-and-owner";
+    public const string ListRecoveryByHeartbeatQuery = "list-recovery-by-heartbeat";
+    public const string ListRecoveryByHeartbeatAndOwnerQuery = "list-recovery-by-heartbeat-and-owner";
     public const string WorkflowHoldStateDocumentKind = "controlPlaneState";
     public const string IncidentStateDocumentKind = "incidentState";
 
@@ -243,6 +276,7 @@ public static class ElsaRuntimeStorageManifest
     // Durable scheduler work queue. Each queued work item is a document so the queue survives process
     // restarts; the by-collection partition supports the system-wide pending-executions sweep.
     public const string SchedulerWorkItemDocumentKind = "schedulerWorkItem";
+    public const string SchedulerWorkByWorkflowOrderIndex = BySchedulerWorkOrderIndex;
 
     // Durable scheduler poison records. Each failed work item is keyed by workflow execution and work item id so
     // handler crashes survive process restarts and can be inspected/re-driven according to the runtime retry policy.
@@ -254,8 +288,11 @@ public static class ElsaRuntimeStorageManifest
     public const string DurableTimerByWorkflowExecution = ByWorkflowExecutionIndex;
     public const string DurableTimerDueTimeField = "timer.dueTime";
     public const string DurableTimerByDueTime = "by-due-time";
+    public const string DurableTimerClaimOrderKeyField = "claimOrderKey";
+    public const string DurableTimerByClaimOrder = "by-claim-order";
     public const string ListDurableTimersByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
     public const string ListDueDurableTimersQuery = "list-due";
+    public const string ClaimDueDurableTimersQuery = "claim-due";
 
     // Durable trigger index over PUBLISHED artifacts (W7, E3-1). Each start-trigger activity in a
     // published executable becomes one document, so an external stimulus with no execution id can be
@@ -324,12 +361,13 @@ public static class ElsaRuntimeStorageManifest
     /// over the provider-neutral legacy declarations.
     /// </summary>
     public static StorageManifest CreatePhysicalized() =>
-        PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
-            TestScopeStoragePhysicalizer.AddCompositeRoutes(
-                WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                    BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                        WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))));
+        ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(
+            PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
+                TestScopeStoragePhysicalizer.AddCompositeRoutes(
+                    WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                        BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                            WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())))))));
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
@@ -484,7 +522,7 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
                     Keyword(ByCollectionIndex, CollectionField),
-                    Keyword(ByOutboxStatusIndex, PostCommitOutboxStatusField),
+                    Number(ByOutboxStatusIndex, PostCommitOutboxStatusField),
                     DateTime(ByOutboxAvailableAtIndex, PostCommitOutboxAvailableAtField),
                     DateTime(ByOutboxVisibleAfterIndex, PostCommitOutboxVisibleAfterField),
                     DateTime(ByOutboxRecordedAtIndex, PostCommitOutboxRecordedAtField),
@@ -518,11 +556,37 @@ public static class ElsaRuntimeStorageManifest
                 SchedulerWorkItemDocumentKind,
                 "Scheduler work queue item",
                 [
-                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    new IndexDeclaration(
+                        SchedulerWorkByWorkflowOrderIndex,
+                        [new IndexField(SchedulerWorkOrderKeyField, IndexValueKind.Keyword)],
+                        IndexValueKind.Keyword,
+                        false,
+                        true,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        IndexPhysicalizationPolicy.Optimized),
+                    new IndexDeclaration(
+                        ByWorkflowExecutionIndex,
+                        [new IndexField(WorkflowExecutionIdField, IndexValueKind.Keyword)],
+                        IndexValueKind.Keyword,
+                        false,
+                        true,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        IndexPhysicalizationPolicy.Optimized),
                     Keyword(ByCollectionIndex, CollectionField)
                 ],
                 [
-                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query(
+                        ListByWorkflowExecutionQuery,
+                        SchedulerWorkByWorkflowOrderIndex,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        QuerySortSupport.Ascending),
+                    Query(
+                        ListPendingSchedulerWorkflowExecutionsQuery,
+                        ByWorkflowExecutionIndex,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
+                        QuerySortSupport.Ascending),
                     Query("list-all", ByCollectionIndex)
                 ]),
             Unit(
@@ -536,7 +600,16 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByCollectionIndex, CollectionField),
                     Keyword(DurableTimerByWorkflowExecution, WorkflowExecutionIdField),
-                    DateTime(DurableTimerByDueTime, DurableTimerDueTimeField)
+                    DateTime(DurableTimerByDueTime, DurableTimerDueTimeField),
+                    new IndexDeclaration(
+                        DurableTimerByClaimOrder,
+                        [new IndexField(DurableTimerClaimOrderKeyField, IndexValueKind.Keyword)],
+                        IndexValueKind.Keyword,
+                        false,
+                        true,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        IndexPhysicalizationPolicy.Optimized)
                 ],
                 [
                     Query("list-all", ByCollectionIndex),
@@ -544,6 +617,11 @@ public static class ElsaRuntimeStorageManifest
                     Query(
                         ListDueDurableTimersQuery,
                         DurableTimerByDueTime,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending),
+                    Query(
+                        ClaimDueDurableTimersQuery,
+                        DurableTimerByClaimOrder,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
                         QuerySortSupport.Ascending)
                 ]),
@@ -623,6 +701,16 @@ public static class ElsaRuntimeStorageManifest
         [new IndexField(field)],
         IndexValueKind.Keyword,
         isUnique,
+        true,
+        MissingValueBehavior.Excluded,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
+
+    private static IndexDeclaration Number(string identity, string field) => new(
+        identity,
+        [new IndexField(field)],
+        IndexValueKind.Number,
+        false,
         true,
         MissingValueBehavior.Excluded,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
