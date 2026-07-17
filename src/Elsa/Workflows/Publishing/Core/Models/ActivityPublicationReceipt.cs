@@ -26,6 +26,7 @@ public sealed record ActivityPublicationOutcome(
 /// prevents one operation identity from being reused for different reviewed material.
 /// </summary>
 public sealed record ActivityPublicationReceipt(
+    string? TenantId,
     string IdempotencyKey,
     string RequestFingerprint,
     ActivityPublicationReceiptStatus Status,

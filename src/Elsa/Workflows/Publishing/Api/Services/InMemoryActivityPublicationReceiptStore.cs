@@ -6,15 +6,16 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 
 public sealed class InMemoryActivityPublicationReceiptStore : IActivityPublicationReceiptStore
 {
-    private readonly ConcurrentDictionary<string, ActivityPublicationReceipt> _receipts =
-        new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string? TenantId, string IdempotencyKey), ActivityPublicationReceipt> _receipts =
+        new();
 
     public ValueTask<ActivityPublicationReceipt?> FindAsync(
+        string? tenantId,
         string idempotencyKey,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _receipts.TryGetValue(idempotencyKey, out var receipt);
+        _receipts.TryGetValue((tenantId, idempotencyKey), out var receipt);
         return ValueTask.FromResult(receipt);
     }
 
@@ -23,6 +24,6 @@ public sealed class InMemoryActivityPublicationReceiptStore : IActivityPublicati
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(_receipts.TryAdd(receipt.IdempotencyKey, receipt));
+        return ValueTask.FromResult(_receipts.TryAdd((receipt.TenantId, receipt.IdempotencyKey), receipt));
     }
 }

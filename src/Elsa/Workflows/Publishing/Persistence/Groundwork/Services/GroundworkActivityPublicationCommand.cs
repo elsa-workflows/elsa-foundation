@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
@@ -16,6 +14,8 @@ using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -65,7 +65,12 @@ public sealed class GroundworkActivityPublicationCommand(
         foreach (var edge in commit.Design.DirectDependencies)
             await EnsureAbsentAsync(ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind, edge.Id, cancellationToken);
         await EnsureAbsentAsync(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, commit.SourceReference.SourceReferenceId, cancellationToken);
-        await EnsureAbsentAsync(PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind, ReceiptId(commit.Receipt.IdempotencyKey), cancellationToken);
+        await EnsureAbsentAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            GroundworkActivityPublicationReceiptStore.Id(
+                commit.Receipt.TenantId,
+                commit.Receipt.IdempotencyKey),
+            cancellationToken);
 
         var requests = new List<SaveDocumentRequest>();
         var templateRequest = await CreateTemplateRequestAsync(commit.ExecutableTemplate, cancellationToken);
@@ -89,7 +94,9 @@ public sealed class GroundworkActivityPublicationCommand(
             commit.Receipt);
         requests.Add(new(
             PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
-            ReceiptId(commit.Receipt.IdempotencyKey),
+            GroundworkActivityPublicationReceiptStore.Id(
+                commit.Receipt.TenantId,
+                commit.Receipt.IdempotencyKey),
             receiptSchemaVersion,
             receiptContent,
             0));
@@ -304,6 +311,12 @@ public sealed class GroundworkActivityPublicationCommand(
         var template = commit.ExecutableTemplate;
         var source = commit.SourceReference;
         var receipt = commit.Receipt;
+        var expectedRequestFingerprint = ActivityPublicationRequestFingerprint.Compute(
+            receipt.DraftId,
+            receipt.ExpectedDraftRevision,
+            receipt.ExpectedDefinitionHeadVersionId,
+            receipt.RequestedVersion,
+            receipt.ReviewToken);
         if (!StringComparer.Ordinal.Equals(design.DefinitionId, publication.DefinitionId) ||
             !StringComparer.Ordinal.Equals(design.CatalogVersion.DefinitionId, publication.DefinitionId) ||
             !StringComparer.Ordinal.Equals(design.CatalogVersion.Id, publication.DefinitionVersionId) ||
@@ -311,13 +324,23 @@ public sealed class GroundworkActivityPublicationCommand(
             throw new ArgumentException("Publication definition/version identities do not align.", nameof(commit));
         if (receipt.Status != ActivityPublicationReceiptStatus.Applied ||
             receipt.Outcome is null ||
+            string.IsNullOrWhiteSpace(receipt.IdempotencyKey) ||
+            !StringComparer.Ordinal.Equals(receipt.RequestFingerprint, expectedRequestFingerprint) ||
+            string.IsNullOrWhiteSpace(receipt.ReviewToken) ||
+            !StringComparer.Ordinal.Equals(receipt.TenantId, commit.OperationTenantId) ||
             !StringComparer.Ordinal.Equals(receipt.DraftId, design.DraftId) ||
             receipt.ExpectedDraftRevision != design.ExpectedDraftRevision ||
             !StringComparer.Ordinal.Equals(receipt.ExpectedDefinitionHeadVersionId, design.ExpectedDefinitionHeadVersionId) ||
             !StringComparer.Ordinal.Equals(receipt.Outcome.DefinitionId, publication.DefinitionId) ||
             !StringComparer.Ordinal.Equals(receipt.Outcome.DefinitionVersionId, publication.DefinitionVersionId) ||
+            !StringComparer.Ordinal.Equals(receipt.RequestedVersion, publication.Version) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.Version, publication.Version) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.DraftId, design.DraftId) ||
             !StringComparer.Ordinal.Equals(receipt.Outcome.TemplateId, template.TemplateId) ||
-            !StringComparer.Ordinal.Equals(receipt.Outcome.SourceReferenceId, source.SourceReferenceId))
+            !StringComparer.Ordinal.Equals(receipt.Outcome.TemplateHash, template.TemplateHash) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.SourceReferenceId, source.SourceReferenceId) ||
+            receipt.Outcome.PublishedAt != publication.PublishedAt ||
+            receipt.UpdatedAt != publication.PublishedAt)
             throw new ArgumentException("Publication receipt does not match authoritative publication material.", nameof(commit));
         if (!StringComparer.Ordinal.Equals(publication.TemplateId, template.TemplateId) ||
             !StringComparer.Ordinal.Equals(publication.TemplateHash, template.TemplateHash) ||
@@ -368,9 +391,6 @@ public sealed class GroundworkActivityPublicationCommand(
             design.DirectDependencies.Any(x => !StringComparer.Ordinal.Equals(x.TenantId, publication.TenantId)))
             throw new ArgumentException("Publication Design document tenants do not align.", nameof(commit));
     }
-
-    internal static string ReceiptId(string idempotencyKey) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
 
     private async Task<DocumentEnvelope> RequiredAsync(string kind, string id, CancellationToken cancellationToken) =>
         await store.LoadAsync(kind, id, cancellationToken) ?? throw Conflict($"Required document '{kind}/{id}' was not found.");

@@ -31,11 +31,15 @@ packages that replace a related store family should remove and register the whol
 cannot accidentally split one authority model between process-local and durable state.
 
 The Groundwork composition also replaces `IActivityPublicationReceiptStore`. It must preserve one
-immutable request fingerprint per idempotency key. An Applied receipt is written by
+immutable request fingerprint per tenant-owned idempotency key. Receipt lookup must use the
+request authorization context's tenant scope and must not depend on the continued existence of the
+source draft. That current operation tenant remains the receipt owner when the authorized source
+resource is global. An Applied receipt is written by
 `ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference,
 ActivityPublicationReceipt>` in the same atomic transaction as the activity version, definition
 head, template, Source Reference, layout, and dependencies. A persistence replacement must retain
-that shared transaction boundary.
+that shared transaction boundary and recompute the canonical request fingerprint with
+`ActivityPublicationRequestFingerprint` before accepting the receipt.
 
 ## Contract obligations
 

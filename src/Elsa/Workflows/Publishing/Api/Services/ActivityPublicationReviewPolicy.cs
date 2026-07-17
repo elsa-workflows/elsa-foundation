@@ -123,11 +123,19 @@ internal sealed class ActivityPublicationReviewPolicy(
             .ToArray();
     }
 
+    public static string MinimumVersion(string? headVersion, ActivityVersionBump requiredBump) =>
+        ValidVersionChoices(headVersion, requiredBump)[0];
+
     public static string StableCandidateVersionId(string definitionId, string draftId, long revision)
     {
         var value = $"{definitionId}\n{draftId}\n{revision.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
         return $"activity-ver-candidate-{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)))}";
     }
+
+    public static bool IsVersionAtLeast(string candidateText, string minimumText) =>
+        SemVer.TryParse(candidateText, out var candidate) &&
+        SemVer.TryParse(minimumText, out var minimum) &&
+        candidate >= minimum;
 
     public static string ReviewToken(
         ActivityDefinitionDraft draft,
@@ -145,6 +153,7 @@ internal sealed class ActivityPublicationReviewPolicy(
         var material = JsonSerializer.SerializeToUtf8Bytes(new
         {
             draft.Id,
+            draft.TenantId,
             draft.DefinitionId,
             draft.Revision,
             HeadVersionId = headVersionId,
@@ -172,13 +181,21 @@ internal sealed class ActivityPublicationReviewPolicy(
             {
                 x.Code,
                 Severity = x.Severity.ToString(),
+                x.Message,
+                x.Remediation,
                 x.Subject.Kind,
                 x.Subject.Id,
                 x.Subject.DefinitionId,
                 x.Subject.VersionId,
                 x.Subject.Revision,
                 JsonPointer = x.Location?.JsonPointer,
+                x.Location?.ProviderKey,
                 x.Location?.ReferenceKey,
+                NodeOrigin = x.Location?.NodeOrigin?.Select(y => new
+                {
+                    Kind = y.Kind.ToString(),
+                    y.Id
+                }),
                 DependencyPath = x.Location?.DependencyPath?.Select(y => new
                 {
                     y.DefinitionId,
@@ -190,18 +207,6 @@ internal sealed class ActivityPublicationReviewPolicy(
             })
         });
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(material))}";
-    }
-
-    public static string RequestFingerprint(PublishActivityDefinitionRequest request)
-    {
-        var material = string.Join(
-            "\n",
-            request.DraftId,
-            request.ExpectedDraftRevision.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            request.ExpectedDefinitionHeadVersionId ?? "",
-            request.Version,
-            request.ReviewToken);
-        return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))}";
     }
 
     private static IReadOnlyList<string> ValidVersionChoices(

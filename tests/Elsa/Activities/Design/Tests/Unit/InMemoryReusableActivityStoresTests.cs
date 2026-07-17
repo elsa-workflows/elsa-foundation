@@ -132,6 +132,7 @@ public sealed class InMemoryReusableActivityStoresTests
         var contract = Contract();
         var provider = Provider();
         return new(
+            null,
             new ActivityPublicationDesignMutation(
                 "draft-1",
                 0,

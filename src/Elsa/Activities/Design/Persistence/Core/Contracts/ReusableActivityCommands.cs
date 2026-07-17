@@ -166,6 +166,7 @@ public sealed record ActivityPublicationDesignMutation(
 /// bridge to commit every authoritative document and the durable outcome in one transaction.
 /// </summary>
 public sealed record ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt>(
+    string? OperationTenantId,
     ActivityPublicationDesignMutation Design,
     TExecutableTemplate ExecutableTemplate,
     TSourceReference SourceReference,

@@ -356,6 +356,7 @@ public sealed class PublishingHttpContractTests
     {
         var publishedAt = new DateTimeOffset(2026, 7, 15, 12, 20, 0, TimeSpan.Zero);
         return new(
+            null,
             "publish-operation-1",
             "sha256:request",
             ActivityPublicationReceiptStatus.Applied,
@@ -400,10 +401,6 @@ public sealed class PublishingHttpContractTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(receipt);
 
-        public Task<PublishActivityDefinitionResult> PublishAsync(
-            PublishActivityDefinitionRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     private sealed class ValueSender(object value) : IRequestSender

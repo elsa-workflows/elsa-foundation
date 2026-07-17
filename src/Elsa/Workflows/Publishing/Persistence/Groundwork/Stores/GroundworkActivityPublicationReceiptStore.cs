@@ -16,12 +16,18 @@ public sealed class GroundworkActivityPublicationReceiptStore(
         IActivityPublicationReceiptStore
 {
     public async ValueTask<ActivityPublicationReceipt?> FindAsync(
+        string? tenantId,
         string idempotencyKey,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
-        var loaded = await LoadAsync<ActivityPublicationReceipt>(Id(idempotencyKey), cancellationToken);
-        return loaded?.Document;
+        var loaded = await LoadAsync<ActivityPublicationReceipt>(Id(tenantId, idempotencyKey), cancellationToken);
+        if (loaded is null)
+            return null;
+        var receipt = loaded.Value.Document;
+        if (!StringComparer.Ordinal.Equals(receipt.TenantId, tenantId))
+            throw new InvalidOperationException("The activity publication receipt tenant does not match its storage identity.");
+        return receipt;
     }
 
     public async ValueTask<bool> TryCreateAsync(
@@ -29,10 +35,13 @@ public sealed class GroundworkActivityPublicationReceiptStore(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(receipt);
-        var result = await SaveAsync(Id(receipt.IdempotencyKey), receipt, 0, cancellationToken);
+        var result = await SaveAsync(Id(receipt.TenantId, receipt.IdempotencyKey), receipt, 0, cancellationToken);
         return result.Status == DocumentStoreWriteStatus.Saved;
     }
 
-    private static string Id(string idempotencyKey) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
+    internal static string Id(string? tenantId, string idempotencyKey) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
+            tenantId is null
+                ? $"global\n{idempotencyKey}"
+                : $"tenant\n{tenantId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}\n{tenantId}\n{idempotencyKey}")));
 }

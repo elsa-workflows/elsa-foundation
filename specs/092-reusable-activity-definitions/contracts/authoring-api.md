@@ -641,7 +641,7 @@ Content-Type: application/json
 ```
 
 The `200 OK` response contains one ordered diagnostic set, the impact-first diff, exact dependency
-evidence, provider/storage/Runtime readiness, `minimumVersion`, `validVersions`, and an opaque
+evidence, provider/storage/Runtime readiness, `minimumVersion`, suggested `validVersions`, and an opaque
 `reviewToken`. A first publication reports `hasBaseline: false`, compares against the explicit
 definition baseline, and normally offers `1.0.0`. Unknown change kinds and additive fields are
 forward-compatible; clients render their supplied impact and safe description without rejecting
@@ -663,9 +663,12 @@ Content-Type: application/json
 }
 ```
 
-For a first publication, `expectedDefinitionHeadVersionId` is `null`. `version` must be one of the
-exact choices returned by the reviewed preflight. The idempotency key is bound to the complete
-reviewed request and cannot be reused for different material.
+For a first publication, `expectedDefinitionHeadVersionId` is `null`. `version` may be any unique,
+exact SemVer with precedence at or above `minimumVersion`; `validVersions` provides convenient
+presets rather than an exhaustive finite set. The idempotency key is tenant-owned and bound to the
+complete reviewed request, so the same textual key may be used independently in another tenant but
+cannot be reused for different material in the same tenant. Receipt ownership follows the caller's
+current operation tenant, including when that tenant is authorized to publish a global definition.
 
 Response: `201 Created` after atomic publication, with `Location` pointing to
 `/design/activities/publications/{idempotencyKey}`:
