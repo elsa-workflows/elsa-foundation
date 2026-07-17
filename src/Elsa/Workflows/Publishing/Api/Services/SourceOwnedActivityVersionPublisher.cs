@@ -133,6 +133,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
             DefinitionId = definition.Id,
             ContentAuthority = new(ActivityContentAuthorityKind.ProviderSource, version.ProviderKey, version.SourceId),
             HeadVersionId = version.Id,
+            RecommendedVersionId = version.Id,
             CreatedAt = now,
             LastModifiedAt = now
         };

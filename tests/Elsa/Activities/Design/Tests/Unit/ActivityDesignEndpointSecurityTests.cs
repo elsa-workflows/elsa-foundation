@@ -35,6 +35,8 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Definitions.List")]
     [InlineData("Definitions.ListDrafts")]
     [InlineData("Definitions.ListVersions")]
+    [InlineData("Definitions.Recommendation")]
+    [InlineData("Definitions.Picker")]
     [InlineData("Definitions.Update")]
     [InlineData("Drafts.Diff")]
     [InlineData("Drafts.Discard")]
@@ -82,6 +84,8 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Definitions.List",
             "Definitions.ListDrafts",
             "Definitions.ListVersions",
+            "Definitions.Recommendation",
+            "Definitions.Picker",
             "Definitions.Update",
             "Drafts.Diff",
             "Drafts.Discard",

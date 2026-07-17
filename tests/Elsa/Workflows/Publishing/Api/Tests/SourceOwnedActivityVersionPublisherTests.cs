@@ -25,6 +25,7 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         Assert.Equal(ActivityContentAuthorityKind.ProviderSource, commit.AuthoringState.ContentAuthority.Kind);
         Assert.Equal("elsa.clr-activity", commit.AuthoringState.ContentAuthority.AuthorityKey);
         Assert.Equal("assembly-a", commit.AuthoringState.ContentAuthority.SourceId);
+        Assert.Equal("version-1", commit.AuthoringState.RecommendedVersionId);
         Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, commit.CatalogVersion.ConsumerKey);
         Assert.Equal("1", commit.CatalogVersion.ConsumerSchemaVersion);
         Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, commit.ExecutableTemplate.Root.Descriptor.ConsumerKey);

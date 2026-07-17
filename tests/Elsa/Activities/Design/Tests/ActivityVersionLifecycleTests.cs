@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Tests.Fixtures;
@@ -15,16 +16,8 @@ public sealed class ActivityVersionLifecycleTests
     [Fact]
     public async Task Retire_restore_and_revoke_are_optimistic_and_revocation_is_terminal()
     {
-        var stores = new InMemoryReusableActivityStores();
-        stores.SeedPublication(Publication(), new()
-        {
-            Id = "layout-1",
-            DefinitionVersionId = "version-1",
-            TenantId = "tenant-a",
-            CreatedAt = Now,
-            LastModifiedAt = Now
-        });
-        var service = new ActivityVersionLifecycleService(stores, stores, new Context(), new Clock());
+        var stores = await StoresAsync();
+        var service = new ActivityVersionLifecycleService(stores, stores, stores, new Context(), new Clock());
 
         var retired = await service.RetireAsync(new("version-1", ActivityDefinitionVersionLifecycle.Active, "Superseded"), default);
         var stale = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
@@ -44,6 +37,65 @@ public sealed class ActivityVersionLifecycleTests
     }
 
     [Fact]
+    public async Task Retiring_the_recommended_version_requires_an_atomic_clear_or_active_replacement()
+    {
+        var stores = await StoresAsync("version-1", includeReplacement: true);
+        var service = new ActivityVersionLifecycleService(stores, stores, stores, new Context(), new Clock());
+
+        var missingDecision = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            service.RetireAsync(new("version-1", ActivityDefinitionVersionLifecycle.Active, "Superseded"), default));
+        var retired = await service.RetireAsync(new(
+            "version-1",
+            ActivityDefinitionVersionLifecycle.Active,
+            "Superseded",
+            new(
+                "version-2",
+                "version-1",
+                ActivityRecommendationDisposition.Replace,
+                "version-2",
+                ActivityDefinitionVersionLifecycle.Active)), default);
+
+        Assert.Equal("activity.definition.recommendation-required", missingDecision.ErrorCode);
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Retired, retired.Lifecycle);
+        Assert.Equal("version-2", (await stores.FindAsync("definition-1"))!.RecommendedVersionId);
+    }
+
+    [Fact]
+    public async Task Clearing_on_retirement_is_explicit_and_restore_does_not_recommend_the_version()
+    {
+        var stores = await StoresAsync("version-1");
+        var service = new ActivityVersionLifecycleService(stores, stores, stores, new Context(), new Clock());
+
+        await service.RetireAsync(new(
+            "version-1",
+            ActivityDefinitionVersionLifecycle.Active,
+            "No replacement",
+            new("version-1", "version-1", ActivityRecommendationDisposition.Clear)), default);
+        await service.RestoreAsync(new("version-1", ActivityDefinitionVersionLifecycle.Retired, "Restored for exact use"), default);
+
+        Assert.Null((await stores.FindAsync("definition-1"))!.RecommendedVersionId);
+    }
+
+    [Fact]
+    public async Task Revoking_the_recommended_version_also_requires_an_explicit_decision()
+    {
+        var stores = await StoresAsync("version-1");
+        var service = new ActivityVersionLifecycleService(stores, stores, stores, new Context(), new Clock());
+
+        var missingDecision = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            service.RevokeAsync(new("version-1", ActivityDefinitionVersionLifecycle.Active, "Unsafe"), default));
+        var revoked = await service.RevokeAsync(new(
+            "version-1",
+            ActivityDefinitionVersionLifecycle.Active,
+            "Unsafe",
+            new("version-1", "version-1", ActivityRecommendationDisposition.Clear)), default);
+
+        Assert.Equal("activity.definition.recommendation-required", missingDecision.ErrorCode);
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Revoked, revoked.Lifecycle);
+        Assert.Null((await stores.FindAsync("definition-1"))!.RecommendedVersionId);
+    }
+
+    [Fact]
     public void Selection_policy_blocks_retired_direct_selection_but_preserves_closed_parent_dependencies()
     {
         var policy = new DefaultActivityVersionSelectionPolicy();
@@ -55,19 +107,79 @@ public sealed class ActivityVersionLifecycleTests
 
     private static readonly DateTimeOffset Now = new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
 
-    private static ActivityDefinitionVersionPublication Publication() => new()
+    private static async Task<InMemoryReusableActivityStores> StoresAsync(
+        string? recommendedVersionId = null,
+        bool includeReplacement = false)
     {
-        Id = "publication-1",
-        DefinitionVersionId = "version-1",
+        var stores = new InMemoryReusableActivityStores();
+        await stores.ExecuteAsync(new CreateActivityDefinitionRequest(
+            new ActivityDefinition
+            {
+                Id = "definition-1",
+                ActivityTypeKey = "acme.test",
+                Category = "Tests",
+                TenantId = "tenant-a",
+                CreatedAt = Now,
+                LastModifiedAt = Now
+            },
+            new ActivityDefinitionAuthoringState
+            {
+                Id = "authoring-1",
+                DefinitionId = "definition-1",
+                TenantId = "tenant-a",
+                ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
+                HeadVersionId = includeReplacement ? "version-2" : "version-1",
+                RecommendedVersionId = recommendedVersionId,
+                CreatedAt = Now,
+                LastModifiedAt = Now
+            },
+            new ActivityDefinitionDraft
+            {
+                Id = "draft-1",
+                DefinitionId = "definition-1",
+                TenantId = "tenant-a",
+                State = new(new("1", [], [], []), new("test.provider", "1", JsonSerializer.SerializeToElement(new { })), new Dictionary<string, string>()),
+                CreatedAt = Now,
+                LastModifiedAt = Now
+            },
+            new ActivityDefinitionDraftLayout
+            {
+                Id = "layout-draft-1",
+                DraftId = "draft-1",
+                TenantId = "tenant-a",
+                Records = [],
+                CreatedAt = Now,
+                LastModifiedAt = Now
+            }));
+        stores.SeedPublication(Publication(), Layout("version-1"));
+        if (includeReplacement)
+            stores.SeedPublication(Publication("version-2", "2.0.0"), Layout("version-2"));
+        return stores;
+    }
+
+    private static ActivityDefinitionVersionLayout Layout(string versionId) => new()
+    {
+        Id = $"layout-{versionId}",
+        DefinitionVersionId = versionId,
+        TenantId = "tenant-a",
+        Records = [],
+        CreatedAt = Now,
+        LastModifiedAt = Now
+    };
+
+    private static ActivityDefinitionVersionPublication Publication(string versionId = "version-1", string version = "1.0.0") => new()
+    {
+        Id = $"publication-{versionId}",
+        DefinitionVersionId = versionId,
         DefinitionId = "definition-1",
         TenantId = "tenant-a",
-        Version = "1.0.0",
+        Version = version,
         ActivityTypeKey = "acme.test",
         Contract = new("1", [], [], [new("done", "Done", true)]),
         Provider = new("test.provider", "1", JsonSerializer.SerializeToElement(new { })),
-        TemplateId = "template-1",
-        TemplateHash = "sha256:1",
-        SourceReferenceId = "source-ref-1",
+        TemplateId = $"template-{versionId}",
+        TemplateHash = $"sha256:{versionId}",
+        SourceReferenceId = $"source-ref-{versionId}",
         ProviderFingerprint = "test/1",
         DirectDependencyCount = 0,
         ClosedTemplateCount = 0,

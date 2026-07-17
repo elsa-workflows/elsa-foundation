@@ -24,6 +24,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Definitions.List", "GET", "design/activities/definitions" },
         { "Definitions.Get", "GET", "design/activities/definitions/{definitionId}" },
         { "Definitions.Update", "PATCH", "design/activities/definitions/{definitionId}" },
+        { "Definitions.Recommendation", "PUT", "design/activities/definitions/{definitionId}/recommendation" },
+        { "Definitions.Picker", "GET", "design/activities/definitions/picker" },
         { "Definitions.AddDraft", "POST", "design/activities/definitions/{definitionId}/drafts" },
         { "Definitions.ListDrafts", "GET", "design/activities/definitions/{definitionId}/drafts" },
         { "Definitions.ListVersions", "GET", "design/activities/definitions/{definitionId}/versions" },
@@ -43,6 +45,15 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "UpgradePlans.Get", "GET", "design/activities/upgrade-plans/{planId}" },
         { "UpgradePlans.Apply", "POST", "design/activities/upgrade-plans/{planId}/apply" }
     };
+
+    [Fact]
+    public void Activity_design_capability_advertises_picker_and_templated_recommendation_relations()
+    {
+        var links = Elsa.Activities.Design.Api.Capabilities.ActivityDesignApiCapabilities.StaticDeclaration.Links;
+
+        Assert.Contains(links, x => x.Rel == "recommended-activity-definitions" && x.Href == "design/activities/definitions/picker" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-recommendation" && x.Href == "design/activities/definitions/{definitionId}/recommendation" && x.Templated);
+    }
 
     [Theory]
     [MemberData(nameof(Routes))]
@@ -73,11 +84,19 @@ public sealed class ActivityDefinitionAuthoringApiTests
             new RetireReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
             new RestoreReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Retired, "reason"),
             new RevokeReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
+            new SetRecommendedReusableActivityVersion(
+                "definition-route",
+                "version-head",
+                "version-current",
+                "version-target",
+                ActivityDefinitionVersionLifecycle.Active,
+                "reason"),
             new PreviewActivityDraftDiff("draft-route", 3, "base-version"),
             new ApplyActivityUpgradePlan("plan-route", ["step-1"])
         ];
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         foreach (var request in requests)
         {
             var json = JsonSerializer.Serialize(request, request.GetType(), options);
@@ -93,6 +112,15 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Equal(
             "{\"selectedStepIds\":[\"step-1\"]}",
             JsonSerializer.Serialize(new ApplyActivityUpgradePlan("plan-route", ["step-1"]), options));
+        Assert.Equal(
+            "{\"expectedDefinitionHeadVersionId\":\"version-head\",\"expectedRecommendedVersionId\":\"version-current\",\"recommendedVersionId\":\"version-target\",\"expectedRecommendedVersionLifecycle\":\"Active\",\"reason\":\"reason\"}",
+            JsonSerializer.Serialize(new SetRecommendedReusableActivityVersion(
+                "definition-route",
+                "version-head",
+                "version-current",
+                "version-target",
+                ActivityDefinitionVersionLifecycle.Active,
+                "reason"), options));
     }
 
     [Fact]

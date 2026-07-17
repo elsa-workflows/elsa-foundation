@@ -80,12 +80,30 @@ public sealed record ChangeActivityVersionLifecycleRequest(
     string DefinitionVersionId,
     ActivityDefinitionVersionLifecycle ExpectedLifecycle,
     ActivityDefinitionVersionLifecycle Lifecycle,
-    string Reason);
+    string Reason,
+    string? TenantId = null,
+    ActivityRecommendationDecision? RecommendationDecision = null);
 
 public interface IChangeActivityVersionLifecycleCommand
 {
     Task<ActivityDefinitionVersionPublication> ExecuteAsync(
         ChangeActivityVersionLifecycleRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record SetActivityDefinitionRecommendationRequest(
+    string DefinitionId,
+    string? TenantId,
+    string? ExpectedDefinitionHeadVersionId,
+    string? ExpectedRecommendedVersionId,
+    string? RecommendedVersionId,
+    ActivityDefinitionVersionLifecycle? ExpectedRecommendedVersionLifecycle,
+    DateTimeOffset ChangedAt);
+
+public interface ISetActivityDefinitionRecommendationCommand
+{
+    Task<ActivityDefinitionAuthoringState> ExecuteAsync(
+        SetActivityDefinitionRecommendationRequest request,
         CancellationToken cancellationToken = default);
 }
 

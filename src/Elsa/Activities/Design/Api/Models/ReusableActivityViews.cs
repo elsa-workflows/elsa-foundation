@@ -142,7 +142,31 @@ public sealed record ActivityDefinitionIdentityView(
     string? Description,
     ActivityContentAuthority ContentAuthority,
     ActivityDefinitionForkOrigin? ForkedFrom,
-    string? HeadVersionId);
+    string? HeadVersionId,
+    string? RecommendedVersionId);
+
+public sealed record ActivityDefinitionRecommendationView(
+    string DefinitionId,
+    string? HeadVersionId,
+    string? RecommendedVersionId,
+    DateTimeOffset ChangedAt,
+    string Reason);
+
+public sealed record RecommendedActivityDefinitionView(
+    string DefinitionId,
+    string ActivityTypeKey,
+    string? TenantId,
+    string Category,
+    string DisplayName,
+    string? Description,
+    string VersionId,
+    string Version,
+    bool IsAvailable,
+    string? UnavailableReason);
+
+public sealed record RecommendedActivityDefinitionPageView(
+    IReadOnlyList<RecommendedActivityDefinitionView> Items,
+    int? NextOffset);
 
 public sealed record ReusableActivityDefinitionDetailsView(
     ActivityDefinitionIdentityView Definition,

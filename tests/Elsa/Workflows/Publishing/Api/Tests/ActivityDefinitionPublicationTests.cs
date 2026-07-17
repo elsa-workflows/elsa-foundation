@@ -325,6 +325,7 @@ public sealed class ActivityDefinitionPublicationTests
             ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
             ActivityDependencyProjectionState.CurrentId))!);
         Assert.Equal("version-1", authoring.HeadVersionId);
+        Assert.Equal("version-1", authoring.RecommendedVersionId);
         Assert.Equal(ActivityDefinitionDraftStatus.Published, draft.Status);
         Assert.Equal(1, projection.Sequence);
     }
@@ -344,6 +345,7 @@ public sealed class ActivityDefinitionPublicationTests
         var authoring = DeserializeDesign<ActivityDefinitionAuthoringState>((await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, "authoring-generated-id"))!);
         var draft = DeserializeDesign<ActivityDefinitionDraft>((await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, "draft-1"))!);
         Assert.Null(authoring.HeadVersionId);
+        Assert.Null(authoring.RecommendedVersionId);
         Assert.Equal(ActivityDefinitionDraftStatus.Active, draft.Status);
     }
 

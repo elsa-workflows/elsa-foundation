@@ -8,7 +8,8 @@ namespace Elsa.Activities.Design.Api.Commands;
 public sealed record RetireReusableActivityVersion(
     [property: JsonIgnore] string VersionId,
     ActivityDefinitionVersionLifecycle ExpectedLifecycle,
-    string Reason) : ICommand<ReusableActivityVersionLifecycleView>;
+    string Reason,
+    ActivityRecommendationDecision? RecommendationDecision = null) : ICommand<ReusableActivityVersionLifecycleView>;
 
 public sealed record RestoreReusableActivityVersion(
     [property: JsonIgnore] string VersionId,
@@ -18,7 +19,8 @@ public sealed record RestoreReusableActivityVersion(
 public sealed record RevokeReusableActivityVersion(
     [property: JsonIgnore] string VersionId,
     ActivityDefinitionVersionLifecycle ExpectedLifecycle,
-    string Reason) : ICommand<ReusableActivityVersionLifecycleView>;
+    string Reason,
+    ActivityRecommendationDecision? RecommendationDecision = null) : ICommand<ReusableActivityVersionLifecycleView>;
 
 public interface IActivityVersionSelectionPolicy
 {

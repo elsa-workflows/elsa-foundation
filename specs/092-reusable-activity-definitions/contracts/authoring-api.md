@@ -10,6 +10,8 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 | `POST` | `/design/activities/definitions` | Create a Design-owned definition and initial draft. |
 | `GET` | `/design/activities/definitions/{definitionId}` | Read definition metadata, authority, fork provenance, head, drafts, and version lifecycle summaries. |
 | `PATCH` | `/design/activities/definitions/{definitionId}` | Change presentation metadata only. |
+| `PUT` | `/design/activities/definitions/{definitionId}/recommendation` | Replace or explicitly clear the exact recommended active version under reviewed preconditions. |
+| `GET` | `/design/activities/definitions/picker` | Page one authorization-safe exact recommended active version per definition. |
 | `POST` | `/design/activities/definitions/{definitionId}/forks` | Fork an exact source-owned version into a new Design-owned identity and draft. |
 | `POST` | `/design/activities/definitions/{definitionId}/drafts` | Create a fresh draft or clone an exact version. |
 | `GET` | `/design/activities/definitions/{definitionId}/drafts` | List drafts for a definition. |
@@ -493,6 +495,30 @@ Retire, restore, and revoke use an expected current lifecycle value:
 - Retire/restore: `200 OK` with the new lifecycle. Retirement affects new direct catalog selection only.
 - Revoke: `200 OK` after the stronger policy fact commits. Revocation does not delete the version, template, Source Reference, dependencies, or historical evidence.
 - Stale lifecycle: `409 activity.version.stale-lifecycle`.
+
+When the target is currently recommended, retire and revoke also require one explicit atomic recommendation decision:
+
+- `Clear`: bind the exact definition head and current recommendation and leave the definition with no recommendation.
+- `Replace`: additionally bind an exact same-definition replacement and its expected `Active` lifecycle.
+
+Omitting that decision returns `409 activity.definition.recommendation-required`. Restore never changes recommendation.
+
+### Recommendation command
+
+```http
+PUT /design/activities/definitions/{definitionId}/recommendation
+Content-Type: application/json
+
+{
+  "expectedDefinitionHeadVersionId": "activity-ver-2",
+  "expectedRecommendedVersionId": "activity-ver-1",
+  "recommendedVersionId": "activity-ver-2",
+  "expectedRecommendedVersionLifecycle": "Active",
+  "reason": "Promote the reviewed version."
+}
+```
+
+A null `recommendedVersionId` with a null expected target lifecycle is an explicit clear. Stale head, recommendation, or target lifecycle returns a stable `409` Problem Details code. The bounded picker never substitutes head/latest and omits null, retired, revoked, hidden, or inconsistent recommendations.
 
 ## 12. Activity draft test run
 

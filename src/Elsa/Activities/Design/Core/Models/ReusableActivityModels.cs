@@ -23,6 +23,19 @@ public enum ActivityDefinitionVersionLifecycle
     Revoked
 }
 
+public enum ActivityRecommendationDisposition
+{
+    Clear,
+    Replace
+}
+
+public sealed record ActivityRecommendationDecision(
+    string? ExpectedDefinitionHeadVersionId,
+    string? ExpectedRecommendedVersionId,
+    ActivityRecommendationDisposition Disposition,
+    string? ReplacementVersionId = null,
+    ActivityDefinitionVersionLifecycle? ExpectedReplacementLifecycle = null);
+
 public enum ActivityBoundaryDurability
 {
     Required
@@ -122,6 +135,7 @@ public sealed record ReusableActivityDefinition(
     ActivityContentAuthority ContentAuthority,
     ActivityDefinitionForkOrigin? ForkedFrom,
     string? HeadVersionId,
+    string? RecommendedVersionId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 

@@ -56,6 +56,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IActivityDefinitionDraftStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionVersionPublicationStore>();
         services.AddScoped<IActivityDefinitionVersionPublicationStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IRecommendedActivityDefinitionPickerStore>();
+        services.AddScoped<IRecommendedActivityDefinitionPickerStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionLayoutStore>();
         services.AddScoped<IActivityDefinitionLayoutStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDraftValidationStore>();
@@ -84,6 +86,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IStoreActivityDraftValidationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IChangeActivityVersionLifecycleCommand>();
         services.AddScoped<IChangeActivityVersionLifecycleCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<ISetActivityDefinitionRecommendationCommand>();
+        services.AddScoped<ISetActivityDefinitionRecommendationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
 
         services.TryAddScoped<IIdentityGenerator, ShortIdentityGenerator>();
         services.TryAddScoped<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();

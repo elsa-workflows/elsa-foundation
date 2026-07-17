@@ -37,6 +37,23 @@ public interface IActivityDefinitionVersionPublicationStore
         CancellationToken cancellationToken = default);
 }
 
+public sealed record RecommendedActivityDefinitionPickerItem(
+    ActivityDefinition Definition,
+    ActivityDefinitionVersionPublication Version);
+
+public sealed record RecommendedActivityDefinitionPickerPage(
+    IReadOnlyList<RecommendedActivityDefinitionPickerItem> Items,
+    int? NextOffset);
+
+public interface IRecommendedActivityDefinitionPickerStore
+{
+    Task<RecommendedActivityDefinitionPickerPage> ReadAsync(
+        string? tenantId,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IActivityDefinitionLayoutStore
 {
     Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(

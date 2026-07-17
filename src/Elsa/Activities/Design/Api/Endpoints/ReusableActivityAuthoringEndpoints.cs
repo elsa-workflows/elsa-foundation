@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Requests;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
@@ -156,6 +157,26 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         {
             Patch(RouteConstants.GetRoute("definitions/{definitionId}"));
             ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class Recommendation(ICommandSender sender, ILogger<Recommendation> logger)
+        : ActivityAuthoringCommandEndpoint<SetRecommendedReusableActivityVersion, ActivityDefinitionRecommendationView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Put(RouteConstants.GetRoute("definitions/{definitionId}/recommendation"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class Picker(IRequestSender sender, ILogger<Picker> logger)
+        : ActivityAuthoringRequestEndpoint<ListRecommendedActivityDefinitions, RecommendedActivityDefinitionPageView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Get(RouteConstants.GetRoute("definitions/picker"));
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }
 
