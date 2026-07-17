@@ -69,7 +69,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
                 new(edge.OccurrenceId, edge.NodeOrigin.ToArray()),
                 true,
                 1,
-                [owner, dependency]));
+                [owner, dependency],
+                edge.MemberUsage.ToArray()));
         }
     }
 
@@ -95,7 +96,7 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
             foreach (var declaration in discovery.Dependencies)
             {
                 var dependency = Reference(await RequiredPublicationAsync(declaration.DefinitionVersionId, cancellationToken));
-                items.Add(DirectItem(owner, dependency, declaration.OccurrenceId, declaration.NodeOrigin));
+                items.Add(DirectItem(owner, dependency, declaration.OccurrenceId, declaration.NodeOrigin, declaration.MemberUsage));
             }
         }
     }
@@ -163,7 +164,12 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
             // participate in this projection; CLR/provider catalog activities remain ordinary nodes.
             var publication = await publications.FindAsync(node.ActivityVersionId, cancellationToken);
             if (publication is not null)
-                items.Add(DirectItem(owner, Reference(publication), node.NodeId, [new("AuthoredNode", node.NodeId)]));
+                items.Add(DirectItem(
+                    owner,
+                    Reference(publication),
+                    node.NodeId,
+                    [new("AuthoredNode", node.NodeId)],
+                    PublicMemberUsage(node)));
             foreach (var slot in structureService.ProjectChildren(node).Reverse())
                 foreach (var child in slot.Activities.Reverse())
                     stack.Push(child);
@@ -207,14 +213,26 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         ActivityDefinitionReference owner,
         ActivityDefinitionReference dependency,
         string occurrenceId,
-        IReadOnlyList<ActivityNodeOrigin> origin) => new(
+        IReadOnlyList<ActivityNodeOrigin> origin,
+        IReadOnlyList<ActivityContractMemberUsage>? memberUsage = null) => new(
         $"{owner.Kind}:{owner.DraftId ?? owner.VersionId}:{occurrenceId}:{dependency.VersionId}",
         owner,
         dependency,
         new(occurrenceId, origin),
         true,
         1,
-        [owner, dependency]);
+        [owner, dependency],
+        memberUsage);
+
+    private static IReadOnlyList<ActivityContractMemberUsage> PublicMemberUsage(ActivityNode node) =>
+        node.Inputs
+            .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
+            .Concat(node.Outputs.Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.ReferenceKey))
+            .Distinct()
+            .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
+            .ThenBy(x => x.ReferenceKey, StringComparer.Ordinal)
+            .ToArray();
 
     private static string SortKey(ActivityDependencyItem item) =>
         $"{item.Owner.Kind}\u001f{item.Owner.DraftId ?? item.Owner.VersionId}\u001f{item.Occurrence.OccurrenceId}\u001f{item.Dependency.VersionId}";

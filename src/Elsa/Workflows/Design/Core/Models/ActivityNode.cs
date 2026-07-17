@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Models;
 
@@ -33,6 +34,14 @@ public sealed record ActivityNode(
 public sealed record ActivityChildProjection(
     string Name,
     IEnumerable<ActivityNode> Activities
+);
+
+/// <summary>
+/// Disclosure-safe public-contract usage contributed by an activity-owned structure for one child.
+/// </summary>
+public sealed record ActivityChildContractMemberUsage(
+    string NodeId,
+    IReadOnlyCollection<ActivityContractMemberUsage> MemberUsage
 );
 
 /// <summary>

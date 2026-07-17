@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
 
@@ -23,7 +24,8 @@ public sealed class CreateActivityUpgradePlanHandler(
                 command.Roots,
                 command.IncludeTransitiveDependents,
                 command.CreateDraftsForPublishedDependents,
-                context.TenantId), cancellationToken);
+                context.TenantId,
+                ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)), cancellationToken);
             return await plan.ToViewAsync(publications, cancellationToken);
         }
         catch (ArgumentException exception)
@@ -49,12 +51,22 @@ public sealed class GetActivityUpgradePlanHandler(
         var plan = await store.FindAsync(request.PlanId, cancellationToken)
                    ?? throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
         EnsureTenant(plan);
+        EnsureAccessProfile(plan, context);
         return await plan.ToViewAsync(publications, cancellationToken);
     }
 
     private void EnsureTenant(ActivityUpgradePlan plan)
     {
         if (!StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId))
+            throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
+    }
+
+    private static void EnsureAccessProfile(ActivityUpgradePlan plan, IActivityAuthoringContext context)
+    {
+        if (plan.Binding is null ||
+            !StringComparer.Ordinal.Equals(
+                plan.Binding.AccessProfileFingerprint,
+                ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)))
             throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
     }
 }
@@ -70,9 +82,14 @@ public sealed class ApplyActivityUpgradePlanHandler(
         try
         {
             var plan = await store.FindAsync(command.PlanId, cancellationToken);
-            if (plan is null || !StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId))
+            if (plan is null ||
+                !StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId) ||
+                plan.Binding is null ||
+                !StringComparer.Ordinal.Equals(
+                    plan.Binding.AccessProfileFingerprint,
+                    ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)))
                 throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
-            return (await applier.ApplyAsync(new(command.PlanId, command.SelectedStepIds), cancellationToken)).ToView();
+            return (await applier.ApplyAsync(new(command.PlanId, command.StageId, command.IdempotencyKey), cancellationToken)).ToView();
         }
         catch (ActivityUpgradeApplyException exception)
         {
@@ -80,6 +97,72 @@ public sealed class ApplyActivityUpgradePlanHandler(
                 exception.StatusCode,
                 exception.ErrorCode,
                 "Activity upgrade plan rejected",
+                exception.Message,
+                exception.Diagnostics,
+                exception);
+        }
+    }
+}
+
+public sealed class GetActivityUpgradeApplyReceiptHandler(
+    IActivityUpgradeApplyReceiptStore receipts,
+    IActivityUpgradePlanStore plans,
+    IActivityAuthoringContext context)
+    : IRequestHandler<GetActivityUpgradeApplyReceipt, ActivityUpgradeApplyReceiptView>
+{
+    public async Task<ActivityUpgradeApplyReceiptView> Handle(
+        GetActivityUpgradeApplyReceipt request,
+        CancellationToken cancellationToken)
+    {
+        var plan = await plans.FindAsync(request.PlanId, cancellationToken);
+        var fingerprint = ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile);
+        if (plan is null ||
+            !StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId) ||
+            plan.Binding is null ||
+            !StringComparer.Ordinal.Equals(plan.Binding.AccessProfileFingerprint, fingerprint))
+            throw NotFound();
+        var receipt = await receipts.FindAsync(request.ReceiptId, cancellationToken);
+        if (receipt is null ||
+            !StringComparer.Ordinal.Equals(receipt.PlanId, request.PlanId) ||
+            !StringComparer.Ordinal.Equals(receipt.TenantId, context.TenantId) ||
+            !StringComparer.Ordinal.Equals(receipt.AccessProfileFingerprint, fingerprint))
+            throw NotFound();
+        return receipt.ToView();
+    }
+
+    private static ActivityAuthoringException NotFound() => new(
+        404,
+        "activity.upgrade.receipt-not-found",
+        "Upgrade apply receipt not found",
+        "The activity upgrade apply receipt was not found.");
+}
+
+public sealed class RefreshActivityUpgradePlanHandler(
+    IActivityUpgradePlanRefresher refresher,
+    IActivityDefinitionVersionPublicationStore publications,
+    IActivityAuthoringContext context)
+    : ICommandHandler<RefreshActivityUpgradePlan, ActivityUpgradePlanView>
+{
+    public async Task<ActivityUpgradePlanView> Handle(
+        RefreshActivityUpgradePlan command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var plan = await refresher.RefreshAsync(new(
+                command.PlanId,
+                command.ReceiptId,
+                command.PublishedDrafts,
+                context.TenantId,
+                ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)), cancellationToken);
+            return await plan.ToViewAsync(publications, cancellationToken);
+        }
+        catch (ActivityUpgradeApplyException exception)
+        {
+            throw new ActivityAuthoringException(
+                exception.StatusCode,
+                exception.ErrorCode,
+                "Activity upgrade plan refresh rejected",
                 exception.Message,
                 exception.Diagnostics,
                 exception);

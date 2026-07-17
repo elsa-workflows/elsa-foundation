@@ -55,7 +55,8 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         var version = new WorkflowDefinitionVersion(draft.WorkflowDefinitionId, WorkflowVersionNumbering.NextMajor(lastVersion?.Version))
         {
             Id = versionId,
-            State = draft.State
+            State = draft.State,
+            SourceDraftId = draft.Id
         };
 
         var versionLayout = new WorkflowDefinitionVersionLayout

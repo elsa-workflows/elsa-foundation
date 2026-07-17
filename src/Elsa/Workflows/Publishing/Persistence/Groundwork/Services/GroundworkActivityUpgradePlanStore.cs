@@ -43,7 +43,10 @@ public sealed class GroundworkActivityUpgradePlanStore(
     ActivityContractAuthoringValidator contractValidator,
     IEnumerable<IActivityProviderReferenceRewriter> activityRewriters,
     IIdentityGenerator identityGenerator,
-    GroundworkActivityManagementProjectionWriter managementProjectionWriter) : IActivityUpgradeDiscoverySource, IActivityUpgradePlanMutationStore
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter) :
+    IActivityUpgradeDiscoverySource,
+    IActivityUpgradePlanMutationStore,
+    IActivityUpgradePublishedDraftResolver
 {
     private static readonly JsonSerializerOptions ActivityJson = GroundworkActivitiesDesignJson.Options;
     private readonly JsonSerializerOptions _workflowJson = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
@@ -142,9 +145,38 @@ public sealed class GroundworkActivityUpgradePlanStore(
             diagnostics.OrderBy(x => x.Code, StringComparer.Ordinal).ThenBy(x => x.Subject.Id, StringComparer.Ordinal).ToArray());
     }
 
+    public async ValueTask<ActivityUpgradePublishedDraft?> ResolveAsync(
+        string publishedVersionId,
+        string expectedKind,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedKind == "ActivityVersion")
+        {
+            var activity = await activityVersions.FindAsync(publishedVersionId, cancellationToken);
+            return activity?.SourceDraftId is null
+                ? null
+                : new(
+                    "ActivityVersion",
+                    activity.SourceDraftId,
+                    activity.DefinitionId,
+                    activity.DefinitionVersionId);
+        }
+        if (expectedKind != "WorkflowVersion")
+            return null;
+        var workflow = await workflowVersions.FindByIdAsync(publishedVersionId, cancellationToken);
+        return workflow?.SourceDraftId is null
+            ? null
+            : new(
+                "WorkflowVersion",
+                workflow.SourceDraftId,
+                workflow.DefinitionId,
+                workflow.Id);
+    }
+
     public async ValueTask<ActivityUpgradeApplyResult> ApplyAsync(
         ActivityUpgradePlan plan,
         IReadOnlyList<ActivityUpgradeStep> selectedSteps,
+        ActivityUpgradeApplyReceipt receipt,
         DateTimeOffset appliedAt,
         CancellationToken cancellationToken = default)
     {
@@ -153,10 +185,22 @@ public sealed class GroundworkActivityUpgradePlanStore(
                             ?? throw new InvalidOperationException($"Upgrade plan '{plan.PlanId}' is unreadable.");
         if (!SamePlan(persistedPlan, plan) || persistedPlan.Status != ActivityUpgradePlanStatus.Ready)
             throw Stale("The upgrade plan changed before apply.");
+        var receiptEnvelope = await RequiredAsync(
+            ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+            receipt.ReceiptId,
+            cancellationToken);
+        var persistedReceipt = JsonSerializer.Deserialize<ApplyReceiptDocument>(receiptEnvelope.ContentJson, ActivityJson)?.Receipt
+                               ?? throw new InvalidOperationException($"Upgrade receipt '{receipt.ReceiptId}' is unreadable.");
+        if (!SameReceipt(persistedReceipt, receipt) || persistedReceipt.Status != ActivityUpgradeApplyReceiptStatus.Preparing)
+            throw Stale("The upgrade apply receipt changed before apply.");
 
         await RecheckTargetsAsync(plan.Replacements, cancellationToken);
         var requests = new List<SaveDocumentRequest>();
-        var scopes = new HashSet<string>(StringComparer.Ordinal) { ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind };
+        var scopes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind
+        };
         var applied = new List<ActivityUpgradeAppliedDraft>();
         var changedActivityDrafts = new List<ActivityDefinitionDraft>();
         foreach (var step in selectedSteps.OrderBy(x => x.Order))
@@ -198,12 +242,68 @@ public sealed class GroundworkActivityUpgradePlanStore(
         requests.Add(projectionUpdate.Request);
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind);
 
-        var appliedPlan = plan with { Status = ActivityUpgradePlanStatus.Applied, AppliedAt = appliedAt, AppliedDrafts = applied.ToArray() };
+        var appliedStageIds = selectedSteps.Select(x => x.StageId).Where(x => x is not null).ToHashSet(StringComparer.Ordinal);
+        if (appliedStageIds.Count != 1 || !appliedStageIds.Contains(receipt.StageId))
+            throw new ActivityUpgradeApplyException(422, "activity.upgrade.stage-invalid", "One exact stage must be applied per operation.");
+        var stages = plan.Stages
+            .Select(x => appliedStageIds.Contains(x.StageId) ? x with { Status = ActivityUpgradeStageStatus.Applied } : x)
+            .ToArray();
+        var awaitingStages = stages
+            .Where(x => x.Status == ActivityUpgradeStageStatus.AwaitingPublication &&
+                        x.DependsOnStageIds.Contains(receipt.StageId, StringComparer.Ordinal))
+            .ToArray();
+        var handoffs = applied
+            .Where(x => x.SourceVersionId is not null)
+            .Select(x => new ActivityUpgradePublicationHandoff(
+                x.Kind,
+                x.DraftId,
+                x.DefinitionId,
+                x.Revision,
+                x.SourceVersionId!,
+                awaitingStages.Select(y => y.StageId).Order(StringComparer.Ordinal).ToArray()))
+            .Where(x => x.RequiredByStageIds.Count != 0)
+            .ToArray();
+        var status = stages.All(x => x.Status == ActivityUpgradeStageStatus.Applied)
+            ? ActivityUpgradePlanStatus.Applied
+            : stages.Any(x => x.Status == ActivityUpgradeStageStatus.Ready)
+                ? ActivityUpgradePlanStatus.Ready
+                : stages.Any(x => x.Status == ActivityUpgradeStageStatus.AwaitingPublication)
+                    ? ActivityUpgradePlanStatus.AwaitingPublication
+                    : ActivityUpgradePlanStatus.Blocked;
+        var allAppliedDrafts = (plan.AppliedDrafts ?? []).Concat(applied).ToArray();
+        var appliedPlan = plan with
+        {
+            Status = status,
+            AppliedAt = status == ActivityUpgradePlanStatus.Applied ? appliedAt : null,
+            AppliedDrafts = allAppliedDrafts,
+            Stages = stages
+        };
+        var result = new ActivityUpgradeApplyResult(
+            plan.PlanId,
+            status,
+            appliedAt,
+            applied,
+            [],
+            receipt.ReceiptId,
+            receipt.StageId,
+            handoffs);
+        var completedReceipt = receipt with
+        {
+            Status = ActivityUpgradeApplyReceiptStatus.Applied,
+            UpdatedAt = appliedAt,
+            Revision = receipt.Revision + 1,
+            Result = result
+        };
         requests.Add(SaveSimple(
             ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
             plan.PlanId,
             new UpgradePlanDocument(ActivitiesDesignStorageManifest.ActivityUpgradePlanCollection, appliedPlan),
             planEnvelope.Version));
+        requests.Add(SaveSimple(
+            ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+            receipt.ReceiptId,
+            new ApplyReceiptDocument(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptCollection, completedReceipt),
+            receiptEnvelope.Version));
         try
         {
             if (changedActivityDrafts.Count == 0)
@@ -220,7 +320,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         {
             throw Stale("One or more upgrade snapshots changed before the atomic commit.");
         }
-        return new(plan.PlanId, ActivityUpgradePlanStatus.Applied, appliedAt, applied, []);
+        return result;
     }
 
     private static IReadOnlyList<ActivityDependencyProjectionOwnerChange> BuildProjectionChanges(
@@ -360,7 +460,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         requests.Add(SaveActivity(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout, layoutEnvelope.Version));
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind);
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind);
-        applied.Add(new("ActivityDraft", draft.Id, draft.DefinitionId, draft.Revision, false));
+        applied.Add(new("ActivityDraft", draft.Id, draft.DefinitionId, draft.Revision, false, draft.SourceVersionId));
         managementDrafts.Add(draft);
     }
 
@@ -398,7 +498,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         requests.Add(SaveActivity(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout, 0));
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind);
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind);
-        applied.Add(new("ActivityDraft", id, source.DefinitionId, 1, true));
+        applied.Add(new("ActivityDraft", id, source.DefinitionId, 1, true, source.DefinitionVersionId));
         managementDrafts.Add(draft);
     }
 
@@ -450,7 +550,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         document.Entity.LastModifiedAt = now;
         requests.Add(SaveWorkflowDraft(document, envelope.Version));
         scopes.Add(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
-        applied.Add(new("WorkflowDraft", document.Entity.Id, document.Entity.WorkflowDefinitionId, envelope.Version + 1, false));
+        applied.Add(new("WorkflowDraft", document.Entity.Id, document.Entity.WorkflowDefinitionId, envelope.Version + 1, false, document.Entity.SourceVersionId));
     }
 
     private async Task StageWorkflowDraftCloneAsync(
@@ -478,7 +578,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         };
         requests.Add(SaveWorkflowDraft(new(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection, draft, layout?.Records.ToArray() ?? []), 0));
         scopes.Add(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
-        applied.Add(new("WorkflowDraft", id, source.DefinitionId, 1, true));
+        applied.Add(new("WorkflowDraft", id, source.DefinitionId, 1, true, source.Id));
     }
 
     private async Task RecheckTargetsAsync(IEnumerable<ActivityVersionReplacement> replacements, CancellationToken cancellationToken)
@@ -616,6 +716,12 @@ public sealed class GroundworkActivityUpgradePlanStore(
             JsonNode.Parse(JsonSerializer.Serialize(left, ActivityJson)),
             JsonNode.Parse(JsonSerializer.Serialize(right, ActivityJson)));
 
+    private static bool SameReceipt(ActivityUpgradeApplyReceipt left, ActivityUpgradeApplyReceipt right) =>
+        JsonNode.DeepEquals(
+            JsonNode.Parse(JsonSerializer.Serialize(left, ActivityJson)),
+            JsonNode.Parse(JsonSerializer.Serialize(right, ActivityJson)));
+
     private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan);
+    private sealed record ApplyReceiptDocument(string Collection, ActivityUpgradeApplyReceipt Receipt);
     private sealed record WorkflowDraftDocument(string Collection, WorkflowDefinitionDraft Entity, IReadOnlyCollection<DesignMetadataRecord> Layout);
 }

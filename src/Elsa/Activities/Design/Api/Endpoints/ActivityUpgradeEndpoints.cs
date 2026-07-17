@@ -41,3 +41,27 @@ internal sealed class Apply(ICommandSender sender, ILogger<Apply> logger)
         ConfigurePermissions(PermissionNames.ActivityDesignManage);
     }
 }
+
+internal sealed class GetReceipt(IRequestSender sender, ILogger<GetReceipt> logger)
+    : ActivityAuthoringRequestEndpoint<GetActivityUpgradeApplyReceipt, ActivityUpgradeApplyReceiptView>(sender, logger)
+{
+    public override void Configure()
+    {
+        Get(RouteConstants.GetRoute("upgrade-plans/{planId}/receipts/{receiptId}"));
+        ConfigurePermissions(PermissionNames.ActivityDesignRead);
+    }
+}
+
+internal sealed class Refresh(ICommandSender sender, ILogger<Refresh> logger)
+    : ActivityAuthoringCommandEndpoint<RefreshActivityUpgradePlan, ActivityUpgradePlanView>(sender, logger)
+{
+    protected override int SuccessStatusCode => 201;
+    protected override string GetLocation(ActivityUpgradePlanView response) =>
+        $"/{RouteConstants.GetRoute($"upgrade-plans/{response.PlanId}")}";
+
+    public override void Configure()
+    {
+        Post(RouteConstants.GetRoute("upgrade-plans/{planId}/refresh"));
+        ConfigurePermissions(PermissionNames.ActivityDesignManage);
+    }
+}

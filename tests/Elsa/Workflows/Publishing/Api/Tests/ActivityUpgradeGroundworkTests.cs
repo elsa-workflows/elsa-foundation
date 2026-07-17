@@ -38,7 +38,7 @@ public sealed class ActivityUpgradeGroundworkTests
     {
         var harness = await Harness.CreateAsync(workflowExpectedRevision: 1);
 
-        var result = await harness.Subject.ApplyAsync(harness.Plan, harness.Plan.Steps, Now.AddMinutes(1));
+        var result = await harness.Subject.ApplyAsync(harness.Plan, harness.Plan.Steps, Receipt(harness.Plan), Now.AddMinutes(1));
 
         Assert.Equal(ActivityUpgradePlanStatus.Applied, result.Status);
         Assert.Equal([3L, 2L], result.Drafts.Select(x => x.Revision));
@@ -51,6 +51,12 @@ public sealed class ActivityUpgradeGroundworkTests
         Assert.Equal(ActivityUpgradePlanStatus.Applied, storedPlan.Status);
         Assert.Equal(result.Drafts, storedPlan.AppliedDrafts);
         Assert.Equal(result.AppliedAt, storedPlan.AppliedAt);
+        var receipt = await harness.LoadReceiptAsync();
+        Assert.Equal(ActivityUpgradeApplyReceiptStatus.Applied, receipt.Status);
+        Assert.Equal(result.PlanId, receipt.Result!.PlanId);
+        Assert.Equal(result.Status, receipt.Result.Status);
+        Assert.Equal(result.AppliedAt, receipt.Result.AppliedAt);
+        Assert.Equal(result.Drafts, receipt.Result.Drafts);
         var projection = await harness.LoadProjectionAsync();
         Assert.Equal(2, projection.Sequence);
         Assert.All(projection.Items, x => Assert.Equal("new", x.Dependency.VersionId));
@@ -63,7 +69,7 @@ public sealed class ActivityUpgradeGroundworkTests
         var harness = await Harness.CreateAsync(workflowExpectedRevision: 99);
 
         var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
-            await harness.Subject.ApplyAsync(harness.Plan, harness.Plan.Steps, Now.AddMinutes(1)));
+            await harness.Subject.ApplyAsync(harness.Plan, harness.Plan.Steps, Receipt(harness.Plan), Now.AddMinutes(1)));
 
         Assert.Equal("activity.upgrade.stale-plan", exception.ErrorCode);
         Assert.Equal(2, (await harness.LoadActivityDraftAsync()).Revision);
@@ -89,6 +95,44 @@ public sealed class ActivityUpgradeGroundworkTests
         Assert.Equal(rebuild.RebuildId, after.RebuildId);
         Assert.Contains(after.Items, x => x.Owner.Kind == "WorkflowDraft" && x.Dependency.VersionId == "new");
         Assert.Contains(after.Items, x => x.Owner.Kind == "ActivityDraft" && x.Dependency.VersionId == "old");
+    }
+
+    [Fact]
+    public async Task Dependency_projection_preserves_repeated_diamond_paths_with_bounded_pages()
+    {
+        var documents = new InMemoryDocumentStore(CombinedManifest());
+        var versions = new VersionStore(
+            Version("root", ActivityDefinitionVersionLifecycle.Active),
+            Version("left", ActivityDefinitionVersionLifecycle.Active),
+            Version("right", ActivityDefinitionVersionLifecycle.Active),
+            Version("shared", ActivityDefinitionVersionLifecycle.Active),
+            Version("leaf", ActivityDefinitionVersionLifecycle.Active));
+        var projection = new ActivityDependencyProjection(documents, versions);
+        await projection.RebuildAsync(new(
+            "diamond",
+            1,
+            Now,
+            [
+                Edge("root", "left", "root-left"),
+                Edge("root", "right", "root-right"),
+                Edge("left", "shared", "left-shared"),
+                Edge("right", "shared", "right-shared"),
+                Edge("shared", "leaf", "shared-leaf")
+            ]));
+        var query = new ActivityDependencyQuery(
+            ActivityDependencyDirection.Outbound,
+            true,
+            new HashSet<string>(["Versions"], StringComparer.Ordinal));
+
+        var first = await projection.ReadAsync(new("root", query, null, null, 0, 3));
+        var second = await projection.ReadAsync(new("root", query, null, first.Watermark, first.NextOffset!.Value, 10));
+        var items = first.Items.Concat(second.Items).ToArray();
+
+        Assert.Equal(2, items.Count(x => x.Occurrence.OccurrenceId == "shared-leaf"));
+        Assert.Equal(2, items.Where(x => x.Occurrence.OccurrenceId == "shared-leaf")
+            .Select(x => string.Join(">", x.Path.Select(y => y.VersionId)))
+            .Distinct(StringComparer.Ordinal)
+            .Count());
     }
 
     private sealed class Harness(
@@ -126,6 +170,14 @@ public sealed class ActivityUpgradeGroundworkTests
                 plan.PlanId,
                 ActivitiesDesignStorageManifest.SchemaVersion,
                 new UpgradePlanDocument(ActivitiesDesignStorageManifest.ActivityUpgradePlanCollection, plan),
+                GroundworkActivitiesDesignJson.Options));
+            await documents.SaveAsync(JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+                ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+                "receipt",
+                ActivitiesDesignStorageManifest.SchemaVersion,
+                new ApplyReceiptDocument(
+                    ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptCollection,
+                    Receipt(plan)),
                 GroundworkActivitiesDesignJson.Options));
             await documents.SaveAsync(JsonDocumentStoreExtensions.ToSaveDocumentRequest(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
@@ -204,6 +256,16 @@ public sealed class ActivityUpgradeGroundworkTests
             return JsonSerializer.Deserialize<UpgradePlanDocument>(envelope!.ContentJson, GroundworkActivitiesDesignJson.Options)!.Plan;
         }
 
+        public async Task<ActivityUpgradeApplyReceipt> LoadReceiptAsync()
+        {
+            var envelope = await documents.LoadAsync(
+                ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+                "receipt");
+            return JsonSerializer.Deserialize<ApplyReceiptDocument>(
+                envelope!.ContentJson,
+                GroundworkActivitiesDesignJson.Options)!.Receipt;
+        }
+
         public async Task<ActivityDependencyProjectionState> LoadProjectionAsync()
         {
             var envelope = await documents.LoadAsync(
@@ -244,9 +306,19 @@ public sealed class ActivityUpgradeGroundworkTests
 
         private static ActivityUpgradePlan CreatePlan(long workflowRevision)
         {
-            var activity = new ActivityUpgradeStep("activity-step", 10, new("ActivityDraft", "definition", "activity-draft", 2), ActivityUpgradeAction.UpdateDraft, [], [new("activity-root", "old", "new")], 2, "head", null, []);
-            var workflow = new ActivityUpgradeStep("workflow-step", 20, new("WorkflowDraft", "workflow-definition", "workflow-draft", workflowRevision), ActivityUpgradeAction.UpdateDraft, [activity.StepId], [new("workflow-root", "old", "new")], workflowRevision, null, null, []);
-            return new("plan", Now, Now.AddMinutes(30), ActivityUpgradePlanStatus.Ready, [new("old", "new")], [], [activity, workflow], []);
+            var activity = new ActivityUpgradeStep("activity-step", 10, new("ActivityDraft", "definition", "activity-draft", 2), ActivityUpgradeAction.UpdateDraft, [], [new("activity-root", "old", "new")], 2, "head", null, [], "stage");
+            var workflow = new ActivityUpgradeStep("workflow-step", 20, new("WorkflowDraft", "workflow-definition", "workflow-draft", workflowRevision), ActivityUpgradeAction.UpdateDraft, [activity.StepId], [new("workflow-root", "old", "new")], workflowRevision, null, null, [], "stage");
+            return new(
+                "plan",
+                Now,
+                Now.AddMinutes(30),
+                ActivityUpgradePlanStatus.Ready,
+                [new("old", "new")],
+                [],
+                [activity, workflow],
+                [],
+                Binding: new([], true, false, "access", []),
+                Stages: [new("stage", 10, ActivityUpgradeStageStatus.Ready, ["activity-step", "workflow-step"], [])]);
         }
 
         private static ActivityDefinitionDraft ActivityDraft() => new()
@@ -280,6 +352,20 @@ public sealed class ActivityUpgradeGroundworkTests
     private static ActivityContract Contract() => new("1", [], [], []);
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
+    private static ActivityDependencyItem Edge(string ownerVersionId, string dependencyVersionId, string occurrenceId)
+    {
+        var owner = new ActivityDefinitionReference("ActivityVersion", "dependency-definition", ownerVersionId);
+        var dependency = new ActivityDefinitionReference("ActivityVersion", "dependency-definition", dependencyVersionId);
+        return new(
+            $"{ownerVersionId}:{occurrenceId}:{dependencyVersionId}",
+            owner,
+            dependency,
+            new(occurrenceId, []),
+            true,
+            1,
+            [owner, dependency]);
+    }
+
     private static async Task SaveActivityAsync<TEntity>(IDocumentStore store, string kind, string collection, TEntity entity) where TEntity : Elsa.Primitives.Entities.Entity =>
         await store.SaveAsync(GroundworkDocumentWriter.ToSaveRequest(kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, GroundworkActivitiesDesignJson.Options));
 
@@ -291,7 +377,21 @@ public sealed class ActivityUpgradeGroundworkTests
     }
 
     private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan);
+    private sealed record ApplyReceiptDocument(string Collection, ActivityUpgradeApplyReceipt Receipt);
     private sealed record WorkflowDraftDocument(string Collection, WorkflowDefinitionDraft Entity, IReadOnlyCollection<DesignMetadataRecord> Layout);
+
+    private static ActivityUpgradeApplyReceipt Receipt(ActivityUpgradePlan plan) => new(
+        "receipt",
+        plan.PlanId,
+        "stage",
+        "key-hash",
+        "request-fingerprint",
+        plan.TenantId,
+        plan.Binding!.AccessProfileFingerprint,
+        ActivityUpgradeApplyReceiptStatus.Preparing,
+        Now,
+        Now,
+        1);
     private sealed class TestManifestRewriter : IActivityProviderReferenceRewriter
     {
         public string ProviderKey => "test.provider";

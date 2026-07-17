@@ -110,6 +110,35 @@ public interface IActivityUpgradePlanStore
     Task SaveAsync(
         ActivityUpgradePlan plan,
         CancellationToken cancellationToken = default);
+
+    Task LinkSuccessorAsync(
+        string planId,
+        string successorPlanId,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IActivityUpgradeApplyReceiptStore
+{
+    Task<ActivityUpgradeApplyReceipt?> FindAsync(
+        string receiptId,
+        CancellationToken cancellationToken = default);
+
+    Task<ActivityUpgradeApplyReceipt?> FindByIdempotencyKeyAsync(
+        string planId,
+        string idempotencyKeyHash,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryCreateAsync(
+        ActivityUpgradeApplyReceipt receipt,
+        CancellationToken cancellationToken = default);
+
+    Task RejectAsync(
+        ActivityUpgradeApplyReceipt receipt,
+        int statusCode,
+        string errorCode,
+        IReadOnlyList<ActivityDiagnostic> diagnostics,
+        DateTimeOffset rejectedAt,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IActivityDependencyProjectionRebuilder

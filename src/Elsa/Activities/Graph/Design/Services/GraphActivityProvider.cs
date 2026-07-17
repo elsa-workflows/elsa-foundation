@@ -161,9 +161,35 @@ public sealed class GraphActivityProvider(
                 [new("AuthoredNode", x.NodeId)],
                 x.ParentOccurrenceId,
                 x.ChildSlotName,
-                x.ChildIndex))
+                x.ChildIndex,
+                x.MemberUsage))
             .ToArray();
         return ValueTask.FromResult(new ActivityTemplateDependencyDiscovery(dependencies, ActivityDiagnosticOrderer.Order(diagnostics)));
+    }
+
+    private static IReadOnlyList<ActivityContractMemberUsage> PublicMemberUsage(JsonElement element)
+    {
+        ActivityNode? node;
+        try
+        {
+            node = element.Deserialize<ActivityNode>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+
+        if (node is null)
+            return [];
+
+        return node.Inputs
+            .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
+            .Concat(node.Outputs.Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.ReferenceKey))
+            .Distinct()
+            .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
+            .ThenBy(x => x.ReferenceKey, StringComparer.Ordinal)
+            .ToArray();
     }
 
     public ValueTask<ActivityManifestMigration> MigrateAsync(
@@ -432,8 +458,14 @@ public sealed class GraphActivityProvider(
             .GroupBy(x => x.Element.GetProperty("nodeId").GetString()!, StringComparer.Ordinal)
             .ToDictionary(x => x.Key, x => x.First().JsonPointer, StringComparer.Ordinal);
         var nodes = new List<GraphNode>();
-        var pending = new Stack<(ActivityNode Node, string? ParentOccurrenceId, string ChildSlotName, int ChildIndex, long Depth)>();
-        pending.Push((rootNode, null, "activity-graph", 0, 1));
+        var pending = new Stack<(
+            ActivityNode Node,
+            string? ParentOccurrenceId,
+            string ChildSlotName,
+            int ChildIndex,
+            long Depth,
+            IReadOnlyCollection<ActivityContractMemberUsage> StructureMemberUsage)>();
+        pending.Push((rootNode, null, "activity-graph", 0, 1, []));
 
         while (pending.TryPop(out var item))
         {
@@ -441,6 +473,12 @@ public sealed class GraphActivityProvider(
                 continue;
             var pointer = pointers.GetValueOrDefault(item.Node.NodeId, "/rootActivity");
             var element = FindNodeElement(root, item.Node.NodeId) ?? root;
+            var memberUsage = PublicMemberUsage(element)
+                .Concat(item.StructureMemberUsage)
+                .Distinct()
+                .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
+                .ThenBy(x => x.ReferenceKey, StringComparer.Ordinal)
+                .ToArray();
             nodes.Add(new(
                 item.Node.NodeId,
                 item.Node.ActivityVersionId,
@@ -449,13 +487,34 @@ public sealed class GraphActivityProvider(
                 element,
                 item.ParentOccurrenceId,
                 item.ChildSlotName,
-                item.ChildIndex));
+                item.ChildIndex,
+                memberUsage));
 
+            var structureMemberUsage = activityStructureService.ProjectChildContractMemberUsage(item.Node)
+                .GroupBy(x => x.NodeId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyCollection<ActivityContractMemberUsage>)group
+                        .SelectMany(x => x.MemberUsage)
+                        .Distinct()
+                        .ToArray(),
+                    StringComparer.Ordinal);
             foreach (var slot in activityStructureService.ProjectChildren(item.Node).Reverse())
             {
                 var children = slot.Activities.ToArray();
                 for (var index = children.Length - 1; index >= 0; index--)
-                    pending.Push((children[index], item.Node.NodeId, slot.Name, index, item.Depth + 1));
+                {
+                    var child = children[index];
+                    pending.Push((
+                        child,
+                        item.Node.NodeId,
+                        slot.Name,
+                        index,
+                        item.Depth + 1,
+                        string.IsNullOrWhiteSpace(child.NodeId)
+                            ? []
+                            : structureMemberUsage.GetValueOrDefault(child.NodeId) ?? []));
+                }
             }
         }
 
@@ -712,6 +771,7 @@ public sealed class GraphActivityProvider(
         JsonElement Element,
         string? ParentOccurrenceId,
         string ChildSlotName,
-        int ChildIndex);
+        int ChildIndex,
+        IReadOnlyList<ActivityContractMemberUsage> MemberUsage);
     private sealed record NodeCandidate(JsonElement Element, string JsonPointer);
 }

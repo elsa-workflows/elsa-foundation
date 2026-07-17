@@ -4,6 +4,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.Options;
@@ -161,7 +162,8 @@ public sealed class ActivityDependencyReader(
                 new(edge.OccurrenceId, edge.NodeOrigin.ToArray()),
                 true,
                 1,
-                [ownerReference, dependencyReference]);
+                [ownerReference, dependencyReference],
+                edge.MemberUsage.ToArray());
             if (Visible(item.Owner) && Visible(item.Dependency) && authorization.CanRead(item.Owner) && authorization.CanRead(item.Dependency) && Included(item.Owner.Kind, query.Include))
                 items.Add(item);
         }
@@ -305,7 +307,7 @@ public sealed class ActivityDependencyReader(
     private string TenantScope() => authorization.TenantId is null ? "global:" : $"tenant:{authorization.TenantId}";
 
     private string AuthorizationProfileFingerprint() =>
-        $"sha256-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(authorization.AuthorizationProfile))).ToLowerInvariant()}";
+        ActivityAccessProfileFingerprint.Create(authorization.AuthorizationProfile);
 
     private static bool Included(string ownerKind, IReadOnlySet<string> include) => ownerKind switch
     {
@@ -360,9 +362,21 @@ public sealed class ActivityDependencyReader(
     private static ActivityAuthoringException BadRequest(string detail) =>
         new(400, "activity.request.invalid", "Invalid activity dependency query", detail);
     private static ActivityAuthoringException BindingMismatch(Exception? inner = null) =>
-        new(409, "activity.cursor.binding-mismatch", "Activity dependency cursor does not match", "The dependency cursor does not belong to this query or authorization scope.", innerException: inner);
+        new(
+            409,
+            "activity.cursor.binding-mismatch",
+            "Activity dependency cursor does not match",
+            "The dependency cursor does not belong to this query or authorization scope.",
+            innerException: inner,
+            recovery: new(Relation: "restart", Instruction: "Restart this dependency query from the latest authorized snapshot."));
     private static ActivityAuthoringException CursorExpired(Exception? inner = null) =>
-        new(410, "activity.cursor.expired", "Activity dependency cursor expired", "The dependency projection snapshot used by this cursor is no longer available.", innerException: inner);
+        new(
+            410,
+            "activity.cursor.expired",
+            "Activity dependency cursor expired",
+            "The dependency projection snapshot used by this cursor is no longer available.",
+            innerException: inner,
+            recovery: new(Relation: "restart", Instruction: "Keep the loaded snapshot separate and restart from the latest authorized snapshot."));
     private static ActivityAuthoringException OperationFailed(string detail) =>
         new(500, "activity.operation.failed", "Activity dependency query failed", detail);
 }

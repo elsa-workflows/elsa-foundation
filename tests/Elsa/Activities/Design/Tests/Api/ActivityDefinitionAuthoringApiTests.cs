@@ -48,7 +48,9 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Versions.Revoke", "POST", "design/activities/versions/{versionId}/revoke" },
         { "UpgradePlans.Create", "POST", "design/activities/upgrade-plans" },
         { "UpgradePlans.Get", "GET", "design/activities/upgrade-plans/{planId}" },
-        { "UpgradePlans.Apply", "POST", "design/activities/upgrade-plans/{planId}/apply" }
+        { "UpgradePlans.Apply", "POST", "design/activities/upgrade-plans/{planId}/apply" },
+        { "UpgradePlans.GetReceipt", "GET", "design/activities/upgrade-plans/{planId}/receipts/{receiptId}" },
+        { "UpgradePlans.Refresh", "POST", "design/activities/upgrade-plans/{planId}/refresh" }
     };
 
     [Fact]
@@ -115,7 +117,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
                 ActivityDefinitionVersionLifecycle.Active,
                 "reason"),
             new PreviewActivityDraftDiff("draft-route", 3, "base-version"),
-            new ApplyActivityUpgradePlan("plan-route", ["step-1"])
+            new ApplyActivityUpgradePlan("plan-route", "stage-1", "operation-1")
         ];
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -133,8 +135,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
             "{\"expectedRevision\":3,\"baseVersionId\":\"base-version\"}",
             JsonSerializer.Serialize(new PreviewActivityDraftDiff("draft-route", 3, "base-version"), options));
         Assert.Equal(
-            "{\"selectedStepIds\":[\"step-1\"]}",
-            JsonSerializer.Serialize(new ApplyActivityUpgradePlan("plan-route", ["step-1"]), options));
+            "{\"stageId\":\"stage-1\",\"idempotencyKey\":\"operation-1\"}",
+            JsonSerializer.Serialize(new ApplyActivityUpgradePlan("plan-route", "stage-1", "operation-1"), options));
         Assert.Equal(
             "{\"expectedDefinitionHeadVersionId\":\"version-head\",\"expectedRecommendedVersionId\":\"version-current\",\"recommendedVersionId\":\"version-target\",\"expectedRecommendedVersionLifecycle\":\"Active\",\"reason\":\"reason\"}",
             JsonSerializer.Serialize(new SetRecommendedReusableActivityVersion(

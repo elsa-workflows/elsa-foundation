@@ -11,6 +11,8 @@ public interface IWorkflowDefinitionVersion
 
     string DefinitionId { get; }
 
+    string? SourceDraftId => null;
+
     IWorkflowDefinition Definition { get; }
 
     WorkflowDefinitionState State { get; }

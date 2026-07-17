@@ -548,6 +548,7 @@ public sealed class ActivityDefinitionPublisher(
             ChildSlotName = dependency.ChildSlotName,
             ChildIndex = dependency.ChildIndex,
             NodeOrigin = dependency.NodeOrigin.ToArray(),
+            MemberUsage = dependency.MemberUsage.ToArray(),
             CreatedAt = now,
             LastModifiedAt = now
         }).ToArray();

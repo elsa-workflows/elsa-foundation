@@ -13,4 +13,10 @@ public sealed record CreateActivityUpgradePlan(
 
 public sealed record ApplyActivityUpgradePlan(
     [property: JsonIgnore] string PlanId,
-    IReadOnlyList<string>? SelectedStepIds = null) : ICommand<ActivityUpgradeApplyResultView>;
+    string StageId,
+    string IdempotencyKey) : ICommand<ActivityUpgradeApplyResultView>;
+
+public sealed record RefreshActivityUpgradePlan(
+    [property: JsonIgnore] string PlanId,
+    string ReceiptId,
+    IReadOnlyList<ActivityUpgradePublishedDraftSelection> PublishedDrafts) : ICommand<ActivityUpgradePlanView>;

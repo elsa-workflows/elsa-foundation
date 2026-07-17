@@ -100,8 +100,25 @@ public enum ActivityUpgradePlanStatus
 {
     Ready,
     Blocked,
+    AwaitingPublication,
     Applied,
+    Superseded,
     Expired
+}
+
+public enum ActivityUpgradeStageStatus
+{
+    Ready,
+    AwaitingPublication,
+    Applied,
+    Blocked
+}
+
+public enum ActivityUpgradeApplyReceiptStatus
+{
+    Preparing,
+    Applied,
+    Rejected
 }
 
 public enum ActivityUpgradeAction
@@ -391,6 +408,12 @@ public sealed record ActivityDependencyOccurrence(
     string OccurrenceId,
     IReadOnlyList<ActivityNodeOrigin> NodeOrigin);
 
+/// <summary>Disclosure-safe public-contract usage evidence. Values and expressions are excluded.</summary>
+public sealed record ActivityContractMemberUsage(
+    string MemberKind,
+    string ReferenceKey,
+    string UsageKind);
+
 public sealed record ActivityDependencyItem(
     string RelationshipId,
     ActivityDefinitionReference Owner,
@@ -398,7 +421,11 @@ public sealed record ActivityDependencyItem(
     ActivityDependencyOccurrence Occurrence,
     bool IsDirect,
     int Depth,
-    IReadOnlyList<ActivityDefinitionReference> Path);
+    IReadOnlyList<ActivityDefinitionReference> Path,
+    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
+{
+    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
+}
 
 public sealed record ActivityDependencyQuery(
     ActivityDependencyDirection Direction,
@@ -443,7 +470,9 @@ public sealed record ActivityUpgradePlanRequest(
     IReadOnlyList<ActivityUpgradeRoot> Roots,
     bool IncludeTransitiveDependents,
     bool CreateDraftsForPublishedDependents,
-    string? TenantId = null);
+    string? TenantId = null,
+    string? AccessProfileFingerprint = null,
+    string? PredecessorPlanId = null);
 
 /// <summary>
 /// One exact owner snapshot returned by the authoritative upgrade-discovery seam. The planner only
@@ -493,7 +522,22 @@ public sealed record ActivityUpgradeStep(
     long? ExpectedRevision,
     string? ExpectedDefinitionHeadVersionId,
     ActivityVersionDiff? ResultingDiff,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    string? StageId = null);
+
+public sealed record ActivityUpgradeStage(
+    string StageId,
+    int Order,
+    ActivityUpgradeStageStatus Status,
+    IReadOnlyList<string> StepIds,
+    IReadOnlyList<string> DependsOnStageIds);
+
+public sealed record ActivityUpgradePlanBinding(
+    IReadOnlyList<ActivityUpgradeRoot> Roots,
+    bool IncludeTransitiveDependents,
+    bool CreateDraftsForPublishedDependents,
+    string AccessProfileFingerprint,
+    IReadOnlyList<ActivityDefinitionReference> SelectedClosure);
 
 public sealed record ActivityUpgradePlan(
     string PlanId,
@@ -506,25 +550,86 @@ public sealed record ActivityUpgradePlan(
     IReadOnlyList<ActivityDiagnostic> Diagnostics,
     DateTimeOffset? AppliedAt = null,
     IReadOnlyList<ActivityUpgradeAppliedDraft>? AppliedDrafts = null,
-    string? TenantId = null);
+    string? TenantId = null,
+    ActivityUpgradePlanBinding? Binding = null,
+    IReadOnlyList<ActivityUpgradeStage>? Stages = null,
+    string? PredecessorPlanId = null,
+    string? SuccessorPlanId = null)
+{
+    public IReadOnlyList<ActivityUpgradeStage> Stages { get; init; } = Stages ?? [];
+}
 
 public sealed record ActivityUpgradeApplyRequest(
     string PlanId,
-    IReadOnlyList<string>? SelectedStepIds = null);
+    string StageId,
+    string IdempotencyKey);
 
 public sealed record ActivityUpgradeAppliedDraft(
     string Kind,
     string DraftId,
     string DefinitionId,
     long Revision,
-    bool Created);
+    bool Created,
+    string? SourceVersionId = null);
+
+public sealed record ActivityUpgradePublicationHandoff(
+    string DraftKind,
+    string DraftId,
+    string DefinitionId,
+    long Revision,
+    string SourceVersionId,
+    IReadOnlyList<string> RequiredByStageIds);
 
 public sealed record ActivityUpgradeApplyResult(
     string PlanId,
     ActivityUpgradePlanStatus Status,
     DateTimeOffset AppliedAt,
     IReadOnlyList<ActivityUpgradeAppliedDraft> Drafts,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    string? ReceiptId = null,
+    string? StageId = null,
+    IReadOnlyList<ActivityUpgradePublicationHandoff>? AwaitingPublications = null)
+{
+    public IReadOnlyList<ActivityUpgradePublicationHandoff> AwaitingPublications { get; init; } =
+        AwaitingPublications ?? [];
+}
+
+public sealed record ActivityUpgradeApplyReceipt(
+    string ReceiptId,
+    string PlanId,
+    string StageId,
+    string IdempotencyKeyHash,
+    string RequestFingerprint,
+    string? TenantId,
+    string AccessProfileFingerprint,
+    ActivityUpgradeApplyReceiptStatus Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    long Revision,
+    ActivityUpgradeApplyResult? Result = null,
+    IReadOnlyList<ActivityDiagnostic>? Diagnostics = null,
+    int? RejectionStatusCode = null,
+    string? RejectionCode = null)
+{
+    public IReadOnlyList<ActivityDiagnostic> Diagnostics { get; init; } = Diagnostics ?? [];
+}
+
+public sealed record ActivityUpgradePublishedDraftSelection(
+    string DraftId,
+    string PublishedVersionId);
+
+public sealed record ActivityUpgradePublishedDraft(
+    string Kind,
+    string DraftId,
+    string DefinitionId,
+    string PublishedVersionId);
+
+public sealed record ActivityUpgradePlanRefreshRequest(
+    string PlanId,
+    string ReceiptId,
+    IReadOnlyList<ActivityUpgradePublishedDraftSelection> PublishedDrafts,
+    string? TenantId,
+    string AccessProfileFingerprint);
 
 public sealed class ActivityUpgradeApplyException(
     int statusCode,
@@ -556,7 +661,11 @@ public sealed record ActivityResolvedDependency(
     IReadOnlyList<ActivityNodeOrigin> NodeOrigin,
     string? ParentOccurrenceId = null,
     string ChildSlotName = "activity-graph",
-    int ChildIndex = 0);
+    int ChildIndex = 0,
+    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
+{
+    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
+}
 
 public sealed record ActivityRuntimeRequirementDeclaration(string ConsumerKey, string SchemaVersion);
 
