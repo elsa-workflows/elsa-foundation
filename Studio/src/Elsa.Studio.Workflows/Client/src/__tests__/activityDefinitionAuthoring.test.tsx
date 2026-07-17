@@ -1459,7 +1459,24 @@ describe("Activity Definition publication", () => {
     await rendered.unmount();
   });
 
-  it("keeps an unresolved mismatched receipt reconciliation-only without opening a second publication", async () => {
+  it.each([
+    {
+      name: "mismatched receipt envelope",
+      receiptOverrides: { requestedVersion: "9.9.9" },
+      expectedMessage: "did not match this reviewed operation"
+    },
+    {
+      name: "mismatched applied outcome",
+      receiptOverrides: { outcome: { ...publicationReceipt().outcome!, definitionId: "other-definition" } },
+      expectedMessage: "did not contain an exact matching outcome"
+    },
+    {
+      name: "unrecognized non-terminal status",
+      receiptOverrides: { status: "Preparing" },
+      expectedMessage: "not in a recognized terminal state"
+    }
+  ] satisfies Array<{ name: string; receiptOverrides: Record<string, unknown>; expectedMessage: string }>)
+  ("keeps an unresolved $name reconciliation-only without opening a second publication", async ({ receiptOverrides, expectedMessage }) => {
     let preflightCalls = 0;
     let publishCalls = 0;
     const rendered = renderPage({
@@ -1471,13 +1488,14 @@ describe("Activity Definition publication", () => {
         }
         if (url.endsWith("/publish")) {
           publishCalls += 1;
-          const request = body as { idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string };
+          const request = body as { idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string; version: string };
           return publicationReceipt({
             idempotencyKey: request.idempotencyKey,
             expectedDraftRevision: request.expectedDraftRevision,
             expectedDefinitionHeadVersionId: request.expectedDefinitionHeadVersionId ?? null,
             reviewToken: request.reviewToken,
-            requestedVersion: "9.9.9"
+            requestedVersion: request.version,
+            ...receiptOverrides
           });
         }
         throw new Error(`Unexpected POST ${url}`);
@@ -1494,7 +1512,7 @@ describe("Activity Definition publication", () => {
     click(buttonByText(rendered.container, "Prepare publication"));
     await waitForText(rendered.container, "Minimum valid version: 1.0.0");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
-    await waitForText(rendered.container, "Reconcile the existing operation");
+    await waitForText(rendered.container, expectedMessage);
     const reopen = buttonByText(rendered.container, "Reopen preflight") as HTMLButtonElement;
     expect(reopen.disabled).toBe(true);
     click(reopen);

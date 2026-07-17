@@ -102,7 +102,12 @@ export function ActivityDefinitionPublicationReview({
       return;
     }
     setReceipt(next);
-    if (next.status === "Applied" && next.outcome) {
+    if (next.status === "Applied") {
+      if (!outcomeMatchesReview(next.outcome, preflight, version)) {
+        setPhase("unknown");
+        setFailure("The publication receipt did not contain an exact matching outcome. Reconcile the existing operation before starting another publication.");
+        return;
+      }
       setPhase("success");
       setFailure(null);
       void verifyRecommendation(next.outcome.definitionVersionId);
@@ -121,10 +126,15 @@ export function ActivityDefinitionPublicationReview({
       setFailure("The publication outcome is not yet authoritative. Reconcile status before trying another operation.");
       return;
     }
-    setPhase("failed");
-    setFailure(next.status === "Rejected"
-      ? "The authoritative publication request was rejected. Review the returned diagnostics before reopening preflight."
-      : "The authoritative publication operation failed. No success is assumed.");
+    if (next.status === "Rejected" || next.status === "Failed") {
+      setPhase("failed");
+      setFailure(next.status === "Rejected"
+        ? "The authoritative publication request was rejected. Review the returned diagnostics before reopening preflight."
+        : "The authoritative publication operation failed. No success is assumed.");
+      return;
+    }
+    setPhase("unknown");
+    setFailure("The publication receipt is not in a recognized terminal state. Reconcile the existing operation before starting another publication.");
   };
 
   const verifyRecommendation = async (publishedVersionId: string) => {
@@ -407,4 +417,16 @@ function receiptMatchesReview(
     (receipt.expectedDefinitionHeadVersionId ?? null) === (preflight.definitionHeadVersionId ?? null) &&
     receipt.reviewToken === preflight.reviewToken &&
     receipt.requestedVersion === version);
+}
+
+function outcomeMatchesReview(
+  outcome: ActivityPublicationReceipt["outcome"],
+  preflight: ActivityPublicationPreflight | null,
+  version: string
+): outcome is NonNullable<ActivityPublicationReceipt["outcome"]> {
+  return Boolean(outcome && preflight &&
+    outcome.definitionId === preflight.definitionId &&
+    outcome.draftId === preflight.draftId &&
+    outcome.version === version &&
+    outcome.definitionVersionId.trim().length > 0);
 }
