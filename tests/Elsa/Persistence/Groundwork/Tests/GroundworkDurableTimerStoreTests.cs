@@ -80,6 +80,44 @@ public sealed class GroundworkDurableTimerStoreTests
         Assert.Null(query.Take);
     }
 
+    [Fact]
+    public async Task ListAsync_UsesDeclaredWorkflowExecutionRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IDurableTimerStore store = new GroundworkDurableTimerStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListAsync("wfexec-1");
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        Assert.Equal("wfexec-1", Assert.Single(comparison.Values));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListAsync_ReturnsOnlyWorkflowTimers_OrderedByTimerId(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IDurableTimerStore store = NewStore(fixture);
+
+        await store.SaveAsync(NewTimer("timer-b", workflowExecutionId: "wfexec-1", dueOffset: TimeSpan.FromMinutes(-1)));
+        await store.SaveAsync(NewTimer("timer-a", workflowExecutionId: "wfexec-1", dueOffset: TimeSpan.FromMinutes(-1)));
+        await store.SaveAsync(NewTimer("timer-other", workflowExecutionId: "wfexec-2", dueOffset: TimeSpan.FromMinutes(-1)));
+
+        var timers = await store.ListAsync("wfexec-1");
+
+        Assert.Equal(new[] { "timer-a", "timer-b" }, timers.Select(timer => timer.TimerId));
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]

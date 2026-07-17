@@ -83,12 +83,20 @@ public sealed class ElsaRuntimeStorageManifestTests
         var manifest = ElsaRuntimeStorageManifest.Create();
         var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.DurableTimerDocumentKind);
 
+        var byWorkflowExecution = Assert.Single(
+            unit.Indexes,
+            i => i.Identity == ElsaRuntimeStorageManifest.DurableTimerByWorkflowExecution);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, Assert.Single(byWorkflowExecution.Fields).Path);
+
         var byDueTime = Assert.Single(
             unit.Indexes,
             i => i.Identity == ElsaRuntimeStorageManifest.DurableTimerByDueTime);
         Assert.Equal(IndexValueKind.DateTime, byDueTime.ValueKind);
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, Assert.Single(byDueTime.Fields).Path);
         Assert.Contains(PortableQueryOperation.LessThanOrEqual, byDueTime.SupportedOperations);
+
+        var byWorkflowQuery = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByWorkflowExecution, byWorkflowQuery.IndexIdentity);
 
         var query = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery);
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByDueTime, query.IndexIdentity);
