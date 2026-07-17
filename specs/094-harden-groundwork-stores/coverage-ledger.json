@@ -309,7 +309,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Ownership transitions and recovery scans are not one bounded provider-atomic path.",
       "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",
@@ -346,6 +346,8 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeRecoveryScannerTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeRecoveryBoundedRouteTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimeExecutionOwnershipTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimeRecoveryScannerTests.cs"
       ]

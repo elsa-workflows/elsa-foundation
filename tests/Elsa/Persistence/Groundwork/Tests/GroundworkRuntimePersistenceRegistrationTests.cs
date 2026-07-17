@@ -45,6 +45,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         typeof(IDurableValueStateStore),
         typeof(ISchedulerStateStore),
         typeof(IExecutionLivenessStateStore),
+        typeof(IRuntimeRecoveryScanner),
         typeof(IWorkflowHoldStateStore),
         typeof(IIncidentStateStore),
         typeof(IRuntimeCheckpointCommitStore),
@@ -195,6 +196,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<GroundworkSchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<GroundworkExecutionLivenessStateStore>(provider.GetRequiredService<IExecutionLivenessStateStore>());
+        Assert.IsType<GroundworkRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
         Assert.IsType<GroundworkWorkflowHoldStateStore>(provider.GetRequiredService<IWorkflowHoldStateStore>());
         Assert.IsType<GroundworkIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());

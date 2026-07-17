@@ -44,7 +44,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowA_CrashBeforeOutboxDelivery_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = GroundworkProviderTestManifests.Runtime;
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -88,7 +88,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowB_CrashAfterOutboxDeliveryBeforeDrain_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = GroundworkProviderTestManifests.Runtime;
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -131,7 +131,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = GroundworkProviderTestManifests.Runtime;
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 

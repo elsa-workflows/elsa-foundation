@@ -54,7 +54,7 @@ public sealed class DispatchWorkflowWaitCrashTests
     [Fact]
     public async Task ChildCompleted_commit_and_replay_preserve_one_exact_safe_resume_intent()
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(GroundworkProviderTestManifests.Runtime);
         var commit = NewChildCompletedCommit();
         string committedPayload;
 
@@ -120,7 +120,7 @@ public sealed class DispatchWorkflowWaitCrashTests
     [Fact]
     public async Task Provider_backed_wait_cycle_converges_across_restart_expired_claim_and_uncertain_ack()
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(GroundworkProviderTestManifests.Runtime);
         var timeProvider = new MutableTimeProvider(Now);
         var bookmarkObserver = new RecordingBookmarkObserver();
         var lostAcknowledgement = new LostAcknowledgementProbe();
@@ -286,7 +286,7 @@ public sealed class DispatchWorkflowWaitCrashTests
     public async Task Provider_backed_wait_cycle_converges_after_each_named_crash_boundary(
         WaitCrashBoundary boundary)
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(GroundworkProviderTestManifests.Runtime);
         var timeProvider = new MutableTimeProvider(Now);
         var bookmarkObserver = new RecordingBookmarkObserver();
         WorkflowDispatchIdentity? identity = null;
