@@ -819,7 +819,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists; the current durable outcome is memory-only.",
       "performanceWorkload": "queue-drain",
       "accessPolicy": "ordinary",
@@ -831,7 +831,7 @@
         "create-only-or-expected-version-record",
         "conditional-redrive-link"
       ],
-      "atomicBoundary": "One poison record and its failed-work identity/retry relationship are committed together.",
+      "atomicBoundary": "One poison record and its failed-work identity/retry disposition are committed together.",
       "failureWindows": [
         "before-provider-decision",
         "during-provider-decision",
@@ -851,6 +851,7 @@
       "dependency": "none",
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerPoisonStoreTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs"
       ]
     },

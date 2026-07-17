@@ -185,6 +185,10 @@ public static class ElsaRuntimeStorageManifest
     // restarts; the by-collection partition supports the system-wide pending-executions sweep.
     public const string SchedulerWorkItemDocumentKind = "schedulerWorkItem";
 
+    // Durable scheduler poison records. Each failed work item is keyed by workflow execution and work item id so
+    // handler crashes survive process restarts and can be inspected/re-driven according to the runtime retry policy.
+    public const string SchedulerPoisonDocumentKind = "schedulerPoison";
+
     // Durable timer store. Each pending timer is a document so timers survive process restarts; the
     // by-collection partition serves the due-timer sweep through an equality index (Groundwork is
     // equality-only, so due-time filtering/ordering happens in memory — see GroundworkDurableTimerStore).
@@ -405,6 +409,11 @@ public static class ElsaRuntimeStorageManifest
                     Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
                     Query("list-all", ByCollectionIndex)
                 ]),
+            Unit(
+                SchedulerPoisonDocumentKind,
+                "Scheduler poison record",
+                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
+                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
             Unit(
                 DurableTimerDocumentKind,
                 "Durable timer",

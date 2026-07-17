@@ -49,6 +49,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+        ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind,
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
@@ -163,6 +164,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind:
                 await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer).EnqueueAsync(WorkItem());
                 break;
+            case ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind:
+                await new GroundworkWorkflowSchedulerPoisonStore(store, Serializer).RecordAsync(PoisonRecord());
+                break;
             case ElsaRuntimeStorageManifest.DurableTimerDocumentKind:
                 await new GroundworkDurableTimerStore(store, Serializer).SaveAsync(Timer());
                 break;
@@ -232,6 +236,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer)
                 .ListAsync(new RuntimeSchedulerWorkQuery(Wf)))
                 .SingleOrDefault()?.WorkItemId,
+        ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind =>
+            (await new GroundworkWorkflowSchedulerPoisonStore(store, Serializer)
+                .FindAsync(Wf, "work-1"))?.Fault.Message,
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind =>
             (await new GroundworkDurableTimerStore(store, Serializer).FindAsync(Wf, "timer-1"))?.StimulusHash,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind =>
@@ -270,6 +277,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => "item-1",
         ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind => WorkflowDispatchStatus.Pending,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind => "work-1",
+        ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind => "handler exploded",
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind => "timer-hash-1",
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind => "Event",
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind => "schedule-hash-1",
@@ -631,6 +639,18 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" },
         executionScopeId: "scope-1",
         attempt: new ActivityExecutionAttemptLineage(1, "ae-1", null));
+
+    private static RuntimeSchedulerPoisonRecord PoisonRecord() => new(
+        workflowExecutionId: Wf,
+        workItemId: "work-1",
+        commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+        handlerName: "TestSchedulerHandler",
+        fault: new RuntimeFaultInfo("System.InvalidOperationException", "handler exploded", "stack"),
+        failureCount: 1,
+        disposition: RuntimeSchedulerPoisonDisposition.Poisoned,
+        firstFailedAt: DateTimeOffset.UnixEpoch,
+        lastFailedAt: DateTimeOffset.UnixEpoch,
+        metadata: new Dictionary<string, string> { ["tag"] = "v1" });
 
     private static DurableTimer Timer() => new(
         TimerId: "timer-1",
