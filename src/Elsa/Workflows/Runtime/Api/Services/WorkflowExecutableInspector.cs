@@ -129,8 +129,8 @@ public sealed class WorkflowExecutableInspector(
         var compiledInputs = executable.Nodes
             .SelectMany(node => node.InputBindings.Values.Select(binding => new WorkflowExecutableCompiledInputView(
                 node.ExecutableNodeId,
-                Binding(binding, includeSourceDetails: !binding.IsSensitive),
-                binding.IsSensitive ? "redacted" : "allowed")))
+                Binding(binding, includeSourceDetails: !binding.EffectivePolicy.IsSensitive),
+                binding.EffectivePolicy.IsSensitive ? "redacted" : "allowed")))
             .ToArray();
 
         return new WorkflowExecutableInputSourcesView(
@@ -264,12 +264,12 @@ public sealed class WorkflowExecutableInspector(
             binding.Source.ToString(),
             includeSourceDetails ? Preview(binding) : null,
             binding.InputKey,
-            binding.IsSensitive,
+            binding.EffectivePolicy.IsSensitive,
             includeSourceDetails ? binding.LiteralValue : null,
             includeSourceDetails ? binding.Expression : null,
-            includeSourceDetails ? binding.ActivityOutput : null,
-            includeSourceDetails ? binding.DurableValue : null,
-            includeSourceDetails ? binding.Reference : null,
+            includeSourceDetails ? binding.WorkflowRequest : null,
+            includeSourceDetails ? binding.Variable : null,
+            includeSourceDetails ? binding.ActivityResult : null,
             includeSourceDetails ? binding.Metadata : null);
 
     private static WorkflowExecutableInputContractView? InputContract(WorkflowExecutableInputContract? contract) =>
@@ -292,9 +292,9 @@ public sealed class WorkflowExecutableInspector(
         {
             RuntimeInputBindingSource.Literal when binding.LiteralValue is { } value => value.GetRawText(),
             RuntimeInputBindingSource.Expression when binding.Expression is { } expression => $"{expression.Language}: {expression.Expression}",
-            RuntimeInputBindingSource.ActivityOutput => binding.ActivityOutput?.OutputName,
-            RuntimeInputBindingSource.DurableValue => binding.DurableValue?.ValueId,
-            RuntimeInputBindingSource.Reference => binding.Reference?.ReferenceId,
+            RuntimeInputBindingSource.WorkflowRequest => binding.WorkflowRequest?.MemberKey,
+            RuntimeInputBindingSource.VariableRead => binding.Variable?.VariableKey,
+            RuntimeInputBindingSource.ActivityResult => binding.ActivityResult?.ProjectionKey,
             _ => null
         };
         return text is null || text.Length <= PreviewLength ? text : $"{text[..PreviewLength]}…";

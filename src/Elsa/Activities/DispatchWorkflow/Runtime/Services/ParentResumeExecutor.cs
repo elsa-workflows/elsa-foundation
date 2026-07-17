@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -41,14 +42,18 @@ public sealed class ParentResumeExecutor(
                 workflowExecutionId: payload.ParentWorkflowExecutionId,
                 stimulusType: payload.StimulusType,
                 stimulusHash: payload.StimulusHash,
-                input: intent.Payload.Value,
+                input: JsonSerializer.SerializeToElement(payload),
                 idempotencyKey: identity.ParentResumeIdempotencyKey,
-                requestedBy: "runtime.dispatch-workflow",
+                requestedBy: DispatchWorkflowConstants.ParentResumeProviderId,
                 metadata: new Dictionary<string, string>
                 {
                     [RuntimeMetadataKeys.DispatchId] = payload.DispatchId,
                     [RuntimeMetadataKeys.ChildWorkflowExecutionId] = payload.ChildWorkflowExecutionId
-                }),
+                },
+                payloadType: new ValueTypeDescriptor(
+                    TypeAliasConvention.CanonicalAlias(typeof(WorkflowDispatchParentResumePayload)),
+                    schemaVersion: 1),
+                providerId: DispatchWorkflowConstants.ParentResumeProviderId),
             cancellationToken: cancellationToken);
 
         if (result.Bookmark is { } resolvedBookmark)

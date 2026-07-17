@@ -15,19 +15,33 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <remarks>
 /// Failure policy: this fires on the RUN path, so an observer that throws is caught and logged and NEVER faults
 /// the run (contrast <see cref="IWorkflowTriggerIndexObserver"/>, whose exceptions fail the publish). Every
-/// observer is invoked even if an earlier one threw. Absent observers is the common, cheap case.
+/// observer is invoked even if an earlier one threw or exceeded its independent per-observer timeout. Absent
+/// observers is the common, cheap case.
 /// </remarks>
 public sealed class BookmarkLifecycleNotifier
 {
+    /// <summary>Default upper bound for one lifecycle observer invocation.</summary>
+    public static TimeSpan DefaultObserverTimeout { get; } = TimeSpan.FromSeconds(5);
+
     private readonly IReadOnlyList<IBookmarkLifecycleObserver> _observers;
     private readonly ILogger<BookmarkLifecycleNotifier> _logger;
+    private readonly TimeProvider _timeProvider;
+    private readonly TimeSpan _observerTimeout;
 
     public BookmarkLifecycleNotifier(
         IEnumerable<IBookmarkLifecycleObserver>? observers = null,
-        ILogger<BookmarkLifecycleNotifier>? logger = null)
+        ILogger<BookmarkLifecycleNotifier>? logger = null,
+        TimeProvider? timeProvider = null,
+        TimeSpan? observerTimeout = null)
     {
+        var effectiveTimeout = observerTimeout ?? DefaultObserverTimeout;
+        if (effectiveTimeout <= TimeSpan.Zero || effectiveTimeout == Timeout.InfiniteTimeSpan)
+            throw new ArgumentOutOfRangeException(nameof(observerTimeout), effectiveTimeout, "Bookmark lifecycle observer timeout must be finite and positive.");
+
         _observers = observers?.ToArray() ?? [];
         _logger = logger ?? NullLogger<BookmarkLifecycleNotifier>.Instance;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _observerTimeout = effectiveTimeout;
     }
 
     /// <summary>Notifies observers that a bookmark was durably created; observer throws are caught and logged.</summary>
@@ -47,16 +61,25 @@ public sealed class BookmarkLifecycleNotifier
 
         foreach (var observer in _observers)
         {
+            using var timeoutCancellation = new CancellationTokenSource(_observerTimeout, _timeProvider);
+            using var observerCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                timeoutCancellation.Token);
             try
             {
-                if (created)
-                    await observer.OnBookmarkCreatedAsync(bookmark, cancellationToken);
-                else
-                    await observer.OnBookmarkConsumedAsync(bookmark, cancellationToken);
+                var observerToken = observerCancellation.Token;
+                var notification = created
+                    ? observer.OnBookmarkCreatedAsync(bookmark, observerToken)
+                    : observer.OnBookmarkConsumedAsync(bookmark, observerToken);
+                await notification.AsTask().WaitAsync(observerToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (OperationCanceledException) when (timeoutCancellation.IsCancellationRequested)
+            {
+                LogTimeout(observer, bookmark, created);
             }
             catch (Exception exception)
             {
@@ -72,4 +95,13 @@ public sealed class BookmarkLifecycleNotifier
             }
         }
     }
+
+    private void LogTimeout(IBookmarkLifecycleObserver observer, BookmarkState bookmark, bool created) =>
+        _logger.LogWarning(
+            "Bookmark lifecycle observer '{Observer}' exceeded the {Timeout} timeout while handling the {Transition} of bookmark '{BookmarkId}' (workflow execution '{WorkflowExecutionId}'); continuing with later observers so committed scheduler work is not blocked.",
+            observer.GetType().FullName,
+            _observerTimeout,
+            created ? "creation" : "consumption",
+            bookmark.BookmarkId,
+            bookmark.WorkflowExecutionId);
 }

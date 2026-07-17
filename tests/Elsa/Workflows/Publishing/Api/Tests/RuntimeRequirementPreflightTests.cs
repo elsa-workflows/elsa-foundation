@@ -22,11 +22,11 @@ public sealed class RuntimeRequirementPreflightTests
         var executables = new InMemoryWorkflowExecutableStore();
         var templates = new InMemoryExecutableActivityTemplateStore();
         var references = new InMemoryWorkflowExecutableSourceReferenceStore();
-        var constructors = new ActivityConstructorRegistry();
-        constructors.AddAll([
-            new TestConstructor("sample.available", "1"),
-            new TestConstructor("sample.schema", "1")
-        ]);
+        IRuntimeActivityConsumerCapability[] consumers =
+        [
+            new RuntimeActivityConsumerCapability("sample.available", ["1"]),
+            new RuntimeActivityConsumerCapability("sample.schema", ["1"])
+        ];
         var drivers = new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]);
         var executable = Executable(
             "artifact-1",
@@ -48,7 +48,7 @@ public sealed class RuntimeRequirementPreflightTests
         });
         await references.SaveAsync(Reference("ref-retired", "artifact-retired") with { DeletedAt = Now.AddMinutes(-1), DeletedReason = "retired" });
         await references.SaveAsync(Reference("ref-missing", "artifact-missing"));
-        var service = new RuntimeRequirementPreflight(references, executables, templates, constructors, drivers, new FixedTimeProvider(Now));
+        var service = new RuntimeRequirementPreflight(references, executables, templates, consumers, drivers, new FixedTimeProvider(Now));
 
         var result = await service.RunAsync(RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, null);
 
@@ -73,15 +73,17 @@ public sealed class RuntimeRequirementPreflightTests
         var executables = new InMemoryWorkflowExecutableStore();
         var templates = new InMemoryExecutableActivityTemplateStore();
         var references = new InMemoryWorkflowExecutableSourceReferenceStore();
-        var constructors = new ActivityConstructorRegistry();
-        constructors.AddAll([new TestConstructor("sample.available", "1")]);
+        IRuntimeActivityConsumerCapability[] consumers =
+        [
+            new RuntimeActivityConsumerCapability("sample.available", ["1"])
+        ];
         await executables.SaveAsync(Executable("artifact-1", [new("sample.available", "1")], []));
         await references.SaveAsync(Reference("ref-live", "artifact-1"));
         var service = new RuntimeRequirementPreflight(
             references,
             executables,
             templates,
-            constructors,
+            consumers,
             new RuntimeDurableValueStorageDriverRegistry([]),
             new FixedTimeProvider(Now));
 
@@ -181,18 +183,6 @@ public sealed class RuntimeRequirementPreflightTests
             new Dictionary<string, string>(),
             Now,
             [new("elsa.json")]);
-    }
-
-    private sealed class TestConstructor(string consumerKey, params string[] schemas) : IActivityConstructor
-    {
-        public string ConsumerKey { get; } = consumerKey;
-        public IReadOnlySet<string> SupportedSchemaVersions { get; } = schemas.ToHashSet(StringComparer.Ordinal);
-
-        public ValueTask<IActivity> ConstructAsync(
-            RuntimeActivityDescriptor descriptor,
-            IReadOnlyDictionary<string, InputArgument> inputs,
-            IReadOnlyDictionary<string, OutputArgument> outputs,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider

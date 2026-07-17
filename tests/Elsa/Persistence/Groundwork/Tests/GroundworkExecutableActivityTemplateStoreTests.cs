@@ -31,18 +31,18 @@ public sealed class GroundworkExecutableActivityTemplateStoreTests
         Assert.Equal("template-1", byHash!.TemplateId);
 
         var envelope = Assert.Single(documents.Snapshot(ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind));
-        Assert.Equal("1", envelope.SchemaVersion);
+        Assert.Equal("2", envelope.SchemaVersion);
         using var content = JsonDocument.Parse(envelope.ContentJson);
         var root = content.RootElement;
         Assert.Equal(ElsaRuntimeStorageManifest.ExecutableActivityTemplateCollection, root.GetProperty("collection").GetString());
         Assert.Equal("sha256:one", root.GetProperty("templateHash").GetString());
         var persistedTemplate = root.GetProperty("template");
         Assert.False(persistedTemplate.TryGetProperty("nodesById", out _));
-        var descriptor = persistedTemplate.GetProperty("root").GetProperty("descriptor");
-        Assert.Equal("test.consumer", descriptor.GetProperty("consumerKey").GetString());
-        Assert.Equal("1", descriptor.GetProperty("schemaVersion").GetString());
-        Assert.False(descriptor.TryGetProperty("descriptorType", out _));
-        Assert.False(descriptor.TryGetProperty("descriptorPayload", out _));
+        var persistedRoot = persistedTemplate.GetProperty("root");
+        Assert.Equal("test.consumer", persistedRoot.GetProperty("descriptorType").GetString());
+        Assert.Equal("1", persistedRoot.GetProperty("descriptorSchemaVersion").GetString());
+        Assert.Equal("node-1", persistedRoot.GetProperty("descriptorPayload").GetProperty("id").GetString());
+        Assert.False(persistedRoot.TryGetProperty("descriptor", out _));
     }
 
     [Fact]

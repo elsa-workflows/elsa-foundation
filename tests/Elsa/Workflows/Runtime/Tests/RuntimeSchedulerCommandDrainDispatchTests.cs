@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -493,8 +495,16 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: new ActivityContract(
+                "test/activity",
+                "1.0.0",
+                "test",
+                document.RootElement,
+                [],
+                new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+                ["Done"],
+                new ActivityActivationRequirement("test", "test/activity")));
 
         return new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),

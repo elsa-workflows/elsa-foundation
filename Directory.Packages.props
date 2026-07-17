@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="Acornima" Version="1.6.1" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
@@ -44,6 +46,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Routing.Abstractions" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />

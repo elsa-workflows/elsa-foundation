@@ -11,8 +11,6 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
-using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -140,21 +138,21 @@ public sealed class DispatchWorkflowContractTests
     [Fact]
     public void Activity_exposes_stable_schema_defaults_editor_and_outcomes()
     {
-        var activity = new Activity();
-
-        Assert.Equal(DispatchWorkflowConstants.ActivityType, activity.Type);
+        Assert.Equal(DispatchWorkflowConstants.ActivityType, Activity.ActivityType);
 
         var inputs = typeof(Activity).GetProperties()
-            .Where(property => DerivesFrom(property.PropertyType, typeof(InputArgument)))
+            .Where(property => property.GetCustomAttribute<ActivityInputAttribute>() is not null)
             .ToDictionary(property => property.Name, StringComparer.Ordinal);
-        var outputs = typeof(Activity).GetProperties()
-            .Where(property => DerivesFrom(property.PropertyType, typeof(OutputArgument)))
+        var outputs = typeof(DispatchWorkflowActivityResult).GetProperties()
+            .Where(property => property.GetCustomAttribute<OutputAttribute>() is not null)
             .ToDictionary(property => property.Name, StringComparer.Ordinal);
 
         Assert.Equal(
             new[] { nameof(Activity.WorkflowDefinitionId), nameof(Activity.Inputs), nameof(Activity.WaitForCompletion), nameof(Activity.CancelChildOnParentCancellation), nameof(Activity.CorrelationId) },
             inputs.Keys.OrderBy(InputOrder).ToArray());
-        Assert.Equal(new[] { nameof(Activity.ChildWorkflowExecutionId), nameof(Activity.Result) }, outputs.Keys.Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            new[] { nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId), nameof(DispatchWorkflowActivityResult.Result) },
+            outputs.Keys.Order(StringComparer.Ordinal).ToArray());
 
         var workflowId = inputs[nameof(Activity.WorkflowDefinitionId)].GetCustomAttribute<ActivityInputAttribute>();
         Assert.NotNull(workflowId);
@@ -163,11 +161,12 @@ public sealed class DispatchWorkflowContractTests
 
         Assert.Equal("false", inputs[nameof(Activity.WaitForCompletion)].GetCustomAttribute<ActivityInputAttribute>()?.DefaultValue);
         Assert.Equal("true", inputs[nameof(Activity.CancelChildOnParentCancellation)].GetCustomAttribute<ActivityInputAttribute>()?.DefaultValue);
-        Assert.Equal(typeof(OutputArgument<DispatchWorkflowResult>), outputs[nameof(Activity.Result)].PropertyType);
+        Assert.Equal(typeof(string), outputs[nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId)].PropertyType);
+        Assert.Equal(typeof(DispatchWorkflowResult), outputs[nameof(DispatchWorkflowActivityResult.Result)].PropertyType);
 
         Assert.Equal(
             new[] { "Dispatched", "Completed", "Faulted", "Cancelled", "DispatchFailed" },
-            DispatchWorkflowOutcomes.All);
+            typeof(Activity).GetCustomAttributes<ActivityOutcomeAttribute>().Select(attribute => attribute.Key).ToArray());
     }
 
     [Fact]
@@ -380,15 +379,6 @@ public sealed class DispatchWorkflowContractTests
             [DispatchWorkflowDiagnostics.DeliveryIncidentIdKey] = incidentId
         };
 
-    private static bool DerivesFrom(Type candidate, Type baseType)
-    {
-        for (var current = candidate; current is not null; current = current.BaseType)
-            if (current == baseType)
-                return true;
-
-        return false;
-    }
-
     private static void AssertFeatureCanBeSpecialized(Type featureType)
     {
         Assert.False(featureType.IsSealed);
@@ -419,30 +409,4 @@ public sealed class DispatchWorkflowContractTests
             ValueTask.FromResult<PostCommitFailureProjection?>(null);
     }
 
-    private sealed class StubExecutionContext(IActivity activity, IReadOnlyDictionary<string, object?> values) : IActivityExecutionContext
-    {
-        public TService GetRequiredService<TService>() where TService : notnull => throw new InvalidOperationException();
-        public IExpressionExecutionContext ExpressionExecutionContext => throw new InvalidOperationException();
-        public IActivity Activity { get; } = activity;
-        public IActivityExecutionContext ParentActivityExecutionContext => throw new InvalidOperationException();
-        public CancellationToken CancellationToken => CancellationToken.None;
-
-        public T? Get<T>(InputArgument<T>? input) =>
-            input?.MemoryBlockReference() is { } reference && values.TryGetValue(reference.Id, out var value)
-                ? (T?)value
-                : default;
-
-        public void Set<T>(OutputArgument<T>? output, T? value, string? outputName = null) { }
-        public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => Empty();
-        public void SetOutcomes(string[] outcomes) { }
-        public IEnumerable<string> GetOutcomes() => [];
-        public void CreateBookmark(ActivityBookmarkRequest request) { }
-        public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => [];
-
-        private static async IAsyncEnumerable<ActivityOutputs> Empty()
-        {
-            await Task.CompletedTask;
-            yield break;
-        }
-    }
 }

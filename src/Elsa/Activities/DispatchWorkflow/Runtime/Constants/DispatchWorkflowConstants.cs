@@ -12,5 +12,6 @@ public static class DispatchWorkflowConstants
     public const string CancelChildIntentKind = "Elsa.Activities.DispatchWorkflow.CancelChild";
     public const string ResumeParentIntentKind = WorkflowDispatchLifecycle.ResumeParentIntentKind;
     public const string WaitStimulusType = "Elsa.Activities.DispatchWorkflow.ChildCompleted";
+    public const string ParentResumeProviderId = "runtime.dispatch-workflow";
     public const string CompletionResumeTargetId = "resume-target:dispatch-workflow-completed";
 }

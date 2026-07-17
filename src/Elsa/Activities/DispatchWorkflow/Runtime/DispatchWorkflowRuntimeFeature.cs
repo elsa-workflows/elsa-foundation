@@ -87,6 +87,11 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCompletionEnricher>());
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IPostCommitFailureProjector, WorkflowDispatchDeliveryFailureProjector>());
+        services.TryAddSingleton<WorkflowDispatchStagingBuffer>();
+        services.TryAddSingleton<IWorkflowDispatchStager>(
+            serviceProvider => serviceProvider.GetRequiredService<WorkflowDispatchStagingBuffer>());
+        services.TryAddSingleton<IWorkflowDispatchStagingAccessor>(
+            serviceProvider => serviceProvider.GetRequiredService<WorkflowDispatchStagingBuffer>());
         services.TryAddScoped<IWorkflowTestScopeCleaner, WorkflowTestScopeCleaner>();
         services.AddSingleton<IShellInitializer, WorkflowDispatchReadinessInitializer>();
     }

@@ -198,20 +198,8 @@ public sealed class GraphActivityRecoveryTests
         Assert.Equal(identity.ArtifactHash, payload.PinnedExecutable.ArtifactHash);
         Assert.Equal("outer-retry", payload.ActivityExecutionId);
 
-        var materializer = provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
-        var outputReader = Assert.IsAssignableFrom<IRuntimeActivityOutputReader>(
-            provider.GetRequiredService<IRuntimeActivityOutputRegister>());
-        var materialized = await materializer.MaterializeInputsAsync(
-            Executable(identity).RootActivity,
-            new RuntimeInputBindingResolutionContext(
-                WorkflowId,
-                "outer-retry",
-                new Dictionary<string, DurableValueState> { [cloned.ValueId] = cloned },
-                outputReader,
-                provider));
-        var effectiveInput = Assert.Single(materialized);
-        Assert.Equal("Order", effectiveInput.Name);
-        Assert.Equal(42, Assert.IsType<JsonElement>(effectiveInput.Value).GetProperty("id").GetInt32());
+        Assert.Equal("Order", cloned.Metadata[RuntimeMetadataKeys.BoundaryInputName]);
+        Assert.Equal(42, cloned.InlineValue!.Value.GetProperty("id").GetInt32());
     }
 
     [Fact]
@@ -289,8 +277,8 @@ public sealed class GraphActivityRecoveryTests
         status == ActivityExecutionStatus.Faulted ? 1 : 0,
         status == ActivityExecutionStatus.Faulted ? 1 : 0,
         new Dictionary<string, string>(),
-        executionScopeId,
-        new ActivityExecutionAttemptLineage(1, id, null));
+        ExecutionScopeId: executionScopeId,
+        Attempt: new ActivityExecutionAttemptLineage(1, id, null));
 
     private static DurableValueState InputValue(string executionId, string referenceKey, string inputName, JsonElement value)
     {

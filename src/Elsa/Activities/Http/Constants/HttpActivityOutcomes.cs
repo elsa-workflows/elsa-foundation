@@ -2,12 +2,14 @@ namespace Elsa.Activities.Http.Constants;
 
 /// <summary>
 /// Completion outcome names emitted by outbound HTTP activities. These are the branch labels an author wires
-/// downstream nodes to. Successful responses branch on the numeric status code (e.g. <c>"200"</c>) or the
-/// default <c>Done</c> outcome; the named outcomes below cover the non-response terminal paths so a workflow
-/// can react to failures without the activity throwing and faulting the run.
+/// downstream nodes to. Outcomes are a finite part of the published activity contract; response status is data
+/// on the atomic result and is never synthesized into an unpinned outcome name.
 /// </summary>
 public static class HttpActivityOutcomes
 {
+    /// <summary>A response was received and its status was present in <c>ExpectedStatusCodes</c>.</summary>
+    public const string Matched = "Matched";
+
     /// <summary>The request failed at the transport layer (DNS, connection, TLS, protocol) — no response was received.</summary>
     public const string Failed = "Failed";
 

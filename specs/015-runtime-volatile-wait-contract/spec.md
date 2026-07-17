@@ -1,5 +1,7 @@
 # Feature Specification: Runtime Volatile Wait Contract
 
+> **Current status (2026-07-16): wait semantics remain historical input; all value transport is governed by [spec 095](../095-value-flow-redesign/spec.md).** A wait may not revive memory blocks, argument wrappers, ambient expression state, or generic value references.
+
 **Feature Branch**: `codex/runtime-volatile-wait-contract`
 **Created**: 2026-06-10
 **Status**: Draft

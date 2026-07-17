@@ -82,7 +82,7 @@ public sealed class RuntimeGeneratorContractTests
     [Fact]
     public void GeneratedEvent_IsEmissionDataNotActivityExecutionState()
     {
-        var payload = new RuntimeDurableValueReference("durable-generated-payload");
+        var payload = new GeneratedEventPayloadReference("durable-generated-payload");
         var generatedEvent = NewGeneratedEvent(sequence: 3, payloadValue: payload);
         var downstreamActivityWork = new ScheduledActivityWorkItem(
             WorkItemId: "activity-work-3",
@@ -232,7 +232,7 @@ public sealed class RuntimeGeneratorContractTests
         registeredAt: _now,
         metadata: new Dictionary<string, string> { ["Kind"] = "timer" });
 
-    private GeneratedEvent NewGeneratedEvent(long sequence, RuntimeDurableValueReference? payloadValue = null) => new(
+    private GeneratedEvent NewGeneratedEvent(long sequence, GeneratedEventPayloadReference? payloadValue = null) => new(
         generatedEventId: $"event-{sequence}",
         workflowExecutionId: "wfexec-1",
         generatorActivityExecutionId: "actexec-generator",

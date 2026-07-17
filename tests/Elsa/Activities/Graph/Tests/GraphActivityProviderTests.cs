@@ -10,9 +10,11 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Xunit;
+using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
 namespace Elsa.Activities.Graph.Tests;
 
@@ -226,6 +228,15 @@ public sealed class GraphActivityProviderTests
         Assert.Equal("elsa.graph-activity", first.ExecutableRoot!.ActivityType);
         Assert.Equal("1", first.ExecutableRoot.ActivityTypeVersion);
         Assert.Equal(WellKnownRuntimeActivityConsumers.GraphActivity, first.ExecutableRoot!.Descriptor.ConsumerKey);
+        var runtimeContract = Assert.IsType<Elsa.Activities.Runtime.Core.Models.ActivityContract>(first.ExecutableRoot.ActivityContract);
+        Assert.Equal("activity-type-1", runtimeContract.ActivityTypeKey);
+        Assert.Equal("2.0.0", runtimeContract.ContractVersion);
+        Assert.Equal(WellKnownRuntimeActivityConsumers.GraphActivity, runtimeContract.DescriptorKind);
+        Assert.True(JsonElement.DeepEquals(first.ExecutableRoot.Descriptor.Payload, runtimeContract.DescriptorPayload));
+        Assert.Equal([ActivityOutcomes.Done], runtimeContract.Outcomes);
+        var totalProjection = Assert.Single(runtimeContract.Result.Projections);
+        Assert.Equal("total", totalProjection.Key);
+        Assert.Equal("total", totalProjection.Value.Path);
         Assert.True(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("occurrences", out var occurrences));
         Assert.Equal(2, occurrences.GetArrayLength());
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("rootActivity", out _));
@@ -386,7 +397,7 @@ public sealed class GraphActivityProviderTests
             }
             """));
 
-    private static ActivityContract CreateContract() => new(
+    private static DesignActivityContract CreateContract() => new(
         "1",
         [],
         [new ActivityOutputContract(
@@ -424,7 +435,7 @@ public sealed class GraphActivityProviderTests
         public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderManifest manifest, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("secret infrastructure detail");
 
-        public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, ActivityContract contract, CancellationToken cancellationToken = default) =>
+        public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, DesignActivityContract contract, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("secret infrastructure detail");
 
         public ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default) =>

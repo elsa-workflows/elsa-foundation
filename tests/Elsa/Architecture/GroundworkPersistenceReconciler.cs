@@ -426,7 +426,10 @@ internal sealed class GroundworkPersistenceReconciler
         Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandStreamHeadDocumentKind")
     ];
 
-    private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts = [];
+    private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts =
+    [
+        new("IExternalPayloadStore", "the host-selected external payload provider")
+    ];
 
     private static GroundworkPersistenceRowMapping Map(
         string owner,

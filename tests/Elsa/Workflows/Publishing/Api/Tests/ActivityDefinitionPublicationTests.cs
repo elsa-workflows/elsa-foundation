@@ -364,7 +364,7 @@ public sealed class ActivityDefinitionPublicationTests
             0);
     }
 
-    private static ActivityContract Contract() => new("1", [], [], []);
+    private static Elsa.Activities.Design.Core.Models.ActivityContract Contract() => new("1", [], [], []);
     private static ActivityProviderManifest Provider() => new("test.provider", "1", Json("{}"));
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
 

@@ -236,7 +236,8 @@ public sealed class WorkflowStartLineageTests
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore),
             inspectionAccumulator: null,
             timeProvider: new FixedTimeProvider(Now),
-            workflowExecutionStateStore: workflowStore);
+            workflowExecutionStateStore: workflowStore,
+            workflowExecutableStore: executableStore);
         var authority = new WorkflowExecutionAuthoritySnapshot("parent-1", "initiator-1");
         var testScope = NewTestScope();
         var payload = new WorkflowExecutionStartCommandPayload(

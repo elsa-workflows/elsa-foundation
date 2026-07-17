@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// Resume / Schedule / Start / Checkpoint / CreateBookmark handlers in both
 /// <c>Elsa.Workflows.Runtime</c> and <c>Elsa.Activities.Runtime</c>. Public (not internal) so the
 /// Activities-assembly handlers can consume it without <c>InternalsVisibleTo</c> (constitution
-/// §2.23.3), matching the existing <see cref="ActivityOutputPublisher"/> precedent.
+/// §2.23.3), matching the runtime inspection-capture convention.
 /// </summary>
 public static class SchedulerWorkHandlerHelpers
 {
@@ -49,6 +49,35 @@ public static class SchedulerWorkHandlerHelpers
 
         throw new InvalidOperationException(
             $"{commandLabel} scheduler work item '{workItem.WorkItemId}' references executable node '{executableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+    }
+
+    /// <summary>
+    /// Resolves either a globally placed resume-target id or the activity-local id captured in a
+    /// reusable template. Local ids are scoped to their placed executable node.
+    /// </summary>
+    public static WorkflowExecutableResumeTarget? FindResumeTargetForNode(
+        WorkflowExecutable executable,
+        string executableNodeId,
+        string requestedResumeTargetId)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestedResumeTargetId);
+
+        if (executable.ResumeTargets.TryGetValue(requestedResumeTargetId, out var direct))
+            return direct;
+
+        var matches = executable.ResumeTargets.Values
+            .Where(target => StringComparer.Ordinal.Equals(target.ExecutableNodeId, executableNodeId))
+            .Where(target => StringComparer.Ordinal.Equals(target.LocalResumeTargetId, requestedResumeTargetId))
+            .ToArray();
+        return matches.Length switch
+        {
+            0 => null,
+            1 => matches[0],
+            _ => throw new InvalidOperationException(
+                $"Local resume target '{requestedResumeTargetId}' is ambiguous for executable node '{executableNodeId}'.")
+        };
     }
 
     /// <summary>

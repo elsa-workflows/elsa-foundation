@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Description>Reflection-only CLR activity reconciliation from annotated input properties and typed result contracts.</Description>
   </PropertyGroup>
 
   <ItemGroup>

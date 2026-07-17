@@ -548,8 +548,13 @@ public sealed class DispatchWorkflowDesignTests
             {
                 ["WorkflowDefinitionId"] = new(
                     "WorkflowDefinitionId",
+                    ValueType(typeof(string)),
+                    ValueProtectionPolicy.InstanceInline,
                     RuntimeInputBindingSource.Literal,
-                    JsonSerializer.SerializeToElement(definitionId))
+                    literal: ValueEnvelope.Inline(
+                        ValueType(typeof(string)),
+                        JsonSerializer.SerializeToElement(definitionId),
+                        ValueProtectionPolicy.InstanceInline))
             },
             new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string> { ["authoredNodeId"] = nodeId });
@@ -558,7 +563,15 @@ public sealed class DispatchWorkflowDesignTests
         DispatchNodeWithInputs(
             nodeId,
             definitionId,
-            new RuntimeInputBinding("Inputs", RuntimeInputBindingSource.Literal, inputs));
+            new RuntimeInputBinding(
+                "Inputs",
+                ValueType(typeof(IReadOnlyDictionary<string, JsonElement>)),
+                ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal,
+                literal: ValueEnvelope.Inline(
+                    ValueType(typeof(IReadOnlyDictionary<string, JsonElement>)),
+                    inputs,
+                    ValueProtectionPolicy.InstanceInline)));
 
     private static ExecutableNode DispatchNodeWithDynamicInputs(string nodeId, string definitionId) =>
         DispatchNodeWithInputs(
@@ -566,8 +579,16 @@ public sealed class DispatchWorkflowDesignTests
             definitionId,
             new RuntimeInputBinding(
                 "Inputs",
+                ValueType(typeof(IReadOnlyDictionary<string, JsonElement>)),
+                ValueProtectionPolicy.InstanceInline,
                 RuntimeInputBindingSource.Expression,
                 expression: new RuntimeExpressionBinding("JavaScript", "dynamicInputs")));
+
+    private static ValueTypeDescriptor ValueType(Type type)
+    {
+        var reference = TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias);
+        return new ValueTypeDescriptor(reference.Alias, reference.CollectionKind);
+    }
 
     private static ExecutableNode DispatchNodeWithInputs(
         string nodeId,

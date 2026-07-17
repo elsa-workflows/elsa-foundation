@@ -3,15 +3,18 @@ using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
+using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core;
-using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -60,12 +63,10 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
         services.AddSingleton<RecordingDispatchBookmarkObserver>();
         services.AddSingleton<IBookmarkLifecycleObserver>(serviceProvider => serviceProvider.GetRequiredService<RecordingDispatchBookmarkObserver>());
-        services.AddSingleton<IActivityConstructor, DispatchActivityConstructor>();
-        services.AddSingleton<IActivityConstructor, ChildProbeActivityConstructor>();
-
         new SerializationFeature().ConfigureServices(services);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
+        new ActivitiesPrimitivesFeature().ConfigureServices(services);
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
         new DispatchWorkflowRuntimeFeature { MaxNestingDepth = maxNestingDepth }.ConfigureServices(services);
         services.Replace(ServiceDescriptor.Singleton<IWellKnownTypeRegistry>(typeRegistry));
@@ -81,9 +82,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 serviceProvider.GetRequiredService<CheckpointRecorder>(),
                 failDispatchCommit)));
 
+        RegisterActivityTypes(typeRegistry);
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        provider.GetRequiredService<IActivityConstructorRegistry>()
-            .AddAll(provider.GetServices<IActivityConstructor>());
         var fixture = new DispatchWorkflowRuntimeTestFixture(provider, timeProvider);
         await fixture.SeedChildAsync();
         return fixture;
@@ -162,8 +162,38 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         {
             var incidents = await _provider.GetRequiredService<IIncidentStateStore>().ListAsync(parentWorkflowExecutionId);
             var incidentSummary = string.Join(" | ", incidents.Select(incident => $"{incident.FailureType}: {incident.Message}"));
+            var parentState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(parentWorkflowExecutionId);
+            var queuedWork = await _provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                .ListAsync(new RuntimeSchedulerWorkQuery(parentWorkflowExecutionId));
+            var poisonRecords = await _provider.GetRequiredService<IWorkflowSchedulerPoisonStore>()
+                .ListAsync(parentWorkflowExecutionId);
+            var commits = Checkpoints.Commits
+                .Where(commit => StringComparer.Ordinal.Equals(commit.Checkpoint.WorkflowExecutionId, parentWorkflowExecutionId))
+                .ToArray();
+            await using var diagnosisScope = _provider.CreateAsyncScope();
+            var outboxLookup = diagnosisScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();
+            var intentStates = new List<string>();
+            foreach (var checkpointCommit in commits)
+            {
+                foreach (var intent in checkpointCommit.PostCommitIntents)
+                {
+                    var outboxItemId = RuntimePostCommitOutboxItems.OutboxItemId(checkpointCommit.CommitId, intent);
+                    var outboxItem = await outboxLookup.FindAsync(outboxItemId);
+                    intentStates.Add(
+                        $"{checkpointCommit.Checkpoint.Name}:{intent.Kind}/{intent.IntentId}=" +
+                        (outboxItem is null
+                            ? "missing"
+                            : $"{outboxItem.Status}[attempts={outboxItem.DeliveryAttemptCount}, failure={outboxItem.LastFailureMessage}]"));
+                }
+            }
             throw new InvalidOperationException(
-                $"Dispatch '{identity.DispatchId}' was not persisted. Incidents: {incidentSummary}");
+                $"Dispatch '{identity.DispatchId}' was not persisted. Activity: {activityState.Status}/{activityState.SubStatus}. " +
+                $"Metadata: {string.Join(", ", activityState.Metadata.Select(item => $"{item.Key}={item.Value}"))}. " +
+                $"Workflow: {parentState?.Status}/{parentState?.SubStatus}. " +
+                $"Queue: {string.Join(", ", queuedWork.Select(item => $"{item.CommandKind}/{item.WorkItemId}"))}. " +
+                $"Poison: {string.Join(" | ", poisonRecords.Select(item => $"{item.CommandKind}/{item.WorkItemId}: {item.Fault.ToSummaryString()}"))}. " +
+                $"Commits: {string.Join(", ", commits.Select(commit => $"{commit.Checkpoint.Name}[intents={commit.PostCommitIntents.Count}]"))}. " +
+                $"Outbox: {string.Join(" | ", intentStates)}. Incidents: {incidentSummary}");
         }
         var commit = Checkpoints.SingleDispatchCommit(identity.DispatchId);
         return new ParentDispatchRun(start, activityState, identity, dispatch, commit);
@@ -234,9 +264,6 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     internal async ValueTask<WorkflowExecutionState?> FindWorkflowAsync(string workflowExecutionId) =>
         await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId);
 
-    internal async ValueTask<IReadOnlyCollection<DurableValueState>> ListDurableValuesAsync(string workflowExecutionId) =>
-        await _provider.GetRequiredService<IDurableValueStateStore>().ListAsync(workflowExecutionId);
-
     internal async ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListDispatchesAsync(string parentWorkflowExecutionId) =>
         await _provider.GetRequiredService<IWorkflowDispatchStore>().ListAsync(parentWorkflowExecutionId);
 
@@ -284,9 +311,26 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             identity: identity ?? ChildIdentity,
             rootActivity: NewNode(
                 executableNodeId: "node-child-probe",
-                activityType: "test/dispatch-child-probe",
-                consumerKey: ChildProbeActivityConstructor.ConsumerKeyValue,
-                descriptorPayload: JsonSerializer.SerializeToElement(new ChildProbeDescriptor())),
+                activityType: typeof(ChildProbeActivity),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>
+                {
+                    [nameof(ChildProbeActivity.Message)] = WorkflowInputBinding(
+                        nameof(ChildProbeActivity.Message),
+                        typeof(string),
+                        "message"),
+                    [nameof(ChildProbeActivity.Count)] = WorkflowInputBinding(
+                        nameof(ChildProbeActivity.Count),
+                        typeof(int),
+                        "count"),
+                    [nameof(ChildProbeActivity.Tenant)] = WorkflowInputBinding(
+                        nameof(ChildProbeActivity.Tenant),
+                        typeof(string),
+                        "tenant"),
+                    [nameof(ChildProbeActivity.Defaulted)] = WorkflowInputBinding(
+                        nameof(ChildProbeActivity.Defaulted),
+                        typeof(string),
+                        "defaulted")
+                }),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
@@ -318,6 +362,10 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             ["count"] = 7,
             ["tenant"] = "workflow-input-tenant"
         };
+        var jsonDispatchInputs = dispatchInputs.ToDictionary(
+            item => item.Key,
+            item => JsonSerializer.SerializeToElement(item.Value, item.Value?.GetType() ?? typeof(object)),
+            StringComparer.Ordinal);
         var inputs = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
         {
             [nameof(DispatchWorkflowActivity.WorkflowDefinitionId)] = LiteralBinding(
@@ -326,8 +374,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 typeof(string)),
             [nameof(DispatchWorkflowActivity.Inputs)] = LiteralBinding(
                 nameof(DispatchWorkflowActivity.Inputs),
-                dispatchInputs,
-                typeof(IReadOnlyDictionary<string, object?>))
+                jsonDispatchInputs,
+                typeof(IReadOnlyDictionary<string, JsonElement>))
         };
         if (correlationOverride is not null)
         {
@@ -359,27 +407,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         };
         var node = NewNode(
             executableNodeId: "node-dispatch",
-            activityType: DispatchWorkflowConstants.ActivityType,
-            consumerKey: DispatchActivityConstructor.ConsumerKeyValue,
-            descriptorPayload: JsonSerializer.SerializeToElement(new DispatchActivityDescriptor()),
+            activityType: typeof(DispatchWorkflowActivity),
             inputBindings: inputs,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
-            {
-                [nameof(DispatchWorkflowActivity.ChildWorkflowExecutionId)] = new(
-                    outputName: nameof(DispatchWorkflowActivity.ChildWorkflowExecutionId),
-                    valueId: $"dispatch-child-id-{caseId}",
-                    type: new RuntimeValueTypeDescriptor("clr", typeof(string).FullName, null),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true),
-                [nameof(DispatchWorkflowActivity.Result)] = new(
-                    outputName: nameof(DispatchWorkflowActivity.Result),
-                    valueId: $"dispatch-result-{caseId}",
-                    type: new RuntimeValueTypeDescriptor("clr", typeof(DispatchWorkflowResult).FullName, null),
-                    lifecycle: DurableValueLifecycle.Result,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true)
-            },
             metadata: metadata);
         return new WorkflowExecutable(
             identity: new WorkflowExecutableIdentity(
@@ -409,36 +438,164 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             ]);
     }
 
-    private static RuntimeInputBinding LiteralBinding(string name, object value, Type type) =>
+    private static RuntimeInputBinding LiteralBinding(string name, object value, Type type)
+    {
+        var valueType = ValueType(type);
+        return new RuntimeInputBinding(
+            name,
+            valueType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                valueType,
+                JsonSerializer.SerializeToElement(value, value.GetType()),
+                ValueProtectionPolicy.InstanceInline));
+    }
+
+    private static RuntimeInputBinding WorkflowInputBinding(
+        string name,
+        Type type,
+        string workflowInputName) =>
         new(
-            inputName: name,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value, value.GetType()),
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = type.AssemblyQualifiedName!
-            });
+            name,
+            ValueType(type),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference(workflowInputName));
 
     private static ExecutableNode NewNode(
         string executableNodeId,
-        string activityType,
-        string consumerKey,
-        JsonElement descriptorPayload,
+        Type activityType,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
-        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
-        IReadOnlyDictionary<string, string>? metadata = null) =>
-        new(
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        var contract = ActivityContractFor(activityType);
+        return new ExecutableNode(
             executableNodeId: executableNodeId,
             authoredActivityId: $"authored-{executableNodeId}",
-            activityType: activityType,
+            activityType: ActivityTypeMetadata.GetDeclaredActivityType(activityType) ?? activityType.FullName!,
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor(
-                consumerKey,
+                WellKnownRuntimeActivityConsumers.ClrActivity,
                 RuntimeActivityDescriptor.InitialSchemaVersion,
-                descriptorPayload),
-            inputBindings: inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: metadata ?? new Dictionary<string, string>());
+                JsonSerializer.SerializeToElement(
+                    new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)))),
+            inputBindings: CompleteInputBindings(contract, inputBindings),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: metadata ?? new Dictionary<string, string>(),
+            activityContract: contract);
+    }
+
+    private static ActivityContract ActivityContractFor(Type activityType)
+    {
+        var inputs = activityType.GetProperties()
+            .Select(property => (Property: property, Attribute: property.GetCustomAttributes(typeof(ActivityInputAttribute), inherit: true)
+                .Cast<ActivityInputAttribute>()
+                .SingleOrDefault()))
+            .Where(candidate => candidate.Attribute is not null)
+            .Select(candidate =>
+            {
+                var attribute = candidate.Attribute!;
+                var hasDefault = attribute.DefaultValue is not null;
+                return new ActivityInputContract(
+                    attribute.Key ?? candidate.Property.Name,
+                    candidate.Property.Name,
+                    ValueType(candidate.Property.PropertyType),
+                    candidate.Property.IsDefined(typeof(RequiredAttribute), inherit: true),
+                    hasDefault,
+                    hasDefault
+                        ? JsonSerializer.SerializeToElement(ParseDefault(candidate.Property.PropertyType, attribute.DefaultValue!))
+                        : null,
+                    ActivityValuePolicy.Default)
+                {
+                    IsNullable = IsNullable(candidate.Property)
+                };
+            })
+            .ToArray();
+        var resultType = activityType.GetInterfaces()
+            .Single(candidate => candidate.IsGenericType &&
+                                 candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
+            .GetGenericArguments()[0];
+        var projections = resultType.GetProperties()
+            .Select(property => (Property: property, Attribute: property.GetCustomAttributes(typeof(OutputAttribute), inherit: true)
+                .Cast<OutputAttribute>()
+                .SingleOrDefault()))
+            .Where(candidate => candidate.Attribute is not null)
+            .Select(candidate => new ActivityResultProjectionContract(
+                candidate.Attribute!.Key ?? candidate.Property.Name,
+                candidate.Attribute.Path ?? JsonNamingPolicy.CamelCase.ConvertName(candidate.Property.Name),
+                ValueType(candidate.Property.PropertyType),
+                candidate.Attribute.IsRequired,
+                ActivityValuePolicy.Default))
+            .ToArray();
+        var descriptorType = typeof(ClrActivityDescriptor).FullName!;
+        var alias = TypeAliasConvention.CanonicalAlias(activityType);
+        return new ActivityContract(
+            activityType.FullName!,
+            "1.0.0",
+            descriptorType,
+            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias)),
+            inputs,
+            new ActivityResultContract(
+                ValueType(resultType),
+                true,
+                ActivityValuePolicy.Default,
+                projections),
+            activityType.GetCustomAttributes(typeof(ActivityOutcomeAttribute), inherit: true)
+                .Cast<ActivityOutcomeAttribute>()
+                .Select(attribute => attribute.Key)
+                .DefaultIfEmpty(ActivityOutcomes.Done)
+                .ToArray(),
+            new ActivityActivationRequirement(descriptorType, alias));
+    }
+
+    private static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(
+        ActivityContract contract,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? authoredBindings)
+    {
+        var bindings = authoredBindings?.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
+                       ?? new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        foreach (var input in contract.Inputs.Values.Where(input => !bindings.ContainsKey(input.Key)))
+        {
+            var policy = ValueProtectionPolicy.InstanceInline;
+            var value = input.HasDefault
+                ? ValueEnvelope.Inline(input.Type, input.DefaultValue!.Value, policy)
+                : input.IsNullable == true
+                    ? ValueEnvelope.Absent(input.Type, policy)
+                    : throw new InvalidOperationException(
+                        $"Test executable omits non-nullable activity input '{input.Key}' without a pinned default.");
+            bindings.Add(input.Key, new RuntimeInputBinding(
+                input.Key,
+                input.Type,
+                policy,
+                RuntimeInputBindingSource.Literal,
+                literal: value));
+        }
+
+        return bindings;
+    }
+
+    private static bool IsNullable(System.Reflection.PropertyInfo property)
+    {
+        if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+            return true;
+        if (property.PropertyType.IsValueType)
+            return false;
+        return new System.Reflection.NullabilityInfoContext().Create(property).ReadState !=
+               System.Reflection.NullabilityState.NotNull;
+    }
+
+    private static object ParseDefault(Type type, string value) =>
+        type == typeof(bool) ? bool.Parse(value) :
+        type == typeof(int) ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) :
+        type == typeof(TimeSpan) ? TimeSpan.Parse(value, System.Globalization.CultureInfo.InvariantCulture) :
+        value;
+
+    private static ValueTypeDescriptor ValueType(Type type)
+    {
+        var reference = TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias);
+        return new ValueTypeDescriptor(reference.Alias, reference.CollectionKind);
+    }
 
     private static WorkflowExecutableSourceReference NewSourceReference(
         string sourceReferenceId,
@@ -466,69 +623,53 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             ? values.Single()
             : throw new InvalidOperationException($"Expected one value but found {values.Count}.");
 
-    private sealed class DispatchActivityConstructor : IActivityConstructor<DispatchActivityDescriptor>
+    private static void RegisterActivityTypes(WellKnownTypeRegistry registry)
     {
-        internal const string ConsumerKeyValue = "test/dispatch-workflow";
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            DispatchActivityDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
+        var types = new[]
         {
-            var activity = new DispatchWorkflowActivity();
-            if (inputs is not null)
-            {
-                if (inputs.TryGetValue(nameof(activity.WorkflowDefinitionId), out var definitionId))
-                    activity.WorkflowDefinitionId = (InputArgument<string>)definitionId;
-                if (inputs.TryGetValue(nameof(activity.Inputs), out var dispatchInputs))
-                    activity.Inputs = (InputArgument<IReadOnlyDictionary<string, object?>>)dispatchInputs;
-                if (inputs.TryGetValue(nameof(activity.CorrelationId), out var correlationId))
-                    activity.CorrelationId = (InputArgument<string>)correlationId;
-                if (inputs.TryGetValue(nameof(activity.WaitForCompletion), out var waitForCompletion))
-                    activity.WaitForCompletion = (InputArgument<bool>)waitForCompletion;
-                if (inputs.TryGetValue(nameof(activity.CancelChildOnParentCancellation), out var cancelChild))
-                    activity.CancelChildOnParentCancellation = (InputArgument<bool>)cancelChild;
-            }
-
-            if (outputs is not null && outputs.TryGetValue(nameof(activity.ChildWorkflowExecutionId), out var childId))
-                activity.ChildWorkflowExecutionId = new OutputArgument<string>(childId.MemoryBlockReference());
-            if (outputs is not null && outputs.TryGetValue(nameof(activity.Result), out var result))
-                activity.Result = new OutputArgument<DispatchWorkflowResult>(result.MemoryBlockReference());
-            return new(activity);
-        }
+            typeof(DispatchWorkflowActivity),
+            typeof(DispatchWorkflowActivityResult),
+            typeof(DispatchWorkflowState),
+            typeof(WorkflowDispatchParentResumePayload),
+            typeof(DispatchWorkflowResult),
+            typeof(ChildProbeActivity),
+            typeof(ActivityUnit),
+            typeof(JsonElement),
+            typeof(IReadOnlyDictionary<string, JsonElement>)
+        };
+        foreach (var type in types)
+            registry.RegisterType(type, TypeAliasConvention.CanonicalAlias(type));
     }
 
-    private sealed record DispatchActivityDescriptor;
-
-    private sealed class ChildProbeActivityConstructor : IActivityConstructor<ChildProbeDescriptor>
+    private sealed class ChildProbeActivity(ChildExecutionProbe probe) : Activity<ActivityUnit>
     {
-        internal const string ConsumerKeyValue = "test/dispatch-child-probe";
-        public string ConsumerKey => ConsumerKeyValue;
+        [ActivityInput]
+        [Required]
+        public string Message { get; set; } = null!;
 
-        public ValueTask<IActivity> Construct(
-            ChildProbeDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            new(new ChildProbeActivity());
-    }
+        [ActivityInput]
+        [Required]
+        public int Count { get; set; }
 
-    private sealed record ChildProbeDescriptor;
+        [ActivityInput]
+        public string? Tenant { get; set; }
 
-    private sealed class ChildProbeActivity : CodeActivity
-    {
-        public ChildProbeActivity() : base("test/dispatch-child-probe") { }
+        [ActivityInput]
+        public string? Defaulted { get; set; }
 
-        protected override void Execute(IActivityExecutionContext context)
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
         {
-            var runtimeContext = (IRuntimeActivityExecutionContext)context;
-            var executionState = (IExecutionExpressionState)context.ExpressionExecutionContext;
-            context.GetRequiredService<ChildExecutionProbe>().Record(
-                runtimeContext.WorkflowExecutionId,
-                runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
-                executionState.WorkflowInputs);
+            probe.Record(
+                context.WorkflowExecutionId,
+                context.InvocationId,
+                new Dictionary<string, object?>
+                {
+                    ["message"] = Message,
+                    ["count"] = Count,
+                    ["tenant"] = Tenant,
+                    ["defaulted"] = Defaulted
+                });
+            return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
         }
     }
 
@@ -579,6 +720,15 @@ internal sealed class CheckpointRecorder
     {
         lock (_gate)
             _commits.Add(commit);
+    }
+
+    internal IReadOnlyCollection<RuntimeCheckpointCommit> Commits
+    {
+        get
+        {
+            lock (_gate)
+                return _commits.ToArray();
+        }
     }
 
     internal RuntimeCheckpointCommit SingleDispatchCommit(string dispatchId)

@@ -64,7 +64,7 @@ internal sealed class JavaScriptTypeDefinitionDocumentRenderer
     private static void RenderEnumMember(JavaScriptPropertyDeclaration property, StringBuilder output)
         => output.AppendLine($"{property.Name} = \"{property.Name}\",");
     private static void Render(JavaScriptVariableDeclaration variable, StringBuilder output)
-        => output.AppendLine($"declare var {variable.Name}: {variable.Type};");
+        => output.AppendLine($"declare {variable.DeclarationKeyword} {variable.Name}: {variable.Type};");
     private static string RenderParameter(JavaScriptParameterDeclaration parameter)
         => $"{parameter.Name}{(parameter.IsOptional ? "?" : "")}: {parameter.Type}";
     private static string RenderParameters(IEnumerable<JavaScriptParameterDeclaration> parameters)

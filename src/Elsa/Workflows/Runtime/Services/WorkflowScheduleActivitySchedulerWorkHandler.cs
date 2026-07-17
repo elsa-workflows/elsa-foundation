@@ -135,6 +135,9 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     {
         var scheduledAt = _timeProvider.GetUtcNow();
         var provenance = NormalizeProvenance(workItem.WorkflowExecutionId, schedulePayload);
+        var executionScopeId = executableNode.Metadata.ContainsKey("activity.definitionVersionId")
+            ? schedulePayload.ActivityExecutionId
+            : provenance.ExecutionScopeId;
         var execution = new ActivityExecution(
             ActivityExecutionId: schedulePayload.ActivityExecutionId,
             WorkflowExecutionId: workItem.WorkflowExecutionId,
@@ -174,8 +177,24 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             FaultCount: 0,
             AggregateFaultCount: 0,
             Metadata: metadata,
-            ExecutionScopeId: provenance.ExecutionScopeId,
-            Attempt: provenance.Attempt);
+            DocumentVersion: ActivityExecutionValueFlowDocumentVersions.Current,
+            ContractIdentity: executableNode.IntrinsicKind is null
+                ? new ActivityInvocationContractIdentity(
+                    executableNode.ActivityType,
+                    executableNode.ActivityTypeVersion,
+                    schedulePayload.PinnedExecutable.ArtifactHash)
+                : null,
+            Attempts: [],
+            TriggerRegistrations: [],
+            TriggerDeliveries: [],
+            ValueFlowCompatibility: ActivityExecutionValueFlowDocumentVersionGuard.Compatible(
+                ActivityExecutionValueFlowDocumentVersions.Current,
+                ActivityExecutionValueFlowDocumentVersions.Current))
+        {
+            IterationFrameRequest = schedulePayload.IterationFrame,
+            ExecutionScopeId = executionScopeId,
+            Attempt = provenance.Attempt
+        };
     }
 
     private static readonly string[] BoundaryInspectionMetadataKeys =
@@ -291,7 +310,6 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         RuntimeScheduleActivityCommandPayload schedulePayload)
     {
         var provenance = schedulePayload.SchedulingProvenance;
-        var attempt = provenance.Attempt ?? new ActivityExecutionAttemptLineage(1, schedulePayload.ActivityExecutionId, null);
         return ActivitySchedulingProvenance.From(
             workflowExecutionId,
             provenance.ParentActivityExecutionId ?? schedulePayload.ParentActivityExecutionId,
@@ -301,8 +319,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             provenance.ExecutionPathId,
             provenance.ExecutionScopeId ?? ReadMetadata(provenance.Metadata, RuntimeMetadataKeys.FlowchartExecutionScopeId),
             provenance.SchedulingCause ?? schedulePayload.Reason,
-            provenance.Metadata,
-            attempt);
+            provenance.Metadata);
     }
 
     private static string? ReadMetadata(IReadOnlyDictionary<string, string> metadata, string key) =>

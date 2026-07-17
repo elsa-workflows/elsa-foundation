@@ -116,8 +116,9 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<IWorkflowTestScopeCleanupStore, GroundworkTestScopeCleanupStore>();
 
         // Versioned document serialization: every bridge store routes its content JSON through the
-        // serializer, which stamps per-kind schema versions on write and enforces each current-only pre-GA
-        // boundary on read. TryAdd keeps host-supplied serializer replacements intact.
+        // serializer, which stamps per-kind schema versions on write and enforces each declared readable
+        // boundary, including the workflow-executable v5-to-v6 rolling window. TryAdd keeps host-supplied
+        // serializer replacements intact.
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
         // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the
         // process-local in-memory queue, and a crash after checkpoint commit loses the continuation

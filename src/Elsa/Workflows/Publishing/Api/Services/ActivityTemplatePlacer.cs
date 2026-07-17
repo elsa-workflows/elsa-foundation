@@ -173,6 +173,13 @@ public sealed class ActivityTemplatePlacer(
             var outputCaptures = isBoundary && stackIsRoot(frame)
                 ? rootRequest.BoundaryOutputCaptures
                 : current.Node.OutputCaptures;
+            var activityContract = isBoundary
+                ? StampBoundaryContract(
+                    current.Node.ActivityContract,
+                    descriptor,
+                    frame.ActivityTypeKey,
+                    frame.Publication.Version)
+                : current.Node.ActivityContract;
             placedNodes[current.Node.ExecutableNodeId] = new(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
@@ -183,7 +190,8 @@ public sealed class ActivityTemplatePlacer(
                 outputCaptures,
                 metadata,
                 childSlots,
-                current.Node.Structure);
+                current.Node.Structure,
+                activityContract);
         }
 
         var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
@@ -306,6 +314,26 @@ public sealed class ActivityTemplatePlacer(
             slots[existingIndex] = merged;
     }
 
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract? StampBoundaryContract(
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? contract,
+        RuntimeActivityDescriptor descriptor,
+        string activityTypeKey,
+        string activityVersion)
+    {
+        if (contract is null)
+            return null;
+
+        return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+            activityTypeKey,
+            activityVersion,
+            contract.DescriptorKind,
+            descriptor.Payload,
+            contract.Inputs.Values,
+            contract.Result,
+            contract.Outcomes,
+            contract.Activation);
+    }
+
     private static ExecutableNode CloneWithChildSlots(ExecutableNode node, IReadOnlyCollection<ExecutableChildSlot> childSlots) => new(
         node.ExecutableNodeId,
         node.AuthoredActivityId,
@@ -316,7 +344,8 @@ public sealed class ActivityTemplatePlacer(
         node.OutputCaptures,
         node.Metadata,
         childSlots,
-        node.Structure);
+        node.Structure,
+        node.ActivityContract);
 
     private RuntimeActivityDescriptor StampBoundaryDescriptor(
         RuntimeActivityDescriptor descriptor,

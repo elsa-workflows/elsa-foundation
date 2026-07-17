@@ -10,7 +10,7 @@ public sealed record ActivityTemplateCompilationRequest(
     string DraftId,
     long Revision,
     string CandidateVersion,
-    ActivityContract Contract,
+    Elsa.Activities.Design.Core.Models.ActivityContract Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityResolvedDependency> ResolvedDirectDependencies,
     string ProviderFingerprint);

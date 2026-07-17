@@ -1,34 +1,43 @@
+using System.Collections.ObjectModel;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The per-iteration variable state a loop activity (<c>ForEach</c>/<c>For</c>/<c>While</c>/<c>Do</c>,
-/// #264–#267) declares for one pass of its body (#259). One request describes the values the loop
-/// owner publishes for a single iteration: the engine-assigned <see cref="IterationId"/> that
-/// correlates the pass, the current item, and the zero-based index.
+/// Typed values a loop owner publishes when scheduling one body iteration. The request travels in
+/// the scheduler command and is materialized as a durable <see cref="VariableFrameState"/>; values
+/// never travel through scheduling metadata.
 /// </summary>
 /// <remarks>
-/// The reference keys are stable per loop owner — every iteration of the same loop reuses the same
-/// <see cref="ItemReferenceKey"/>/<see cref="IndexReferenceKey"/>. Passes are kept apart by the factory
-/// building a distinct scope instance (with its own value store) per call, <b>not</b> by the
-/// <see cref="IterationId"/>: the iteration id is recorded as the produced scope's <c>ExecutionId</c>
-/// for correlation/inspection and provenance routing only, and scope value resolution never reads it.
-/// Supply a distinct <see cref="IterationId"/> per pass so the body execution's iteration identity is
-/// meaningful, but do not rely on it for isolation.
+/// Variable keys are stable authored identities. The concrete iteration id supplies activation
+/// identity, so parallel or repeated iterations cannot share mutable storage.
 /// </remarks>
-/// <param name="OwnerNodeId">The loop activity's executable node id; becomes the produced scope's declaring <c>ScopeId</c>.</param>
-/// <param name="IterationId">The engine iteration identity for this pass (the value the loop owner threads through <c>ActivitySchedulingProvenance.IterationId</c>). Distinct per pass; recorded as the scope's <c>ExecutionId</c> for correlation, not used as the isolation key.</param>
-/// <param name="ItemReferenceKey">Reference key of the current-item variable. Stable across iterations of the same loop.</param>
-/// <param name="ItemName">Bare name of the current-item variable (e.g. <c>currentItem</c>), used by name-based access.</param>
-/// <param name="Item">The current item value for this pass.</param>
-/// <param name="Index">The zero-based iteration index for this pass.</param>
-/// <param name="IndexReferenceKey">Optional reference key of the iteration-index variable. When null, no index variable is declared.</param>
-/// <param name="IndexName">Bare name of the iteration-index variable (e.g. <c>index</c>). Required when <see cref="IndexReferenceKey"/> is set.</param>
-public sealed record LoopIterationScopeRequest(
-    string OwnerNodeId,
-    string IterationId,
-    string ItemReferenceKey,
-    string ItemName,
-    object? Item,
-    int Index,
-    string? IndexReferenceKey = null,
-    string? IndexName = null);
+public sealed record LoopIterationScopeRequest
+{
+    public LoopIterationScopeRequest(
+        string ownerNodeId,
+        string iterationId,
+        IReadOnlyDictionary<string, ValueEnvelope> values)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(iterationId);
+        ArgumentNullException.ThrowIfNull(values);
+        if (values.Count == 0)
+            throw new ArgumentException("An iteration frame must contain at least one value.", nameof(values));
+        if (values.Keys.Any(string.IsNullOrWhiteSpace) || values.Values.Any(value => value is null))
+            throw new ArgumentException("Iteration frame keys and envelopes cannot be blank or null.", nameof(values));
+
+        OwnerNodeId = ownerNodeId;
+        IterationId = iterationId;
+        Values = new ReadOnlyDictionary<string, ValueEnvelope>(
+            values.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+    }
+
+    /// <summary>Executable lexical scope declared by the loop owner.</summary>
+    public string OwnerNodeId { get; }
+
+    /// <summary>Concrete iteration activation identity.</summary>
+    public string IterationId { get; }
+
+    /// <summary>Stable variable key to protected value envelope.</summary>
+    public IReadOnlyDictionary<string, ValueEnvelope> Values { get; }
+}

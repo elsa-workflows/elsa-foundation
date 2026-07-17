@@ -12,7 +12,7 @@ namespace Elsa.Activities.Runtime.Services;
 /// <see cref="WorkflowParentActivityCompletionSchedulerWorkHandler"/> (it is a
 /// <see cref="SchedulerCompletionKind.ParentCompletionEvaluation"/> command) and is tagged
 /// <see cref="RuntimeMetadataKeys.ChildFaulted"/> so that handler invokes
-/// <see cref="Elsa.Activities.Runtime.Core.Contracts.IActivityChildFaultHandler"/> rather than the
+/// <see cref="Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityChildFaultHandler"/> rather than the
 /// completion handler. Emitted as a post-commit intent on the fault incident checkpoint so it commits
 /// atomically with the recorded incident.
 /// </summary>
@@ -21,7 +21,7 @@ internal static class ChildFaultParentEvaluation
     /// <summary>
     /// Builds the parent-fault evaluation work item for the parent of <paramref name="faultedChildState"/>,
     /// or <c>null</c> when the faulted activity has no parent (nothing to propagate to). The parent's opt-in
-    /// (whether it implements <c>IActivityChildFaultHandler</c>) is checked downstream by the handler, so a
+    /// (whether it implements <c>IRuntimeActivityChildFaultHandler</c>) is checked downstream by the handler, so a
     /// parent that does not handle child faults simply no-ops on the work item.
     /// </summary>
     public static async ValueTask<RuntimeSchedulerWorkItem?> TryBuildAsync(

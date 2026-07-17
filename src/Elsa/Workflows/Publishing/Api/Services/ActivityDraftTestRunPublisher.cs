@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -235,13 +236,16 @@ public sealed class ActivityDraftTestRunPublisher(
                 continue;
             if (!StringComparer.OrdinalIgnoreCase.Equals(value.State, "Present") || !value.Value.HasValue)
                 throw Reject("activity.test-run.input-state-invalid", $"Activity input '{input.ReferenceKey}' has an invalid state/value combination.");
-            result.Add(input.Name, new(
-                input.Name,
+            var targetType = new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind);
+            var policy = ValueProtectionPolicy.InstanceInline;
+            result.Add(input.ReferenceKey, new(
+                input.ReferenceKey,
+                targetType,
+                policy,
                 RuntimeInputBindingSource.Literal,
-                literalValue: value.Value.Value.Clone(),
+                literal: ValueEnvelope.Inline(targetType, value.Value.Value.Clone(), policy),
                 metadata: new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["typeName"] = typeof(object).AssemblyQualifiedName!,
                     ["referenceKey"] = input.ReferenceKey
                 }));
         }

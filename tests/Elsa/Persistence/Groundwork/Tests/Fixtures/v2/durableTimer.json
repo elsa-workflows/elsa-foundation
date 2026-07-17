@@ -14,6 +14,8 @@
     "metadata": {
       "tag": "v1"
     },
+    "payloadType": null,
+    "providerId": null,
     "stimulusHash": "timer-hash-1",
     "stimulusType": "DurableTimer",
     "timerId": "timer-1",

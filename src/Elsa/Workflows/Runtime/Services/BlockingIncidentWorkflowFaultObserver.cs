@@ -72,12 +72,12 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
 
         var occurredAt = _timeProvider.GetUtcNow();
         var faultedAncestorStates = await FindFaultedAncestorStatesAsync(workflowExecutionId, blockingIncidents, occurredAt, cancellationToken);
-        var faultedState = workflowState with
+        var faultedState = RuntimeContainerScopeService.CloseRootFrame(workflowState with
         {
             Status = WorkflowExecutionStatus.Faulted,
             UpdatedAt = occurredAt,
             CompletedAt = occurredAt
-        };
+        });
 
         var checkpointId = $"checkpoint:{workflowExecutionId}:workflow-faulted";
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -177,13 +177,13 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
         }
 
         return activeAncestors.Values
-            .Select(state => state with
+            .Select(state => RuntimeContainerScopeService.CloseOwnedFrames(state with
             {
                 Status = ActivityExecutionStatus.Faulted,
                 SubStatus = FaultReason,
                 CompletedAt = completedAt,
                 AggregateFaultCount = state.AggregateFaultCount + incidentsByAncestor[state.Execution.ActivityExecutionId].Count
-            })
+            }))
             .OrderBy(state => state.ExecutionSequence)
             .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
             .ToArray();

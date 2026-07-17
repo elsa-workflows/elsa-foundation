@@ -8,8 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Elsa.Expressions.Core.csproj" />
-    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\Primitives\Elsa.Expressions.JavaScript.Primitives.csproj" />
   </ItemGroup>
 
 </Project>

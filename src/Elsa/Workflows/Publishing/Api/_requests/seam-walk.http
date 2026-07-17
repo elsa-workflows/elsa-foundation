@@ -35,8 +35,9 @@ Content-Type: application/json
 ### 2. List constructable versions and inspect their stable provider/consumer key/schema identity.
 GET {{host}}/publishing/activities
 
-### 3. Cross the construction seam for one row. Paste an ActivityVersionId from step 2.
-###    `elsa.clr-activity` schema `1` resolves through ClrActivityConstructor.
+### 3. Inspect the compiled contract surface for one row. Paste an ActivityVersionId from step 2.
+###    CLR rows expose canonical type aliases and stable plain-property inputs. WorkflowIdentity rows remain
+###    discovery metadata until the typed child-workflow execution boundary is implemented.
 GET {{host}}/publishing/activities/<paste ActivityVersionId>/construct
 
 ### Starting another workflow remains the separate ExecuteWorkflow API/activity behavior. Reusable graph

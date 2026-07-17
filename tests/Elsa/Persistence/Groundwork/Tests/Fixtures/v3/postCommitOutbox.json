@@ -1,7 +1,7 @@
 {
   "collection": "postCommitOutbox",
   "item": {
-    "availableAt": "1970-01-01T00:00:00+00:00",
+    "availableAt": "1970-01-01T00:00:00\u002B00:00",
     "deliveredAt": null,
     "deliveringOwnerId": null,
     "deliveryAttemptCount": 0,
@@ -17,7 +17,7 @@
       "kind": "Elsa.Activities.DispatchWorkflow.ResumeParent",
       "metadata": {},
       "payload": null,
-      "recordedAt": "1970-01-01T00:00:00+00:00",
+      "recordedAt": "1970-01-01T00:00:00\u002B00:00",
       "waitFailurePolicy": null,
       "workflowExecutionId": "wf-1"
     },
@@ -25,7 +25,7 @@
     "lastFailureMessage": null,
     "metadata": {},
     "outboxItemId": "item-1",
-    "recordedAt": "1970-01-01T00:00:00+00:00",
+    "recordedAt": "1970-01-01T00:00:00\u002B00:00",
     "retryPolicy": {
       "delay": "00:00:05",
       "maxAttempts": 0,

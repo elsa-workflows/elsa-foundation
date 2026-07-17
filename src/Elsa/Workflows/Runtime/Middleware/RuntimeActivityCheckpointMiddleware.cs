@@ -33,7 +33,7 @@ public sealed class RuntimeActivityCheckpointMiddleware(
         foreach (var commit in context.Workspace.PendingCheckpointCommits)
         {
             await checkpointCommitter.CommitAsync(commit, context.Workspace.CancellationToken);
-            await NotifyBookmarksCreatedAsync(commit, context.Workspace.CancellationToken);
+            await NotifyBookmarksCreatedAsync(commit);
         }
 
         await next(context);
@@ -46,7 +46,7 @@ public sealed class RuntimeActivityCheckpointMiddleware(
     /// notification must fire here (the drainer dispatches CreateBookmark through the pipeline, not the direct path).
     /// Gated on the checkpoint name so non-bookmark checkpoints cost only a string compare.
     /// </summary>
-    private async ValueTask NotifyBookmarksCreatedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask NotifyBookmarksCreatedAsync(RuntimeCheckpointCommit commit)
     {
         if (bookmarkLifecycleNotifier is null || !StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.BookmarkCreated))
             return;
@@ -54,7 +54,7 @@ public sealed class RuntimeActivityCheckpointMiddleware(
         foreach (var change in commit.StateChanges.Bookmarks)
         {
             if (change is { Operation: RuntimeStateChangeOperation.Upsert, State: { } bookmark })
-                await bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, cancellationToken);
+                await bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, CancellationToken.None);
         }
     }
 }

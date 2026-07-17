@@ -1,7 +1,7 @@
 # Feature Specification: DispatchWorkflow Parent Audit Remediation
 
 **Feature Branch**: `codex/dispatch-674-remediation`
-**Created**: 2026-07-17  
+**Created**: 2026-07-17
 **Input**: GitHub issue #674, "Add a transport-neutral DispatchWorkflow activity", the completed program review, and the replacement implementation merged by PR #717.
 
 ## User Story 1 - Preserve dispatch work across crashes (Priority: P1)

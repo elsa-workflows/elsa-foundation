@@ -1,7 +1,7 @@
 # Specification Quality Checklist: DispatchWorkflow Parent Audit Remediation
 
-**Purpose**: Validate specification completeness and quality before implementation  
-**Created**: 2026-07-17  
+**Purpose**: Validate specification completeness and quality before implementation
+**Created**: 2026-07-17
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality

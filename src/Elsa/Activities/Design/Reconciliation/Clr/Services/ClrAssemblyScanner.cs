@@ -8,6 +8,7 @@ using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -35,10 +36,11 @@ public sealed class ClrAssemblyScanner(
     public const string SchemaVersion = "1";
     private const long MaxJavaScriptSafeInteger = 9007199254740991L;
     private static readonly string ActivityInterfaceFullName = typeof(IActivity).FullName!;
-    private static readonly string InputArgumentFullName = typeof(InputArgument).FullName!;
-    private static readonly string OutputArgumentFullName = typeof(OutputArgument).FullName!;
+    private static readonly string ActivityResultInterfaceFullName = typeof(IActivityResult<>).FullName!;
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
+    private static readonly string RequiredMemberAttributeFullName = typeof(RequiredMemberAttribute).FullName!;
     private static readonly string ActivityInputAttributeFullName = typeof(ActivityInputAttribute).FullName!;
+    private static readonly string OutputAttributeFullName = typeof(OutputAttribute).FullName!;
     private static readonly string ActivityInputOptionAttributeFullName = typeof(ActivityInputOptionAttribute).FullName!;
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
@@ -122,40 +124,56 @@ public sealed class ClrAssemblyScanner(
 
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var inputNames = properties
-            .Where(property => DerivesFrom(property.PropertyType, InputArgumentFullName))
+            .Where(property => ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, ActivityInputAttributeFullName))
             .Select(property => property.Name)
             .ToHashSet(StringComparer.Ordinal);
 
         foreach (var property in properties)
         {
-            if (DerivesFrom(property.PropertyType, InputArgumentFullName))
-            {
-                var valueType = GetArgumentValueType(property.PropertyType);
-                var metadata = ReadActivityInputMetadata(property, valueType, inputNames, type.FullName!);
-                inputs.Add(new InputDefinition(
-                    ReferenceKey: property.Name,
-                    Name: property.Name,
-                    Type: ToTypeReference(valueType),
-                    StorageDriverType: null,
-                    DisplayName: property.Name,
-                    Category: metadata.Category,
-                    Order: metadata.Order,
-                    UiHint: metadata.UiHint,
-                    UISpecifications: metadata.UiSpecifications,
-                    IsRequired: HasRequired(property),
-                    DefaultValue: metadata.DefaultValue,
-                    DefaultSyntax: metadata.DefaultSyntax));
-            }
+            if (!ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, ActivityInputAttributeFullName))
+                continue;
 
-            else if (DerivesFrom(property.PropertyType, OutputArgumentFullName))
+            var metadata = ReadActivityInputMetadata(property, property.PropertyType, inputNames, type.FullName!);
+            var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName)!;
+            var key = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Key)) ?? property.Name;
+            inputs.Add(new InputDefinition(
+                ReferenceKey: key,
+                Name: property.Name,
+                Type: ToTypeReference(property.PropertyType),
+                StorageDriverType: null,
+                DisplayName: property.Name,
+                Category: metadata.Category,
+                Order: metadata.Order,
+                UiHint: metadata.UiHint,
+                UISpecifications: metadata.UiSpecifications,
+                IsRequired: HasRequired(property),
+                DefaultValue: metadata.DefaultValue,
+                DefaultSyntax: metadata.DefaultSyntax)
+            {
+                IsNullable = IsNullable(property)
+            });
+        }
+
+        var resultType = FindTypedActivityResult(type);
+        if (resultType is not null)
+        {
+            foreach (var property in resultType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, OutputAttributeFullName);
+                if (attribute is null)
+                    continue;
+
+                var key = ReadNamedStringArgument(attribute, nameof(OutputAttribute.Key)) ?? property.Name;
                 outputs.Add(new OutputDefinition(
-                    ReferenceKey: property.Name,
+                    ReferenceKey: key,
                     Name: property.Name,
-                    Type: ToTypeReference(GetArgumentValueType(property.PropertyType)),
+                    Type: ToTypeReference(property.PropertyType),
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
-                    IsRequired: HasRequired(property)));
+                    IsRequired: !HasNamedArgument(attribute, nameof(OutputAttribute.IsRequired)) ||
+                                ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired))));
+            }
         }
 
         return new ActivityVersionReconciliationModel(
@@ -262,14 +280,48 @@ public sealed class ClrAssemblyScanner(
         type is { IsClass: true, IsAbstract: false }
         && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName);
 
+    private static Type? FindTypedActivityResult(Type activityType)
+    {
+        var contracts = activityType.GetInterfaces()
+            .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition().FullName == ActivityResultInterfaceFullName)
+            .Select(candidate => candidate.GetGenericArguments()[0])
+            .Distinct()
+            .ToArray();
+
+        return contracts.Length switch
+        {
+            0 => null,
+            1 => contracts[0],
+            _ => throw new InvalidOperationException($"Activity type '{activityType.FullName}' declares more than one atomic result type.")
+        };
+    }
+
     private static bool IsRecoverableReflectionException(Exception exception) =>
         exception is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException;
 
-    // Walk the base-property chain: a [Required] declared on a base class's input/output property must
+    // Walk the base-property chain: requiredness declared on a base class's input property must
     // be honoured even though a reflection-only MetadataLoadContext gives no inherit-aware attribute
-    // read (issue #417 item 3).
+    // read (issue #417 item 3). Support both Elsa's [Required] marker and the metadata emitted by
+    // C# `required` properties so the documented activity-authoring syntax maps to the same contract.
     private static bool HasRequired(PropertyInfo property) =>
-        ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredAttributeFullName);
+        ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredAttributeFullName) ||
+        ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredMemberAttributeFullName);
+
+    private static bool IsNullable(PropertyInfo property)
+    {
+        var propertyType = property.PropertyType;
+        if (propertyType.IsValueType)
+        {
+            return propertyType.IsGenericType &&
+                   StringComparer.Ordinal.Equals(
+                       propertyType.GetGenericTypeDefinition().FullName,
+                       typeof(Nullable<>).FullName);
+        }
+
+        // Unknown is intentionally treated as nullable for assemblies compiled without nullable metadata.
+        // Only an explicit NotNull annotation may tighten the published contract.
+        return new NullabilityInfoContext().Create(property).WriteState is not NullabilityState.NotNull;
+    }
 
     private static ActivityInputMetadata ReadActivityInputMetadata(
         PropertyInfo property,
@@ -640,26 +692,6 @@ public sealed class ClrAssemblyScanner(
         JsonElement? UiSpecifications);
 
     private sealed record ActivityInputOptionSpecification(string Label, JsonElement Value);
-
-    private static bool DerivesFrom(Type? type, string fullName)
-    {
-        for (var current = type; current is not null; current = current.BaseType)
-            if (current.FullName == fullName)
-                return true;
-
-        return false;
-    }
-
-    private static Type? GetArgumentValueType(Type? propertyType)
-    {
-        for (var current = propertyType; current is not null; current = current.BaseType)
-        {
-            if (current.IsGenericType && current.GetGenericArguments() is [var single])
-                return single;
-        }
-
-        return null;
-    }
 
     // Reflection-only path: types come from a MetadataLoadContext, so the runtime well-known type
     // registry can't resolve them. The element alias is produced by the shared TypeAliasConvention —

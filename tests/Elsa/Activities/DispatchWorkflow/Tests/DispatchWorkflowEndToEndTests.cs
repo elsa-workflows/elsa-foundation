@@ -161,9 +161,8 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(new[] { expectedOutcome }, outcomes);
         Assert.Empty(await fixture.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run.Start.WorkflowExecutionId));
 
-        var values = await fixture.ListDurableValuesAsync(run.Start.WorkflowExecutionId);
-        var resultValue = Assert.Single(values, value => value.DurableValueId.Contains("dispatch-result-terminal", StringComparison.Ordinal));
-        var dispatchResult = resultValue.InlineValue!.Value.Deserialize<DispatchWorkflowResult>(SerializerOptions);
+        var activityResult = ReadActivityResult(activity);
+        var dispatchResult = activityResult.Result;
         Assert.NotNull(dispatchResult);
         Assert.Equal(dispatchStatus, dispatchResult.Status);
         Assert.Empty(dispatchResult.Outputs);
@@ -172,7 +171,10 @@ public sealed class DispatchWorkflowEndToEndTests
                 ? DispatchWorkflowDiagnostics.FaultedCode
                 : DispatchWorkflowDiagnostics.CancelledCode,
             dispatchResult.DiagnosticMetadata[DispatchWorkflowDiagnostics.CodeKey]);
-        Assert.DoesNotContain("secret", resultValue.InlineValue.Value.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "secret",
+            activity.Completion!.Result.InlineValue!.Value.GetRawText(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
@@ -205,13 +207,16 @@ public sealed class DispatchWorkflowEndToEndTests
         var resumeSweep = await fixture.SweepAsync();
         Assert.Equal(1, resumeSweep.OutboxDeliveredCount);
         Assert.Null(await fixture.FindBookmarkAsync(run.Start.WorkflowExecutionId, run.Identity.WaitBookmarkId));
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
+        var parent = await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId);
+        var parentIncidents = await fixture.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run.Start.WorkflowExecutionId);
+        Assert.True(
+            parent?.Status == WorkflowExecutionStatus.Completed,
+            $"Parent ended as {parent?.Status}/{parent?.SubStatus}. " +
+            string.Join(" | ", parentIncidents.Select(incident => $"{incident.FailureType}: {incident.Message}")));
         var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
         Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
 
-        var values = await fixture.ListDurableValuesAsync(run.Start.WorkflowExecutionId);
-        var resultValue = Assert.Single(values, value => value.DurableValueId.Contains($"dispatch-result-wait-success-{caseSuffix}", StringComparison.Ordinal));
-        var result = resultValue.InlineValue!.Value.Deserialize<DispatchWorkflowResult>(SerializerOptions);
+        var result = ReadActivityResult(activity).Result;
         Assert.NotNull(result);
         Assert.Equal(run.Identity.ChildWorkflowExecutionId, result.ChildWorkflowExecutionId);
         Assert.Equal(WorkflowDispatchStatus.Completed, result.Status);
@@ -394,10 +399,9 @@ public sealed class DispatchWorkflowEndToEndTests
             intent => intent.Kind == DispatchWorkflowConstants.StartChildIntentKind &&
                       intent.IntentId == run.Identity.StartIntentId);
 
-        var childIdValue = Assert.Single(
-            await fixture.ListDurableValuesAsync(run.Start.WorkflowExecutionId),
-            value => value.DurableValueId.Contains("dispatch-child-id", StringComparison.Ordinal));
-        Assert.Equal(run.Identity.ChildWorkflowExecutionId, childIdValue.InlineValue!.Value.GetString());
+        Assert.Equal(
+            run.Identity.ChildWorkflowExecutionId,
+            ReadActivityResult(run.Activity).ChildWorkflowExecutionId);
 
         // The parent is durably complete before global delivery has activated or materialized the child.
         Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
@@ -459,10 +463,10 @@ public sealed class DispatchWorkflowEndToEndTests
 
         var observation = Assert.Single(fixture.ChildProbe.Observations);
         Assert.Equal(run.Identity.ChildWorkflowExecutionId, observation.WorkflowExecutionId);
-        Assert.Equal("hello child", Assert.IsType<JsonElement>(observation.WorkflowInputs["message"]).GetString());
-        Assert.Equal(7, Assert.IsType<JsonElement>(observation.WorkflowInputs["count"]).GetInt32());
-        Assert.Equal("workflow-input-tenant", Assert.IsType<JsonElement>(observation.WorkflowInputs["tenant"]).GetString());
-        Assert.Equal("from-default", Assert.IsType<JsonElement>(observation.WorkflowInputs["defaulted"]).GetString());
+        Assert.Equal("hello child", Assert.IsType<string>(observation.WorkflowInputs["message"]));
+        Assert.Equal(7, Assert.IsType<int>(observation.WorkflowInputs["count"]));
+        Assert.Equal("workflow-input-tenant", Assert.IsType<string>(observation.WorkflowInputs["tenant"]));
+        Assert.Equal("from-default", Assert.IsType<string>(observation.WorkflowInputs["defaulted"]));
         Assert.Equal(4, observation.WorkflowInputs.Count);
     }
 
@@ -768,16 +772,16 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(
             new[] { DispatchWorkflowOutcomes.DispatchFailed },
             JsonSerializer.Deserialize<string[]>(activity.Metadata[RuntimeMetadataKeys.CompletionOutcomeNames]));
-        var values = await fixture.ListDurableValuesAsync(run.Start.WorkflowExecutionId);
-        var resultValue = Assert.Single(values, value =>
-            value.DurableValueId.Contains("dispatch-result", StringComparison.Ordinal));
-        var result = Assert.IsType<DispatchWorkflowResult>(resultValue.InlineValue!.Value.Deserialize<DispatchWorkflowResult>(SerializerOptions));
+        var result = Assert.IsType<DispatchWorkflowResult>(ReadActivityResult(activity).Result);
         Assert.Equal(WorkflowDispatchStatus.DispatchFailed, result.Status);
         Assert.Empty(result.Outputs);
         Assert.Equal(
             WorkflowDispatchLifecycle.ReadDeliveryIncidentId(failed),
             result.DiagnosticMetadata[DispatchWorkflowDiagnostics.DeliveryIncidentIdKey]);
-        Assert.DoesNotContain("provider", resultValue.InlineValue.Value.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "provider",
+            activity.Completion!.Result.InlineValue!.Value.GetRawText(),
+            StringComparison.OrdinalIgnoreCase);
 
         var parentResume = scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>();
         await parentResume.HandleAsync(resumeItem.Intent);
@@ -869,6 +873,14 @@ public sealed class DispatchWorkflowEndToEndTests
             DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(30),
             "tenant-42",
             new WorkflowExecutionPartition("partition-eu"));
+
+    private static DispatchWorkflowActivityResult ReadActivityResult(ActivityExecutionState activity)
+    {
+        var inlineResult = activity.Completion?.Result.InlineValue;
+        Assert.NotNull(inlineResult);
+        return Assert.IsType<DispatchWorkflowActivityResult>(
+            inlineResult.Value.Deserialize<DispatchWorkflowActivityResult>(SerializerOptions));
+    }
 
     private static ValueTask AddDistractorChildSourceAsync(IServiceProvider services) =>
         services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(

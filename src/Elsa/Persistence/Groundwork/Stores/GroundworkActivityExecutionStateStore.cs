@@ -22,6 +22,7 @@ public sealed class GroundworkActivityExecutionStateStore(
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.ActivityExecutionId);
+        state.EnsureValueFlowCompatible();
 
         var existing = await LoadByLogicalIdentityAsync(
             state.Execution.WorkflowExecutionId,

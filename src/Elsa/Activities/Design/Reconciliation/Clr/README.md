@@ -40,9 +40,15 @@ The runtime carries no author-supplied UI metadata, so the scanner reads only st
 the two values derived from assembly/type identity:
 
 - the CLR type **full name** → `ActivityTypeKey` (excludes assembly identity, FR-022);
-- public `InputArgument<T>` / `OutputArgument<T>` properties → `InputDefinition` / `OutputDefinition`
-  (`ReferenceKey` = `Name` = the property name; value `Type` from the generic argument);
-- the `[Required]` attribute on an argument property → `IsRequired`;
+- public plain CLR properties annotated with `[ActivityInput]` → `InputDefinition` (the attribute's
+  `Key`, or the property name when omitted, becomes `ReferenceKey`; the property type becomes the
+  input type);
+- public properties annotated with `[Output]` on the `TResult` contract declared through
+  `IActivityResult<TResult>` (including `Activity<TResult>` and stateful activity bases) →
+  `OutputDefinition` (the attribute's `Key`, or the property name when omitted, becomes
+  `ReferenceKey`);
+- the `[Required]` attribute on an input property → `IsRequired`; output requiredness comes from
+  `[Output(IsRequired = ...)]`;
 - the resolved semver (above);
 - the resolved category, derived from the declaring assembly's name (above).
 

@@ -159,5 +159,7 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current feature plan: [specs/104-dispatch-parent-audit/plan.md](specs/104-dispatch-parent-audit/plan.md)
+For additional context about technologies, project structure, shell commands, contracts, and
+validation scenarios for the active work unit, read
+`specs/095-value-flow-redesign/plan.md`.
 <!-- SPECKIT END -->

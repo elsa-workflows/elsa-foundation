@@ -3,7 +3,6 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -80,16 +79,15 @@ public sealed class DispatchWorkflowCheckpointTests
         Assert.Equal(DispatchWorkflowConstants.StartChildIntentKind, startIntent.Kind);
         Assert.Single(commit.StateChanges.PostCommitOutbox);
 
-        var childIdOutput = Assert.Single(
-            commit.StateChanges.DurableValues,
-            change => change.State.ValueId == "dispatch-child-id-wait-atomic");
-        Assert.Equal(run.Identity.ChildWorkflowExecutionId, childIdOutput.State.InlineValue?.GetString());
+        Assert.Empty(commit.StateChanges.DurableValues);
+        var privateState = activity.PrivateState?.Value.InlineValue?.Deserialize<DispatchWorkflowState>();
+        Assert.NotNull(privateState);
+        Assert.Equal(run.Identity.ChildWorkflowExecutionId, privateState.ChildWorkflowExecutionId);
         var inspection = Assert.Single(commit.StateChanges.ActivityExecutionInspections).State;
         Assert.Empty(inspection.OutcomeNames);
-        Assert.Single(
+        Assert.DoesNotContain(
             inspection.ValueSnapshots,
-            snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput &&
-                        snapshot.Name == nameof(Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow.ChildWorkflowExecutionId));
+            snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput);
         Assert.Equal(ActivityExecutionStatus.Suspended, run.Activity.Status);
         Assert.Equal(WorkflowExecutionStatus.Running, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
         Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
@@ -231,10 +229,12 @@ public sealed class DispatchWorkflowCheckpointTests
         var inspectionChange = Assert.Single(commit.StateChanges.ActivityExecutionInspections);
         Assert.Equal([DispatchWorkflowOutcomes.Dispatched], inspectionChange.State.OutcomeNames);
 
-        var childIdOutput = Assert.Single(
-            commit.StateChanges.DurableValues,
-            change => change.State.ValueId == "dispatch-child-id-checkpoint-atomic");
-        Assert.Equal(run.Identity.ChildWorkflowExecutionId, childIdOutput.State.InlineValue?.GetString());
+        Assert.Empty(commit.StateChanges.DurableValues);
+        var activityResult = activityChange.State.Completion?.Result.InlineValue?.Deserialize<DispatchWorkflowActivityResult>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(activityResult);
+        Assert.Equal(run.Identity.ChildWorkflowExecutionId, activityResult.ChildWorkflowExecutionId);
+        Assert.Null(activityResult.Result);
 
         var dispatchChange = Assert.Single(commit.StateChanges.WorkflowDispatches);
         Assert.Equal(run.Identity.DispatchId, dispatchChange.StateId);
@@ -321,44 +321,30 @@ public sealed class DispatchWorkflowCheckpointTests
         var artifactId = commit.Metadata[RuntimeMetadataKeys.ExecutableArtifactId];
         var executable = await fixture.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId)
             ?? throw new InvalidOperationException($"Executable '{artifactId}' was not found.");
-        var activity = new DispatchWorkflowActivity
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var staging = scope.ServiceProvider.GetRequiredService<IWorkflowDispatchStagingAccessor>();
+        staging.Reset(run.Start.WorkflowExecutionId, run.Activity.Execution.ActivityExecutionId);
+        var activity = ActivatorUtilities.CreateInstance<DispatchWorkflowActivity>(scope.ServiceProvider);
+        activity.WorkflowDefinitionId = DispatchWorkflowRuntimeTestFixture.ChildIdentity.DefinitionId;
+        activity.Inputs = new Dictionary<string, JsonElement>
         {
-            WorkflowDefinitionId = new InputArgument<string>(new Variable("definition")),
-            Inputs = new InputArgument<IReadOnlyDictionary<string, object?>>(new Variable("inputs")),
-            WaitForCompletion = new InputArgument<bool>(new Variable("wait"))
+            ["message"] = JsonSerializer.SerializeToElement("hello child"),
+            ["count"] = JsonSerializer.SerializeToElement(7),
+            ["tenant"] = JsonSerializer.SerializeToElement("workflow-input-tenant")
         };
-        var workItem = new RuntimeSchedulerWorkItem(
-            workItemId: commit.Metadata[RuntimeMetadataKeys.SchedulerWorkItemId],
-            workflowExecutionId: run.Start.WorkflowExecutionId,
-            commandId: commit.Metadata[RuntimeMetadataKeys.CommandId],
-            commandKind: WorkflowExecutionCommandKind.InvokeActivity,
-            envelopeId: "envelope:wait-reexecute-time",
-            idempotencyKey: "invoke:wait-reexecute-time",
-            enqueuedAt: commit.Checkpoint.OccurredAt,
-            recordedAt: commit.Checkpoint.OccurredAt);
-        var context = new SimpleActivityExecutionContext(
-            fixture.Services,
-            activity,
-            CancellationToken.None,
+        activity.WaitForCompletion = waitForCompletion;
+        var attempt = run.Activity.Attempts!.Last();
+        var context = new ActivityExecutionContext(
             run.Start.WorkflowExecutionId,
-            executable.Identity,
-            workItem,
-            executable.RootActivity,
-            run.Activity);
-        context.Set(activity.WorkflowDefinitionId.MemoryBlockReference(), DispatchWorkflowRuntimeTestFixture.ChildIdentity.DefinitionId);
-        context.Set(
-            activity.Inputs.MemoryBlockReference(),
-            new Dictionary<string, object?>
-            {
-                ["message"] = JsonSerializer.SerializeToElement("hello child"),
-                ["count"] = JsonSerializer.SerializeToElement(7),
-                ["tenant"] = JsonSerializer.SerializeToElement("workflow-input-tenant")
-            });
-        context.Set(activity.WaitForCompletion.MemoryBlockReference(), waitForCompletion);
+            run.Activity.InvocationId,
+            attempt.AttemptId,
+            executable.RootActivity.ExecutableNodeId,
+            CancellationToken.None);
 
-        await ((IActivity)activity).ExecuteAsync(context);
+        _ = await ((IStatefulActivity<DispatchWorkflowActivityResult, DispatchWorkflowState, WorkflowDispatchParentResumePayload>)activity)
+            .ExecuteAsync(context);
 
-        return context.WorkflowDispatchRequest
+        return staging.TakeWorkflowDispatch(run.Start.WorkflowExecutionId, run.Activity.Execution.ActivityExecutionId)
             ?? throw new InvalidOperationException("DispatchWorkflow did not stage a checkpoint request.");
     }
 

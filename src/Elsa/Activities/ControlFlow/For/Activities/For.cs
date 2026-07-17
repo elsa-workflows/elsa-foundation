@@ -6,6 +6,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -44,7 +45,7 @@ namespace Elsa.Activities.For.Activities;
 /// </remarks>
 [ActivityStructure("elsa.for.structure", "1.0.0")]
 [ActivityChildSlot("For.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class For : ActivityBase, IActivityChildCompletionHandler
+public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "For.Body";
     public const string StructureKind = "elsa.for.structure";
@@ -57,37 +58,36 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
     public const string IndexVariableName = "index";
 
     /// <summary>The first index (inclusive). Defaults to <c>0</c> when unbound.</summary>
-    [ActivityInput(Order = 0)]
-    public InputArgument<int> Start { get; set; } = null!;
+    [ActivityInput(Key = nameof(Start), Order = 0)]
+    public int Start { get; set; }
 
     /// <summary>The end index. Exclusive unless <see cref="EndInclusive"/> is set. Defaults to <c>0</c> when unbound.</summary>
-    [ActivityInput(Order = 10)]
-    public InputArgument<int> End { get; set; } = null!;
+    [ActivityInput(Key = nameof(End), Order = 10)]
+    public int End { get; set; }
 
     /// <summary>The amount each pass advances the index by. Defaults to <c>1</c> when unbound; must be non-zero.</summary>
-    [ActivityInput(Order = 20, DefaultValue = "1", DefaultSyntax = "Literal")]
-    public InputArgument<int> Step { get; set; } = null!;
+    [ActivityInput(Key = nameof(Step), Order = 20, DefaultValue = "1", DefaultSyntax = "Literal")]
+    public int Step { get; set; } = 1;
 
     /// <summary>When true the range is closed (<c>[Start, End]</c>); otherwise half-open (<c>[Start, End)</c>).</summary>
-    [ActivityInput(Order = 30)]
-    public InputArgument<bool> EndInclusive { get; set; } = null!;
+    [ActivityInput(Key = nameof(EndInclusive), Order = 30)]
+    public bool EndInclusive { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
-        var range = ResolveRange(context);
+        var range = ResolveRange();
         var navigator = ForNavigator.From(runtimeContext.ExecutableNode);
 
         if (!range.HasFirst || navigator.Body is null)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleBody(runtimeContext, navigator.Body, range.Start);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -99,29 +99,30 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
 
         if (context.OutcomeNames.Contains(BreakOutcome, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
-        var range = ResolveRange(context.ParentContext);
+        var range = ResolveRange();
         var completedIndex = ReadIterationIndex(context);
         var nextIndex = range.Next(completedIndex);
 
         if (nextIndex is not { } index || navigator.Body is null)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleBody(runtimeContext, navigator.Body, index);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
     private void ScheduleBody(IRuntimeActivityExecutionContext runtimeContext, ExecutableNode body, int index)
     {
         var ownerNodeId = runtimeContext.ExecutableNode.ExecutableNodeId;
         var iterationId = FormatIterationId(index);
-        var indexJson = JsonSerializer.Serialize(index);
+        var indexEnvelope = ValueEnvelope.Inline(
+            new ValueTypeDescriptor("Int32"),
+            JsonSerializer.SerializeToElement(index),
+            ValueProtectionPolicy.InstanceInline);
 
         // ADR 0028 / #259: publish this pass's iteration variable in the body child's scheduling
         // provenance. The runtime (RuntimeContainerScopeService) reads these keys to layer a fresh
@@ -141,39 +142,24 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
             metadata: new Dictionary<string, string>
             {
                 ["for.parentActivityExecutionId"] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
-                ["for.targetNodeId"] = body.ExecutableNodeId,
-                [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = ownerNodeId,
-                // For exposes a single counter; the current item and the zero-based index are the same
-                // value, surfaced under one variable name.
-                [RuntimeMetadataKeys.LoopIterationItemName] = IndexVariableName,
-                [RuntimeMetadataKeys.LoopIterationItemValue] = indexJson
+                ["for.targetNodeId"] = body.ExecutableNodeId
             });
 
         runtimeContext.ScheduleChildActivity(
             body.ExecutableNodeId,
             runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
             metadata: provenance.Metadata,
-            schedulingProvenance: provenance);
+            schedulingProvenance: provenance,
+            iterationFrame: new LoopIterationScopeRequest(
+                ownerNodeId,
+                iterationId,
+                new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
+                {
+                    [IndexVariableName] = indexEnvelope
+                }));
     }
 
-    private static ForRange ResolveRange(IActivityExecutionContext context)
-    {
-        var start = context.Get(((For)context.Activity).Start);
-        var end = context.Get(((For)context.Activity).End);
-        var step = ResolveStep(context);
-        var endInclusive = context.Get(((For)context.Activity).EndInclusive);
-        return ForRange.Create(start, end, step, endInclusive);
-    }
-
-    private static int ResolveStep(IActivityExecutionContext context)
-    {
-        var stepArgument = ((For)context.Activity).Step;
-
-        // A Step that is not wired up at all (null argument) defaults to the conventional 1. A Step that
-        // IS wired but evaluates to 0 is a deliberate configuration error and flows through to
-        // ForRange.Create, which faults the activity (a zero step can never reach the end).
-        return stepArgument is null ? 1 : context.Get(stepArgument);
-    }
+    private ForRange ResolveRange() => ForRange.Create(Start, End, Step, EndInclusive);
 
     private static string FormatIterationId(int index) => index.ToString(CultureInfo.InvariantCulture);
 

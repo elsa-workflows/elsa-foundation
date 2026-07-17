@@ -9,6 +9,8 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowCreateBookmarkSchedulerWorkHandler);
+    private const string SuspendedSubStatus = "BookmarkWaiting";
+
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
@@ -58,10 +60,10 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // Notify bookmark-lifecycle observers AFTER the durable commit (spec 089 D). Observer failures are caught
         // and logged inside the notifier — they never fault this run. The created bookmark rides the commit's
         // upsert state change, so we read it back rather than re-deriving it.
-        await NotifyBookmarksCreatedAsync(commit, cancellationToken);
+        await NotifyBookmarksCreatedAsync(commit);
     }
 
-    private async ValueTask NotifyBookmarksCreatedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask NotifyBookmarksCreatedAsync(RuntimeCheckpointCommit commit)
     {
         if (_bookmarkLifecycleNotifier is null)
             return;
@@ -69,7 +71,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         foreach (var change in commit.StateChanges.Bookmarks)
         {
             if (change is { Operation: RuntimeStateChangeOperation.Upsert, State: { } bookmark })
-                await _bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, cancellationToken);
+                await _bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, CancellationToken.None);
         }
     }
 
@@ -99,8 +101,6 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         var requestedResumeTargetId = payload.ResumeTargetId;
         var resumeTarget = ResolveResumeTarget(executable, payload.ExecutableNodeId, requestedResumeTargetId, workItem.WorkItemId);
-        if (!StringComparer.Ordinal.Equals(payload.ResumeTargetId, resumeTarget.ResumeTargetId))
-            payload = WithResumeTargetId(payload, resumeTarget.ResumeTargetId);
 
         if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, payload.ExecutableNodeId))
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{payload.ExecutableNodeId}', but resume target '{payload.ResumeTargetId}' points at executable node '{resumeTarget.ExecutableNodeId}'.");
@@ -115,12 +115,22 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (state.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
             return null;
 
+        // Stateful activity bookmarks are emitted as independent post-commit work items. One trigger can be
+        // selected before a delayed sibling CreateBookmark item is dispatched, so only a registration that is
+        // still owned by the currently suspended invocation may create a bookmark. Treat stale work as an
+        // idempotent no-op; otherwise it could roll the claimed Running state back to Suspended and resurrect a
+        // sibling that the trigger-claim checkpoint already retired.
+        if (!IsLiveTypedRegistration(state, payload))
+            return null;
+
+        if (!StringComparer.Ordinal.Equals(requestedResumeTargetId, resumeTarget.ResumeTargetId))
+            payload = WithResumeTargetId(payload, resumeTarget.ResumeTargetId);
+
         if (state.Status is not ActivityExecutionStatus.Running and not ActivityExecutionStatus.Suspended)
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' cannot create a durable bookmark for activity execution '{payload.ActivityExecutionId}' while it is '{state.Status}'.");
 
-        var suspension = BookmarkSuspension.Build(workItem, payload, state, _timeProvider.GetUtcNow());
-        var bookmark = suspension.Bookmark;
-        var suspendedState = suspension.ActivityExecution;
+        var bookmark = NewBookmark(workItem, payload);
+        var suspendedState = SuspendActivity(workItem, payload, state);
         return await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
     }
 
@@ -161,6 +171,39 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         payload.Metadata,
         payload.ValueSnapshots,
         payload.DurableValueChanges);
+
+    private static bool IsLiveTypedRegistration(
+        ActivityExecutionState state,
+        RuntimeCreateBookmarkCommandPayload payload)
+    {
+        // Legacy/non-stateful bookmark work has no typed private-state/registration protocol and retains its
+        // existing Running -> Suspended behavior.
+        if (state.PrivateState is null && state.TriggerRegistrations is not { Count: > 0 })
+            return true;
+
+        if (state.Status != ActivityExecutionStatus.Suspended)
+            return false;
+
+        var registrations = state.TriggerRegistrations?
+            .Where(candidate => StringComparer.Ordinal.Equals(candidate.RegistrationId, payload.BookmarkId))
+            .ToArray() ?? [];
+        if (registrations.Length == 0)
+            return false;
+        if (registrations.Length != 1)
+            throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' owns duplicate trigger registration '{payload.BookmarkId}'.");
+
+        var registration = registrations[0];
+        if (!StringComparer.Ordinal.Equals(registration.InvocationId, state.InvocationId) ||
+            !StringComparer.Ordinal.Equals(registration.ResumeTargetKey, payload.ResumeTargetId) ||
+            !StringComparer.Ordinal.Equals(registration.StimulusType, payload.StimulusType) ||
+            !StringComparer.Ordinal.Equals(registration.StimulusHash, payload.StimulusHash))
+        {
+            throw new InvalidOperationException(
+                $"VF-ACT-008: CreateBookmark scheduler work item '{payload.BookmarkId}' does not match its live trigger registration on activity invocation '{state.InvocationId}'.");
+        }
+
+        return true;
+    }
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
         RuntimeSchedulerWorkItem workItem,
@@ -244,6 +287,55 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     ]),
             PostCommitIntents: [],
             Metadata: metadata);
+    }
+
+    private BookmarkState NewBookmark(RuntimeSchedulerWorkItem workItem, RuntimeCreateBookmarkCommandPayload payload) =>
+        new(
+            BookmarkId: payload.BookmarkId,
+            WorkflowExecutionId: workItem.WorkflowExecutionId,
+            ActivityExecutionId: payload.ActivityExecutionId,
+            ExecutableNodeId: payload.ExecutableNodeId,
+            ResumeTargetId: payload.ResumeTargetId,
+            StimulusType: payload.StimulusType,
+            StimulusHash: payload.StimulusHash,
+            Payload: payload.Payload,
+            Metadata: MergeBookmarkMetadata(workItem, payload),
+            CreatedAt: _timeProvider.GetUtcNow(),
+            ExpiresAt: payload.ExpiresAt);
+
+    private static IReadOnlyDictionary<string, string> MergeBookmarkMetadata(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCreateBookmarkCommandPayload payload)
+    {
+        var metadata = payload.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.CommandId] = workItem.CommandId;
+        metadata[RuntimeMetadataKeys.Reason] = payload.Reason;
+        return RuntimeModelMetadata.Snapshot(metadata);
+    }
+
+    private ActivityExecutionState SuspendActivity(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCreateBookmarkCommandPayload payload,
+        ActivityExecutionState state)
+    {
+        var bookmarkIds = state.BookmarkIds
+            .Append(payload.BookmarkId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.BookmarkId] = payload.BookmarkId;
+        metadata[RuntimeMetadataKeys.ResumeTargetId] = payload.ResumeTargetId;
+        metadata[RuntimeMetadataKeys.SuspendReason] = payload.Reason;
+        metadata[RuntimeMetadataKeys.CreateBookmarkSchedulerWorkItemId] = workItem.WorkItemId;
+
+        return state with
+        {
+            Status = ActivityExecutionStatus.Suspended,
+            SubStatus = SuspendedSubStatus,
+            BookmarkIds = bookmarkIds,
+            Metadata = metadata
+        };
     }
 
     private static RuntimeCreateBookmarkCommandPayload DeserializePayload(RuntimeSchedulerWorkItem workItem) =>

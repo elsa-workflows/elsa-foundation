@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
@@ -375,12 +376,39 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
-                    inputName: "to",
-                    source: RuntimeInputBindingSource.DurableValue,
-                    durableValue: new RuntimeDurableValueReference("customerEmail"))
+                    inputKey: "to",
+                    targetType: new ValueTypeDescriptor("System.String"),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.VariableRead,
+                    variable: new RuntimeVariableReference("customerEmail", "root"))
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string> { ["role"] = "leaf" });
+            metadata: new Dictionary<string, string> { ["role"] = "leaf" },
+            activityContract: new ActivityContract(
+                "Elsa.SendEmail",
+                "1.0.0",
+                "Elsa.Activities.SendEmailDescriptor",
+                Json("""{ "kind": "Send" }"""),
+                [
+                    new ActivityInputContract(
+                        "to",
+                        "to",
+                        new ValueTypeDescriptor("System.String"),
+                        isRequired: true,
+                        hasDefault: false,
+                        defaultValue: null,
+                        ActivityValuePolicy.Default)
+                    {
+                        IsNullable = false
+                    }
+                ],
+                new ActivityResultContract(
+                    new ValueTypeDescriptor("Unit"),
+                    isRequired: true,
+                    ActivityValuePolicy.Default,
+                    []),
+                ["Done"],
+                new ActivityActivationRequirement("Elsa.Activities.SendEmailDescriptor", "Elsa.SendEmail")));
 
         var root = new ExecutableNode(
             executableNodeId: "root",

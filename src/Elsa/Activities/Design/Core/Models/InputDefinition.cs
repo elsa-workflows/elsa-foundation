@@ -30,4 +30,11 @@ public sealed record InputDefinition(
     JsonElement? UISpecifications = null,
     bool IsRequired = false,
     JsonElement? DefaultValue = null,
-    string? DefaultSyntax = null);
+    string? DefaultSyntax = null)
+{
+    /// <summary>
+    /// Whether the input accepts null. A null value means that the source did not provide explicit
+    /// nullability metadata.
+    /// </summary>
+    public bool? IsNullable { get; init; }
+}

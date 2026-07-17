@@ -2,15 +2,18 @@ using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Primitives;
+using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Http.Core;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Services;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,8 +32,6 @@ namespace Elsa.Activities.Http.Tests;
 public sealed class HttpEndpointExecutionTests
 {
     private const string NodeId = "node-http-endpoint";
-    private const string ResultValueId = "http-endpoint-result";
-    private const string ParsedContentValueId = "http-endpoint-parsed-content";
 
     // The endpoint is the root node, so it is handed the first deterministic activity-execution id (see NewHarness).
     private const string ActivityExecutionId = "actexec-http-endpoint";
@@ -46,7 +47,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]> { ["q"] = ["1"] },
             Body: """{"id":7}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
 
         run.AssertCompleted(NodeId);
         run.AssertWorkflowCompleted();
@@ -71,7 +72,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: """{"orderId":7}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
         run.AssertWorkflowCompleted();
 
         var parsed = await ParsedContentAsync(harness);
@@ -92,7 +93,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: "null");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
         run.AssertWorkflowCompleted();
 
         var parsed = await ParsedContentAsync(harness);
@@ -111,16 +112,11 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: null);
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
         run.AssertWorkflowCompleted();
 
-        // CLR null captured inline: the durable value is either absent or a JSON null token — the distinguishing
-        // fact (proven at HttpRequestBodyParserTests) is that this "no content" path never yields a JsonElement,
-        // whereas the explicit-JSON-null path above does.
-        var value = await harness.Services.GetRequiredService<IDurableValueStateStore>()
-            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, $"durable-{ParsedContentValueId}");
-        if (value?.InlineValue is { } inline)
-            Assert.Equal(JsonValueKind.Null, inline.ValueKind);
+        var parsed = await ParsedContentAsync(harness);
+        Assert.Equal(JsonValueKind.Null, parsed.ValueKind);
     }
 
     [Fact]
@@ -138,23 +134,38 @@ public sealed class HttpEndpointExecutionTests
     }
 
     [Theory]
-    [InlineData("\"not-a-request-model\"")] // JSON string — not an object
     [InlineData("""{"foo":1}""")] // foreign JSON object — deserializes but has no Path/Method
     [InlineData("""{"Path":"x"}""")] // half-shaped object — Method missing
-    public async Task FallsBackToAuthoredRoute_WhenStimulusInputIsForeignOrMalformed(string foreignPayload)
+    public async Task FallsBackToAuthoredRoute_WhenTargetedPayloadDeserializesWithoutRequestIdentity(string foreignPayload)
     {
-        // A foreign stimulus payload (another trigger module started this artifact) must never surface as a
-        // half-populated request model — identifying members (Path, Method) are validated after deserialize.
+        // The wire model is forward-compatible and therefore permits missing members during deserialization.
+        // HttpEndpoint applies its own Path/Method identity validation before accepting that model.
         await using var harness = NewHarness();
         using var document = JsonDocument.Parse(foreignPayload);
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), document.RootElement.Clone());
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), document.RootElement.Clone(), triggerNodeId: NodeId);
 
         run.AssertWorkflowCompleted();
 
         var result = await ResultAsync(harness);
         Assert.Equal("orders/webhook", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
         Assert.Equal("*", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
+    }
+
+    [Fact]
+    public async Task TargetedMalformedStimulus_FaultsInsteadOfFallingBackToDirectInvocation()
+    {
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(
+            NewEndpointExecutable("orders/webhook", canStartWorkflow: true),
+            JsonSerializer.SerializeToElement("not-a-request-model"),
+            triggerNodeId: NodeId);
+
+        var endpoint = run.State(NodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, endpoint.Status);
+        Assert.NotEmpty(endpoint.IncidentIds);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
     }
 
     [Fact]
@@ -219,7 +230,7 @@ public sealed class HttpEndpointExecutionTests
         Assert.Equal(2, bookmarks.Count);
         foreach (var method in new[] { "get", "post" })
         {
-            var bookmark = Assert.Single(bookmarks, b => b.BookmarkId == $"http-endpoint:{ActivityExecutionId}:{method}");
+            var bookmark = Assert.Single(bookmarks, b => b.Metadata[HttpEndpointRouting.MethodMetadataKey] == method);
             Assert.Equal(HttpEndpointRouting.StimulusType, bookmark.StimulusType);
             Assert.Equal(HttpEndpointStimulus.Hash("callbacks/{id}", method), bookmark.StimulusHash);
             Assert.Equal(HttpEndpoint.ResumeTargetId, bookmark.ResumeTargetId);
@@ -292,6 +303,23 @@ public sealed class HttpEndpointExecutionTests
     }
 
     [Fact]
+    public async Task DirectRun_DoesNotExposeAnAmbientStimulusPayload()
+    {
+        await using var harness = NewHarness();
+        var ambient = new HttpRequestModel(
+            "foreign/request", "DELETE", new Dictionary<string, string[]>(), new Dictionary<string, string[]>(), "foreign");
+
+        var run = await harness.RunAsync(
+            NewEndpointExecutable("orders/webhook", canStartWorkflow: true),
+            JsonSerializer.SerializeToElement(ambient));
+
+        run.AssertWorkflowCompleted();
+        var result = await ResultAsync(harness);
+        Assert.Equal("orders/webhook", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("*", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
+    }
+
+    [Fact]
     public async Task DirectRun_UnauthoredCanStart_AlwaysSuspends()
     {
         await using var harness = NewHarness();
@@ -315,7 +343,7 @@ public sealed class HttpEndpointExecutionTests
         Assert.False(CompletedEndpoint(run));
         Assert.NotEqual(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
         var bookmark = Assert.Single(await BookmarksAsync(harness));
-        Assert.Equal($"http-endpoint:{ActivityExecutionId}:get", bookmark.BookmarkId);
+        Assert.Contains(":trigger:", bookmark.BookmarkId, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -377,6 +405,15 @@ public sealed class HttpEndpointExecutionTests
     {
         // The mid-flow suspension created one GET bookmark keyed by the (template, method) hash.
         var bookmark = Assert.Single(await BookmarksAsync(harness));
+        var state = await harness.Services.GetRequiredService<IActivityExecutionStateStore>()
+            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, ActivityExecutionId);
+        var registration = Assert.Single(state!.TriggerRegistrations!, candidate => candidate.RegistrationId == bookmark.BookmarkId);
+        var delivery = new RuntimeTypedTriggerDeliveryMetadata(
+            deliveryId: $"delivery:{bookmark.BookmarkId}",
+            payloadType: registration.PayloadType,
+            providerId: "test.http-endpoint",
+            receivedAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
+            deduplicationKey: $"dedupe:{bookmark.BookmarkId}");
         return await harness.ResumeAsync(
             pinnedExecutable: WorkflowExecutionHarness.Identity,
             bookmarkId: bookmark.BookmarkId,
@@ -385,22 +422,26 @@ public sealed class HttpEndpointExecutionTests
             resumeTargetId: HttpEndpoint.ResumeTargetId,
             stimulusType: bookmark.StimulusType,
             stimulusHash: bookmark.StimulusHash,
-            input: resumeInput);
+            input: resumeInput,
+            triggerDelivery: delivery);
     }
 
-    private static Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ResultValueId);
+    private static Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness) => CompletionProjectionAsync(harness, "Request");
 
-    private static Task<JsonElement> ParsedContentAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ParsedContentValueId);
+    private static Task<JsonElement> ParsedContentAsync(WorkflowExecutionHarness harness) => CompletionProjectionAsync(harness, "ParsedContent");
 
     private static JsonElement RequestProperty(JsonElement request, string clrPropertyName) =>
-        request.GetProperty(JsonNamingPolicy.CamelCase.ConvertName(clrPropertyName));
+        request.TryGetProperty(clrPropertyName, out var value)
+            ? value
+            : request.GetProperty(JsonNamingPolicy.CamelCase.ConvertName(clrPropertyName));
 
-    private static async Task<JsonElement> CapturedAsync(WorkflowExecutionHarness harness, string valueId)
+    private static async Task<JsonElement> CompletionProjectionAsync(WorkflowExecutionHarness harness, string propertyName)
     {
-        var value = await harness.Services.GetRequiredService<IDurableValueStateStore>()
-            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, $"durable-{valueId}");
-        Assert.NotNull(value);
-        return value!.InlineValue!.Value;
+        var state = await harness.Services.GetRequiredService<IActivityExecutionStateStore>()
+            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, ActivityExecutionId);
+        var result = state?.Completion?.Result.InlineValue;
+        Assert.NotNull(result);
+        return RequestProperty(result.Value, propertyName);
     }
 
     private static WorkflowExecutionHarness NewHarness() =>
@@ -421,40 +462,29 @@ public sealed class HttpEndpointExecutionTests
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
-            ["Path"] = LiteralBinding("Path", JsonSerializer.SerializeToElement(path), "System.String")
+            [nameof(HttpEndpoint.Path)] = TypedLiteralBinding(nameof(HttpEndpoint.Path), path, typeof(string)),
+            [nameof(HttpEndpoint.SupportedMethods)] = TypedLiteralBinding(nameof(HttpEndpoint.SupportedMethods), methods, typeof(ICollection<string>)),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = TypedLiteralBinding(nameof(HttpEndpoint.CanStartWorkflow), canStartWorkflow ?? false, typeof(bool)),
+            [nameof(HttpEndpoint.Authorize)] = TypedLiteralBinding(nameof(HttpEndpoint.Authorize), false, typeof(bool)),
+            [nameof(HttpEndpoint.Policy)] = TypedLiteralBinding(nameof(HttpEndpoint.Policy), null, typeof(string)),
+            [nameof(HttpEndpoint.RequestTimeout)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestTimeout), null, typeof(TimeSpan)),
+            [nameof(HttpEndpoint.RequestSizeLimit)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), null, typeof(long)),
+            [nameof(HttpEndpoint.ResponseMode)] = TypedLiteralBinding(nameof(HttpEndpoint.ResponseMode), ResponseMode.Async, typeof(ResponseMode))
         };
 
-        if (methods is not null)
-            inputBindings["SupportedMethods"] = LiteralBinding("SupportedMethods", JsonSerializer.SerializeToElement(methods), "System.Collections.Generic.ICollection`1[[System.String]]");
-
-        if (canStartWorkflow is { } canStart)
-            inputBindings["CanStartWorkflow"] = LiteralBinding("CanStartWorkflow", JsonSerializer.SerializeToElement(canStart), "System.Boolean");
+        var descriptorPayload = ClrConstruction.Payload(Serializer, typeof(HttpEndpoint));
+        var contract = EndpointContract(descriptorPayload);
 
         var node = new ExecutableNode(
             executableNodeId: NodeId,
             authoredActivityId: "authored-http-endpoint",
             activityType: HttpEndpoint.ActivityType,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, typeof(HttpEndpoint))),
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
-            {
-                ["Result"] = new(
-                    outputName: "Result",
-                    valueId: ResultValueId,
-                    type: new RuntimeValueTypeDescriptor("clr", "System.Object", null),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true),
-                ["ParsedContent"] = new(
-                    outputName: "ParsedContent",
-                    valueId: ParsedContentValueId,
-                    type: new RuntimeValueTypeDescriptor("clr", "System.Object", null),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true)
-            },
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
 
         // The real compiler indexes the [ResumeTarget] handler into this map; the harness builds executables
         // directly, so declare the same entry the compiler emits for the HttpEndpoint node (mirrors Delay's test).
@@ -463,7 +493,7 @@ public sealed class HttpEndpointExecutionTests
             [HttpEndpoint.ResumeTargetId] = new(
                 ResumeTargetId: HttpEndpoint.ResumeTargetId,
                 ExecutableNodeId: NodeId,
-                HandlerKey: "OnRequestReceived",
+                HandlerKey: "ResumeAsync",
                 Metadata: new Dictionary<string, string>())
         };
 
@@ -482,9 +512,9 @@ public sealed class HttpEndpointExecutionTests
         var node = executable.RootActivity;
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(node.InputBindings)
         {
-            ["Authorize"] = LiteralBinding("Authorize", JsonSerializer.SerializeToElement(authorize), "System.Boolean"),
-            ["Policy"] = LiteralBinding("Policy", JsonSerializer.SerializeToElement(policy), "System.String"),
-            ["RequestSizeLimit"] = LiteralBinding("RequestSizeLimit", JsonSerializer.SerializeToElement(sizeLimit), "System.Int64")
+            [nameof(HttpEndpoint.Authorize)] = TypedLiteralBinding(nameof(HttpEndpoint.Authorize), authorize, typeof(bool)),
+            [nameof(HttpEndpoint.Policy)] = TypedLiteralBinding(nameof(HttpEndpoint.Policy), policy, typeof(string)),
+            [nameof(HttpEndpoint.RequestSizeLimit)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), sizeLimit, typeof(long))
         };
 
         var withOptions = new ExecutableNode(
@@ -494,8 +524,8 @@ public sealed class HttpEndpointExecutionTests
             activityTypeVersion: node.ActivityTypeVersion,
             descriptor: node.Descriptor,
             inputBindings: inputBindings,
-            outputCaptures: node.OutputCaptures,
-            metadata: node.Metadata);
+            metadata: node.Metadata,
+            activityContract: node.ActivityContract);
 
         return new WorkflowExecutable(
             identity: executable.Identity,
@@ -513,7 +543,7 @@ public sealed class HttpEndpointExecutionTests
         {
             // The runtime input materializer deserializes the literal against the enum type via System.Text.Json;
             // author the underlying numeric value so it materializes regardless of enum-converter registration.
-            ["ResponseMode"] = LiteralBinding("ResponseMode", JsonSerializer.SerializeToElement((int)mode), typeof(ResponseMode).FullName!)
+            [nameof(HttpEndpoint.ResponseMode)] = TypedLiteralBinding(nameof(HttpEndpoint.ResponseMode), mode, typeof(ResponseMode))
         };
 
         var withMode = new ExecutableNode(
@@ -523,8 +553,8 @@ public sealed class HttpEndpointExecutionTests
             activityTypeVersion: node.ActivityTypeVersion,
             descriptor: node.Descriptor,
             inputBindings: inputBindings,
-            outputCaptures: node.OutputCaptures,
-            metadata: node.Metadata);
+            metadata: node.Metadata,
+            activityContract: node.ActivityContract);
 
         return new WorkflowExecutable(
             identity: executable.Identity,
@@ -534,12 +564,68 @@ public sealed class HttpEndpointExecutionTests
             compatibilityMetadata: executable.CompatibilityMetadata);
     }
 
-    private static RuntimeInputBinding LiteralBinding(string name, JsonElement value, string clrType) =>
+    private static ActivityContract EndpointContract(JsonElement descriptorPayload) =>
         new(
-            inputName: name,
+            HttpEndpoint.ActivityType,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            new[]
+            {
+                InputContract(nameof(HttpEndpoint.Path), typeof(string), isRequired: true),
+                InputContract(nameof(HttpEndpoint.SupportedMethods), typeof(ICollection<string>)),
+                InputContract(nameof(HttpEndpoint.CanStartWorkflow), typeof(bool)),
+                InputContract(nameof(HttpEndpoint.Authorize), typeof(bool)),
+                InputContract(nameof(HttpEndpoint.Policy), typeof(string)),
+                InputContract(nameof(HttpEndpoint.RequestTimeout), typeof(TimeSpan)),
+                InputContract(nameof(HttpEndpoint.RequestSizeLimit), typeof(long)),
+                InputContract(nameof(HttpEndpoint.ResponseMode), typeof(ResponseMode))
+            },
+            new ActivityResultContract(
+                ValueType(typeof(HttpEndpointResult)),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                new[]
+                {
+                    Projection("Request", "request", typeof(HttpRequestModel), isRequired: true),
+                    Projection("RouteData", "routeData", typeof(IReadOnlyDictionary<string, string>), isRequired: true),
+                    Projection("ParsedContent", "parsedContent", typeof(JsonElement), isRequired: false)
+                }),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(HttpEndpoint))));
+
+    private static ActivityInputContract InputContract(string key, Type type, bool isRequired = false) =>
+        new(key, key, ValueType(type), isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
+
+    private static ActivityResultProjectionContract Projection(string key, string path, Type type, bool isRequired) =>
+        new(key, path, ValueType(type), isRequired, ActivityValuePolicy.Default);
+
+    private static RuntimeInputBinding TypedLiteralBinding(string inputName, object? value, Type type)
+    {
+        var valueType = ValueType(type);
+        return new RuntimeInputBinding(
+            inputKey: inputName,
+            targetType: valueType,
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Literal,
-            literalValue: value,
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = clrType });
+            literal: value is null
+                ? ValueEnvelope.Null(valueType, ValueProtectionPolicy.InstanceInline)
+                : ValueEnvelope.Inline(
+                    valueType,
+                    JsonSerializer.SerializeToElement(value, type),
+                    ValueProtectionPolicy.InstanceInline));
+    }
+
+    private static ValueTypeDescriptor ValueType(Type type) =>
+        TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias) is { } reference
+            ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
+            : throw new InvalidOperationException($"Could not describe '{type}'.");
+
+    private static RuntimeValueTypeDescriptor RuntimeValueType(Type type)
+    {
+        var valueType = ValueType(type);
+        return new RuntimeValueTypeDescriptor("clr", valueType.Alias, null);
+    }
 
     private static async Task<IReadOnlyCollection<BookmarkState>> BookmarksAsync(WorkflowExecutionHarness harness) =>
         await harness.Services.GetRequiredService<IBookmarkStateStore>().ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);

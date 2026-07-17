@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
@@ -46,8 +47,8 @@ public sealed class GroundworkWorkflowExecutableStoreTests
 
         // Compiled input binding survives.
         var binding = child.InputBindings["to"];
-        Assert.Equal(RuntimeInputBindingSource.DurableValue, binding.Source);
-        Assert.Equal("customerEmail", binding.DurableValue!.ValueId);
+        Assert.Equal(RuntimeInputBindingSource.WorkflowRequest, binding.Source);
+        Assert.Equal("customerEmail", binding.WorkflowRequest!.MemberKey);
 
         // Raw descriptor payload survives as JSON.
         Assert.Equal("Send", found.RootActivity.Descriptor.Payload.GetProperty("kind").GetString());
@@ -525,11 +526,12 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
-                    inputName: "to",
-                    source: RuntimeInputBindingSource.DurableValue,
-                    durableValue: new RuntimeDurableValueReference("customerEmail"))
+                    inputKey: "to",
+                    targetType: new ValueTypeDescriptor("String"),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.WorkflowRequest,
+                    workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { ["role"] = "leaf" });
 
         var root = new ExecutableNode(
@@ -539,7 +541,6 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SequenceDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot("Body", [child])]);
 

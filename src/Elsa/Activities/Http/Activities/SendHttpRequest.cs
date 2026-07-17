@@ -1,8 +1,7 @@
 using System.Net.Http;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Options;
-using Elsa.Activities.Runtime.Core.Abstractions;
-using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Microsoft.Extensions.Options;
@@ -11,8 +10,8 @@ namespace Elsa.Activities.Http.Activities;
 
 /// <summary>
 /// Sends an outbound HTTP request and captures the response. Ported in spirit from elsa-core's
-/// <c>SendHttpRequest</c> and adapted to this repo's runtime activity model: a CLR leaf (resolved by the
-/// existing <c>ClrActivityConstructor</c>) that resolves a pooled <see cref="HttpClient"/> from
+/// <c>SendHttpRequest</c> and adapted to this repo's transient typed activity model. A pooled
+/// <see cref="HttpClient"/> is supplied through constructor-injected infrastructure from
 /// <see cref="IHttpClientFactory"/> under the well-known <see cref="HttpActivityConstants.HttpClientName"/>
 /// client, so connection pooling, redirect policy and timeouts are configured once by
 /// <c>ActivitiesHttpFeature</c> rather than per activity.
@@ -20,15 +19,15 @@ namespace Elsa.Activities.Http.Activities;
 /// <remarks>
 /// <para>
 /// <b>Error model.</b> The activity does not throw for a completed-but-unsuccessful exchange: a received
-/// response always sets the <see cref="StatusCode"/>/<see cref="ResponseBody"/>/<see cref="ResponseHeaders"/>
-/// outputs, and the completion <em>outcome</em> encodes the result so a workflow can branch without faulting.
+/// response always returns one complete <see cref="SendHttpRequestResult"/>, and the completion
+/// <em>outcome</em> encodes the branch so a workflow can react without faulting.
 /// A transport failure emits <see cref="HttpActivityOutcomes.Failed"/> and a timeout emits
 /// <see cref="HttpActivityOutcomes.Timeout"/>; only a genuine misconfiguration (missing URL) or an external
 /// cancellation of the workflow faults the activity.
 /// </para>
 /// <para>
 /// <b>Outcome mapping.</b> When <see cref="ExpectedStatusCodes"/> is supplied, a matching response branches on
-/// the numeric status code string (e.g. <c>"200"</c>) and a non-matching response branches on
+/// <see cref="HttpActivityOutcomes.Matched"/> and a non-matching response branches on
 /// <see cref="HttpActivityOutcomes.Unmatched"/>. When it is not supplied, a 2xx response branches on the
 /// default <c>Done</c> outcome and any other status branches on <see cref="HttpActivityOutcomes.Failed"/>
 /// (outputs are still captured in both cases).
@@ -40,54 +39,57 @@ namespace Elsa.Activities.Http.Activities;
 /// propagates as a normal cancellation.
 /// </para>
 /// </remarks>
-public sealed class SendHttpRequest : CodeActivity
+[ActivityOutcome(ActivityOutcomes.Done)]
+[ActivityOutcome(HttpActivityOutcomes.Matched)]
+[ActivityOutcome(HttpActivityOutcomes.Unmatched)]
+[ActivityOutcome(HttpActivityOutcomes.Failed)]
+[ActivityOutcome(HttpActivityOutcomes.Timeout)]
+public sealed class SendHttpRequest(
+    IHttpClientFactory httpClientFactory,
+    IOptions<HttpActivityOptions> httpActivityOptions) : Activity<SendHttpRequestResult>
 {
     /// <summary>The absolute request URL. Required.</summary>
-    public InputArgument<Uri>? Url { get; set; }
+    [ActivityInput(Key = nameof(Url))]
+    [Required]
+    public Uri Url { get; set; } = null!;
 
     /// <summary>The HTTP method (verb). Defaults to <c>GET</c> when not set.</summary>
-    public InputArgument<string>? Method { get; set; }
+    [ActivityInput(Key = nameof(Method), DefaultValue = "GET", DefaultSyntax = "Literal")]
+    public string Method { get; set; } = "GET";
 
     /// <summary>Optional request body content, serialized as a UTF-8 string.</summary>
-    public InputArgument<string>? Content { get; set; }
+    [ActivityInput(Key = nameof(Content))]
+    public string? Content { get; set; }
 
     /// <summary>Content type (media type) for the request body. Defaults to <c>text/plain</c> when content is present.</summary>
-    public InputArgument<string>? ContentType { get; set; }
+    [ActivityInput(Key = nameof(ContentType), DefaultValue = "text/plain", DefaultSyntax = "Literal")]
+    public string? ContentType { get; set; }
 
     /// <summary>Optional request headers to add to the outbound request.</summary>
-    public InputArgument<IDictionary<string, string>>? RequestHeaders { get; set; }
+    [ActivityInput(Key = nameof(RequestHeaders))]
+    public IDictionary<string, string>? RequestHeaders { get; set; }
 
     /// <summary>Optional set of status codes that should branch on the matching numeric outcome; others branch on <c>Unmatched</c>.</summary>
-    public InputArgument<ICollection<int>>? ExpectedStatusCodes { get; set; }
+    [ActivityInput(Key = nameof(ExpectedStatusCodes))]
+    public ICollection<int>? ExpectedStatusCodes { get; set; }
 
     /// <summary>Optional per-request timeout overriding <c>HttpActivityOptions.DefaultTimeout</c>.</summary>
-    public InputArgument<TimeSpan?>? Timeout { get; set; }
+    [ActivityInput(Key = nameof(Timeout))]
+    public TimeSpan? Timeout { get; set; }
 
-    /// <summary>The received response status code (set for any completed exchange).</summary>
-    public OutputArgument<int>? StatusCode { get; set; }
-
-    /// <summary>The received response body as a string (set for any completed exchange).</summary>
-    public OutputArgument<string>? ResponseBody { get; set; }
-
-    /// <summary>The received response headers, keyed by header name (set for any completed exchange).</summary>
-    public OutputArgument<IDictionary<string, string[]>>? ResponseHeaders { get; set; }
-
-    protected override async ValueTask ExecuteAsync(IActivityExecutionContext context)
+    protected override async ValueTask<ActivityTransition<SendHttpRequestResult>> ExecuteAsync(ActivityExecutionContext context)
     {
-        var url = context.Get(Url) ?? throw new InvalidOperationException("SendHttpRequest requires a non-null Url.");
-        var method = context.Get(Method);
+        var url = Url ?? throw new InvalidOperationException("SendHttpRequest requires a non-null Url.");
+        var method = Method;
         method = string.IsNullOrWhiteSpace(method) ? "GET" : method.Trim();
 
-        var factory = context.GetRequiredService<IHttpClientFactory>();
-        var options = context.GetRequiredService<IOptions<HttpActivityOptions>>().Value;
-        var client = factory.CreateClient(HttpActivityConstants.HttpClientName);
+        var client = httpClientFactory.CreateClient(HttpActivityConstants.HttpClientName);
 
         using var request = new HttpRequestMessage(new HttpMethod(method), url);
-        AddHeaders(context, request);
-        AddContent(context, request);
+        AddHeaders(request);
+        AddContent(request);
 
-        var requestedTimeout = context.Get(Timeout);
-        var effectiveTimeout = requestedTimeout is { } t && t > TimeSpan.Zero ? t : options.DefaultTimeout;
+        var effectiveTimeout = Timeout is { } t && t > TimeSpan.Zero ? t : httpActivityOptions.Value.DefaultTimeout;
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         timeoutCts.CancelAfter(effectiveTimeout);
@@ -98,11 +100,9 @@ public sealed class SendHttpRequest : CodeActivity
             var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
             var status = (int)response.StatusCode;
 
-            context.Set(StatusCode, status);
-            context.Set(ResponseBody, body);
-            context.Set(ResponseHeaders, CollectHeaders(response));
-
-            context.SetOutcomes(DetermineResponseOutcomes(context, status, response.IsSuccessStatusCode));
+            return ActivityTransition.Complete(
+                new SendHttpRequestResult(status, body, CollectHeaders(response)),
+                DetermineResponseOutcome(status, response.IsSuccessStatusCode));
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
@@ -112,44 +112,41 @@ public sealed class SendHttpRequest : CodeActivity
         catch (OperationCanceledException)
         {
             // Only our linked timeout fired.
-            context.SetOutcomes([HttpActivityOutcomes.Timeout]);
+            return ActivityTransition.Complete(SendHttpRequestResult.NoResponse, HttpActivityOutcomes.Timeout);
         }
         catch (HttpRequestException)
         {
-            context.SetOutcomes([HttpActivityOutcomes.Failed]);
+            return ActivityTransition.Complete(SendHttpRequestResult.NoResponse, HttpActivityOutcomes.Failed);
         }
     }
 
-    private void AddHeaders(IActivityExecutionContext context, HttpRequestMessage request)
+    private void AddHeaders(HttpRequestMessage request)
     {
-        var headers = context.Get(RequestHeaders);
-        if (headers is null)
+        if (RequestHeaders is null)
             return;
 
-        foreach (var (name, value) in headers)
+        foreach (var (name, value) in RequestHeaders)
             request.Headers.TryAddWithoutValidation(name, value);
     }
 
-    private void AddContent(IActivityExecutionContext context, HttpRequestMessage request)
+    private void AddContent(HttpRequestMessage request)
     {
-        var content = context.Get(Content);
-        if (string.IsNullOrEmpty(content))
+        if (string.IsNullOrEmpty(Content))
             return;
 
-        var contentType = context.Get(ContentType);
+        var contentType = ContentType;
         contentType = string.IsNullOrWhiteSpace(contentType) ? "text/plain" : contentType.Trim();
-        request.Content = new StringContent(content, System.Text.Encoding.UTF8, contentType);
+        request.Content = new StringContent(Content, System.Text.Encoding.UTF8, contentType);
     }
 
-    private string[] DetermineResponseOutcomes(IActivityExecutionContext context, int status, bool isSuccess)
+    private string DetermineResponseOutcome(int status, bool isSuccess)
     {
-        var expected = context.Get(ExpectedStatusCodes);
-        if (expected is { Count: > 0 })
-            return expected.Contains(status)
-                ? [status.ToString()]
-                : [HttpActivityOutcomes.Unmatched];
+        if (ExpectedStatusCodes is { Count: > 0 })
+            return ExpectedStatusCodes.Contains(status)
+                ? HttpActivityOutcomes.Matched
+                : HttpActivityOutcomes.Unmatched;
 
-        return isSuccess ? [ActivityOutcomes.Done] : [HttpActivityOutcomes.Failed];
+        return isSuccess ? ActivityOutcomes.Done : HttpActivityOutcomes.Failed;
     }
 
     private static IDictionary<string, string[]> CollectHeaders(HttpResponseMessage response)
@@ -164,4 +161,13 @@ public sealed class SendHttpRequest : CodeActivity
 
         return result;
     }
+}
+
+/// <summary>The atomic response document returned by <see cref="SendHttpRequest"/>.</summary>
+public sealed record SendHttpRequestResult(
+    [property: Output(Key = "StatusCode", Path = "statusCode")] int? StatusCode,
+    [property: Output(Key = "ResponseBody", Path = "responseBody")] string? ResponseBody,
+    [property: Output(Key = "ResponseHeaders", Path = "responseHeaders")] IDictionary<string, string[]>? ResponseHeaders)
+{
+    public static SendHttpRequestResult NoResponse { get; } = new(null, null, null);
 }

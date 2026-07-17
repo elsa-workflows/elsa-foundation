@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -18,7 +20,6 @@ using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
-using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -32,10 +33,13 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
+using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
+using DesignActivityInputContract = Elsa.Activities.Design.Core.Models.ActivityInputContract;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
@@ -100,7 +104,7 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Resolves_exact_reusable_version_places_template_and_compiles_expression_default()
     {
-        var contract = new ActivityContract("1", [new ActivityInputContract(
+        var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
             "value", "Value", new TypeReference("Int32"), true,
             new("JavaScript", JsonSerializer.SerializeToElement("40 + 2")), "elsa.json")], [new ActivityOutputContract(
             "result", "Result", new TypeReference("Int32"), true, "elsa.json")], []);
@@ -111,7 +115,8 @@ public sealed class WorkflowExecutableCompilerTests
             [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
-                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])]);
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
+            activityContract: BoundaryRuntimeContract(hasValueInput: true));
         var template = new ExecutableActivityTemplate(
             "template-reusable", "hash-reusable", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -162,7 +167,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.Equal("activity.reusable", executable.RootActivity.ActivityType);
         Assert.Matches("^node-[0-9a-f]{64}$", executable.RootActivity.ExecutableNodeId);
-        var binding = executable.RootActivity.InputBindings["Value"];
+        var binding = executable.RootActivity.InputBindings["value"];
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         Assert.Equal("JavaScript", binding.Expression!.Language);
         Assert.Equal("40 + 2", binding.Expression.Expression);
@@ -224,7 +229,7 @@ public sealed class WorkflowExecutableCompilerTests
             Version = "1.0.0",
             ActivityTypeKey = "activity.reusable",
             SourceDraftId = "draft-reusable-with-authored-children",
-            Contract = new ActivityContract("1", [], [], []),
+            Contract = new DesignActivityContract("1", [], [], []),
             Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
             TemplateId = "template-reusable-with-authored-children",
             TemplateHash = "hash-reusable-with-authored-children",
@@ -249,12 +254,12 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Reusable_output_capture_preserves_a_custom_driver_and_non_serializable_value_through_runtime_completion()
+    public async Task Reusable_output_capture_preserves_a_custom_driver_and_persistable_value_through_runtime_completion()
     {
         var driver = new OpaqueOutputStorageDriver();
         var storageDrivers = new RuntimeDurableValueStorageDriverRegistry(
             [new JsonRuntimeDurableValueStorageDriver(), driver]);
-        var contract = new ActivityContract(
+        var contract = new DesignActivityContract(
             "1",
             [],
             [new("result", "Result", new TypeReference("Object"), true, driver.DriverKey)],
@@ -275,7 +280,8 @@ public sealed class WorkflowExecutableCompilerTests
             [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
-                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])]);
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
+            activityContract: BoundaryRuntimeContract(hasValueInput: false));
         var template = new ExecutableActivityTemplate(
             "template-custom", "hash-custom", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -322,7 +328,7 @@ public sealed class WorkflowExecutableCompilerTests
             placed.ResumeTargets,
             DateTimeOffset.UnixEpoch,
             new Dictionary<string, string>());
-        var opaque = new OpaqueOutput(() => { });
+        var opaque = new OpaqueOutput("opaque");
 
         var captured = await CompleteReusableBoundaryAsync(executable, storageDrivers, opaque);
         var projections = await RuntimeInputBindingStateProjection.ProjectAllAsync([captured], storageDrivers);
@@ -771,8 +777,8 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotNull(expression);
         Assert.Equal("JavaScript", expression!.Language);
         Assert.Equal("\"Hello \" + \"World\"", expression.Expression);
-        Assert.StartsWith("System.String", expression.ResultType?.Id, StringComparison.Ordinal);
-        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+        Assert.Equal("String", expression.ResultType?.Id);
+        Assert.Equal("String", binding.TargetType.Alias);
         Assert.Equal("Text", binding.Metadata["referenceKey"]);
     }
 
@@ -795,15 +801,10 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "artifact-"));
 
         var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
-        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
         Assert.Null(binding.LiteralValue);
-        var expression = binding.Expression;
-        Assert.NotNull(expression);
-        Assert.Equal("Variable", expression!.Language);
-
-        var parsed = JsonSerializer.Deserialize<JsonElement>(expression.Expression);
-        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
-        Assert.Equal("node-sequence", parsed.GetProperty("declaringScopeId").GetString());
+        Assert.Equal("var-counter", binding.Variable?.VariableKey);
+        Assert.Equal("node-sequence", binding.Variable?.DeclaringScopeId);
     }
 
     [Fact]
@@ -822,10 +823,9 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "artifact-"));
 
         var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
-        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
-        Assert.Equal("Variable", binding.Expression!.Language);
-        var parsed = JsonSerializer.Deserialize<JsonElement>(binding.Expression.Expression);
-        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
+        Assert.Equal("var-counter", binding.Variable?.VariableKey);
+        Assert.Equal(Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, binding.Variable?.DeclaringScopeId);
     }
 
     [Fact]
@@ -900,7 +900,7 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("Text", binding.InputName);
         Assert.Equal("Hello World!", binding.LiteralValue?.GetString());
         Assert.Equal("Text", binding.Metadata["referenceKey"]);
-        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+        Assert.Equal("String", binding.TargetType.Alias);
     }
 
     [Fact]
@@ -920,11 +920,11 @@ public sealed class WorkflowExecutableCompilerTests
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-"));
 
-        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+        var materialized = await MaterializeInputsAsync(executable, "write-hello", now);
 
-        var textInput = Assert.Single(materialized);
-        Assert.Equal("Text", textInput.Name);
-        Assert.Equal("Hello World!", textInput.Value);
+        var textInput = Assert.Single(materialized.Values);
+        Assert.Equal("Text", textInput.Key);
+        Assert.Equal("Hello World!", textInput.Value.InlineValue?.Deserialize<string>());
     }
 
     [Fact]
@@ -945,10 +945,10 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(JsonValueKind.Array, binding.LiteralValue?.ValueKind);
 
-        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+        var materialized = await MaterializeInputsAsync(executable, "write-lines", now);
 
-        var linesInput = Assert.Single(materialized);
-        var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value);
+        var linesInput = Assert.Single(materialized.Values);
+        var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value.InlineValue?.Deserialize<string[]>());
         Assert.Equal(["Hello", "World"], lines);
     }
 
@@ -1042,11 +1042,11 @@ public sealed class WorkflowExecutableCompilerTests
 
         var structure = executable.RootActivity.Structure;
         Assert.NotNull(structure);
-        var executableStructure = structure!.Payload.Deserialize<SequenceExecutableStructure>(
+        var executableStructure = structure!.Payload.Deserialize<RuntimeVariableStructureProjection>(
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(executableStructure);
         var materializedVariable = Assert.Single(executableStructure!.Variables);
-        Assert.Equal("var-counter", materializedVariable.ReferenceKey);
+        Assert.Equal("var-counter", materializedVariable.VariableKey);
         Assert.Equal("Counter", materializedVariable.Name);
     }
 
@@ -1088,6 +1088,20 @@ public sealed class WorkflowExecutableCompilerTests
         await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(now)).AsTask());
     }
 
+    private static ValueTask<ActivityInputSnapshot> MaterializeInputsAsync(
+        WorkflowExecutable executable,
+        string invocationId,
+        DateTimeOffset materializedAt) =>
+        new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create())
+            .MaterializeSnapshotAsync(
+                executable.RootActivity,
+                invocationId,
+                new RuntimeInputBindingResolutionContext(
+                    "workflow-execution-test",
+                    invocationId,
+                    executable: executable),
+                materializedAt);
+
     private static async Task<DurableValueState> CompleteReusableBoundaryAsync(
         WorkflowExecutable executable,
         IRuntimeDurableValueStorageDriverRegistry storageDrivers,
@@ -1115,16 +1129,41 @@ public sealed class WorkflowExecutableCompilerTests
             activityExecutionInspectionWriter: inspectionStore);
 
         await executableStore.SaveAsync(executable);
-        await activityStore.SaveAsync(RuntimeState(boundaryExecutionId, boundary, ActivityExecutionStatus.Running));
+        var boundaryContract = boundary.ActivityContract
+            ?? throw new InvalidOperationException("The reusable boundary must carry its pinned runtime activity contract.");
+        var boundaryState = RuntimeState(boundaryExecutionId, boundary, ActivityExecutionStatus.Running) with
+        {
+            ContractIdentity = new ActivityInvocationContractIdentity(
+                boundaryContract.ActivityTypeKey,
+                boundaryContract.ContractVersion,
+                boundaryContract.SchemaFingerprint),
+            InputSnapshot = new ActivityInputSnapshot(
+                boundaryExecutionId,
+                boundaryContract.SchemaFingerprint,
+                "sha256:reusable-boundary-bindings",
+                new Dictionary<string, ValueEnvelope>(),
+                DateTimeOffset.UtcNow.AddMinutes(-2)),
+            Attempts =
+            [
+                new ActivityAttempt(
+                    $"{boundaryExecutionId}:attempt:1",
+                    boundaryExecutionId,
+                    1,
+                    ActivityAttemptReason.Initial,
+                    DateTimeOffset.UtcNow.AddMinutes(-2),
+                    DateTimeOffset.UtcNow.AddMinutes(-1),
+                    transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend)
+            ]
+        };
+        await activityStore.SaveAsync(boundaryState);
         await activityStore.SaveAsync(RuntimeState(childExecutionId, child, ActivityExecutionStatus.Completed, boundaryExecutionId));
 
         var services = new ServiceCollection();
-        services.AddScoped<IActivityFactory>(_ => new FixedActivityFactory(new OutputtingCompositeActivity(outputValue)));
-        services.AddSingleton<IExpressionEvaluator, ConstantExpressionEvaluator>();
+        services.AddScoped<IActivityActivator>(_ => new FixedActivityActivator(new OutputtingCompositeActivity(outputValue)));
         services.AddSingleton<IWorkflowExecutableStore>(executableStore);
         services.AddSingleton<IActivityExecutionStateStore>(activityStore);
+        services.AddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(schedulerQueue);
-        services.AddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
         services.AddSingleton(storageDrivers);
         services.AddSingleton<IDurableValueStateStore>(durableStore);
         services.AddSingleton<IIncidentStateStore>(incidentStore);
@@ -1135,11 +1174,12 @@ public sealed class WorkflowExecutableCompilerTests
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
+        services.AddSingleton<ActivityCompletionProjector>();
+        services.AddSingleton<RuntimeOutputCaptureProjector>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ActivityFaultIncidentRecorder>();
         await using var provider = services.BuildServiceProvider();
         var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
-            new RuntimeActivityInputMaterializer(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             TimeProvider.System);
         var now = DateTimeOffset.UtcNow;
@@ -1208,44 +1248,22 @@ public sealed class WorkflowExecutableCompilerTests
         AggregateFaultCount: 0,
         Metadata: new Dictionary<string, string>());
 
-    private sealed class ConstantExpressionEvaluator : IExpressionEvaluator
+    private sealed class FixedActivityActivator(IActivity activity) : IActivityActivator
     {
-        public ValueTask<T?> EvaluateAsync<T>(
-            IExpression expression,
-            IExpressionExecutionContext context,
-            IExpressionEvaluatorOptions? options = default) =>
-            ValueTask.FromResult((T?)(object)42);
-
-        public ValueTask<object?> EvaluateAsync(
-            IExpression expression,
-            Type returnType,
-            IExpressionExecutionContext context,
-            IExpressionEvaluatorOptions? options = default) =>
-            ValueTask.FromResult<object?>(42);
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityActivationLease(activity));
     }
 
-    private sealed class FixedActivityFactory(IActivity activity) : IActivityFactory
+    private sealed class OutputtingCompositeActivity(object? outputValue) :
+        StructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeActivityCheckpointParticipant
     {
-        public ValueTask<IActivity> Create(
-            RuntimeActivityDescriptor descriptor,
-            IReadOnlyDictionary<string, InputArgument>? inputs,
-            IReadOnlyDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken = default) => ValueTask.FromResult(activity);
-    }
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
 
-    private sealed class OutputtingCompositeActivity(object? outputValue) : IActivity, IActivityChildCompletionHandler, IRuntimeActivityCheckpointParticipant
-    {
-        public string Id { get; set; } = string.Empty;
-        public string NodeId { get; set; } = string.Empty;
-        public string? Name { get; set; }
-        public string Type { get; set; } = "test.boundary";
-        public string Version { get; set; } = "1";
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
-        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
-        public Dictionary<string, object> Metadata { get; set; } = new();
-        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
-        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context) => ValueTask.CompletedTask;
         public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
             IRuntimeActivityExecutionContext context,
             IReadOnlyDictionary<string, object?> effectiveInputs,
@@ -1253,21 +1271,19 @@ public sealed class WorkflowExecutableCompilerTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
 
-        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareCompletionCheckpointAsync(
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
             IRuntimeActivityExecutionContext context,
             IReadOnlyCollection<DurableValueState> persistedValues,
             DateTimeOffset capturedAt,
             CancellationToken cancellationToken = default)
-        {
-            context.RecordActivityOutput("Result", outputValue);
-            context.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
-        }
+            => ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
+                [],
+                ActivityTransition.Complete(outputValue, ActivityOutcomes.Done)));
     }
 
-    private sealed class OpaqueOutput(Action callback)
+    private sealed class OpaqueOutput(string value)
     {
-        public Action Callback { get; } = callback;
+        public string Value { get; } = value;
     }
 
     private sealed class OpaqueOutputStorageDriver : IRuntimeDurableValueStorageDriver
@@ -1486,7 +1502,7 @@ public sealed class WorkflowExecutableCompilerTests
         Version = version.Version,
         ActivityTypeKey = version.Definition!.ActivityTypeKey,
         ResolutionKind = resolutionKind,
-        Contract = new ActivityContract("1", [], [], []),
+        Contract = new DesignActivityContract("1", [], [], []),
         Provider = new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload),
         TemplateId = "source-owned-template",
         TemplateHash = "source-owned-hash",
@@ -1496,6 +1512,43 @@ public sealed class WorkflowExecutableCompilerTests
         ClosedTemplateCount = 0,
         RuntimeRequirements = []
     };
+
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(bool hasValueInput)
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
+        var valueType = new ValueTypeDescriptor("Object");
+        var inputs = hasValueInput
+            ? new[]
+            {
+                new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                    "value",
+                    "Value",
+                    new ValueTypeDescriptor("Int32"),
+                    isRequired: true,
+                    hasDefault: false,
+                    defaultValue: null,
+                    policy: ActivityValuePolicy.Default)
+            }
+            : [];
+        return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+            "test.boundary",
+            "1",
+            "test.boundary",
+            descriptor,
+            inputs,
+            new ActivityResultContract(
+                valueType,
+                isRequired: true,
+                policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+                projections: [new ActivityResultProjectionContract(
+                    "Result",
+                    "$",
+                    valueType,
+                    isRequired: true,
+                    policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result })]),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test.boundary", "test"));
+    }
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
@@ -1526,9 +1579,20 @@ public sealed class WorkflowExecutableCompilerTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+                id switch
+                {
+                    "activity-write-line" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)),
+                    "activity-write-lines" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)),
+                    _ => "Object"
+                })),
             Inputs = inputs ?? []
         };
+
+    private sealed class RuntimeVariableStructureProjection
+    {
+        public IReadOnlyCollection<RuntimeVariableDeclaration> Variables { get; init; } = [];
+    }
 
     private static ActivityDefinitionVersion LegacyTriggerActivityVersion() =>
         LegacyTriggerActivityVersion(typeof(LegacyTriggerActivity));

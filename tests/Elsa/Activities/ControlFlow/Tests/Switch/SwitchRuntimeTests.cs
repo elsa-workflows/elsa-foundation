@@ -4,6 +4,7 @@ using Elsa.Activities.Switch;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -15,7 +16,7 @@ namespace Elsa.Activities.Switch.Tests;
 /// <summary>
 /// In-process execution coverage for the <c>Switch</c> composite running through the real workflow agent.
 /// Built on the shared <see cref="WorkflowExecutionHarness"/>: this file only declares the Switch-specific
-/// activity constructor and graph shape; provider wiring, execution, and assertions come from the harness.
+/// activity graph shape; provider wiring, CLR activation, execution, and assertions come from the harness.
 /// Asserts the matching case branch runs (and only it), the default runs on no-match, and the composite
 /// emits the matching case / default outcome.
 /// </summary>
@@ -62,7 +63,7 @@ public sealed class SwitchRuntimeTests
     public async Task SelectedCaseBranchIsEmpty_FinalizesWithoutSchedulingChild_AndCompletesWorkflow()
     {
         // Value selects case "a", but its slot is empty: the composite must finalize via
-        // CompleteCompositeActivity ("a" outcome) with no child scheduled, and the run must complete.
+        // The returned structural completion ("a" outcome) schedules no child, and the run must complete.
         await using var harness = NewHarness("actexec-switch");
 
         var run = await harness.RunAsync(NewExecutable(value: "a", includeCaseBranch: false));
@@ -89,7 +90,6 @@ public sealed class SwitchRuntimeTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<SwitchActivityConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
@@ -106,16 +106,20 @@ public sealed class SwitchRuntimeTests
             authoredActivityId: "authored-switch",
             activityType: typeof(SwitchActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(SwitchActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new SwitchDescriptor())),
+            descriptorType: typeof(SwitchDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new SwitchDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Value"] = new RuntimeInputBinding(
-                    inputName: "Value",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement(value),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" })
+                    "Value",
+                    new ValueTypeDescriptor("String"),
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        new ValueTypeDescriptor("String"),
+                        JsonSerializer.SerializeToElement(value),
+                        ValueProtectionPolicy.InstanceInline))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(
@@ -128,31 +132,6 @@ public sealed class SwitchRuntimeTests
                 })));
 
         return WorkflowExecutionHarness.NewExecutable(root);
-    }
-
-    private sealed class SwitchActivityConstructor : IActivityConstructor<SwitchDescriptor>
-    {
-        public static string ConsumerKeyValue => typeof(SwitchDescriptor).FullName!;
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new SwitchDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            SwitchDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-        {
-            var activity = new SwitchActivity();
-            if (inputs is not null && inputs.TryGetValue("Value", out var valueInput))
-                activity.Value = (InputArgument<string>)valueInput;
-            return new(activity);
-        }
     }
 
     private sealed record SwitchDescriptor;

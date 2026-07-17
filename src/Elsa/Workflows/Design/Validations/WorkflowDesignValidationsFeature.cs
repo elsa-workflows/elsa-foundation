@@ -58,5 +58,6 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();
         services.AddScoped<IDraftValidator, RequiredInputOutputValidator>();
         services.AddScoped<IDraftValidator, VariableExpressionResolverValidator>();
+        services.AddScoped<IDraftValidator, ValueFlowValidator>();
     }
 }

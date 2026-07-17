@@ -38,15 +38,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
         var persistedDefinition = ActivityDefinition.From(definition);
         catalogVersion.Definition = persistedDefinition;
 
-        var root = new ExecutableNode(
-            "root",
-            "root",
-            definition.ActivityTypeKey,
-            version.ConsumerSchemaVersion,
-            new RuntimeActivityDescriptor(version.ConsumerKey, version.ConsumerSchemaVersion, version.DescriptorPayload),
-            new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
-            new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
-            new Dictionary<string, string>(StringComparer.Ordinal));
+        var root = nodeCompiler.CompileSourceOwnedRoot(catalogVersion);
         var resumeTargets = nodeCompiler.BuildResumeTargets(root)
             .ToDictionary(
                 x => x.Key,
@@ -157,9 +149,9 @@ public sealed class SourceOwnedActivityVersionPublisher(
             sourceReference), cancellationToken);
     }
 
-    private static ActivityContract ToContract(IActivityDefinitionVersion version) => new(
+    private static Elsa.Activities.Design.Core.Models.ActivityContract ToContract(IActivityDefinitionVersion version) => new(
         "1",
-        version.Inputs.Select(input => new ActivityInputContract(
+        version.Inputs.Select(input => new Elsa.Activities.Design.Core.Models.ActivityInputContract(
             input.ReferenceKey,
             input.Name,
             input.Type,

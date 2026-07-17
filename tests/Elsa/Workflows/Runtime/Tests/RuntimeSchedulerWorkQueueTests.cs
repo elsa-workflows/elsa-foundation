@@ -129,7 +129,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
             0,
             0,
             new Dictionary<string, string>(),
-            "outer"));
+            ExecutionScopeId: "outer"));
         var processor = new WorkflowSchedulerCommandRouter(
             queue,
             DeferredSchedulerDrainPolicy.Instance,

@@ -1,0 +1,3023 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 27 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/" /p:OutDir="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0/" /p:OutputPath="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0/" /p:PublishDir="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/publish/" in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1
+// command took 1.88 sec and exited with 0
+// start dotnet  build -c Release --no-restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/" /p:OutDir="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0/" /p:OutputPath="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0/" /p:PublishDir="/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/publish/" --output "/Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0/" in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1
+// command took 21.97 sec and exited with 0
+// ***** Done, took 00:00:24 (24.32 sec)   *****
+// Found 27 benchmarks:
+//   ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+//   ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+//   ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+//   ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+
+// **************************
+// Benchmark: ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.NoOp(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 0 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 188667.00 ns, 188.6670 us/op
+WorkloadJitting  1: 1 op, 211558042.00 ns, 211.5580 ms/op
+
+WorkloadPilot    1: 2 op, 1040333.00 ns, 520.1665 us/op
+WorkloadPilot    2: 3 op, 2478208.00 ns, 826.0693 us/op
+WorkloadPilot    3: 4 op, 2121750.00 ns, 530.4375 us/op
+WorkloadPilot    4: 5 op, 1748958.00 ns, 349.7916 us/op
+WorkloadPilot    5: 6 op, 3083792.00 ns, 513.9653 us/op
+WorkloadPilot    6: 7 op, 4028416.00 ns, 575.4880 us/op
+WorkloadPilot    7: 8 op, 4058500.00 ns, 507.3125 us/op
+WorkloadPilot    8: 9 op, 4541000.00 ns, 504.5556 us/op
+WorkloadPilot    9: 10 op, 6321583.00 ns, 632.1583 us/op
+WorkloadPilot   10: 11 op, 4446208.00 ns, 404.2007 us/op
+WorkloadPilot   11: 12 op, 6317125.00 ns, 526.4271 us/op
+WorkloadPilot   12: 13 op, 6941708.00 ns, 533.9775 us/op
+WorkloadPilot   13: 14 op, 5847667.00 ns, 417.6905 us/op
+WorkloadPilot   14: 15 op, 8377000.00 ns, 558.4667 us/op
+WorkloadPilot   15: 16 op, 223471541.00 ns, 13.9670 ms/op
+WorkloadPilot   16: 32 op, 124617458.00 ns, 3.8943 ms/op
+WorkloadPilot   17: 64 op, 130577125.00 ns, 2.0403 ms/op
+WorkloadPilot   18: 128 op, 290023041.00 ns, 2.2658 ms/op
+WorkloadPilot   19: 256 op, 240745500.00 ns, 940.4121 us/op
+WorkloadPilot   20: 512 op, 239275000.00 ns, 467.3340 us/op
+WorkloadPilot   21: 1024 op, 407736667.00 ns, 398.1803 us/op
+WorkloadPilot   22: 2048 op, 360464917.00 ns, 176.0083 us/op
+WorkloadPilot   23: 4096 op, 739897792.00 ns, 180.6391 us/op
+
+WorkloadWarmup   1: 4096 op, 1285961041.00 ns, 313.9553 us/op
+WorkloadWarmup   2: 4096 op, 592635542.00 ns, 144.6864 us/op
+WorkloadWarmup   3: 4096 op, 518306958.00 ns, 126.5398 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 4096 op, 564919333.00 ns, 137.9198 us/op
+WorkloadActual   2: 4096 op, 534603708.00 ns, 130.5185 us/op
+WorkloadActual   3: 4096 op, 541403167.00 ns, 132.1785 us/op
+WorkloadActual   4: 4096 op, 464972375.00 ns, 113.5186 us/op
+WorkloadActual   5: 4096 op, 394030500.00 ns, 96.1989 us/op
+WorkloadActual   6: 4096 op, 518283625.00 ns, 126.5341 us/op
+WorkloadActual   7: 4096 op, 507565041.00 ns, 123.9172 us/op
+WorkloadActual   8: 4096 op, 554551916.00 ns, 135.3887 us/op
+WorkloadActual   9: 4096 op, 596198667.00 ns, 145.5563 us/op
+WorkloadActual  10: 4096 op, 656276125.00 ns, 160.2237 us/op
+WorkloadActual  11: 4096 op, 1277299792.00 ns, 311.8408 us/op
+WorkloadActual  12: 4096 op, 2234160958.00 ns, 545.4495 us/op
+
+// AfterActualRun
+WorkloadResult   1: 4096 op, 564919333.00 ns, 137.9198 us/op
+WorkloadResult   2: 4096 op, 534603708.00 ns, 130.5185 us/op
+WorkloadResult   3: 4096 op, 541403167.00 ns, 132.1785 us/op
+WorkloadResult   4: 4096 op, 464972375.00 ns, 113.5186 us/op
+WorkloadResult   5: 4096 op, 394030500.00 ns, 96.1989 us/op
+WorkloadResult   6: 4096 op, 518283625.00 ns, 126.5341 us/op
+WorkloadResult   7: 4096 op, 507565041.00 ns, 123.9172 us/op
+WorkloadResult   8: 4096 op, 554551916.00 ns, 135.3887 us/op
+WorkloadResult   9: 4096 op, 596198667.00 ns, 145.5563 us/op
+WorkloadResult  10: 4096 op, 656276125.00 ns, 160.2237 us/op
+// GC:  36 1 0 306249728 4096
+// Threading:  0 0 4096
+
+// AfterAll
+// Benchmark Process 76021 has exited with code 0.
+
+Mean = 130.195 μs, StdErr = 5.492 μs (4.22%), N = 10, StdDev = 17.369 μs
+Min = 96.199 μs, Q1 = 124.571 μs, Median = 131.348 μs, Q3 = 137.287 μs, Max = 160.224 μs
+IQR = 12.716 μs, LowerFence = 105.498 μs, UpperFence = 156.360 μs
+ConfidenceInterval = [103.937 μs; 156.454 μs] (CI 99.9%), Margin = 26.259 μs (20.17% of Mean)
+Skewness = -0.25, Kurtosis = 2.51, MValue = 2
+
+// ** Remained 26 (96,3%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 6m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.TransientDependency(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 1 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 192959.00 ns, 192.9590 us/op
+WorkloadJitting  1: 1 op, 242119250.00 ns, 242.1193 ms/op
+
+WorkloadPilot    1: 2 op, 2643958.00 ns, 1.3220 ms/op
+WorkloadPilot    2: 3 op, 491500.00 ns, 163.8333 us/op
+WorkloadPilot    3: 4 op, 790291.00 ns, 197.5728 us/op
+WorkloadPilot    4: 5 op, 721208.00 ns, 144.2416 us/op
+WorkloadPilot    5: 6 op, 1163208.00 ns, 193.8680 us/op
+WorkloadPilot    6: 7 op, 1151167.00 ns, 164.4524 us/op
+WorkloadPilot    7: 8 op, 978000.00 ns, 122.2500 us/op
+WorkloadPilot    8: 9 op, 1100416.00 ns, 122.2684 us/op
+WorkloadPilot    9: 10 op, 1865083.00 ns, 186.5083 us/op
+WorkloadPilot   10: 11 op, 2263541.00 ns, 205.7765 us/op
+WorkloadPilot   11: 12 op, 1699875.00 ns, 141.6563 us/op
+WorkloadPilot   12: 13 op, 2415959.00 ns, 185.8430 us/op
+WorkloadPilot   13: 14 op, 2316541.00 ns, 165.4672 us/op
+WorkloadPilot   14: 15 op, 2819709.00 ns, 187.9806 us/op
+WorkloadPilot   15: 16 op, 3076041.00 ns, 192.2526 us/op
+WorkloadPilot   16: 32 op, 4048459.00 ns, 126.5143 us/op
+WorkloadPilot   17: 64 op, 8754750.00 ns, 136.7930 us/op
+WorkloadPilot   18: 128 op, 35498125.00 ns, 277.3291 us/op
+WorkloadPilot   19: 256 op, 61799250.00 ns, 241.4033 us/op
+WorkloadPilot   20: 512 op, 148779917.00 ns, 290.5858 us/op
+WorkloadPilot   21: 1024 op, 228211625.00 ns, 222.8629 us/op
+WorkloadPilot   22: 2048 op, 300099250.00 ns, 146.5328 us/op
+WorkloadPilot   23: 4096 op, 581126166.00 ns, 141.8765 us/op
+
+WorkloadWarmup   1: 4096 op, 374117083.00 ns, 91.3372 us/op
+WorkloadWarmup   2: 4096 op, 269875375.00 ns, 65.8875 us/op
+WorkloadWarmup   3: 4096 op, 262174209.00 ns, 64.0074 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 4096 op, 271056167.00 ns, 66.1758 us/op
+WorkloadActual   2: 4096 op, 332614666.00 ns, 81.2048 us/op
+WorkloadActual   3: 4096 op, 308159209.00 ns, 75.2342 us/op
+WorkloadActual   4: 4096 op, 435539917.00 ns, 106.3330 us/op
+WorkloadActual   5: 4096 op, 379658709.00 ns, 92.6901 us/op
+WorkloadActual   6: 4096 op, 535082917.00 ns, 130.6355 us/op
+WorkloadActual   7: 4096 op, 296704916.00 ns, 72.4377 us/op
+WorkloadActual   8: 4096 op, 513410208.00 ns, 125.3443 us/op
+WorkloadActual   9: 4096 op, 396107709.00 ns, 96.7060 us/op
+WorkloadActual  10: 4096 op, 448653625.00 ns, 109.5346 us/op
+WorkloadActual  11: 4096 op, 346019209.00 ns, 84.4773 us/op
+WorkloadActual  12: 4096 op, 330222875.00 ns, 80.6208 us/op
+
+// AfterActualRun
+WorkloadResult   1: 4096 op, 271056167.00 ns, 66.1758 us/op
+WorkloadResult   2: 4096 op, 332614666.00 ns, 81.2048 us/op
+WorkloadResult   3: 4096 op, 308159209.00 ns, 75.2342 us/op
+WorkloadResult   4: 4096 op, 435539917.00 ns, 106.3330 us/op
+WorkloadResult   5: 4096 op, 379658709.00 ns, 92.6901 us/op
+WorkloadResult   6: 4096 op, 535082917.00 ns, 130.6355 us/op
+WorkloadResult   7: 4096 op, 296704916.00 ns, 72.4377 us/op
+WorkloadResult   8: 4096 op, 513410208.00 ns, 125.3443 us/op
+WorkloadResult   9: 4096 op, 396107709.00 ns, 96.7060 us/op
+WorkloadResult  10: 4096 op, 448653625.00 ns, 109.5346 us/op
+WorkloadResult  11: 4096 op, 346019209.00 ns, 84.4773 us/op
+WorkloadResult  12: 4096 op, 330222875.00 ns, 80.6208 us/op
+// GC:  23 0 0 196804608 4096
+// Threading:  0 0 4096
+
+// AfterAll
+// Benchmark Process 76691 has exited with code 0.
+
+Mean = 93.450 μs, StdErr = 5.998 μs (6.42%), N = 12, StdDev = 20.776 μs
+Min = 66.176 μs, Q1 = 79.274 μs, Median = 88.584 μs, Q3 = 107.133 μs, Max = 130.635 μs
+IQR = 27.859 μs, LowerFence = 37.485 μs, UpperFence = 148.922 μs
+ConfidenceInterval = [66.838 μs; 120.061 μs] (CI 99.9%), Margin = 26.611 μs (28.48% of Mean)
+Skewness = 0.46, Kurtosis = 1.77, MValue = 2
+
+// ** Remained 25 (92,6%) benchmark(s) to run. Estimated finish 2026-07-16 11:40 (0h 5m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ScopedDisposableTransitive(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 2 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 206250.00 ns, 206.2500 us/op
+WorkloadJitting  1: 1 op, 35087000.00 ns, 35.0870 ms/op
+
+WorkloadPilot    1: 2 op, 2003041.00 ns, 1.0015 ms/op
+WorkloadPilot    2: 3 op, 1131750.00 ns, 377.2500 us/op
+WorkloadPilot    3: 4 op, 4364708.00 ns, 1.0912 ms/op
+WorkloadPilot    4: 5 op, 3704625.00 ns, 740.9250 us/op
+WorkloadPilot    5: 6 op, 5534666.00 ns, 922.4443 us/op
+WorkloadPilot    6: 7 op, 5139625.00 ns, 734.2321 us/op
+WorkloadPilot    7: 8 op, 5653291.00 ns, 706.6614 us/op
+WorkloadPilot    8: 9 op, 6693209.00 ns, 743.6899 us/op
+WorkloadPilot    9: 10 op, 7007000.00 ns, 700.7000 us/op
+WorkloadPilot   10: 11 op, 7243750.00 ns, 658.5227 us/op
+WorkloadPilot   11: 12 op, 7609042.00 ns, 634.0868 us/op
+WorkloadPilot   12: 13 op, 8276375.00 ns, 636.6442 us/op
+WorkloadPilot   13: 14 op, 9070541.00 ns, 647.8958 us/op
+WorkloadPilot   14: 15 op, 11345500.00 ns, 756.3667 us/op
+WorkloadPilot   15: 16 op, 9351708.00 ns, 584.4818 us/op
+WorkloadPilot   16: 32 op, 18205458.00 ns, 568.9206 us/op
+WorkloadPilot   17: 64 op, 52549833.00 ns, 821.0911 us/op
+WorkloadPilot   18: 128 op, 111536167.00 ns, 871.3763 us/op
+WorkloadPilot   19: 256 op, 196003375.00 ns, 765.6382 us/op
+WorkloadPilot   20: 512 op, 356005042.00 ns, 695.3223 us/op
+WorkloadPilot   21: 1024 op, 273727125.00 ns, 267.3116 us/op
+WorkloadPilot   22: 2048 op, 373847333.00 ns, 182.5426 us/op
+WorkloadPilot   23: 4096 op, 849742333.00 ns, 207.4566 us/op
+
+WorkloadWarmup   1: 4096 op, 916511167.00 ns, 223.7576 us/op
+WorkloadWarmup   2: 4096 op, 937241500.00 ns, 228.8187 us/op
+WorkloadWarmup   3: 4096 op, 1067260041.00 ns, 260.5615 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 4096 op, 898986334.00 ns, 219.4791 us/op
+WorkloadActual   2: 4096 op, 901619334.00 ns, 220.1219 us/op
+WorkloadActual   3: 4096 op, 1506943917.00 ns, 367.9062 us/op
+WorkloadActual   4: 4096 op, 1142110500.00 ns, 278.8356 us/op
+WorkloadActual   5: 4096 op, 847530375.00 ns, 206.9166 us/op
+WorkloadActual   6: 4096 op, 1195562042.00 ns, 291.8853 us/op
+WorkloadActual   7: 4096 op, 1317319792.00 ns, 321.6113 us/op
+WorkloadActual   8: 4096 op, 942109708.00 ns, 230.0073 us/op
+WorkloadActual   9: 4096 op, 544063042.00 ns, 132.8279 us/op
+WorkloadActual  10: 4096 op, 713111584.00 ns, 174.0995 us/op
+WorkloadActual  11: 4096 op, 845509709.00 ns, 206.4233 us/op
+WorkloadActual  12: 4096 op, 844333583.00 ns, 206.1361 us/op
+
+// AfterActualRun
+WorkloadResult   1: 4096 op, 898986334.00 ns, 219.4791 us/op
+WorkloadResult   2: 4096 op, 901619334.00 ns, 220.1219 us/op
+WorkloadResult   3: 4096 op, 1506943917.00 ns, 367.9062 us/op
+WorkloadResult   4: 4096 op, 1142110500.00 ns, 278.8356 us/op
+WorkloadResult   5: 4096 op, 847530375.00 ns, 206.9166 us/op
+WorkloadResult   6: 4096 op, 1195562042.00 ns, 291.8853 us/op
+WorkloadResult   7: 4096 op, 1317319792.00 ns, 321.6113 us/op
+WorkloadResult   8: 4096 op, 942109708.00 ns, 230.0073 us/op
+WorkloadResult   9: 4096 op, 544063042.00 ns, 132.8279 us/op
+WorkloadResult  10: 4096 op, 713111584.00 ns, 174.0995 us/op
+WorkloadResult  11: 4096 op, 845509709.00 ns, 206.4233 us/op
+WorkloadResult  12: 4096 op, 844333583.00 ns, 206.1361 us/op
+// GC:  43 3 0 361660416 4096
+// Threading:  0 0 4096
+
+// AfterAll
+// Benchmark Process 76954 has exited with code 0.
+
+Mean = 238.021 μs, StdErr = 18.927 μs (7.95%), N = 12, StdDev = 65.566 μs
+Min = 132.828 μs, Q1 = 206.351 μs, Median = 219.800 μs, Q3 = 282.098 μs, Max = 367.906 μs
+IQR = 75.747 μs, LowerFence = 92.732 μs, UpperFence = 395.718 μs
+ConfidenceInterval = [154.042 μs; 322.000 μs] (CI 99.9%), Margin = 83.979 μs (35.28% of Mean)
+Skewness = 0.43, Kurtosis = 2.2, MValue = 2
+
+// ** Remained 24 (88,9%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 5m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.IntrinsicHeavy(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 3 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 369375.00 ns, 369.3750 us/op
+WorkloadJitting  1: 1 op, 5144167.00 ns, 5.1442 ms/op
+
+OverheadJitting  2: 16 op, 483916.00 ns, 30.2448 us/op
+WorkloadJitting  2: 16 op, 791541.00 ns, 49.4713 us/op
+
+WorkloadPilot    1: 16 op, 186542.00 ns, 11.6589 us/op
+WorkloadPilot    2: 32 op, 433125.00 ns, 13.5352 us/op
+WorkloadPilot    3: 64 op, 922250.00 ns, 14.4102 us/op
+WorkloadPilot    4: 128 op, 1546166.00 ns, 12.0794 us/op
+WorkloadPilot    5: 256 op, 2545041.00 ns, 9.9416 us/op
+WorkloadPilot    6: 512 op, 6011875.00 ns, 11.7419 us/op
+WorkloadPilot    7: 1024 op, 9376167.00 ns, 9.1564 us/op
+WorkloadPilot    8: 2048 op, 20868625.00 ns, 10.1898 us/op
+WorkloadPilot    9: 4096 op, 36278250.00 ns, 8.8570 us/op
+WorkloadPilot   10: 8192 op, 91774833.00 ns, 11.2030 us/op
+WorkloadPilot   11: 16384 op, 59573125.00 ns, 3.6361 us/op
+WorkloadPilot   12: 32768 op, 118900458.00 ns, 3.6286 us/op
+WorkloadPilot   13: 65536 op, 224271125.00 ns, 3.4221 us/op
+WorkloadPilot   14: 131072 op, 470015667.00 ns, 3.5859 us/op
+WorkloadPilot   15: 262144 op, 972189459.00 ns, 3.7086 us/op
+
+OverheadWarmup   1: 262144 op, 1237125.00 ns, 4.7193 ns/op
+OverheadWarmup   2: 262144 op, 1681000.00 ns, 6.4125 ns/op
+OverheadWarmup   3: 262144 op, 1191708.00 ns, 4.5460 ns/op
+OverheadWarmup   4: 262144 op, 1254875.00 ns, 4.7870 ns/op
+OverheadWarmup   5: 262144 op, 1084167.00 ns, 4.1358 ns/op
+
+OverheadActual   1: 262144 op, 1008750.00 ns, 3.8481 ns/op
+OverheadActual   2: 262144 op, 6064042.00 ns, 23.1325 ns/op
+OverheadActual   3: 262144 op, 1189334.00 ns, 4.5369 ns/op
+OverheadActual   4: 262144 op, 1117208.00 ns, 4.2618 ns/op
+OverheadActual   5: 262144 op, 1144833.00 ns, 4.3672 ns/op
+OverheadActual   6: 262144 op, 1019542.00 ns, 3.8892 ns/op
+OverheadActual   7: 262144 op, 1006917.00 ns, 3.8411 ns/op
+OverheadActual   8: 262144 op, 1004167.00 ns, 3.8306 ns/op
+OverheadActual   9: 262144 op, 1088292.00 ns, 4.1515 ns/op
+OverheadActual  10: 262144 op, 1043917.00 ns, 3.9822 ns/op
+OverheadActual  11: 262144 op, 1002292.00 ns, 3.8234 ns/op
+OverheadActual  12: 262144 op, 1185291.00 ns, 4.5215 ns/op
+OverheadActual  13: 262144 op, 1599958.00 ns, 6.1034 ns/op
+OverheadActual  14: 262144 op, 1127083.00 ns, 4.2995 ns/op
+OverheadActual  15: 262144 op, 1012958.00 ns, 3.8641 ns/op
+OverheadActual  16: 262144 op, 1581250.00 ns, 6.0320 ns/op
+OverheadActual  17: 262144 op, 1357333.00 ns, 5.1778 ns/op
+OverheadActual  18: 262144 op, 3061292.00 ns, 11.6779 ns/op
+OverheadActual  19: 262144 op, 1007125.00 ns, 3.8419 ns/op
+OverheadActual  20: 262144 op, 1004375.00 ns, 3.8314 ns/op
+
+WorkloadWarmup   1: 262144 op, 1568030750.00 ns, 5.9816 us/op
+WorkloadWarmup   2: 262144 op, 2075403584.00 ns, 7.9170 us/op
+WorkloadWarmup   3: 262144 op, 3190219709.00 ns, 12.1697 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 262144 op, 1627587041.00 ns, 6.2088 us/op
+WorkloadActual   2: 262144 op, 1188292375.00 ns, 4.5330 us/op
+WorkloadActual   3: 262144 op, 1614936916.00 ns, 6.1605 us/op
+WorkloadActual   4: 262144 op, 1193939542.00 ns, 4.5545 us/op
+WorkloadActual   5: 262144 op, 858681125.00 ns, 3.2756 us/op
+WorkloadActual   6: 262144 op, 576298500.00 ns, 2.1984 us/op
+WorkloadActual   7: 262144 op, 510363375.00 ns, 1.9469 us/op
+WorkloadActual   8: 262144 op, 483969875.00 ns, 1.8462 us/op
+WorkloadActual   9: 262144 op, 486340958.00 ns, 1.8552 us/op
+WorkloadActual  10: 262144 op, 487425750.00 ns, 1.8594 us/op
+WorkloadActual  11: 262144 op, 495003542.00 ns, 1.8883 us/op
+WorkloadActual  12: 262144 op, 475168500.00 ns, 1.8126 us/op
+
+// AfterActualRun
+WorkloadResult   1: 262144 op, 1626484291.00 ns, 6.2045 us/op
+WorkloadResult   2: 262144 op, 1187189625.00 ns, 4.5288 us/op
+WorkloadResult   3: 262144 op, 1613834166.00 ns, 6.1563 us/op
+WorkloadResult   4: 262144 op, 1192836792.00 ns, 4.5503 us/op
+WorkloadResult   5: 262144 op, 857578375.00 ns, 3.2714 us/op
+WorkloadResult   6: 262144 op, 575195750.00 ns, 2.1942 us/op
+WorkloadResult   7: 262144 op, 509260625.00 ns, 1.9427 us/op
+WorkloadResult   8: 262144 op, 482867125.00 ns, 1.8420 us/op
+WorkloadResult   9: 262144 op, 485238208.00 ns, 1.8510 us/op
+WorkloadResult  10: 262144 op, 486323000.00 ns, 1.8552 us/op
+WorkloadResult  11: 262144 op, 493900792.00 ns, 1.8841 us/op
+WorkloadResult  12: 262144 op, 474065750.00 ns, 1.8084 us/op
+// GC:  31 0 0 262144000 262144
+// Threading:  0 0 262144
+
+// AfterAll
+// Benchmark Process 77853 has exited with code 0.
+
+Mean = 3.174 μs, StdErr = 0.501 μs (15.77%), N = 12, StdDev = 1.734 μs
+Min = 1.808 μs, Q1 = 1.854 μs, Median = 2.068 μs, Q3 = 4.534 μs, Max = 6.205 μs
+IQR = 2.680 μs, LowerFence = -2.166 μs, UpperFence = 8.554 μs
+ConfidenceInterval = [0.953 μs; 5.395 μs] (CI 99.9%), Margin = 2.221 μs (69.99% of Mean)
+Skewness = 0.72, Kurtosis = 1.74, MValue = 3
+
+// ** Remained 23 (85,2%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 5m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.MixedIntrinsicAndActivities(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 4 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 103125.00 ns, 103.1250 us/op
+WorkloadJitting  1: 1 op, 15400041.00 ns, 15.4000 ms/op
+
+OverheadJitting  2: 16 op, 257875.00 ns, 16.1172 us/op
+WorkloadJitting  2: 16 op, 815708.00 ns, 50.9818 us/op
+
+WorkloadPilot    1: 16 op, 438625.00 ns, 27.4141 us/op
+WorkloadPilot    2: 32 op, 924459.00 ns, 28.8893 us/op
+WorkloadPilot    3: 64 op, 1897083.00 ns, 29.6419 us/op
+WorkloadPilot    4: 128 op, 3790792.00 ns, 29.6156 us/op
+WorkloadPilot    5: 256 op, 7395083.00 ns, 28.8870 us/op
+WorkloadPilot    6: 512 op, 15577417.00 ns, 30.4246 us/op
+WorkloadPilot    7: 1024 op, 29941750.00 ns, 29.2400 us/op
+WorkloadPilot    8: 2048 op, 58426000.00 ns, 28.5283 us/op
+WorkloadPilot    9: 4096 op, 127351125.00 ns, 31.0916 us/op
+WorkloadPilot   10: 8192 op, 296161708.00 ns, 36.1526 us/op
+WorkloadPilot   11: 16384 op, 325667375.00 ns, 19.8772 us/op
+WorkloadPilot   12: 32768 op, 440278167.00 ns, 13.4362 us/op
+WorkloadPilot   13: 65536 op, 741168584.00 ns, 11.3093 us/op
+
+OverheadWarmup   1: 65536 op, 144375.00 ns, 2.2030 ns/op
+OverheadWarmup   2: 65536 op, 143416.00 ns, 2.1884 ns/op
+OverheadWarmup   3: 65536 op, 143709.00 ns, 2.1928 ns/op
+OverheadWarmup   4: 65536 op, 143333.00 ns, 2.1871 ns/op
+OverheadWarmup   5: 65536 op, 143375.00 ns, 2.1877 ns/op
+OverheadWarmup   6: 65536 op, 145042.00 ns, 2.2132 ns/op
+OverheadWarmup   7: 65536 op, 144792.00 ns, 2.2094 ns/op
+
+OverheadActual   1: 65536 op, 146166.00 ns, 2.2303 ns/op
+OverheadActual   2: 65536 op, 146000.00 ns, 2.2278 ns/op
+OverheadActual   3: 65536 op, 143250.00 ns, 2.1858 ns/op
+OverheadActual   4: 65536 op, 176459.00 ns, 2.6926 ns/op
+OverheadActual   5: 65536 op, 143209.00 ns, 2.1852 ns/op
+OverheadActual   6: 65536 op, 144042.00 ns, 2.1979 ns/op
+OverheadActual   7: 65536 op, 143167.00 ns, 2.1846 ns/op
+OverheadActual   8: 65536 op, 144292.00 ns, 2.2017 ns/op
+OverheadActual   9: 65536 op, 144167.00 ns, 2.1998 ns/op
+OverheadActual  10: 65536 op, 144041.00 ns, 2.1979 ns/op
+OverheadActual  11: 65536 op, 143250.00 ns, 2.1858 ns/op
+OverheadActual  12: 65536 op, 143208.00 ns, 2.1852 ns/op
+OverheadActual  13: 65536 op, 143375.00 ns, 2.1877 ns/op
+OverheadActual  14: 65536 op, 143250.00 ns, 2.1858 ns/op
+OverheadActual  15: 65536 op, 143083.00 ns, 2.1833 ns/op
+
+WorkloadWarmup   1: 65536 op, 689016458.00 ns, 10.5136 us/op
+WorkloadWarmup   2: 65536 op, 674615375.00 ns, 10.2938 us/op
+WorkloadWarmup   3: 65536 op, 653725542.00 ns, 9.9751 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 65536 op, 650192416.00 ns, 9.9211 us/op
+WorkloadActual   2: 65536 op, 690393166.00 ns, 10.5346 us/op
+WorkloadActual   3: 65536 op, 686719000.00 ns, 10.4785 us/op
+WorkloadActual   4: 65536 op, 655844958.00 ns, 10.0074 us/op
+WorkloadActual   5: 65536 op, 674050083.00 ns, 10.2852 us/op
+WorkloadActual   6: 65536 op, 663003167.00 ns, 10.1166 us/op
+WorkloadActual   7: 65536 op, 666206292.00 ns, 10.1655 us/op
+WorkloadActual   8: 65536 op, 689150458.00 ns, 10.5156 us/op
+WorkloadActual   9: 65536 op, 715419167.00 ns, 10.9164 us/op
+WorkloadActual  10: 65536 op, 798250750.00 ns, 12.1803 us/op
+WorkloadActual  11: 65536 op, 736323917.00 ns, 11.2354 us/op
+WorkloadActual  12: 65536 op, 671590458.00 ns, 10.2477 us/op
+
+// AfterActualRun
+WorkloadResult   1: 65536 op, 650049041.00 ns, 9.9190 us/op
+WorkloadResult   2: 65536 op, 690249791.00 ns, 10.5324 us/op
+WorkloadResult   3: 65536 op, 686575625.00 ns, 10.4763 us/op
+WorkloadResult   4: 65536 op, 655701583.00 ns, 10.0052 us/op
+WorkloadResult   5: 65536 op, 673906708.00 ns, 10.2830 us/op
+WorkloadResult   6: 65536 op, 662859792.00 ns, 10.1144 us/op
+WorkloadResult   7: 65536 op, 666062917.00 ns, 10.1633 us/op
+WorkloadResult   8: 65536 op, 689007083.00 ns, 10.5134 us/op
+WorkloadResult   9: 65536 op, 715275792.00 ns, 10.9142 us/op
+WorkloadResult  10: 65536 op, 736180542.00 ns, 11.2332 us/op
+WorkloadResult  11: 65536 op, 671447083.00 ns, 10.2455 us/op
+// GC:  169 2 0 1417150464 65536
+// Threading:  0 0 65536
+
+// AfterAll
+// Benchmark Process 78740 has exited with code 0.
+
+Mean = 10.400 μs, StdErr = 0.119 μs (1.14%), N = 11, StdDev = 0.395 μs
+Min = 9.919 μs, Q1 = 10.139 μs, Median = 10.283 μs, Q3 = 10.523 μs, Max = 11.233 μs
+IQR = 0.384 μs, LowerFence = 9.563 μs, UpperFence = 11.099 μs
+ConfidenceInterval = [9.854 μs; 10.946 μs] (CI 99.9%), Margin = 0.546 μs (5.25% of Mean)
+Skewness = 0.75, Kurtosis = 2.4, MValue = 2
+
+// ** Remained 22 (81,5%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 5m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.IoBound(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 5 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 94333.00 ns, 94.3330 us/op
+WorkloadJitting  1: 1 op, 20777417.00 ns, 20.7774 ms/op
+
+OverheadJitting  2: 16 op, 244083.00 ns, 15.2552 us/op
+WorkloadJitting  2: 16 op, 82269958.00 ns, 5.1419 ms/op
+
+WorkloadPilot    1: 16 op, 84714167.00 ns, 5.2946 ms/op
+WorkloadPilot    2: 32 op, 165284792.00 ns, 5.1651 ms/op
+WorkloadPilot    3: 64 op, 331029917.00 ns, 5.1723 ms/op
+WorkloadPilot    4: 128 op, 667870000.00 ns, 5.2177 ms/op
+
+OverheadWarmup   1: 128 op, 3834.00 ns, 29.9531 ns/op
+OverheadWarmup   2: 128 op, 916.00 ns, 7.1563 ns/op
+OverheadWarmup   3: 128 op, 666.00 ns, 5.2031 ns/op
+OverheadWarmup   4: 128 op, 875.00 ns, 6.8359 ns/op
+OverheadWarmup   5: 128 op, 667.00 ns, 5.2109 ns/op
+OverheadWarmup   6: 128 op, 625.00 ns, 4.8828 ns/op
+OverheadWarmup   7: 128 op, 542.00 ns, 4.2344 ns/op
+OverheadWarmup   8: 128 op, 666.00 ns, 5.2031 ns/op
+OverheadWarmup   9: 128 op, 542.00 ns, 4.2344 ns/op
+
+OverheadActual   1: 128 op, 500.00 ns, 3.9063 ns/op
+OverheadActual   2: 128 op, 417.00 ns, 3.2578 ns/op
+OverheadActual   3: 128 op, 500.00 ns, 3.9063 ns/op
+OverheadActual   4: 128 op, 458.00 ns, 3.5781 ns/op
+OverheadActual   5: 128 op, 416.00 ns, 3.2500 ns/op
+OverheadActual   6: 128 op, 750.00 ns, 5.8594 ns/op
+OverheadActual   7: 128 op, 458.00 ns, 3.5781 ns/op
+OverheadActual   8: 128 op, 333.00 ns, 2.6016 ns/op
+OverheadActual   9: 128 op, 416.00 ns, 3.2500 ns/op
+OverheadActual  10: 128 op, 750.00 ns, 5.8594 ns/op
+OverheadActual  11: 128 op, 417.00 ns, 3.2578 ns/op
+OverheadActual  12: 128 op, 334.00 ns, 2.6094 ns/op
+OverheadActual  13: 128 op, 416.00 ns, 3.2500 ns/op
+OverheadActual  14: 128 op, 583.00 ns, 4.5547 ns/op
+OverheadActual  15: 128 op, 459.00 ns, 3.5859 ns/op
+OverheadActual  16: 128 op, 500.00 ns, 3.9063 ns/op
+OverheadActual  17: 128 op, 333.00 ns, 2.6016 ns/op
+OverheadActual  18: 128 op, 416.00 ns, 3.2500 ns/op
+OverheadActual  19: 128 op, 375.00 ns, 2.9297 ns/op
+OverheadActual  20: 128 op, 666.00 ns, 5.2031 ns/op
+
+WorkloadWarmup   1: 128 op, 648320542.00 ns, 5.0650 ms/op
+WorkloadWarmup   2: 128 op, 670138125.00 ns, 5.2355 ms/op
+WorkloadWarmup   3: 128 op, 667650875.00 ns, 5.2160 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 128 op, 674485917.00 ns, 5.2694 ms/op
+WorkloadActual   2: 128 op, 659259667.00 ns, 5.1505 ms/op
+WorkloadActual   3: 128 op, 697057042.00 ns, 5.4458 ms/op
+WorkloadActual   4: 128 op, 707230833.00 ns, 5.5252 ms/op
+WorkloadActual   5: 128 op, 689661958.00 ns, 5.3880 ms/op
+WorkloadActual   6: 128 op, 678942166.00 ns, 5.3042 ms/op
+WorkloadActual   7: 128 op, 651195375.00 ns, 5.0875 ms/op
+WorkloadActual   8: 128 op, 685404667.00 ns, 5.3547 ms/op
+WorkloadActual   9: 128 op, 666146875.00 ns, 5.2043 ms/op
+WorkloadActual  10: 128 op, 659385583.00 ns, 5.1514 ms/op
+WorkloadActual  11: 128 op, 673315000.00 ns, 5.2603 ms/op
+WorkloadActual  12: 128 op, 668094042.00 ns, 5.2195 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 128 op, 674485479.50 ns, 5.2694 ms/op
+WorkloadResult   2: 128 op, 659259229.50 ns, 5.1505 ms/op
+WorkloadResult   3: 128 op, 697056604.50 ns, 5.4458 ms/op
+WorkloadResult   4: 128 op, 707230395.50 ns, 5.5252 ms/op
+WorkloadResult   5: 128 op, 689661520.50 ns, 5.3880 ms/op
+WorkloadResult   6: 128 op, 678941728.50 ns, 5.3042 ms/op
+WorkloadResult   7: 128 op, 651194937.50 ns, 5.0875 ms/op
+WorkloadResult   8: 128 op, 685404229.50 ns, 5.3547 ms/op
+WorkloadResult   9: 128 op, 666146437.50 ns, 5.2043 ms/op
+WorkloadResult  10: 128 op, 659385145.50 ns, 5.1514 ms/op
+WorkloadResult  11: 128 op, 673314562.50 ns, 5.2603 ms/op
+WorkloadResult  12: 128 op, 668093604.50 ns, 5.2195 ms/op
+// GC:  0 0 0 1275904 128
+// Threading:  512 0 128
+
+// AfterAll
+// Benchmark Process 79181 has exited with code 0.
+
+Mean = 5.280 ms, StdErr = 0.038 ms (0.71%), N = 12, StdDev = 0.130 ms
+Min = 5.087 ms, Q1 = 5.191 ms, Median = 5.265 ms, Q3 = 5.363 ms, Max = 5.525 ms
+IQR = 0.172 ms, LowerFence = 4.933 ms, UpperFence = 5.621 ms
+ConfidenceInterval = [5.114 ms; 5.446 ms] (CI 99.9%), Margin = 0.166 ms (3.15% of Mean)
+Skewness = 0.34, Kurtosis = 1.9, MValue = 2
+
+// ** Remained 21 (77,8%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 5m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.Retry(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 6 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 110333.00 ns, 110.3330 us/op
+WorkloadJitting  1: 1 op, 17704792.00 ns, 17.7048 ms/op
+
+OverheadJitting  2: 16 op, 296000.00 ns, 18.5000 us/op
+WorkloadJitting  2: 16 op, 753458.00 ns, 47.0911 us/op
+
+WorkloadPilot    1: 16 op, 172083.00 ns, 10.7552 us/op
+WorkloadPilot    2: 32 op, 282542.00 ns, 8.8294 us/op
+WorkloadPilot    3: 64 op, 553583.00 ns, 8.6497 us/op
+WorkloadPilot    4: 128 op, 1121125.00 ns, 8.7588 us/op
+WorkloadPilot    5: 256 op, 2158209.00 ns, 8.4305 us/op
+WorkloadPilot    6: 512 op, 4101333.00 ns, 8.0104 us/op
+WorkloadPilot    7: 1024 op, 8079166.00 ns, 7.8898 us/op
+WorkloadPilot    8: 2048 op, 17448833.00 ns, 8.5199 us/op
+WorkloadPilot    9: 4096 op, 32121208.00 ns, 7.8421 us/op
+WorkloadPilot   10: 8192 op, 70648958.00 ns, 8.6241 us/op
+WorkloadPilot   11: 16384 op, 133863209.00 ns, 8.1704 us/op
+WorkloadPilot   12: 32768 op, 201746375.00 ns, 6.1568 us/op
+WorkloadPilot   13: 65536 op, 187875000.00 ns, 2.8667 us/op
+WorkloadPilot   14: 131072 op, 341677125.00 ns, 2.6068 us/op
+WorkloadPilot   15: 262144 op, 687528416.00 ns, 2.6227 us/op
+
+OverheadWarmup   1: 262144 op, 548167.00 ns, 2.0911 ns/op
+OverheadWarmup   2: 262144 op, 524875.00 ns, 2.0022 ns/op
+OverheadWarmup   3: 262144 op, 535083.00 ns, 2.0412 ns/op
+OverheadWarmup   4: 262144 op, 524666.00 ns, 2.0014 ns/op
+OverheadWarmup   5: 262144 op, 536083.00 ns, 2.0450 ns/op
+OverheadWarmup   6: 262144 op, 524417.00 ns, 2.0005 ns/op
+
+OverheadActual   1: 262144 op, 533125.00 ns, 2.0337 ns/op
+OverheadActual   2: 262144 op, 583750.00 ns, 2.2268 ns/op
+OverheadActual   3: 262144 op, 570458.00 ns, 2.1761 ns/op
+OverheadActual   4: 262144 op, 532833.00 ns, 2.0326 ns/op
+OverheadActual   5: 262144 op, 532875.00 ns, 2.0328 ns/op
+OverheadActual   6: 262144 op, 535667.00 ns, 2.0434 ns/op
+OverheadActual   7: 262144 op, 510917.00 ns, 1.9490 ns/op
+OverheadActual   8: 262144 op, 510292.00 ns, 1.9466 ns/op
+OverheadActual   9: 262144 op, 510417.00 ns, 1.9471 ns/op
+OverheadActual  10: 262144 op, 510333.00 ns, 1.9468 ns/op
+OverheadActual  11: 262144 op, 519833.00 ns, 1.9830 ns/op
+OverheadActual  12: 262144 op, 510500.00 ns, 1.9474 ns/op
+OverheadActual  13: 262144 op, 512209.00 ns, 1.9539 ns/op
+OverheadActual  14: 262144 op, 529250.00 ns, 2.0189 ns/op
+OverheadActual  15: 262144 op, 538625.00 ns, 2.0547 ns/op
+
+WorkloadWarmup   1: 262144 op, 713166417.00 ns, 2.7205 us/op
+WorkloadWarmup   2: 262144 op, 783332458.00 ns, 2.9882 us/op
+WorkloadWarmup   3: 262144 op, 747849416.00 ns, 2.8528 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 262144 op, 844901042.00 ns, 3.2230 us/op
+WorkloadActual   2: 262144 op, 834984875.00 ns, 3.1852 us/op
+WorkloadActual   3: 262144 op, 825746708.00 ns, 3.1500 us/op
+WorkloadActual   4: 262144 op, 968569458.00 ns, 3.6948 us/op
+WorkloadActual   5: 262144 op, 961575584.00 ns, 3.6681 us/op
+WorkloadActual   6: 262144 op, 942796000.00 ns, 3.5965 us/op
+WorkloadActual   7: 262144 op, 1056683292.00 ns, 4.0309 us/op
+WorkloadActual   8: 262144 op, 917806292.00 ns, 3.5012 us/op
+WorkloadActual   9: 262144 op, 930285709.00 ns, 3.5488 us/op
+WorkloadActual  10: 262144 op, 830046750.00 ns, 3.1664 us/op
+WorkloadActual  11: 262144 op, 705069459.00 ns, 2.6896 us/op
+WorkloadActual  12: 262144 op, 688222459.00 ns, 2.6254 us/op
+
+// AfterActualRun
+WorkloadResult   1: 262144 op, 844371792.00 ns, 3.2210 us/op
+WorkloadResult   2: 262144 op, 834455625.00 ns, 3.1832 us/op
+WorkloadResult   3: 262144 op, 825217458.00 ns, 3.1480 us/op
+WorkloadResult   4: 262144 op, 968040208.00 ns, 3.6928 us/op
+WorkloadResult   5: 262144 op, 961046334.00 ns, 3.6661 us/op
+WorkloadResult   6: 262144 op, 942266750.00 ns, 3.5945 us/op
+WorkloadResult   7: 262144 op, 1056154042.00 ns, 4.0289 us/op
+WorkloadResult   8: 262144 op, 917277042.00 ns, 3.4991 us/op
+WorkloadResult   9: 262144 op, 929756459.00 ns, 3.5467 us/op
+WorkloadResult  10: 262144 op, 829517500.00 ns, 3.1644 us/op
+WorkloadResult  11: 262144 op, 704540209.00 ns, 2.6876 us/op
+WorkloadResult  12: 262144 op, 687693209.00 ns, 2.6233 us/op
+// GC:  170 1 0 1428160512 262144
+// Threading:  0 0 262144
+
+// AfterAll
+// Benchmark Process 79563 has exited with code 0.
+
+Mean = 3.338 μs, StdErr = 0.119 μs (3.58%), N = 12, StdDev = 0.414 μs
+Min = 2.623 μs, Q1 = 3.160 μs, Median = 3.360 μs, Q3 = 3.612 μs, Max = 4.029 μs
+IQR = 0.452 μs, LowerFence = 2.482 μs, UpperFence = 4.291 μs
+ConfidenceInterval = [2.808 μs; 3.868 μs] (CI 99.9%), Margin = 0.530 μs (15.88% of Mean)
+Skewness = -0.26, Kurtosis = 2, MValue = 2.57
+
+// ** Remained 20 (74,1%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 4m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ResumeInFreshBurst(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 7 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 107292.00 ns, 107.2920 us/op
+WorkloadJitting  1: 1 op, 14806542.00 ns, 14.8065 ms/op
+
+OverheadJitting  2: 16 op, 245709.00 ns, 15.3568 us/op
+WorkloadJitting  2: 16 op, 1101334.00 ns, 68.8334 us/op
+
+WorkloadPilot    1: 16 op, 164084.00 ns, 10.2553 us/op
+WorkloadPilot    2: 32 op, 309833.00 ns, 9.6823 us/op
+WorkloadPilot    3: 64 op, 643083.00 ns, 10.0482 us/op
+WorkloadPilot    4: 128 op, 1298292.00 ns, 10.1429 us/op
+WorkloadPilot    5: 256 op, 2535500.00 ns, 9.9043 us/op
+WorkloadPilot    6: 512 op, 4847000.00 ns, 9.4668 us/op
+WorkloadPilot    7: 1024 op, 9863250.00 ns, 9.6321 us/op
+WorkloadPilot    8: 2048 op, 19825916.00 ns, 9.6806 us/op
+WorkloadPilot    9: 4096 op, 40810916.00 ns, 9.9636 us/op
+WorkloadPilot   10: 8192 op, 76852041.00 ns, 9.3814 us/op
+WorkloadPilot   11: 16384 op, 173852250.00 ns, 10.6111 us/op
+WorkloadPilot   12: 32768 op, 254183500.00 ns, 7.7571 us/op
+WorkloadPilot   13: 65536 op, 245639084.00 ns, 3.7482 us/op
+WorkloadPilot   14: 131072 op, 461308042.00 ns, 3.5195 us/op
+WorkloadPilot   15: 262144 op, 973559542.00 ns, 3.7138 us/op
+
+OverheadWarmup   1: 262144 op, 511208.00 ns, 1.9501 ns/op
+OverheadWarmup   2: 262144 op, 510292.00 ns, 1.9466 ns/op
+OverheadWarmup   3: 262144 op, 511917.00 ns, 1.9528 ns/op
+OverheadWarmup   4: 262144 op, 510167.00 ns, 1.9461 ns/op
+OverheadWarmup   5: 262144 op, 514875.00 ns, 1.9641 ns/op
+OverheadWarmup   6: 262144 op, 510416.00 ns, 1.9471 ns/op
+
+OverheadActual   1: 262144 op, 514375.00 ns, 1.9622 ns/op
+OverheadActual   2: 262144 op, 536708.00 ns, 2.0474 ns/op
+OverheadActual   3: 262144 op, 510167.00 ns, 1.9461 ns/op
+OverheadActual   4: 262144 op, 513416.00 ns, 1.9585 ns/op
+OverheadActual   5: 262144 op, 507625.00 ns, 1.9364 ns/op
+OverheadActual   6: 262144 op, 513833.00 ns, 1.9601 ns/op
+OverheadActual   7: 262144 op, 510750.00 ns, 1.9484 ns/op
+OverheadActual   8: 262144 op, 511125.00 ns, 1.9498 ns/op
+OverheadActual   9: 262144 op, 511000.00 ns, 1.9493 ns/op
+OverheadActual  10: 262144 op, 513458.00 ns, 1.9587 ns/op
+OverheadActual  11: 262144 op, 523667.00 ns, 1.9976 ns/op
+OverheadActual  12: 262144 op, 510250.00 ns, 1.9464 ns/op
+OverheadActual  13: 262144 op, 510167.00 ns, 1.9461 ns/op
+OverheadActual  14: 262144 op, 513250.00 ns, 1.9579 ns/op
+OverheadActual  15: 262144 op, 510083.00 ns, 1.9458 ns/op
+
+WorkloadWarmup   1: 262144 op, 930811875.00 ns, 3.5508 us/op
+WorkloadWarmup   2: 262144 op, 3902975166.00 ns, 14.8887 us/op
+WorkloadWarmup   3: 262144 op, 13697968833.00 ns, 52.2536 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 262144 op, 2387249250.00 ns, 9.1066 us/op
+WorkloadActual   2: 262144 op, 3219196541.00 ns, 12.2803 us/op
+WorkloadActual   3: 262144 op, 2238552708.00 ns, 8.5394 us/op
+WorkloadActual   4: 262144 op, 2046289167.00 ns, 7.8060 us/op
+WorkloadActual   5: 262144 op, 3592395375.00 ns, 13.7039 us/op
+WorkloadActual   6: 262144 op, 4092875083.00 ns, 15.6131 us/op
+WorkloadActual   7: 262144 op, 3877628583.00 ns, 14.7920 us/op
+WorkloadActual   8: 262144 op, 3264274000.00 ns, 12.4522 us/op
+WorkloadActual   9: 262144 op, 3550178500.00 ns, 13.5429 us/op
+WorkloadActual  10: 262144 op, 2756092958.00 ns, 10.5137 us/op
+WorkloadActual  11: 262144 op, 3029933959.00 ns, 11.5583 us/op
+WorkloadActual  12: 262144 op, 1237078000.00 ns, 4.7191 us/op
+
+// AfterActualRun
+WorkloadResult   1: 262144 op, 2386738125.00 ns, 9.1047 us/op
+WorkloadResult   2: 262144 op, 3218685416.00 ns, 12.2783 us/op
+WorkloadResult   3: 262144 op, 2238041583.00 ns, 8.5375 us/op
+WorkloadResult   4: 262144 op, 2045778042.00 ns, 7.8040 us/op
+WorkloadResult   5: 262144 op, 3591884250.00 ns, 13.7020 us/op
+WorkloadResult   6: 262144 op, 4092363958.00 ns, 15.6111 us/op
+WorkloadResult   7: 262144 op, 3877117458.00 ns, 14.7900 us/op
+WorkloadResult   8: 262144 op, 3263762875.00 ns, 12.4503 us/op
+WorkloadResult   9: 262144 op, 3549667375.00 ns, 13.5409 us/op
+WorkloadResult  10: 262144 op, 2755581833.00 ns, 10.5117 us/op
+WorkloadResult  11: 262144 op, 3029422834.00 ns, 11.5563 us/op
+WorkloadResult  12: 262144 op, 1236566875.00 ns, 4.7171 us/op
+// GC:  219 2 0 1837105152 262144
+// Threading:  0 0 262144
+
+// AfterAll
+// Benchmark Process 80186 has exited with code 0.
+
+Mean = 11.217 μs, StdErr = 0.923 μs (8.23%), N = 12, StdDev = 3.197 μs
+Min = 4.717 μs, Q1 = 8.963 μs, Median = 11.917 μs, Q3 = 13.581 μs, Max = 15.611 μs
+IQR = 4.618 μs, LowerFence = 2.035 μs, UpperFence = 20.509 μs
+ConfidenceInterval = [7.122 μs; 15.312 μs] (CI 99.9%), Margin = 4.095 μs (36.51% of Mean)
+Skewness = -0.46, Kurtosis = 2.07, MValue = 2
+
+// ** Remained 19 (70,4%) benchmark(s) to run. Estimated finish 2026-07-16 11:43 (0h 6m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ConcurrentDrain(Strategy: BurstOnly)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 8 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 177292.00 ns, 177.2920 us/op
+WorkloadJitting  1: 1 op, 39334333.00 ns, 39.3343 ms/op
+
+WorkloadPilot    1: 2 op, 574083.00 ns, 287.0415 us/op
+WorkloadPilot    2: 3 op, 935042.00 ns, 311.6807 us/op
+WorkloadPilot    3: 4 op, 3519916.00 ns, 879.9790 us/op
+WorkloadPilot    4: 5 op, 3455416.00 ns, 691.0832 us/op
+WorkloadPilot    5: 6 op, 5710750.00 ns, 951.7917 us/op
+WorkloadPilot    6: 7 op, 4910833.00 ns, 701.5476 us/op
+WorkloadPilot    7: 8 op, 5934208.00 ns, 741.7760 us/op
+WorkloadPilot    8: 9 op, 8459333.00 ns, 939.9259 us/op
+WorkloadPilot    9: 10 op, 7578708.00 ns, 757.8708 us/op
+WorkloadPilot   10: 11 op, 12182166.00 ns, 1.1075 ms/op
+WorkloadPilot   11: 12 op, 7478125.00 ns, 623.1771 us/op
+WorkloadPilot   12: 13 op, 8206834.00 ns, 631.2949 us/op
+WorkloadPilot   13: 14 op, 13122833.00 ns, 937.3452 us/op
+WorkloadPilot   14: 15 op, 14075209.00 ns, 938.3473 us/op
+WorkloadPilot   15: 16 op, 16200708.00 ns, 1.0125 ms/op
+WorkloadPilot   16: 32 op, 38552625.00 ns, 1.2048 ms/op
+WorkloadPilot   17: 64 op, 51535292.00 ns, 805.2389 us/op
+WorkloadPilot   18: 128 op, 104080125.00 ns, 813.1260 us/op
+WorkloadPilot   19: 256 op, 263617708.00 ns, 1.0298 ms/op
+WorkloadPilot   20: 512 op, 677121708.00 ns, 1.3225 ms/op
+
+WorkloadWarmup   1: 512 op, 191991291.00 ns, 374.9830 us/op
+WorkloadWarmup   2: 512 op, 113827792.00 ns, 222.3199 us/op
+WorkloadWarmup   3: 512 op, 104847708.00 ns, 204.7807 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 512 op, 197590750.00 ns, 385.9194 us/op
+WorkloadActual   2: 512 op, 300280833.00 ns, 586.4860 us/op
+WorkloadActual   3: 512 op, 145926250.00 ns, 285.0122 us/op
+WorkloadActual   4: 512 op, 141768375.00 ns, 276.8914 us/op
+WorkloadActual   5: 512 op, 477218209.00 ns, 932.0668 us/op
+WorkloadActual   6: 512 op, 183511417.00 ns, 358.4207 us/op
+WorkloadActual   7: 512 op, 270743291.00 ns, 528.7955 us/op
+WorkloadActual   8: 512 op, 177372833.00 ns, 346.4313 us/op
+WorkloadActual   9: 512 op, 1205300125.00 ns, 2.3541 ms/op
+WorkloadActual  10: 512 op, 429880500.00 ns, 839.6104 us/op
+WorkloadActual  11: 512 op, 212828625.00 ns, 415.6809 us/op
+WorkloadActual  12: 512 op, 683447083.00 ns, 1.3349 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 512 op, 197590750.00 ns, 385.9194 us/op
+WorkloadResult   2: 512 op, 300280833.00 ns, 586.4860 us/op
+WorkloadResult   3: 512 op, 145926250.00 ns, 285.0122 us/op
+WorkloadResult   4: 512 op, 141768375.00 ns, 276.8914 us/op
+WorkloadResult   5: 512 op, 477218209.00 ns, 932.0668 us/op
+WorkloadResult   6: 512 op, 183511417.00 ns, 358.4207 us/op
+WorkloadResult   7: 512 op, 270743291.00 ns, 528.7955 us/op
+WorkloadResult   8: 512 op, 177372833.00 ns, 346.4313 us/op
+WorkloadResult   9: 512 op, 429880500.00 ns, 839.6104 us/op
+WorkloadResult  10: 512 op, 212828625.00 ns, 415.6809 us/op
+WorkloadResult  11: 512 op, 683447083.00 ns, 1.3349 ms/op
+// GC:  5 0 0 45699072 512
+// Threading:  0 0 512
+
+// AfterAll
+// Benchmark Process 82381 has exited with code 0.
+
+Mean = 571.834 μs, StdErr = 100.467 μs (17.57%), N = 11, StdDev = 333.212 μs
+Min = 276.891 μs, Q1 = 352.426 μs, Median = 415.681 μs, Q3 = 713.048 μs, Max = 1,334.858 μs
+IQR = 360.622 μs, LowerFence = -188.507 μs, UpperFence = 1,253.981 μs
+ConfidenceInterval = [111.002 μs; 1,032.666 μs] (CI 99.9%), Margin = 460.832 μs (80.59% of Mean)
+Skewness = 1.06, Kurtosis = 2.82, MValue = 2.29
+
+// ** Remained 18 (66,7%) benchmark(s) to run. Estimated finish 2026-07-16 11:43 (0h 5m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.NoOp(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 9 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 227291.00 ns, 227.2910 us/op
+WorkloadJitting  1: 1 op, 284793375.00 ns, 284.7934 ms/op
+
+WorkloadPilot    1: 2 op, 642875.00 ns, 321.4375 us/op
+WorkloadPilot    2: 3 op, 2358500.00 ns, 786.1667 us/op
+WorkloadPilot    3: 4 op, 1843875.00 ns, 460.9688 us/op
+WorkloadPilot    4: 5 op, 3193750.00 ns, 638.7500 us/op
+WorkloadPilot    5: 6 op, 2453708.00 ns, 408.9513 us/op
+WorkloadPilot    6: 7 op, 3774583.00 ns, 539.2261 us/op
+WorkloadPilot    7: 8 op, 4621542.00 ns, 577.6928 us/op
+WorkloadPilot    8: 9 op, 4347292.00 ns, 483.0324 us/op
+WorkloadPilot    9: 10 op, 5728084.00 ns, 572.8084 us/op
+WorkloadPilot   10: 11 op, 5866709.00 ns, 533.3372 us/op
+WorkloadPilot   11: 12 op, 5893375.00 ns, 491.1146 us/op
+WorkloadPilot   12: 13 op, 6053625.00 ns, 465.6635 us/op
+WorkloadPilot   13: 14 op, 7375000.00 ns, 526.7857 us/op
+WorkloadPilot   14: 15 op, 5634250.00 ns, 375.6167 us/op
+WorkloadPilot   15: 16 op, 6615000.00 ns, 413.4375 us/op
+WorkloadPilot   16: 32 op, 171838084.00 ns, 5.3699 ms/op
+WorkloadPilot   17: 64 op, 118963584.00 ns, 1.8588 ms/op
+WorkloadPilot   18: 128 op, 436204250.00 ns, 3.4078 ms/op
+WorkloadPilot   19: 256 op, 450006125.00 ns, 1.7578 ms/op
+WorkloadPilot   20: 512 op, 402448667.00 ns, 786.0326 us/op
+WorkloadPilot   21: 1024 op, 710746250.00 ns, 694.0881 us/op
+
+WorkloadWarmup   1: 1024 op, 338471292.00 ns, 330.5384 us/op
+WorkloadWarmup   2: 1024 op, 297411500.00 ns, 290.4409 us/op
+WorkloadWarmup   3: 1024 op, 189598875.00 ns, 185.1552 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 1024 op, 454987750.00 ns, 444.3240 us/op
+WorkloadActual   2: 1024 op, 517400250.00 ns, 505.2737 us/op
+WorkloadActual   3: 1024 op, 314462250.00 ns, 307.0920 us/op
+WorkloadActual   4: 1024 op, 163892458.00 ns, 160.0512 us/op
+WorkloadActual   5: 1024 op, 177320167.00 ns, 173.1642 us/op
+WorkloadActual   6: 1024 op, 164707916.00 ns, 160.8476 us/op
+WorkloadActual   7: 1024 op, 164391625.00 ns, 160.5387 us/op
+WorkloadActual   8: 1024 op, 182123875.00 ns, 177.8553 us/op
+WorkloadActual   9: 1024 op, 236275708.00 ns, 230.7380 us/op
+WorkloadActual  10: 1024 op, 175401083.00 ns, 171.2901 us/op
+WorkloadActual  11: 1024 op, 216068416.00 ns, 211.0043 us/op
+WorkloadActual  12: 1024 op, 292355333.00 ns, 285.5033 us/op
+
+// AfterActualRun
+WorkloadResult   1: 1024 op, 454987750.00 ns, 444.3240 us/op
+WorkloadResult   2: 1024 op, 314462250.00 ns, 307.0920 us/op
+WorkloadResult   3: 1024 op, 163892458.00 ns, 160.0512 us/op
+WorkloadResult   4: 1024 op, 177320167.00 ns, 173.1642 us/op
+WorkloadResult   5: 1024 op, 164707916.00 ns, 160.8476 us/op
+WorkloadResult   6: 1024 op, 164391625.00 ns, 160.5387 us/op
+WorkloadResult   7: 1024 op, 182123875.00 ns, 177.8553 us/op
+WorkloadResult   8: 1024 op, 236275708.00 ns, 230.7380 us/op
+WorkloadResult   9: 1024 op, 175401083.00 ns, 171.2901 us/op
+WorkloadResult  10: 1024 op, 216068416.00 ns, 211.0043 us/op
+WorkloadResult  11: 1024 op, 292355333.00 ns, 285.5033 us/op
+// GC:  9 0 0 82067456 1024
+// Threading:  0 0 1024
+
+// AfterAll
+// Benchmark Process 82704 has exited with code 0.
+
+Mean = 225.674 μs, StdErr = 26.801 μs (11.88%), N = 11, StdDev = 88.888 μs
+Min = 160.051 μs, Q1 = 166.069 μs, Median = 177.855 μs, Q3 = 258.121 μs, Max = 444.324 μs
+IQR = 92.052 μs, LowerFence = 27.991 μs, UpperFence = 396.198 μs
+ConfidenceInterval = [102.742 μs; 348.605 μs] (CI 99.9%), Margin = 122.932 μs (54.47% of Mean)
+Skewness = 1.29, Kurtosis = 3.52, MValue = 2.29
+
+// ** Remained 17 (63,0%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 5m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.TransientDependency(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 10 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 192000.00 ns, 192.0000 us/op
+WorkloadJitting  1: 1 op, 262566500.00 ns, 262.5665 ms/op
+
+WorkloadPilot    1: 2 op, 1201416.00 ns, 600.7080 us/op
+WorkloadPilot    2: 3 op, 924125.00 ns, 308.0417 us/op
+WorkloadPilot    3: 4 op, 852250.00 ns, 213.0625 us/op
+WorkloadPilot    4: 5 op, 941708.00 ns, 188.3416 us/op
+WorkloadPilot    5: 6 op, 1350167.00 ns, 225.0278 us/op
+WorkloadPilot    6: 7 op, 1480916.00 ns, 211.5594 us/op
+WorkloadPilot    7: 8 op, 1706958.00 ns, 213.3698 us/op
+WorkloadPilot    8: 9 op, 1474625.00 ns, 163.8472 us/op
+WorkloadPilot    9: 10 op, 1633625.00 ns, 163.3625 us/op
+WorkloadPilot   10: 11 op, 2552750.00 ns, 232.0682 us/op
+WorkloadPilot   11: 12 op, 3231792.00 ns, 269.3160 us/op
+WorkloadPilot   12: 13 op, 3581125.00 ns, 275.4712 us/op
+WorkloadPilot   13: 14 op, 2236750.00 ns, 159.7679 us/op
+WorkloadPilot   14: 15 op, 3476166.00 ns, 231.7444 us/op
+WorkloadPilot   15: 16 op, 3265375.00 ns, 204.0859 us/op
+WorkloadPilot   16: 32 op, 5761125.00 ns, 180.0352 us/op
+WorkloadPilot   17: 64 op, 94793250.00 ns, 1.4811 ms/op
+WorkloadPilot   18: 128 op, 39387417.00 ns, 307.7142 us/op
+WorkloadPilot   19: 256 op, 80124375.00 ns, 312.9858 us/op
+WorkloadPilot   20: 512 op, 189907959.00 ns, 370.9140 us/op
+WorkloadPilot   21: 1024 op, 360603792.00 ns, 352.1521 us/op
+WorkloadPilot   22: 2048 op, 197971250.00 ns, 96.6656 us/op
+WorkloadPilot   23: 4096 op, 344093166.00 ns, 84.0071 us/op
+WorkloadPilot   24: 8192 op, 637053875.00 ns, 77.7654 us/op
+
+WorkloadWarmup   1: 8192 op, 764288750.00 ns, 93.2970 us/op
+WorkloadWarmup   2: 8192 op, 847806417.00 ns, 103.4920 us/op
+WorkloadWarmup   3: 8192 op, 1371761333.00 ns, 167.4513 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 8192 op, 958764625.00 ns, 117.0367 us/op
+WorkloadActual   2: 8192 op, 995468667.00 ns, 121.5172 us/op
+WorkloadActual   3: 8192 op, 570234916.00 ns, 69.6088 us/op
+WorkloadActual   4: 8192 op, 635621125.00 ns, 77.5905 us/op
+WorkloadActual   5: 8192 op, 547056041.00 ns, 66.7793 us/op
+WorkloadActual   6: 8192 op, 390519583.00 ns, 47.6708 us/op
+WorkloadActual   7: 8192 op, 329938500.00 ns, 40.2757 us/op
+WorkloadActual   8: 8192 op, 305640584.00 ns, 37.3096 us/op
+WorkloadActual   9: 8192 op, 295661958.00 ns, 36.0915 us/op
+WorkloadActual  10: 8192 op, 305620583.00 ns, 37.3072 us/op
+WorkloadActual  11: 8192 op, 321201000.00 ns, 39.2091 us/op
+WorkloadActual  12: 8192 op, 309797791.00 ns, 37.8171 us/op
+
+// AfterActualRun
+WorkloadResult   1: 8192 op, 958764625.00 ns, 117.0367 us/op
+WorkloadResult   2: 8192 op, 995468667.00 ns, 121.5172 us/op
+WorkloadResult   3: 8192 op, 570234916.00 ns, 69.6088 us/op
+WorkloadResult   4: 8192 op, 635621125.00 ns, 77.5905 us/op
+WorkloadResult   5: 8192 op, 547056041.00 ns, 66.7793 us/op
+WorkloadResult   6: 8192 op, 390519583.00 ns, 47.6708 us/op
+WorkloadResult   7: 8192 op, 329938500.00 ns, 40.2757 us/op
+WorkloadResult   8: 8192 op, 305640584.00 ns, 37.3096 us/op
+WorkloadResult   9: 8192 op, 295661958.00 ns, 36.0915 us/op
+WorkloadResult  10: 8192 op, 305620583.00 ns, 37.3072 us/op
+WorkloadResult  11: 8192 op, 321201000.00 ns, 39.2091 us/op
+WorkloadResult  12: 8192 op, 309797791.00 ns, 37.8171 us/op
+// GC:  52 1 0 437649408 8192
+// Threading:  0 0 8192
+
+// AfterAll
+// Benchmark Process 82961 has exited with code 0.
+
+Mean = 60.684 μs, StdErr = 8.939 μs (14.73%), N = 12, StdDev = 30.964 μs
+Min = 36.092 μs, Q1 = 37.690 μs, Median = 43.973 μs, Q3 = 71.604 μs, Max = 121.517 μs
+IQR = 33.914 μs, LowerFence = -13.181 μs, UpperFence = 122.475 μs
+ConfidenceInterval = [21.024 μs; 100.345 μs] (CI 99.9%), Margin = 39.660 μs (65.35% of Mean)
+Skewness = 0.95, Kurtosis = 2.31, MValue = 2.22
+
+// ** Remained 16 (59,3%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 4m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ScopedDisposableTransitive(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 11 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 95625.00 ns, 95.6250 us/op
+WorkloadJitting  1: 1 op, 17102500.00 ns, 17.1025 ms/op
+
+OverheadJitting  2: 16 op, 243083.00 ns, 15.1927 us/op
+WorkloadJitting  2: 16 op, 6193667.00 ns, 387.1042 us/op
+
+WorkloadPilot    1: 16 op, 6179042.00 ns, 386.1901 us/op
+WorkloadPilot    2: 32 op, 12245667.00 ns, 382.6771 us/op
+WorkloadPilot    3: 64 op, 24643334.00 ns, 385.0521 us/op
+WorkloadPilot    4: 128 op, 50385542.00 ns, 393.6370 us/op
+WorkloadPilot    5: 256 op, 98347334.00 ns, 384.1693 us/op
+WorkloadPilot    6: 512 op, 227923334.00 ns, 445.1628 us/op
+WorkloadPilot    7: 1024 op, 351711959.00 ns, 343.4687 us/op
+WorkloadPilot    8: 2048 op, 250895833.00 ns, 122.5077 us/op
+WorkloadPilot    9: 4096 op, 509171875.00 ns, 124.3095 us/op
+
+OverheadWarmup   1: 4096 op, 11166.00 ns, 2.7261 ns/op
+OverheadWarmup   2: 4096 op, 9750.00 ns, 2.3804 ns/op
+OverheadWarmup   3: 4096 op, 9834.00 ns, 2.4009 ns/op
+OverheadWarmup   4: 4096 op, 9584.00 ns, 2.3398 ns/op
+OverheadWarmup   5: 4096 op, 10084.00 ns, 2.4619 ns/op
+OverheadWarmup   6: 4096 op, 10084.00 ns, 2.4619 ns/op
+
+OverheadActual   1: 4096 op, 9709.00 ns, 2.3704 ns/op
+OverheadActual   2: 4096 op, 9833.00 ns, 2.4006 ns/op
+OverheadActual   3: 4096 op, 9541.00 ns, 2.3293 ns/op
+OverheadActual   4: 4096 op, 9708.00 ns, 2.3701 ns/op
+OverheadActual   5: 4096 op, 9750.00 ns, 2.3804 ns/op
+OverheadActual   6: 4096 op, 9792.00 ns, 2.3906 ns/op
+OverheadActual   7: 4096 op, 9875.00 ns, 2.4109 ns/op
+OverheadActual   8: 4096 op, 9792.00 ns, 2.3906 ns/op
+OverheadActual   9: 4096 op, 9917.00 ns, 2.4211 ns/op
+OverheadActual  10: 4096 op, 9792.00 ns, 2.3906 ns/op
+OverheadActual  11: 4096 op, 10416.00 ns, 2.5430 ns/op
+OverheadActual  12: 4096 op, 9625.00 ns, 2.3499 ns/op
+OverheadActual  13: 4096 op, 9625.00 ns, 2.3499 ns/op
+OverheadActual  14: 4096 op, 9708.00 ns, 2.3701 ns/op
+OverheadActual  15: 4096 op, 9833.00 ns, 2.4006 ns/op
+
+WorkloadWarmup   1: 4096 op, 631449250.00 ns, 154.1624 us/op
+WorkloadWarmup   2: 4096 op, 1230251750.00 ns, 300.3544 us/op
+WorkloadWarmup   3: 4096 op, 1217774875.00 ns, 297.3083 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 4096 op, 1480522958.00 ns, 361.4558 us/op
+WorkloadActual   2: 4096 op, 1325685750.00 ns, 323.6537 us/op
+WorkloadActual   3: 4096 op, 1181963000.00 ns, 288.5652 us/op
+WorkloadActual   4: 4096 op, 699103333.00 ns, 170.6795 us/op
+WorkloadActual   5: 4096 op, 602690542.00 ns, 147.1412 us/op
+WorkloadActual   6: 4096 op, 643317250.00 ns, 157.0599 us/op
+WorkloadActual   7: 4096 op, 593737041.00 ns, 144.9553 us/op
+WorkloadActual   8: 4096 op, 594565542.00 ns, 145.1576 us/op
+WorkloadActual   9: 4096 op, 676970750.00 ns, 165.2761 us/op
+WorkloadActual  10: 4096 op, 769226250.00 ns, 187.7994 us/op
+WorkloadActual  11: 4096 op, 605772375.00 ns, 147.8936 us/op
+WorkloadActual  12: 4096 op, 2071248250.00 ns, 505.6758 us/op
+
+// AfterActualRun
+WorkloadResult   1: 4096 op, 1480513166.00 ns, 361.4534 us/op
+WorkloadResult   2: 4096 op, 1325675958.00 ns, 323.6514 us/op
+WorkloadResult   3: 4096 op, 1181953208.00 ns, 288.5628 us/op
+WorkloadResult   4: 4096 op, 699093541.00 ns, 170.6771 us/op
+WorkloadResult   5: 4096 op, 602680750.00 ns, 147.1389 us/op
+WorkloadResult   6: 4096 op, 643307458.00 ns, 157.0575 us/op
+WorkloadResult   7: 4096 op, 593727249.00 ns, 144.9529 us/op
+WorkloadResult   8: 4096 op, 594555750.00 ns, 145.1552 us/op
+WorkloadResult   9: 4096 op, 676960958.00 ns, 165.2737 us/op
+WorkloadResult  10: 4096 op, 769216458.00 ns, 187.7970 us/op
+WorkloadResult  11: 4096 op, 605762583.00 ns, 147.8913 us/op
+WorkloadResult  12: 4096 op, 2071238458.00 ns, 505.6735 us/op
+// GC:  51 4 0 428376064 4096
+// Threading:  0 0 4096
+
+// AfterAll
+// Benchmark Process 83462 has exited with code 0.
+
+Mean = 228.774 μs, StdErr = 33.519 μs (14.65%), N = 12, StdDev = 116.114 μs
+Min = 144.953 μs, Q1 = 147.703 μs, Median = 167.975 μs, Q3 = 297.335 μs, Max = 505.673 μs
+IQR = 149.632 μs, LowerFence = -76.745 μs, UpperFence = 521.783 μs
+ConfidenceInterval = [80.049 μs; 377.498 μs] (CI 99.9%), Margin = 148.724 μs (65.01% of Mean)
+Skewness = 1.14, Kurtosis = 2.99, MValue = 2.25
+
+// ** Remained 15 (55,6%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 4m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.IntrinsicHeavy(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 12 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 183750.00 ns, 183.7500 us/op
+WorkloadJitting  1: 1 op, 5445916.00 ns, 5.4459 ms/op
+
+OverheadJitting  2: 16 op, 448375.00 ns, 28.0234 us/op
+WorkloadJitting  2: 16 op, 659125.00 ns, 41.1953 us/op
+
+WorkloadPilot    1: 16 op, 229791.00 ns, 14.3619 us/op
+WorkloadPilot    2: 32 op, 371292.00 ns, 11.6029 us/op
+WorkloadPilot    3: 64 op, 699875.00 ns, 10.9355 us/op
+WorkloadPilot    4: 128 op, 1338208.00 ns, 10.4548 us/op
+WorkloadPilot    5: 256 op, 2858291.00 ns, 11.1652 us/op
+WorkloadPilot    6: 512 op, 4897958.00 ns, 9.5663 us/op
+WorkloadPilot    7: 1024 op, 9207208.00 ns, 8.9914 us/op
+WorkloadPilot    8: 2048 op, 19098500.00 ns, 9.3254 us/op
+WorkloadPilot    9: 4096 op, 38270208.00 ns, 9.3433 us/op
+WorkloadPilot   10: 8192 op, 67563417.00 ns, 8.2475 us/op
+WorkloadPilot   11: 16384 op, 74372000.00 ns, 4.5393 us/op
+WorkloadPilot   12: 32768 op, 118029500.00 ns, 3.6020 us/op
+WorkloadPilot   13: 65536 op, 212705250.00 ns, 3.2456 us/op
+WorkloadPilot   14: 131072 op, 407894500.00 ns, 3.1120 us/op
+WorkloadPilot   15: 262144 op, 745153083.00 ns, 2.8425 us/op
+
+OverheadWarmup   1: 262144 op, 776083.00 ns, 2.9605 ns/op
+OverheadWarmup   2: 262144 op, 774750.00 ns, 2.9554 ns/op
+OverheadWarmup   3: 262144 op, 783791.00 ns, 2.9899 ns/op
+OverheadWarmup   4: 262144 op, 775667.00 ns, 2.9589 ns/op
+OverheadWarmup   5: 262144 op, 774917.00 ns, 2.9561 ns/op
+OverheadWarmup   6: 262144 op, 786750.00 ns, 3.0012 ns/op
+OverheadWarmup   7: 262144 op, 780750.00 ns, 2.9783 ns/op
+
+OverheadActual   1: 262144 op, 776125.00 ns, 2.9607 ns/op
+OverheadActual   2: 262144 op, 790125.00 ns, 3.0141 ns/op
+OverheadActual   3: 262144 op, 787792.00 ns, 3.0052 ns/op
+OverheadActual   4: 262144 op, 776459.00 ns, 2.9620 ns/op
+OverheadActual   5: 262144 op, 786334.00 ns, 2.9996 ns/op
+OverheadActual   6: 262144 op, 783250.00 ns, 2.9879 ns/op
+OverheadActual   7: 262144 op, 774458.00 ns, 2.9543 ns/op
+OverheadActual   8: 262144 op, 782125.00 ns, 2.9836 ns/op
+OverheadActual   9: 262144 op, 776958.00 ns, 2.9639 ns/op
+OverheadActual  10: 262144 op, 780583.00 ns, 2.9777 ns/op
+OverheadActual  11: 262144 op, 776541.00 ns, 2.9623 ns/op
+OverheadActual  12: 262144 op, 775125.00 ns, 2.9569 ns/op
+OverheadActual  13: 262144 op, 781208.00 ns, 2.9801 ns/op
+OverheadActual  14: 262144 op, 784875.00 ns, 2.9941 ns/op
+OverheadActual  15: 262144 op, 781041.00 ns, 2.9794 ns/op
+
+WorkloadWarmup   1: 262144 op, 989968792.00 ns, 3.7764 us/op
+WorkloadWarmup   2: 262144 op, 2753430625.00 ns, 10.5035 us/op
+WorkloadWarmup   3: 262144 op, 4482638167.00 ns, 17.0999 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 262144 op, 3251408208.00 ns, 12.4031 us/op
+WorkloadActual   2: 262144 op, 1441219042.00 ns, 5.4978 us/op
+WorkloadActual   3: 262144 op, 1225896417.00 ns, 4.6764 us/op
+WorkloadActual   4: 262144 op, 1271476958.00 ns, 4.8503 us/op
+WorkloadActual   5: 262144 op, 951486416.00 ns, 3.6296 us/op
+WorkloadActual   6: 262144 op, 746388042.00 ns, 2.8472 us/op
+WorkloadActual   7: 262144 op, 682810875.00 ns, 2.6047 us/op
+WorkloadActual   8: 262144 op, 708643583.00 ns, 2.7033 us/op
+WorkloadActual   9: 262144 op, 728897250.00 ns, 2.7805 us/op
+WorkloadActual  10: 262144 op, 753532583.00 ns, 2.8745 us/op
+WorkloadActual  11: 262144 op, 774849125.00 ns, 2.9558 us/op
+WorkloadActual  12: 262144 op, 820236042.00 ns, 3.1290 us/op
+
+// AfterActualRun
+WorkloadResult   1: 262144 op, 1440438001.00 ns, 5.4948 us/op
+WorkloadResult   2: 262144 op, 1225115376.00 ns, 4.6734 us/op
+WorkloadResult   3: 262144 op, 1270695917.00 ns, 4.8473 us/op
+WorkloadResult   4: 262144 op, 950705375.00 ns, 3.6267 us/op
+WorkloadResult   5: 262144 op, 745607001.00 ns, 2.8443 us/op
+WorkloadResult   6: 262144 op, 682029834.00 ns, 2.6017 us/op
+WorkloadResult   7: 262144 op, 707862542.00 ns, 2.7003 us/op
+WorkloadResult   8: 262144 op, 728116209.00 ns, 2.7775 us/op
+WorkloadResult   9: 262144 op, 752751542.00 ns, 2.8715 us/op
+WorkloadResult  10: 262144 op, 774068084.00 ns, 2.9528 us/op
+WorkloadResult  11: 262144 op, 819455001.00 ns, 3.1260 us/op
+// GC:  31 0 0 262144000 262144
+// Threading:  0 0 262144
+
+// AfterAll
+// Benchmark Process 84076 has exited with code 0.
+
+Mean = 3.501 μs, StdErr = 0.308 μs (8.79%), N = 11, StdDev = 1.021 μs
+Min = 2.602 μs, Q1 = 2.811 μs, Median = 2.953 μs, Q3 = 4.150 μs, Max = 5.495 μs
+IQR = 1.339 μs, LowerFence = 0.802 μs, UpperFence = 6.159 μs
+ConfidenceInterval = [2.090 μs; 4.913 μs] (CI 99.9%), Margin = 1.412 μs (40.32% of Mean)
+Skewness = 0.82, Kurtosis = 1.9, MValue = 2.75
+
+// ** Remained 14 (51,9%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 4m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.MixedIntrinsicAndActivities(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 13 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 201750.00 ns, 201.7500 us/op
+WorkloadJitting  1: 1 op, 37468000.00 ns, 37.4680 ms/op
+
+WorkloadPilot    1: 2 op, 235833.00 ns, 117.9165 us/op
+WorkloadPilot    2: 3 op, 181625.00 ns, 60.5417 us/op
+WorkloadPilot    3: 4 op, 211584.00 ns, 52.8960 us/op
+WorkloadPilot    4: 5 op, 263375.00 ns, 52.6750 us/op
+WorkloadPilot    5: 6 op, 515917.00 ns, 85.9862 us/op
+WorkloadPilot    6: 7 op, 380125.00 ns, 54.3036 us/op
+WorkloadPilot    7: 8 op, 600792.00 ns, 75.0990 us/op
+WorkloadPilot    8: 9 op, 735958.00 ns, 81.7731 us/op
+WorkloadPilot    9: 10 op, 533083.00 ns, 53.3083 us/op
+WorkloadPilot   10: 11 op, 1031167.00 ns, 93.7425 us/op
+WorkloadPilot   11: 12 op, 805375.00 ns, 67.1146 us/op
+WorkloadPilot   12: 13 op, 1240459.00 ns, 95.4199 us/op
+WorkloadPilot   13: 14 op, 1245209.00 ns, 88.9435 us/op
+WorkloadPilot   14: 15 op, 826750.00 ns, 55.1167 us/op
+WorkloadPilot   15: 16 op, 1593292.00 ns, 99.5808 us/op
+WorkloadPilot   16: 32 op, 2103375.00 ns, 65.7305 us/op
+WorkloadPilot   17: 64 op, 5284750.00 ns, 82.5742 us/op
+WorkloadPilot   18: 128 op, 9697250.00 ns, 75.7598 us/op
+WorkloadPilot   19: 256 op, 18578583.00 ns, 72.5726 us/op
+WorkloadPilot   20: 512 op, 28461167.00 ns, 55.5882 us/op
+WorkloadPilot   21: 1024 op, 66879375.00 ns, 65.3119 us/op
+WorkloadPilot   22: 2048 op, 141309917.00 ns, 68.9990 us/op
+WorkloadPilot   23: 4096 op, 344466208.00 ns, 84.0982 us/op
+WorkloadPilot   24: 8192 op, 268322209.00 ns, 32.7542 us/op
+WorkloadPilot   25: 16384 op, 408555500.00 ns, 24.9362 us/op
+WorkloadPilot   26: 32768 op, 854344875.00 ns, 26.0725 us/op
+
+WorkloadWarmup   1: 32768 op, 702208458.00 ns, 21.4297 us/op
+WorkloadWarmup   2: 32768 op, 633895750.00 ns, 19.3450 us/op
+WorkloadWarmup   3: 32768 op, 596888459.00 ns, 18.2156 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 32768 op, 652454083.00 ns, 19.9113 us/op
+WorkloadActual   2: 32768 op, 681710416.00 ns, 20.8042 us/op
+WorkloadActual   3: 32768 op, 1109608000.00 ns, 33.8625 us/op
+WorkloadActual   4: 32768 op, 1546431209.00 ns, 47.1933 us/op
+WorkloadActual   5: 32768 op, 1484042459.00 ns, 45.2894 us/op
+WorkloadActual   6: 32768 op, 1541523500.00 ns, 47.0436 us/op
+WorkloadActual   7: 32768 op, 2604125250.00 ns, 79.4716 us/op
+WorkloadActual   8: 32768 op, 2408030792.00 ns, 73.4873 us/op
+WorkloadActual   9: 32768 op, 3705318750.00 ns, 113.0774 us/op
+WorkloadActual  10: 32768 op, 1147956333.00 ns, 35.0328 us/op
+WorkloadActual  11: 32768 op, 1626683834.00 ns, 49.6425 us/op
+WorkloadActual  12: 32768 op, 2490285375.00 ns, 75.9975 us/op
+
+// AfterActualRun
+WorkloadResult   1: 32768 op, 652454083.00 ns, 19.9113 us/op
+WorkloadResult   2: 32768 op, 681710416.00 ns, 20.8042 us/op
+WorkloadResult   3: 32768 op, 1109608000.00 ns, 33.8625 us/op
+WorkloadResult   4: 32768 op, 1546431209.00 ns, 47.1933 us/op
+WorkloadResult   5: 32768 op, 1484042459.00 ns, 45.2894 us/op
+WorkloadResult   6: 32768 op, 1541523500.00 ns, 47.0436 us/op
+WorkloadResult   7: 32768 op, 2604125250.00 ns, 79.4716 us/op
+WorkloadResult   8: 32768 op, 2408030792.00 ns, 73.4873 us/op
+WorkloadResult   9: 32768 op, 3705318750.00 ns, 113.0774 us/op
+WorkloadResult  10: 32768 op, 1147956333.00 ns, 35.0328 us/op
+WorkloadResult  11: 32768 op, 1626683834.00 ns, 49.6425 us/op
+WorkloadResult  12: 32768 op, 2490285375.00 ns, 75.9975 us/op
+// GC:  95 1 0 796655616 32768
+// Threading:  0 0 32768
+
+// AfterAll
+// Benchmark Process 85189 has exited with code 0.
+
+Mean = 53.401 μs, StdErr = 7.890 μs (14.77%), N = 12, StdDev = 27.332 μs
+Min = 19.911 μs, Q1 = 34.740 μs, Median = 47.118 μs, Q3 = 74.115 μs, Max = 113.077 μs
+IQR = 39.375 μs, LowerFence = -24.322 μs, UpperFence = 133.177 μs
+ConfidenceInterval = [18.394 μs; 88.409 μs] (CI 99.9%), Margin = 35.007 μs (65.56% of Mean)
+Skewness = 0.67, Kurtosis = 2.42, MValue = 2
+
+// ** Remained 13 (48,1%) benchmark(s) to run. Estimated finish 2026-07-16 11:43 (0h 4m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.IoBound(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 14 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 668250.00 ns, 668.2500 us/op
+WorkloadJitting  1: 1 op, 198767542.00 ns, 198.7675 ms/op
+
+WorkloadPilot    1: 2 op, 59806834.00 ns, 29.9034 ms/op
+WorkloadPilot    2: 3 op, 28615541.00 ns, 9.5385 ms/op
+WorkloadPilot    3: 4 op, 37169583.00 ns, 9.2924 ms/op
+WorkloadPilot    4: 5 op, 97848542.00 ns, 19.5697 ms/op
+WorkloadPilot    5: 6 op, 44910458.00 ns, 7.4851 ms/op
+WorkloadPilot    6: 7 op, 49228416.00 ns, 7.0326 ms/op
+WorkloadPilot    7: 8 op, 110598042.00 ns, 13.8248 ms/op
+WorkloadPilot    8: 9 op, 65365375.00 ns, 7.2628 ms/op
+WorkloadPilot    9: 10 op, 124160459.00 ns, 12.4160 ms/op
+WorkloadPilot   10: 11 op, 281311625.00 ns, 25.5738 ms/op
+WorkloadPilot   11: 12 op, 282329333.00 ns, 23.5274 ms/op
+WorkloadPilot   12: 13 op, 236096042.00 ns, 18.1612 ms/op
+WorkloadPilot   13: 14 op, 284250542.00 ns, 20.3036 ms/op
+WorkloadPilot   14: 15 op, 299701250.00 ns, 19.9801 ms/op
+WorkloadPilot   15: 16 op, 342646375.00 ns, 21.4154 ms/op
+WorkloadPilot   16: 32 op, 549922917.00 ns, 17.1851 ms/op
+
+WorkloadWarmup   1: 32 op, 659330750.00 ns, 20.6041 ms/op
+WorkloadWarmup   2: 32 op, 375586834.00 ns, 11.7371 ms/op
+WorkloadWarmup   3: 32 op, 515959958.00 ns, 16.1237 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 32 op, 871075458.00 ns, 27.2211 ms/op
+WorkloadActual   2: 32 op, 660086958.00 ns, 20.6277 ms/op
+WorkloadActual   3: 32 op, 641293667.00 ns, 20.0404 ms/op
+WorkloadActual   4: 32 op, 605397542.00 ns, 18.9187 ms/op
+WorkloadActual   5: 32 op, 693934500.00 ns, 21.6855 ms/op
+WorkloadActual   6: 32 op, 666201583.00 ns, 20.8188 ms/op
+WorkloadActual   7: 32 op, 754092584.00 ns, 23.5654 ms/op
+WorkloadActual   8: 32 op, 757683333.00 ns, 23.6776 ms/op
+WorkloadActual   9: 32 op, 647712166.00 ns, 20.2410 ms/op
+WorkloadActual  10: 32 op, 579011125.00 ns, 18.0941 ms/op
+WorkloadActual  11: 32 op, 652510250.00 ns, 20.3909 ms/op
+WorkloadActual  12: 32 op, 682305375.00 ns, 21.3220 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 32 op, 660086958.00 ns, 20.6277 ms/op
+WorkloadResult   2: 32 op, 641293667.00 ns, 20.0404 ms/op
+WorkloadResult   3: 32 op, 605397542.00 ns, 18.9187 ms/op
+WorkloadResult   4: 32 op, 693934500.00 ns, 21.6855 ms/op
+WorkloadResult   5: 32 op, 666201583.00 ns, 20.8188 ms/op
+WorkloadResult   6: 32 op, 754092584.00 ns, 23.5654 ms/op
+WorkloadResult   7: 32 op, 757683333.00 ns, 23.6776 ms/op
+WorkloadResult   8: 32 op, 647712166.00 ns, 20.2410 ms/op
+WorkloadResult   9: 32 op, 579011125.00 ns, 18.0941 ms/op
+WorkloadResult  10: 32 op, 652510250.00 ns, 20.3909 ms/op
+WorkloadResult  11: 32 op, 682305375.00 ns, 21.3220 ms/op
+// GC:  0 0 0 338624 32
+// Threading:  128 0 32
+
+// AfterAll
+// Benchmark Process 86255 has exited with code 0.
+
+Mean = 20.853 ms, StdErr = 0.513 ms (2.46%), N = 11, StdDev = 1.700 ms
+Min = 18.094 ms, Q1 = 20.141 ms, Median = 20.628 ms, Q3 = 21.504 ms, Max = 23.678 ms
+IQR = 1.363 ms, LowerFence = 18.096 ms, UpperFence = 23.548 ms
+ConfidenceInterval = [18.502 ms; 23.204 ms] (CI 99.9%), Margin = 2.351 ms (11.28% of Mean)
+Skewness = 0.26, Kurtosis = 2.08, MValue = 2.4
+
+// ** Remained 12 (44,4%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 3m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.Retry(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 15 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 254250.00 ns, 254.2500 us/op
+WorkloadJitting  1: 1 op, 396148125.00 ns, 396.1481 ms/op
+
+OverheadJitting  2: 1 op, 459.00 ns, 459.0000 ns/op
+WorkloadJitting  2: 1 op, 665459.00 ns, 665.4590 us/op
+
+OverheadJitting  3: 16 op, 547625.00 ns, 34.2266 us/op
+WorkloadJitting  3: 16 op, 1114916.00 ns, 69.6823 us/op
+
+WorkloadPilot    1: 16 op, 372125.00 ns, 23.2578 us/op
+WorkloadPilot    2: 32 op, 610208.00 ns, 19.0690 us/op
+WorkloadPilot    3: 64 op, 1150917.00 ns, 17.9831 us/op
+WorkloadPilot    4: 128 op, 2344209.00 ns, 18.3141 us/op
+WorkloadPilot    5: 256 op, 6105208.00 ns, 23.8485 us/op
+WorkloadPilot    6: 512 op, 8827292.00 ns, 17.2408 us/op
+WorkloadPilot    7: 1024 op, 76083959.00 ns, 74.3007 us/op
+WorkloadPilot    8: 2048 op, 305678292.00 ns, 149.2570 us/op
+WorkloadPilot    9: 4096 op, 647186334.00 ns, 158.0045 us/op
+
+OverheadWarmup   1: 4096 op, 18500.00 ns, 4.5166 ns/op
+OverheadWarmup   2: 4096 op, 16416.00 ns, 4.0078 ns/op
+OverheadWarmup   3: 4096 op, 18041.00 ns, 4.4045 ns/op
+OverheadWarmup   4: 4096 op, 17584.00 ns, 4.2930 ns/op
+OverheadWarmup   5: 4096 op, 17833.00 ns, 4.3538 ns/op
+OverheadWarmup   6: 4096 op, 31500.00 ns, 7.6904 ns/op
+OverheadWarmup   7: 4096 op, 16625.00 ns, 4.0588 ns/op
+
+OverheadActual   1: 4096 op, 17000.00 ns, 4.1504 ns/op
+OverheadActual   2: 4096 op, 17167.00 ns, 4.1912 ns/op
+OverheadActual   3: 4096 op, 15959.00 ns, 3.8962 ns/op
+OverheadActual   4: 4096 op, 14334.00 ns, 3.4995 ns/op
+OverheadActual   5: 4096 op, 14250.00 ns, 3.4790 ns/op
+OverheadActual   6: 4096 op, 13875.00 ns, 3.3875 ns/op
+OverheadActual   7: 4096 op, 14084.00 ns, 3.4385 ns/op
+OverheadActual   8: 4096 op, 18125.00 ns, 4.4250 ns/op
+OverheadActual   9: 4096 op, 17833.00 ns, 4.3538 ns/op
+OverheadActual  10: 4096 op, 19667.00 ns, 4.8015 ns/op
+OverheadActual  11: 4096 op, 14500.00 ns, 3.5400 ns/op
+OverheadActual  12: 4096 op, 14625.00 ns, 3.5706 ns/op
+OverheadActual  13: 4096 op, 17917.00 ns, 4.3743 ns/op
+OverheadActual  14: 4096 op, 16667.00 ns, 4.0691 ns/op
+OverheadActual  15: 4096 op, 18333.00 ns, 4.4758 ns/op
+OverheadActual  16: 4096 op, 18375.00 ns, 4.4861 ns/op
+OverheadActual  17: 4096 op, 16667.00 ns, 4.0691 ns/op
+OverheadActual  18: 4096 op, 16666.00 ns, 4.0688 ns/op
+OverheadActual  19: 4096 op, 17833.00 ns, 4.3538 ns/op
+OverheadActual  20: 4096 op, 19000.00 ns, 4.6387 ns/op
+
+WorkloadWarmup   1: 4096 op, 563071958.00 ns, 137.4687 us/op
+WorkloadWarmup   2: 4096 op, 478102500.00 ns, 116.7242 us/op
+WorkloadWarmup   3: 4096 op, 199576458.00 ns, 48.7247 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 4096 op, 420452708.00 ns, 102.6496 us/op
+WorkloadActual   2: 4096 op, 544221000.00 ns, 132.8665 us/op
+WorkloadActual   3: 4096 op, 390788041.00 ns, 95.4072 us/op
+WorkloadActual   4: 4096 op, 241499792.00 ns, 58.9599 us/op
+WorkloadActual   5: 4096 op, 33217083.00 ns, 8.1096 us/op
+WorkloadActual   6: 4096 op, 212157500.00 ns, 51.7963 us/op
+WorkloadActual   7: 4096 op, 41878584.00 ns, 10.2243 us/op
+WorkloadActual   8: 4096 op, 281162584.00 ns, 68.6432 us/op
+WorkloadActual   9: 4096 op, 249170125.00 ns, 60.8326 us/op
+WorkloadActual  10: 4096 op, 186766500.00 ns, 45.5973 us/op
+WorkloadActual  11: 4096 op, 118685792.00 ns, 28.9760 us/op
+WorkloadActual  12: 4096 op, 167980417.00 ns, 41.0108 us/op
+
+// AfterActualRun
+WorkloadResult   1: 4096 op, 420435874.50 ns, 102.6455 us/op
+WorkloadResult   2: 4096 op, 390771207.50 ns, 95.4031 us/op
+WorkloadResult   3: 4096 op, 241482958.50 ns, 58.9558 us/op
+WorkloadResult   4: 4096 op, 33200249.50 ns, 8.1055 us/op
+WorkloadResult   5: 4096 op, 212140666.50 ns, 51.7922 us/op
+WorkloadResult   6: 4096 op, 41861750.50 ns, 10.2202 us/op
+WorkloadResult   7: 4096 op, 281145750.50 ns, 68.6391 us/op
+WorkloadResult   8: 4096 op, 249153291.50 ns, 60.8284 us/op
+WorkloadResult   9: 4096 op, 186749666.50 ns, 45.5932 us/op
+WorkloadResult  10: 4096 op, 118668958.50 ns, 28.9719 us/op
+WorkloadResult  11: 4096 op, 167963583.50 ns, 41.0067 us/op
+// GC:  2 0 0 23691264 4096
+// Threading:  0 0 4096
+
+// AfterAll
+// Benchmark Process 86981 has exited with code 0.
+
+Mean = 52.015 μs, StdErr = 9.153 μs (17.60%), N = 11, StdDev = 30.359 μs
+Min = 8.106 μs, Q1 = 34.989 μs, Median = 51.792 μs, Q3 = 64.734 μs, Max = 102.645 μs
+IQR = 29.744 μs, LowerFence = -9.627 μs, UpperFence = 109.350 μs
+ConfidenceInterval = [10.029 μs; 94.001 μs] (CI 99.9%), Margin = 41.986 μs (80.72% of Mean)
+Skewness = 0.15, Kurtosis = 1.85, MValue = 2
+
+// ** Remained 11 (40,7%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 3m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ResumeInFreshBurst(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 16 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 232250.00 ns, 232.2500 us/op
+WorkloadJitting  1: 1 op, 406934791.00 ns, 406.9348 ms/op
+
+OverheadJitting  2: 1 op, 500.00 ns, 500.0000 ns/op
+WorkloadJitting  2: 1 op, 2130750.00 ns, 2.1308 ms/op
+
+OverheadJitting  3: 16 op, 534792.00 ns, 33.4245 us/op
+WorkloadJitting  3: 16 op, 903791.00 ns, 56.4869 us/op
+
+WorkloadPilot    1: 16 op, 515542.00 ns, 32.2214 us/op
+WorkloadPilot    2: 32 op, 1061250.00 ns, 33.1641 us/op
+WorkloadPilot    3: 64 op, 1658791.00 ns, 25.9186 us/op
+WorkloadPilot    4: 128 op, 3565208.00 ns, 27.8532 us/op
+WorkloadPilot    5: 256 op, 10818083.00 ns, 42.2581 us/op
+WorkloadPilot    6: 512 op, 366678708.00 ns, 716.1694 us/op
+WorkloadPilot    7: 1024 op, 165060417.00 ns, 161.1918 us/op
+WorkloadPilot    8: 2048 op, 400934500.00 ns, 195.7688 us/op
+WorkloadPilot    9: 4096 op, 571314875.00 ns, 139.4812 us/op
+
+OverheadWarmup   1: 4096 op, 18000.00 ns, 4.3945 ns/op
+OverheadWarmup   2: 4096 op, 16084.00 ns, 3.9268 ns/op
+OverheadWarmup   3: 4096 op, 18042.00 ns, 4.4048 ns/op
+OverheadWarmup   4: 4096 op, 18083.00 ns, 4.4148 ns/op
+OverheadWarmup   5: 4096 op, 17625.00 ns, 4.3030 ns/op
+OverheadWarmup   6: 4096 op, 18250.00 ns, 4.4556 ns/op
+OverheadWarmup   7: 4096 op, 16125.00 ns, 3.9368 ns/op
+
+OverheadActual   1: 4096 op, 17875.00 ns, 4.3640 ns/op
+OverheadActual   2: 4096 op, 16167.00 ns, 3.9470 ns/op
+OverheadActual   3: 4096 op, 16375.00 ns, 3.9978 ns/op
+OverheadActual   4: 4096 op, 16250.00 ns, 3.9673 ns/op
+OverheadActual   5: 4096 op, 16792.00 ns, 4.0996 ns/op
+OverheadActual   6: 4096 op, 16458.00 ns, 4.0181 ns/op
+OverheadActual   7: 4096 op, 27416.00 ns, 6.6934 ns/op
+OverheadActual   8: 4096 op, 16333.00 ns, 3.9875 ns/op
+OverheadActual   9: 4096 op, 16041.00 ns, 3.9163 ns/op
+OverheadActual  10: 4096 op, 17042.00 ns, 4.1606 ns/op
+OverheadActual  11: 4096 op, 18000.00 ns, 4.3945 ns/op
+OverheadActual  12: 4096 op, 17875.00 ns, 4.3640 ns/op
+OverheadActual  13: 4096 op, 17791.00 ns, 4.3435 ns/op
+OverheadActual  14: 4096 op, 16167.00 ns, 3.9470 ns/op
+OverheadActual  15: 4096 op, 16083.00 ns, 3.9265 ns/op
+OverheadActual  16: 4096 op, 15875.00 ns, 3.8757 ns/op
+
+WorkloadWarmup   1: 4096 op, 282762541.00 ns, 69.0338 us/op
+WorkloadWarmup   2: 4096 op, 221265583.00 ns, 54.0199 us/op
+WorkloadWarmup   3: 4096 op, 474027375.00 ns, 115.7293 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 4096 op, 140037209.00 ns, 34.1888 us/op
+WorkloadActual   2: 4096 op, 113419208.00 ns, 27.6902 us/op
+WorkloadActual   3: 4096 op, 122881875.00 ns, 30.0005 us/op
+WorkloadActual   4: 4096 op, 373148458.00 ns, 91.1007 us/op
+WorkloadActual   5: 4096 op, 103739833.00 ns, 25.3271 us/op
+WorkloadActual   6: 4096 op, 113934709.00 ns, 27.8161 us/op
+WorkloadActual   7: 4096 op, 104930958.00 ns, 25.6179 us/op
+WorkloadActual   8: 4096 op, 244906000.00 ns, 59.7915 us/op
+WorkloadActual   9: 4096 op, 115595916.00 ns, 28.2217 us/op
+WorkloadActual  10: 4096 op, 123534208.00 ns, 30.1597 us/op
+WorkloadActual  11: 4096 op, 117354750.00 ns, 28.6511 us/op
+WorkloadActual  12: 4096 op, 208651459.00 ns, 50.9403 us/op
+
+// AfterActualRun
+WorkloadResult   1: 4096 op, 140020792.50 ns, 34.1848 us/op
+WorkloadResult   2: 4096 op, 113402791.50 ns, 27.6862 us/op
+WorkloadResult   3: 4096 op, 122865458.50 ns, 29.9964 us/op
+WorkloadResult   4: 4096 op, 103723416.50 ns, 25.3231 us/op
+WorkloadResult   5: 4096 op, 113918292.50 ns, 27.8121 us/op
+WorkloadResult   6: 4096 op, 104914541.50 ns, 25.6139 us/op
+WorkloadResult   7: 4096 op, 115579499.50 ns, 28.2177 us/op
+WorkloadResult   8: 4096 op, 123517791.50 ns, 30.1557 us/op
+WorkloadResult   9: 4096 op, 117338333.50 ns, 28.6471 us/op
+WorkloadResult  10: 4096 op, 208635042.50 ns, 50.9363 us/op
+// GC:  3 0 0 30081024 4096
+// Threading:  0 0 4096
+
+// AfterAll
+// Benchmark Process 87405 has exited with code 0.
+
+Mean = 30.857 μs, StdErr = 2.368 μs (7.67%), N = 10, StdDev = 7.489 μs
+Min = 25.323 μs, Q1 = 27.718 μs, Median = 28.432 μs, Q3 = 30.116 μs, Max = 50.936 μs
+IQR = 2.398 μs, LowerFence = 24.120 μs, UpperFence = 33.713 μs
+ConfidenceInterval = [19.535 μs; 42.180 μs] (CI 99.9%), Margin = 11.322 μs (36.69% of Mean)
+Skewness = 1.84, Kurtosis = 5.23, MValue = 2.8
+
+// ** Remained 10 (37,0%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 2m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ConcurrentDrain(Strategy: PerAttempt)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 17 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 195292.00 ns, 195.2920 us/op
+WorkloadJitting  1: 1 op, 347239792.00 ns, 347.2398 ms/op
+
+OverheadJitting  2: 1 op, 166.00 ns, 166.0000 ns/op
+WorkloadJitting  2: 1 op, 351084.00 ns, 351.0840 us/op
+
+OverheadJitting  3: 16 op, 464458.00 ns, 29.0286 us/op
+WorkloadJitting  3: 16 op, 12644208.00 ns, 790.2630 us/op
+
+WorkloadPilot    1: 16 op, 50812041.00 ns, 3.1758 ms/op
+WorkloadPilot    2: 32 op, 69785208.00 ns, 2.1808 ms/op
+WorkloadPilot    3: 64 op, 361136166.00 ns, 5.6428 ms/op
+WorkloadPilot    4: 128 op, 392885958.00 ns, 3.0694 ms/op
+WorkloadPilot    5: 256 op, 658797542.00 ns, 2.5734 ms/op
+
+OverheadWarmup   1: 256 op, 4000.00 ns, 15.6250 ns/op
+OverheadWarmup   2: 256 op, 2000.00 ns, 7.8125 ns/op
+OverheadWarmup   3: 256 op, 1708.00 ns, 6.6719 ns/op
+OverheadWarmup   4: 256 op, 2125.00 ns, 8.3008 ns/op
+OverheadWarmup   5: 256 op, 2709.00 ns, 10.5820 ns/op
+OverheadWarmup   6: 256 op, 2042.00 ns, 7.9766 ns/op
+OverheadWarmup   7: 256 op, 1625.00 ns, 6.3477 ns/op
+OverheadWarmup   8: 256 op, 1959.00 ns, 7.6523 ns/op
+OverheadWarmup   9: 256 op, 1583.00 ns, 6.1836 ns/op
+
+OverheadActual   1: 256 op, 1709.00 ns, 6.6758 ns/op
+OverheadActual   2: 256 op, 1916.00 ns, 7.4844 ns/op
+OverheadActual   3: 256 op, 1792.00 ns, 7.0000 ns/op
+OverheadActual   4: 256 op, 1542.00 ns, 6.0234 ns/op
+OverheadActual   5: 256 op, 1292.00 ns, 5.0469 ns/op
+OverheadActual   6: 256 op, 1875.00 ns, 7.3242 ns/op
+OverheadActual   7: 256 op, 2250.00 ns, 8.7891 ns/op
+OverheadActual   8: 256 op, 2750.00 ns, 10.7422 ns/op
+OverheadActual   9: 256 op, 1916.00 ns, 7.4844 ns/op
+OverheadActual  10: 256 op, 1458.00 ns, 5.6953 ns/op
+OverheadActual  11: 256 op, 1500.00 ns, 5.8594 ns/op
+OverheadActual  12: 256 op, 1708.00 ns, 6.6719 ns/op
+OverheadActual  13: 256 op, 1500.00 ns, 5.8594 ns/op
+OverheadActual  14: 256 op, 1250.00 ns, 4.8828 ns/op
+OverheadActual  15: 256 op, 1959.00 ns, 7.6523 ns/op
+OverheadActual  16: 256 op, 1417.00 ns, 5.5352 ns/op
+OverheadActual  17: 256 op, 2250.00 ns, 8.7891 ns/op
+OverheadActual  18: 256 op, 16625.00 ns, 64.9414 ns/op
+OverheadActual  19: 256 op, 1375.00 ns, 5.3711 ns/op
+OverheadActual  20: 256 op, 1375.00 ns, 5.3711 ns/op
+
+WorkloadWarmup   1: 256 op, 574592291.00 ns, 2.2445 ms/op
+WorkloadWarmup   2: 256 op, 239875500.00 ns, 937.0137 us/op
+WorkloadWarmup   3: 256 op, 305329125.00 ns, 1.1927 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 256 op, 315645000.00 ns, 1.2330 ms/op
+WorkloadActual   2: 256 op, 315181375.00 ns, 1.2312 ms/op
+WorkloadActual   3: 256 op, 182065292.00 ns, 711.1925 us/op
+WorkloadActual   4: 256 op, 114858584.00 ns, 448.6663 us/op
+WorkloadActual   5: 256 op, 130732917.00 ns, 510.6755 us/op
+WorkloadActual   6: 256 op, 149188667.00 ns, 582.7682 us/op
+WorkloadActual   7: 256 op, 148588041.00 ns, 580.4220 us/op
+WorkloadActual   8: 256 op, 109535375.00 ns, 427.8726 us/op
+WorkloadActual   9: 256 op, 223000667.00 ns, 871.0964 us/op
+WorkloadActual  10: 256 op, 594649875.00 ns, 2.3229 ms/op
+WorkloadActual  11: 256 op, 303191375.00 ns, 1.1843 ms/op
+WorkloadActual  12: 256 op, 235403583.00 ns, 919.5452 us/op
+
+// AfterActualRun
+WorkloadResult   1: 256 op, 315643291.50 ns, 1.2330 ms/op
+WorkloadResult   2: 256 op, 315179666.50 ns, 1.2312 ms/op
+WorkloadResult   3: 256 op, 182063583.50 ns, 711.1859 us/op
+WorkloadResult   4: 256 op, 114856875.50 ns, 448.6597 us/op
+WorkloadResult   5: 256 op, 130731208.50 ns, 510.6688 us/op
+WorkloadResult   6: 256 op, 149186958.50 ns, 582.7616 us/op
+WorkloadResult   7: 256 op, 148586332.50 ns, 580.4154 us/op
+WorkloadResult   8: 256 op, 109533666.50 ns, 427.8659 us/op
+WorkloadResult   9: 256 op, 222998958.50 ns, 871.0897 us/op
+WorkloadResult  10: 256 op, 303189666.50 ns, 1.1843 ms/op
+WorkloadResult  11: 256 op, 235401874.50 ns, 919.5386 us/op
+// GC:  3 0 0 26929152 256
+// Threading:  0 0 256
+
+// AfterAll
+// Benchmark Process 87628 has exited with code 0.
+
+Mean = 790.970 μs, StdErr = 94.795 μs (11.98%), N = 11, StdDev = 314.400 μs
+Min = 427.866 μs, Q1 = 545.542 μs, Median = 711.186 μs, Q3 = 1,051.937 μs, Max = 1,232.982 μs
+IQR = 506.395 μs, LowerFence = -214.050 μs, UpperFence = 1,811.528 μs
+ConfidenceInterval = [356.155 μs; 1,225.786 μs] (CI 99.9%), Margin = 434.816 μs (54.97% of Mean)
+Skewness = 0.31, Kurtosis = 1.31, MValue = 2
+
+// ** Remained 9 (33,3%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 2m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.NoOp(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 18 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 493458.00 ns, 493.4580 us/op
+WorkloadJitting  1: 1 op, 159260750.00 ns, 159.2608 ms/op
+
+WorkloadPilot    1: 2 op, 625500.00 ns, 312.7500 us/op
+WorkloadPilot    2: 3 op, 2353292.00 ns, 784.4307 us/op
+WorkloadPilot    3: 4 op, 2105333.00 ns, 526.3333 us/op
+WorkloadPilot    4: 5 op, 2728834.00 ns, 545.7668 us/op
+WorkloadPilot    5: 6 op, 3145083.00 ns, 524.1805 us/op
+WorkloadPilot    6: 7 op, 3739083.00 ns, 534.1547 us/op
+WorkloadPilot    7: 8 op, 3960834.00 ns, 495.1043 us/op
+WorkloadPilot    8: 9 op, 4016959.00 ns, 446.3288 us/op
+WorkloadPilot    9: 10 op, 5002000.00 ns, 500.2000 us/op
+WorkloadPilot   10: 11 op, 5434709.00 ns, 494.0645 us/op
+WorkloadPilot   11: 12 op, 14768291.00 ns, 1.2307 ms/op
+WorkloadPilot   12: 13 op, 7228875.00 ns, 556.0673 us/op
+WorkloadPilot   13: 14 op, 7233458.00 ns, 516.6756 us/op
+WorkloadPilot   14: 15 op, 6497250.00 ns, 433.1500 us/op
+WorkloadPilot   15: 16 op, 54265209.00 ns, 3.3916 ms/op
+WorkloadPilot   16: 32 op, 88963708.00 ns, 2.7801 ms/op
+WorkloadPilot   17: 64 op, 126873666.00 ns, 1.9824 ms/op
+WorkloadPilot   18: 128 op, 441408875.00 ns, 3.4485 ms/op
+WorkloadPilot   19: 256 op, 381221375.00 ns, 1.4891 ms/op
+WorkloadPilot   20: 512 op, 254562083.00 ns, 497.1916 us/op
+WorkloadPilot   21: 1024 op, 656281959.00 ns, 640.9004 us/op
+
+WorkloadWarmup   1: 1024 op, 435720333.00 ns, 425.5081 us/op
+WorkloadWarmup   2: 1024 op, 318642708.00 ns, 311.1745 us/op
+WorkloadWarmup   3: 1024 op, 441380625.00 ns, 431.0358 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 1024 op, 547099542.00 ns, 534.2769 us/op
+WorkloadActual   2: 1024 op, 313772041.00 ns, 306.4180 us/op
+WorkloadActual   3: 1024 op, 288995458.00 ns, 282.2221 us/op
+WorkloadActual   4: 1024 op, 439678833.00 ns, 429.3739 us/op
+WorkloadActual   5: 1024 op, 428564750.00 ns, 418.5203 us/op
+WorkloadActual   6: 1024 op, 921000875.00 ns, 899.4149 us/op
+WorkloadActual   7: 1024 op, 547240083.00 ns, 534.4141 us/op
+WorkloadActual   8: 1024 op, 661709541.00 ns, 646.2007 us/op
+WorkloadActual   9: 1024 op, 846591417.00 ns, 826.7494 us/op
+WorkloadActual  10: 1024 op, 769490208.00 ns, 751.4553 us/op
+WorkloadActual  11: 1024 op, 867398417.00 ns, 847.0688 us/op
+WorkloadActual  12: 1024 op, 1342154417.00 ns, 1.3107 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 1024 op, 547099542.00 ns, 534.2769 us/op
+WorkloadResult   2: 1024 op, 313772041.00 ns, 306.4180 us/op
+WorkloadResult   3: 1024 op, 288995458.00 ns, 282.2221 us/op
+WorkloadResult   4: 1024 op, 439678833.00 ns, 429.3739 us/op
+WorkloadResult   5: 1024 op, 428564750.00 ns, 418.5203 us/op
+WorkloadResult   6: 1024 op, 921000875.00 ns, 899.4149 us/op
+WorkloadResult   7: 1024 op, 547240083.00 ns, 534.4141 us/op
+WorkloadResult   8: 1024 op, 661709541.00 ns, 646.2007 us/op
+WorkloadResult   9: 1024 op, 846591417.00 ns, 826.7494 us/op
+WorkloadResult  10: 1024 op, 769490208.00 ns, 751.4553 us/op
+WorkloadResult  11: 1024 op, 867398417.00 ns, 847.0688 us/op
+WorkloadResult  12: 1024 op, 1342154417.00 ns, 1.3107 ms/op
+// GC:  9 0 0 77619200 1024
+// Threading:  0 0 1024
+
+// AfterAll
+// Benchmark Process 87948 has exited with code 0.
+
+Mean = 648.901 μs, StdErr = 85.343 μs (13.15%), N = 12, StdDev = 295.638 μs
+Min = 282.222 μs, Q1 = 426.660 μs, Median = 590.307 μs, Q3 = 831.829 μs, Max = 1,310.698 μs
+IQR = 405.169 μs, LowerFence = -181.093 μs, UpperFence = 1,439.582 μs
+ConfidenceInterval = [270.235 μs; 1,027.567 μs] (CI 99.9%), Margin = 378.666 μs (58.36% of Mean)
+Skewness = 0.66, Kurtosis = 2.57, MValue = 2.33
+
+// ** Remained 8 (29,6%) benchmark(s) to run. Estimated finish 2026-07-16 11:42 (0h 2m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.TransientDependency(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 19 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 253458.00 ns, 253.4580 us/op
+WorkloadJitting  1: 1 op, 272745167.00 ns, 272.7452 ms/op
+
+WorkloadPilot    1: 2 op, 795916.00 ns, 397.9580 us/op
+WorkloadPilot    2: 3 op, 695333.00 ns, 231.7777 us/op
+WorkloadPilot    3: 4 op, 951041.00 ns, 237.7603 us/op
+WorkloadPilot    4: 5 op, 1196000.00 ns, 239.2000 us/op
+WorkloadPilot    5: 6 op, 1325875.00 ns, 220.9792 us/op
+WorkloadPilot    6: 7 op, 1296458.00 ns, 185.2083 us/op
+WorkloadPilot    7: 8 op, 1551292.00 ns, 193.9115 us/op
+WorkloadPilot    8: 9 op, 1680417.00 ns, 186.7130 us/op
+WorkloadPilot    9: 10 op, 2216875.00 ns, 221.6875 us/op
+WorkloadPilot   10: 11 op, 2556167.00 ns, 232.3788 us/op
+WorkloadPilot   11: 12 op, 2755417.00 ns, 229.6181 us/op
+WorkloadPilot   12: 13 op, 2942541.00 ns, 226.3493 us/op
+WorkloadPilot   13: 14 op, 2676417.00 ns, 191.1726 us/op
+WorkloadPilot   14: 15 op, 2734000.00 ns, 182.2667 us/op
+WorkloadPilot   15: 16 op, 4345166.00 ns, 271.5729 us/op
+WorkloadPilot   16: 32 op, 6425959.00 ns, 200.8112 us/op
+WorkloadPilot   17: 64 op, 135045667.00 ns, 2.1101 ms/op
+WorkloadPilot   18: 128 op, 157465834.00 ns, 1.2302 ms/op
+WorkloadPilot   19: 256 op, 311254917.00 ns, 1.2158 ms/op
+WorkloadPilot   20: 512 op, 577760375.00 ns, 1.1284 ms/op
+
+WorkloadWarmup   1: 512 op, 266615833.00 ns, 520.7340 us/op
+WorkloadWarmup   2: 512 op, 547663791.00 ns, 1.0697 ms/op
+WorkloadWarmup   3: 512 op, 126861375.00 ns, 247.7761 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 512 op, 185233416.00 ns, 361.7840 us/op
+WorkloadActual   2: 512 op, 218262125.00 ns, 426.2932 us/op
+WorkloadActual   3: 512 op, 294877791.00 ns, 575.9332 us/op
+WorkloadActual   4: 512 op, 55951833.00 ns, 109.2809 us/op
+WorkloadActual   5: 512 op, 94895167.00 ns, 185.3421 us/op
+WorkloadActual   6: 512 op, 178024667.00 ns, 347.7044 us/op
+WorkloadActual   7: 512 op, 106638125.00 ns, 208.2776 us/op
+WorkloadActual   8: 512 op, 77281875.00 ns, 150.9412 us/op
+WorkloadActual   9: 512 op, 162182625.00 ns, 316.7629 us/op
+WorkloadActual  10: 512 op, 55378208.00 ns, 108.1606 us/op
+WorkloadActual  11: 512 op, 188215166.00 ns, 367.6077 us/op
+WorkloadActual  12: 512 op, 71942209.00 ns, 140.5121 us/op
+
+// AfterActualRun
+WorkloadResult   1: 512 op, 185233416.00 ns, 361.7840 us/op
+WorkloadResult   2: 512 op, 218262125.00 ns, 426.2932 us/op
+WorkloadResult   3: 512 op, 294877791.00 ns, 575.9332 us/op
+WorkloadResult   4: 512 op, 55951833.00 ns, 109.2809 us/op
+WorkloadResult   5: 512 op, 94895167.00 ns, 185.3421 us/op
+WorkloadResult   6: 512 op, 178024667.00 ns, 347.7044 us/op
+WorkloadResult   7: 512 op, 106638125.00 ns, 208.2776 us/op
+WorkloadResult   8: 512 op, 77281875.00 ns, 150.9412 us/op
+WorkloadResult   9: 512 op, 162182625.00 ns, 316.7629 us/op
+WorkloadResult  10: 512 op, 55378208.00 ns, 108.1606 us/op
+WorkloadResult  11: 512 op, 188215166.00 ns, 367.6077 us/op
+WorkloadResult  12: 512 op, 71942209.00 ns, 140.5121 us/op
+// GC:  3 0 0 27357184 512
+// Threading:  0 0 512
+
+// AfterAll
+// Benchmark Process 88395 has exited with code 0.
+
+Mean = 274.883 μs, StdErr = 42.449 μs (15.44%), N = 12, StdDev = 147.048 μs
+Min = 108.161 μs, Q1 = 148.334 μs, Median = 262.520 μs, Q3 = 363.240 μs, Max = 575.933 μs
+IQR = 214.906 μs, LowerFence = -174.025 μs, UpperFence = 685.599 μs
+ConfidenceInterval = [86.538 μs; 463.229 μs] (CI 99.9%), Margin = 188.346 μs (68.52% of Mean)
+Skewness = 0.48, Kurtosis = 1.97, MValue = 2
+
+// ** Remained 7 (25,9%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 1m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ScopedDisposableTransitive(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 20 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 224458.00 ns, 224.4580 us/op
+WorkloadJitting  1: 1 op, 142913958.00 ns, 142.9140 ms/op
+
+WorkloadPilot    1: 2 op, 936208.00 ns, 468.1040 us/op
+WorkloadPilot    2: 3 op, 1699000.00 ns, 566.3333 us/op
+WorkloadPilot    3: 4 op, 5104666.00 ns, 1.2762 ms/op
+WorkloadPilot    4: 5 op, 5221333.00 ns, 1.0443 ms/op
+WorkloadPilot    5: 6 op, 5218542.00 ns, 869.7570 us/op
+WorkloadPilot    6: 7 op, 6837292.00 ns, 976.7560 us/op
+WorkloadPilot    7: 8 op, 9512000.00 ns, 1.1890 ms/op
+WorkloadPilot    8: 9 op, 9323458.00 ns, 1.0359 ms/op
+WorkloadPilot    9: 10 op, 8990542.00 ns, 899.0542 us/op
+WorkloadPilot   10: 11 op, 14129125.00 ns, 1.2845 ms/op
+WorkloadPilot   11: 12 op, 15130000.00 ns, 1.2608 ms/op
+WorkloadPilot   12: 13 op, 19686208.00 ns, 1.5143 ms/op
+WorkloadPilot   13: 14 op, 41049292.00 ns, 2.9321 ms/op
+WorkloadPilot   14: 15 op, 43852834.00 ns, 2.9235 ms/op
+WorkloadPilot   15: 16 op, 87582458.00 ns, 5.4739 ms/op
+WorkloadPilot   16: 32 op, 51356292.00 ns, 1.6049 ms/op
+WorkloadPilot   17: 64 op, 164569500.00 ns, 2.5714 ms/op
+WorkloadPilot   18: 128 op, 419454208.00 ns, 3.2770 ms/op
+WorkloadPilot   19: 256 op, 603802167.00 ns, 2.3586 ms/op
+
+WorkloadWarmup   1: 256 op, 605589042.00 ns, 2.3656 ms/op
+WorkloadWarmup   2: 256 op, 658711000.00 ns, 2.5731 ms/op
+WorkloadWarmup   3: 256 op, 373267791.00 ns, 1.4581 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 256 op, 224281834.00 ns, 876.1009 us/op
+WorkloadActual   2: 256 op, 174881000.00 ns, 683.1289 us/op
+WorkloadActual   3: 256 op, 198741000.00 ns, 776.3320 us/op
+WorkloadActual   4: 256 op, 244518708.00 ns, 955.1512 us/op
+WorkloadActual   5: 256 op, 188839708.00 ns, 737.6551 us/op
+WorkloadActual   6: 256 op, 216289958.00 ns, 844.8826 us/op
+WorkloadActual   7: 256 op, 308576708.00 ns, 1.2054 ms/op
+WorkloadActual   8: 256 op, 204034583.00 ns, 797.0101 us/op
+WorkloadActual   9: 256 op, 286999167.00 ns, 1.1211 ms/op
+WorkloadActual  10: 256 op, 231993667.00 ns, 906.2253 us/op
+WorkloadActual  11: 256 op, 324771333.00 ns, 1.2686 ms/op
+WorkloadActual  12: 256 op, 293944209.00 ns, 1.1482 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 256 op, 224281834.00 ns, 876.1009 us/op
+WorkloadResult   2: 256 op, 174881000.00 ns, 683.1289 us/op
+WorkloadResult   3: 256 op, 198741000.00 ns, 776.3320 us/op
+WorkloadResult   4: 256 op, 244518708.00 ns, 955.1512 us/op
+WorkloadResult   5: 256 op, 188839708.00 ns, 737.6551 us/op
+WorkloadResult   6: 256 op, 216289958.00 ns, 844.8826 us/op
+WorkloadResult   7: 256 op, 308576708.00 ns, 1.2054 ms/op
+WorkloadResult   8: 256 op, 204034583.00 ns, 797.0101 us/op
+WorkloadResult   9: 256 op, 286999167.00 ns, 1.1211 ms/op
+WorkloadResult  10: 256 op, 231993667.00 ns, 906.2253 us/op
+WorkloadResult  11: 256 op, 324771333.00 ns, 1.2686 ms/op
+WorkloadResult  12: 256 op, 293944209.00 ns, 1.1482 ms/op
+// GC:  3 0 0 26775552 256
+// Threading:  0 0 256
+
+// AfterAll
+// Benchmark Process 88547 has exited with code 0.
+
+Mean = 943.318 μs, StdErr = 56.616 μs (6.00%), N = 12, StdDev = 196.123 μs
+Min = 683.129 μs, Q1 = 791.841 μs, Median = 891.163 μs, Q3 = 1,127.873 μs, Max = 1,268.638 μs
+IQR = 336.032 μs, LowerFence = 287.792 μs, UpperFence = 1,631.921 μs
+ConfidenceInterval = [692.115 μs; 1,194.521 μs] (CI 99.9%), Margin = 251.203 μs (26.63% of Mean)
+Skewness = 0.35, Kurtosis = 1.49, MValue = 3.14
+
+// ** Remained 6 (22,2%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 1m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.IntrinsicHeavy(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 21 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 232541.00 ns, 232.5410 us/op
+WorkloadJitting  1: 1 op, 6952625.00 ns, 6.9526 ms/op
+
+OverheadJitting  2: 16 op, 573625.00 ns, 35.8516 us/op
+WorkloadJitting  2: 16 op, 859250.00 ns, 53.7031 us/op
+
+WorkloadPilot    1: 16 op, 227583.00 ns, 14.2239 us/op
+WorkloadPilot    2: 32 op, 419625.00 ns, 13.1133 us/op
+WorkloadPilot    3: 64 op, 796125.00 ns, 12.4395 us/op
+WorkloadPilot    4: 128 op, 1319125.00 ns, 10.3057 us/op
+WorkloadPilot    5: 256 op, 3022709.00 ns, 11.8075 us/op
+WorkloadPilot    6: 512 op, 6614458.00 ns, 12.9189 us/op
+WorkloadPilot    7: 1024 op, 93778875.00 ns, 91.5809 us/op
+WorkloadPilot    8: 2048 op, 79301500.00 ns, 38.7214 us/op
+WorkloadPilot    9: 4096 op, 37763375.00 ns, 9.2196 us/op
+WorkloadPilot   10: 8192 op, 130043417.00 ns, 15.8744 us/op
+WorkloadPilot   11: 16384 op, 256312792.00 ns, 15.6441 us/op
+WorkloadPilot   12: 32768 op, 452196583.00 ns, 13.7999 us/op
+WorkloadPilot   13: 65536 op, 604314209.00 ns, 9.2211 us/op
+
+OverheadWarmup   1: 65536 op, 276041.00 ns, 4.2121 ns/op
+OverheadWarmup   2: 65536 op, 304958.00 ns, 4.6533 ns/op
+OverheadWarmup   3: 65536 op, 273666.00 ns, 4.1758 ns/op
+OverheadWarmup   4: 65536 op, 260500.00 ns, 3.9749 ns/op
+OverheadWarmup   5: 65536 op, 319667.00 ns, 4.8777 ns/op
+OverheadWarmup   6: 65536 op, 261291.00 ns, 3.9870 ns/op
+
+OverheadActual   1: 65536 op, 286875.00 ns, 4.3774 ns/op
+OverheadActual   2: 65536 op, 253917.00 ns, 3.8745 ns/op
+OverheadActual   3: 65536 op, 296334.00 ns, 4.5217 ns/op
+OverheadActual   4: 65536 op, 275083.00 ns, 4.1974 ns/op
+OverheadActual   5: 65536 op, 508000.00 ns, 7.7515 ns/op
+OverheadActual   6: 65536 op, 295708.00 ns, 4.5121 ns/op
+OverheadActual   7: 65536 op, 321541.00 ns, 4.9063 ns/op
+OverheadActual   8: 65536 op, 303292.00 ns, 4.6279 ns/op
+OverheadActual   9: 65536 op, 377333.00 ns, 5.7576 ns/op
+OverheadActual  10: 65536 op, 369209.00 ns, 5.6337 ns/op
+OverheadActual  11: 65536 op, 273625.00 ns, 4.1752 ns/op
+OverheadActual  12: 65536 op, 272667.00 ns, 4.1606 ns/op
+OverheadActual  13: 65536 op, 271792.00 ns, 4.1472 ns/op
+OverheadActual  14: 65536 op, 285667.00 ns, 4.3589 ns/op
+OverheadActual  15: 65536 op, 275667.00 ns, 4.2063 ns/op
+OverheadActual  16: 65536 op, 272542.00 ns, 4.1587 ns/op
+OverheadActual  17: 65536 op, 254416.00 ns, 3.8821 ns/op
+OverheadActual  18: 65536 op, 254708.00 ns, 3.8865 ns/op
+OverheadActual  19: 65536 op, 273333.00 ns, 4.1707 ns/op
+OverheadActual  20: 65536 op, 349042.00 ns, 5.3260 ns/op
+
+WorkloadWarmup   1: 65536 op, 576566167.00 ns, 8.7977 us/op
+WorkloadWarmup   2: 65536 op, 564398084.00 ns, 8.6120 us/op
+WorkloadWarmup   3: 65536 op, 697125458.00 ns, 10.6373 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 65536 op, 558139625.00 ns, 8.5165 us/op
+WorkloadActual   2: 65536 op, 710615083.00 ns, 10.8431 us/op
+WorkloadActual   3: 65536 op, 576387000.00 ns, 8.7950 us/op
+WorkloadActual   4: 65536 op, 958754750.00 ns, 14.6294 us/op
+WorkloadActual   5: 65536 op, 728756917.00 ns, 11.1199 us/op
+WorkloadActual   6: 65536 op, 1187371958.00 ns, 18.1179 us/op
+WorkloadActual   7: 65536 op, 1248588333.00 ns, 19.0519 us/op
+WorkloadActual   8: 65536 op, 1024173584.00 ns, 15.6276 us/op
+WorkloadActual   9: 65536 op, 1140103542.00 ns, 17.3966 us/op
+WorkloadActual  10: 65536 op, 769360666.00 ns, 11.7395 us/op
+WorkloadActual  11: 65536 op, 426031584.00 ns, 6.5007 us/op
+WorkloadActual  12: 65536 op, 555675791.00 ns, 8.4789 us/op
+
+// AfterActualRun
+WorkloadResult   1: 65536 op, 557858958.00 ns, 8.5123 us/op
+WorkloadResult   2: 65536 op, 710334416.00 ns, 10.8388 us/op
+WorkloadResult   3: 65536 op, 576106333.00 ns, 8.7907 us/op
+WorkloadResult   4: 65536 op, 958474083.00 ns, 14.6252 us/op
+WorkloadResult   5: 65536 op, 728476250.00 ns, 11.1157 us/op
+WorkloadResult   6: 65536 op, 1187091291.00 ns, 18.1136 us/op
+WorkloadResult   7: 65536 op, 1248307666.00 ns, 19.0477 us/op
+WorkloadResult   8: 65536 op, 1023892917.00 ns, 15.6234 us/op
+WorkloadResult   9: 65536 op, 1139822875.00 ns, 17.3923 us/op
+WorkloadResult  10: 65536 op, 769079999.00 ns, 11.7352 us/op
+WorkloadResult  11: 65536 op, 425750917.00 ns, 6.4964 us/op
+WorkloadResult  12: 65536 op, 555395124.00 ns, 8.4747 us/op
+// GC:  7 0 0 65536000 65536
+// Threading:  0 0 65536
+
+// AfterAll
+// Benchmark Process 88870 has exited with code 0.
+
+Mean = 12.564 μs, StdErr = 1.230 μs (9.79%), N = 12, StdDev = 4.261 μs
+Min = 6.496 μs, Q1 = 8.721 μs, Median = 11.425 μs, Q3 = 16.066 μs, Max = 19.048 μs
+IQR = 7.345 μs, LowerFence = -2.296 μs, UpperFence = 27.082 μs
+ConfidenceInterval = [7.106 μs; 18.021 μs] (CI 99.9%), Margin = 5.458 μs (43.44% of Mean)
+Skewness = 0.19, Kurtosis = 1.39, MValue = 3.67
+
+// ** Remained 5 (18,5%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 1m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.MixedIntrinsicAndActivities(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 22 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 175791.00 ns, 175.7910 us/op
+WorkloadJitting  1: 1 op, 34362916.00 ns, 34.3629 ms/op
+
+WorkloadPilot    1: 2 op, 363166.00 ns, 181.5830 us/op
+WorkloadPilot    2: 3 op, 220791.00 ns, 73.5970 us/op
+WorkloadPilot    3: 4 op, 239834.00 ns, 59.9585 us/op
+WorkloadPilot    4: 5 op, 356833.00 ns, 71.3666 us/op
+WorkloadPilot    5: 6 op, 526583.00 ns, 87.7638 us/op
+WorkloadPilot    6: 7 op, 534834.00 ns, 76.4049 us/op
+WorkloadPilot    7: 8 op, 484916.00 ns, 60.6145 us/op
+WorkloadPilot    8: 9 op, 689792.00 ns, 76.6436 us/op
+WorkloadPilot    9: 10 op, 767750.00 ns, 76.7750 us/op
+WorkloadPilot   10: 11 op, 838542.00 ns, 76.2311 us/op
+WorkloadPilot   11: 12 op, 74623791.00 ns, 6.2186 ms/op
+WorkloadPilot   12: 13 op, 1074959.00 ns, 82.6892 us/op
+WorkloadPilot   13: 14 op, 1190375.00 ns, 85.0268 us/op
+WorkloadPilot   14: 15 op, 1500375.00 ns, 100.0250 us/op
+WorkloadPilot   15: 16 op, 2585292.00 ns, 161.5808 us/op
+WorkloadPilot   16: 32 op, 3121291.00 ns, 97.5403 us/op
+WorkloadPilot   17: 64 op, 4278750.00 ns, 66.8555 us/op
+WorkloadPilot   18: 128 op, 82428584.00 ns, 643.9733 us/op
+WorkloadPilot   19: 256 op, 77771167.00 ns, 303.7936 us/op
+WorkloadPilot   20: 512 op, 315280125.00 ns, 615.7815 us/op
+WorkloadPilot   21: 1024 op, 247377083.00 ns, 241.5792 us/op
+WorkloadPilot   22: 2048 op, 293249041.00 ns, 143.1880 us/op
+WorkloadPilot   23: 4096 op, 399503167.00 ns, 97.5350 us/op
+WorkloadPilot   24: 8192 op, 1014442041.00 ns, 123.8333 us/op
+
+WorkloadWarmup   1: 8192 op, 616142542.00 ns, 75.2127 us/op
+WorkloadWarmup   2: 8192 op, 685305916.00 ns, 83.6555 us/op
+WorkloadWarmup   3: 8192 op, 1027145792.00 ns, 125.3840 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 8192 op, 910617291.00 ns, 111.1593 us/op
+WorkloadActual   2: 8192 op, 689191333.00 ns, 84.1298 us/op
+WorkloadActual   3: 8192 op, 538088458.00 ns, 65.6846 us/op
+WorkloadActual   4: 8192 op, 589839042.00 ns, 72.0018 us/op
+WorkloadActual   5: 8192 op, 1001798542.00 ns, 122.2899 us/op
+WorkloadActual   6: 8192 op, 551432084.00 ns, 67.3135 us/op
+WorkloadActual   7: 8192 op, 354110000.00 ns, 43.2263 us/op
+WorkloadActual   8: 8192 op, 271717375.00 ns, 33.1686 us/op
+WorkloadActual   9: 8192 op, 297475958.00 ns, 36.3130 us/op
+WorkloadActual  10: 8192 op, 241799333.00 ns, 29.5165 us/op
+WorkloadActual  11: 8192 op, 341935375.00 ns, 41.7402 us/op
+WorkloadActual  12: 8192 op, 378156250.00 ns, 46.1617 us/op
+
+// AfterActualRun
+WorkloadResult   1: 8192 op, 910617291.00 ns, 111.1593 us/op
+WorkloadResult   2: 8192 op, 689191333.00 ns, 84.1298 us/op
+WorkloadResult   3: 8192 op, 538088458.00 ns, 65.6846 us/op
+WorkloadResult   4: 8192 op, 589839042.00 ns, 72.0018 us/op
+WorkloadResult   5: 8192 op, 1001798542.00 ns, 122.2899 us/op
+WorkloadResult   6: 8192 op, 551432084.00 ns, 67.3135 us/op
+WorkloadResult   7: 8192 op, 354110000.00 ns, 43.2263 us/op
+WorkloadResult   8: 8192 op, 271717375.00 ns, 33.1686 us/op
+WorkloadResult   9: 8192 op, 297475958.00 ns, 36.3130 us/op
+WorkloadResult  10: 8192 op, 241799333.00 ns, 29.5165 us/op
+WorkloadResult  11: 8192 op, 341935375.00 ns, 41.7402 us/op
+WorkloadResult  12: 8192 op, 378156250.00 ns, 46.1617 us/op
+// GC:  21 0 0 181403648 8192
+// Threading:  0 0 8192
+
+// AfterAll
+// Benchmark Process 89385 has exited with code 0.
+
+Mean = 62.725 μs, StdErr = 8.806 μs (14.04%), N = 12, StdDev = 30.506 μs
+Min = 29.517 μs, Q1 = 40.383 μs, Median = 55.923 μs, Q3 = 75.034 μs, Max = 122.290 μs
+IQR = 34.650 μs, LowerFence = -11.592 μs, UpperFence = 127.010 μs
+ConfidenceInterval = [23.652 μs; 101.799 μs] (CI 99.9%), Margin = 39.073 μs (62.29% of Mean)
+Skewness = 0.69, Kurtosis = 2.04, MValue = 2
+
+// ** Remained 4 (14,8%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 1m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.IoBound(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 23 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 181125.00 ns, 181.1250 us/op
+WorkloadJitting  1: 1 op, 44849875.00 ns, 44.8499 ms/op
+
+WorkloadPilot    1: 2 op, 18741959.00 ns, 9.3710 ms/op
+WorkloadPilot    2: 3 op, 25465167.00 ns, 8.4884 ms/op
+WorkloadPilot    3: 4 op, 55684125.00 ns, 13.9210 ms/op
+WorkloadPilot    4: 5 op, 28499750.00 ns, 5.7000 ms/op
+WorkloadPilot    5: 6 op, 141021208.00 ns, 23.5035 ms/op
+WorkloadPilot    6: 7 op, 67760791.00 ns, 9.6801 ms/op
+WorkloadPilot    7: 8 op, 73894834.00 ns, 9.2369 ms/op
+WorkloadPilot    8: 9 op, 50085375.00 ns, 5.5650 ms/op
+WorkloadPilot    9: 10 op, 57901042.00 ns, 5.7901 ms/op
+WorkloadPilot   10: 11 op, 53149083.00 ns, 4.8317 ms/op
+WorkloadPilot   11: 12 op, 65215708.00 ns, 5.4346 ms/op
+WorkloadPilot   12: 13 op, 179711125.00 ns, 13.8239 ms/op
+WorkloadPilot   13: 14 op, 165812916.00 ns, 11.8438 ms/op
+WorkloadPilot   14: 15 op, 80422541.00 ns, 5.3615 ms/op
+WorkloadPilot   15: 16 op, 144676875.00 ns, 9.0423 ms/op
+WorkloadPilot   16: 32 op, 481020583.00 ns, 15.0319 ms/op
+WorkloadPilot   17: 64 op, 748511709.00 ns, 11.6955 ms/op
+
+WorkloadWarmup   1: 64 op, 596091584.00 ns, 9.3139 ms/op
+WorkloadWarmup   2: 64 op, 733212750.00 ns, 11.4564 ms/op
+WorkloadWarmup   3: 64 op, 461764584.00 ns, 7.2151 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 64 op, 386888417.00 ns, 6.0451 ms/op
+WorkloadActual   2: 64 op, 694114667.00 ns, 10.8455 ms/op
+WorkloadActual   3: 64 op, 646365750.00 ns, 10.0995 ms/op
+WorkloadActual   4: 64 op, 468480792.00 ns, 7.3200 ms/op
+WorkloadActual   5: 64 op, 535390334.00 ns, 8.3655 ms/op
+WorkloadActual   6: 64 op, 605363500.00 ns, 9.4588 ms/op
+WorkloadActual   7: 64 op, 440611042.00 ns, 6.8845 ms/op
+WorkloadActual   8: 64 op, 391157167.00 ns, 6.1118 ms/op
+WorkloadActual   9: 64 op, 477446583.00 ns, 7.4601 ms/op
+WorkloadActual  10: 64 op, 405779792.00 ns, 6.3403 ms/op
+WorkloadActual  11: 64 op, 491630459.00 ns, 7.6817 ms/op
+WorkloadActual  12: 64 op, 540075916.00 ns, 8.4387 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 64 op, 386888417.00 ns, 6.0451 ms/op
+WorkloadResult   2: 64 op, 694114667.00 ns, 10.8455 ms/op
+WorkloadResult   3: 64 op, 646365750.00 ns, 10.0995 ms/op
+WorkloadResult   4: 64 op, 468480792.00 ns, 7.3200 ms/op
+WorkloadResult   5: 64 op, 535390334.00 ns, 8.3655 ms/op
+WorkloadResult   6: 64 op, 605363500.00 ns, 9.4588 ms/op
+WorkloadResult   7: 64 op, 440611042.00 ns, 6.8845 ms/op
+WorkloadResult   8: 64 op, 391157167.00 ns, 6.1118 ms/op
+WorkloadResult   9: 64 op, 477446583.00 ns, 7.4601 ms/op
+WorkloadResult  10: 64 op, 405779792.00 ns, 6.3403 ms/op
+WorkloadResult  11: 64 op, 491630459.00 ns, 7.6817 ms/op
+WorkloadResult  12: 64 op, 540075916.00 ns, 8.4387 ms/op
+// GC:  0 0 0 681344 64
+// Threading:  256 0 64
+
+// AfterAll
+// Benchmark Process 89972 has exited with code 0.
+
+Mean = 7.921 ms, StdErr = 0.453 ms (5.72%), N = 12, StdDev = 1.570 ms
+Min = 6.045 ms, Q1 = 6.748 ms, Median = 7.571 ms, Q3 = 8.694 ms, Max = 10.846 ms
+IQR = 1.945 ms, LowerFence = 3.831 ms, UpperFence = 11.612 ms
+ConfidenceInterval = [5.910 ms; 9.932 ms] (CI 99.9%), Margin = 2.011 ms (25.39% of Mean)
+Skewness = 0.46, Kurtosis = 1.81, MValue = 2
+
+// ** Remained 3 (11,1%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 0m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 124 125 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.Retry(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 24 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 339459.00 ns, 339.4590 us/op
+WorkloadJitting  1: 1 op, 31488125.00 ns, 31.4881 ms/op
+
+OverheadJitting  2: 16 op, 481208.00 ns, 30.0755 us/op
+WorkloadJitting  2: 16 op, 994292.00 ns, 62.1433 us/op
+
+WorkloadPilot    1: 16 op, 593125.00 ns, 37.0703 us/op
+WorkloadPilot    2: 32 op, 1195333.00 ns, 37.3542 us/op
+WorkloadPilot    3: 64 op, 1529959.00 ns, 23.9056 us/op
+WorkloadPilot    4: 128 op, 2078750.00 ns, 16.2402 us/op
+WorkloadPilot    5: 256 op, 4739917.00 ns, 18.5153 us/op
+WorkloadPilot    6: 512 op, 14217834.00 ns, 27.7692 us/op
+WorkloadPilot    7: 1024 op, 14309125.00 ns, 13.9738 us/op
+WorkloadPilot    8: 2048 op, 35424875.00 ns, 17.2973 us/op
+WorkloadPilot    9: 4096 op, 83465083.00 ns, 20.3772 us/op
+WorkloadPilot   10: 8192 op, 232855000.00 ns, 28.4247 us/op
+WorkloadPilot   11: 16384 op, 351842834.00 ns, 21.4748 us/op
+WorkloadPilot   12: 32768 op, 308832625.00 ns, 9.4248 us/op
+WorkloadPilot   13: 65536 op, 708590459.00 ns, 10.8122 us/op
+
+OverheadWarmup   1: 65536 op, 253208.00 ns, 3.8636 ns/op
+OverheadWarmup   2: 65536 op, 253500.00 ns, 3.8681 ns/op
+OverheadWarmup   3: 65536 op, 278834.00 ns, 4.2547 ns/op
+OverheadWarmup   4: 65536 op, 251292.00 ns, 3.8344 ns/op
+OverheadWarmup   5: 65536 op, 272209.00 ns, 4.1536 ns/op
+OverheadWarmup   6: 65536 op, 274084.00 ns, 4.1822 ns/op
+OverheadWarmup   7: 65536 op, 251834.00 ns, 3.8427 ns/op
+
+OverheadActual   1: 65536 op, 304208.00 ns, 4.6418 ns/op
+OverheadActual   2: 65536 op, 252625.00 ns, 3.8548 ns/op
+OverheadActual   3: 65536 op, 261833.00 ns, 3.9953 ns/op
+OverheadActual   4: 65536 op, 269875.00 ns, 4.1180 ns/op
+OverheadActual   5: 65536 op, 261750.00 ns, 3.9940 ns/op
+OverheadActual   6: 65536 op, 251167.00 ns, 3.8325 ns/op
+OverheadActual   7: 65536 op, 251667.00 ns, 3.8401 ns/op
+OverheadActual   8: 65536 op, 280417.00 ns, 4.2788 ns/op
+OverheadActual   9: 65536 op, 397834.00 ns, 6.0705 ns/op
+OverheadActual  10: 65536 op, 259709.00 ns, 3.9628 ns/op
+OverheadActual  11: 65536 op, 258834.00 ns, 3.9495 ns/op
+OverheadActual  12: 65536 op, 269625.00 ns, 4.1142 ns/op
+OverheadActual  13: 65536 op, 251625.00 ns, 3.8395 ns/op
+OverheadActual  14: 65536 op, 251875.00 ns, 3.8433 ns/op
+OverheadActual  15: 65536 op, 251834.00 ns, 3.8427 ns/op
+
+WorkloadWarmup   1: 65536 op, 381509208.00 ns, 5.8214 us/op
+WorkloadWarmup   2: 65536 op, 472856291.00 ns, 7.2152 us/op
+WorkloadWarmup   3: 65536 op, 374194541.00 ns, 5.7098 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 65536 op, 369788000.00 ns, 5.6425 us/op
+WorkloadActual   2: 65536 op, 524819667.00 ns, 8.0081 us/op
+WorkloadActual   3: 65536 op, 375099000.00 ns, 5.7236 us/op
+WorkloadActual   4: 65536 op, 334451958.00 ns, 5.1033 us/op
+WorkloadActual   5: 65536 op, 351946958.00 ns, 5.3703 us/op
+WorkloadActual   6: 65536 op, 346785541.00 ns, 5.2915 us/op
+WorkloadActual   7: 65536 op, 296001125.00 ns, 4.5166 us/op
+WorkloadActual   8: 65536 op, 439728459.00 ns, 6.7097 us/op
+WorkloadActual   9: 65536 op, 358495875.00 ns, 5.4702 us/op
+WorkloadActual  10: 65536 op, 374225208.00 ns, 5.7102 us/op
+WorkloadActual  11: 65536 op, 629793541.00 ns, 9.6099 us/op
+WorkloadActual  12: 65536 op, 552009208.00 ns, 8.4230 us/op
+
+// AfterActualRun
+WorkloadResult   1: 65536 op, 369528291.00 ns, 5.6386 us/op
+WorkloadResult   2: 65536 op, 524559958.00 ns, 8.0041 us/op
+WorkloadResult   3: 65536 op, 374839291.00 ns, 5.7196 us/op
+WorkloadResult   4: 65536 op, 334192249.00 ns, 5.0994 us/op
+WorkloadResult   5: 65536 op, 351687249.00 ns, 5.3663 us/op
+WorkloadResult   6: 65536 op, 346525832.00 ns, 5.2876 us/op
+WorkloadResult   7: 65536 op, 295741416.00 ns, 4.5127 us/op
+WorkloadResult   8: 65536 op, 439468750.00 ns, 6.7058 us/op
+WorkloadResult   9: 65536 op, 358236166.00 ns, 5.4663 us/op
+WorkloadResult  10: 65536 op, 373965499.00 ns, 5.7063 us/op
+WorkloadResult  11: 65536 op, 551749499.00 ns, 8.4190 us/op
+// GC:  45 0 0 379584512 65536
+// Threading:  0 0 65536
+
+// AfterAll
+// Benchmark Process 90454 has exited with code 0.
+
+Mean = 5.993 μs, StdErr = 0.368 μs (6.14%), N = 11, StdDev = 1.220 μs
+Min = 4.513 μs, Q1 = 5.327 μs, Median = 5.639 μs, Q3 = 6.213 μs, Max = 8.419 μs
+IQR = 0.886 μs, LowerFence = 3.998 μs, UpperFence = 7.541 μs
+ConfidenceInterval = [4.306 μs; 7.680 μs] (CI 99.9%), Margin = 1.687 μs (28.15% of Mean)
+Skewness = 0.9, Kurtosis = 2.35, MValue = 2.29
+
+// ** Remained 2 (7,4%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 0m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ResumeInFreshBurst(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 25 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 172584.00 ns, 172.5840 us/op
+WorkloadJitting  1: 1 op, 37632958.00 ns, 37.6330 ms/op
+
+WorkloadPilot    1: 2 op, 2919250.00 ns, 1.4596 ms/op
+WorkloadPilot    2: 3 op, 165334.00 ns, 55.1113 us/op
+WorkloadPilot    3: 4 op, 151750.00 ns, 37.9375 us/op
+WorkloadPilot    4: 5 op, 290667.00 ns, 58.1334 us/op
+WorkloadPilot    5: 6 op, 137833.00 ns, 22.9722 us/op
+WorkloadPilot    6: 7 op, 135625.00 ns, 19.3750 us/op
+WorkloadPilot    7: 8 op, 177250.00 ns, 22.1563 us/op
+WorkloadPilot    8: 9 op, 188333.00 ns, 20.9259 us/op
+WorkloadPilot    9: 10 op, 219084.00 ns, 21.9084 us/op
+WorkloadPilot   10: 11 op, 386625.00 ns, 35.1477 us/op
+WorkloadPilot   11: 12 op, 306000.00 ns, 25.5000 us/op
+WorkloadPilot   12: 13 op, 447417.00 ns, 34.4167 us/op
+WorkloadPilot   13: 14 op, 341542.00 ns, 24.3959 us/op
+WorkloadPilot   14: 15 op, 336375.00 ns, 22.4250 us/op
+WorkloadPilot   15: 16 op, 560667.00 ns, 35.0417 us/op
+WorkloadPilot   16: 32 op, 1041750.00 ns, 32.5547 us/op
+WorkloadPilot   17: 64 op, 1489334.00 ns, 23.2708 us/op
+WorkloadPilot   18: 128 op, 2512292.00 ns, 19.6273 us/op
+WorkloadPilot   19: 256 op, 6002917.00 ns, 23.4489 us/op
+WorkloadPilot   20: 512 op, 14051084.00 ns, 27.4435 us/op
+WorkloadPilot   21: 1024 op, 22820083.00 ns, 22.2852 us/op
+WorkloadPilot   22: 2048 op, 65987542.00 ns, 32.2205 us/op
+WorkloadPilot   23: 4096 op, 138355042.00 ns, 33.7781 us/op
+WorkloadPilot   24: 8192 op, 212501541.00 ns, 25.9401 us/op
+WorkloadPilot   25: 16384 op, 331816083.00 ns, 20.2524 us/op
+WorkloadPilot   26: 32768 op, 334308125.00 ns, 10.2023 us/op
+WorkloadPilot   27: 65536 op, 528178125.00 ns, 8.0594 us/op
+
+WorkloadWarmup   1: 65536 op, 861042583.00 ns, 13.1385 us/op
+WorkloadWarmup   2: 65536 op, 988132250.00 ns, 15.0777 us/op
+WorkloadWarmup   3: 65536 op, 1048940250.00 ns, 16.0056 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 65536 op, 555615417.00 ns, 8.4780 us/op
+WorkloadActual   2: 65536 op, 832201458.00 ns, 12.6984 us/op
+WorkloadActual   3: 65536 op, 541937875.00 ns, 8.2693 us/op
+WorkloadActual   4: 65536 op, 654425500.00 ns, 9.9857 us/op
+WorkloadActual   5: 65536 op, 679344667.00 ns, 10.3660 us/op
+WorkloadActual   6: 65536 op, 540286875.00 ns, 8.2441 us/op
+WorkloadActual   7: 65536 op, 593044791.00 ns, 9.0491 us/op
+WorkloadActual   8: 65536 op, 561829791.00 ns, 8.5728 us/op
+WorkloadActual   9: 65536 op, 647501084.00 ns, 9.8801 us/op
+WorkloadActual  10: 65536 op, 468271084.00 ns, 7.1452 us/op
+WorkloadActual  11: 65536 op, 797158209.00 ns, 12.1637 us/op
+WorkloadActual  12: 65536 op, 621580792.00 ns, 9.4846 us/op
+
+// AfterActualRun
+WorkloadResult   1: 65536 op, 555615417.00 ns, 8.4780 us/op
+WorkloadResult   2: 65536 op, 541937875.00 ns, 8.2693 us/op
+WorkloadResult   3: 65536 op, 654425500.00 ns, 9.9857 us/op
+WorkloadResult   4: 65536 op, 679344667.00 ns, 10.3660 us/op
+WorkloadResult   5: 65536 op, 540286875.00 ns, 8.2441 us/op
+WorkloadResult   6: 65536 op, 593044791.00 ns, 9.0491 us/op
+WorkloadResult   7: 65536 op, 561829791.00 ns, 8.5728 us/op
+WorkloadResult   8: 65536 op, 647501084.00 ns, 9.8801 us/op
+WorkloadResult   9: 65536 op, 468271084.00 ns, 7.1452 us/op
+WorkloadResult  10: 65536 op, 797158209.00 ns, 12.1637 us/op
+WorkloadResult  11: 65536 op, 621580792.00 ns, 9.4846 us/op
+// GC:  57 0 0 482344960 65536
+// Threading:  0 0 65536
+
+// AfterAll
+// Benchmark Process 90865 has exited with code 0.
+
+Mean = 9.240 μs, StdErr = 0.407 μs (4.41%), N = 11, StdDev = 1.350 μs
+Min = 7.145 μs, Q1 = 8.374 μs, Median = 9.049 μs, Q3 = 9.933 μs, Max = 12.164 μs
+IQR = 1.559 μs, LowerFence = 6.035 μs, UpperFence = 12.272 μs
+ConfidenceInterval = [7.373 μs; 11.107 μs] (CI 99.9%), Margin = 1.867 μs (20.21% of Mean)
+Skewness = 0.56, Kurtosis = 2.65, MValue = 2
+
+// ** Remained 1 (3,7%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 0m from now) **
+// **************************
+// Benchmark: ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1.dll --anonymousPipes 121 123 --benchmarkName "Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks.ConcurrentDrain(Strategy: Conditional)" --job "IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3" --benchmarkId 26 in /Users/sipke/.codex/worktrees/c48a/elsa-foundation/benchmarks/Elsa/Activities/Runtime/Benchmarks/bin/Release/net10.0/Elsa.Activities.Runtime.Benchmarks-Job-NLWYXA-1/bin/Release/net10.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+// GC=Concurrent Workstation
+// HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 148584.00 ns, 148.5840 us/op
+WorkloadJitting  1: 1 op, 32016291.00 ns, 32.0163 ms/op
+
+OverheadJitting  2: 16 op, 501458.00 ns, 31.3411 us/op
+WorkloadJitting  2: 16 op, 9767125.00 ns, 610.4453 us/op
+
+WorkloadPilot    1: 16 op, 9635834.00 ns, 602.2396 us/op
+WorkloadPilot    2: 32 op, 20006917.00 ns, 625.2162 us/op
+WorkloadPilot    3: 64 op, 42773541.00 ns, 668.3366 us/op
+WorkloadPilot    4: 128 op, 111483541.00 ns, 870.9652 us/op
+WorkloadPilot    5: 256 op, 279478916.00 ns, 1.0917 ms/op
+WorkloadPilot    6: 512 op, 828387041.00 ns, 1.6179 ms/op
+
+OverheadWarmup   1: 512 op, 5000.00 ns, 9.7656 ns/op
+OverheadWarmup   2: 512 op, 2791.00 ns, 5.4512 ns/op
+OverheadWarmup   3: 512 op, 3083.00 ns, 6.0215 ns/op
+OverheadWarmup   4: 512 op, 2542.00 ns, 4.9648 ns/op
+OverheadWarmup   5: 512 op, 3000.00 ns, 5.8594 ns/op
+OverheadWarmup   6: 512 op, 2500.00 ns, 4.8828 ns/op
+
+OverheadActual   1: 512 op, 2375.00 ns, 4.6387 ns/op
+OverheadActual   2: 512 op, 2583.00 ns, 5.0449 ns/op
+OverheadActual   3: 512 op, 2500.00 ns, 4.8828 ns/op
+OverheadActual   4: 512 op, 2292.00 ns, 4.4766 ns/op
+OverheadActual   5: 512 op, 2459.00 ns, 4.8027 ns/op
+OverheadActual   6: 512 op, 2875.00 ns, 5.6152 ns/op
+OverheadActual   7: 512 op, 2250.00 ns, 4.3945 ns/op
+OverheadActual   8: 512 op, 2333.00 ns, 4.5566 ns/op
+OverheadActual   9: 512 op, 2084.00 ns, 4.0703 ns/op
+OverheadActual  10: 512 op, 2250.00 ns, 4.3945 ns/op
+OverheadActual  11: 512 op, 2125.00 ns, 4.1504 ns/op
+OverheadActual  12: 512 op, 2208.00 ns, 4.3125 ns/op
+OverheadActual  13: 512 op, 2166.00 ns, 4.2305 ns/op
+OverheadActual  14: 512 op, 2167.00 ns, 4.2324 ns/op
+OverheadActual  15: 512 op, 3209.00 ns, 6.2676 ns/op
+OverheadActual  16: 512 op, 2500.00 ns, 4.8828 ns/op
+OverheadActual  17: 512 op, 3167.00 ns, 6.1855 ns/op
+OverheadActual  18: 512 op, 2959.00 ns, 5.7793 ns/op
+OverheadActual  19: 512 op, 2375.00 ns, 4.6387 ns/op
+OverheadActual  20: 512 op, 3166.00 ns, 6.1836 ns/op
+
+WorkloadWarmup   1: 512 op, 180855875.00 ns, 353.2341 us/op
+WorkloadWarmup   2: 512 op, 199269334.00 ns, 389.1979 us/op
+WorkloadWarmup   3: 512 op, 166612625.00 ns, 325.4153 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 512 op, 114310000.00 ns, 223.2617 us/op
+WorkloadActual   2: 512 op, 447176084.00 ns, 873.3908 us/op
+WorkloadActual   3: 512 op, 137596791.00 ns, 268.7437 us/op
+WorkloadActual   4: 512 op, 111356500.00 ns, 217.4932 us/op
+WorkloadActual   5: 512 op, 121511708.00 ns, 237.3276 us/op
+WorkloadActual   6: 512 op, 178258834.00 ns, 348.1618 us/op
+WorkloadActual   7: 512 op, 154250083.00 ns, 301.2697 us/op
+WorkloadActual   8: 512 op, 150820542.00 ns, 294.5714 us/op
+WorkloadActual   9: 512 op, 263218291.00 ns, 514.0982 us/op
+WorkloadActual  10: 512 op, 237732166.00 ns, 464.3206 us/op
+WorkloadActual  11: 512 op, 121155167.00 ns, 236.6312 us/op
+WorkloadActual  12: 512 op, 97847250.00 ns, 191.1079 us/op
+
+// AfterActualRun
+WorkloadResult   1: 512 op, 114307625.00 ns, 223.2571 us/op
+WorkloadResult   2: 512 op, 137594416.00 ns, 268.7391 us/op
+WorkloadResult   3: 512 op, 111354125.00 ns, 217.4885 us/op
+WorkloadResult   4: 512 op, 121509333.00 ns, 237.3229 us/op
+WorkloadResult   5: 512 op, 178256459.00 ns, 348.1571 us/op
+WorkloadResult   6: 512 op, 154247708.00 ns, 301.2651 us/op
+WorkloadResult   7: 512 op, 150818167.00 ns, 294.5667 us/op
+WorkloadResult   8: 512 op, 263215916.00 ns, 514.0936 us/op
+WorkloadResult   9: 512 op, 237729791.00 ns, 464.3160 us/op
+WorkloadResult  10: 512 op, 121152792.00 ns, 236.6265 us/op
+WorkloadResult  11: 512 op, 97844875.00 ns, 191.1033 us/op
+// GC:  6 0 0 53866496 512
+// Threading:  0 0 512
+
+// AfterAll
+// Benchmark Process 91448 has exited with code 0.
+
+Mean = 299.721 μs, StdErr = 31.430 μs (10.49%), N = 11, StdDev = 104.242 μs
+Min = 191.103 μs, Q1 = 229.942 μs, Median = 268.739 μs, Q3 = 324.711 μs, Max = 514.094 μs
+IQR = 94.769 μs, LowerFence = 87.788 μs, UpperFence = 466.865 μs
+ConfidenceInterval = [155.555 μs; 443.888 μs] (CI 99.9%), Margin = 144.166 μs (48.10% of Mean)
+Skewness = 0.93, Kurtosis = 2.39, MValue = 2
+
+// ** Remained 0 (0,0%) benchmark(s) to run. Estimated finish 2026-07-16 11:41 (0h 0m from now) **
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  benchmarks/Elsa/Activities/Runtime/Benchmarks/results/2026-07-16-m2-net10/results/Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks-report.csv
+  benchmarks/Elsa/Activities/Runtime/Benchmarks/results/2026-07-16-m2-net10/results/Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks-report-github.md
+  benchmarks/Elsa/Activities/Runtime/Benchmarks/results/2026-07-16-m2-net10/results/Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks-report.html
+
+// * Detailed results *
+ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 130.195 μs, StdErr = 5.492 μs (4.22%), N = 10, StdDev = 17.369 μs
+Min = 96.199 μs, Q1 = 124.571 μs, Median = 131.348 μs, Q3 = 137.287 μs, Max = 160.224 μs
+IQR = 12.716 μs, LowerFence = 105.498 μs, UpperFence = 156.360 μs
+ConfidenceInterval = [103.937 μs; 156.454 μs] (CI 99.9%), Margin = 26.259 μs (20.17% of Mean)
+Skewness = -0.25, Kurtosis = 2.51, MValue = 2
+-------------------- Histogram --------------------
+[ 94.278 μs ; 115.440 μs) | @@
+[115.440 μs ; 141.500 μs) | @@@@@@
+[141.500 μs ; 163.471 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 93.450 μs, StdErr = 5.998 μs (6.42%), N = 12, StdDev = 20.776 μs
+Min = 66.176 μs, Q1 = 79.274 μs, Median = 88.584 μs, Q3 = 107.133 μs, Max = 130.635 μs
+IQR = 27.859 μs, LowerFence = 37.485 μs, UpperFence = 148.922 μs
+ConfidenceInterval = [66.838 μs; 120.061 μs] (CI 99.9%), Margin = 26.611 μs (28.48% of Mean)
+Skewness = 0.46, Kurtosis = 1.77, MValue = 2
+-------------------- Histogram --------------------
+[ 63.416 μs ;  87.237 μs) | @@@@@@
+[ 87.237 μs ; 116.079 μs) | @@@@
+[116.079 μs ; 142.546 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 238.021 μs, StdErr = 18.927 μs (7.95%), N = 12, StdDev = 65.566 μs
+Min = 132.828 μs, Q1 = 206.351 μs, Median = 219.800 μs, Q3 = 282.098 μs, Max = 367.906 μs
+IQR = 75.747 μs, LowerFence = 92.732 μs, UpperFence = 395.718 μs
+ConfidenceInterval = [154.042 μs; 322.000 μs] (CI 99.9%), Margin = 83.979 μs (35.28% of Mean)
+Skewness = 0.43, Kurtosis = 2.2, MValue = 2
+-------------------- Histogram --------------------
+[ 95.240 μs ; 164.466 μs) | @
+[164.466 μs ; 262.636 μs) | @@@@@@@
+[262.636 μs ; 337.811 μs) | @@@
+[337.811 μs ; 405.494 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 3.174 μs, StdErr = 0.501 μs (15.77%), N = 12, StdDev = 1.734 μs
+Min = 1.808 μs, Q1 = 1.854 μs, Median = 2.068 μs, Q3 = 4.534 μs, Max = 6.205 μs
+IQR = 2.680 μs, LowerFence = -2.166 μs, UpperFence = 8.554 μs
+ConfidenceInterval = [0.953 μs; 5.395 μs] (CI 99.9%), Margin = 2.221 μs (69.99% of Mean)
+Skewness = 0.72, Kurtosis = 1.74, MValue = 3
+-------------------- Histogram --------------------
+[1.546 μs ; 3.534 μs) | @@@@@@@@
+[3.534 μs ; 4.372 μs) |
+[4.372 μs ; 6.361 μs) | @@@@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 10.400 μs, StdErr = 0.119 μs (1.14%), N = 11, StdDev = 0.395 μs
+Min = 9.919 μs, Q1 = 10.139 μs, Median = 10.283 μs, Q3 = 10.523 μs, Max = 11.233 μs
+IQR = 0.384 μs, LowerFence = 9.563 μs, UpperFence = 11.099 μs
+ConfidenceInterval = [9.854 μs; 10.946 μs] (CI 99.9%), Margin = 0.546 μs (5.25% of Mean)
+Skewness = 0.75, Kurtosis = 2.4, MValue = 2
+-------------------- Histogram --------------------
+[ 9.686 μs ; 10.091 μs) | @@
+[10.091 μs ; 10.556 μs) | @@@@@@@
+[10.556 μs ; 10.841 μs) |
+[10.841 μs ; 11.307 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 5.280 ms, StdErr = 0.038 ms (0.71%), N = 12, StdDev = 0.130 ms
+Min = 5.087 ms, Q1 = 5.191 ms, Median = 5.265 ms, Q3 = 5.363 ms, Max = 5.525 ms
+IQR = 0.172 ms, LowerFence = 4.933 ms, UpperFence = 5.621 ms
+ConfidenceInterval = [5.114 ms; 5.446 ms] (CI 99.9%), Margin = 0.166 ms (3.15% of Mean)
+Skewness = 0.34, Kurtosis = 1.9, MValue = 2
+-------------------- Histogram --------------------
+[5.013 ms ; 5.135 ms) | @
+[5.135 ms ; 5.284 ms) | @@@@@@
+[5.284 ms ; 5.449 ms) | @@@@
+[5.449 ms ; 5.600 ms) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 3.338 μs, StdErr = 0.119 μs (3.58%), N = 12, StdDev = 0.414 μs
+Min = 2.623 μs, Q1 = 3.160 μs, Median = 3.360 μs, Q3 = 3.612 μs, Max = 4.029 μs
+IQR = 0.452 μs, LowerFence = 2.482 μs, UpperFence = 4.291 μs
+ConfidenceInterval = [2.808 μs; 3.868 μs] (CI 99.9%), Margin = 0.530 μs (15.88% of Mean)
+Skewness = -0.26, Kurtosis = 2, MValue = 2.57
+-------------------- Histogram --------------------
+[2.386 μs ; 2.893 μs) | @@
+[2.893 μs ; 3.134 μs) |
+[3.134 μs ; 3.608 μs) | @@@@@@@
+[3.608 μs ; 4.085 μs) | @@@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 11.217 μs, StdErr = 0.923 μs (8.23%), N = 12, StdDev = 3.197 μs
+Min = 4.717 μs, Q1 = 8.963 μs, Median = 11.917 μs, Q3 = 13.581 μs, Max = 15.611 μs
+IQR = 4.618 μs, LowerFence = 2.035 μs, UpperFence = 20.509 μs
+ConfidenceInterval = [7.122 μs; 15.312 μs] (CI 99.9%), Margin = 4.095 μs (36.51% of Mean)
+Skewness = -0.46, Kurtosis = 2.07, MValue = 2
+-------------------- Histogram --------------------
+[ 2.884 μs ;  6.621 μs) | @
+[ 6.621 μs ; 10.274 μs) | @@@
+[10.274 μs ; 13.940 μs) | @@@@@@
+[13.940 μs ; 17.444 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=BurstOnly]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 571.834 μs, StdErr = 100.467 μs (17.57%), N = 11, StdDev = 333.212 μs
+Min = 276.891 μs, Q1 = 352.426 μs, Median = 415.681 μs, Q3 = 713.048 μs, Max = 1,334.858 μs
+IQR = 360.622 μs, LowerFence = -188.507 μs, UpperFence = 1,253.981 μs
+ConfidenceInterval = [111.002 μs; 1,032.666 μs] (CI 99.9%), Margin = 460.832 μs (80.59% of Mean)
+Skewness = 1.06, Kurtosis = 2.82, MValue = 2.29
+-------------------- Histogram --------------------
+[  235.041 μs ;   628.336 μs) | @@@@@@@@
+[  628.336 μs ; 1,082.486 μs) | @@
+[1,082.486 μs ; 1,531.505 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 225.674 μs, StdErr = 26.801 μs (11.88%), N = 11, StdDev = 88.888 μs
+Min = 160.051 μs, Q1 = 166.069 μs, Median = 177.855 μs, Q3 = 258.121 μs, Max = 444.324 μs
+IQR = 92.052 μs, LowerFence = 27.991 μs, UpperFence = 396.198 μs
+ConfidenceInterval = [102.742 μs; 348.605 μs] (CI 99.9%), Margin = 122.932 μs (54.47% of Mean)
+Skewness = 1.29, Kurtosis = 3.52, MValue = 2.29
+-------------------- Histogram --------------------
+[142.937 μs ; 247.852 μs) | @@@@@@@@
+[247.852 μs ; 348.755 μs) | @@
+[348.755 μs ; 391.866 μs) |
+[391.866 μs ; 496.782 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 60.684 μs, StdErr = 8.939 μs (14.73%), N = 12, StdDev = 30.964 μs
+Min = 36.092 μs, Q1 = 37.690 μs, Median = 43.973 μs, Q3 = 71.604 μs, Max = 121.517 μs
+IQR = 33.914 μs, LowerFence = -13.181 μs, UpperFence = 122.475 μs
+ConfidenceInterval = [21.024 μs; 100.345 μs] (CI 99.9%), Margin = 39.660 μs (65.35% of Mean)
+Skewness = 0.95, Kurtosis = 2.31, MValue = 2.22
+-------------------- Histogram --------------------
+[ 35.099 μs ;  70.601 μs) | @@@@@@@@@
+[ 70.601 μs ; 101.526 μs) | @
+[101.526 μs ; 139.268 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 228.774 μs, StdErr = 33.519 μs (14.65%), N = 12, StdDev = 116.114 μs
+Min = 144.953 μs, Q1 = 147.703 μs, Median = 167.975 μs, Q3 = 297.335 μs, Max = 505.673 μs
+IQR = 149.632 μs, LowerFence = -76.745 μs, UpperFence = 521.783 μs
+ConfidenceInterval = [80.049 μs; 377.498 μs] (CI 99.9%), Margin = 148.724 μs (65.01% of Mean)
+Skewness = 1.14, Kurtosis = 2.99, MValue = 2.25
+-------------------- Histogram --------------------
+[ 99.808 μs ; 258.441 μs) | @@@@@@@@
+[258.441 μs ; 391.575 μs) | @@@
+[391.575 μs ; 439.107 μs) |
+[439.107 μs ; 572.240 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 3.501 μs, StdErr = 0.308 μs (8.79%), N = 11, StdDev = 1.021 μs
+Min = 2.602 μs, Q1 = 2.811 μs, Median = 2.953 μs, Q3 = 4.150 μs, Max = 5.495 μs
+IQR = 1.339 μs, LowerFence = 0.802 μs, UpperFence = 6.159 μs
+ConfidenceInterval = [2.090 μs; 4.913 μs] (CI 99.9%), Margin = 1.412 μs (40.32% of Mean)
+Skewness = 0.82, Kurtosis = 1.9, MValue = 2.75
+-------------------- Histogram --------------------
+[2.512 μs ; 3.717 μs) | @@@@@@@@
+[3.717 μs ; 4.482 μs) |
+[4.482 μs ; 5.687 μs) | @@@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 53.401 μs, StdErr = 7.890 μs (14.77%), N = 12, StdDev = 27.332 μs
+Min = 19.911 μs, Q1 = 34.740 μs, Median = 47.118 μs, Q3 = 74.115 μs, Max = 113.077 μs
+IQR = 39.375 μs, LowerFence = -24.322 μs, UpperFence = 133.177 μs
+ConfidenceInterval = [18.394 μs; 88.409 μs] (CI 99.9%), Margin = 35.007 μs (65.56% of Mean)
+Skewness = 0.67, Kurtosis = 2.42, MValue = 2
+-------------------- Histogram --------------------
+[19.108 μs ;  50.446 μs) | @@@@@@@@
+[50.446 μs ;  92.148 μs) | @@@
+[92.148 μs ; 128.746 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 20.853 ms, StdErr = 0.513 ms (2.46%), N = 11, StdDev = 1.700 ms
+Min = 18.094 ms, Q1 = 20.141 ms, Median = 20.628 ms, Q3 = 21.504 ms, Max = 23.678 ms
+IQR = 1.363 ms, LowerFence = 18.096 ms, UpperFence = 23.548 ms
+ConfidenceInterval = [18.502 ms; 23.204 ms] (CI 99.9%), Margin = 2.351 ms (11.28% of Mean)
+Skewness = 0.26, Kurtosis = 2.08, MValue = 2.4
+-------------------- Histogram --------------------
+[17.503 ms ; 19.860 ms) | @@
+[19.860 ms ; 21.866 ms) | @@@@@@@
+[21.866 ms ; 22.618 ms) |
+[22.618 ms ; 24.681 ms) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 52.015 μs, StdErr = 9.153 μs (17.60%), N = 11, StdDev = 30.359 μs
+Min = 8.106 μs, Q1 = 34.989 μs, Median = 51.792 μs, Q3 = 64.734 μs, Max = 102.645 μs
+IQR = 29.744 μs, LowerFence = -9.627 μs, UpperFence = 109.350 μs
+ConfidenceInterval = [10.029 μs; 94.001 μs] (CI 99.9%), Margin = 41.986 μs (80.72% of Mean)
+Skewness = 0.15, Kurtosis = 1.85, MValue = 2
+-------------------- Histogram --------------------
+[ 0.622 μs ;  36.906 μs) | @@@
+[36.906 μs ;  81.108 μs) | @@@@@@
+[81.108 μs ; 120.562 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 30.857 μs, StdErr = 2.368 μs (7.67%), N = 10, StdDev = 7.489 μs
+Min = 25.323 μs, Q1 = 27.718 μs, Median = 28.432 μs, Q3 = 30.116 μs, Max = 50.936 μs
+IQR = 2.398 μs, LowerFence = 24.120 μs, UpperFence = 33.713 μs
+ConfidenceInterval = [19.535 μs; 42.180 μs] (CI 99.9%), Margin = 11.322 μs (36.69% of Mean)
+Skewness = 1.84, Kurtosis = 5.23, MValue = 2.8
+-------------------- Histogram --------------------
+[25.192 μs ; 34.316 μs) | @@@@@@@@@
+[34.316 μs ; 46.374 μs) |
+[46.374 μs ; 55.499 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=PerAttempt]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 790.970 μs, StdErr = 94.795 μs (11.98%), N = 11, StdDev = 314.400 μs
+Min = 427.866 μs, Q1 = 545.542 μs, Median = 711.186 μs, Q3 = 1,051.937 μs, Max = 1,232.982 μs
+IQR = 506.395 μs, LowerFence = -214.050 μs, UpperFence = 1,811.528 μs
+ConfidenceInterval = [356.155 μs; 1,225.786 μs] (CI 99.9%), Margin = 434.816 μs (54.97% of Mean)
+Skewness = 0.31, Kurtosis = 1.31, MValue = 2
+-------------------- Histogram --------------------
+[383.980 μs ;   866.490 μs) | @@@@@@
+[866.490 μs ; 1,237.581 μs) | @@@@@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.NoOp: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 648.901 μs, StdErr = 85.343 μs (13.15%), N = 12, StdDev = 295.638 μs
+Min = 282.222 μs, Q1 = 426.660 μs, Median = 590.307 μs, Q3 = 831.829 μs, Max = 1,310.698 μs
+IQR = 405.169 μs, LowerFence = -181.093 μs, UpperFence = 1,439.582 μs
+ConfidenceInterval = [270.235 μs; 1,027.567 μs] (CI 99.9%), Margin = 378.666 μs (58.36% of Mean)
+Skewness = 0.66, Kurtosis = 2.57, MValue = 2.33
+-------------------- Histogram --------------------
+[  238.833 μs ;   577.803 μs) | @@@@@@
+[  577.803 μs ;   942.293 μs) | @@@@@
+[  942.293 μs ; 1,141.212 μs) |
+[1,141.212 μs ; 1,480.183 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.TransientDependency: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 274.883 μs, StdErr = 42.449 μs (15.44%), N = 12, StdDev = 147.048 μs
+Min = 108.161 μs, Q1 = 148.334 μs, Median = 262.520 μs, Q3 = 363.240 μs, Max = 575.933 μs
+IQR = 214.906 μs, LowerFence = -174.025 μs, UpperFence = 685.599 μs
+ConfidenceInterval = [86.538 μs; 463.229 μs] (CI 99.9%), Margin = 188.346 μs (68.52% of Mean)
+Skewness = 0.48, Kurtosis = 1.97, MValue = 2
+-------------------- Histogram --------------------
+[ 73.918 μs ; 242.520 μs) | @@@@@@
+[242.520 μs ; 455.829 μs) | @@@@@
+[455.829 μs ; 660.234 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ScopedDisposableTransitive: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 943.318 μs, StdErr = 56.616 μs (6.00%), N = 12, StdDev = 196.123 μs
+Min = 683.129 μs, Q1 = 791.841 μs, Median = 891.163 μs, Q3 = 1,127.873 μs, Max = 1,268.638 μs
+IQR = 336.032 μs, LowerFence = 287.792 μs, UpperFence = 1,631.921 μs
+ConfidenceInterval = [692.115 μs; 1,194.521 μs] (CI 99.9%), Margin = 251.203 μs (26.63% of Mean)
+Skewness = 0.35, Kurtosis = 1.49, MValue = 3.14
+-------------------- Histogram --------------------
+[  570.694 μs ;   733.968 μs) | @
+[  733.968 μs ;   958.838 μs) | @@@@@@@
+[  958.838 μs ; 1,082.430 μs) |
+[1,082.430 μs ; 1,307.299 μs) | @@@@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.IntrinsicHeavy: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 12.564 μs, StdErr = 1.230 μs (9.79%), N = 12, StdDev = 4.261 μs
+Min = 6.496 μs, Q1 = 8.721 μs, Median = 11.425 μs, Q3 = 16.066 μs, Max = 19.048 μs
+IQR = 7.345 μs, LowerFence = -2.296 μs, UpperFence = 27.082 μs
+ConfidenceInterval = [7.106 μs; 18.021 μs] (CI 99.9%), Margin = 5.458 μs (43.44% of Mean)
+Skewness = 0.19, Kurtosis = 1.39, MValue = 3.67
+-------------------- Histogram --------------------
+[ 4.054 μs ;  7.662 μs) | @
+[ 7.662 μs ; 12.548 μs) | @@@@@@
+[12.548 μs ; 14.394 μs) |
+[14.394 μs ; 19.279 μs) | @@@@@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.MixedIntrinsicAndActivities: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 62.725 μs, StdErr = 8.806 μs (14.04%), N = 12, StdDev = 30.506 μs
+Min = 29.517 μs, Q1 = 40.383 μs, Median = 55.923 μs, Q3 = 75.034 μs, Max = 122.290 μs
+IQR = 34.650 μs, LowerFence = -11.592 μs, UpperFence = 127.010 μs
+ConfidenceInterval = [23.652 μs; 101.799 μs] (CI 99.9%), Margin = 39.073 μs (62.29% of Mean)
+Skewness = 0.69, Kurtosis = 2.04, MValue = 2
+-------------------- Histogram --------------------
+[12.028 μs ;  32.752 μs) | @
+[32.752 μs ;  67.730 μs) | @@@@@@@
+[67.730 μs ;  99.236 μs) | @@
+[99.236 μs ; 139.779 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.IoBound: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 7.921 ms, StdErr = 0.453 ms (5.72%), N = 12, StdDev = 1.570 ms
+Min = 6.045 ms, Q1 = 6.748 ms, Median = 7.571 ms, Q3 = 8.694 ms, Max = 10.846 ms
+IQR = 1.945 ms, LowerFence = 3.831 ms, UpperFence = 11.612 ms
+ConfidenceInterval = [5.910 ms; 9.932 ms] (CI 99.9%), Margin = 2.011 ms (25.39% of Mean)
+Skewness = 0.46, Kurtosis = 1.81, MValue = 2
+-------------------- Histogram --------------------
+[ 5.963 ms ;  7.764 ms) | @@@@@@@
+[ 7.764 ms ; 10.133 ms) | @@@@
+[10.133 ms ; 11.746 ms) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.Retry: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 5.993 μs, StdErr = 0.368 μs (6.14%), N = 11, StdDev = 1.220 μs
+Min = 4.513 μs, Q1 = 5.327 μs, Median = 5.639 μs, Q3 = 6.213 μs, Max = 8.419 μs
+IQR = 0.886 μs, LowerFence = 3.998 μs, UpperFence = 7.541 μs
+ConfidenceInterval = [4.306 μs; 7.680 μs] (CI 99.9%), Margin = 1.687 μs (28.15% of Mean)
+Skewness = 0.9, Kurtosis = 2.35, MValue = 2.29
+-------------------- Histogram --------------------
+[4.396 μs ; 5.836 μs) | @@@@@@@@
+[5.836 μs ; 7.492 μs) | @
+[7.492 μs ; 9.139 μs) | @@
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ResumeInFreshBurst: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 9.240 μs, StdErr = 0.407 μs (4.41%), N = 11, StdDev = 1.350 μs
+Min = 7.145 μs, Q1 = 8.374 μs, Median = 9.049 μs, Q3 = 9.933 μs, Max = 12.164 μs
+IQR = 1.559 μs, LowerFence = 6.035 μs, UpperFence = 12.272 μs
+ConfidenceInterval = [7.373 μs; 11.107 μs] (CI 99.9%), Margin = 1.867 μs (20.21% of Mean)
+Skewness = 0.56, Kurtosis = 2.65, MValue = 2
+-------------------- Histogram --------------------
+[ 6.349 μs ;  8.068 μs) | @
+[ 8.068 μs ;  9.661 μs) | @@@@@@
+[ 9.661 μs ; 11.367 μs) | @@@
+[11.367 μs ; 12.960 μs) | @
+---------------------------------------------------
+
+ActivationScopeBenchmarks.ConcurrentDrain: Job-NLWYXA(IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3) [Strategy=Conditional]
+Runtime = .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a; GC = Concurrent Workstation
+Mean = 299.721 μs, StdErr = 31.430 μs (10.49%), N = 11, StdDev = 104.242 μs
+Min = 191.103 μs, Q1 = 229.942 μs, Median = 268.739 μs, Q3 = 324.711 μs, Max = 514.094 μs
+IQR = 94.769 μs, LowerFence = 87.788 μs, UpperFence = 466.865 μs
+ConfidenceInterval = [155.555 μs; 443.888 μs] (CI 99.9%), Margin = 144.166 μs (48.10% of Mean)
+Skewness = 0.93, Kurtosis = 2.39, MValue = 2
+-------------------- Histogram --------------------
+[184.665 μs ; 307.703 μs) | @@@@@@@@
+[307.703 μs ; 427.686 μs) | @
+[427.686 μs ; 550.724 μs) | @@
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.15.8, macOS Tahoe 26.5.2 (25F84) [Darwin 25.5.0]
+Apple M2, 1 CPU, 8 logical and 8 physical cores
+.NET SDK 10.0.300
+  [Host]     : .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+  Job-NLWYXA : .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+
+IterationCount=12  LaunchCount=1  RunStrategy=Throughput
+WarmupCount=3
+
+| Method                      | Strategy    | Mean          | Error         | StdDev        | StdErr      | Median        | Min           | Q1            | Q3            | Max           | P95           | Op/s       | Ratio  | RatioSD | Gen0    | Gen1   | Allocated | Alloc Ratio |
+|---------------------------- |------------ |--------------:|--------------:|--------------:|------------:|--------------:|--------------:|--------------:|--------------:|--------------:|--------------:|-----------:|-------:|--------:|--------:|-------:|----------:|------------:|
+| NoOp                        | BurstOnly   |    130.195 μs |    26.2589 μs |    17.3686 μs |   5.4924 μs |    131.348 μs |     96.199 μs |    124.571 μs |    137.287 μs |    160.224 μs |    153.623 μs |   7,680.76 |   1.02 |    0.19 |  8.7891 | 0.2441 |   74768 B |        1.00 |
+| TransientDependency         | BurstOnly   |     93.450 μs |    26.6110 μs |    20.7761 μs |   5.9976 μs |     88.584 μs |     66.176 μs |     79.274 μs |    107.133 μs |    130.635 μs |    127.725 μs |  10,700.97 |   0.73 |    0.19 |  5.6152 |      - |   48048 B |        0.64 |
+| ScopedDisposableTransitive  | BurstOnly   |    238.021 μs |    83.9793 μs |    65.5655 μs |  18.9271 μs |    219.800 μs |    132.828 μs |    206.351 μs |    282.098 μs |    367.906 μs |    342.444 μs |   4,201.31 |   1.86 |    0.56 | 10.4980 | 0.7324 |   88296 B |        1.18 |
+| IntrinsicHeavy              | BurstOnly   |      3.174 μs |     2.2214 μs |     1.7343 μs |   0.5007 μs |      2.068 μs |      1.808 μs |      1.854 μs |      4.534 μs |      6.205 μs |      6.178 μs | 315,052.48 |   0.02 |    0.01 |  0.1183 |      - |    1000 B |        0.01 |
+| MixedIntrinsicAndActivities | BurstOnly   |     10.400 μs |     0.5458 μs |     0.3946 μs |   0.1190 μs |     10.283 μs |      9.919 μs |     10.139 μs |     10.523 μs |     11.233 μs |     11.074 μs |  96,153.88 |   0.08 |    0.01 |  2.5787 | 0.0305 |   21624 B |        0.29 |
+| IoBound                     | BurstOnly   |  5,280.061 μs |   166.4304 μs |   129.9379 μs |  37.5098 μs |  5,264.844 μs |  5,087.460 μs |  5,191.063 μs |  5,363.036 μs |  5,525.237 μs |  5,481.522 μs |     189.39 |  41.27 |    5.81 |       - |      - |    9968 B |        0.13 |
+| Retry                       | BurstOnly   |      3.338 μs |     0.5301 μs |     0.4138 μs |   0.1195 μs |      3.360 μs |      2.623 μs |      3.160 μs |      3.612 μs |      4.029 μs |      3.844 μs | 299,583.54 |   0.03 |    0.00 |  0.6485 | 0.0038 |    5448 B |        0.07 |
+| ResumeInFreshBurst          | BurstOnly   |     11.217 μs |     4.0952 μs |     3.1973 μs |   0.9230 μs |     11.917 μs |      4.717 μs |      8.963 μs |     13.581 μs |     15.611 μs |     15.160 μs |  89,150.45 |   0.09 |    0.03 |  0.8354 | 0.0076 |    7008 B |        0.09 |
+| ConcurrentDrain             | BurstOnly   |    571.834 μs |   460.8322 μs |   333.2118 μs | 100.4672 μs |    415.681 μs |    276.891 μs |    352.426 μs |    713.048 μs |  1,334.858 μs |  1,133.462 μs |   1,748.76 |   4.47 |    2.59 |  9.7656 |      - |   89256 B |        1.19 |
+|                             |             |               |               |               |             |               |               |               |               |               |               |            |        |         |         |        |           |             |
+| NoOp                        | PerAttempt  |    225.674 μs |   122.9316 μs |    88.8876 μs |  26.8006 μs |    177.855 μs |    160.051 μs |    166.069 μs |    258.121 μs |    444.324 μs |    375.708 μs |   4,431.18 |   1.11 |    0.53 |  8.7891 |      - |   80144 B |        1.00 |
+| TransientDependency         | PerAttempt  |     60.684 μs |    39.6601 μs |    30.9640 μs |   8.9385 μs |     43.973 μs |     36.092 μs |     37.690 μs |     71.604 μs |    121.517 μs |    119.053 μs |  16,478.68 |   0.30 |    0.17 |  6.3477 | 0.1221 |   53424 B |        0.67 |
+| ScopedDisposableTransitive  | PerAttempt  |    228.774 μs |   148.7245 μs |   116.1143 μs |  33.5193 μs |    167.975 μs |    144.953 μs |    147.703 μs |    297.335 μs |    505.673 μs |    426.352 μs |   4,371.13 |   1.12 |    0.64 | 12.4512 | 0.9766 |  104584 B |        1.30 |
+| IntrinsicHeavy              | PerAttempt  |      3.501 μs |     1.4118 μs |     1.0208 μs |   0.3078 μs |      2.953 μs |      2.602 μs |      2.811 μs |      4.150 μs |      5.495 μs |      5.171 μs | 285,592.58 |   0.02 |    0.01 |  0.1183 |      - |    1000 B |        0.01 |
+| MixedIntrinsicAndActivities | PerAttempt  |     53.401 μs |    35.0075 μs |    27.3315 μs |   7.8899 μs |     47.118 μs |     19.911 μs |     34.740 μs |     74.115 μs |    113.077 μs |     94.594 μs |  18,726.20 |   0.26 |    0.15 |  2.8992 | 0.0305 |   24312 B |        0.30 |
+| IoBound                     | PerAttempt  | 20,852.924 μs | 2,351.1756 μs | 1,700.0540 μs | 512.5856 μs | 20,627.717 μs | 18,094.098 μs | 20,140.716 μs | 21,503.748 μs | 23,677.604 μs | 23,621.499 μs |      47.95 | 102.39 |   29.09 |       - |      - |   10582 B |        0.13 |
+| Retry                       | PerAttempt  |     52.015 μs |    41.9861 μs |    30.3587 μs |   9.1535 μs |     51.792 μs |      8.106 μs |     34.989 μs |     64.734 μs |    102.645 μs |     99.024 μs |  19,225.34 |   0.26 |    0.16 |  0.4883 |      - |    5784 B |        0.07 |
+| ResumeInFreshBurst          | PerAttempt  |     30.857 μs |    11.3224 μs |     7.4891 μs |   2.3682 μs |     28.432 μs |     25.323 μs |     27.718 μs |     30.116 μs |     50.936 μs |     43.398 μs |  32,407.22 |   0.15 |    0.05 |  0.7324 |      - |    7344 B |        0.09 |
+| ConcurrentDrain             | PerAttempt  |    790.970 μs |   434.8156 μs |   314.4002 μs |  94.7952 μs |    711.186 μs |    427.866 μs |    545.542 μs |  1,051.937 μs |  1,232.982 μs |  1,232.076 μs |   1,264.27 |   3.88 |    1.86 | 11.7188 |      - |  105192 B |        1.31 |
+|                             |             |               |               |               |             |               |               |               |               |               |               |            |        |         |         |        |           |             |
+| NoOp                        | Conditional |    648.901 μs |   378.6663 μs |   295.6378 μs |  85.3433 μs |    590.307 μs |    282.222 μs |    426.660 μs |    831.829 μs |  1,310.698 μs |  1,084.492 μs |   1,541.07 |   1.21 |    0.79 |  8.7891 |      - |   75800 B |        1.00 |
+| TransientDependency         | Conditional |    274.883 μs |   188.3458 μs |   147.0480 μs |  42.4491 μs |    262.520 μs |    108.161 μs |    148.334 μs |    363.240 μs |    575.933 μs |    493.631 μs |   3,637.91 |   0.51 |    0.37 |  5.8594 |      - |   53432 B |        0.70 |
+| ScopedDisposableTransitive  | Conditional |    943.318 μs |   251.2030 μs |   196.1228 μs |  56.6158 μs |    891.163 μs |    683.129 μs |    791.841 μs |  1,127.873 μs |  1,268.638 μs |  1,233.845 μs |   1,060.09 |   1.76 |    0.88 | 11.7188 |      - |  104592 B |        1.38 |
+| IntrinsicHeavy              | Conditional |     12.564 μs |     5.4576 μs |     4.2609 μs |   1.2300 μs |     11.425 μs |      6.496 μs |      8.721 μs |     16.066 μs |     19.048 μs |     18.534 μs |  79,593.62 |   0.02 |    0.01 |  0.1068 |      - |    1000 B |        0.01 |
+| MixedIntrinsicAndActivities | Conditional |     62.725 μs |    39.0735 μs |    30.5060 μs |   8.8063 μs |     55.923 μs |     29.517 μs |     40.383 μs |     75.034 μs |    122.290 μs |    116.168 μs |  15,942.50 |   0.12 |    0.08 |  2.5635 |      - |   22144 B |        0.29 |
+| IoBound                     | Conditional |  7,920.969 μs | 2,011.3284 μs | 1,570.3129 μs | 453.3103 μs |  7,570.914 μs |  6,045.132 μs |  6,748.488 μs |  8,693.716 μs | 10,845.542 μs | 10,435.199 μs |     126.25 |  14.79 |    7.31 |       - |      - |   10646 B |        0.14 |
+| Retry                       | Conditional |      5.993 μs |     1.6870 μs |     1.2198 μs |   0.3678 μs |      5.639 μs |      4.513 μs |      5.327 μs |      6.213 μs |      8.419 μs |      8.212 μs | 166,854.99 |   0.01 |    0.01 |  0.6866 |      - |    5792 B |        0.08 |
+| ResumeInFreshBurst          | Conditional |      9.240 μs |     1.8671 μs |     1.3500 μs |   0.4070 μs |      9.049 μs |      7.145 μs |      8.374 μs |      9.933 μs |     12.164 μs |     11.265 μs | 108,226.46 |   0.02 |    0.01 |  0.8698 |      - |    7360 B |        0.10 |
+| ConcurrentDrain             | Conditional |    299.721 μs |   144.1662 μs |   104.2416 μs |  31.4300 μs |    268.739 μs |    191.103 μs |    229.942 μs |    324.711 μs |    514.094 μs |    489.205 μs |   3,336.43 |   0.56 |    0.32 | 11.7188 |      - |  105208 B |        1.39 |
+
+// * Warnings *
+MinIterationTime
+  ActivationScopeBenchmarks.Retry: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3               -> The minimum observed iteration time is 33.217ms which is very small. It's recommended to increase it to at least 100ms using more operations.
+  ActivationScopeBenchmarks.TransientDependency: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3 -> The minimum observed iteration time is 55.378ms which is very small. It's recommended to increase it to at least 100ms using more operations.
+  ActivationScopeBenchmarks.ConcurrentDrain: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3     -> The minimum observed iteration time is 97.847ms which is very small. It's recommended to increase it to at least 100ms using more operations.
+
+// * Hints *
+Outliers
+  ActivationScopeBenchmarks.NoOp: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3                        -> 2 outliers were removed (311.84 μs, 545.45 μs)
+  ActivationScopeBenchmarks.MixedIntrinsicAndActivities: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3 -> 1 outlier  was  removed (12.18 μs)
+  ActivationScopeBenchmarks.ConcurrentDrain: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3             -> 1 outlier  was  removed (2.35 ms)
+  ActivationScopeBenchmarks.NoOp: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3                        -> 1 outlier  was  removed (505.27 μs)
+  ActivationScopeBenchmarks.IntrinsicHeavy: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3              -> 1 outlier  was  removed (12.40 μs)
+  ActivationScopeBenchmarks.IoBound: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3                     -> 1 outlier  was  removed (27.22 ms)
+  ActivationScopeBenchmarks.Retry: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3                       -> 1 outlier  was  removed (132.87 μs)
+  ActivationScopeBenchmarks.ResumeInFreshBurst: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3          -> 2 outliers were removed (59.79 μs, 91.10 μs)
+  ActivationScopeBenchmarks.ConcurrentDrain: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3             -> 1 outlier  was  removed (2.32 ms)
+  ActivationScopeBenchmarks.Retry: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3                       -> 1 outlier  was  removed (9.61 μs)
+  ActivationScopeBenchmarks.ResumeInFreshBurst: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3          -> 1 outlier  was  removed (12.70 μs)
+  ActivationScopeBenchmarks.ConcurrentDrain: IterationCount=12, LaunchCount=1, RunStrategy=Throughput, WarmupCount=3             -> 1 outlier  was  removed (873.39 μs)
+
+// * Legends *
+  Strategy    : Value of the 'Strategy' parameter
+  Mean        : Arithmetic mean of all measurements
+  Error       : Half of 99.9% confidence interval
+  StdDev      : Standard deviation of all measurements
+  StdErr      : Standard error of all measurements
+  Median      : Value separating the higher half of all measurements (50th percentile)
+  Min         : Minimum
+  Q1          : Quartile 1 (25th percentile)
+  Q3          : Quartile 3 (75th percentile)
+  Max         : Maximum
+  P95         : Percentile 95
+  Op/s        : Operation per second
+  Ratio       : Mean of the ratio distribution ([Current]/[Baseline])
+  RatioSD     : Standard deviation of the ratio distribution ([Current]/[Baseline])
+  Gen0        : GC Generation 0 collects per 1000 operations
+  Gen1        : GC Generation 1 collects per 1000 operations
+  Allocated   : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  Alloc Ratio : Allocated memory ratio distribution ([Current]/[Baseline])
+  1 μs        : 1 Microsecond (0.000001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:06:33 (393.28 sec), executed benchmarks: 27
+
+Global total time: 00:06:58 (418.17 sec), executed benchmarks: 27
+// * Artifacts cleanup *
+Artifacts cleanup is finished

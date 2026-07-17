@@ -70,7 +70,7 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         TimeSpan visibilityTimeout,
         CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is { } session && session.Owns(claim.Item.WorkflowExecutionId))
+        if (sessionAccessor.Current is { } session && session.OwnsOverlayClaim(claim))
             return await session.RenewOverlayClaimAsync(claim, now, visibilityTimeout, cancellationToken);
 
         return await _inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
@@ -80,7 +80,7 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         RuntimeSchedulerWorkClaim claim,
         CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is { } session && session.Owns(claim.Item.WorkflowExecutionId))
+        if (sessionAccessor.Current is { } session && session.OwnsOverlayClaim(claim))
             return await session.CompleteOverlayClaimAsync(claim, cancellationToken);
 
         return await _inner.CompleteClaimAsync(claim, cancellationToken);
@@ -91,7 +91,7 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is { } session && session.Owns(claim.Item.WorkflowExecutionId))
+        if (sessionAccessor.Current is { } session && session.OwnsOverlayClaim(claim))
             return await session.ReleaseOverlayClaimAsync(claim, visibleAt, cancellationToken);
 
         return await _inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);

@@ -3,14 +3,17 @@ using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
@@ -199,8 +202,8 @@ public sealed class DispatchWorkflowWaitCrashTests
             AssertSafeResult(
                 intent,
                 expectedDisclosedValue: "visible-value",
-                expectedDisclosedName: nameof(ChildOutputActivity.Disclosed),
-                expectedSecretName: nameof(ChildOutputActivity.Secret));
+                expectedDisclosedName: nameof(ChildOutputActivityResult.Disclosed),
+                expectedSecretName: nameof(ChildOutputActivityResult.Secret));
             Assert.DoesNotContain(SensitiveValue, intent.Payload!.Value.GetRawText(), StringComparison.Ordinal);
 
             expiredClaim = Assert.Single(await completingChild.GetRequiredService<IRuntimePostCommitOutboxClaimStore>()
@@ -254,8 +257,8 @@ public sealed class DispatchWorkflowWaitCrashTests
             AssertSafeResult(
                 persisted.Intent,
                 expectedDisclosedValue: "visible-value",
-                expectedDisclosedName: nameof(ChildOutputActivity.Disclosed),
-                expectedSecretName: nameof(ChildOutputActivity.Secret));
+                expectedDisclosedName: nameof(ChildOutputActivityResult.Disclosed),
+                expectedSecretName: nameof(ChildOutputActivityResult.Secret));
             Assert.DoesNotContain(SensitiveValue, persisted.Intent.Payload.Value.GetRawText(), StringComparison.Ordinal);
             Assert.Empty(await recovered.GetRequiredService<IRuntimePostCommitOutboxClaimStore>().ClaimAsync(
                 new RuntimePostCommitOutboxClaimRequest("completion-audit", Now.AddYears(1), TimeSpan.FromMinutes(1), 10)));
@@ -468,8 +471,8 @@ public sealed class DispatchWorkflowWaitCrashTests
             AssertSafeResult(
                 resume.Intent,
                 "visible-value",
-                nameof(ChildOutputActivity.Disclosed),
-                nameof(ChildOutputActivity.Secret));
+                nameof(ChildOutputActivityResult.Disclosed),
+                nameof(ChildOutputActivityResult.Secret));
             Assert.DoesNotContain(SensitiveValue, resume.Intent.Payload!.Value.GetRawText(), StringComparison.Ordinal);
             Assert.Empty(await auditing.GetRequiredService<IRuntimePostCommitOutboxClaimStore>().ClaimAsync(
                 new RuntimePostCommitOutboxClaimRequest(
@@ -490,16 +493,16 @@ public sealed class DispatchWorkflowWaitCrashTests
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<IRuntimePayloadCapturePolicy>(new CaptureDisclosedOutputPolicy());
-        services.AddSingleton<IActivityConstructor, DispatchActivityConstructor>();
-        services.AddSingleton<IActivityConstructor, ChildOutputActivityConstructor>();
         services.AddSingleton<IBookmarkLifecycleObserver>(bookmarkObserver);
         var typeRegistry = new WellKnownTypeRegistry();
         typeRegistry.RegisterType(typeof(string), "String");
+        RegisterActivityTypes(typeRegistry);
         services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
 
         new SerializationFeature().ConfigureServices(services);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
+        new ActivitiesPrimitivesFeature().ConfigureServices(services);
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
         new DispatchWorkflowRuntimeFeature().ConfigureServices(services);
         services.Replace(ServiceDescriptor.Singleton<IWellKnownTypeRegistry>(typeRegistry));
@@ -532,10 +535,7 @@ public sealed class DispatchWorkflowWaitCrashTests
                     serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>()));
         }
 
-        var provider = services.BuildServiceProvider();
-        provider.GetRequiredService<IActivityConstructorRegistry>()
-            .AddAll(provider.GetServices<IActivityConstructor>());
-        return provider;
+        return services.BuildServiceProvider();
     }
 
     private static async Task SeedExecutableGraphAsync(ServiceProvider provider)
@@ -609,8 +609,8 @@ public sealed class DispatchWorkflowWaitCrashTests
         AssertSafeResult(
             item.Intent,
             "visible-value",
-            nameof(ChildOutputActivity.Disclosed),
-            nameof(ChildOutputActivity.Secret));
+            nameof(ChildOutputActivityResult.Disclosed),
+            nameof(ChildOutputActivityResult.Secret));
         Assert.DoesNotContain(SensitiveValue, item.Intent.Payload!.Value.GetRawText(), StringComparison.Ordinal);
         return item.OutboxItemId;
     }
@@ -629,8 +629,8 @@ public sealed class DispatchWorkflowWaitCrashTests
         AssertSafeResult(
             item.Intent,
             "visible-value",
-            nameof(ChildOutputActivity.Disclosed),
-            nameof(ChildOutputActivity.Secret));
+            nameof(ChildOutputActivityResult.Disclosed),
+            nameof(ChildOutputActivityResult.Secret));
         Assert.DoesNotContain(SensitiveValue, item.Intent.Payload!.Value.GetRawText(), StringComparison.Ordinal);
         return item.OutboxItemId;
     }
@@ -653,10 +653,10 @@ public sealed class DispatchWorkflowWaitCrashTests
         Assert.NotNull(result);
         var outputs = result.Outputs.OrderBy(output => output.Name, StringComparer.Ordinal).ToArray();
         Assert.Equal(2, outputs.Length);
-        Assert.Equal(nameof(ChildOutputActivity.Disclosed), outputs[0].Name);
+        Assert.Equal(nameof(ChildOutputActivityResult.Disclosed), outputs[0].Name);
         Assert.Equal("visible-value", outputs[0].Value!.Value.GetString());
         Assert.False(outputs[0].IsRedacted);
-        Assert.Equal(nameof(ChildOutputActivity.Secret), outputs[1].Name);
+        Assert.Equal(nameof(ChildOutputActivityResult.Secret), outputs[1].Name);
         Assert.True(outputs[1].IsRedacted);
         Assert.Null(outputs[1].Value);
         Assert.DoesNotContain(SensitiveValue, resultState.InlineValue.Value.GetRawText(), StringComparison.Ordinal);
@@ -671,20 +671,18 @@ public sealed class DispatchWorkflowWaitCrashTests
     {
         var node = NewNode(
             "node-child-output",
-            "test/dispatch-child-output",
-            ChildOutputActivityConstructor.ConsumerKeyValue,
-            JsonSerializer.SerializeToElement(new ChildOutputDescriptor()),
+            typeof(ChildOutputActivity),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>
             {
-                [nameof(ChildOutputActivity.Disclosed)] = new(
-                    nameof(ChildOutputActivity.Disclosed),
+                [nameof(ChildOutputActivityResult.Disclosed)] = new(
+                    nameof(ChildOutputActivityResult.Disclosed),
                     RuntimeWorkflowStateSeed.OutputValueIdPrefix + "disclosed",
                     new RuntimeValueTypeDescriptor("clr", typeof(string).FullName, null),
                     DurableValueLifecycle.Result,
                     DurableValueStorage.Inline,
                     true),
-                [nameof(ChildOutputActivity.Secret)] = new(
-                    nameof(ChildOutputActivity.Secret),
+                [nameof(ChildOutputActivityResult.Secret)] = new(
+                    nameof(ChildOutputActivityResult.Secret),
                     RuntimeWorkflowStateSeed.OutputValueIdPrefix + "secret",
                     new RuntimeValueTypeDescriptor("clr", typeof(string).FullName, null),
                     DurableValueLifecycle.Result,
@@ -717,21 +715,19 @@ public sealed class DispatchWorkflowWaitCrashTests
         };
         var node = NewNode(
             "node-dispatch",
-            DispatchWorkflowConstants.ActivityType,
-            DispatchActivityConstructor.ConsumerKeyValue,
-            JsonSerializer.SerializeToElement(new DispatchActivityDescriptor()),
+            typeof(DispatchWorkflowActivity),
             inputs,
             new Dictionary<string, RuntimeOutputCapture>
             {
-                [nameof(DispatchWorkflowActivity.ChildWorkflowExecutionId)] = new(
-                    nameof(DispatchWorkflowActivity.ChildWorkflowExecutionId),
+                [nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId)] = new(
+                    nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId),
                     "dispatch-child-id-provider-cycle",
                     new RuntimeValueTypeDescriptor("clr", typeof(string).FullName, null),
                     DurableValueLifecycle.Instance,
                     DurableValueStorage.Inline,
                     true),
-                [nameof(DispatchWorkflowActivity.Result)] = new(
-                    nameof(DispatchWorkflowActivity.Result),
+                [nameof(DispatchWorkflowActivityResult.Result)] = new(
+                    nameof(DispatchWorkflowActivityResult.Result),
                     "dispatch-result-provider-cycle",
                     new RuntimeValueTypeDescriptor("clr", typeof(DispatchWorkflowResult).FullName, null),
                     DurableValueLifecycle.Result,
@@ -769,36 +765,42 @@ public sealed class DispatchWorkflowWaitCrashTests
             ]);
     }
 
-    private static RuntimeInputBinding LiteralBinding(string name, object value, Type type) =>
-        new(
-            inputName: name,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value, value.GetType()),
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = type.AssemblyQualifiedName!
-            });
+    private static RuntimeInputBinding LiteralBinding(string name, object value, Type type)
+    {
+        var valueType = ValueType(type);
+        return new RuntimeInputBinding(
+            name,
+            valueType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                valueType,
+                JsonSerializer.SerializeToElement(value, value.GetType()),
+                ValueProtectionPolicy.InstanceInline));
+    }
 
     private static ExecutableNode NewNode(
         string executableNodeId,
-        string activityType,
-        string consumerKey,
-        JsonElement descriptorPayload,
+        Type activityType,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
         IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
-        IReadOnlyDictionary<string, string>? metadata = null) =>
-        new(
-            executableNodeId,
-            $"authored-{executableNodeId}",
-            activityType,
-            "1.0.0",
-            new RuntimeActivityDescriptor(
-                consumerKey,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        var contract = ActivityContractFor(activityType);
+        return new ExecutableNode(
+            executableNodeId: executableNodeId,
+            authoredActivityId: $"authored-{executableNodeId}",
+            activityType: ActivityTypeMetadata.GetDeclaredActivityType(activityType) ?? activityType.FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptor: new RuntimeActivityDescriptor(
+                WellKnownRuntimeActivityConsumers.ClrActivity,
                 RuntimeActivityDescriptor.InitialSchemaVersion,
-                descriptorPayload),
-            inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
-            metadata ?? new Dictionary<string, string>());
+                JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)))),
+            inputBindings: CompleteInputBindings(contract, inputBindings),
+            outputCaptures: outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: metadata ?? new Dictionary<string, string>(),
+            activityContract: contract);
+    }
 
     private static WorkflowExecutableSourceReference ChildSourceReference() =>
         NewSourceReference("source-child-provider", ChildExecutableIdentity, "publication-child-provider", "slot-child-provider");
@@ -969,73 +971,145 @@ public sealed class DispatchWorkflowWaitCrashTests
     private static WorkflowDispatchIdentity Identity() =>
         new(ParentWorkflowExecutionId, ParentActivityExecutionId);
 
-    private sealed class DispatchActivityConstructor : IActivityConstructor<DispatchActivityDescriptor>
+    private static ActivityContract ActivityContractFor(Type activityType)
     {
-        internal const string ConsumerKeyValue = "test/dispatch-workflow";
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            DispatchActivityDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-        {
-            var activity = new DispatchWorkflowActivity();
-            if (inputs is not null)
+        var inputs = activityType.GetProperties()
+            .Select(property => (Property: property, Attribute: property.GetCustomAttributes(typeof(ActivityInputAttribute), inherit: true)
+                .Cast<ActivityInputAttribute>()
+                .SingleOrDefault()))
+            .Where(candidate => candidate.Attribute is not null)
+            .Select(candidate =>
             {
-                if (inputs.TryGetValue(nameof(activity.WorkflowDefinitionId), out var definitionId))
-                    activity.WorkflowDefinitionId = (InputArgument<string>)definitionId;
-                if (inputs.TryGetValue(nameof(activity.WaitForCompletion), out var waitForCompletion))
-                    activity.WaitForCompletion = (InputArgument<bool>)waitForCompletion;
-            }
-
-            if (outputs is not null && outputs.TryGetValue(nameof(activity.ChildWorkflowExecutionId), out var childId))
-                activity.ChildWorkflowExecutionId = new OutputArgument<string>(childId.MemoryBlockReference());
-            if (outputs is not null && outputs.TryGetValue(nameof(activity.Result), out var result))
-                activity.Result = new OutputArgument<DispatchWorkflowResult>(result.MemoryBlockReference());
-            return new(activity);
-        }
+                var attribute = candidate.Attribute!;
+                var hasDefault = attribute.DefaultValue is not null;
+                return new ActivityInputContract(
+                    attribute.Key ?? candidate.Property.Name,
+                    candidate.Property.Name,
+                    ValueType(candidate.Property.PropertyType),
+                    candidate.Property.IsDefined(typeof(RequiredAttribute), inherit: true),
+                    hasDefault,
+                    hasDefault
+                        ? JsonSerializer.SerializeToElement(ParseDefault(candidate.Property.PropertyType, attribute.DefaultValue!))
+                        : null,
+                    ActivityValuePolicy.Default)
+                {
+                    IsNullable = IsNullable(candidate.Property)
+                };
+            })
+            .ToArray();
+        var resultType = activityType.GetInterfaces()
+            .Single(candidate => candidate.IsGenericType &&
+                                 candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
+            .GetGenericArguments()[0];
+        var projections = resultType.GetProperties()
+            .Select(property => (Property: property, Attribute: property.GetCustomAttributes(typeof(OutputAttribute), inherit: true)
+                .Cast<OutputAttribute>()
+                .SingleOrDefault()))
+            .Where(candidate => candidate.Attribute is not null)
+            .Select(candidate => new ActivityResultProjectionContract(
+                candidate.Attribute!.Key ?? candidate.Property.Name,
+                candidate.Attribute.Path ?? JsonNamingPolicy.CamelCase.ConvertName(candidate.Property.Name),
+                ValueType(candidate.Property.PropertyType),
+                candidate.Attribute.IsRequired,
+                ActivityValuePolicy.Default))
+            .ToArray();
+        var descriptorType = typeof(ClrActivityDescriptor).FullName!;
+        var alias = TypeAliasConvention.CanonicalAlias(activityType);
+        return new ActivityContract(
+            activityType.FullName!,
+            "1.0.0",
+            descriptorType,
+            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias)),
+            inputs,
+            new ActivityResultContract(
+                ValueType(resultType),
+                true,
+                ActivityValuePolicy.Default,
+                projections),
+            activityType.GetCustomAttributes(typeof(ActivityOutcomeAttribute), inherit: true)
+                .Cast<ActivityOutcomeAttribute>()
+                .Select(attribute => attribute.Key)
+                .DefaultIfEmpty(ActivityOutcomes.Done)
+                .ToArray(),
+            new ActivityActivationRequirement(descriptorType, alias));
     }
 
-    private sealed record DispatchActivityDescriptor;
-
-    private sealed class ChildOutputActivityConstructor : IActivityConstructor<ChildOutputDescriptor>
+    private static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(
+        ActivityContract contract,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? authoredBindings)
     {
-        internal const string ConsumerKeyValue = "test/dispatch-child-output";
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            ChildOutputDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
+        var bindings = authoredBindings?.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
+                       ?? new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        foreach (var input in contract.Inputs.Values.Where(input => !bindings.ContainsKey(input.Key)))
         {
-            var activity = new ChildOutputActivity();
-            if (outputs is not null && outputs.TryGetValue(nameof(activity.Disclosed), out var disclosed))
-                activity.Disclosed = new OutputArgument<string>(disclosed.MemoryBlockReference());
-            if (outputs is not null && outputs.TryGetValue(nameof(activity.Secret), out var secret))
-                activity.Secret = new OutputArgument<string>(secret.MemoryBlockReference());
-            return new(activity);
+            var policy = ValueProtectionPolicy.InstanceInline;
+            var value = input.HasDefault
+                ? ValueEnvelope.Inline(input.Type, input.DefaultValue!.Value, policy)
+                : input.IsNullable == true
+                    ? ValueEnvelope.Absent(input.Type, policy)
+                    : throw new InvalidOperationException(
+                        $"Test executable omits non-nullable activity input '{input.Key}' without a pinned default.");
+            bindings.Add(input.Key, new RuntimeInputBinding(
+                input.Key,
+                input.Type,
+                policy,
+                RuntimeInputBindingSource.Literal,
+                literal: value));
         }
+
+        return bindings;
     }
 
-    private sealed record ChildOutputDescriptor;
-
-    private sealed class ChildOutputActivity : CodeActivity
+    private static bool IsNullable(System.Reflection.PropertyInfo property)
     {
-        public ChildOutputActivity() : base("test/dispatch-child-output")
-        {
-        }
-
-        public OutputArgument<string>? Disclosed { get; set; }
-        public OutputArgument<string>? Secret { get; set; }
-
-        protected override void Execute(IActivityExecutionContext context)
-        {
-            context.Set(Disclosed, "visible-value", nameof(Disclosed));
-            context.Set(Secret, SensitiveValue, nameof(Secret));
-        }
+        if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+            return true;
+        if (property.PropertyType.IsValueType)
+            return false;
+        return new System.Reflection.NullabilityInfoContext().Create(property).ReadState !=
+               System.Reflection.NullabilityState.NotNull;
     }
+
+    private static object ParseDefault(Type type, string value) =>
+        type == typeof(bool) ? bool.Parse(value) :
+        type == typeof(int) ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) :
+        type == typeof(TimeSpan) ? TimeSpan.Parse(value, System.Globalization.CultureInfo.InvariantCulture) :
+        value;
+
+    private static ValueTypeDescriptor ValueType(Type type)
+    {
+        var reference = TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias);
+        return new ValueTypeDescriptor(reference.Alias, reference.CollectionKind);
+    }
+
+    private static void RegisterActivityTypes(WellKnownTypeRegistry registry)
+    {
+        var types = new[]
+        {
+            typeof(DispatchWorkflowActivity),
+            typeof(DispatchWorkflowActivityResult),
+            typeof(DispatchWorkflowState),
+            typeof(WorkflowDispatchParentResumePayload),
+            typeof(DispatchWorkflowResult),
+            typeof(ChildOutputActivity),
+            typeof(ChildOutputActivityResult),
+            typeof(JsonElement),
+            typeof(IReadOnlyDictionary<string, JsonElement>)
+        };
+        foreach (var type in types)
+            registry.RegisterType(type, TypeAliasConvention.CanonicalAlias(type));
+    }
+
+    private sealed class ChildOutputActivity : Activity<ChildOutputActivityResult>
+    {
+        protected override ValueTask<ActivityTransition<ChildOutputActivityResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(
+                new ChildOutputActivityResult("visible-value", SensitiveValue)));
+    }
+
+    private sealed record ChildOutputActivityResult(
+        [property: Output] string Disclosed,
+        [property: Output] string Secret);
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {

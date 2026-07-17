@@ -17,6 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
@@ -28,7 +30,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Committed current-version golden fixtures. Historical pre-GA shapes are intentionally unsupported.
+    <!-- Committed current-version golden fixtures plus the supported workflow-executable v5 and
+         executable-activity-template v1 generations.
          Copied next to the test assembly so drift and read-path tests can load them at runtime. -->
     <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

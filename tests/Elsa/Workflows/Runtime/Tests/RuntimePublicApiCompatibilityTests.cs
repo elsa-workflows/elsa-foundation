@@ -155,8 +155,8 @@ public sealed class RuntimePublicApiCompatibilityTests
             .Select(member => member.Name)
             .ToArray();
 
-        Assert.DoesNotContain(nameof(IWorkflowDispatchStagingContext.StageWorkflowDispatch), declaredNames);
-        Assert.DoesNotContain(nameof(IWorkflowDispatchStagingContext.WorkflowDispatchRequest), declaredNames);
+        Assert.DoesNotContain(nameof(IWorkflowDispatchStager.StageWorkflowDispatch), declaredNames);
+        Assert.DoesNotContain("WorkflowDispatchRequest", declaredNames);
     }
 
     private static void AssertConstructor(Type type, params Type[] parameterTypes) =>

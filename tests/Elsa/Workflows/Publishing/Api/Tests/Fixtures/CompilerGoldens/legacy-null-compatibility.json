@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:75565fdff1eb6489c2da9cbd39e4817f6953ec37b2d422e243843a27878c30ed",
-    "artifactId": "artifact-75565fdff1eb",
+    "artifactHash": "sha256:be1ea3ad5b4e13f3c7788d3000342b7f87a0450b86f6599f7bc717d819af1374",
+    "artifactId": "artifact-be1ea3ad5b4e",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -34,10 +34,6 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
         "source": "Literal"

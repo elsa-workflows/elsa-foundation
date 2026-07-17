@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -5,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
 /// <summary>
-/// Per-drain in-memory working set for a coalesced checkpoint segment (E3-6, RT-10). Buffers the deferred checkpoint
+/// Per-drain in-memory working set for coalesced checkpoint segments (E3-6, RT-10). Buffers deferred checkpoint
 /// change-sets, holds an overlay of the mutated continuation state so intra-segment reads see prior hops, mirrors the
 /// scheduler work queue and post-commit outbox so the drain advances without touching durable stores, and folds
 /// everything into a single atomic commit at a flush boundary.
@@ -21,6 +22,8 @@ public sealed class RuntimeCoalescingSession
     private readonly IWorkflowSchedulerWorkQueue _innerQueue;
     private readonly InMemoryWorkflowSchedulerWorkQueue _overlayQueue = new();
     private readonly List<string> _seededWorkItemIds = [];
+    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
+        new(ReferenceEqualityComparer.Instance);
     private bool _queueSeeded;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
@@ -58,9 +61,9 @@ public sealed class RuntimeCoalescingSession
     public int MaxSegmentCheckpoints { get; }
 
     /// <summary>
-    /// <see langword="true"/> while the session is coalescing. Set to <see langword="false"/> once the segment has
-    /// flushed (at a boundary, cap, or quiescence); the decorators then pass through to the durable inner stores so the
-    /// remainder of the drain runs with Immediate semantics.
+    /// <see langword="true"/> while the session is coalescing. An activity-attempt boundary may durably close one
+    /// segment and start another in the same drain; terminal/external boundaries, the cap, and quiescence deactivate
+    /// the session.
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
@@ -73,12 +76,12 @@ public sealed class RuntimeCoalescingSession
     public bool AppliesTo(string workflowExecutionId) =>
         IsActive && StringComparer.Ordinal.Equals(WorkflowExecutionId, workflowExecutionId);
 
-    /// <summary>
-    /// Returns whether this session owns the workflow execution, including after a boundary flush deactivates
-    /// coalescing. In-flight queue claims created against the overlay must still finish against that overlay.
-    /// </summary>
-    public bool Owns(string workflowExecutionId) =>
-        StringComparer.Ordinal.Equals(WorkflowExecutionId, workflowExecutionId);
+    /// <summary>Returns whether this exact claim was issued by the overlay queue.</summary>
+    public bool OwnsOverlayClaim(RuntimeSchedulerWorkClaim claim)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        return _overlayClaims.ContainsKey(claim);
+    }
 
     // ---- Buffering -------------------------------------------------------------------------------------------------
 
@@ -87,12 +90,22 @@ public sealed class RuntimeCoalescingSession
     {
         ArgumentNullException.ThrowIfNull(commit);
 
-        ApplyToOverlay(commit.StateChanges);
+        ApplyToOverlay(commit.StateChanges, includeOutbox: true);
         _bufferedChangeSets.Add(commit.StateChanges);
         HopCount++;
     }
 
-    private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes)
+    /// <summary>
+    /// Advances the state overlay to a boundary that has already committed durably. Boundary-owned outbox items remain
+    /// with the durable provider; only deferred outbox items belong to the in-memory segment overlay.
+    /// </summary>
+    public void RecordDurableBoundaryState(RuntimeCheckpointStateChangeSet changes)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+        ApplyToOverlay(changes, includeOutbox: false);
+    }
+
+    private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes, bool includeOutbox)
     {
         if (changes.WorkflowExecution is { } workflowExecutionChange)
             _workflowExecution = workflowExecutionChange.State;
@@ -134,8 +147,11 @@ public sealed class RuntimeCoalescingSession
         foreach (var change in changes.WorkflowDispatches)
             _workflowDispatchUpserts[change.StateId] = change.State;
 
-        foreach (var change in changes.PostCommitOutbox)
-            RecordOutboxItem(change.State);
+        if (includeOutbox)
+        {
+            foreach (var change in changes.PostCommitOutbox)
+                RecordOutboxItem(change.State);
+        }
     }
 
     private void RecordOutboxItem(RuntimePostCommitOutboxItem item)
@@ -472,26 +488,43 @@ public sealed class RuntimeCoalescingSession
         CancellationToken cancellationToken)
     {
         await EnsureQueueSeededAsync(cancellationToken);
-        return await _overlayQueue.ClaimAsync(request, cancellationToken);
+        var claim = await _overlayQueue.ClaimAsync(request, cancellationToken);
+        if (claim is not null)
+            _overlayClaims.TryAdd(claim, 0);
+        return claim;
     }
 
-    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewOverlayClaimAsync(
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewOverlayClaimAsync(
         RuntimeSchedulerWorkClaim claim,
         DateTimeOffset now,
         TimeSpan visibilityTimeout,
-        CancellationToken cancellationToken) =>
-        _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var result = await _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+        _overlayClaims.TryRemove(claim, out _);
+        if (result.Claim is not null)
+            _overlayClaims.TryAdd(result.Claim, 0);
+        return result;
+    }
 
-    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteOverlayClaimAsync(
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteOverlayClaimAsync(
         RuntimeSchedulerWorkClaim claim,
-        CancellationToken cancellationToken) =>
-        _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var result = await _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
+        _overlayClaims.TryRemove(claim, out _);
+        return result;
+    }
 
-    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseOverlayClaimAsync(
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseOverlayClaimAsync(
         RuntimeSchedulerWorkClaim claim,
         DateTimeOffset visibleAt,
-        CancellationToken cancellationToken) =>
-        _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+        _overlayClaims.TryRemove(claim, out _);
+        return result;
+    }
 
     // ---- Flush -----------------------------------------------------------------------------------------------------
 
@@ -566,5 +599,10 @@ public sealed class RuntimeCoalescingSession
             if (!seeded.Contains(item.WorkItemId))
                 await _innerQueue.EnqueueAsync(item, cancellationToken);
         }
+
+        // The durable queue now matches the overlay's remaining frontier. Treat that frontier as the entry point for
+        // a possible next coalesced segment in this drain so a later boundary advances only work consumed since here.
+        _seededWorkItemIds.Clear();
+        _seededWorkItemIds.AddRange(remaining.Select(item => item.WorkItemId));
     }
 }

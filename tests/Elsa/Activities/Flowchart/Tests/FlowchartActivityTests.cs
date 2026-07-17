@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,10 +23,10 @@ public sealed class FlowchartActivityTests : IDisposable
     {
         var context = NewContext(NewFlowchartNode([]));
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
         Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
@@ -37,12 +38,12 @@ public sealed class FlowchartActivityTests : IDisposable
             startNodeId: "node-b");
         var context = NewContext(root);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-b", request.ExecutableNodeId);
         Assert.Equal("actexec-flowchart", request.SchedulingActivityExecutionId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -80,14 +81,14 @@ public sealed class FlowchartActivityTests : IDisposable
             [NewNode("node-a"), NewNode("node-b")],
             connections: [NewConnection("node-a", "node-b", sourcePort: null)]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
-        await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", []));
+        var continuation = await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", []));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-b", request.ExecutableNodeId);
         Assert.Equal("actexec-a", request.SchedulingActivityExecutionId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -101,12 +102,13 @@ public sealed class FlowchartActivityTests : IDisposable
                 NewConnection("node-a", "node-c", "Rejected")
             ]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
-        await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", ["Rejected"]));
+        var continuation = await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", ["Rejected"]));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-c", request.ExecutableNodeId);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -116,7 +118,7 @@ public sealed class FlowchartActivityTests : IDisposable
             [NewNode("node-a")],
             connections: [NewConnection("node-a", "node-a")]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
         await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]));
 
@@ -133,13 +135,13 @@ public sealed class FlowchartActivityTests : IDisposable
             [NewNode("node-a"), NewNode("node-b")],
             connections: [NewConnection("node-a", "node-b", "Approved")]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
-        await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", ["Rejected"]));
+        var continuation = await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", ["Rejected"]));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -164,7 +166,7 @@ public sealed class FlowchartActivityTests : IDisposable
                 NewConnection("node-a", "node-b")
             ]);
         var context = NewContext(root);
-        var flowchart = new FlowchartActivity();
+        var flowchart = NewActivity();
 
         await Assert.ThrowsAsync<FlowchartExecutionException>(() => flowchart
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]))
@@ -181,14 +183,16 @@ public sealed class FlowchartActivityTests : IDisposable
         return services.BuildServiceProvider();
     }
 
-    private ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        ((IActivity)new FlowchartActivity()).ExecuteAsync(context);
+    private ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)NewActivity()).ExecuteStructureAsync(context);
+
+    private FlowchartActivity NewActivity() =>
+        ActivatorUtilities.CreateInstance<FlowchartActivity>(_serviceProvider);
 
     private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode)
     {
-        var activity = new FlowchartActivity { Id = "actexec-flowchart", NodeId = "node-flowchart" };
+        var activity = NewActivity();
         return new SimpleActivityExecutionContext(
-            _serviceProvider,
             activity,
             CancellationToken.None,
             "wfexec-1",
@@ -266,7 +270,6 @@ public sealed class FlowchartActivityTests : IDisposable
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: structure);

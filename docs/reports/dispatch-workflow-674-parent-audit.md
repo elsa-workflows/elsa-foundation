@@ -1,8 +1,8 @@
 # DispatchWorkflow parent #674 audit
 
-Date: 2026-07-17  
-Remediation branch: `codex/dispatch-674-remediation`  
-Original program base: `codex/dispatch-677` at `674b7125b6b41cc64ab0a9111886ef635c6d7ad7`  
+Date: 2026-07-17
+Remediation branch: `codex/dispatch-674-remediation`
+Original program base: `codex/dispatch-677` at `674b7125b6b41cc64ab0a9111886ef635c6d7ad7`
 Replacement implementation: PR #717, merge commit `164ff88e8`
 
 ## Outcome

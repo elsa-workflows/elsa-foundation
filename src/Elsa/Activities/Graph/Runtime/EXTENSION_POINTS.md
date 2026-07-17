@@ -6,11 +6,15 @@ This project owns the Runtime consumer for compiled reusable activity graphs. Th
 
 | Contribution | Stable identity | Registration | Status |
 |---|---|---|---|
-| Graph activity Runtime consumer | `elsa.graph-activity` | Future Runtime consumer contribution from `GraphActivitiesRuntimeFeature` | Planned by T041 and T047 |
-| Runtime descriptor schema | `1` | Consumer-owned construction and activation | Planned by T010–T013 and T041 |
+| Graph activity Runtime consumer | `elsa.graph-activity` | `IRuntimeActivityConsumerCapability` from `GraphActivitiesRuntimeFeature` | Implemented |
+| Transient graph activation | `elsa.graph-activity` / `1` | Scoped `IActivityActivationStrategy` from `GraphActivitiesRuntimeFeature` | Implemented |
+| Runtime descriptor schema | `1` | `GraphActivityDescriptor` parsed from the pinned executable node | Implemented |
 
-The Runtime consumer may reference only Runtime/Core contracts. It must not reference Activity Design, Workflow Design, Publishing, the graph Design provider, Elsa 3 compatibility projects, or concrete persistence providers.
+The Runtime consumer may reference only Activity/Workflow Runtime contracts and models. It must not reference Activity Design, Workflow Design, Publishing, the graph Design provider, Elsa 3 compatibility projects, or concrete persistence providers.
 
 ## Implementable contributor interfaces
 
-The stable consumer interfaces land in `Elsa.Activities.Runtime.Core` during the foundational contract slice. This catalog will name their exact signatures when those contracts exist.
+- `IRuntimeActivityConsumerCapability` advertises the stable consumer/schema pair used by publication preflight.
+- `IActivityActivationStrategy` creates one fresh graph boundary and owned dependency scope per attempt.
+- `IRuntimeStructuralActivity` and the child completion/fault protocols return immutable structural continuation decisions.
+- `IRuntimeActivityCheckpointParticipant` stages graph boundary Durable Value changes for the scheduler-owned checkpoint.

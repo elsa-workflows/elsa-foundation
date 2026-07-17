@@ -17,8 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
