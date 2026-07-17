@@ -39,7 +39,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1

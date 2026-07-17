@@ -134,6 +134,9 @@ internal sealed class GroundworkDocumentStoreFixture(
                     ElsaRuntimeStorageManifest.DurableTimerDueTimeField,
                     "Groundwork durable timer due cursor must be non-null.",
                     cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.DurableTimerDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery)
+                return await new RuntimeTestBoundedDocumentStore(store).QueryAsync(query, cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery)
                 return await QueryDateTimeLessThanOrEqualAsync(

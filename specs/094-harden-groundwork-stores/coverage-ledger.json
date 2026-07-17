@@ -221,7 +221,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Due selection and advancement lack provider-atomic four-provider evidence.",
       "performanceWorkload": "due-timer-selection",
       "accessPolicy": "ordinary",
@@ -255,7 +255,9 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableTimerStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Workflows/Runtime/Scheduling/Tests/DurableTimerPumpTaskTests.cs"
       ]
     },
     {
@@ -437,7 +439,8 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
       ]
     },
     {

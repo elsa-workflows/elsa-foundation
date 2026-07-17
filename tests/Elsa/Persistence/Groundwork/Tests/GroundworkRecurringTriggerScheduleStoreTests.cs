@@ -203,6 +203,40 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         Assert.Equal(advanced, found!.NextOccurrence);
     }
 
+    [Fact]
+    public async Task Save_RejectsACompetingRepublishThatChangesAfterRead()
+    {
+        await using var fixture = CreateStore("memory");
+        IRecurringTriggerScheduleStore seedStore = NewStore(fixture);
+        var original = await seedStore.SaveAsync(
+            NewSchedule("art", "node", nextOffset: TimeSpan.FromMinutes(1), expression: "PT1M"));
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(1, request.ExpectedVersion);
+                var competitor = NewSchedule(
+                    "art",
+                    "node",
+                    nextOffset: TimeSpan.FromMinutes(2),
+                    expression: "PT2M");
+                await seedStore.SaveAsync(competitor);
+            }
+        };
+        IRecurringTriggerScheduleStore store = new GroundworkRecurringTriggerScheduleStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.SaveAsync(original with
+            {
+                Expression = "PT3M",
+                NextOccurrence = Now.AddMinutes(3)
+            }));
+
+        Assert.Equal("PT2M", (await seedStore.FindAsync(original.ScheduleId))!.Expression);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
