@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronRight, CornerDownRight, Plus, Trash2 } from "lucide-react";
-import type { StudioActivityDefinitionImplementationEditorProps } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDefinitionImplementationEditorProps, StudioActivityDiagnosticFocusResult } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
 import { createActivityNode, getActivityDisplay, getChildSlots, replaceSlotActivities, updateActivity } from "./workflowAdapter";
 import { createNodeId } from "./workflow-editor/editorHelpers";
 import { useWorkflowActivities } from "./api/activityDesign";
+import { activityGraphDiagnosticFocusEvent, type ActivityGraphDiagnosticFocusEventDetail } from "./activityGraphDiagnosticFocus";
 
 interface ActivityGraphPayload {
   rootActivity: ActivityNode;
@@ -32,6 +33,12 @@ export function ActivityGraphImplementationEditor({ context, value, readOnly, on
   const selectedCatalogItem = selected ? catalogByVersion.get(selected.activityVersionId) : undefined;
   const [inputsDraft, setInputsDraft] = useState("[]");
   const [inputsError, setInputsError] = useState("");
+  const [diagnosticFocusVersion, setDiagnosticFocusVersion] = useState(0);
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const pendingDiagnosticFocusRef = useRef<{
+    target: "root" | string;
+    complete(result: StudioActivityDiagnosticFocusResult): void;
+  } | null>(null);
 
   useEffect(() => {
     setInputsDraft(JSON.stringify(selected?.inputs ?? [], null, 2));
@@ -42,6 +49,67 @@ export function ActivityGraphImplementationEditor({ context, value, readOnly, on
     if (!selectedNodeId || activities.some(activity => activity.nodeId === selectedNodeId)) return;
     setSelectedNodeId(null);
   }, [activities, selectedNodeId]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const focusDiagnostic = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<ActivityGraphDiagnosticFocusEventDetail>;
+      const location = event.detail.location;
+      if (location.jsonPointer?.startsWith("/contract") || location.jsonPointer?.startsWith("/variables") || location.jsonPointer?.startsWith("/outputMappings")) return;
+      const nodeId = location.referenceKey || nodeIdAtJsonPointer(payload, location.jsonPointer);
+      if (!nodeId || nodeId === root.nodeId) {
+        if (!location.jsonPointer?.startsWith("/rootActivity")) return;
+        event.preventDefault();
+        setScopePath([]);
+        setSelectedNodeId(null);
+        pendingDiagnosticFocusRef.current?.complete(unsupportedGraphFocus());
+        pendingDiagnosticFocusRef.current = { target: "root", complete: event.detail.complete };
+        setDiagnosticFocusVersion(version => version + 1);
+        return;
+      }
+      const target = findNodeFocusTarget(root, nodeId, catalogByVersion);
+      if (!target) return;
+      event.preventDefault();
+      setScopePath(target.ownerPath);
+      setSelectedNodeId(nodeId);
+      pendingDiagnosticFocusRef.current?.complete(unsupportedGraphFocus());
+      pendingDiagnosticFocusRef.current = { target: nodeId, complete: event.detail.complete };
+      setDiagnosticFocusVersion(version => version + 1);
+    };
+    editor.addEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
+    return () => editor.removeEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
+  }, [catalogByVersion, payload, root]);
+
+  useEffect(() => {
+    const pending = pendingDiagnosticFocusRef.current;
+    if (!pending || !editorRef.current) return;
+    const rootControl = editorRef.current.querySelector<HTMLSelectElement>("[data-graph-root-control]");
+    const target = pending.target === "root"
+      ? rootControl && !rootControl.disabled
+        ? rootControl
+        : editorRef.current.querySelector<HTMLElement>("[data-graph-root-location]")
+      : [...editorRef.current.querySelectorAll<HTMLElement>("[data-graph-node-id]")]
+        .find(element => element.dataset.graphNodeId === pending.target);
+    pendingDiagnosticFocusRef.current = null;
+    if (!target) {
+      pending.complete(unsupportedGraphFocus());
+      return;
+    }
+    target.focus();
+    target.scrollIntoView?.({ block: "center", inline: "center" });
+    pending.complete(document.activeElement === target
+      ? {
+          kind: "focused",
+          announcement: "Focused the provider-owned Activity Graph location. Use Return to diagnostic to restore the diagnostics context."
+        }
+      : unsupportedGraphFocus());
+  }, [diagnosticFocusVersion, scopePath, selectedNodeId]);
+
+  useEffect(() => () => {
+    pendingDiagnosticFocusRef.current?.complete(unsupportedGraphFocus());
+    pendingDiagnosticFocusRef.current = null;
+  }, []);
 
   const commitRoot = (nextRoot: ActivityNode) => {
     onChange({
@@ -108,9 +176,9 @@ export function ActivityGraphImplementationEditor({ context, value, readOnly, on
   const selectedSupported = selected ? supportsActivityNode(selected, selectedCatalogItem) : true;
   const selectedChildSlot = selected && selectedSupported ? getChildSlots(selected, catalogByVersion)[0] : undefined;
 
-  return <div className="ad-graph-editor">
+  return <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
     <aside className="ad-graph-tools" aria-label="Activity Graph tools">
-      <label><span>Root activity</span><select value={root.activityVersionId} onChange={event => chooseRoot(event.target.value)} disabled={readOnly || catalogQuery.isPending}><option value="">Select an activity</option>{root.activityVersionId && !availableActivities.some(item => item.activityVersionId === root.activityVersionId) ? <option value={root.activityVersionId} disabled>Existing unsupported structure</option> : null}{availableActivities.map(item => <option key={item.activityVersionId} value={item.activityVersionId}>{getActivityDisplay(item)} · {item.version}</option>)}</select></label>
+      <label data-graph-root-location tabIndex={-1}><span>Root activity</span><select data-graph-root-control value={root.activityVersionId} onChange={event => chooseRoot(event.target.value)} disabled={readOnly || catalogQuery.isPending}><option value="">Select an activity</option>{root.activityVersionId && !availableActivities.some(item => item.activityVersionId === root.activityVersionId) ? <option value={root.activityVersionId} disabled>Existing unsupported structure</option> : null}{availableActivities.map(item => <option key={item.activityVersionId} value={item.activityVersionId}>{getActivityDisplay(item)} · {item.version}</option>)}</select></label>
       {catalogQuery.isPending ? <span role="status">Loading the authorized activity catalog…</span> : null}
       {catalogQuery.isError ? <span role="alert">The activity catalog is unavailable. Existing graph state remains unchanged.</span> : null}
       {slot ? <div className="ad-graph-add"><label><span>Add to {slot.label}</span><select aria-label={`Activity for ${slot.label}`} value={paletteActivityVersionId} onChange={event => setPaletteActivityVersionId(event.target.value)} disabled={readOnly}><option value="">Choose an activity</option>{availableActivities.map(item => <option key={item.activityVersionId} value={item.activityVersionId}>{getActivityDisplay(item)}</option>)}</select></label><button type="button" onClick={addActivity} disabled={readOnly || !paletteActivityVersionId}><Plus size={15} /> Add activity</button></div> : root.activityVersionId && ownerSupported ? <p>The selected root is a leaf activity. Choose a supported single-slot sequence container to compose multiple activities.</p> : null}
@@ -121,7 +189,7 @@ export function ActivityGraphImplementationEditor({ context, value, readOnly, on
     <section className="ad-graph-canvas" aria-label="Activity Graph canvas">
       <nav className="ad-graph-breadcrumb" aria-label="Graph scope"><button type="button" onClick={() => { setScopePath([]); setSelectedNodeId(null); }} disabled={scopePath.length === 0}>Root</button>{scopePath.map((nodeId, index) => <span key={nodeId}><ChevronRight size={14} /><button type="button" onClick={() => { setScopePath(path => path.slice(0, index + 1)); setSelectedNodeId(null); }}>{nodeLabel(findNodeByPath(root, scopePath.slice(0, index + 1), catalogByVersion), catalogByVersion)}</button></span>)}</nav>
       <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong></div>
-      {slot ? activities.length ? <div className="ad-graph-flow">{activities.map((activity, index) => { const item = catalogByVersion.get(activity.activityVersionId); return <div className="ad-graph-flow-step" key={activity.nodeId}>{index ? <ChevronRight className="ad-graph-connector" aria-hidden /> : null}<button type="button" className={`ad-graph-node ${selectedNodeId === activity.nodeId ? "is-selected" : ""}`} onClick={() => setSelectedNodeId(activity.nodeId)} aria-pressed={selectedNodeId === activity.nodeId}><span>Step {index + 1}</span><strong>{item ? getActivityDisplay(item) : activity.activityVersionId}</strong><small>{item ? `${item.activityTypeKey} · ${item.version}` : activity.nodeId}</small>{getChildSlots(activity, catalogByVersion).length ? <em>Contains child activities</em> : null}</button></div>; })}</div> : <div className="ad-graph-empty"><strong>{slot.label} is empty</strong><span>Choose an authorized catalog activity and add it to compose this reusable graph.</span></div> : <div className={`ad-graph-node ${root.activityVersionId ? "is-configured" : "is-placeholder"}`}><span>Root</span><strong>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Choose a root activity"}</strong><small>{ownerCatalogItem ? `${ownerCatalogItem.activityTypeKey} · ${ownerCatalogItem.version}` : "A graph can be saved while incomplete; validation identifies what must be resolved."}</small></div>}
+      {slot ? activities.length ? <div className="ad-graph-flow">{activities.map((activity, index) => { const item = catalogByVersion.get(activity.activityVersionId); return <div className="ad-graph-flow-step" key={activity.nodeId}>{index ? <ChevronRight className="ad-graph-connector" aria-hidden /> : null}<button type="button" data-graph-node-id={activity.nodeId} className={`ad-graph-node ${selectedNodeId === activity.nodeId ? "is-selected" : ""}`} onClick={() => setSelectedNodeId(activity.nodeId)} aria-pressed={selectedNodeId === activity.nodeId}><span>Step {index + 1}</span><strong>{item ? getActivityDisplay(item) : activity.activityVersionId}</strong><small>{item ? `${item.activityTypeKey} · ${item.version}` : activity.nodeId}</small>{getChildSlots(activity, catalogByVersion).length ? <em>Contains child activities</em> : null}</button></div>; })}</div> : <div className="ad-graph-empty"><strong>{slot.label} is empty</strong><span>Choose an authorized catalog activity and add it to compose this reusable graph.</span></div> : <div className={`ad-graph-node ${root.activityVersionId ? "is-configured" : "is-placeholder"}`}><span>Root</span><strong>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Choose a root activity"}</strong><small>{ownerCatalogItem ? `${ownerCatalogItem.activityTypeKey} · ${ownerCatalogItem.version}` : "A graph can be saved while incomplete; validation identifies what must be resolved."}</small></div>}
     </section>
   </div>;
 }
@@ -150,6 +218,48 @@ function findNodeByPath(root: ActivityNode, path: string[], catalog: Map<string,
     if (!current) return null;
   }
   return current;
+}
+
+function findNodeFocusTarget(root: ActivityNode, nodeId: string, catalog: Map<string, ActivityCatalogItem>) {
+  const visit = (owner: ActivityNode, ownerPath: string[]): { ownerPath: string[] } | null => {
+    for (const child of getChildSlots(owner, catalog).flatMap(slot => slot.activities)) {
+      if (child.nodeId === nodeId) return { ownerPath };
+      const nested = visit(child, [...ownerPath, child.nodeId]);
+      if (nested) return nested;
+    }
+    return null;
+  };
+  return visit(root, []);
+}
+
+function nodeIdAtJsonPointer(payload: ActivityGraphPayload, pointer: string | null | undefined) {
+  if (!pointer?.startsWith("/")) return null;
+  const segments = pointer.slice(1).split("/").map(segment => segment.replaceAll("~1", "/").replaceAll("~0", "~"));
+  let current: unknown = payload;
+  let closestNodeId: string | null = null;
+  for (const segment of segments) {
+    if (current && typeof current === "object" && !Array.isArray(current)) {
+      const nodeId = (current as { nodeId?: unknown }).nodeId;
+      if (typeof nodeId === "string" && nodeId) closestNodeId = nodeId;
+      current = (current as Record<string, unknown>)[segment];
+    } else if (Array.isArray(current) && /^\d+$/.test(segment)) {
+      current = current[Number(segment)];
+    } else {
+      return closestNodeId;
+    }
+  }
+  if (current && typeof current === "object" && !Array.isArray(current)) {
+    const nodeId = (current as { nodeId?: unknown }).nodeId;
+    if (typeof nodeId === "string" && nodeId) closestNodeId = nodeId;
+  }
+  return closestNodeId;
+}
+
+function unsupportedGraphFocus(): StudioActivityDiagnosticFocusResult {
+  return {
+    kind: "unsupported",
+    announcement: "The Activity Graph editor retained this diagnostic but cannot focus its typed location."
+  };
 }
 
 function nodeLabel(node: ActivityNode | null, catalog: Map<string, ActivityCatalogItem>) {

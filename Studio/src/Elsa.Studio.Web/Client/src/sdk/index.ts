@@ -1181,6 +1181,56 @@ export interface StudioActivityDefinitionImplementationState {
   layout: StudioActivityDefinitionLayoutRecord[];
 }
 
+export type StudioActivityDiagnosticSeverity = "Error" | "Warning" | "Info";
+
+export interface StudioActivityDiagnosticSubject {
+  kind: string;
+  id: string;
+  definitionId?: string | null;
+  versionId?: string | null;
+  revision?: number | null;
+}
+
+export interface StudioActivityDependencyPathItem {
+  definitionId: string;
+  versionId: string;
+  version: string;
+  templateHash: string;
+}
+
+export interface StudioActivityNodeOrigin {
+  kind: string;
+  id: string;
+}
+
+export interface StudioActivityDiagnosticLocation {
+  providerKey?: string | null;
+  jsonPointer?: string | null;
+  referenceKey?: string | null;
+  nodeOrigin?: StudioActivityNodeOrigin[] | null;
+  dependencyPath?: StudioActivityDependencyPathItem[] | null;
+}
+
+export interface StudioActivityDiagnostic {
+  code: string;
+  severity: StudioActivityDiagnosticSeverity;
+  message: string;
+  subject: StudioActivityDiagnosticSubject;
+  location?: StudioActivityDiagnosticLocation | null;
+  remediation?: string | null;
+  metadata: Record<string, string>;
+}
+
+export type StudioActivityDiagnosticFocusResult =
+  | { kind: "focused"; announcement: string }
+  | { kind: "unsupported"; announcement: string };
+
+export interface StudioActivityDiagnosticFocusRequest {
+  location: StudioActivityDiagnosticLocation;
+  subject: StudioActivityDiagnosticSubject;
+  editorElement: HTMLElement;
+}
+
 export interface StudioActivityDefinitionImplementationEditorProps {
   context: StudioEndpointContext;
   definitionId: string;
@@ -1199,6 +1249,9 @@ export interface StudioActivityDefinitionImplementationEditorContribution {
   providerKey: string;
   providerSchemaVersion: string;
   createInitialImplementation(): StudioActivityDefinitionImplementationState;
+  focusDiagnosticLocation?(
+    request: StudioActivityDiagnosticFocusRequest
+  ): StudioActivityDiagnosticFocusResult | Promise<StudioActivityDiagnosticFocusResult>;
   component: ComponentType<StudioActivityDefinitionImplementationEditorProps>;
 }
 

@@ -8,6 +8,7 @@ import {
   requestStudioNavigation,
   type StudioActivityDefinitionImplementationEditorProps,
   type StudioActivityDefinitionImplementationEditorContribution,
+  type StudioActivityDiagnosticFocusResult,
   type StudioEndpointContext,
   type StudioRuntimeSettings
 } from "@elsa-workflows/studio-sdk";
@@ -775,13 +776,405 @@ describe("Activity Definition authoring", () => {
     click(buttonByText(rendered.container, "Edit implementation 0"));
     await waitForText(rendered.container, "Save failed");
     expect(rendered.container.textContent).toContain("Revision-sensitive lifecycle actions and navigation are paused");
-    expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(false);
     expect(rendered.container.textContent).not.toContain("safe test failure");
     await rendered.unmount();
   });
 
-  it("validates only the exact saved revision and gates validation while edits are pending", async () => {
+  it("flushes pending autosave and validates only the exact returned saved revision", async () => {
     const postJson = vi.fn(async (_url: string, body: unknown) => ({ draftId: "activity-draft-1", revision: (body as { expectedRevision: number }).expectedRevision, isValid: true, validatedAt: "2026-07-17T10:01:00Z", diagnostics: [] }));
+    const putJson = vi.fn(async (_url: string, body: unknown) => fullDraft({ revision: 4, payload: (body as { provider: { payload: unknown } }).provider.payload }));
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()],
+      postJson,
+      putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitFor(() => expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({ expectedRevision: 3 })));
+    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1/validate", { expectedRevision: 4 }));
+    await waitForText(rendered.container, "Revision 4 passed validation");
+    await rendered.unmount();
+  });
+
+  it("renders ordered structured diagnostics with safe severity counts and typed unknown-location handling", async () => {
+    const postJson = vi.fn(async () => ({
+      draftId: "activity-draft-1",
+      revision: 3,
+      isValid: false,
+      validatedAt: "2026-07-17T10:01:00Z",
+      diagnostics: [
+        {
+          code: "activity.contract.input-invalid",
+          severity: "Error",
+          message: "Every input requires a reference key.",
+          subject: { kind: "ActivityDraft", id: "activity-draft-1", revision: 3 },
+          location: { jsonPointer: "/contract/inputs", referenceKey: "customer-note" },
+          remediation: "Provide a stable reference key.",
+          metadata: {}
+        },
+        {
+          code: "activity.future-location",
+          severity: "Warning",
+          message: "A future provider location needs attention.",
+          subject: { kind: "ActivityDraft", id: "hidden-draft-id", revision: 3 },
+          location: { providerKey: "future.provider", jsonPointer: "/future/private-location" },
+          remediation: "Use a provider editor that supports this location.",
+          metadata: {}
+        },
+        {
+          code: "unsafe <private-code>",
+          severity: "Info",
+          message: "Validation completed with additional context.",
+          subject: { kind: "ActivityDraft", id: "activity-draft-1", revision: 3 },
+          location: null,
+          remediation: null,
+          metadata: {}
+        }
+      ]
+    }));
+    const draft = fullDraft({ revision: 3 });
+    draft.contract.inputs = [{
+      referenceKey: "customer-note",
+      name: "Customer note",
+      displayName: "Customer note",
+      description: null,
+      category: null,
+      order: 0,
+      uiHint: null,
+      uiSpecifications: null,
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false,
+      isNullable: true,
+      default: null,
+      storageDriverKey: "elsa.json",
+      durability: "Required"
+    }];
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return draft;
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        if (url === "/expressions/descriptors") return { items: [] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, "Draft diagnostics");
+    expect(rendered.container.textContent).toContain("1 error");
+    expect(rendered.container.textContent).toContain("1 warning");
+    expect(rendered.container.textContent).toContain("1 info");
+    expect(rendered.container.textContent).toContain("Provide a stable reference key.");
+    const codes = [...rendered.container.querySelectorAll(".ad-diagnostic-code")].map(item => item.textContent);
+    expect(codes).toEqual([
+      "activity.contract.input-invalid",
+      "activity.future-location",
+      "activity.validation.issue"
+    ]);
+    const contractDiagnostic = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.contract.input-invalid']")!;
+    click(contractDiagnostic);
+    await waitForText(rendered.container, "Focused the exact provider-neutral contract location");
+    expect((document.activeElement as HTMLElement)?.hasAttribute("data-contract-reference-key-control")).toBe(true);
+    click(buttonByText(rendered.container, "Return to diagnostic"));
+    expect(document.activeElement).toBe(contractDiagnostic);
+    click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.future-location']")!);
+    await waitForText(rendered.container, "The exact diagnostic location is unavailable");
+    expect(rendered.container.textContent).not.toContain("hidden-draft-id");
+    expect(rendered.container.textContent).not.toContain("future.provider");
+    await rendered.unmount();
+  });
+
+  it("delegates provider locations through focusDiagnosticLocation and restores keyboard context", async () => {
+    const focusDiagnosticLocation = vi.fn(({ editorElement }: { editorElement: HTMLElement }) => {
+      editorElement.querySelector<HTMLButtonElement>("[data-provider-focus]")?.focus();
+      return { kind: "focused" as const, announcement: "Focused the exact provider control." };
+    });
+    const contribution: StudioActivityDefinitionImplementationEditorContribution = {
+      ...graphContribution(),
+      focusDiagnosticLocation,
+      component: () => <button type="button" data-provider-focus>Provider target</button>
+    };
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [contribution],
+      postJson: vi.fn(async () => ({
+        draftId: "activity-draft-1",
+        revision: 3,
+        isValid: false,
+        validatedAt: "2026-07-17T10:01:00Z",
+        diagnostics: [{
+          code: "activity.graph.node-invalid",
+          severity: "Error",
+          message: "The graph node is invalid.",
+          subject: { kind: "ActivityDraft", id: "activity-draft-1", revision: 3 },
+          location: { providerKey: "elsa.activity-graph", jsonPointer: "/rootActivity/activityVersionId", referenceKey: "done" },
+          remediation: "Choose an exact activity version.",
+          metadata: {}
+        }]
+      })),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, "activity.graph.node-invalid");
+    const diagnostic = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.node-invalid']")!;
+    click(diagnostic);
+    await waitFor(() => expect((document.activeElement as HTMLElement)?.hasAttribute("data-provider-focus")).toBe(true));
+    expect(focusDiagnosticLocation).toHaveBeenCalledWith(expect.objectContaining({
+      location: expect.objectContaining({ jsonPointer: "/rootActivity/activityVersionId", referenceKey: "done" }),
+      subject: expect.objectContaining({ kind: "ActivityDraft" })
+    }));
+    await waitForText(rendered.container, "Return to diagnostic");
+    click(buttonByText(rendered.container, "Return to diagnostic"));
+    expect(document.activeElement).toBe(diagnostic);
+    focusDiagnosticLocation.mockRejectedValueOnce(new Error("hidden provider focus failure"));
+    click(diagnostic);
+    await waitForText(rendered.container, "exact diagnostic location is unavailable");
+    expect(rendered.container.textContent).not.toContain("hidden provider focus failure");
+    expect(rendered.container.textContent).toContain("activity.graph.node-invalid");
+    await rendered.unmount();
+  });
+
+  it("keeps the latest diagnostic focus context when an older provider request completes late", async () => {
+    let resolveFirst!: (result: StudioActivityDiagnosticFocusResult) => void;
+    let resolveSecond!: (result: StudioActivityDiagnosticFocusResult) => void;
+    const focusDiagnosticLocation = vi.fn()
+      .mockImplementationOnce(() => new Promise<StudioActivityDiagnosticFocusResult>(resolve => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise<StudioActivityDiagnosticFocusResult>(resolve => { resolveSecond = resolve; }));
+    const contribution: StudioActivityDefinitionImplementationEditorContribution = {
+      ...graphContribution(),
+      focusDiagnosticLocation,
+      component: () => <button type="button" data-provider-focus>Provider target</button>
+    };
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [contribution],
+      postJson: vi.fn(async () => ({
+        draftId: "activity-draft-1",
+        revision: 3,
+        isValid: false,
+        validatedAt: "2026-07-17T10:01:00Z",
+        diagnostics: ["first", "second"].map(referenceKey => ({
+          code: `activity.graph.${referenceKey}`,
+          severity: "Error" as const,
+          message: `Correct the ${referenceKey} graph location.`,
+          subject: { kind: "ActivityDraft", id: "activity-draft-1", revision: 3 },
+          location: { providerKey: "elsa.activity-graph", jsonPointer: `/rootActivity/${referenceKey}`, referenceKey },
+          remediation: "Use the provider editor.",
+          metadata: {}
+        }))
+      })),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, "activity.graph.second");
+    const first = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.first']")!;
+    const second = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.second']")!;
+    click(first);
+    await waitFor(() => expect(focusDiagnosticLocation).toHaveBeenCalledTimes(1));
+    click(second);
+    await waitFor(() => expect(focusDiagnosticLocation).toHaveBeenCalledTimes(2));
+
+    rendered.container.querySelector<HTMLButtonElement>("[data-provider-focus]")?.focus();
+    resolveSecond({ kind: "focused", announcement: "Focused the second provider location." });
+    await waitForText(rendered.container, "Focused the second provider location.");
+    resolveFirst({ kind: "unsupported", announcement: "Stale first request must be ignored." });
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+
+    expect(rendered.container.textContent).toContain("Focused the second provider location.");
+    expect(rendered.container.textContent).not.toContain("Stale first request must be ignored.");
+    click(buttonByText(rendered.container, "Return to diagnostic"));
+    expect(document.activeElement).toBe(second);
+    await rendered.unmount();
+  });
+
+  it("maps typed contract JSON pointers to exact accessible controls before using member fallback", async () => {
+    const draft = fullDraft({ revision: 3 });
+    draft.contract.inputs = [{
+      referenceKey: "customer-note",
+      name: "Customer note",
+      displayName: "Customer note",
+      description: null,
+      category: null,
+      order: 0,
+      uiHint: null,
+      uiSpecifications: null,
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false,
+      isNullable: true,
+      default: { syntax: "Literal", value: "hello" },
+      storageDriverKey: "elsa.json",
+      durability: "Required"
+    }];
+    const pointers = [
+      ["activity.contract.type", "/contract/inputs/0/type/alias", "type.alias"],
+      ["activity.contract.storage", "/contract/inputs/0/storageDriverKey", "storageDriverKey"],
+      ["activity.contract.default", "/contract/inputs/0/default/value", "default.value"],
+      ["activity.contract.reference", "/contract/inputs/0/referenceKey", "referenceKey"]
+    ] as const;
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async () => ({
+        draftId: "activity-draft-1",
+        revision: 3,
+        isValid: false,
+        validatedAt: "2026-07-17T10:01:00Z",
+        diagnostics: [
+          ...pointers.map(([code, jsonPointer]) => ({
+            code,
+            severity: "Error" as const,
+            message: "Correct this exact contract field.",
+            subject: { kind: "ActivityDraft", id: "activity-draft-1", revision: 3 },
+            location: { jsonPointer, referenceKey: "customer-note" },
+            remediation: "Use the focused control.",
+            metadata: {}
+          })),
+          {
+            code: "activity.contract.emitted",
+            severity: "Error",
+            message: "The required outcome must remain emitted.",
+            subject: { kind: "ActivityDraft", id: "activity-draft-1", revision: 3 },
+            location: { jsonPointer: "/contract/outcomes/0/isEmitted", referenceKey: "done" },
+            remediation: "Retain the provider-required outcome.",
+            metadata: {}
+          }
+        ]
+      })),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return draft;
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        if (url === "/expressions/descriptors") return { items: [] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, "activity.contract.reference");
+    for (const [code, , expectedField] of pointers) {
+      click(rendered.container.querySelector<HTMLButtonElement>(`[aria-label='Focus ${code}']`)!);
+      await waitFor(() => expect((document.activeElement as HTMLElement)?.dataset.contractField).toBe(expectedField));
+      click(buttonByText(rendered.container, "Return to diagnostic"));
+    }
+    click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.contract.emitted']")!);
+    await waitFor(() => {
+      const focused = document.activeElement as HTMLElement;
+      expect(focused.tagName).toBe("LABEL");
+      expect(focused.querySelector<HTMLInputElement>("[data-contract-field='isEmitted']")?.disabled).toBe(true);
+    });
+    expect(rendered.container.textContent).toContain("exact accessible context for a disabled");
+    await rendered.unmount();
+  });
+
+  it.each([
+    [403, "Draft validation is not authorized"],
+    [404, "exact authorized draft could not be confirmed"],
+    [503, "Draft validation is unavailable"]
+  ])("keeps a %s validation failure privacy-safe", async (status, expected) => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async () => { throw new StudioHttpError(status, "hidden provider/resource identity", null); }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, expected);
+    expect(rendered.container.textContent).not.toContain("hidden provider/resource identity");
+    await rendered.unmount();
+  });
+
+  it("distinguishes a missing validation capability from a transport failure", async () => {
+    const unavailableCapabilities = capabilities();
+    unavailableCapabilities.capabilities[0]!.links = unavailableCapabilities.capabilities[0]!.links
+      .filter(link => link.rel !== "activity-draft-validation");
+    const unavailable = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return unavailableCapabilities;
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(unavailable.container, "Saved revision 3");
+    click(buttonByText(unavailable.container, "Validate saved revision"));
+    await waitForText(unavailable.container, "advertised capability could not be confirmed");
+    await unavailable.unmount();
+
+    const transport = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async () => { throw new TypeError("hidden network detail"); }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(transport.container, "Saved revision 3");
+    click(buttonByText(transport.container, "Validate saved revision"));
+    await waitForText(transport.container, "could not reach the server");
+    expect(transport.container.textContent).toContain("was not classified as invalid");
+    expect(transport.container.textContent).not.toContain("hidden network detail");
+    await transport.unmount();
+  });
+
+  it("distinguishes exact-revision validation rejection from transport and Runtime rejection", async () => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson: vi.fn(async () => {
+        throw new StudioHttpError(409, "stale", null, {
+          errorCode: "activity.draft.stale-revision",
+          recovery: { currentRevision: 4 }
+        });
+      }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, "backend rejected validation");
+    expect(rendered.container.textContent).toContain("server draft advanced to revision 4");
+    expect(rendered.container.textContent).toContain("Runtime rejection is reported by the Test Run experience");
+    expect(rendered.container.textContent).not.toContain("could not reach the server");
+    await rendered.unmount();
+  });
+
+  it("ignores a late validation response after the author advances the draft", async () => {
+    let rejectValidation!: (reason: unknown) => void;
+    const validation = new Promise((_resolve, reject) => { rejectValidation = reject; });
+    const postJson = vi.fn(async () => validation);
     const rendered = renderPage({
       path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
       contributions: [editingContribution()],
@@ -796,30 +1189,7 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Validate saved revision"));
-    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1/validate", { expectedRevision: 3 }));
-    await waitForText(rendered.container, "Revision 3 passed validation");
-    click(buttonByText(rendered.container, "Edit implementation 0"));
-    expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
-    await rendered.unmount();
-  });
-
-  it("ignores a late validation response after the author advances the draft", async () => {
-    let rejectValidation!: (reason: unknown) => void;
-    const validation = new Promise((_resolve, reject) => { rejectValidation = reject; });
-    const rendered = renderPage({
-      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
-      contributions: [editingContribution()],
-      postJson: vi.fn(async () => validation),
-      putJson: vi.fn(async (_url: string, body: unknown) => fullDraft({ revision: 4, payload: (body as { provider: { payload: unknown } }).provider.payload })),
-      getJson: async (url: string) => {
-        if (url === "/capabilities") return capabilities();
-        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
-        throw new Error(`Unexpected GET ${url}`);
-      }
-    });
-
-    await waitForText(rendered.container, "Saved revision 3");
-    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
     click(buttonByText(rendered.container, "Edit implementation 0"));
     await waitForText(rendered.container, "Saved revision 4");
     rejectValidation(new StudioHttpError(409, "stale", null, { errorCode: "activity.draft.stale-revision", recovery: { currentRevision: 4 } }));

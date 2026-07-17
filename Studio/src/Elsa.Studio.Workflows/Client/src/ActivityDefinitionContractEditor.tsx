@@ -154,7 +154,7 @@ export function ActivityDefinitionContractEditor({
   return <section className="ad-contract-editor" aria-labelledby="activity-contract-title">
     <header className="ad-contract-header">
       <div><span className="ad-kicker">Provider-neutral public surface</span><h2 id="activity-contract-title">Contract</h2><p>Inputs, outputs, and outcomes are saved through the same exact-revision draft queue as the implementation.</p></div>
-      <span className="ad-badge">Schema {contract.contractSchemaVersion}</span>
+      <span className="ad-badge" data-contract-schema tabIndex={-1}>Schema {contract.contractSchemaVersion}</span>
     </header>
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract authoring unavailable</strong><span>The authorized capability catalog could not be confirmed. Stored contract members remain visible, but Studio will not offer raw aliases, CLR types, or guessed storage drivers.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No capability-catalog type has an activated durable storage driver. Input and output creation is unavailable.</div> : null}
@@ -228,12 +228,12 @@ function InputEditor({ member, index, capabilities, authorableTypes, expressionC
 }) {
   const type = findContractType(capabilities, member.type.alias);
   const available = isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities);
-  return <fieldset className="ad-contract-member"><legend>Input {index + 1}: {member.name}</legend>
+  return <fieldset className="ad-contract-member" data-contract-kind="input" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}><legend>Input {index + 1}: {member.name}</legend>
     {!available ? <UnavailableType alias={member.type.alias} /> : null}
     <div className="ad-contract-fields">
       <StagedNameField value={member.name} readOnly={readOnly} onApply={name => onChange({ ...member, name })} />
       <TypeFields member={member} type={type} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
-      <label className="ad-contract-check"><input type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Required effective value</span><small>After applying a default, an effective value must exist.</small></label>
+      <label className="ad-contract-check"><input data-contract-field="isRequired" type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Required effective value</span><small>After applying a default, an effective value must exist.</small></label>
       <NullabilityField
         member={member}
         type={type}
@@ -261,12 +261,12 @@ function OutputEditor({ member, index, capabilities, authorableTypes, readOnly, 
 }) {
   const type = findContractType(capabilities, member.type.alias);
   const available = isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities);
-  return <fieldset className="ad-contract-member"><legend>Output {index + 1}: {member.name}</legend>
+  return <fieldset className="ad-contract-member" data-contract-kind="output" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}><legend>Output {index + 1}: {member.name}</legend>
     {!available ? <UnavailableType alias={member.type.alias} /> : null}
     <div className="ad-contract-fields">
       <StagedNameField value={member.name} readOnly={readOnly} onApply={name => onChange({ ...member, name })} />
       <TypeFields member={member} type={type} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
-      <label className="ad-contract-check"><input type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Must be produced</span><small>The implementation is obligated to produce this output.</small></label>
+      <label className="ad-contract-check"><input data-contract-field="isRequired" type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Must be produced</span><small>The implementation is obligated to produce this output.</small></label>
       <NullabilityField member={member} type={type} readOnly={readOnly} onChange={onChange} />
       <DurabilityFields member={member} type={type} capabilities={capabilities} readOnly={readOnly} onChange={onChange} />
     </div>
@@ -284,11 +284,11 @@ function OutcomeEditor({ member, index, providerRequired, readOnly, onChange, on
   onReferenceKeyChange(key: string): void;
   onRemove(): void;
 }) {
-  return <fieldset className="ad-contract-member"><legend>Outcome {index + 1}: {member.name}</legend>
+  return <fieldset className="ad-contract-member" data-contract-kind="outcome" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}><legend>Outcome {index + 1}: {member.name}</legend>
     {providerRequired ? <div className="ad-inline-status" role="status"><strong>Required by the implementation provider</strong><span>This outcome is supplied by provider capability metadata and cannot be removed or made non-emitted.</span></div> : null}
     <div className="ad-contract-fields">
       <StagedNameField value={member.name} readOnly={readOnly || providerRequired} onApply={name => onChange({ ...member, name })} />
-      <label className="ad-contract-check"><input type="checkbox" checked={member.isEmitted} onChange={event => onChange({ ...member, isEmitted: event.target.checked })} disabled={readOnly || providerRequired} /><span>Emitted by this activity</span></label>
+      <label className="ad-contract-check"><input data-contract-field="isEmitted" type="checkbox" checked={member.isEmitted} onChange={event => onChange({ ...member, isEmitted: event.target.checked })} disabled={readOnly || providerRequired} /><span>Emitted by this activity</span></label>
     </div>
     <details className="ad-contract-advanced"><summary>Advanced identity and presentation</summary><div className="ad-contract-fields">
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly || providerRequired} onApply={onReferenceKeyChange} />
@@ -313,7 +313,7 @@ function TypeFields<T extends ActivityInputContract | ActivityOutputContract>({ 
     !isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities)
   );
   return <>
-    <label><span>Capability type</span><select value={member.type.alias} onChange={event => {
+    <label><span>Capability type</span><select data-contract-field="type.alias" value={member.type.alias} onChange={event => {
       const selected = authorableTypes.find(item => item.alias === event.target.value);
       if (selected && capabilities) onChange(selectTypeForMember(member, selected, capabilities));
     }} disabled={readOnly || authorableTypes.length === 0}>
@@ -321,7 +321,7 @@ function TypeFields<T extends ActivityInputContract | ActivityOutputContract>({ 
       {authorableTypes.map(item => <option key={item.alias} value={item.alias} disabled={!item.supportsNull && member.isNullable}>{item.displayName} · {item.category}{!item.supportsNull && member.isNullable ? " · first disable nullability" : ""}</option>)}
     </select><small>Alias <code>{member.type.alias}</code>; no CLR identity is authored.</small></label>
     {currentTypeCanBeReapplied && type && capabilities ? <button type="button" onClick={() => onChange(selectTypeForMember(member, type, capabilities))} disabled={readOnly}>Apply advertised type defaults</button> : null}
-    {type && type.supportedCollectionKinds.length > 1 ? <label><span>Collection kind</span><select value={member.type.collectionKind} onChange={event => onChange({ ...member, type: { ...member.type, collectionKind: event.target.value } })} disabled={readOnly}>{type.supportedCollectionKinds.map(kind => <option key={kind}>{kind}</option>)}</select></label> : <ReadOnlyFact label="Collection kind" value={member.type.collectionKind} />}
+    {type && type.supportedCollectionKinds.length > 1 ? <label><span>Collection kind</span><select data-contract-field="type.collectionKind" value={member.type.collectionKind} onChange={event => onChange({ ...member, type: { ...member.type, collectionKind: event.target.value } })} disabled={readOnly}>{type.supportedCollectionKinds.map(kind => <option key={kind}>{kind}</option>)}</select></label> : <ReadOnlyFact label="Collection kind" value={member.type.collectionKind} field="type.collectionKind" />}
   </>;
 }
 
@@ -334,8 +334,8 @@ function DurabilityFields<T extends ActivityInputContract | ActivityOutputContra
 }) {
   const drivers = activatedStorageDrivers(type, capabilities);
   return <>
-    <ReadOnlyFact label="Durability" value="Required" />
-    {drivers.length > 1 ? <label><span>Durable storage driver</span><select value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly}>{drivers.map(driver => <option key={driver}>{driver}</option>)}</select></label> : <ReadOnlyFact label="Durable storage driver" value={member.storageDriverKey || "Unavailable"} />}
+    <ReadOnlyFact label="Durability" value="Required" field="durability" />
+    {drivers.length > 1 ? <label><span>Durable storage driver</span><select data-contract-field="storageDriverKey" value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly}>{drivers.map(driver => <option key={driver}>{driver}</option>)}</select></label> : <ReadOnlyFact label="Durable storage driver" value={member.storageDriverKey || "Unavailable"} field="storageDriverKey" />}
   </>;
 }
 
@@ -352,7 +352,7 @@ function NullabilityField<T extends ActivityInputContract | ActivityOutputContra
     : nullDefaultRequiresNullability
       ? "Remove or change the literal null default before tightening nullability."
       : "Independent from requiredness and production obligations.";
-  return <label className="ad-contract-check"><input type="checkbox" checked={member.isNullable} onChange={event => onChange({ ...member, isNullable: event.target.checked })} disabled={readOnly || !type?.supportsNull || nullDefaultRequiresNullability} /><span>Allows null</span><small>{description}</small></label>;
+  return <label className="ad-contract-check"><input data-contract-field="isNullable" type="checkbox" checked={member.isNullable} onChange={event => onChange({ ...member, isNullable: event.target.checked })} disabled={readOnly || !type?.supportsNull || nullDefaultRequiresNullability} /><span>Allows null</span><small>{description}</small></label>;
 }
 
 function DefaultEditor({ member, type, expressions, readOnly, onValidityChange, onChange }: {
@@ -381,8 +381,8 @@ function DefaultEditor({ member, type, expressions, readOnly, onValidityChange, 
     setValid(nextValid);
     onValidityChange(nextValid);
   };
-  return <div className="ad-default-editor">
-    <label><span>Default</span><select value={mode} onChange={event => {
+  return <div className="ad-default-editor" data-contract-field-container="default">
+    <label><span>Default</span><select data-contract-field="default" value={mode} onChange={event => {
       const next = event.target.value;
       setCandidateValidity(true);
       if (next === "none") setCandidate(null);
@@ -411,7 +411,7 @@ function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, 
   const [source, setSource] = useState(() => serializeDefaultValue(value));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setSource(serializeDefaultValue(value)), [value]);
-  return <label><span>Literal JSON value</span><textarea value={source} onChange={event => {
+  return <label><span>Literal JSON value</span><textarea data-contract-field="default.value" value={source} onChange={event => {
     const next = event.target.value;
     setSource(next);
     const parsed = parseLiteralDefault(next);
@@ -431,11 +431,11 @@ function ExpressionDefaultFields({ value, expressions, readOnly, onChange }: {
   const current = value.syntax;
   const known = expressions.some(expression => expression.type === current);
   return <>
-    <label><span>Expression syntax</span><select value={current} onChange={event => onChange({ ...value, syntax: event.target.value })} disabled={readOnly || expressions.length === 0}>
+    <label><span>Expression syntax</span><select data-contract-field="default.syntax" value={current} onChange={event => onChange({ ...value, syntax: event.target.value })} disabled={readOnly || expressions.length === 0}>
       {!known ? <option value={current} disabled>{current} · unavailable</option> : null}
       {expressions.map(expression => <option key={expression.type} value={expression.type}>{expression.displayName || expression.type}</option>)}
     </select></label>
-    <label><span>Expression source</span><textarea value={typeof value.value === "string" ? value.value : serializeDefaultValue(value.value)} onChange={event => onChange({ ...value, value: event.target.value })} rows={3} disabled={readOnly || !known} /></label>
+    <label><span>Expression source</span><textarea data-contract-field="default.value" value={typeof value.value === "string" ? value.value : serializeDefaultValue(value.value)} onChange={event => onChange({ ...value, value: event.target.value })} rows={3} disabled={readOnly || !known} /></label>
     {!known ? <div className="ad-inline-error" role="alert">The stored expression syntax remains visible but is unavailable for mutable authoring. Select an advertised syntax to continue.</div> : null}
   </>;
 }
@@ -459,7 +459,7 @@ function AdvancedMemberFields<T extends ActivityInputContract | ActivityOutputCo
 function ReferenceKeyField({ value, readOnly, onApply }: { value: string; readOnly: boolean; onApply(key: string): void }) {
   const [candidate, setCandidate] = useState(value);
   useEffect(() => setCandidate(value), [value]);
-  return <div className="ad-contract-staged-field"><label><span>Stable reference key</span><input value={candidate} onChange={event => setCandidate(event.target.value)} disabled={readOnly} /></label><button type="button" onClick={() => onApply(candidate)} disabled={readOnly || !candidate.trim() || candidate.trim() === value}>Apply key</button><small>Changing a published key is breaking; Studio never rewrites consumers.</small></div>;
+  return <div className="ad-contract-staged-field"><label><span>Stable reference key</span><input data-contract-reference-key-control data-contract-field="referenceKey" value={candidate} onChange={event => setCandidate(event.target.value)} disabled={readOnly} /></label><button type="button" onClick={() => onApply(candidate)} disabled={readOnly || !candidate.trim() || candidate.trim() === value}>Apply key</button><small>Changing a published key is breaking; Studio never rewrites consumers.</small></div>;
 }
 
 function StagedNameField({ value, readOnly, onApply }: { value: string; readOnly: boolean; onApply(name: string): void }) {
@@ -468,8 +468,8 @@ function StagedNameField({ value, readOnly, onApply }: { value: string; readOnly
   return <div className="ad-contract-staged-field"><label><span>Name</span><input value={candidate} onChange={event => setCandidate(event.target.value)} disabled={readOnly} /></label><button type="button" onClick={() => onApply(candidate.trim())} disabled={readOnly || !candidate.trim() || candidate.trim() === value}>Apply name</button><small>The technical name is behavioral. Use Display name for presentation-only copy.</small></div>;
 }
 
-function ReadOnlyFact({ label, value }: { label: string; value: string }) {
-  return <div className="ad-readonly-fact"><span>{label}</span><strong>{value}</strong></div>;
+function ReadOnlyFact({ label, value, field }: { label: string; value: string; field?: string }) {
+  return <div className="ad-readonly-fact" data-contract-field={field} tabIndex={field ? -1 : undefined}><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function UnavailableType({ alias }: { alias: string }) {

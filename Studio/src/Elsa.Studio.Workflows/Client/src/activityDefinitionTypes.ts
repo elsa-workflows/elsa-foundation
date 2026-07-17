@@ -1,3 +1,5 @@
+import type { StudioActivityDiagnostic } from "@elsa-workflows/studio-sdk";
+
 export type ActivityContentAuthorityKind = "Design" | "ProviderSource" | string;
 
 export interface ActivityContentAuthority {
@@ -234,7 +236,7 @@ export interface ActivityDefinitionDraftView {
     payload?: unknown;
   };
   layout: ActivityDefinitionLayoutRecord[];
-  validation?: unknown | null;
+  validation?: ActivityDraftValidationView | null;
   createdAt: string;
   updatedAt: string;
   presentationLabel?: string | null;
@@ -269,7 +271,7 @@ export interface ActivityDraftValidationView {
   revision: number;
   isValid: boolean;
   validatedAt: string;
-  diagnostics: unknown[];
+  diagnostics: StudioActivityDiagnostic[];
 }
 
 export interface ActivityDefinitionVersionView {
