@@ -725,6 +725,7 @@ public class GroundworkStorageCompositionTests
             typeof(IWorkflowDispatchAdmissionStore),
             typeof(IWorkflowDispatchCancellationStore),
             typeof(IWorkflowDispatchRedriveStore),
+            typeof(IWorkflowSchedulerPoisonStore),
             typeof(IWorkflowSchedulerWorkQueue),
             typeof(IDurableTimerStore),
             typeof(IWorkflowTriggerBindingStore),

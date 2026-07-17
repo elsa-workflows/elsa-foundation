@@ -58,6 +58,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         typeof(IWorkflowDispatchDeleteStore),
         typeof(IWorkflowDispatchRetentionRootStore),
         typeof(IWorkflowSchedulerWorkQueue),
+        typeof(IWorkflowSchedulerPoisonStore),
         typeof(IDurableTimerStore),
         typeof(IWorkflowTriggerBindingStore),
         typeof(IRecurringTriggerScheduleStore)
@@ -178,6 +179,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
+        services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
         services.AddWorkflowRuntime();
 
@@ -208,6 +210,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchDeleteStore>());
         Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchRetentionRootStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+        Assert.IsType<GroundworkWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
     }
 
     [Theory]
@@ -302,6 +305,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+        Assert.IsType<GroundworkWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
 
         var dispatchStore = provider.GetRequiredService<IWorkflowDispatchStore>();
         var dispatchQueryStore = provider.GetRequiredService<IWorkflowDispatchQueryStore>();

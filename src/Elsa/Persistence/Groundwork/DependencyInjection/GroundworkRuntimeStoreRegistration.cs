@@ -123,6 +123,11 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
         services.AddScoped<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
 
+        // Durable scheduler poison store. Without this swap handler crashes recorded by the drainer live only
+        // in process memory and disappear on restart.
+        services.RemoveAll<IWorkflowSchedulerPoisonStore>();
+        services.AddScoped<IWorkflowSchedulerPoisonStore, GroundworkWorkflowSchedulerPoisonStore>();
+
         // Durable timer store. Without this swap timers live only in the process-local in-memory store and
         // are lost on restart, so a Delay would never resume after a crash.
         services.RemoveAll<IDurableTimerStore>();
