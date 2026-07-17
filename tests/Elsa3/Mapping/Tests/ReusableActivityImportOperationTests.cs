@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
@@ -12,7 +13,11 @@ using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 using Elsa3.Activities.Design.Import.Services;
 using Elsa3.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -176,6 +181,253 @@ public sealed class ReusableActivityImportOperationTests
             await harness.Service.GetStatusAsync("operation-1", new("tenant-b", "user-a")));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Later_valid_subset_reuses_definition_and_existing_versions_while_adding_new_versions(
+        bool repeatFirstVersion)
+    {
+        var v1 = ReusableActivityImportFixtures.Workflow(
+            "a",
+            "a-v1",
+            1,
+            true,
+            ReusableActivityImportFixtures.Leaf("root-v1"));
+        var v2 = ReusableActivityImportFixtures.Workflow(
+            "a",
+            "a-v2",
+            2,
+            true,
+            ReusableActivityImportFixtures.Leaf("root-v2"));
+        var harness = Harness();
+        var upload = await harness.Service.UploadAsync(Json(v1, v2), null, Scope);
+        var analysis = await harness.Service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope);
+
+        var first = await harness.Service.ApplyAsync(
+            upload.CollectionHandle,
+            analysis.PlanId,
+            ["a-v1"],
+            "subset-v1",
+            Scope);
+        var laterSelection = repeatFirstVersion ? new[] { "a-v1", "a-v2" } : ["a-v2"];
+        var later = await harness.Service.ApplyAsync(
+            upload.CollectionHandle,
+            analysis.PlanId,
+            laterSelection,
+            repeatFirstVersion ? "subset-v1-v2" : "subset-v2",
+            Scope);
+
+        Assert.Equal(ReusableActivityImportResourceDisposition.Created, Assert.Single(first.Sources).ActivityDefinitionDisposition);
+        Assert.All(later.Sources, source =>
+            Assert.Equal(ReusableActivityImportResourceDisposition.Reused, source.ActivityDefinitionDisposition));
+        var v2Receipt = Assert.Single(later.Sources.Where(x => x.SourceVersionId == "a-v2"));
+        Assert.Equal(ReusableActivityImportResourceDisposition.Created, v2Receipt.ActivityVersionDisposition);
+        if (repeatFirstVersion)
+        {
+            var v1Receipt = Assert.Single(later.Sources.Where(x => x.SourceVersionId == "a-v1"));
+            Assert.Equal(ReusableActivityImportResourceDisposition.Reused, v1Receipt.ActivityVersionDisposition);
+        }
+
+        Assert.Single(harness.Store.Snapshot("activityDefinition"));
+        Assert.Equal(2, harness.Store.Snapshot("activityDefinitionVersion").Count);
+        Assert.Single(harness.Store.Snapshot("activityDefinitionAuthoringState"));
+        Assert.Equal(2, harness.Store.Snapshot("workflowDefinitionVersion").Count);
+        Assert.Equal(2, harness.Store.Snapshot("elsa3ReusableImportReceipt").Count);
+    }
+
+    [Fact]
+    public async Task Same_export_imported_by_different_tenants_is_isolated_by_ambient_persistence_scope()
+    {
+        var source = ReusableActivityImportFixtures.Workflow(
+            "shared",
+            "shared-v1",
+            1,
+            true,
+            ReusableActivityImportFixtures.Leaf("root"));
+        var tenantA = new ReusableActivityImportAccessScope("tenant-a", "user-a");
+        var tenantB = new ReusableActivityImportAccessScope("tenant-b", "user-b");
+        var a = Harness(scope: tenantA);
+        var b = Harness(scope: tenantB);
+
+        var uploadA = await a.Service.UploadAsync(Json(source), null, tenantA);
+        var uploadB = await b.Service.UploadAsync(Json(source), null, tenantB);
+        var analysisA = await a.Service.AnalyzeAsync(uploadA.CollectionHandle, 0, 10, tenantA);
+        var analysisB = await b.Service.AnalyzeAsync(uploadB.CollectionHandle, 0, 10, tenantB);
+        var receiptA = await a.Service.ApplyAsync(uploadA.CollectionHandle, analysisA.PlanId, ["shared-v1"], "same-key", tenantA);
+        var receiptB = await b.Service.ApplyAsync(uploadB.CollectionHandle, analysisB.PlanId, ["shared-v1"], "same-key", tenantB);
+
+        Assert.NotEqual(receiptA.ReceiptId, receiptB.ReceiptId);
+        Assert.Equal(receiptA.Sources[0].ActivityDefinitionId, receiptB.Sources[0].ActivityDefinitionId);
+        Assert.Single(a.Store.Snapshot("activityDefinition"));
+        Assert.Single(b.Store.Snapshot("activityDefinition"));
+        await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
+            await a.Service.GetStatusAsync("same-key", tenantB));
+    }
+
+    [Fact]
+    public async Task Upload_wraps_stream_failure_and_handle_exhaustion_in_typed_outcomes()
+    {
+        var failingStreamHarness = Harness();
+        await Assert.ThrowsAsync<ReusableActivityImportPayloadException>(async () =>
+            await failingStreamHarness.Service.UploadAsync(new ThrowingReadStream(), null, Scope));
+
+        var exhausted = OperationService(new ExhaustedOperationStore());
+        var exception = await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
+            await exhausted.UploadAsync(Json(
+                ReusableActivityImportFixtures.Workflow(
+                    "a",
+                    "a-v1",
+                    1,
+                    true,
+                    ReusableActivityImportFixtures.Leaf("root"))), null, Scope));
+        Assert.Equal("create collection", exception.Operation);
+    }
+
+    [Fact]
+    public async Task Operation_store_wraps_storage_and_malformed_documents_and_rejects_scope_mismatch()
+    {
+        var inner = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        var accessor = GroundworkTestAccess.AccessContext(Scope.TenantId!);
+        var throwing = new GroundworkReusableActivityImportOperationStore(
+            new ThrowingDocumentStore(inner, throwOnLoad: true),
+            accessor);
+        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
+            await throwing.FindCollectionAsync("handle", Scope));
+        var now = DateTimeOffset.Parse("2026-07-17T10:00:00Z");
+        var collection = new ReusableActivityImportCollectionHandle(
+            "save-failure",
+            Scope,
+            now,
+            now.AddHours(1),
+            1,
+            ReusableActivityImportFixtures.Collection(
+                ReusableActivityImportFixtures.Workflow(
+                    "save",
+                    "save-v1",
+                    1,
+                    true,
+                    ReusableActivityImportFixtures.Leaf("root"))));
+        var saveFailure = new GroundworkReusableActivityImportOperationStore(
+            new ThrowingDocumentStore(inner, throwOnSave: true),
+            accessor);
+        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
+            await saveFailure.TryCreateCollectionAsync(collection));
+
+        await inner.SaveAsync(new SaveDocumentRequest(
+            "elsa3ReusableImportCollection",
+            "malformed-collection",
+            "1.0.0",
+            "{",
+            0));
+        var receiptId = Elsa3.Activities.Design.Import.Persistence.Groundwork.Elsa3ImportStorageManifest.ReceiptId("bad", Scope);
+        await inner.SaveAsync(new SaveDocumentRequest(
+            "elsa3ReusableImportReceipt",
+            receiptId,
+            "1.0.0",
+            "{\"receipt\":null}",
+            0));
+        var store = new GroundworkReusableActivityImportOperationStore(inner, accessor);
+
+        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
+            await store.FindCollectionAsync("malformed-collection", Scope));
+        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
+            await store.FindReceiptAsync("bad", Scope));
+        await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
+            await store.FindReceiptAsync("bad", new("tenant-b", "user-a")));
+    }
+
+    [Fact]
+    public async Task Scoped_identity_collision_fails_without_writing_a_second_receipt()
+    {
+        var original = ReusableActivityImportFixtures.Workflow(
+            "collision",
+            "collision-v1",
+            1,
+            true,
+            ReusableActivityImportFixtures.Leaf("original"));
+        var changed = ReusableActivityImportFixtures.Workflow(
+            "collision",
+            "collision-v1",
+            1,
+            true,
+            ReusableActivityImportFixtures.Leaf("changed"));
+        var harness = Harness();
+        var originalUpload = await harness.Service.UploadAsync(Json(original), null, Scope);
+        var originalAnalysis = await harness.Service.AnalyzeAsync(originalUpload.CollectionHandle, 0, 10, Scope);
+        await harness.Service.ApplyAsync(
+            originalUpload.CollectionHandle,
+            originalAnalysis.PlanId,
+            ["collision-v1"],
+            "collision-first",
+            Scope);
+
+        var changedUpload = await harness.Service.UploadAsync(Json(changed), null, Scope);
+        var changedAnalysis = await harness.Service.AnalyzeAsync(changedUpload.CollectionHandle, 0, 10, Scope);
+        await Assert.ThrowsAsync<ReusableActivityImportCollisionException>(async () =>
+            await harness.Service.ApplyAsync(
+                changedUpload.CollectionHandle,
+                changedAnalysis.PlanId,
+                ["collision-v1"],
+                "collision-second",
+                Scope));
+
+        Assert.Single(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Single(harness.Store.Snapshot("activityDefinitionVersion"));
+    }
+
+    [Fact]
+    public async Task Atomic_command_wraps_serializer_failures_and_same_receipt_races_converge()
+    {
+        var source = ReusableActivityImportFixtures.Workflow(
+            "race",
+            "race-v1",
+            1,
+            true,
+            ReusableActivityImportFixtures.Leaf("root"));
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var collection = ReusableActivityImportFixtures.Collection(source);
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var item = Assert.Single(plan.Items);
+        var mutation = await ReusableActivityImportFixtures.Materializer()
+            .MaterializeAsync(collection, plan, [item]);
+        foreach (var activity in mutation.Activities)
+        {
+            activity.Definition.TenantId = Scope.TenantId;
+            activity.Version.TenantId = Scope.TenantId;
+            activity.AuthoringState.TenantId = Scope.TenantId;
+        }
+        foreach (var workflow in mutation.Workflows)
+        {
+            workflow.Definition.TenantId = Scope.TenantId;
+            workflow.Version.TenantId = Scope.TenantId;
+        }
+        mutation = mutation with
+        {
+            AccessScope = Scope,
+            IdempotencyKey = "race-key"
+        };
+
+        var serializerFailureStore = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        var serializerFailure = new GroundworkReusableActivityImportCommand(
+            serializerFailureStore,
+            new ThrowingPayloadSerializer(),
+            new GroundworkActivityManagementProjectionWriter(serializerFailureStore, new ImmediateLockProvider(), serializerFailureStore),
+            GroundworkTestAccess.AccessContext(Scope.TenantId!));
+        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
+            await serializerFailure.CommitAsync(mutation));
+
+        var harness = Harness();
+        var upload = await harness.Service.UploadAsync(Json(source), null, Scope);
+        var analysis = await harness.Service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope);
+        var attempts = await Task.WhenAll(
+            harness.Service.ApplyAsync(upload.CollectionHandle, analysis.PlanId, ["race-v1"], "same-race", Scope).AsTask(),
+            harness.Service.ApplyAsync(upload.CollectionHandle, analysis.PlanId, ["race-v1"], "same-race", Scope).AsTask());
+
+        Assert.Equal(attempts[0].ReceiptId, attempts[1].ReceiptId);
+        Assert.Single(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Contains(attempts, x => x.Status == ReusableActivityImportReceiptStatus.Applied);
+    }
+
     [Fact]
     public async Task Stale_plan_and_non_closed_selection_write_no_receipt_or_design_documents()
     {
@@ -200,6 +452,8 @@ public sealed class ReusableActivityImportOperationTests
     {
         var harness = Harness(maximumBytes: 2_000);
         await Assert.ThrowsAsync<ReusableActivityImportPayloadException>(async () =>
+            await harness.Service.UploadAsync(new MemoryStream("null"u8.ToArray()), null, Scope));
+        await Assert.ThrowsAsync<ReusableActivityImportPayloadException>(async () =>
             await harness.Service.UploadAsync(new MemoryStream("not-json"u8.ToArray()), null, Scope));
         await Assert.ThrowsAsync<ReusableActivityImportPayloadException>(async () =>
             await harness.Service.UploadAsync(new MemoryStream("[]"u8.ToArray()), null, Scope));
@@ -217,8 +471,12 @@ public sealed class ReusableActivityImportOperationTests
 
         var valid = ReusableActivityImportFixtures.Workflow("valid", "valid-v1", 1, true, ReusableActivityImportFixtures.Leaf("root"));
         var upload = await harness.Service.UploadAsync(Json(valid), null, Scope);
+        await Assert.ThrowsAsync<ReusableActivityImportPayloadException>(async () =>
+            await harness.Service.UploadAsync(Json(valid), -1, Scope));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await harness.Service.AnalyzeAsync(upload.CollectionHandle, -1, 10, Scope));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await harness.Service.AnalyzeAsync(upload.CollectionHandle, 0, 0, Scope));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await harness.Service.AnalyzeAsync(upload.CollectionHandle, 0, 51, Scope));
         var analysis = await harness.Service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope);
@@ -236,15 +494,21 @@ public sealed class ReusableActivityImportOperationTests
 
     private static HarnessState Harness(
         MutableTimeProvider? clock = null,
-        long maximumBytes = 64 * 1024)
+        long maximumBytes = 64 * 1024,
+        ReusableActivityImportAccessScope? scope = null)
     {
+        scope ??= Scope;
         clock ??= new(DateTimeOffset.Parse("2026-07-17T10:00:00Z"));
         var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var operationStore = new GroundworkReusableActivityImportOperationStore(store);
+        var accessContext = scope.TenantId is null
+            ? new FixedAccessContextAccessor(PersistenceAccessContext.Global)
+            : GroundworkTestAccess.AccessContext(scope.TenantId);
+        var operationStore = new GroundworkReusableActivityImportOperationStore(store, accessContext);
         var command = new GroundworkReusableActivityImportCommand(
             store,
             Serializer(),
             new GroundworkActivityManagementProjectionWriter(store, new ImmediateLockProvider(), store),
+            accessContext,
             clock);
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
@@ -261,12 +525,145 @@ public sealed class ReusableActivityImportOperationTests
             store);
     }
 
+    private static IReusableActivityImportOperationService OperationService(
+        IReusableActivityImportOperationStore operationStore)
+    {
+        var options = Options.Create(new ReusableActivityImportOptions
+        {
+            MaximumUploadBytes = 64 * 1024,
+            MaximumSourceVersions = 100,
+            DefaultPageSize = 10,
+            MaximumPageSize = 50,
+            CollectionLifetime = TimeSpan.FromHours(1)
+        });
+        return new ReusableActivityImportOperationService(
+            operationStore,
+            new UnusedImporter(),
+            options,
+            new MutableTimeProvider(DateTimeOffset.Parse("2026-07-17T10:00:00Z")));
+    }
+
     private static MemoryStream Json(params Elsa3.Models.Elsa3WorkflowDefinition[] definitions) =>
         new(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(definitions, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 
     private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
     private sealed record HarnessState(IReusableActivityImportOperationService Service, InMemoryDocumentStore Store);
+
+    private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
+        : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class ExhaustedOperationStore : IReusableActivityImportOperationStore
+    {
+        public ValueTask<bool> TryCreateCollectionAsync(ReusableActivityImportCollectionHandle collection, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public ValueTask<ReusableActivityImportCollectionHandle?> FindCollectionAsync(
+            string handle,
+            ReusableActivityImportAccessScope accessScope,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ReusableActivityImportCollectionHandle?>(null);
+
+        public ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(
+            string idempotencyKey,
+            ReusableActivityImportAccessScope accessScope,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ReusableActivityImportReceipt?>(null);
+    }
+
+    private sealed class UnusedImporter : IReusableActivityCollectionImporter
+    {
+        public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
+            ReusableActivityImportCollection collection,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<ReusableActivityImportApplyResult> ApplyAsync(
+            ReusableActivityImportApplyRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingReadStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new IOException("read failed");
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<int>(new IOException("read failed"));
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingPayloadSerializer : IPayloadSerializer
+    {
+        private static Exception Failure() => new NotSupportedException("serializer failed");
+        public string Serialize(object payload) => throw Failure();
+        public JsonElement SerializeToElement(object payload) => throw Failure();
+        public object Deserialize(string serializedData) => throw Failure();
+        public object Deserialize(string serializedData, Type type) => throw Failure();
+        public object Deserialize(JsonElement serializedData) => throw Failure();
+        public T Deserialize<T>(string serializedData) => throw Failure();
+        public T Deserialize<T>(JsonElement serializedData) => throw Failure();
+        public JsonSerializerOptions GetOptions() => throw Failure();
+    }
+
+#pragma warning disable GW0004 // Required legacy IDocumentStore members on the failure-injection test double.
+    private sealed class ThrowingDocumentStore(
+        InMemoryDocumentStore inner,
+        bool throwOnLoad = false,
+        bool throwOnSave = false) : IDocumentStore
+    {
+        public DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            throwOnSave
+                ? Task.FromException<DocumentStoreWriteResult>(new IOException("save failed"))
+                : inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            throwOnLoad
+                ? Task.FromException<DocumentEnvelope?>(new IOException("load failed"))
+                : inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
+            DocumentStoreQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            inner.BeginAsync(scope, cancellationToken);
+    }
+#pragma warning restore GW0004
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {

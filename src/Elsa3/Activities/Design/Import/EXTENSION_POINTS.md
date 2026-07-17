@@ -20,13 +20,16 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Purpose:** commits one selected dependency closure across Activity Design and Workflow Design.
 - **Default implementation:** `GroundworkReusableActivityImportCommand`, registered by `Elsa3ImportActivitiesGroundworkFeature`.
 - **Invariant:** all candidate documents and the durable receipt are preflighted before one cross-kind commit; identical reapply is an `AlreadyImported` no-op.
+- **Composition:** the generic `Elsa3ImportActivitiesFeature` depends only on mapping and contracts.
+  A host selects `Elsa3ImportActivitiesGroundworkFeature` (or another provider feature) explicitly.
 
 ### `IReusableActivityImportOperationStore`
 
 - **Kind:** scoped durable operation store.
 - **Purpose:** stores immutable expiring collection handles and reads completed apply receipts.
 - **Default implementation:** `GroundworkReusableActivityImportOperationStore`.
-- **Invariant:** collection and receipt reads are bound to the exact tenant and user scope; authorization mismatches are indistinguishable from absence.
+- **Invariant:** collection and receipt writes are append-only, and reads are bound to the exact
+  ambient tenant plus user scope; authorization mismatches are indistinguishable from absence.
 
 ### `IReusableActivityCollectionAnalyzer`
 

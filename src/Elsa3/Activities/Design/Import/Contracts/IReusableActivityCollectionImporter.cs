@@ -68,12 +68,19 @@ public interface IReusableActivityImportOperationStore
 
 public interface IReusableActivityImportOperationService
 {
+    /// <summary>Reads, validates, and durably stores one bounded immutable Elsa 3 collection.</summary>
+    /// <exception cref="ReusableActivityImportPayloadException">The stream cannot be read or does not contain a supported bounded collection.</exception>
+    /// <exception cref="ReusableActivityImportPersistenceException">The immutable collection cannot be stored.</exception>
     ValueTask<ReusableActivityImportUploadResult> UploadAsync(
         Stream json,
         long? contentLength,
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Returns one deterministic analysis page for a scoped immutable collection.</summary>
+    /// <exception cref="ReusableActivityImportNotFoundException">The collection does not exist in the current access scope.</exception>
+    /// <exception cref="ReusableActivityImportExpiredException">The immutable collection has expired.</exception>
+    /// <exception cref="ReusableActivityImportPersistenceException">The collection cannot be loaded.</exception>
     ValueTask<ReusableActivityImportAnalysisPage> AnalyzeAsync(
         string collectionHandle,
         int offset,
@@ -81,6 +88,11 @@ public interface IReusableActivityImportOperationService
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Expands a reviewed selection to its exact reusable dependency closure.</summary>
+    /// <exception cref="ReusableActivityImportNotFoundException">The collection does not exist in the current access scope.</exception>
+    /// <exception cref="ReusableActivityImportExpiredException">The immutable collection has expired.</exception>
+    /// <exception cref="ReusableActivityImportValidationException">The reviewed plan no longer matches the immutable collection.</exception>
+    /// <exception cref="ReusableActivityImportPersistenceException">The collection cannot be loaded.</exception>
     ValueTask<ReusableActivityImportSelectionReadiness> ExpandSelectionAsync(
         string collectionHandle,
         string planId,
@@ -88,6 +100,13 @@ public interface IReusableActivityImportOperationService
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Atomically applies one reviewed exact selection and stores its immutable durable receipt.</summary>
+    /// <exception cref="ReusableActivityImportNotFoundException">The collection does not exist in the current access scope.</exception>
+    /// <exception cref="ReusableActivityImportExpiredException">The immutable collection has expired.</exception>
+    /// <exception cref="ReusableActivityImportValidationException">The plan or selection is not valid and dependency-closed.</exception>
+    /// <exception cref="ReusableActivityImportIdempotencyConflictException">The idempotency key is bound to another request.</exception>
+    /// <exception cref="ReusableActivityImportCollisionException">A deterministic Design identity is owned by different content.</exception>
+    /// <exception cref="ReusableActivityImportPersistenceException">The atomic mutation or receipt cannot be persisted.</exception>
     ValueTask<ReusableActivityImportReceipt> ApplyAsync(
         string collectionHandle,
         string planId,
@@ -96,6 +115,9 @@ public interface IReusableActivityImportOperationService
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Loads the immutable receipt for a previously completed scoped import.</summary>
+    /// <exception cref="ReusableActivityImportNotFoundException">The receipt does not exist in the current access scope.</exception>
+    /// <exception cref="ReusableActivityImportPersistenceException">The receipt cannot be loaded.</exception>
     ValueTask<ReusableActivityImportReceipt> GetStatusAsync(
         string idempotencyKey,
         ReusableActivityImportAccessScope accessScope,

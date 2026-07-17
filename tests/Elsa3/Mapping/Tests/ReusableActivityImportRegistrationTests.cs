@@ -1,3 +1,10 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Locking.Core;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 using Elsa3.Activities.Design.Import;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -8,6 +15,8 @@ using Elsa3.Mapping;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
+using Groundwork.Core.Manifests;
+using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -51,6 +60,59 @@ public sealed class ReusableActivityImportRegistrationTests
         Assert.IsType<ReusableActivityCollectionImporter>(scope.ServiceProvider.GetRequiredService<IReusableActivityCollectionImporter>());
         Assert.IsType<StubOperationStore>(scope.ServiceProvider.GetRequiredService<IReusableActivityImportOperationStore>());
         Assert.IsType<ReusableActivityImportOperationService>(scope.ServiceProvider.GetRequiredService<IReusableActivityImportOperationService>());
+    }
+
+    [Fact]
+    public void Groundwork_provider_feature_builds_and_resolves_every_owned_registration()
+    {
+        var services = new ServiceCollection();
+        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        services.AddSingleton<IDocumentStore>(store);
+        services.AddSingleton<IBoundedDocumentStore>(store);
+        services.AddSingleton<IPayloadSerializer>(
+            new JsonPayloadSerializer(new JsonPayloadConverterRegistry()));
+        services.AddSingleton<IPersistenceAccessContextAccessor>(
+            GroundworkTestAccess.AccessContext("tenant-a"));
+        services.AddSingleton<IDistributedLockProvider, ImmediateLockProvider>();
+
+        new Elsa3ImportActivitiesGroundworkFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+        using var scope = provider.CreateScope();
+        Assert.IsType<GroundworkReusableActivityImportOperationStore>(
+            scope.ServiceProvider.GetRequiredService<IReusableActivityImportOperationStore>());
+        Assert.IsType<GroundworkReusableActivityImportCommand>(
+            scope.ServiceProvider.GetRequiredService<IReusableActivityImportCommand>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<GroundworkActivityManagementProjectionWriter>());
+        Assert.NotNull(scope.ServiceProvider.GetServices<Elsa.Persistence.Groundwork.Composition.IGroundworkStorageManifestSource>()
+            .Single(x => x is Elsa3ImportGroundworkStorageManifestSource));
+    }
+
+    [Fact]
+    public void Import_storage_manifest_declares_uploaded_collections_and_receipts_append_only()
+    {
+        var units = Elsa3ImportStorageManifest.Create().StorageUnits;
+
+        Assert.Equal(2, units.Count);
+        Assert.All(units, unit => Assert.Equal(LifecyclePolicy.AppendOnly, unit.Lifecycle));
+    }
+
+    [Fact]
+    public void Generic_import_feature_does_not_select_a_concrete_persistence_provider()
+    {
+        var featureAttribute = typeof(Elsa3ImportActivitiesFeature)
+            .GetCustomAttributes(inherit: false)
+            .Single(x => x.GetType().Name == "ShellFeatureAttribute");
+        var dependencies = (IEnumerable<object>?)featureAttribute.GetType()
+            .GetProperty("DependsOn")
+            ?.GetValue(featureAttribute) ?? [];
+
+        Assert.DoesNotContain(dependencies, x =>
+            StringComparer.Ordinal.Equals(x?.ToString(), "Elsa3ImportActivitiesGroundwork"));
     }
 
     [Fact]
@@ -98,5 +160,32 @@ public sealed class ReusableActivityImportRegistrationTests
         public ValueTask<bool> TryCreateCollectionAsync(ReusableActivityImportCollectionHandle collection, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
         public ValueTask<ReusableActivityImportCollectionHandle?> FindCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult<ReusableActivityImportCollectionHandle?>(null);
         public ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(string idempotencyKey, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult<ReusableActivityImportReceipt?>(null);
+    }
+
+    private sealed class ImmediateLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) => new Handle();
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }

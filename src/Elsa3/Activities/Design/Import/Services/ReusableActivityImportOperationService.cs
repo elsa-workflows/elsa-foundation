@@ -25,6 +25,7 @@ public sealed class ReusableActivityImportOperationService(
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);
 
+    /// <inheritdoc />
     public async ValueTask<ReusableActivityImportUploadResult> UploadAsync(
         Stream json,
         long? contentLength,
@@ -42,14 +43,29 @@ public sealed class ReusableActivityImportOperationService(
 
         await using var bounded = new MemoryStream(contentLength is > 0 and <= int.MaxValue ? (int)contentLength.Value : 0);
         var buffer = new byte[64 * 1024];
-        while (true)
+        try
         {
-            var read = await json.ReadAsync(buffer, cancellationToken);
-            if (read == 0)
-                break;
-            if (bounded.Length + read > _options.MaximumUploadBytes)
-                throw new ReusableActivityImportPayloadException($"The Elsa 3 collection exceeds the {_options.MaximumUploadBytes}-byte upload limit.");
-            await bounded.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            while (true)
+            {
+                var read = await json.ReadAsync(buffer, cancellationToken);
+                if (read == 0)
+                    break;
+                if (bounded.Length + read > _options.MaximumUploadBytes)
+                    throw new ReusableActivityImportPayloadException($"The Elsa 3 collection exceeds the {_options.MaximumUploadBytes}-byte upload limit.");
+                await bounded.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ReusableActivityImportPayloadException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new ReusableActivityImportPayloadException("The Elsa 3 collection stream could not be read.", exception);
         }
 
         Elsa3WorkflowDefinition[] definitions;
@@ -59,9 +75,21 @@ public sealed class ReusableActivityImportOperationService(
             definitions = await JsonSerializer.DeserializeAsync<Elsa3WorkflowDefinition[]>(bounded, Json, cancellationToken)
                           ?? throw new ReusableActivityImportPayloadException("The Elsa 3 collection payload must be a JSON array.");
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ReusableActivityImportPayloadException)
+        {
+            throw;
+        }
         catch (JsonException exception)
         {
             throw new ReusableActivityImportPayloadException("The Elsa 3 collection payload is not valid authored-definition JSON.", exception);
+        }
+        catch (Exception exception)
+        {
+            throw new ReusableActivityImportPayloadException("The Elsa 3 collection payload contains an unsupported authored-definition JSON shape.", exception);
         }
 
         if (definitions.Length == 0)
@@ -97,6 +125,7 @@ public sealed class ReusableActivityImportOperationService(
             new InvalidOperationException("Unable to allocate a unique Elsa 3 collection handle."));
     }
 
+    /// <inheritdoc />
     public async ValueTask<ReusableActivityImportAnalysisPage> AnalyzeAsync(
         string collectionHandle,
         int offset,
@@ -128,6 +157,7 @@ public sealed class ReusableActivityImportOperationService(
             diagnosticPage);
     }
 
+    /// <inheritdoc />
     public async ValueTask<ReusableActivityImportSelectionReadiness> ExpandSelectionAsync(
         string collectionHandle,
         string planId,
@@ -180,6 +210,7 @@ public sealed class ReusableActivityImportOperationService(
             orderedDiagnostics);
     }
 
+    /// <inheritdoc />
     public async ValueTask<ReusableActivityImportReceipt> ApplyAsync(
         string collectionHandle,
         string planId,
@@ -214,6 +245,7 @@ public sealed class ReusableActivityImportOperationService(
                    new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
     }
 
+    /// <inheritdoc />
     public async ValueTask<ReusableActivityImportReceipt> GetStatusAsync(
         string idempotencyKey,
         ReusableActivityImportAccessScope accessScope,

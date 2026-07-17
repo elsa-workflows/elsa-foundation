@@ -36,7 +36,7 @@ public static class Elsa3ImportStorageManifest
         new StorageUnitIdentity(documentKind),
         label,
         StorageIntent.PortableDocument(),
-        LifecyclePolicy.Mutable,
+        LifecyclePolicy.AppendOnly,
         IdentityPolicy.StringId(),
         TenancyPolicy.Scoped,
         ConcurrencyPolicy.Optimistic(),
