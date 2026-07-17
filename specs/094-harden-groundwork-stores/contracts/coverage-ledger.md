@@ -128,6 +128,7 @@ The implementation-phase validator must fail when:
 - an explicitly global row lacks its scope reason, or a privileged access policy lacks its authorization reason and audit scenario;
 - a capability has no active-path scenario;
 - a #644/#660 authority row points to a local parallel document;
+- a #644/#660 composition link changes its reviewed relationship (`#644` adapter-only, `#660` linked-source-evidence);
 - the EF surface grows relative to the baseline commit;
 - a baseline test objective disappears without a recorded architect approval.
 - a logic-bearing persistence registration has an undocumented non-scoped lifetime or a lifetime test observes scope/mutable-state leakage between request scopes.
