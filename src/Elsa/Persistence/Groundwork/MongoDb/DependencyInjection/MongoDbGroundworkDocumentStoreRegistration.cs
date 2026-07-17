@@ -7,6 +7,8 @@ using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
 
@@ -47,7 +49,9 @@ public static class MongoDbGroundworkDocumentStoreRegistration
             autoApplyOnStartup,
             serviceProvider.GetRequiredService<GroundworkStoreSessionSource>(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MongoDbGroundworkDocumentStoreInitializer>>()));
+            // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
+            serviceProvider.GetService<ILogger<MongoDbGroundworkDocumentStoreInitializer>>()
+            ?? NullLogger<MongoDbGroundworkDocumentStoreInitializer>.Instance));
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(serviceProvider =>

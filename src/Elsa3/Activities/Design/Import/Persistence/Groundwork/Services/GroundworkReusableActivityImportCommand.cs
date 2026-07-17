@@ -98,11 +98,15 @@ public sealed class GroundworkReusableActivityImportCommand(
             return new(false);
         }
 
-        var changedAt = newActivities.Max(x => x.Definition.LastModifiedAt);
+        var newDefinitions = newActivities
+            .GroupBy(activity => activity.Definition.Id, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+        var changedAt = newDefinitions.Max(x => x.Definition.LastModifiedAt);
         await using var managementProjection = await managementProjectionWriter.PrepareAsync(
             new(
                 changedAt,
-                newActivities.Select(x => new ActivityManagementDefinitionChange(x.Definition, x.AuthoringState)).ToArray(),
+                newDefinitions.Select(x => new ActivityManagementDefinitionChange(x.Definition, x.AuthoringState)).ToArray(),
                 [],
                 []),
             cancellationToken);
