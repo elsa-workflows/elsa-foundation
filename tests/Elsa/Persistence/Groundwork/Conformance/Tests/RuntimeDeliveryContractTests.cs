@@ -33,7 +33,9 @@ public sealed class RuntimeDeliveryContractTests
         driver.Descriptor.Topology.EnsureSupports(
             GroundworkTopologyCapabilities.PersistentStorage |
             GroundworkTopologyCapabilities.IndependentClients);
-        await driver.ResetPhysicalAsync([new SchedulerWorkManifestSource()]);
+        await driver.ResetPhysicalAsync([
+            new RuntimeDeliveryManifestSource(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind)
+        ]);
 
         await using var firstClient = await driver.OpenPhysicalClientAsync();
         await using var secondClient = await driver.OpenPhysicalClientAsync();
@@ -98,7 +100,120 @@ public sealed class RuntimeDeliveryContractTests
         Assert.Empty(await first.ListPendingWorkflowExecutionIdsAsync(10));
     }
 
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Outbox_claim_expiry_retry_and_stale_ack_are_fenced_on_every_provider(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync([
+            new RuntimeDeliveryManifestSource(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind)
+        ]);
+
+        await using var firstClient = await driver.OpenPhysicalClientAsync();
+        await using var secondClient = await driver.OpenPhysicalClientAsync();
+        var first = Outbox(firstClient);
+        var second = Outbox(secondClient);
+        await first.SavePendingAsync(PendingOutbox());
+
+        var initialClaims = await Task.WhenAll(
+            first.ClaimAsync(OutboxClaimRequest("owner-a", Now)).AsTask(),
+            second.ClaimAsync(OutboxClaimRequest("owner-b", Now)).AsTask());
+        var initial = Assert.Single(initialClaims.SelectMany(claims => claims));
+        Assert.Empty(await first.ClaimAsync(OutboxClaimRequest("owner-c", Now.AddMinutes(1))));
+
+        await using var restartedClient = await driver.OpenPhysicalClientAsync();
+        var restarted = Outbox(restartedClient);
+        var reclaimedAt = Now.Add(VisibilityTimeout).AddSeconds(1);
+        var reclaimed = Assert.Single(await restarted.ClaimAsync(
+            OutboxClaimRequest("owner-restarted", reclaimedAt)));
+        Assert.True(reclaimed.FencingToken > initial.FencingToken);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            first.RecordDeliveryResultAsync(
+                initial,
+                DeliveryResult(RuntimePostCommitOutboxStatus.Delivered, reclaimedAt)).AsTask());
+
+        await restarted.RecordDeliveryResultAsync(
+            reclaimed,
+            DeliveryResult(RuntimePostCommitOutboxStatus.FailedRetryable, reclaimedAt));
+        var retryable = Assert.IsType<RuntimePostCommitOutboxItem>(
+            await restarted.FindAsync("outbox-1"));
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, retryable.Status);
+        Assert.Equal(1, retryable.DeliveryAttemptCount);
+        Assert.Equal(reclaimedAt.AddMinutes(2), retryable.AvailableAt);
+        var retryAt = retryable.AvailableAt
+            ?? throw new InvalidOperationException("A retryable outbox item must have a next availability time.");
+        Assert.Empty(await first.ClaimAsync(
+            OutboxClaimRequest("owner-a", retryAt.AddTicks(-1))));
+
+        var retry = Assert.Single(await first.ClaimAsync(
+            OutboxClaimRequest("owner-a", retryAt)));
+        Assert.True(retry.FencingToken > reclaimed.FencingToken);
+        await first.RecordDeliveryResultAsync(
+            retry,
+            DeliveryResult(RuntimePostCommitOutboxStatus.Delivered, retryAt));
+
+        var delivered = Assert.IsType<RuntimePostCommitOutboxItem>(
+            await restarted.FindAsync("outbox-1"));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+        Assert.Equal(2, delivered.DeliveryAttemptCount);
+        Assert.Empty(await restarted.ClaimAsync(
+            OutboxClaimRequest("owner-restarted", Now.AddHours(1))));
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Scheduler_poison_record_survives_restart_on_every_provider(string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync([
+            new RuntimeDeliveryManifestSource(ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind)
+        ]);
+
+        await using (var firstClient = await driver.OpenPhysicalClientAsync())
+        {
+            await Poison(firstClient).RecordAsync(PoisonRecord());
+        }
+
+        await using var restartedClient = await driver.OpenPhysicalClientAsync();
+        var restarted = Poison(restartedClient);
+        var recovered = Assert.IsType<RuntimeSchedulerPoisonRecord>(
+            await restarted.FindAsync(WorkflowExecutionId, "work-poison"));
+
+        Assert.Equal(3, recovered.FailureCount);
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, recovered.Disposition);
+        Assert.Equal(Now.AddMinutes(2), recovered.NextRetryAt);
+        Assert.Equal("delivery-contract", recovered.Metadata["source"]);
+        Assert.Equal("work-poison", Assert.Single(
+            await restarted.ListAsync(WorkflowExecutionId)).WorkItemId);
+    }
+
     private static GroundworkWorkflowSchedulerWorkQueue Queue(GroundworkProviderClient client) =>
+        new(
+            client.DocumentStore,
+            GroundworkProviderTestSerialization.Serializer,
+            client.BoundedDocumentStore ??
+            throw new InvalidOperationException(
+                "The physical provider did not expose its admitted bounded-query runtime."));
+
+    private static GroundworkRuntimePostCommitOutboxStore Outbox(GroundworkProviderClient client) =>
+        new(
+            client.DocumentStore,
+            GroundworkProviderTestSerialization.Serializer,
+            client.BoundedDocumentStore ??
+            throw new InvalidOperationException(
+                "The physical provider did not expose its admitted bounded-query runtime."));
+
+    private static GroundworkWorkflowSchedulerPoisonStore Poison(GroundworkProviderClient client) =>
         new(
             client.DocumentStore,
             GroundworkProviderTestSerialization.Serializer,
@@ -108,6 +223,46 @@ public sealed class RuntimeDeliveryContractTests
 
     private static RuntimeSchedulerWorkClaimRequest ClaimRequest(string ownerId, DateTimeOffset now) =>
         new(WorkflowExecutionId, ownerId, now, VisibilityTimeout);
+
+    private static RuntimePostCommitOutboxClaimRequest OutboxClaimRequest(
+        string ownerId,
+        DateTimeOffset now) =>
+        new(ownerId, now, VisibilityTimeout, limit: 1);
+
+    private static RuntimePostCommitOutboxItem PendingOutbox() =>
+        new(
+            "outbox-1",
+            new RuntimePostCommitIntent(
+                "intent-outbox-1",
+                WorkflowExecutionId,
+                "delivery-contract",
+                Now,
+                activityExecutionId: null,
+                idempotencyKey: "delivery-contract:outbox-1",
+                payload: null),
+            RuntimePostCommitOutboxStatus.Pending,
+            Now,
+            Now,
+            new RuntimePostCommitRetryPolicy(maxAttempts: 3, delay: TimeSpan.FromMinutes(2)));
+
+    private static RuntimePostCommitOutboxDeliveryResult DeliveryResult(
+        RuntimePostCommitOutboxStatus status,
+        DateTimeOffset recordedAt) =>
+        new("outbox-1", status, recordedAt, status == RuntimePostCommitOutboxStatus.Delivered ? null : "retry");
+
+    private static RuntimeSchedulerPoisonRecord PoisonRecord() =>
+        new(
+            WorkflowExecutionId,
+            "work-poison",
+            WorkflowExecutionCommandKind.RunSchedulerWork,
+            "delivery-contract-handler",
+            new RuntimeFaultInfo("System.InvalidOperationException", "boom", "stack"),
+            failureCount: 3,
+            RuntimeSchedulerPoisonDisposition.RetryScheduled,
+            Now,
+            Now.AddMinutes(1),
+            Now.AddMinutes(2),
+            new Dictionary<string, string> { ["source"] = "delivery-contract" });
 
     private static RuntimeSchedulerWorkItem NewWorkItem(int index)
     {
@@ -125,27 +280,28 @@ public sealed class RuntimeDeliveryContractTests
             payload: payload.RootElement.Clone());
     }
 
-    private sealed class SchedulerWorkManifestSource : IGroundworkStorageManifestSource
+    private sealed class RuntimeDeliveryManifestSource(params string[] documentKinds)
+        : IGroundworkStorageManifestSource
     {
-        public string FeatureIdentity => "runtime-scheduler-delivery-conformance";
+        private readonly HashSet<string> _documentKinds = documentKinds.ToHashSet(StringComparer.Ordinal);
+
+        public string FeatureIdentity => "runtime-delivery-conformance";
 
         public async ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
             CancellationToken cancellationToken = default)
         {
             var runtime = await new RuntimeGroundworkStorageManifestSource()
                 .CreateDeclarationAsync(cancellationToken);
-            var schedulerManifest = runtime.Manifest with
+            var deliveryManifest = runtime.Manifest with
             {
                 StorageUnits = runtime.Manifest.StorageUnits
-                    .Where(unit => StringComparer.Ordinal.Equals(
-                        unit.Identity.Value,
-                        ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind))
+                    .Where(unit => _documentKinds.Contains(unit.Identity.Value))
                     .ToArray()
             };
 
             return new GroundworkStorageManifestDeclaration(
                 FeatureIdentity,
-                schedulerManifest,
+                deliveryManifest,
                 [],
                 [],
                 [],

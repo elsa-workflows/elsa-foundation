@@ -251,12 +251,16 @@ public sealed class ElsaRuntimeStorageManifestTests
             unit.PhysicalStorage.LogicalIndexes,
             index => index.Identity == immediate.IndexIdentity);
         Assert.Equal(MissingValueBehavior.IncludedAsNull, immediateIndex.MissingValueBehavior);
+        Assert.Equal(
+            IndexValueKind.Number,
+            unit.Indexes.Single(index =>
+                index.Identity == ElsaRuntimeStorageManifest.ByOutboxStatusIndex).ValueKind);
         var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
             unit.PhysicalStorage.Policy).Definition;
-        Assert.Equal(
-            ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength,
-            physical.ProjectedColumns.Single(column =>
-                column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxStatusIndex).Length);
+        var statusProjection = physical.ProjectedColumns.Single(column =>
+            column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxStatusIndex);
+        Assert.Equal(PortablePhysicalType.Int32, statusProjection.Type);
+        Assert.Null(statusProjection.Length);
         Assert.Equal(
             RuntimePostCommitIntent.MaximumKindLength,
             physical.ProjectedColumns.Single(column =>

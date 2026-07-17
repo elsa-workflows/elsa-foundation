@@ -535,7 +535,7 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#682",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Deliverable reads do not claim atomically and completion has no stale-ack token.",
       "performanceWorkload": "outbox-drain",
       "accessPolicy": "ordinary",
@@ -590,6 +590,7 @@
         "tests/Elsa/Persistence/Groundwork/Tests/DispatchWorkflowDeliveryRecoveryCrashTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDispatchCancellationCheckpointTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
       ]
     },
@@ -861,6 +862,7 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerPoisonStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs"
       ]
     },
