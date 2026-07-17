@@ -28,7 +28,8 @@ public sealed class GroundworkActivityPublicationCommand(
     IPayloadSerializer payloadSerializer,
     IGroundworkRuntimeDocumentSerializer runtimeSerializer,
     IActivityDefinitionVersionPublicationStore publications,
-    GroundworkActivityDependencyProjection dependencyProjection)
+    GroundworkActivityDependencyProjection dependencyProjection,
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter)
     : ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
 {
     private static readonly JsonSerializerOptions DesignJson = GroundworkActivitiesDesignJson.Options;
@@ -47,6 +48,11 @@ public sealed class GroundworkActivityPublicationCommand(
         var draft = DeserializeDesign<ActivityDefinitionDraft>(draftEnvelope);
         var authoringEnvelope = await RequiredAuthoringByDefinitionAsync(commit.Design.DefinitionId, cancellationToken);
         var authoring = DeserializeDesign<ActivityDefinitionAuthoringState>(authoringEnvelope);
+        var definitionEnvelope = await RequiredAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            commit.Design.DefinitionId,
+            cancellationToken);
+        var definition = DeserializeDesign<ActivityDefinition>(definitionEnvelope);
         ValidateExpectedState(commit.Design, draft, authoring);
 
         await EnsureNewVersionAsync(commit.Design.CatalogVersion, cancellationToken);
@@ -109,11 +115,18 @@ public sealed class GroundworkActivityPublicationCommand(
             authoringEnvelope.Version));
         var projection = await PrepareProjectionAsync(commit.Design, cancellationToken);
         requests.Add(projection.Request);
+        await using var managementProjection = await managementProjectionWriter.PrepareAsync(
+            new(
+                commit.Design.Publication.PublishedAt,
+                [new(definition, authoring)],
+                [draft],
+                [commit.Design.Publication]),
+            cancellationToken);
 
         try
         {
-            await store.SaveAllAsync(
-                DocumentCommitScope.Of(
+            await managementProjection.CommitAsync(
+                [
                     ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
                     ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
@@ -122,7 +135,8 @@ public sealed class GroundworkActivityPublicationCommand(
                     ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
                     ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
                     ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
-                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind),
+                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+                ],
                 requests,
                 cancellationToken);
         }

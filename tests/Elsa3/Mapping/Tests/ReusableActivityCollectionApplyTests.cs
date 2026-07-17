@@ -1,4 +1,6 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
@@ -122,7 +124,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var selection = plan.Items.Where(x => x.SourceVersionId is "a-v1" or "b-v1").ToArray();
         var mutation = await ReusableActivityImportFixtures.Materializer().MaterializeAsync(collection, plan, selection);
         var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var command = new GroundworkReusableActivityImportCommand(store, Serializer());
+        var command = Command(store);
 
         var first = await command.CommitAsync(mutation);
         var second = await command.CommitAsync(mutation);
@@ -137,7 +139,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var conflictingStore = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
         var conflicting = mutation.Activities[0].Definition.Id;
         await conflictingStore.SaveAsync(new SaveDocumentRequest("activityDefinition", conflicting, "1.0.0", "{\"different\":true}", 0));
-        var conflictingCommand = new GroundworkReusableActivityImportCommand(conflictingStore, Serializer());
+        var conflictingCommand = Command(conflictingStore);
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await conflictingCommand.CommitAsync(mutation));
         Assert.Empty(conflictingStore.Snapshot("activityDefinitionVersion"));
@@ -155,7 +157,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var plan = await analyzer.AnalyzeAsync(collection);
         var mutation = await ReusableActivityImportFixtures.Materializer().MaterializeAsync(collection, plan, plan.Items);
         var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var command = new GroundworkReusableActivityImportCommand(store, Serializer());
+        var command = Command(store);
 
         await command.CommitAsync(mutation);
 
@@ -191,6 +193,36 @@ public sealed class ReusableActivityCollectionApplyTests
     }
 
     private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+
+    private static GroundworkReusableActivityImportCommand Command(InMemoryDocumentStore store) =>
+        new(store, Serializer(), new GroundworkActivityManagementProjectionWriter(store, new ImmediateLockProvider(), store));
+
+    private sealed class ImmediateLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) => new Handle();
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
 
     private sealed class CapturingCommand : IReusableActivityImportCommand
     {
