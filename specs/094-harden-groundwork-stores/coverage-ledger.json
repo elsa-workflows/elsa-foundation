@@ -1339,7 +1339,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Writes are last-write-wins and four-provider concurrency evidence is absent.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "dependency": "#644",
