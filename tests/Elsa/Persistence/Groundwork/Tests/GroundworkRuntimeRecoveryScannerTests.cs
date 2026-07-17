@@ -91,6 +91,42 @@ public sealed class GroundworkRuntimeRecoveryScannerTests
                          comparison.Values.SequenceEqual(["worker-1"]))));
     }
 
+    [Fact]
+    public async Task Runtime_test_bounded_store_admits_unfiltered_and_owner_aware_recovery_routes()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var bounded = new Testing.RuntimeTestBoundedDocumentStore(documents);
+        var states = new GroundworkExecutionLivenessStateStore(
+            documents,
+            GroundworkTestSerialization.Serializer,
+            bounded);
+        var scanner = new GroundworkRuntimeRecoveryScanner(
+            documents,
+            GroundworkTestSerialization.Serializer,
+            bounded);
+        var ownerless = new ExecutionLivenessState(
+            "op-ownerless",
+            "wf-ownerless",
+            executionLease: null,
+            heartbeat: null,
+            drain: null,
+            interruptedExecution: new InterruptedExecutionState(
+                "interruption-1",
+                "wf-ownerless",
+                leaseId: null,
+                lastCheckpointId: "checkpoint-1",
+                RuntimeInterruptionReason.HostStopped,
+                RuntimeInterruptionStatus.Detected,
+                Now.AddMinutes(-2)));
+        await states.SaveAsync(ownerless);
+
+        var unfiltered = Assert.Single(await scanner.ScanAsync(Request()));
+        var ownerAware = Assert.Single(await scanner.ScanAsync(Request(ownerId: "worker-1")));
+
+        Assert.Equal("wf-ownerless", unfiltered.WorkflowExecutionId);
+        Assert.Equal("wf-ownerless", ownerAware.WorkflowExecutionId);
+    }
+
     private static RuntimeRecoveryScanRequest Request(
         string? ownerId = null,
         int limit = 10) =>
