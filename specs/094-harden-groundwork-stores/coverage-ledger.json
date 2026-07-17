@@ -257,7 +257,8 @@
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableTimerStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
         "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
-        "tests/Elsa/Workflows/Runtime/Scheduling/Tests/DurableTimerPumpTaskTests.cs"
+        "tests/Elsa/Workflows/Runtime/Scheduling/Tests/DurableTimerPumpTaskTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -395,7 +396,8 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -441,7 +443,8 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -592,7 +595,8 @@
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDispatchCancellationCheckpointTests.cs",
         "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
-        "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -635,7 +639,8 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -821,7 +826,8 @@
       "deliveryOwner": "#645/boundary-8-operational-stores",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -865,7 +871,8 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerPoisonStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
-        "tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs"
+        "tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -913,7 +920,8 @@
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowSchedulerWorkQueueTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
         "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeDeliveryContractTests.cs",
-        "tests/Elsa/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs"
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -960,7 +968,8 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTriggerBindingStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkAddedIndexBackfillRegressionTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {
@@ -1005,7 +1014,8 @@
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTriggerBindingStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
       ]
     },
     {

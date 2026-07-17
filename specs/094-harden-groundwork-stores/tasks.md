@@ -160,7 +160,7 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 - [x] T054 [P] [US3] Make timer and recurring-schedule create/advance transitions conditional in `src/Elsa/Persistence/Groundwork/Stores/GroundworkDurableTimerStore.cs` and `src/Elsa/Persistence/Groundwork/Stores/GroundworkRecurringTriggerScheduleStore.cs`
 - [x] T055 [P] [US3] Make incident, hold, and publication-projection create/advance transitions conditional in `src/Elsa/Persistence/Groundwork/Stores/GroundworkIncidentStateStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowHoldStateStore.cs`, and `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowTriggerBindingStore.cs`
 - [x] T056 [US3] Replace in-memory recovery scanning with a Groundwork bounded liveness route in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeRecoveryScanner.cs`, register it in `src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkRuntimeStoreRegistration.cs`, and retire production use of `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeRecoveryScanner.cs`
-- [ ] T057 [US3] Run named before/during/after-decision failure windows for row group B8-OPERATIONAL-RUNTIME in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs`
+- [x] T057 [US3] Run named before/during/after-decision failure windows for row group B8-OPERATIONAL-RUNTIME in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs`
 - [ ] T058 [US3] Advance the complete provider matrix only for row group B8-OPERATIONAL-RUNTIME in `specs/094-harden-groundwork-stores/coverage-ledger.json`
 
 **Checkpoint**: No correctness claim depends on an adapter instance lock, and stale owners/claimants cannot commit or acknowledge successor-owned state.
