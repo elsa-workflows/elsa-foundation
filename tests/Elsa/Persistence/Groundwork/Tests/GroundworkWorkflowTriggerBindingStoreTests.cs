@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Manifests;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -16,7 +17,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     [InlineData("memory")]
     public async Task SaveAndQuery_ByStimulusAndArtifact_RoundTrips(string provider)
     {
-        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
         IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
@@ -25,13 +26,15 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         await store.SaveAsync(Binding("artifact-1", "node-a", "Event", "hash-order"));
         await store.SaveAsync(Binding("artifact-2", "node-b", "Event", "hash-order"));
         await store.SaveAsync(Binding("artifact-3", "node-c", "Event", "hash-other"));
+        await store.SaveAsync(Binding("artifact-4", "node-d", "Signal", "hash-order"));
 
         // Cross-artifact by-stimulus lookup returns every published artifact waiting on the same stimulus.
         var byStimulus = await store.ListByStimulusAsync("Event", "hash-order");
         Assert.Equal(new[] { "artifact-1", "artifact-2" }, byStimulus.Select(b => b.ArtifactId).OrderBy(x => x));
 
-        // Type post-filter narrows a shared hash so it can never cross-match a different stimulus type.
-        Assert.Empty(await store.ListByStimulusAsync("Signal", "hash-order"));
+        // The composite route narrows a shared hash by stimulus type before documents are returned.
+        var bySharedHashOtherType = await store.ListByStimulusAsync("Signal", "hash-order");
+        Assert.Equal("artifact-4", Assert.Single(bySharedHashOtherType).ArtifactId);
 
         // Per-artifact lookup is scoped to the one artifact.
         var byArtifact = await store.ListByArtifactAsync("artifact-1");
@@ -45,7 +48,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     [InlineData("memory")]
     public async Task DeleteByArtifact_RemovesOnlyThatArtifact(string provider)
     {
-        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
         IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
@@ -68,7 +71,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
     [InlineData("memory")]
     public async Task ListByStimulusType_ReturnsEveryBindingOfType_AcrossArtifacts(string provider)
     {
-        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
         IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
@@ -99,4 +102,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             "order-scope",
             new Dictionary<string, string> { ["slice"] = "w7" },
             new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero));
+
+    private static StorageManifest RuntimeManifest() =>
+        new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync().GetAwaiter().GetResult().Manifest;
 }

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
@@ -122,6 +123,11 @@ internal sealed class GroundworkDocumentStoreFixture(
                     ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
                     "Groundwork recurring schedule due cursor must be non-null.",
                     cancellationToken);
+            if (TryGetBoundedQuery(query) is { PredicateFields.Count: > 1 } boundedQuery)
+                return await QueryCompositeEqualityAsync(
+                    query,
+                    boundedQuery.PredicateFields.Select(field => field.Path).ToArray(),
+                    cancellationToken);
 
             var (indexIdentity, value) = Resolve(query);
             var all = await store.QueryAsync(
@@ -133,6 +139,42 @@ internal sealed class GroundworkDocumentStoreFixture(
             if (query.Take is { } take)
                 window = window.Take(take);
             return new DocumentQueryResult(window.ToArray(), all.Count);
+        }
+
+        private async Task<DocumentQueryResult> QueryCompositeEqualityAsync(
+            DocumentQuery query,
+            IReadOnlyCollection<string> expectedPaths,
+            CancellationToken cancellationToken)
+        {
+            var comparisons = query.Clauses.SelectMany(clause => clause.Comparisons).ToArray();
+            if (comparisons.Length != expectedPaths.Count ||
+                comparisons.Any(comparison =>
+                    comparison.Operator != QueryComparisonOperator.Equal ||
+                    comparison.Values.Count != 1 ||
+                    !expectedPaths.Contains(comparison.Path, StringComparer.Ordinal)))
+            {
+                throw new InvalidOperationException(
+                    $"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
+            }
+
+#pragma warning disable GW0004
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+#pragma warning restore GW0004
+            var values = comparisons.ToDictionary(
+                comparison => comparison.Path,
+                comparison => comparison.Values[0] ??
+                    throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have non-null comparison values."),
+                StringComparer.Ordinal);
+            var matches = all.Documents
+                .Where(document => values.All(entry => StringComparer.Ordinal.Equals(ReadString(document, entry.Key), entry.Value)))
+                .OrderBy(document => document.Id, StringComparer.Ordinal)
+                .ToArray();
+            IEnumerable<DocumentEnvelope> window = matches;
+            if (query.Skip is { } skip)
+                window = window.Skip(skip);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
         }
 
         private async Task<DocumentQueryResult> QuerySingleValuePageAsync(
@@ -305,9 +347,7 @@ internal sealed class GroundworkDocumentStoreFixture(
         private (string IndexIdentity, string Value) Resolve(DocumentQuery query)
         {
             var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
-            var indexIdentity = unit.PhysicalStorage?.BoundedQueries
-                                    .SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity)
-                                    ?.IndexIdentity
+            var indexIdentity = TryGetBoundedQuery(query)?.IndexIdentity
                                 ?? unit.Queries.Single(candidate => candidate.Identity == query.QueryIdentity).IndexIdentity;
             var index = unit.Indexes.Single(candidate => candidate.Identity == indexIdentity);
             var clause = query.Clauses.Count == 1
@@ -324,6 +364,13 @@ internal sealed class GroundworkDocumentStoreFixture(
             var value = comparison.Values[0]
                         ?? throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have a non-null comparison value.");
             return (indexIdentity, value);
+        }
+
+        private BoundedQueryDeclaration? TryGetBoundedQuery(DocumentQuery query)
+        {
+            var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
+            return unit.PhysicalStorage?.BoundedQueries
+                .SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
         }
     }
 

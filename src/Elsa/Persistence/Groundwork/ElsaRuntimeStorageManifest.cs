@@ -40,6 +40,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ByStateAndExpiresAtIndex = "by-state-and-expires-at";
     public const string ByParentWorkflowExecutionAndStatusIndex = "by-parent-workflow-execution-and-status";
     public const string ByChildWorkflowExecutionAndStatusIndex = "by-child-workflow-execution-and-status";
+    public const string ByStimulusAndTypeIndex = "by-stimulus-and-type";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
@@ -207,10 +208,13 @@ public static class ElsaRuntimeStorageManifest
 
     /// <summary>
     /// Cross-artifact index used by <c>IWorkflowTriggerBindingStore.ListByStimulusAsync</c> so a single
-    /// stimulus can start instances of any workflow that triggers on it. Keyed by stimulus hash alone; the
-    /// caller post-filters by stimulus type (the hash is type-derived in practice).
+    /// stimulus can start instances of any workflow that triggers on it. Kept for backwards-compatible
+    /// storage shape and broad hash-only diagnostics; normal routing uses the stimulus+type route below.
     /// </summary>
     public const string WorkflowTriggerBindingByStimulus = ByStimulusIndex;
+
+    /// <summary>Composite bounded route used by stimulus dispatch to avoid loading same-hash different-type bindings.</summary>
+    public const string WorkflowTriggerBindingByStimulusAndType = ByStimulusAndTypeIndex;
 
     /// <summary>Bounded route used to resolve all active bindings for one stimulus type.</summary>
     public const string WorkflowTriggerBindingByStimulusType = ByStimulusTypeIndex;
@@ -222,6 +226,7 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowTriggerBindingByPublication = ByPublicationIndex;
 
     public const string ListTriggerBindingsByStimulusQuery = "list-by-stimulus";
+    public const string ListTriggerBindingsByStimulusAndTypeQuery = "list-by-stimulus-and-type";
     public const string ListTriggerBindingsByStimulusTypeQuery = "list-by-stimulus-type";
     public const string ListTriggerBindingsByArtifactQuery = ListByArtifactQuery;
     public const string ListTriggerBindingsByPublicationQuery = "list-by-publication";
