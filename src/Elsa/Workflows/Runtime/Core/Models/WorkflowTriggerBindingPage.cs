@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -10,6 +7,7 @@ public sealed record WorkflowTriggerBindingPageQuery
 {
     public const int DefaultLimit = 100;
     public const int MaximumLimit = 500;
+    public const int MaximumContinuationTokenLength = 16 * 1024;
 
     public WorkflowTriggerBindingPageQuery(
         string stimulusType,
@@ -30,97 +28,73 @@ public sealed record WorkflowTriggerBindingPageQuery
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
         Limit = limit;
-        ContinuationToken = continuationToken;
-        Offset = DecodeOffset(continuationToken);
+        ContinuationToken = ValidateContinuationToken(continuationToken, nameof(continuationToken));
     }
 
     public string StimulusType { get; }
     public string StimulusHash { get; }
     public int Limit { get; }
-    public string? ContinuationToken { get; }
 
     /// <summary>
-    /// Adapter-facing offset decoded from <see cref="ContinuationToken"/>. Callers should treat the token as opaque.
+    /// Provider-owned continuation. Callers and provider-neutral runtime code must treat this value as opaque.
     /// </summary>
-    public int Offset { get; }
+    public string? ContinuationToken { get; }
 
-    internal string EncodeContinuation(int offset)
-    {
-        if (offset <= Offset)
-            throw new ArgumentOutOfRangeException(nameof(offset), offset, "A continuation must advance the current page.");
-
-        var payload = $"1:{offset}:{QueryBinding()}";
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes(payload))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-    }
-
-    private int DecodeOffset(string? continuationToken)
+    internal static string? ValidateContinuationToken(string? continuationToken, string parameterName)
     {
         if (continuationToken is null)
-            return 0;
+            return null;
         if (string.IsNullOrWhiteSpace(continuationToken))
-            throw new ArgumentException("A trigger-binding continuation token cannot be blank.", nameof(continuationToken));
-
-        try
-        {
-            var encoded = continuationToken.Replace('-', '+').Replace('_', '/');
-            encoded = encoded.PadRight(encoded.Length + ((4 - encoded.Length % 4) % 4), '=');
-            var parts = Encoding.UTF8.GetString(Convert.FromBase64String(encoded)).Split(':');
-            if (parts is not ["1", var offsetText, var queryBinding] ||
-                !int.TryParse(offsetText, out var offset) ||
-                offset <= 0 ||
-                !StringComparer.Ordinal.Equals(queryBinding, QueryBinding()))
-            {
-                throw new FormatException();
-            }
-
-            return offset;
-        }
-        catch (FormatException exception)
+            throw new ArgumentException("A trigger-binding continuation token cannot be blank.", parameterName);
+        if (continuationToken.Length > MaximumContinuationTokenLength)
         {
             throw new ArgumentException(
-                "The trigger-binding continuation token is invalid or belongs to another stimulus query.",
-                nameof(continuationToken),
-                exception);
+                $"A trigger-binding continuation token cannot exceed {MaximumContinuationTokenLength} characters.",
+                parameterName);
         }
-    }
 
-    private string QueryBinding()
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{StimulusType}\0{StimulusHash}"));
-        return Convert.ToHexString(bytes);
+        return continuationToken;
     }
 }
 
 /// <summary>
-/// One bounded, deterministically ordered page of active trigger bindings.
+/// One bounded, deterministically ordered page of active trigger bindings. A continuation resumes
+/// the provider's live view after the last returned item; it does not promise a cross-request snapshot.
 /// </summary>
 public sealed record WorkflowTriggerBindingPage
 {
     public WorkflowTriggerBindingPage(
         WorkflowTriggerBindingPageQuery query,
         IReadOnlyList<WorkflowTriggerBinding> items,
-        long totalCount)
+        long totalCount,
+        string? nextContinuationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(items);
         if (items.Count > query.Limit)
             throw new ArgumentException("A trigger-binding page cannot exceed its requested limit.", nameof(items));
-        if (totalCount < query.Offset + items.Count)
-            throw new ArgumentOutOfRangeException(nameof(totalCount), totalCount, "The total count cannot be smaller than the returned window.");
-        if (items.Count == 0 && query.Offset < totalCount)
-            throw new ArgumentException("A non-terminal trigger-binding page cannot be empty.", nameof(items));
+        if (totalCount < items.Count)
+            throw new ArgumentOutOfRangeException(nameof(totalCount), totalCount, "The total count cannot be smaller than the returned page.");
+
+        nextContinuationToken = WorkflowTriggerBindingPageQuery.ValidateContinuationToken(
+            nextContinuationToken,
+            nameof(nextContinuationToken));
+        if (items.Count == 0 && nextContinuationToken is not null)
+            throw new ArgumentException("An empty trigger-binding page cannot expose a continuation.", nameof(nextContinuationToken));
+        if (nextContinuationToken is not null &&
+            StringComparer.Ordinal.Equals(query.ContinuationToken, nextContinuationToken))
+            throw new ArgumentException("A trigger-binding continuation must advance the traversal.", nameof(nextContinuationToken));
 
         Items = items;
         TotalCount = totalCount;
-        NextContinuationToken = query.Offset + items.Count < totalCount
-            ? query.EncodeContinuation(checked(query.Offset + items.Count))
-            : null;
+        NextContinuationToken = nextContinuationToken;
     }
 
     public IReadOnlyList<WorkflowTriggerBinding> Items { get; }
+
+    /// <summary>Predicate count observed while this page was evaluated.</summary>
     public long TotalCount { get; }
+
+    /// <summary>Provider-owned token for the next live-view page, or <see langword="null"/> at the end.</summary>
     public string? NextContinuationToken { get; }
 }

@@ -40,21 +40,22 @@ Timing is invalid until the correctness digest and provider conformance scenario
 
 The #644 Identity workload definition is versioned in
 [`../workloads/iam-secrets.json`](../workloads/iam-secrets.json) as
-`iam-normalized-lookup-update` v1.1.0 against Identity storage manifest v1.0.4 and Groundwork
-`0.0.1-preview.59`. Its provider-neutral correctness handoff executes one canonical user,
+`iam-normalized-lookup-update` v1.1.0. Its provider-neutral correctness handoff executes one canonical user,
 16 noise users, one role, and one user-role link through physical Groundwork Identity storage. It uses input
 fingerprint `5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and public result digest
 `32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`. These hashes define the
 provider-neutral contract; they are not accepted provider evidence. Each provider entry point must capture native
 evidence for the five lookup routes against exactly 100,000 physical records and require one materialized
 candidate. The current Identity shape uses Groundwork physical entity tables. SQLite is mandatory; SQL Server,
-PostgreSQL, and MongoDB use the opt-in external-provider matrix. Spec 095 records accepted exact-candidate
-`preview.59` Groundwork evidence for all four topologies; the checked-in `preview.55`-`preview.57` artifacts remain
-historical provenance and are not linked as active passes.
+PostgreSQL, and MongoDB use the opt-in external-provider matrix. Spec 095 retains accepted exact-candidate
+Groundwork `preview.60` / Identity manifest v1.0.4 evidence for all four topologies as immutable historical
+provenance. Current execution uses the repository-pinned `preview.61` family and current Identity manifest; no
+historical artifact is linked as an active exact-head pass.
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
 equality, and all timing.
 
-Groundwork PR #88 supplies the generic version-aware codec contract used by `preview.59`. Elsa-specific payload
+Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
+Groundwork PR #93 supplies the certified provider-neutral keyset continuation used by `preview.61`. Elsa-specific payload
 per-kind version policies, legacy-stamp parsing, JSON options, and concrete upcasters remain behind Elsa's provider marker and provider packages so
 core modules remain Groundwork-free. Any codec or manifest change invalidates prior composition fingerprints and
 requires fresh exact-head provider evidence before the workload can feed #646.

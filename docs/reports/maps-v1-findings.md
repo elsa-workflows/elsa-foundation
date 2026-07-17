@@ -7,9 +7,9 @@ This is a point-in-time report from direct repo facts. It is not a constitution 
 ## Summary
 
 - Source projects: 137
-- Test projects: 68
-- Discovered CShells feature classes: 94
-- Specs: 115
+- Test projects: 69
+- Discovered CShells feature classes: 92
+- Specs: 123
 - Direct package IDs with multiple versions: 0
 
 ## Package Version Clusters
@@ -18,16 +18,16 @@ No direct package ID has multiple direct versions.
 
 ## Test Visibility
 
-- Source projects without a direct test-project reference: 8
+- Source projects without a direct test-project reference: 6
 - This is only a visibility signal; tests may cover behavior indirectly through higher-level projects.
 
 ## Spec 006 State
 
-- `006-activity-construction-seam`: 54 tasks done, 1 tasks open; notes: retained, deferred, out of scope, construct-only.
+- `006-activity-construction-seam`: 54 tasks done, 1 tasks open; notes: superseded, retained, deferred, out of scope, construct-only.
 
 ## Runtime/Design Reference Signal
 
-- Elsa.Workflows.Runtime.JavaScript -> Elsa.Workflows.Design.Core
+No direct runtime-path project reference to an `Elsa.*Design*` project was found by the Maps v1 heuristic.
 
 ## Next Map Work
 

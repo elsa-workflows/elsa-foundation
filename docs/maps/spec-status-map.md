@@ -13,12 +13,12 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Draft | - | 38 | 0 | superseded, retained, out of scope |
 | [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
-| [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 54 | 1 | retained, deferred, out of scope, construct-only |
+| [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 54 | 1 | superseded, retained, deferred, out of scope, construct-only |
 | [007-runtime-executable-state-contracts](../../specs/007-runtime-executable-state-contracts/spec.md) | Runtime Executable Artifact And Execution State Contracts | Draft | - | 18 | 0 | deferred, out of scope |
 | [008-checkpoint-commit-envelope](../../specs/008-checkpoint-commit-envelope/spec.md) | Checkpoint Commit Envelope And Post-Commit Intent Boundary | Draft | - | 6 | 0 | deferred, out of scope |
 | [009-runtime-pipeline-slots](../../specs/009-runtime-pipeline-slots/spec.md) | Runtime Pipeline Slots And Inspectable Plans | Draft | - | 7 | 0 | out of scope |
 | [010-runtime-bookmark-resume-contract](../../specs/010-runtime-bookmark-resume-contract/spec.md) | Runtime Bookmark Resume Contract | Draft | - | 8 | 0 | out of scope |
-| [011-runtime-value-binding-contract](../../specs/011-runtime-value-binding-contract/spec.md) | Runtime Value Binding Contract | unknown | - | 9 | 0 | out of scope |
+| [011-runtime-value-binding-contract](../../specs/011-runtime-value-binding-contract/spec.md) | Runtime Value Binding Contract | unknown | - | 9 | 0 | superseded, out of scope |
 | [012-groundwork-persistence-foundation](../../specs/012-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
 | [012-runtime-diagnostics-history-incidents](../../specs/012-runtime-diagnostics-history-incidents/spec.md) | Runtime Diagnostics History And Incidents | unknown | - | 9 | 0 | out of scope |
 | [013-groundwork-core-manifest-planner](../../specs/013-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Draft | - | 38 | 0 | - |
@@ -46,8 +46,8 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [026-runtime-start-command-scheduling](../../specs/026-runtime-start-command-scheduling/spec.md) | 026-runtime-start-command-scheduling | unknown | - | 0 | 0 | superseded |
 | [027-runtime-schedule-activity-state](../../specs/027-runtime-schedule-activity-state/spec.md) | 027-runtime-schedule-activity-state | unknown | - | 0 | 0 | - |
 | [028-runtime-activity-start-state](../../specs/028-runtime-activity-start-state/spec.md) | 028-runtime-activity-start-state | unknown | - | 0 | 0 | - |
-| [029-runtime-activity-invocation-boundary](../../specs/029-runtime-activity-invocation-boundary/spec.md) | 029-runtime-activity-invocation-boundary | unknown | - | 0 | 0 | - |
-| [030-runtime-activity-completion-work-enqueue](../../specs/030-runtime-activity-completion-work-enqueue/spec.md) | Runtime Activity Completion Work Enqueue | Draft | - | 7 | 1 | - |
+| [029-runtime-activity-invocation-boundary](../../specs/029-runtime-activity-invocation-boundary/spec.md) | 029-runtime-activity-invocation-boundary | unknown | - | 0 | 0 | superseded |
+| [030-runtime-activity-completion-work-enqueue](../../specs/030-runtime-activity-completion-work-enqueue/spec.md) | Runtime Activity Completion Work Enqueue | Draft | - | 7 | 1 | superseded |
 | [031-runtime-parent-completion-evaluation](../../specs/031-runtime-parent-completion-evaluation/spec.md) | Runtime Parent Completion Evaluation Enqueue | Draft | - | 6 | 1 | - |
 | [032-runtime-continuation-scheduling-enqueue](../../specs/032-runtime-continuation-scheduling-enqueue/spec.md) | Runtime Continuation Scheduling Enqueue | Draft | - | 6 | 1 | - |
 | [033-runtime-completion-checkpoint-enqueue](../../specs/033-runtime-completion-checkpoint-enqueue/spec.md) | Runtime Completion Checkpoint Enqueue | Draft | - | 7 | 1 | - |
@@ -77,8 +77,8 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [057-runtime-bookmark-consumption-checkpoint](../../specs/057-runtime-bookmark-consumption-checkpoint/spec.md) | Runtime Bookmark Consumption Checkpoint | Draft | - | 10 | 0 | - |
 | [058-runtime-bookmark-creation-checkpoint](../../specs/058-runtime-bookmark-creation-checkpoint/spec.md) | Runtime Bookmark Creation Checkpoint | Draft | - | 11 | 0 | - |
 | [059-runtime-activity-bookmark-request](../../specs/059-runtime-activity-bookmark-request/spec.md) | Runtime Activity Bookmark Request | Draft | - | 10 | 0 | - |
-| [060-runtime-activity-output-capture](../../specs/060-runtime-activity-output-capture/spec.md) | Runtime Activity Output Capture | Draft | - | 11 | 0 | - |
-| [061-runtime-activity-input-resolution](../../specs/061-runtime-activity-input-resolution/spec.md) | Runtime Activity Input Resolution | Draft | - | 10 | 0 | - |
+| [060-runtime-activity-output-capture](../../specs/060-runtime-activity-output-capture/spec.md) | Runtime Activity Output Capture | Draft | - | 11 | 0 | superseded |
+| [061-runtime-activity-input-resolution](../../specs/061-runtime-activity-input-resolution/spec.md) | Runtime Activity Input Resolution | Draft | - | 10 | 0 | superseded |
 | [062-runtime-activity-fault-incidents](../../specs/062-runtime-activity-fault-incidents/spec.md) | Runtime Activity Fault Incidents | Draft | - | 9 | 0 | - |
 | [063-runtime-bookmark-resume-fault-incidents](../../specs/063-runtime-bookmark-resume-fault-incidents/spec.md) | Runtime Bookmark Resume Fault Incidents | Draft | - | 9 | 0 | - |
 | [064-runtime-workflow-execution-context](../../specs/064-runtime-workflow-execution-context/spec.md) | Runtime Workflow Execution Context | Superseded (mechanism) by [ADR 0030](../../docs/adr/0030-runtime-expression-evaluation-uses-a-parameter-threaded-live-carrier.md) — intent carried forward and implemented by [spec 083 (runtime execution-time expression carrier)](../083-runtime-execution-expression-carrier/spec.md) | - | 7 | 0 | superseded |
@@ -111,15 +111,23 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [087-reconciler-definition-metadata-update](../../specs/087-reconciler-definition-metadata-update/spec.md) | Reconciler Definition-Metadata Update Path | Draft | - | 0 | 0 | out of scope |
 | [088-layout-metadata-opaque-jsonelement](../../specs/088-layout-metadata-opaque-jsonelement/spec.md) | Layout Metadata Bag Becomes Opaque JsonElement | Draft | - | 0 | 0 | out of scope |
 | [089-http-endpoint-parity](../../specs/089-http-endpoint-parity/spec.md) | HTTP Endpoint Full Parity | Draft | - | 9 | 0 | deferred, out of scope |
-| [090-activity-input-editor-options](../../specs/090-activity-input-editor-options/spec.md) | Activity Input Editor Options | Approved for implementation | - | 30 | 0 | - |
+| [090-activity-input-editor-options](../../specs/090-activity-input-editor-options/spec.md) | Activity Input Editor Options | Approved for implementation | - | 30 | 0 | retained |
 | [090-runtime-http-performance](../../specs/090-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Draft | - | 23 | 0 | - |
 | [090-trigger-contract-hardening](../../specs/090-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | retained |
 | [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
 | [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
 | [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Draft | - | 102 | 0 | retained, deferred, out of scope |
 | [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 0 | 88 | - |
-| [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 45 | 60 | - |
+| [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 56 | 49 | - |
 | [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
 | [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
+| [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Draft | - | 117 | 0 | out of scope |
 | [096-dispatch-workflow-fire-and-forget](../../specs/096-dispatch-workflow-fire-and-forget/spec.md) | Dispatch a Published Workflow Fire-and-Forget | Approved | - | 40 | 0 | retained, out of scope, construct-only |
 | [097-dispatch-dependency-hardening](../../specs/097-dispatch-dependency-hardening/spec.md) | Deterministic and Bounded Workflow Dispatch | Draft | - | 60 | 0 | retained, deferred, construct-only |
+| [098-dispatch-durability-inspection](../../specs/098-dispatch-durability-inspection/spec.md) | Durable and Inspectable Detached Dispatch | Approved | - | 53 | 0 | retained |
+| [099-dispatch-wait-success](../../specs/099-dispatch-wait-success/spec.md) | Wait for a Successful Child and Return Safe Outputs | Approved | - | 67 | 0 | retained, deferred, construct-only |
+| [100-dispatch-fault-cancellation](../../specs/100-dispatch-fault-cancellation/spec.md) | Complete Child Fault and Cancellation Semantics | Approved | - | 54 | 0 | deferred |
+| [101-dispatch-delivery-recovery](../../specs/101-dispatch-delivery-recovery/spec.md) | Dispatch Delivery Recovery | Draft | - | 60 | 0 | - |
+| [102-dispatch-test-run-scope](../../specs/102-dispatch-test-run-scope/spec.md) | Preserve Dispatch Test-Run Scope | Draft | - | 53 | 0 | retained, out of scope |
+| [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Draft | - | 32 | 0 | - |
+| [104-dispatch-parent-audit](../../specs/104-dispatch-parent-audit/spec.md) | DispatchWorkflow Parent Audit Remediation | unknown | - | 27 | 0 | retained |

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "root": "src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore",
-  "treeSha256": "5824a78d85b7b52415c4c43d24581ab8af3acd1779e1a2f805900be3b65320f8",
+  "treeSha256": "f9dfeb17c994f17af07203b55498642da79a50ff0161cef252f28bec3a0ad17c",
   "files": [
     {
       "path": "ApplicationIdentityDbContext.cs",
@@ -29,7 +29,7 @@
     },
     {
       "path": "Seeding/IdentitySeeder.cs",
-      "sha256": "97e1f0b86f14bc8e2d9f088e994f51b6d0b49e6e0107f19ae1036d3b86a6ff8a"
+      "sha256": "4fc8621d3005050cfdf2a24e3207d80850983f442974cedd84741defc94e460c"
     },
     {
       "path": "Sqlite/ApplicationIdentityDbContextFactory.cs",

@@ -90,12 +90,91 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         var first = await store.ListByStimulusAsync(
             new WorkflowTriggerBindingPageQuery("Event", "sha256:shared", limit: 1));
 
-        Assert.Throws<ArgumentException>(() =>
-            new WorkflowTriggerBindingPageQuery(
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery(
                 "Event",
                 "sha256:other",
                 limit: 1,
+                continuationToken: first.NextContinuationToken)));
+    }
+
+    [Fact]
+    public async Task ListByStimulus_RejectsATamperedContinuationChecksum()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusHash: "sha256:shared"));
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:shared"));
+        var first = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:shared", limit: 1));
+        var continuation = Assert.IsType<string>(first.NextContinuationToken);
+        var tampered = continuation[..^1] + (continuation[^1] == 'A' ? 'B' : 'A');
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery(
+                "Event",
+                "sha256:shared",
+                limit: 1,
+                continuationToken: tampered)));
+    }
+
+    [Fact]
+    public async Task ListByStimulus_ResumesAfterTheBoundaryAcrossConcurrentChanges()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:shared"));
+        await store.SaveAsync(Binding("artifact-d", "node", stimulusHash: "sha256:shared"));
+        var first = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:shared", limit: 1));
+
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusHash: "sha256:shared"));
+        await store.SaveAsync(Binding("artifact-c", "node", stimulusHash: "sha256:shared"));
+        var resumed = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery(
+                "Event",
+                "sha256:shared",
+                limit: 10,
                 continuationToken: first.NextContinuationToken));
+
+        Assert.Equal("artifact-b", Assert.Single(first.Items).ArtifactId);
+        Assert.Equal(["artifact-c", "artifact-d"], resumed.Items.Select(binding => binding.ArtifactId));
+        Assert.Equal(4, resumed.TotalCount);
+        Assert.Null(resumed.NextContinuationToken);
+    }
+
+    [Fact]
+    public void PageQuery_RejectsBlankAndOversizedContinuations()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowTriggerBindingPageQuery("Event", "shared", continuationToken: " "));
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowTriggerBindingPageQuery(
+                "Event",
+                "shared",
+                continuationToken: new string('x', WorkflowTriggerBindingPageQuery.MaximumContinuationTokenLength + 1)));
+    }
+
+    [Fact]
+    public void Page_RejectsNonAdvancingEmptyAndOversizedProviderContinuations()
+    {
+        var query = new WorkflowTriggerBindingPageQuery(
+            "Event",
+            "sha256:shared",
+            limit: 1,
+            continuationToken: "current");
+        var binding = Binding("artifact-a", "node", stimulusHash: "sha256:shared");
+
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowTriggerBindingPage(query, [binding], totalCount: 1, nextContinuationToken: "current"));
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowTriggerBindingPage(query, [], totalCount: 1, nextContinuationToken: "next"));
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowTriggerBindingPage(
+                query,
+                [binding],
+                totalCount: 1,
+                nextContinuationToken: new string(
+                    'x',
+                    WorkflowTriggerBindingPageQuery.MaximumContinuationTokenLength + 1)));
     }
 
     [Fact]
