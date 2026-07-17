@@ -64,6 +64,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     Version = table.Column<string>(type: "TEXT", nullable: false),
                     SemVerSortKey = table.Column<string>(type: "TEXT", nullable: false),
                     DefinitionId = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceDraftId = table.Column<string>(type: "TEXT", nullable: true),
                     StateSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     SourceCreatedAt = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),

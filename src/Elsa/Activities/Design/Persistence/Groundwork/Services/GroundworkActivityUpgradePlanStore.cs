@@ -136,6 +136,52 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
         }
     }
 
+    public async Task<ActivityUpgradeApplyReceipt?> TryReclaimAsync(
+        ActivityUpgradeApplyReceipt receipt,
+        DateTimeOffset reclaimedAt,
+        DateTimeOffset leaseExpiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (leaseExpiresAt <= reclaimedAt)
+            throw new ArgumentOutOfRangeException(nameof(leaseExpiresAt));
+        var existing = await store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+            receipt.ReceiptId,
+            cancellationToken);
+        if (existing is null)
+            return null;
+        var document = JsonSerializer.Deserialize<ApplyReceiptDocument>(existing.ContentJson, JsonOptions)
+                       ?? throw new InvalidOperationException($"Activity upgrade apply receipt '{receipt.ReceiptId}' is unreadable.");
+        if (document.Receipt.Status != ActivityUpgradeApplyReceiptStatus.Preparing ||
+            document.Receipt.Revision != receipt.Revision ||
+            document.Receipt.LeaseExpiresAt > reclaimedAt)
+            return null;
+        var reclaimed = document.Receipt with
+        {
+            UpdatedAt = reclaimedAt,
+            Revision = document.Receipt.Revision + 1,
+            LeaseExpiresAt = leaseExpiresAt
+        };
+        var save = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+            ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+            receipt.ReceiptId,
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            document with { Receipt = reclaimed },
+            JsonOptions);
+        try
+        {
+            await store.SaveAllAsync(
+                DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind),
+                [new(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing.Version)],
+                cancellationToken);
+            return reclaimed;
+        }
+        catch (DocumentAtomicWriteException)
+        {
+            return null;
+        }
+    }
+
     public async Task RejectAsync(
         ActivityUpgradeApplyReceipt receipt,
         int statusCode,
@@ -151,7 +197,8 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
             ?? throw new InvalidOperationException($"Activity upgrade apply receipt '{receipt.ReceiptId}' was not found.");
         var document = JsonSerializer.Deserialize<ApplyReceiptDocument>(existing.ContentJson, JsonOptions)
                        ?? throw new InvalidOperationException($"Activity upgrade apply receipt '{receipt.ReceiptId}' is unreadable.");
-        if (document.Receipt.Status != ActivityUpgradeApplyReceiptStatus.Preparing)
+        if (document.Receipt.Status != ActivityUpgradeApplyReceiptStatus.Preparing ||
+            document.Receipt.Revision != receipt.Revision)
             return;
         var rejected = document with
         {

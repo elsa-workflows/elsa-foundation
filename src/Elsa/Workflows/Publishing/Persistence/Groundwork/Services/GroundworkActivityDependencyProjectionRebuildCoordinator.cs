@@ -152,12 +152,13 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         if (state.RootActivity is null)
             return;
-        var stack = new Stack<ActivityNode>();
+        var stack = new Stack<(ActivityNode Node, IReadOnlyCollection<ActivityContractMemberUsage> StructureMemberUsage)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        stack.Push(state.RootActivity);
-        while (stack.TryPop(out var node))
+        stack.Push((state.RootActivity, []));
+        while (stack.TryPop(out var entry))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var node = entry.Node;
             if (!seen.Add(node.NodeId))
                 throw new InvalidOperationException($"Workflow owner '{owner.DraftId ?? owner.VersionId}' has duplicate node id '{node.NodeId}'.");
             // Workflow graphs contain every activity kind. Only exact reusable-activity publications
@@ -169,10 +170,26 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
                     Reference(publication),
                     node.NodeId,
                     [new("AuthoredNode", node.NodeId)],
-                    PublicMemberUsage(node)));
+                    PublicMemberUsage(node)
+                        .Concat(entry.StructureMemberUsage)
+                        .Distinct()
+                        .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
+                        .ThenBy(x => x.ReferenceKey, StringComparer.Ordinal)
+                        .ToArray()));
+            var structureUsage = structureService.ProjectChildContractMemberUsage(node)
+                .GroupBy(x => x.NodeId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyCollection<ActivityContractMemberUsage>)group
+                        .SelectMany(x => x.MemberUsage)
+                        .Distinct()
+                        .ToArray(),
+                    StringComparer.Ordinal);
             foreach (var slot in structureService.ProjectChildren(node).Reverse())
                 foreach (var child in slot.Activities.Reverse())
-                    stack.Push(child);
+                    stack.Push((
+                        child,
+                        structureUsage.GetValueOrDefault(child.NodeId) ?? []));
         }
     }
 

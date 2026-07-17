@@ -151,8 +151,7 @@ public sealed class RefreshActivityUpgradePlanHandler(
         {
             var plan = await refresher.RefreshAsync(new(
                 command.PlanId,
-                command.ReceiptId,
-                command.PublishedDrafts,
+                command.Publications,
                 context.TenantId,
                 ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)), cancellationToken);
             return await plan.ToViewAsync(publications, cancellationToken);

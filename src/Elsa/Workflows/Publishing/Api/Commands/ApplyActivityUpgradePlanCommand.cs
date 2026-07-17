@@ -14,6 +14,8 @@ public sealed class ApplyActivityUpgradePlanCommand(
     IActivityUpgradePlanMutationStore mutationStore,
     ISystemClock clock) : IActivityUpgradePlanApplier
 {
+    private static readonly TimeSpan ReceiptLease = TimeSpan.FromMinutes(2);
+
     public async ValueTask<ActivityUpgradeApplyResult> ApplyAsync(
         ActivityUpgradeApplyRequest request,
         CancellationToken cancellationToken = default)
@@ -33,9 +35,32 @@ public sealed class ApplyActivityUpgradePlanCommand(
         var requestFingerprint = ActivityUpgradeApplyIdentity.CreateRequestFingerprint(request.PlanId, request.StageId);
         var existing = await receiptStore.FindByIdempotencyKeyAsync(plan.PlanId, keyHash, cancellationToken);
         if (existing is not null)
-            return ExistingResult(existing, requestFingerprint);
+        {
+            EnsureRequestFingerprint(existing, requestFingerprint);
+            if (existing.Status == ActivityUpgradeApplyReceiptStatus.Applied && existing.Result is not null)
+                return existing.Result;
+            if (existing.Status == ActivityUpgradeApplyReceiptStatus.Rejected)
+                throw Rejected(
+                    existing.RejectionStatusCode ?? 422,
+                    existing.RejectionCode ?? "activity.upgrade.apply-rejected",
+                    "The apply operation was rejected.",
+                    existing.Diagnostics);
+            if (clock.UtcNow < existing.LeaseExpiresAt)
+                throw OutcomeUnknown(existing);
+            existing = await receiptStore.TryReclaimAsync(
+                existing,
+                clock.UtcNow,
+                clock.UtcNow.Add(ReceiptLease),
+                cancellationToken);
+            if (existing is null)
+            {
+                var winner = await receiptStore.FindByIdempotencyKeyAsync(plan.PlanId, keyHash, cancellationToken)
+                             ?? throw Rejected(409, "activity.upgrade.outcome-unknown", "The apply outcome is not yet available; query receipt status before retrying.");
+                return ExistingResult(winner, requestFingerprint);
+            }
+        }
 
-        if (clock.UtcNow >= plan.ExpiresAt)
+        if (existing is null && clock.UtcNow >= plan.ExpiresAt)
             throw Rejected(410, "activity.upgrade.plan-expired", "The activity upgrade plan has expired.");
         if (plan.Status is ActivityUpgradePlanStatus.Blocked or ActivityUpgradePlanStatus.Superseded)
             throw Rejected(422, "activity.upgrade.plan-blocked", "The activity upgrade plan contains blocking diagnostics.", plan.Diagnostics);
@@ -55,7 +80,7 @@ public sealed class ApplyActivityUpgradePlanCommand(
             .OrderBy(x => x.Order)
             .ToArray();
         var now = clock.UtcNow;
-        var receipt = new ActivityUpgradeApplyReceipt(
+        var receipt = existing ?? new ActivityUpgradeApplyReceipt(
             ActivityUpgradeApplyIdentity.CreateReceiptId(plan.PlanId, keyHash),
             plan.PlanId,
             stage.StageId,
@@ -66,8 +91,9 @@ public sealed class ApplyActivityUpgradePlanCommand(
             ActivityUpgradeApplyReceiptStatus.Preparing,
             now,
             now,
-            1);
-        if (!await receiptStore.TryCreateAsync(receipt, cancellationToken))
+            1,
+            LeaseExpiresAt: now.Add(ReceiptLease));
+        if (existing is null && !await receiptStore.TryCreateAsync(receipt, cancellationToken))
         {
             existing = await receiptStore.FindByIdempotencyKeyAsync(plan.PlanId, keyHash, cancellationToken)
                        ?? throw Rejected(409, "activity.upgrade.outcome-unknown", "The apply outcome is not yet available; query receipt status before retrying.");
@@ -95,8 +121,7 @@ public sealed class ApplyActivityUpgradePlanCommand(
         ActivityUpgradeApplyReceipt receipt,
         string requestFingerprint)
     {
-        if (!StringComparer.Ordinal.Equals(receipt.RequestFingerprint, requestFingerprint))
-            throw Rejected(409, "activity.upgrade.idempotency-conflict", "The idempotency key is already bound to another apply request.");
+        EnsureRequestFingerprint(receipt, requestFingerprint);
         if (receipt.Status == ActivityUpgradeApplyReceiptStatus.Applied && receipt.Result is not null)
             return receipt.Result;
         if (receipt.Status == ActivityUpgradeApplyReceiptStatus.Rejected)
@@ -105,17 +130,30 @@ public sealed class ApplyActivityUpgradePlanCommand(
                 receipt.RejectionCode ?? "activity.upgrade.apply-rejected",
                 "The apply operation was rejected.",
                 receipt.Diagnostics);
+        throw OutcomeUnknown(receipt);
+    }
+
+    private static void EnsureRequestFingerprint(
+        ActivityUpgradeApplyReceipt receipt,
+        string requestFingerprint)
+    {
+        if (!StringComparer.Ordinal.Equals(receipt.RequestFingerprint, requestFingerprint))
+            throw Rejected(409, "activity.upgrade.idempotency-conflict", "The idempotency key is already bound to another apply request.");
+    }
+
+    private static ActivityUpgradeApplyException OutcomeUnknown(ActivityUpgradeApplyReceipt receipt)
+    {
         var diagnostic = new ActivityDiagnostic(
             "activity.upgrade.outcome-unknown",
             ActivityDiagnosticSeverity.Warning,
-            "The apply operation is still preparing or its outcome is ambiguous.",
+            "The apply operation still owns an active recovery lease; query its receipt before retrying.",
             new("ActivityUpgradeApplyReceipt", receipt.ReceiptId),
             Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["receiptId"] = receipt.ReceiptId,
                 ["statusHref"] = $"/design/activities/upgrade-plans/{receipt.PlanId}/receipts/{receipt.ReceiptId}"
             });
-        throw Rejected(409, diagnostic.Code, diagnostic.Message, [diagnostic]);
+        return Rejected(409, diagnostic.Code, diagnostic.Message, [diagnostic]);
     }
 
     private static ActivityUpgradeApplyException Rejected(

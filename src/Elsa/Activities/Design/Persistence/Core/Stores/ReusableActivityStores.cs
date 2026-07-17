@@ -132,6 +132,12 @@ public interface IActivityUpgradeApplyReceiptStore
         ActivityUpgradeApplyReceipt receipt,
         CancellationToken cancellationToken = default);
 
+    Task<ActivityUpgradeApplyReceipt?> TryReclaimAsync(
+        ActivityUpgradeApplyReceipt receipt,
+        DateTimeOffset reclaimedAt,
+        DateTimeOffset leaseExpiresAt,
+        CancellationToken cancellationToken = default);
+
     Task RejectAsync(
         ActivityUpgradeApplyReceipt receipt,
         int statusCode,

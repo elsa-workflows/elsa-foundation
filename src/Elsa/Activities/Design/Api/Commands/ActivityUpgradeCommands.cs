@@ -18,5 +18,4 @@ public sealed record ApplyActivityUpgradePlan(
 
 public sealed record RefreshActivityUpgradePlan(
     [property: JsonIgnore] string PlanId,
-    string ReceiptId,
-    IReadOnlyList<ActivityUpgradePublishedDraftSelection> PublishedDrafts) : ICommand<ActivityUpgradePlanView>;
+    IReadOnlyList<ActivityUpgradePublicationReceipt> Publications) : ICommand<ActivityUpgradePlanView>;

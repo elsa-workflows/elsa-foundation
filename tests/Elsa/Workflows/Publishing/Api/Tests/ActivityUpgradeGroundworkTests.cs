@@ -98,6 +98,49 @@ public sealed class ActivityUpgradeGroundworkTests
     }
 
     [Fact]
+    public async Task Full_rebuild_includes_parent_structure_owned_outcome_usage()
+    {
+        var harness = await Harness.CreateAsync(workflowExpectedRevision: 1);
+        var child = new ActivityNode(
+            "child",
+            "old",
+            [ArgumentState.Null("input")],
+            [ArgumentState.Null("output")]);
+        await harness.ChangeWorkflowStateOutsidePublishingAsync(
+            WorkflowDefinitionState.Empty with
+            {
+                RootActivity = new("container", "native-container", [], [])
+            });
+
+        await harness.RebuildProjectionAsync(new ParentUsageStructureService(child));
+
+        var item = Assert.Single((await harness.LoadProjectionAsync()).Items.Where(x =>
+            x.Owner.Kind == "WorkflowDraft" && x.Occurrence.OccurrenceId == child.NodeId));
+        Assert.Equal(
+            [
+                new ActivityContractMemberUsage("Input", "input", "Bound"),
+                new("Outcome", "approved", "Connected"),
+                new("Output", "output", "Bound")
+            ],
+            item.MemberUsage);
+    }
+
+    [Fact]
+    public async Task Apply_rejects_selected_closure_lifecycle_drift_before_any_write()
+    {
+        var harness = await Harness.CreateAsync(workflowExpectedRevision: 1);
+        harness.ChangeSelectedVersionLifecycle(ActivityDefinitionVersionLifecycle.Retired);
+
+        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
+            await harness.Subject.ApplyAsync(harness.Plan, harness.Plan.Steps, Receipt(harness.Plan), Now.AddMinutes(1)));
+
+        Assert.Equal("activity.upgrade.stale-plan", exception.ErrorCode);
+        Assert.Equal(2, (await harness.LoadActivityDraftAsync()).Revision);
+        Assert.Equal("old", (await harness.LoadWorkflowDraftAsync()).Entity.State.RootActivity!.ActivityVersionId);
+        Assert.Equal(ActivityUpgradeApplyReceiptStatus.Preparing, (await harness.LoadReceiptAsync()).Status);
+    }
+
+    [Fact]
     public async Task Dependency_projection_preserves_repeated_diamond_paths_with_bounded_pages()
     {
         var documents = new InMemoryDocumentStore(CombinedManifest());
@@ -133,6 +176,48 @@ public sealed class ActivityUpgradeGroundworkTests
             .Select(x => string.Join(">", x.Path.Select(y => y.VersionId)))
             .Distinct(StringComparer.Ordinal)
             .Count());
+    }
+
+    [Fact]
+    public async Task Expired_receipt_reclaim_race_has_exactly_one_CAS_winner()
+    {
+        var documents = new InMemoryDocumentStore(CombinedManifest());
+        var receipts = new Elsa.Activities.Design.Persistence.Groundwork.Services.GroundworkActivityUpgradePlanStore(documents);
+        var receipt = new ActivityUpgradeApplyReceipt(
+            "receipt-race",
+            "plan",
+            "stage",
+            "key",
+            "request",
+            null,
+            "access",
+            ActivityUpgradeApplyReceiptStatus.Preparing,
+            Now.AddMinutes(-5),
+            Now.AddMinutes(-5),
+            1,
+            LeaseExpiresAt: Now.AddMinutes(-1));
+        Assert.True(await receipts.TryCreateAsync(receipt));
+
+        var attempts = await Task.WhenAll(
+            receipts.TryReclaimAsync(receipt, Now, Now.AddMinutes(2)),
+            receipts.TryReclaimAsync(receipt, Now, Now.AddMinutes(3)));
+
+        var winner = Assert.Single(attempts.Where(x => x is not null))!;
+        Assert.Equal(2, winner.Revision);
+        var persisted = await ((IActivityUpgradeApplyReceiptStore)receipts).FindAsync(receipt.ReceiptId);
+        Assert.Equal(winner.ReceiptId, persisted!.ReceiptId);
+        Assert.Equal(winner.Revision, persisted.Revision);
+        Assert.Equal(winner.LeaseExpiresAt, persisted.LeaseExpiresAt);
+
+        await receipts.RejectAsync(
+            receipt,
+            409,
+            "activity.upgrade.stale-plan",
+            [],
+            Now.AddSeconds(1));
+        persisted = await ((IActivityUpgradeApplyReceiptStore)receipts).FindAsync(receipt.ReceiptId);
+        Assert.Equal(ActivityUpgradeApplyReceiptStatus.Preparing, persisted!.Status);
+        Assert.Equal(winner.Revision, persisted.Revision);
     }
 
     private sealed class Harness(
@@ -290,19 +375,36 @@ public sealed class ActivityUpgradeGroundworkTests
             await documents.SaveAsync(new(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, envelope.Version));
         }
 
-        public Task<ActivityDependencyProjectionRebuild> RebuildProjectionAsync()
+        public async Task ChangeWorkflowStateOutsidePublishingAsync(WorkflowDefinitionState state)
+        {
+            var envelope = await documents.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "workflow-draft");
+            var document = JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope!.ContentJson, workflowJson)!;
+            document.Entity.State = state;
+            var request = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+                document.Entity.Id,
+                WorkflowsDesignStorageManifest.SchemaVersion,
+                document,
+                workflowJson);
+            await documents.SaveAsync(new(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, envelope.Version));
+        }
+
+        public Task<ActivityDependencyProjectionRebuild> RebuildProjectionAsync(IActivityStructureService? structureService = null)
         {
             var coordinator = new GroundworkActivityDependencyProjectionRebuildCoordinator(
                 documents,
                 payloads,
                 versions,
                 new ActivityTemplateDependencyDiscovererRegistry([new TestDependencyDiscoverer()]),
-                new LeafStructureService(),
+                structureService ?? new LeafStructureService(),
                 projection,
                 new Ids(),
                 TimeProvider.System);
             return coordinator.RebuildAsync();
         }
+
+        public void ChangeSelectedVersionLifecycle(ActivityDefinitionVersionLifecycle lifecycle) =>
+            versions.FindRequired("old").Lifecycle = lifecycle;
 
         private static ActivityUpgradePlan CreatePlan(long workflowRevision)
         {
@@ -317,7 +419,21 @@ public sealed class ActivityUpgradeGroundworkTests
                 [],
                 [activity, workflow],
                 [],
-                Binding: new([], true, false, "access", []),
+                Binding: new(
+                    [new("WorkflowDraft", "workflow-draft")],
+                    true,
+                    false,
+                    "access",
+                    [
+                        new("WorkflowDraft", "workflow-definition", DraftId: "workflow-draft", Revision: workflowRevision),
+                        new(
+                            "ActivityVersion",
+                            "dependency-definition",
+                            "old",
+                            "1.0.0",
+                            TemplateHash: "hash-old",
+                            Lifecycle: ActivityDefinitionVersionLifecycle.Active)
+                    ]),
                 Stages: [new("stage", 10, ActivityUpgradeStageStatus.Ready, ["activity-step", "workflow-step"], [])]);
         }
 
@@ -426,8 +542,24 @@ public sealed class ActivityUpgradeGroundworkTests
         public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
         public bool SupportsScopedVariables(ActivityNode activity) => false;
     }
+
+    private sealed class ParentUsageStructureService(ActivityNode child) : IActivityStructureService
+    {
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
+            activity.NodeId == "container" ? [new("children", [child])] : [];
+        public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) =>
+            activity.NodeId == "container"
+                ? [new(child.NodeId, [new("Outcome", "approved", "Connected")])]
+                : [];
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => activity;
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => activity.Structure;
+        public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+        public bool SupportsScopedVariables(ActivityNode activity) => false;
+    }
     private sealed class VersionStore(params ActivityDefinitionVersionPublication[] versions) : IActivityDefinitionVersionPublicationStore
     {
+        public ActivityDefinitionVersionPublication FindRequired(string id) =>
+            versions.Single(x => StringComparer.Ordinal.Equals(x.DefinitionVersionId, id));
         public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) => Task.FromResult(versions.SingleOrDefault(x => x.DefinitionVersionId == definitionVersionId));
         public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>(versions.Where(x => x.DefinitionId == definitionId).ToArray());
     }

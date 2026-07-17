@@ -33,6 +33,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         StorageDriverType: null,
         DisplayName: referenceKey,
         Category: null,
+        IsNullable: false,
         IsRequired: true);
 
     [Fact]

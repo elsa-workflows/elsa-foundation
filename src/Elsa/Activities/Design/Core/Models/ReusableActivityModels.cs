@@ -484,7 +484,7 @@ public sealed record ActivityUpgradeOwnerSnapshot(
     string? DefinitionHeadVersionId,
     string? SourceVersionId,
     IReadOnlyList<ActivityUpgradeOccurrenceReplacement> DirectReplacements,
-    IReadOnlyList<ActivityDefinitionReference> DependencyPath,
+    IReadOnlyList<IReadOnlyList<ActivityDefinitionReference>> DependencyPaths,
     bool RequiresPublishedChildVersion = false,
     string? RequiredChildStepId = null,
     ActivityDraftDiffCandidateRequest? DiffCandidate = null);
@@ -609,7 +609,8 @@ public sealed record ActivityUpgradeApplyReceipt(
     ActivityUpgradeApplyResult? Result = null,
     IReadOnlyList<ActivityDiagnostic>? Diagnostics = null,
     int? RejectionStatusCode = null,
-    string? RejectionCode = null)
+    string? RejectionCode = null,
+    DateTimeOffset LeaseExpiresAt = default)
 {
     public IReadOnlyList<ActivityDiagnostic> Diagnostics { get; init; } = Diagnostics ?? [];
 }
@@ -624,10 +625,13 @@ public sealed record ActivityUpgradePublishedDraft(
     string DefinitionId,
     string PublishedVersionId);
 
+public sealed record ActivityUpgradePublicationReceipt(
+    string ReceiptId,
+    IReadOnlyList<ActivityUpgradePublishedDraftSelection> PublishedDrafts);
+
 public sealed record ActivityUpgradePlanRefreshRequest(
     string PlanId,
-    string ReceiptId,
-    IReadOnlyList<ActivityUpgradePublishedDraftSelection> PublishedDrafts,
+    IReadOnlyList<ActivityUpgradePublicationReceipt> Publications,
     string? TenantId,
     string AccessProfileFingerprint);
 
