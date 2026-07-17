@@ -97,11 +97,13 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
         cancellationToken.ThrowIfCancellationRequested();
+        var documentId = PhysicalDocumentId(workflowExecutionId, workItemId);
         var existing = await LoadDocumentAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
-            GroundworkCompositeDocumentId.From(workflowExecutionId, workItemId), envelope => envelope.Item, cancellationToken);
+            documentId, envelope => envelope.Item, cancellationToken);
         if (existing is null)
             return false;
-        await DeleteDocumentAsync(GroundworkCompositeDocumentId.From(workflowExecutionId, workItemId), cancellationToken);
+        EnsureLogicalIdentity(existing, workflowExecutionId, workItemId);
+        await DeleteDocumentAsync(documentId, cancellationToken);
         return true;
     }
 
