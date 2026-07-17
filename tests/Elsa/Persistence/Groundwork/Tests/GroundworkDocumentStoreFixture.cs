@@ -19,7 +19,8 @@ internal sealed class GroundworkDocumentStoreFixture(
 {
     private static readonly ProviderIdentity SqliteProvider = new("groundwork-sqlite", "1.0.0");
 
-    public IDocumentStore DocumentStore { get; } = documentStore is IBoundedDocumentStore
+    public IDocumentStore DocumentStore { get; } =
+        documentStore is IBoundedDocumentStore && ReferenceEquals(documentStore, boundedDocumentStore)
         ? documentStore
         : new CombinedDocumentStore(documentStore, boundedDocumentStore);
 
@@ -67,8 +68,11 @@ internal sealed class GroundworkDocumentStoreFixture(
         StorageManifest? manifest,
         DocumentStoreAccess? access)
     {
-        var store = new InMemoryDocumentStore(manifest ?? RuntimeManifest(), access);
-        return new GroundworkDocumentStoreFixture(store, store);
+        var selectedManifest = manifest ?? RuntimeManifest();
+        var store = new InMemoryDocumentStore(selectedManifest, access);
+        return new GroundworkDocumentStoreFixture(
+            store,
+            new LegacyBoundedQueryAdapter(store, selectedManifest));
     }
 
     private static StorageManifest RuntimeManifest() =>
@@ -129,9 +133,14 @@ internal sealed class GroundworkDocumentStoreFixture(
                     cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.DurableTimerDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery)
-                return await QueryDateTimeLessThanOrEqualAsync(
+                return await QueryDueAsync(
                     query,
                     ElsaRuntimeStorageManifest.DurableTimerDueTimeField,
+                    [
+                        ElsaRuntimeStorageManifest.DurableTimerDueTimeField,
+                        ElsaRuntimeStorageManifest.DurableTimerIdField
+                    ],
+                    [],
                     "Groundwork durable timer due cursor must be non-null.",
                     cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.DurableTimerDocumentKind &&
@@ -139,9 +148,19 @@ internal sealed class GroundworkDocumentStoreFixture(
                 return await new RuntimeTestBoundedDocumentStore(store).QueryAsync(query, cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery)
-                return await QueryDateTimeLessThanOrEqualAsync(
+                return await QueryDueAsync(
                     query,
                     ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
+                    [
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField,
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField
+                    ],
+                    [
+                        new ExpectedEquality(
+                            ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField,
+                            bool.TrueString.ToLowerInvariant())
+                    ],
                     "Groundwork recurring schedule due cursor must be non-null.",
                     cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind &&
@@ -398,20 +417,31 @@ internal sealed class GroundworkDocumentStoreFixture(
             return new DocumentQueryResult(window.ToArray(), matches.Length);
         }
 
-        private async Task<DocumentQueryResult> QueryDateTimeLessThanOrEqualAsync(
+        private async Task<DocumentQueryResult> QueryDueAsync(
             DocumentQuery query,
-            string expectedPath,
+            string duePath,
+            IReadOnlyList<string> expectedOrder,
+            IReadOnlyList<ExpectedEquality> expectedEqualities,
             string nullValueMessage,
             CancellationToken cancellationToken)
         {
-            var comparison = query.Clauses
+            var comparisons = query.Clauses
                 .SelectMany(clause => clause.Comparisons)
-                .Single();
-            if (comparison.Operator != QueryComparisonOperator.LessThanOrEqual ||
-                comparison.Path != expectedPath ||
-                comparison.Values.Count != 1 ||
-                query.Order.Count != 1 ||
-                query.Order[0].Path != expectedPath)
+                .ToArray();
+            var due = comparisons.SingleOrDefault(comparison =>
+                comparison.Path == duePath &&
+                comparison.Operator == QueryComparisonOperator.LessThanOrEqual);
+            var equalityMatches = expectedEqualities.All(expected =>
+                comparisons.Any(comparison =>
+                    comparison.Path == expected.Path &&
+                    comparison.Operator == QueryComparisonOperator.Equal &&
+                    comparison.Values.Count == 1 &&
+                    StringComparer.OrdinalIgnoreCase.Equals(comparison.Values[0], expected.Value)));
+            if (due is null ||
+                due.Values.Count != 1 ||
+                comparisons.Length != expectedEqualities.Count + 1 ||
+                !equalityMatches ||
+                !query.Order.Select(order => order.Path).SequenceEqual(expectedOrder, StringComparer.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
@@ -421,16 +451,18 @@ internal sealed class GroundworkDocumentStoreFixture(
             var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
 #pragma warning restore GW0004
             var asOf = DateTimeOffset.Parse(
-                comparison.Values[0] ?? throw new InvalidOperationException(nullValueMessage),
+                due.Values[0] ?? throw new InvalidOperationException(nullValueMessage),
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind);
             var matches = all.Documents
-                .Select(document => (Document: document, NextOccurrence: ReadDateTimeOffset(
+                .Where(document => expectedEqualities.All(expected =>
+                    StringComparer.OrdinalIgnoreCase.Equals(ReadScalar(document, expected.Path), expected.Value)))
+                .Select(document => (Document: document, DueAt: ReadDateTimeOffset(
                     document,
-                    expectedPath)))
-                .Where(entry => entry.NextOccurrence <= asOf)
-                .OrderBy(entry => entry.NextOccurrence)
-                .ThenBy(entry => entry.Document.Id, StringComparer.Ordinal)
+                    duePath)))
+                .Where(entry => entry.DueAt <= asOf)
+                .OrderBy(entry => entry.DueAt)
+                .ThenBy(entry => ReadString(entry.Document, expectedOrder[^1]), StringComparer.Ordinal)
                 .ToArray();
             IEnumerable<DocumentEnvelope> window = matches.Select(entry => entry.Document);
             if (query.Skip is { } skip)
@@ -438,6 +470,20 @@ internal sealed class GroundworkDocumentStoreFixture(
             if (query.Take is { } take)
                 window = window.Take(take);
             return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
+        private static string? ReadScalar(DocumentEnvelope envelope, string path)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            var value = GetPropertyPath(document.RootElement, path);
+            return value.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => value.GetString(),
+                JsonValueKind.True => bool.TrueString,
+                JsonValueKind.False => bool.FalseString,
+                _ => value.GetRawText()
+            };
         }
 
         private static DateTimeOffset ReadExpiry(DocumentEnvelope envelope)
@@ -486,6 +532,8 @@ internal sealed class GroundworkDocumentStoreFixture(
                 current = current.GetProperty(segment);
             return current;
         }
+
+        private sealed record ExpectedEquality(string Path, string Value);
 
         public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             (await QueryAsync(query, cancellationToken)).TotalCount;

@@ -59,6 +59,9 @@ public static class ElsaRuntimeStorageManifest
     public const string ByOutboxItemIdIndex = "by-outbox-item-id";
     public const string ByOutboxIntentKindIndex = "by-outbox-intent-kind";
     public const string BySchedulerWorkOrderIndex = "by-scheduler-work-order";
+    public const string ByTimerIdIndex = "by-timer-id";
+    public const string ByRecurringScheduleIdIndex = "by-recurring-schedule-id";
+    public const string ByRecurringScheduleActiveIndex = "by-recurring-schedule-active";
     public const string ByStimulusAndTypeIndex = "by-stimulus-and-type";
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
@@ -291,7 +294,9 @@ public static class ElsaRuntimeStorageManifest
     public const string DurableTimerDocumentKind = "durableTimer";
     public const string DurableTimerByWorkflowExecution = ByWorkflowExecutionIndex;
     public const string DurableTimerDueTimeField = "timer.dueTime";
+    public const string DurableTimerIdField = "timer.timerId";
     public const string DurableTimerByDueTime = "by-due-time";
+    public const string DurableTimerByDueTimeAndTimerId = "by-due-time-and-timer-id";
     public const string DurableTimerClaimOrderKeyField = "claimOrderKey";
     public const string DurableTimerByClaimOrder = "by-claim-order";
     public const string ListDurableTimersByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
@@ -353,9 +358,13 @@ public static class ElsaRuntimeStorageManifest
 
     /// <summary>Nested path to the mutable recurring fire cursor inside the persisted recurring-schedule envelope.</summary>
     public const string RecurringTriggerScheduleNextOccurrenceField = "schedule.nextOccurrence";
+    public const string RecurringTriggerScheduleIdField = "schedule.scheduleId";
+    public const string RecurringTriggerScheduleIsActiveField = "schedule.isActive";
 
     /// <summary>Date index used by the recurring-trigger pump's due-schedule sweep.</summary>
     public const string RecurringTriggerScheduleByNextOccurrence = "by-next-occurrence";
+    public const string RecurringTriggerScheduleByActiveNextOccurrenceAndScheduleId =
+        "by-active-next-occurrence-and-schedule-id";
 
     public const string ListRecurringTriggerSchedulesByPublicationQuery = "list-by-publication";
     public const string ListDueRecurringTriggerSchedulesQuery = "list-due";
@@ -371,7 +380,8 @@ public static class ElsaRuntimeStorageManifest
                     WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
                         BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
                             WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())))))));
+                                DueWorkStoragePhysicalizer.AddRoutes(
+                                    LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))))));
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
@@ -604,6 +614,7 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByCollectionIndex, CollectionField),
                     Keyword(DurableTimerByWorkflowExecution, WorkflowExecutionIdField),
+                    Keyword(ByTimerIdIndex, DurableTimerIdField),
                     DateTime(DurableTimerByDueTime, DurableTimerDueTimeField),
                     new IndexDeclaration(
                         DurableTimerByClaimOrder,
@@ -651,6 +662,8 @@ public static class ElsaRuntimeStorageManifest
                     Keyword(ByCollectionIndex, CollectionField),
                     Keyword(ByArtifactIndex, ArtifactIdField),
                     Keyword(ByPublicationIndex, RecurringTriggerSchedulePublicationIdField),
+                    Keyword(ByRecurringScheduleIdIndex, RecurringTriggerScheduleIdField),
+                    Boolean(ByRecurringScheduleActiveIndex, RecurringTriggerScheduleIsActiveField),
                     DateTime(RecurringTriggerScheduleByNextOccurrence, RecurringTriggerScheduleNextOccurrenceField)
                 ],
                 [
@@ -723,6 +736,16 @@ public static class ElsaRuntimeStorageManifest
         identity,
         [new IndexField(field)],
         IndexValueKind.Number,
+        false,
+        true,
+        MissingValueBehavior.Excluded,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
+
+    private static IndexDeclaration Boolean(string identity, string field) => new(
+        identity,
+        [new IndexField(field)],
+        IndexValueKind.Boolean,
         false,
         true,
         MissingValueBehavior.Excluded,

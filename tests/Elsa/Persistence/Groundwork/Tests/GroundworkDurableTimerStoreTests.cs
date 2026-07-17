@@ -74,10 +74,19 @@ public sealed class GroundworkDurableTimerStoreTests
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, comparison.Path);
         Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
         Assert.Equal(Now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
-        var order = Assert.Single(query.Order);
-        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, order.Path);
-        Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
-        Assert.Null(query.Take);
+        Assert.Collection(
+            query.Order,
+            order =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerIdField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            });
+        Assert.Equal(17, query.Take);
     }
 
     [Fact]
