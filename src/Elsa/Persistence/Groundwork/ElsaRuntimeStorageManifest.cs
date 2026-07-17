@@ -193,8 +193,10 @@ public static class ElsaRuntimeStorageManifest
     // Durable timer store. Each pending timer is a document so timers survive process restarts; the
     // by-due-time route bounds the due-timer sweep by the persisted deadline.
     public const string DurableTimerDocumentKind = "durableTimer";
+    public const string DurableTimerByWorkflowExecution = ByWorkflowExecutionIndex;
     public const string DurableTimerDueTimeField = "timer.dueTime";
     public const string DurableTimerByDueTime = "by-due-time";
+    public const string ListDurableTimersByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
     public const string ListDueDurableTimersQuery = "list-due";
 
     // Durable trigger index over PUBLISHED artifacts (W7, E3-1). Each start-trigger activity in a
@@ -440,10 +442,12 @@ public static class ElsaRuntimeStorageManifest
                 "Durable timer",
                 [
                     Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(DurableTimerByWorkflowExecution, WorkflowExecutionIdField),
                     DateTime(DurableTimerByDueTime, DurableTimerDueTimeField)
                 ],
                 [
                     Query("list-all", ByCollectionIndex),
+                    Query(ListDurableTimersByWorkflowExecutionQuery, DurableTimerByWorkflowExecution),
                     Query(
                         ListDueDurableTimersQuery,
                         DurableTimerByDueTime,

@@ -90,13 +90,12 @@ public sealed class GroundworkDurableTimerStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
         var timers = await QueryDocumentsAsync<DurableTimerEnvelope, DurableTimer>(
-            ElsaRuntimeStorageManifest.ListAllQuery,
-            ElsaRuntimeStorageManifest.CollectionField,
-            ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
+            ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            workflowExecutionId,
             envelope => envelope.Timer,
             cancellationToken);
-        return timers.Where(timer => StringComparer.Ordinal.Equals(timer.WorkflowExecutionId, workflowExecutionId))
-            .OrderBy(timer => timer.TimerId, StringComparer.Ordinal)
+        return timers.OrderBy(timer => timer.TimerId, StringComparer.Ordinal)
             .ToArray();
     }
 
