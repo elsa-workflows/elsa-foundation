@@ -1247,7 +1247,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "No Groundwork implementation exists.",
       "performanceWorkload": "iam-normalized-lookup-update",
       "accessPolicy": "ordinary",
