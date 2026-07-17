@@ -1425,11 +1425,11 @@
     {
       "id": "distributed-execution-placement",
       "family": "distributed-runtime",
-      "contract": "IExecutionPlacementStore",
+      "contract": "IExecutionPlacementStore; IPagedExecutionPlacementStore",
       "outcome": "specialized-primitive",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "List is unbounded and LeaseFencing is advertised before checkpoint integration proves it.",
       "performanceWorkload": "placement-takeover",
       "accessPolicy": "ordinary",
@@ -1466,6 +1466,7 @@
       "behavioralBaseline": [
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionPlacementStoreContractTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedCasTests.cs",
+        "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/GroundworkDistributedBoundedQueryTests.cs",
         "tests/Elsa/Workflows/Runtime/Distributed/Tests/GroundworkTwoNodeAcceptanceTests.cs"
       ]
     },
