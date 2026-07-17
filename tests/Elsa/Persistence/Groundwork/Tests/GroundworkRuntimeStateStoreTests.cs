@@ -380,6 +380,36 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(3, (await store.ListAllAsync()).Count);
     }
 
+    [Fact]
+    public async Task ControlPlaneState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        IWorkflowHoldStateStore seedStore = new GroundworkWorkflowHoldStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(WorkflowHold("cp-1", "wf-1", "first"));
+
+        var competingStore = new GroundworkWorkflowHoldStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, request.DocumentKind);
+                Assert.Equal("cp-1", request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(WorkflowHold("cp-1", "wf-1", "competing"));
+            }
+        };
+        IWorkflowHoldStateStore store = new GroundworkWorkflowHoldStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(WorkflowHold("cp-1", "wf-1", "caller")).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("cp-1");
+        Assert.Equal("competing", winner!.Metadata["value"]);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -576,6 +606,17 @@ public sealed class GroundworkRuntimeStateStoreTests
         sourceActivityExecutionId: null,
         capturedAt: DateTimeOffset.UnixEpoch,
         metadata: new Dictionary<string, string>());
+
+    private static WorkflowHoldState WorkflowHold(string controlPlaneStateId, string? workflowExecutionId, string value) =>
+        new(
+            controlPlaneStateId,
+            workflowExecutionId,
+            activeHolds: null,
+            releasedHolds: null,
+            metadata: new Dictionary<string, string>
+            {
+                ["value"] = value
+            });
 
     private static SchedulerState Scheduler(string workflowExecutionId, long version) => new(
         workflowExecutionId,
