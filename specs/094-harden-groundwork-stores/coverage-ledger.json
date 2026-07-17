@@ -85,7 +85,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
       "performanceWorkload": "not-hot-path",
       "accessPolicy": "ordinary",

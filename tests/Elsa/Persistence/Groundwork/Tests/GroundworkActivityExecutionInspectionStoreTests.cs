@@ -36,6 +36,34 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     }
 
     [Fact]
+    public async Task SaveAsync_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var seedStore = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(Projection("wf-1", "ae-1", sequence: 1));
+
+        var competingStore = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(documentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "ae-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(Projection("wf-1", "ae-1", sequence: 2));
+            }
+        };
+        var store = new GroundworkActivityExecutionInspectionStore(interceptingStore, GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(() =>
+            store.SaveAsync(Projection("wf-1", "ae-1", sequence: 3)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.InnerException?.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "ae-1");
+        Assert.Equal(2, winner!.ExecutionSequence);
+    }
+
+    [Fact]
     public async Task ListSummariesAsync_Returns_Lightweight_Summaries_With_Evidence_Counts()
     {
         var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
