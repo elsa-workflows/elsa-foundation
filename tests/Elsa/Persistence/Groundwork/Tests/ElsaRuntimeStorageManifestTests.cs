@@ -323,6 +323,7 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(
             physical.Indexes,
             index => index.LogicalName == ElsaRuntimeStorageManifest.ByStimulusAndTypeIndex && index.Columns.Count == 3);
+        AssertStimulusProjectionLengths(physical);
     }
 
     [Fact]
@@ -352,6 +353,7 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(
             physical.Indexes,
             index => index.LogicalName == ElsaRuntimeStorageManifest.BookmarkStateByStimulusAndType && index.Columns.Count == 3);
+        AssertStimulusProjectionLengths(physical);
     }
 
     [Fact]
@@ -471,5 +473,18 @@ public sealed class ElsaRuntimeStorageManifestTests
             unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListRetiredWorkflowExecutableSourceReferencesQuery &&
                      query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
+    }
+
+    private static void AssertStimulusProjectionLengths(PhysicalTableDefinition physical)
+    {
+        var stimulusHash = Assert.Single(
+            physical.ProjectedColumns,
+            column => column.LogicalName == ElsaRuntimeStorageManifest.ByStimulusIndex);
+        var stimulusType = Assert.Single(
+            physical.ProjectedColumns,
+            column => column.LogicalName == ElsaRuntimeStorageManifest.ByStimulusTypeIndex);
+
+        Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashProjectionLength, stimulusHash.Length);
+        Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeProjectionLength, stimulusType.Length);
     }
 }

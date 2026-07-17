@@ -35,7 +35,7 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
             MissingValueBehavior.Excluded);
         var augmentedDefinition = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
-            definition.ProjectedColumns,
+            ElsaRuntimeStorageManifest.BoundStimulusProjectionColumns(definition.ProjectedColumns),
             definition.Indexes.Concat(
             [
                 new PhysicalIndexDefinition(

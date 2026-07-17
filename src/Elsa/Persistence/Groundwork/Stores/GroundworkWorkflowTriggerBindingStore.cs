@@ -30,9 +30,34 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentException.ThrowIfNullOrWhiteSpace(binding.TriggerBindingId);
 
-        await SaveDocumentAsync(binding.TriggerBindingId, binding, cancellationToken);
+        var existing = await Store.LoadAsync(DocumentKind, binding.TriggerBindingId, cancellationToken);
+        var result = await SaveDocumentAsync(
+            binding.TriggerBindingId,
+            binding,
+            cancellationToken,
+            existing?.Version ?? 0);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return binding;
+        if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+        {
+            throw new InvalidOperationException(
+                $"Groundwork rejected workflow trigger binding '{binding.TriggerBindingId}' with status '{result.Status}'.");
+        }
 
-        return binding;
+        var winner = await Store.LoadAsync(DocumentKind, binding.TriggerBindingId, cancellationToken);
+        if (winner is not null)
+        {
+            var winnerBinding = Serializer.Deserialize<WorkflowTriggerBinding>(winner);
+            if (StringComparer.Ordinal.Equals(
+                    Serializer.SerializeForComparison(winnerBinding),
+                    Serializer.SerializeForComparison(binding)))
+            {
+                return binding;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Workflow trigger binding '{binding.TriggerBindingId}' changed concurrently and was not overwritten.");
     }
 
     public async ValueTask PreparePublicationAsync(
@@ -44,13 +69,26 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         ArgumentNullException.ThrowIfNull(bindings);
         ValidatePublicationBindings(publicationId, bindings);
 
+        var projectionStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
         var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var prepared = bindings.Select(binding => binding with { IsActive = false }).ToArray();
+        if (projectionStateEnvelope is not null)
+        {
+            var projectionState = Serializer.Deserialize<GroundworkPublicationProjectionState>(projectionStateEnvelope);
+            if (!projectionState.IsActive && ProjectionsEqual(existing, prepared))
+                return;
+
+            throw new InvalidOperationException(
+                $"Trigger-binding publication projection '{publicationId}' is already prepared with different state.");
+        }
+
         await CommitAtomicallyAsync(
             existing.Select(binding => binding.TriggerBindingId),
-            bindings.Select(binding => binding with { IsActive = false }),
-            new PublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
+            prepared,
+            new GroundworkPublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
             deleteProjectionStateId: null,
-            cancellationToken);
+            cancellationToken,
+            projectionStateExpectedVersion: 0);
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByPublicationAsync(
@@ -77,21 +115,35 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         if (candidateStateEnvelope is null)
             throw new InvalidOperationException($"Publication '{publicationId}' has no prepared trigger-binding projection.");
 
-        var candidateState = Serializer.Deserialize<PublicationProjectionState>(candidateStateEnvelope);
+        var candidateState = Serializer.Deserialize<GroundworkPublicationProjectionState>(candidateStateEnvelope);
+        var hasDistinctReplacement = replacedPublicationId is not null &&
+            !StringComparer.Ordinal.Equals(publicationId, replacedPublicationId);
+        var replacedStateEnvelope = !hasDistinctReplacement
+            ? null
+            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId!, cancellationToken);
+        var replacedState = replacedStateEnvelope is null
+            ? null
+            : Serializer.Deserialize<GroundworkPublicationProjectionState>(replacedStateEnvelope);
+        if (GroundworkPublicationProjectionTransition.IsAlreadyActivated(
+                candidateState,
+                replacedState,
+                hasDistinctReplacement))
+        {
+            return;
+        }
+
+        GroundworkPublicationProjectionTransition.EnsureCanActivate(
+            candidateState,
+            replacedState,
+            hasDistinctReplacement);
+
         var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
-        var replaced = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
+        var replaced = !hasDistinctReplacement
             ? []
-            : await ListByPublicationAsync(replacedPublicationId, cancellationToken);
+            : await ListByPublicationAsync(replacedPublicationId!, cancellationToken);
         var updates = candidate.Select(binding => binding with { IsActive = true })
             .Concat(replaced.Select(binding => binding with { IsActive = false }))
             .ToArray();
-
-        var replacedStateEnvelope = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
-            ? null
-            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId, cancellationToken);
-        var replacedState = replacedStateEnvelope is null
-            ? null
-            : Serializer.Deserialize<PublicationProjectionState>(replacedStateEnvelope);
         await CommitAtomicallyAsync(
             [],
             updates,
@@ -215,10 +267,10 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     private async ValueTask CommitAtomicallyAsync(
         IEnumerable<string> deleteIds,
         IEnumerable<WorkflowTriggerBinding> upserts,
-        PublicationProjectionState? projectionState,
+        GroundworkPublicationProjectionState? projectionState,
         string? deleteProjectionStateId,
         CancellationToken cancellationToken,
-        PublicationProjectionState? secondaryProjectionState = null,
+        GroundworkPublicationProjectionState? secondaryProjectionState = null,
         long? projectionStateExpectedVersion = null,
         long? secondaryProjectionStateExpectedVersion = null)
     {
@@ -248,7 +300,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
 
     private async ValueTask SaveProjectionStateAsync(
         IDocumentUnitOfWork unitOfWork,
-        PublicationProjectionState state,
+        GroundworkPublicationProjectionState state,
         long? expectedVersion,
         CancellationToken cancellationToken)
     {
@@ -271,5 +323,26 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     private static string ProjectionStateId(string publicationId) =>
         $"{ProjectionKind}:{publicationId.Length}:{publicationId}";
 
-    private sealed record PublicationProjectionState(string ProjectionKind, string PublicationId, bool IsActive);
+    private bool ProjectionsEqual(
+        IEnumerable<WorkflowTriggerBinding> existing,
+        IEnumerable<WorkflowTriggerBinding> prepared)
+    {
+        var existingById = existing.ToDictionary(binding => binding.TriggerBindingId, StringComparer.Ordinal);
+        var preparedById = prepared.ToDictionary(binding => binding.TriggerBindingId, StringComparer.Ordinal);
+        if (existingById.Count != preparedById.Count)
+            return false;
+
+        foreach (var (id, expected) in preparedById)
+        {
+            if (!existingById.TryGetValue(id, out var actual))
+                return false;
+
+            var (_, actualJson) = Serializer.Serialize(DocumentKind, actual with { IsActive = false });
+            var (_, expectedJson) = Serializer.Serialize(DocumentKind, expected);
+            if (!StringComparer.Ordinal.Equals(actualJson, expectedJson))
+                return false;
+        }
+
+        return true;
+    }
 }

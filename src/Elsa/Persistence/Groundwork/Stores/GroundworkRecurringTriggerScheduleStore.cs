@@ -76,13 +76,26 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         ArgumentNullException.ThrowIfNull(schedules);
         ValidatePublicationSchedules(publicationId, schedules);
 
+        var projectionStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
         var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var prepared = schedules.Select(schedule => schedule with { IsActive = false }).ToArray();
+        if (projectionStateEnvelope is not null)
+        {
+            var projectionState = Serializer.Deserialize<GroundworkPublicationProjectionState>(projectionStateEnvelope);
+            if (!projectionState.IsActive && ProjectionsEqual(existing, prepared))
+                return;
+
+            throw new InvalidOperationException(
+                $"Recurring-schedule publication projection '{publicationId}' is already prepared with different state.");
+        }
+
         await CommitAtomicallyAsync(
             existing.Select(schedule => schedule.ScheduleId),
-            schedules.Select(schedule => schedule with { IsActive = false }),
-            new PublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
+            prepared,
+            new GroundworkPublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
             deleteProjectionStateId: null,
-            cancellationToken);
+            cancellationToken,
+            projectionStateExpectedVersion: 0);
     }
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
@@ -111,21 +124,35 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         if (candidateStateEnvelope is null)
             throw new InvalidOperationException($"Publication '{publicationId}' has no prepared recurring-schedule projection.");
 
-        var candidateState = Serializer.Deserialize<PublicationProjectionState>(candidateStateEnvelope);
+        var candidateState = Serializer.Deserialize<GroundworkPublicationProjectionState>(candidateStateEnvelope);
+        var hasDistinctReplacement = replacedPublicationId is not null &&
+            !StringComparer.Ordinal.Equals(publicationId, replacedPublicationId);
+        var replacedStateEnvelope = !hasDistinctReplacement
+            ? null
+            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId!, cancellationToken);
+        var replacedState = replacedStateEnvelope is null
+            ? null
+            : Serializer.Deserialize<GroundworkPublicationProjectionState>(replacedStateEnvelope);
+        if (GroundworkPublicationProjectionTransition.IsAlreadyActivated(
+                candidateState,
+                replacedState,
+                hasDistinctReplacement))
+        {
+            return;
+        }
+
+        GroundworkPublicationProjectionTransition.EnsureCanActivate(
+            candidateState,
+            replacedState,
+            hasDistinctReplacement);
+
         var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
-        var replaced = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
+        var replaced = !hasDistinctReplacement
             ? []
-            : await ListByPublicationAsync(replacedPublicationId, cancellationToken);
+            : await ListByPublicationAsync(replacedPublicationId!, cancellationToken);
         var updates = candidate.Select(schedule => schedule with { IsActive = true })
             .Concat(replaced.Select(schedule => schedule with { IsActive = false }))
             .ToArray();
-        var replacedStateEnvelope = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
-            ? null
-            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId, cancellationToken);
-        var replacedState = replacedStateEnvelope is null
-            ? null
-            : Serializer.Deserialize<PublicationProjectionState>(replacedStateEnvelope);
-
         await CommitAtomicallyAsync(
             [],
             updates,
@@ -263,10 +290,10 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     private async ValueTask CommitAtomicallyAsync(
         IEnumerable<string> deleteIds,
         IEnumerable<RecurringTriggerSchedule> upserts,
-        PublicationProjectionState? projectionState,
+        GroundworkPublicationProjectionState? projectionState,
         string? deleteProjectionStateId,
         CancellationToken cancellationToken,
-        PublicationProjectionState? secondaryProjectionState = null,
+        GroundworkPublicationProjectionState? secondaryProjectionState = null,
         long? projectionStateExpectedVersion = null,
         long? secondaryProjectionStateExpectedVersion = null)
     {
@@ -296,7 +323,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
 
     private async ValueTask SaveProjectionStateAsync(
         IDocumentUnitOfWork unitOfWork,
-        PublicationProjectionState state,
+        GroundworkPublicationProjectionState state,
         long? expectedVersion,
         CancellationToken cancellationToken)
     {
@@ -319,5 +346,26 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     private static string ProjectionStateId(string publicationId) =>
         $"{ProjectionKind}:{publicationId.Length}:{publicationId}";
 
-    private sealed record PublicationProjectionState(string ProjectionKind, string PublicationId, bool IsActive);
+    private bool ProjectionsEqual(
+        IEnumerable<RecurringTriggerSchedule> existing,
+        IEnumerable<RecurringTriggerSchedule> prepared)
+    {
+        var existingById = existing.ToDictionary(schedule => schedule.ScheduleId, StringComparer.Ordinal);
+        var preparedById = prepared.ToDictionary(schedule => schedule.ScheduleId, StringComparer.Ordinal);
+        if (existingById.Count != preparedById.Count)
+            return false;
+
+        foreach (var (id, expected) in preparedById)
+        {
+            if (!existingById.TryGetValue(id, out var actual))
+                return false;
+
+            var (_, actualJson) = Serializer.Serialize(DocumentKind, ToEnvelope(actual with { IsActive = false }));
+            var (_, expectedJson) = Serializer.Serialize(DocumentKind, ToEnvelope(expected));
+            if (!StringComparer.Ordinal.Equals(actualJson, expectedJson))
+                return false;
+        }
+
+        return true;
+    }
 }
