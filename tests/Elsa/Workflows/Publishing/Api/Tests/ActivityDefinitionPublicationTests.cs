@@ -276,6 +276,74 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task Preflight_reports_missing_storage_readiness_as_a_blocking_diagnostic()
+    {
+        var template = Template([new("acme.secure-value")]);
+        var harness = PublisherHarness.Create(
+            compileResult: SuccessfulCompilation(template),
+            runtimeReady: true);
+
+        var preflight = await harness.Publisher.PreflightAsync(
+            new("draft-1", 4, null));
+
+        var storage = Assert.Single(preflight.Storage);
+        Assert.Equal("acme.secure-value", storage.Key);
+        Assert.Equal("Missing", storage.Status);
+        Assert.False(preflight.IsPublishable);
+        Assert.Contains(
+            preflight.Diagnostics,
+            x => x.Code == "activity.runtime.storage-driver-missing");
+    }
+
+    [Fact]
+    public async Task Invalid_readiness_records_a_rejected_receipt_and_unknown_keys_are_reconcilable()
+    {
+        var harness = PublisherHarness.Create(runtimeReady: false);
+        var preflight = await harness.Publisher.PreflightAsync(
+            new("draft-1", 4, null));
+
+        await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishReviewedAsync(new(
+                "draft-1",
+                4,
+                null,
+                "1.0.0",
+                preflight.ReviewToken,
+                "publish-operation-rejected")));
+
+        Assert.Equal(
+            ActivityPublicationReceiptStatus.Rejected,
+            (await harness.Publisher.GetReceiptAsync("publish-operation-rejected")).Status);
+        Assert.Equal(
+            ActivityPublicationReceiptStatus.OutcomeUnknown,
+            (await harness.Publisher.GetReceiptAsync("publish-operation-unknown")).Status);
+        Assert.Equal(0, harness.Commit.CallCount);
+    }
+
+    [Fact]
+    public async Task Unexpected_commit_failure_records_a_safe_failed_receipt()
+    {
+        var harness = PublisherHarness.Create(commitFails: true);
+        var preflight = await harness.Publisher.PreflightAsync(
+            new("draft-1", 4, null));
+
+        await Assert.ThrowsAsync<IOException>(() =>
+            harness.Publisher.PublishReviewedAsync(new(
+                "draft-1",
+                4,
+                null,
+                "1.0.0",
+                preflight.ReviewToken,
+                "publish-operation-failed")));
+
+        var receipt = await harness.Publisher.GetReceiptAsync("publish-operation-failed");
+        Assert.Equal(ActivityPublicationReceiptStatus.Failed, receipt.Status);
+        Assert.Equal("activity.operation.failed", receipt.ErrorCode);
+        Assert.Empty(receipt.Diagnostics);
+        Assert.Null(receipt.Outcome);
+    }
+
+    [Fact]
     public async Task Implementation_only_change_requires_minor_and_diff_receives_provider_runtime_and_layout_facts()
     {
         var oldTemplate = Template();
@@ -483,7 +551,8 @@ public sealed class ActivityDefinitionPublicationTests
 
     private static ActivityResourceMeasurements Measurements() => new(1, 1, 0, 1, 10, 20, 0);
 
-    private static ExecutableActivityTemplate Template() => new(
+    private static ExecutableActivityTemplate Template(
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageRequirements = null) => new(
         "activity-template-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         Boundary(),
@@ -493,7 +562,8 @@ public sealed class ActivityDefinitionPublicationTests
         [new("test.consumer", "1")],
         "provider-fingerprint",
         new Dictionary<string, string>(),
-        DateTimeOffset.UnixEpoch);
+        DateTimeOffset.UnixEpoch,
+        storageRequirements);
 
     private static ActivityTemplateCompilerResult SuccessfulCompilation(ExecutableActivityTemplate? template = null) =>
         new(template ?? Template(), Measurements(), [], []);
@@ -655,7 +725,8 @@ public sealed class ActivityDefinitionPublicationTests
             string? resourceTenantId = null,
             string? authorizationTenantId = null,
             string? rereadTenantId = null,
-            bool runtimeReady = true)
+            bool runtimeReady = true,
+            bool commitFails = false)
         {
             var definition = new ActivityDefinition
             {
@@ -694,7 +765,7 @@ public sealed class ActivityDefinitionPublicationTests
             var publications = new PublisherPublicationStore(existingPublications ?? []);
             var compiler = new SpyTemplateCompiler(compileResult ?? SuccessfulCompilation());
             var receipts = new InMemoryActivityPublicationReceiptStore();
-            var commit = new SpyPublicationCommit(receipts);
+            var commit = new SpyPublicationCommit(receipts, commitFails);
             var publisher = new ActivityDefinitionPublisher(
                 new PublisherDefinitionStore(definition),
                 new PublisherAuthoringStore(authoring),
@@ -844,7 +915,9 @@ public sealed class ActivityDefinitionPublicationTests
         public IReadOnlyCollection<string> GetSupportedSchemaVersions(string consumerKey) => ["1"];
     }
 
-    private sealed class SpyPublicationCommit(IActivityPublicationReceiptStore receipts) :
+    private sealed class SpyPublicationCommit(
+        IActivityPublicationReceiptStore receipts,
+        bool fails) :
         ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
     {
         public int CallCount { get; private set; }
@@ -855,6 +928,8 @@ public sealed class ActivityDefinitionPublicationTests
             CancellationToken cancellationToken = default)
         {
             CallCount++;
+            if (fails)
+                throw new IOException("simulated infrastructure failure");
             LastCommit = commit;
             if (!await receipts.TryCreateAsync(commit.Receipt, cancellationToken))
                 throw new InvalidOperationException("Duplicate receipt.");
