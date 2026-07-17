@@ -3,12 +3,13 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, type ElsaStudioModuleApi, type StudioContributionRegistry, type StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache, createEnumWorkflowRunInputEditorContribution, isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
 import { createDraftSnapshotId, insertSequenceNodeAfter } from "../workflow-editor/editorHelpers";
 import { ValidationPanel } from "../workflow-editor/editorPanels";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
+import { createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -16,6 +17,7 @@ afterEach(() => {
   window.localStorage.removeItem?.(workflowInspectorCollapsedStorageKey);
   window.localStorage.removeItem?.(workflowInspectorWidthStorageKey);
   window.localStorage.removeItem?.(workflowSidePanelMaximizedStorageKey);
+  window.localStorage.clear();
 });
 
 describe("workflows module", () => {
@@ -109,6 +111,33 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
       expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) })
     ]);
+  });
+
+  it("clears Activity Definition recovery on logout without mounting the editor route", () => {
+    const api = testApi();
+    api.runtime.identity = { tenantId: "tenant-1", subject: "author-1" };
+    const store = createActivityDefinitionRecoveryStore({ enabled: true }, api.runtime.identity)!;
+    store.write({
+      draftId: "draft-1",
+      definitionId: "definition-1",
+      tenantId: "tenant-1",
+      revision: 2,
+      sourceVersionId: null,
+      status: "active",
+      contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] },
+      provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:test", payload: { local: true } },
+      layout: [],
+      validation: null,
+      createdAt: "2026-07-17T10:00:00Z",
+      updatedAt: "2026-07-17T10:00:00Z",
+      presentationLabel: null
+    });
+
+    register(api);
+    expect(window.localStorage.length).toBe(1);
+    window.dispatchEvent(new Event(authSessionEndedEvent));
+
+    expect(window.localStorage.length).toBe(0);
   });
 
   it("announces while the workflow definitions route loads on demand", async () => {
@@ -2808,6 +2837,7 @@ function testApi(): ElsaStudioModuleApi {
     featureAreas: featureAreaRegistry(navigation, routes),
     navigation,
     routes,
+    activityEditors: registry(),
     propertyEditors: registry(),
     expressionEditors: registry(),
     workflowRunInputEditors: registry(),

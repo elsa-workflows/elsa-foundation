@@ -104,6 +104,8 @@ export interface AuthProviderProps {
   children: ReactNode;
 }
 
+export const authSessionEndedEvent = "elsa:auth-session-ended";
+
 export interface PermissionSet {
   has(key: string): boolean;
   hasAny(keys: readonly string[]): boolean;

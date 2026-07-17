@@ -1,7 +1,7 @@
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw, Search } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext, StudioRuntimeSettings } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionCollectionRequest, ActivityDefinitionManagementView } from "./activityDefinitionTypes";
 import { classifyActivityDefinitionReadFailure, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
@@ -9,15 +9,29 @@ import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import "./activityDefinitions.css";
 
 const ActivityDefinitionWorkbench = lazy(() => import("./ActivityDefinitionWorkbench").then(module => ({ default: module.ActivityDefinitionWorkbench })));
+const ActivityDefinitionCreateDialog = lazy(() => import("./ActivityDefinitionCreateDialog").then(module => ({ default: module.ActivityDefinitionCreateDialog })));
+const ActivityDefinitionDraftEditor = lazy(() => import("./ActivityDefinitionDraftEditor").then(module => ({ default: module.ActivityDefinitionDraftEditor })));
 
 type PageSize = 10 | 25 | 50;
 type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null };
 
-export function ActivityDefinitionsPage({ context }: { context: StudioEndpointContext }) {
+export function ActivityDefinitionsPage({ context, activityEditors = () => [], runtime = {} }: { context: StudioEndpointContext; activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[]; runtime?: StudioRuntimeSettings }) {
   const [route, setRoute] = useState(readRouteState);
+  const routeRef = useRef(route);
+  const navigationBlockedRef = useRef(false);
 
   useEffect(() => {
-    const sync = () => setRoute(readRouteState());
+    routeRef.current = route;
+  }, [route]);
+
+  useEffect(() => {
+    const sync = () => {
+      if (navigationBlockedRef.current) {
+        writeRouteState(routeRef.current, "push");
+        return;
+      }
+      setRoute(readRouteState());
+    };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
@@ -26,18 +40,17 @@ export function ActivityDefinitionsPage({ context }: { context: StudioEndpointCo
     observeActivityDefinitions({ event: "route-view", surface: route.definitionId ? "workbench" : "collection" });
   }, [route.definitionId]);
 
-  const navigate = (next: RouteState) => {
-    const parameters = new URLSearchParams();
-    if (next.definitionId) parameters.set("definition", next.definitionId);
-    if (next.section) parameters.set("section", next.section);
-    if (next.draftId) parameters.set("draft", next.draftId);
-    if (next.versionId) parameters.set("version", next.versionId);
-    const query = parameters.toString();
-    window.history.pushState({}, "", `/workflows/activity-definitions${query ? `?${query}` : ""}`);
+  const navigate = (next: RouteState, force = false) => {
+    if (navigationBlockedRef.current && !force) return;
+    navigationBlockedRef.current = false;
+    writeRouteState(next, "push");
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   if (route.definitionId) {
+    if (route.section === "editor" && route.draftId) {
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => navigate({ definitionId: route.definitionId, section: "drafts", draftId: route.draftId, versionId: null }, force)} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null }, true)} /></WorkflowLazyBoundary>;
+    }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
         <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} onNavigate={navigate} />
@@ -45,10 +58,20 @@ export function ActivityDefinitionsPage({ context }: { context: StudioEndpointCo
     );
   }
 
-  return <ActivityDefinitionCollection context={context} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} />;
+  return <ActivityDefinitionCollection context={context} activityEditors={activityEditors()} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
 }
 
-function ActivityDefinitionCollection({ context, onOpen }: { context: StudioEndpointContext; onOpen(definitionId: string): void }) {
+function writeRouteState(route: RouteState, mode: "push" | "replace") {
+  const parameters = new URLSearchParams();
+  if (route.definitionId) parameters.set("definition", route.definitionId);
+  if (route.section) parameters.set("section", route.section);
+  if (route.draftId) parameters.set("draft", route.draftId);
+  if (route.versionId) parameters.set("version", route.versionId);
+  const query = parameters.toString();
+  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", `/workflows/activity-definitions${query ? `?${query}` : ""}`);
+}
+
+function ActivityDefinitionCollection({ context, activityEditors, onOpen, onCreated }: { context: StudioEndpointContext; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [providerInput, setProviderInput] = useState("");
@@ -60,6 +83,7 @@ function ActivityDefinitionCollection({ context, onOpen }: { context: StudioEndp
   const [cursorIndex, setCursorIndex] = useState(0);
   const [lastConfirmedAt, setLastConfirmedAt] = useState<number | null>(null);
   const [privacyFailure, setPrivacyFailure] = useState<"unavailable" | "forbidden" | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const observation = useRef({ fetching: false, startedAt: 0 });
   const cursor = cursorStack[cursorIndex];
   const request = useMemo(() => ({ limit: pageSize, cursor, search, authority, providerKey }), [authority, cursor, pageSize, providerKey, search]);
@@ -132,7 +156,7 @@ function ActivityDefinitionCollection({ context, onOpen }: { context: StudioEndp
     <main className="ad-page" aria-labelledby="activity-definitions-title">
       <header className="ad-page-header">
         <div><span className="ad-kicker">Workflows</span><h1 id="activity-definitions-title">Activity Definitions</h1><p>Browse stable reusable activity identities. Draft and version history stay attached to the definition you open.</p></div>
-        <button type="button" className="ad-primary-action" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button>
+        <div className="ad-header-actions"><button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button><button type="button" className="ad-primary-action" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button></div>
       </header>
 
       <section className="ad-filters" aria-label="Activity Definition filters">
@@ -161,6 +185,7 @@ function ActivityDefinitionCollection({ context, onOpen }: { context: StudioEndp
         </div>
         <footer className="ad-pager" aria-label="Activity Definition pagination"><span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} authorized definitions</span><div><button type="button" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</button><button type="button" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></button></div></footer>
       </> : null}
+      {createOpen ? <WorkflowLazyBoundary label="create activity definition"><ActivityDefinitionCreateDialog context={context} activityEditors={activityEditors} onClose={() => setCreateOpen(false)} onCreated={response => { setCreateOpen(false); onCreated(response.definition.definitionId, response.draft.draftId); }} /></WorkflowLazyBoundary> : null}
     </main>
   );
 }

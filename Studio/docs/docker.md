@@ -108,6 +108,8 @@ double-underscore (`__`) separator.
 | `Studio__BackendBaseUrl` | `https://localhost:7243` | Base URL of the Elsa Server backend. Surfaced to the browser via `/studio-runtime.js`. |
 | `Studio__BackendModuleManagementApiKey` | `local-dev-module-management-key` | **Server-side-only** key the Studio management bridge uses for Studio→backend host-control calls. It is **never emitted to the browser** (ADR 0037); the SPA carries no host management key. **Override in any real deployment.** |
 | `Studio__Workflows__AutosaveEnabledByDefault` | `true` | Whether the workflow editor opens with Autosave enabled. Users can still toggle it per editing session. |
+| `Studio__ActivityDefinitions__LocalRecovery__Enabled` | `false` | Opts the host into expiring device-local recovery snapshots for unsaved Activity Definition provider state. Keep disabled unless the deployment's data-handling policy allows browser storage. |
+| `Studio__ActivityDefinitions__LocalRecovery__TtlMinutes` | `1440` | Maximum retention for an enabled Activity Definition recovery snapshot. Snapshots are also scoped to tenant/user/draft/provider/schema and cleared after save, discard, or logout. |
 | `ASPNETCORE_URLS` | `http://+:8080` | Kestrel bind address/port. Change the port here if you don't want 8080. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Standard ASP.NET Core environment name. |
 | `Logging__LogLevel__Default` | `Information` | Default log level. e.g. set to `Warning` to quieten logs. |

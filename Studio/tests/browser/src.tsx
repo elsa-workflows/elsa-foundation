@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
 import { ActivityDefinitionsPage } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage";
+import { activityGraphImplementationEditorContribution } from "../../src/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
 import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import { createEndpointContext, type StudioActivityDescriptor, type StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
@@ -16,7 +17,7 @@ const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
-const activityDefinitionsFixture = searchParams.get("mode") === "activity-definitions";
+const activityDefinitionsFixture = searchParams.get("mode") === "activity-definitions" || window.location.pathname.startsWith("/workflows/activity-definitions");
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
@@ -193,6 +194,6 @@ document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass"
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
   activityDefinitionsFixture
-    ? <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={createEndpointContext(window.location.origin)} /></QueryClientProvider>
+    ? <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={createEndpointContext(window.location.origin)} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} /></QueryClientProvider>
     : runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
 );

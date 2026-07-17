@@ -1,9 +1,11 @@
 export const activityDefinitionsObservationEvent = "elsa:activity-definitions:observation";
 
 export type ActivityDefinitionsObservation = {
-  event: "route-view" | "query-start" | "query-success" | "query-failure" | "refresh" | "open-definition";
-  surface: "collection" | "workbench";
-  outcome?: "ready" | "empty" | "stale" | "unavailable" | "forbidden" | "not-found" | "expired" | "failed";
+  event: "route-view" | "query-start" | "query-success" | "query-failure" | "refresh" | "open-definition" | "create-start" | "create-success" | "create-failure" | "provider-editor" | "autosave";
+  surface: "collection" | "workbench" | "creation" | "editor";
+  outcome?: "ready" | "empty" | "stale" | "unavailable" | "forbidden" | "not-found" | "expired" | "failed" | "pending" | "saving" | "saved" | "offline" | "conflict";
+  providerKey?: string;
+  providerSchemaVersion?: string;
   hasSearch?: boolean;
   hasAuthorityFilter?: boolean;
   hasProviderFilter?: boolean;
@@ -13,11 +15,11 @@ export type ActivityDefinitionsObservation = {
 };
 
 const events = new Set<ActivityDefinitionsObservation["event"]>([
-  "route-view", "query-start", "query-success", "query-failure", "refresh", "open-definition"
+  "route-view", "query-start", "query-success", "query-failure", "refresh", "open-definition", "create-start", "create-success", "create-failure", "provider-editor", "autosave"
 ]);
-const surfaces = new Set<ActivityDefinitionsObservation["surface"]>(["collection", "workbench"]);
+const surfaces = new Set<ActivityDefinitionsObservation["surface"]>(["collection", "workbench", "creation", "editor"]);
 const outcomes = new Set<NonNullable<ActivityDefinitionsObservation["outcome"]>>([
-  "ready", "empty", "stale", "unavailable", "forbidden", "not-found", "expired", "failed"
+  "ready", "empty", "stale", "unavailable", "forbidden", "not-found", "expired", "failed", "pending", "saving", "saved", "offline", "conflict"
 ]);
 const pageSizes = new Set<NonNullable<ActivityDefinitionsObservation["pageSize"]>>([10, 25, 50]);
 const resultBands = new Set<NonNullable<ActivityDefinitionsObservation["resultBand"]>>([
@@ -40,6 +42,8 @@ export function observeActivityDefinitions(candidate: ActivityDefinitionsObserva
     surface: candidate.surface
   };
   if (candidate.outcome && outcomes.has(candidate.outcome)) detail.outcome = candidate.outcome;
+  if (isSafeCapabilityIdentity(candidate.providerKey)) detail.providerKey = candidate.providerKey;
+  if (isSafeCapabilityIdentity(candidate.providerSchemaVersion)) detail.providerSchemaVersion = candidate.providerSchemaVersion;
   if (typeof candidate.hasSearch === "boolean") detail.hasSearch = candidate.hasSearch;
   if (typeof candidate.hasAuthorityFilter === "boolean") detail.hasAuthorityFilter = candidate.hasAuthorityFilter;
   if (typeof candidate.hasProviderFilter === "boolean") detail.hasProviderFilter = candidate.hasProviderFilter;
@@ -48,6 +52,10 @@ export function observeActivityDefinitions(candidate: ActivityDefinitionsObserva
   if (candidate.durationBucket && durationBuckets.has(candidate.durationBucket)) detail.durationBucket = candidate.durationBucket;
 
   window.dispatchEvent(new CustomEvent<ActivityDefinitionsObservation>(activityDefinitionsObservationEvent, { detail }));
+}
+
+function isSafeCapabilityIdentity(value: string | undefined): value is string {
+  return Boolean(value && value.length <= 128 && /^[A-Za-z0-9._-]+$/.test(value));
 }
 
 export function activityDefinitionResultBand(count: number): NonNullable<ActivityDefinitionsObservation["resultBand"]> {

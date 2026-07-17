@@ -14,10 +14,16 @@ import {
 import type {
   ActivityDefinitionChildCollectionRequest,
   ActivityDefinitionCollectionRequest,
+  ActivityAuthoringCapabilities,
+  ActivityDraftValidationView,
+  ActivityDefinitionDraftView,
   ActivityDefinitionDraftManagementView,
   ActivityDefinitionManagementView,
   ActivityDefinitionVersionManagementView,
-  ActivityManagementPage
+  ActivityManagementPage,
+  CreateActivityDefinitionRequest,
+  CreateActivityDefinitionResponse,
+  ReplaceActivityDefinitionDraftRequest
 } from "../activityDefinitionTypes";
 import {
   ApiCapabilityUnavailableError,
@@ -33,10 +39,12 @@ export const activityDesignKeys = {
   availabilityDiagnostics: ["activity-design", "availability", "diagnostics"] as const,
   definitionCollections: ["activity-design", "definitions"] as const,
   definitionResources: ["activity-design", "definition"] as const,
+  authoringCapabilities: ["activity-design", "authoring-capabilities"] as const,
   definitionCollection: (request: ActivityDefinitionCollectionRequest) => ["activity-design", "definitions", request] as const,
   definition: (definitionId: string) => ["activity-design", "definition", definitionId] as const,
   definitionDrafts: (request: ActivityDefinitionChildCollectionRequest) => ["activity-design", "definition", request.definitionId, "drafts", request] as const,
   definitionDraft: (definitionId: string, draftId: string) => ["activity-design", "definition", definitionId, "draft", draftId] as const,
+  fullDefinitionDraft: (draftId: string) => ["activity-design", "authoring-draft", draftId] as const,
   definitionVersions: (request: ActivityDefinitionChildCollectionRequest) => ["activity-design", "definition", request.definitionId, "versions", request] as const,
   definitionVersion: (definitionId: string, versionId: string) => ["activity-design", "definition", definitionId, "version", versionId] as const
 };
@@ -58,6 +66,28 @@ export function useActivityDefinitions(context: StudioEndpointContext, request: 
     queryKey: activityDesignKeys.definitionCollection(request),
     queryFn: ({ signal }) => listActivityDefinitions(context, request, signal),
     placeholderData: previous => previous,
+    retry: false
+  });
+}
+
+export function useActivityAuthoringCapabilities(context: StudioEndpointContext, enabled = true) {
+  return useQuery({
+    queryKey: activityDesignKeys.authoringCapabilities,
+    queryFn: ({ signal }) => getActivityAuthoringCapabilities(context, signal),
+    enabled,
+    staleTime: 60_000,
+    retry: false
+  });
+}
+
+export function useFullActivityDefinitionDraft(context: StudioEndpointContext, draftId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: activityDesignKeys.fullDefinitionDraft(draftId ?? ""),
+    queryFn: ({ signal }) => getActivityDefinitionDraft(context, draftId!, signal),
+    enabled: enabled && Boolean(draftId),
+    refetchOnMount: "always",
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
     retry: false
   });
 }
@@ -168,6 +198,52 @@ export async function listActivityDefinitions(
 export async function getActivityDefinition(context: StudioEndpointContext, definitionId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition", { definitionId });
   return context.http.getJson<ActivityDefinitionManagementView>(path, { signal });
+}
+
+export async function getActivityAuthoringCapabilities(context: StudioEndpointContext, signal?: AbortSignal) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-authoring-capabilities");
+  return context.http.getJson<ActivityAuthoringCapabilities>(path, { signal });
+}
+
+export async function createActivityDefinition(context: StudioEndpointContext, request: CreateActivityDefinitionRequest) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definitions");
+  return context.http.postJson<CreateActivityDefinitionResponse>(path, request);
+}
+
+export async function getActivityDefinitionDraft(
+  context: StudioEndpointContext,
+  draftId: string,
+  signal?: AbortSignal
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-draft", { draftId });
+  return context.http.getJson<ActivityDefinitionDraftView>(path, { signal });
+}
+
+export async function replaceActivityDefinitionDraft(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: ReplaceActivityDefinitionDraftRequest
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-draft", { draftId });
+  return context.http.putJson<ActivityDefinitionDraftView>(path, request);
+}
+
+export async function createActivityDefinitionConflictCopy(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: Omit<ReplaceActivityDefinitionDraftRequest, "expectedRevision"> & { expectedSourceRevision: number }
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-conflict-copies", { draftId });
+  return context.http.postJson<ActivityDefinitionDraftView>(path, request);
+}
+
+export async function validateActivityDefinitionDraft(
+  context: StudioEndpointContext,
+  draftId: string,
+  expectedRevision: number
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-validation", { draftId });
+  return context.http.postJson<ActivityDraftValidationView>(path, { expectedRevision });
 }
 
 export async function listActivityDefinitionDrafts(
