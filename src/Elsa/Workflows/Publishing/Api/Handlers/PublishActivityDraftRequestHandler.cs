@@ -8,14 +8,16 @@ using Elsa.Workflows.Publishing.Api.Services;
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
 public sealed class PublishActivityDraftRequestHandler(IActivityDefinitionPublisher publisher)
-    : IRequestHandler<PublishActivityDraft, PublishedActivityDefinitionView>
+    : IRequestHandler<PublishActivityDraft, ActivityPublicationReceiptView>
 {
-    public async Task<PublishedActivityDefinitionView> Handle(
+    public async Task<ActivityPublicationReceiptView> Handle(
         PublishActivityDraft request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.DraftId) || request.ExpectedDraftRevision <= 0 ||
             string.IsNullOrWhiteSpace(request.Version) ||
+            string.IsNullOrWhiteSpace(request.ReviewToken) ||
+            string.IsNullOrWhiteSpace(request.IdempotencyKey) ||
             request.ExpectedDefinitionHeadVersionId is not null && string.IsNullOrWhiteSpace(request.ExpectedDefinitionHeadVersionId))
             throw new ActivityPublicationRejectedException(
                 "activity.request.invalid",
@@ -33,11 +35,13 @@ public sealed class PublishActivityDraftRequestHandler(IActivityDefinitionPublis
                     Remediation: "Supply a valid semantic version.",
                     Metadata: new Dictionary<string, string>(StringComparer.Ordinal))]);
 
-        var result = await publisher.PublishAsync(new(
+        var result = await publisher.PublishReviewedAsync(new(
             request.DraftId,
             request.ExpectedDraftRevision,
             request.ExpectedDefinitionHeadVersionId,
-            request.Version), cancellationToken);
-        return PublishedActivityDefinitionView.From(result);
+            request.Version,
+            request.ReviewToken,
+            request.IdempotencyKey), cancellationToken);
+        return ActivityPublicationReceiptView.From(result);
     }
 }

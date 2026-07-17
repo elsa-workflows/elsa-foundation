@@ -20,6 +20,7 @@ separate add-don't-replace seams; see the Runtime catalog linked below.
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
 | `IPublicationPolicyStore` | `InMemoryPublicationPolicyStore` (singleton) | Host/workflow policy and revision CAS must survive restart. |
 | `IPublicationProjectionIntentStore` | `InMemoryPublicationProjectionIntentStore` (singleton) | Projection delivery facts and retries must survive restart. |
+| `IActivityPublicationReceiptStore` | `InMemoryActivityPublicationReceiptStore` (singleton) | Activity publication outcomes and idempotency bindings must survive restart or be shared across nodes. |
 | `IPublicationPolicyResolver` | `PublicationPolicyResolver` (singleton) | A host needs a different policy source while preserving explicit-request precedence and safe defaults. |
 | `IPublicationPreflightService` | `PublicationPreflightService` (singleton) | A host adds claim constraints beyond provider cardinality. |
 | `IPublicationActivator` | `PublicationActivator` (singleton) | Authority coordination uses another transactional boundary while preserving CAS and compensation invariants. |
@@ -28,6 +29,13 @@ separate add-don't-replace seams; see the Runtime catalog linked below.
 Register replacements before the feature's `TryAdd` defaults, or use `services.Replace(...)`. Persistence
 packages that replace a related store family should remove and register the whole family explicitly so a host
 cannot accidentally split one authority model between process-local and durable state.
+
+The Groundwork composition also replaces `IActivityPublicationReceiptStore`. It must preserve one
+immutable request fingerprint per idempotency key. An Applied receipt is written by
+`ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference,
+ActivityPublicationReceipt>` in the same atomic transaction as the activity version, definition
+head, template, Source Reference, layout, and dependencies. A persistence replacement must retain
+that shared transaction boundary.
 
 ## Contract obligations
 
@@ -76,6 +84,9 @@ A new Publishing persistence package should:
 5. Prove restart behavior, stale-revision rejection, idempotent intent replay, and compensation with provider tests.
 6. Keep Runtime executable/reference/trigger/schedule stores in their owning Runtime persistence module; do not
    move those contracts into Publishing merely because the publish flow consumes them.
+7. Persist activity publication receipts by opaque hashed operation identity and prove same-request
+   replay, different-request rejection, stale-review no-write, and receipt rollback with every
+   other publication document.
 
 ## Executable compilation fan-in
 

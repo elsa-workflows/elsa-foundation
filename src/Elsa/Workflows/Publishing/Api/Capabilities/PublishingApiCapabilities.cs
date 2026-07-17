@@ -13,6 +13,9 @@ public static class PublishingApiCapabilities
         [
             new("publication-snapshot-preflight", "publishing/workflows/preflight"),
             new("publication-preflight", "publishing/workflows/{versionId}/preflight", templated: true),
+            new("activity-publication-preflight", "design/activities/drafts/{draftId}/publication-preflight", templated: true),
+            new("activity-publication", "design/activities/drafts/{draftId}/publish", templated: true),
+            new("activity-publication-receipt", "design/activities/publications/{idempotencyKey}", templated: true),
             new("workflow-publish", "publishing/workflows/{versionId}/publish", templated: true),
             new("publication-slots", "publishing/workflows/{definitionId}/slots", templated: true),
             new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true),

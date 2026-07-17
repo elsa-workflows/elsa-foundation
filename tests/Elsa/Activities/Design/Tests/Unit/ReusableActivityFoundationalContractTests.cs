@@ -147,9 +147,9 @@ public sealed class ReusableActivityFoundationalContractTests
     [Fact]
     public void AtomicPublicationPort_CanCloseOverArtifactTypesWithoutRuntimeDependency()
     {
-        var contract = typeof(ICommitActivityPublicationCommand<,>);
+        var contract = typeof(ICommitActivityPublicationCommand<,,>);
         var designCoreReferences = typeof(IActivityProvider).Assembly.GetReferencedAssemblies();
-        var persistenceCoreReferences = typeof(ICommitActivityPublicationCommand<,>).Assembly.GetReferencedAssemblies();
+        var persistenceCoreReferences = typeof(ICommitActivityPublicationCommand<,,>).Assembly.GetReferencedAssemblies();
 
         Assert.Equal(2, contract.GetGenericArguments().Length);
         Assert.DoesNotContain(designCoreReferences, x => x.Name!.Contains("Workflows.Runtime", StringComparison.Ordinal));

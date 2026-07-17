@@ -22,7 +22,9 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 | `POST` | `/design/activities/drafts/{draftId}/conflict-copies` | Atomically preserve reviewed full state as a new parallel draft after a stale-revision conflict. |
 | `DELETE` | `/design/activities/drafts/{draftId}` | Discard an active draft under an expected revision. |
 | `POST` | `/design/activities/drafts/{draftId}/validate` | Revalidate an exact draft revision. |
-| `POST` | `/design/activities/drafts/{draftId}/publish` | Atomically publish a draft as an immutable version. |
+| `POST` | `/design/activities/drafts/{draftId}/publication-preflight` | Review the exact authoritative publication evidence and valid SemVer choices. |
+| `POST` | `/design/activities/drafts/{draftId}/publish` | Atomically publish the exact reviewed draft/head state as an immutable version. |
+| `GET` | `/design/activities/publications/{idempotencyKey}` | Read the durable terminal outcome of an idempotent activity publication. |
 | `POST` | `/design/activities/drafts/{draftId}/migrate-provider` | Clone/migrate a provider manifest into a new draft. |
 | `POST` | `/design/activities/drafts/{draftId}/contract-proposals` | Compute a typed, read-only provider proposal for one exact draft binding. |
 | `POST` | `/design/activities/drafts/{draftId}/contract-proposals/apply` | Apply explicitly selected changes from an unchanged exact proposal. |
@@ -623,6 +625,29 @@ Response: `200 OK` whether valid or invalid:
 
 ## 9. Publish a draft
 
+Publication is a two-step reviewed operation. Preflight binds all evidence to the exact draft
+revision and definition head:
+
+```http
+POST /design/activities/drafts/{draftId}/publication-preflight
+Content-Type: application/json
+```
+
+```json
+{
+  "expectedDraftRevision": 8,
+  "expectedDefinitionHeadVersionId": "activity-ver-1"
+}
+```
+
+The `200 OK` response contains one ordered diagnostic set, the impact-first diff, exact dependency
+evidence, provider/storage/Runtime readiness, `minimumVersion`, `validVersions`, and an opaque
+`reviewToken`. A first publication reports `hasBaseline: false`, compares against the explicit
+definition baseline, and normally offers `1.0.0`. Unknown change kinds and additive fields are
+forward-compatible; clients render their supplied impact and safe description without rejecting
+the response. Provider payloads, Runtime descriptors, values, expressions, and exception details
+are never included.
+
 ```http
 POST /design/activities/drafts/{draftId}/publish
 Content-Type: application/json
@@ -632,42 +657,48 @@ Content-Type: application/json
 {
   "expectedDraftRevision": 8,
   "expectedDefinitionHeadVersionId": "activity-ver-1",
-  "version": "2.0.0"
+  "version": "2.0.0",
+  "reviewToken": "sha256:...",
+  "idempotencyKey": "publish-operation-42"
 }
 ```
 
-For a first publication, `expectedDefinitionHeadVersionId` is `null`.
+For a first publication, `expectedDefinitionHeadVersionId` is `null`. `version` must be one of the
+exact choices returned by the reviewed preflight. The idempotency key is bound to the complete
+reviewed request and cannot be reused for different material.
 
-Response: `201 Created` after atomic publication:
+Response: `201 Created` after atomic publication, with `Location` pointing to
+`/design/activities/publications/{idempotencyKey}`:
 
 ```json
 {
-  "definitionId": "activity-def-1",
-  "versionId": "activity-ver-2",
-  "version": "2.0.0",
+  "idempotencyKey": "publish-operation-42",
+  "status": "Applied",
   "draftId": "activity-draft-1",
-  "templateId": "activity-template-sha256-...",
-  "templateHash": "sha256-...",
-  "sourceReferenceId": "source-ref-...",
-  "provider": {
-    "providerKey": "elsa.activity-graph",
-    "schemaVersion": "1",
-    "fingerprint": "elsa.activity-graph/compiler/1.0.0"
+  "expectedDraftRevision": 8,
+  "expectedDefinitionHeadVersionId": "activity-ver-1",
+  "reviewToken": "sha256:...",
+  "requestedVersion": "2.0.0",
+  "outcome": {
+    "definitionId": "activity-def-1",
+    "definitionVersionId": "activity-ver-2",
+    "draftId": "activity-draft-1",
+    "version": "2.0.0",
+    "templateId": "activity-template-sha256-...",
+    "templateHash": "sha256:...",
+    "sourceReferenceId": "source-ref-...",
+    "publishedAt": "2026-07-15T12:20:00Z"
   },
-  "directDependencyCount": 2,
-  "closedTemplateCount": 5,
-  "runtimeRequirements": [
-    { "consumerKey": "elsa.graph-activity", "schemaVersion": "1" }
-  ],
-  "diff": {
-    "compatibility": "Breaking",
-    "requiredBump": "Major",
-    "behaviorChanged": true,
-    "changes": []
-  },
-  "publishedAt": "2026-07-15T12:20:00Z"
+  "errorCode": null,
+  "diagnostics": [],
+  "updatedAt": "2026-07-15T12:20:00Z"
 }
 ```
+
+`GET /design/activities/publications/{idempotencyKey}` returns the same durable receipt. Terminal
+statuses are `Applied`, `Rejected`, `Stale`, `Failed`, and `OutcomeUnknown`. A retry with the same
+key and identical request returns the recorded outcome and never creates a second version. A key
+bound to different material returns `409 activity.publication.idempotency-conflict`.
 
 Publication rejection after semantic validation uses `422` Problem Details and includes all deterministic diagnostics that can be reported safely in one pass. Examples: contract mismatch, dependency cycle, insufficient SemVer, provider compilation failure, missing required Runtime consumer declaration, or tenant-invalid dependency.
 
@@ -675,10 +706,15 @@ Concurrency conflicts use `409`:
 
 - `activity.draft.stale-revision`
 - `activity.definition.stale-head`
+- `activity.publication.review-stale`
+- `activity.publication.idempotency-conflict`
 - `activity.version.conflict`
 - `activity.definition.content-authority`
 
-No rejected publication creates a version, advances a head, or exposes partial template/reference/dependency state.
+The command recomputes the authoritative evidence inside the publication lock and compares the
+review token before entering the transaction. The Applied receipt is committed atomically with the
+version, head, template, Source Reference, layout, and dependencies. No rejected or stale
+publication creates a version, advances a head, or exposes partial publication state.
 
 ## 10. Read an immutable version
 

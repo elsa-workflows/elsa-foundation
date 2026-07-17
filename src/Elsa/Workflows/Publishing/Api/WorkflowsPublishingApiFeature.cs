@@ -72,6 +72,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
         services.TryAddScoped<PublicationSnapshotReviewService>();
         services.TryAddSingleton<IPublicationSnapshotReviewStore, InMemoryPublicationSnapshotReviewStore>();
+        services.TryAddSingleton<IActivityPublicationReceiptStore, InMemoryActivityPublicationReceiptStore>();
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
         // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
         services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();

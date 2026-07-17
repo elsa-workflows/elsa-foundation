@@ -126,7 +126,7 @@ public sealed class InMemoryReusableActivityStoresTests
             }));
     }
 
-    private static ActivityPublicationCommit<object, object> PublicationCommit(string? expectedHead)
+    private static ActivityPublicationCommit<object, object, object> PublicationCommit(string? expectedHead)
     {
         var now = DateTimeOffset.UtcNow;
         var contract = Contract();
@@ -176,6 +176,7 @@ public sealed class InMemoryReusableActivityStoresTests
                     LastModifiedAt = now
                 },
                 []),
+            new object(),
             new object(),
             new object());
     }

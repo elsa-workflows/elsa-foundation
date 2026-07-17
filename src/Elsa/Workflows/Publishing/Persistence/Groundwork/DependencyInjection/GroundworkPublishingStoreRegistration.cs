@@ -55,6 +55,10 @@ public static class GroundworkPublishingStoreRegistration
             sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
             sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
             boundedDocumentStoreFactory(sp)));
+        services.RemoveAll<IActivityPublicationReceiptStore>();
+        services.AddScoped<IActivityPublicationReceiptStore>(sp => new GroundworkActivityPublicationReceiptStore(
+            documentStoreFactory(sp),
+            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>()));
         return services;
     }
 }

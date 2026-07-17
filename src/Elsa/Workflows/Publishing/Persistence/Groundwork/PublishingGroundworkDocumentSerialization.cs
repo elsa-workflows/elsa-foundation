@@ -20,7 +20,8 @@ public sealed class PublishingGroundworkDocumentSerializer(IEnumerable<IPublishi
         [PublishingGroundworkStorageManifest.PublicationRecordDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind] = 1,
-        [PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind] = 1
+        [PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind] = 1,
+        [PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind] = 1
     };
     private readonly IReadOnlyDictionary<(string Kind, int Version), IPublishingGroundworkDocumentUpcaster> _upcasters =
         (upcasters ?? []).ToDictionary(x => (x.DocumentKind, x.FromVersion));

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -7,6 +9,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
@@ -21,6 +24,7 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -179,6 +183,99 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task Preflight_exposes_first_publication_baseline_exact_version_and_runtime_readiness()
+    {
+        var harness = PublisherHarness.Create(
+            differ: new ActivityVersionDiffer(),
+            runtimeReady: false);
+
+        var preflight = await harness.Publisher.PreflightAsync(
+            new("draft-1", 4, null));
+
+        Assert.False(preflight.HasBaseline);
+        Assert.Equal("ActivityDefinitionBaseline", preflight.Diff?.From.Kind);
+        Assert.Equal("1.0.0", preflight.MinimumVersion);
+        Assert.Equal(["1.0.0"], preflight.ValidVersions);
+        Assert.StartsWith("sha256:", preflight.ReviewToken, StringComparison.Ordinal);
+        Assert.False(preflight.IsPublishable);
+        Assert.Equal("Missing", Assert.Single(preflight.Runtime).Status);
+        Assert.Contains(
+            preflight.Diagnostics,
+            x => x.Code == "activity.runtime.consumer-missing");
+    }
+
+    [Fact]
+    public async Task Reviewed_publish_is_idempotent_and_reusing_the_key_for_other_material_conflicts()
+    {
+        var harness = PublisherHarness.Create(
+            differ: new ActivityVersionDiffer(),
+            runtimeReady: true);
+        var preflight = await harness.Publisher.PreflightAsync(
+            new("draft-1", 4, null));
+        var request = new PublishActivityDefinitionRequest(
+            "draft-1",
+            4,
+            null,
+            "1.0.0",
+            preflight.ReviewToken,
+            "publish-operation-1");
+
+        var first = await harness.Publisher.PublishReviewedAsync(request);
+        var replay = await harness.Publisher.PublishReviewedAsync(request);
+
+        Assert.Equal(ActivityPublicationReceiptStatus.Applied, first.Status);
+        Assert.Equal(first, replay);
+        Assert.Equal(1, harness.Commit.CallCount);
+        var conflict = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishReviewedAsync(request with { Version = "1.0.1" }));
+        Assert.Equal("activity.publication.idempotency-conflict", conflict.ErrorCode);
+        Assert.Equal(1, harness.Commit.CallCount);
+    }
+
+    [Fact]
+    public async Task Stale_review_token_records_a_stale_receipt_without_publication_writes()
+    {
+        var harness = PublisherHarness.Create(
+            differ: new ActivityVersionDiffer(),
+            runtimeReady: true);
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishReviewedAsync(new(
+                "draft-1",
+                4,
+                null,
+                "1.0.0",
+                "sha256:stale",
+                "publish-operation-stale")));
+
+        Assert.Equal("activity.publication.review-stale", exception.ErrorCode);
+        Assert.Equal(0, harness.Commit.CallCount);
+        var receipt = await harness.Publisher.GetReceiptAsync("publish-operation-stale");
+        Assert.Equal(ActivityPublicationReceiptStatus.Stale, receipt.Status);
+        Assert.Null(receipt.Outcome);
+    }
+
+    [Fact]
+    public async Task Preflight_applies_required_semver_bump_to_minimum_and_valid_exact_choices()
+    {
+        var head = CopyPublication(
+            Publication("definition-1", "version-head", "test.activity", Template()),
+            "1.4.7");
+        var harness = PublisherHarness.Create(
+            headVersionId: head.DefinitionVersionId,
+            existingPublications: [head],
+            requiredBump: ActivityVersionBump.Major,
+            runtimeReady: true);
+
+        var preflight = await harness.Publisher.PreflightAsync(
+            new("draft-1", 4, head.DefinitionVersionId));
+
+        Assert.True(preflight.HasBaseline);
+        Assert.Equal("2.0.0", preflight.MinimumVersion);
+        Assert.Equal(["2.0.0"], preflight.ValidVersions);
+    }
+
+    [Fact]
     public async Task Implementation_only_change_requires_minor_and_diff_receives_provider_runtime_and_layout_facts()
     {
         var oldTemplate = Template();
@@ -318,6 +415,9 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.NotNull(await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, "version-1"));
         Assert.NotNull(await harness.Documents.LoadAsync(ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind, harness.Commit.ExecutableTemplate.TemplateId));
         Assert.NotNull(await harness.Documents.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, "source-ref-1"));
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            ReceiptId(harness.Commit.Receipt.IdempotencyKey)));
         var authoringEnvelope = await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, "authoring-generated-id");
         var authoring = DeserializeDesign<ActivityDefinitionAuthoringState>(authoringEnvelope!);
         var draft = DeserializeDesign<ActivityDefinitionDraft>((await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, "draft-1"))!);
@@ -341,6 +441,9 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.Null(await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, "version-1"));
         Assert.Null(await harness.Documents.LoadAsync(ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind, harness.Commit.ExecutableTemplate.TemplateId));
         Assert.Null(await harness.Documents.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, "source-ref-1"));
+        Assert.Null(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            ReceiptId(harness.Commit.Receipt.IdempotencyKey)));
         Assert.Null(await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind, ActivityDependencyProjectionState.CurrentId));
         var authoring = DeserializeDesign<ActivityDefinitionAuthoringState>((await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, "authoring-generated-id"))!);
         var draft = DeserializeDesign<ActivityDefinitionDraft>((await harness.Documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, "draft-1"))!);
@@ -368,6 +471,8 @@ public sealed class ActivityDefinitionPublicationTests
     private static ActivityContract Contract() => new("1", [], [], []);
     private static ActivityProviderManifest Provider() => new("test.provider", "1", Json("{}"));
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
+    private static string ReceiptId(string idempotencyKey) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
 
     private static ExecutableNode Boundary() => new(
         "boundary", "boundary", "test.consumer", "1", new("test.consumer", "1", Json("{}")),
@@ -549,7 +654,8 @@ public sealed class ActivityDefinitionPublicationTests
             IActivityVersionDiffer? differ = null,
             string? resourceTenantId = null,
             string? authorizationTenantId = null,
-            string? rereadTenantId = null)
+            string? rereadTenantId = null,
+            bool runtimeReady = true)
         {
             var definition = new ActivityDefinition
             {
@@ -587,7 +693,8 @@ public sealed class ActivityDefinitionPublicationTests
             };
             var publications = new PublisherPublicationStore(existingPublications ?? []);
             var compiler = new SpyTemplateCompiler(compileResult ?? SuccessfulCompilation());
-            var commit = new SpyPublicationCommit();
+            var receipts = new InMemoryActivityPublicationReceiptStore();
+            var commit = new SpyPublicationCommit(receipts);
             var publisher = new ActivityDefinitionPublisher(
                 new PublisherDefinitionStore(definition),
                 new PublisherAuthoringStore(authoring),
@@ -602,7 +709,9 @@ public sealed class ActivityDefinitionPublicationTests
                 commit,
                 new ImmediateLockProvider(),
                 new SequentialIdentityGenerator(),
-                TimeProvider.System);
+                TimeProvider.System,
+                receipts,
+                runtimeReady ? new ReadyActivityConstructorRegistry() : null);
             return new(publisher, compiler, commit);
         }
 
@@ -717,24 +826,45 @@ public sealed class ActivityDefinitionPublicationTests
         }
     }
 
-    private sealed class SpyPublicationCommit : ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
+    private sealed class ReadyActivityConstructorRegistry : IActivityConstructorRegistry
+    {
+        public void Add(IActivityConstructor constructor) => throw new NotSupportedException();
+        public void AddAll(IEnumerable<IActivityConstructor> constructors) => throw new NotSupportedException();
+        public IActivityConstructor Resolve(string consumerKey, string schemaVersion) =>
+            throw new NotSupportedException();
+        public bool TryResolve(
+            string consumerKey,
+            string schemaVersion,
+            out IActivityConstructor? constructor)
+        {
+            constructor = null;
+            return true;
+        }
+
+        public IReadOnlyCollection<string> GetSupportedSchemaVersions(string consumerKey) => ["1"];
+    }
+
+    private sealed class SpyPublicationCommit(IActivityPublicationReceiptStore receipts) :
+        ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
     {
         public int CallCount { get; private set; }
-        public ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference>? LastCommit { get; private set; }
+        public ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>? LastCommit { get; private set; }
 
-        public Task<ActivityPublicationResult> ExecuteAsync(
-            ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commit,
+        public async Task<ActivityPublicationResult> ExecuteAsync(
+            ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit,
             CancellationToken cancellationToken = default)
         {
             CallCount++;
             LastCommit = commit;
-            return Task.FromResult(new ActivityPublicationResult(
+            if (!await receipts.TryCreateAsync(commit.Receipt, cancellationToken))
+                throw new InvalidOperationException("Duplicate receipt.");
+            return new ActivityPublicationResult(
                 commit.Design.DefinitionId,
                 commit.Design.Publication.DefinitionVersionId,
                 commit.Design.DraftId,
                 commit.ExecutableTemplate.TemplateId,
                 commit.SourceReference.SourceReferenceId,
-                commit.Design.Publication.PublishedAt));
+                commit.Design.Publication.PublishedAt);
         }
     }
 
@@ -761,11 +891,11 @@ public sealed class ActivityDefinitionPublicationTests
     private sealed class Harness(
         InMemoryDocumentStore documents,
         GroundworkActivityPublicationCommand command,
-        ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commit)
+        ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit)
     {
         public InMemoryDocumentStore Documents { get; } = documents;
         public GroundworkActivityPublicationCommand Command { get; } = command;
-        public ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> Commit { get; } = commit;
+        public ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> Commit { get; } = commit;
 
         public static async Task<Harness> CreateAsync(bool injectLateLayoutConflict = false)
         {
@@ -792,7 +922,18 @@ public sealed class ActivityDefinitionPublicationTests
                 store,
                 new ImmediateLockProvider(),
                 documents);
-            return new(documents, new(store, documents, payloads, runtimeSerializer, publications, projection, managementProjection), commit);
+            return new(
+                documents,
+                new(
+                    store,
+                    documents,
+                    payloads,
+                    runtimeSerializer,
+                    publications,
+                    projection,
+                    managementProjection,
+                    new PublishingGroundworkDocumentSerializer()),
+                commit);
         }
 
         private static async Task SeedAsync(IDocumentStore store)
@@ -844,7 +985,7 @@ public sealed class ActivityDefinitionPublicationTests
                 GroundworkActivitiesDesignJson.Options));
         }
 
-        private static ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> CreateCommit()
+        private static ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> CreateCommit()
         {
             var now = new DateTimeOffset(2026, 7, 15, 12, 5, 0, TimeSpan.Zero);
             const string hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -926,18 +1067,44 @@ public sealed class ActivityDefinitionPublicationTests
                 CreatedAt = now,
                 LastModifiedAt = now
             };
-            return new(new("draft-1", 4, "definition-1", null, catalog, publication, layout, []), template, source);
+            var receipt = new ActivityPublicationReceipt(
+                "publish-operation-1",
+                "sha256:request",
+                ActivityPublicationReceiptStatus.Applied,
+                "draft-1",
+                4,
+                null,
+                "sha256:review",
+                "1.0.0",
+                new(
+                    "definition-1",
+                    "version-1",
+                    "draft-1",
+                    "1.0.0",
+                    templateId,
+                    hash,
+                    "source-ref-1",
+                    now),
+                null,
+                [],
+                now);
+            return new(
+                new("draft-1", 4, "definition-1", null, catalog, publication, layout, []),
+                template,
+                source,
+                receipt);
         }
 
         private static StorageManifest CombinedManifest()
         {
             var design = ActivitiesDesignStorageManifest.Create();
             var runtime = ElsaRuntimeStorageManifest.Create();
+            var publishing = PublishingGroundworkStorageManifest.Create();
             return new(
                 new("elsa-activity-publication-tests"),
                 new("elsa.tests"),
                 new("1.0.0"),
-                design.StorageUnits.Concat(runtime.StorageUnits).ToArray(),
+                design.StorageUnits.Concat(runtime.StorageUnits).Concat(publishing.StorageUnits).ToArray(),
                 new HashSet<string> { "optimistic-concurrency" },
                 []);
         }
