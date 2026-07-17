@@ -41,6 +41,8 @@ public static class ElsaRuntimeStorageManifest
     public const string ByParentWorkflowExecutionAndStatusIndex = "by-parent-workflow-execution-and-status";
     public const string ByChildWorkflowExecutionAndStatusIndex = "by-child-workflow-execution-and-status";
     public const string ByStimulusAndTypeIndex = "by-stimulus-and-type";
+    public const string ByScopeIndex = "by-scope";
+    public const string ByRetiredIndex = "by-retired";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
@@ -63,7 +65,9 @@ public static class ElsaRuntimeStorageManifest
     public const string StatusField = "status";
     public const string TestScopeIdField = "testScopeId";
     public const string ScopeIdField = "scopeId";
+    public const string ScopeField = "scope";
     public const string ExpiresAtField = "expiresAt";
+    public const string IsRetiredField = "isRetired";
     public const string StateField = "state";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
@@ -121,6 +125,12 @@ public static class ElsaRuntimeStorageManifest
 
     /// <summary>Constant partition value stamped on every source-reference document so the unfiltered list/expiry sweep can use a keyword equality index.</summary>
     public const string WorkflowExecutableSourceReferenceCollection = "workflowExecutableSourceReference";
+    public const string WorkflowExecutableSourceReferenceByScope = ByScopeIndex;
+    public const string WorkflowExecutableSourceReferenceByExpiresAt = ByExpiresAtIndex;
+    public const string WorkflowExecutableSourceReferenceByRetired = ByRetiredIndex;
+    public const string ListWorkflowExecutableSourceReferencesByScopeQuery = "list-by-scope";
+    public const string ListExpiredWorkflowExecutableSourceReferencesQuery = "list-expired";
+    public const string ListRetiredWorkflowExecutableSourceReferencesQuery = "list-retired";
 
     public const string ActivityExecutionStateDocumentKind = "activityExecutionState";
 
@@ -300,11 +310,21 @@ public static class ElsaRuntimeStorageManifest
                 "Workflow executable source reference",
                 [
                     Keyword(ByCollectionIndex, CollectionField),
-                    Keyword(ByArtifactIndex, ArtifactIdField)
+                    Keyword(ByArtifactIndex, ArtifactIdField),
+                    Keyword(WorkflowExecutableSourceReferenceByScope, ScopeField),
+                    DateTime(WorkflowExecutableSourceReferenceByExpiresAt, ExpiresAtField),
+                    Keyword(WorkflowExecutableSourceReferenceByRetired, IsRetiredField)
                 ],
                 [
                     Query("list-all", ByCollectionIndex),
-                    Query("list-by-artifact", ByArtifactIndex)
+                    Query("list-by-artifact", ByArtifactIndex),
+                    Query(ListWorkflowExecutableSourceReferencesByScopeQuery, WorkflowExecutableSourceReferenceByScope),
+                    Query(
+                        ListExpiredWorkflowExecutableSourceReferencesQuery,
+                        WorkflowExecutableSourceReferenceByExpiresAt,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending),
+                    Query(ListRetiredWorkflowExecutableSourceReferencesQuery, WorkflowExecutableSourceReferenceByRetired)
                 ]),
             Unit(
                 ActivityExecutionStateDocumentKind,

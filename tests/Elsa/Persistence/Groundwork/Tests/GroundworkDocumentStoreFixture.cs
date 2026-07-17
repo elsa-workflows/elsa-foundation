@@ -123,6 +123,13 @@ internal sealed class GroundworkDocumentStoreFixture(
                     ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
                     "Groundwork recurring schedule due cursor must be non-null.",
                     cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ListExpiredWorkflowExecutableSourceReferencesQuery)
+                return await QueryNullableDateTimeLessThanOrEqualAsync(
+                    query,
+                    ElsaRuntimeStorageManifest.ExpiresAtField,
+                    "Groundwork source-reference expiry cursor must be non-null.",
+                    cancellationToken);
             if (TryGetBoundedQuery(query) is { PredicateFields.Count: > 1 } boundedQuery)
                 return await QueryCompositeEqualityAsync(
                     query,
@@ -170,6 +177,48 @@ internal sealed class GroundworkDocumentStoreFixture(
                 .OrderBy(document => document.Id, StringComparer.Ordinal)
                 .ToArray();
             IEnumerable<DocumentEnvelope> window = matches;
+            if (query.Skip is { } skip)
+                window = window.Skip(skip);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
+        private async Task<DocumentQueryResult> QueryNullableDateTimeLessThanOrEqualAsync(
+            DocumentQuery query,
+            string expectedPath,
+            string nullValueMessage,
+            CancellationToken cancellationToken)
+        {
+            var comparison = query.Clauses
+                .SelectMany(clause => clause.Comparisons)
+                .Single();
+            if (comparison.Operator != QueryComparisonOperator.LessThanOrEqual ||
+                comparison.Path != expectedPath ||
+                comparison.Values.Count != 1 ||
+                query.Order.Count != 1 ||
+                query.Order[0].Path != expectedPath)
+            {
+                throw new InvalidOperationException(
+                    $"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
+            }
+
+#pragma warning disable GW0004
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+#pragma warning restore GW0004
+            var asOf = DateTimeOffset.Parse(
+                comparison.Values[0] ?? throw new InvalidOperationException(nullValueMessage),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind);
+            var matches = all.Documents
+                .Select(document => (Document: document, ExpiresAt: ReadNullableDateTimeOffset(
+                    document,
+                    expectedPath)))
+                .Where(entry => entry.ExpiresAt <= asOf)
+                .OrderBy(entry => entry.ExpiresAt)
+                .ThenBy(entry => entry.Document.Id, StringComparer.Ordinal)
+                .ToArray();
+            IEnumerable<DocumentEnvelope> window = matches.Select(entry => entry.Document);
             if (query.Skip is { } skip)
                 window = window.Skip(skip);
             if (query.Take is { } take)
@@ -323,6 +372,13 @@ internal sealed class GroundworkDocumentStoreFixture(
         {
             using var document = JsonDocument.Parse(envelope.ContentJson);
             return GetPropertyPath(document.RootElement, path).GetDateTimeOffset();
+        }
+
+        private static DateTimeOffset? ReadNullableDateTimeOffset(DocumentEnvelope envelope, string path)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            var value = GetPropertyPath(document.RootElement, path);
+            return value.ValueKind == JsonValueKind.Null ? null : value.GetDateTimeOffset();
         }
 
         private static JsonElement GetPropertyPath(JsonElement root, string path)
