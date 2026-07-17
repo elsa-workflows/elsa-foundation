@@ -431,6 +431,7 @@ public sealed class ActivityDefinitionPublisher(
             DefinitionId = definition.Id,
             Version = version,
             ActivityTypeKey = definition.ActivityTypeKey,
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
             SourceDraftId = draft.Id,
             SourceVersionId = draft.SourceVersionId,
             Contract = draft.State.Contract,

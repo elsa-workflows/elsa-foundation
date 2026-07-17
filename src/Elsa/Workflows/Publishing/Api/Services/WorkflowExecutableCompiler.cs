@@ -134,7 +134,8 @@ public sealed class WorkflowExecutableCompiler(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var publication = await activityPublications.FindAsync(activity.ActivityVersionId, cancellationToken);
-                if (publication is null)
+                if (publication is null ||
+                    publication.ResolveWorkflowResolutionKind() == ActivityDefinitionVersionResolutionKind.AuthorableActivity)
                 {
                     if (!activityRows.ContainsKey(activity.ActivityVersionId))
                         activityRows[activity.ActivityVersionId] = await activityVersions.GetWithDefinitionAsync(activity.ActivityVersionId, cancellationToken);

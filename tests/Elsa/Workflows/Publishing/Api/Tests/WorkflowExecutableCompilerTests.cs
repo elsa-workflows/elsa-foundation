@@ -8,6 +8,8 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
@@ -36,6 +38,7 @@ using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 using CronActivity = Elsa.Activities.Scheduling.Activities.Cron;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 using TimerActivity = Elsa.Activities.Scheduling.Activities.Timer;
@@ -69,6 +72,7 @@ public sealed class WorkflowExecutableCompilerTests
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly ActivityDefinitionVersion _writeLinesActivity = ActivityVersion("activity-write-lines", "Lines", new TypeReference("String", CollectionKind.List));
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
+    private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion("activity-flowchart", typeof(FlowchartActivity).FullName!);
     private readonly ActivityDefinitionVersion _legacyTriggerActivity = LegacyTriggerActivityVersion();
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
 
@@ -118,6 +122,7 @@ public sealed class WorkflowExecutableCompilerTests
             DefinitionId = "definition-reusable",
             Version = "3.2.1",
             ActivityTypeKey = "activity.reusable",
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
             Contract = contract,
             Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
             TemplateId = template.TemplateId,
@@ -148,7 +153,7 @@ public sealed class WorkflowExecutableCompilerTests
             new FakeActivityVersionStore([]),
             _activityStructureService,
             TestWellKnownTypeRegistry.Create(),
-            new ReusablePublicationStore(publication),
+            new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
             sidecars);
@@ -174,6 +179,73 @@ public sealed class WorkflowExecutableCompilerTests
             42);
         Assert.Equal(42, captured.InlineValue?.GetInt32());
         Assert.Equal("CallerResult", captured.Metadata[RuntimeMetadataKeys.VariableName]);
+    }
+
+    [Fact]
+    public async Task Source_owned_flowchart_publication_compiles_authored_children_as_ordinary_structure()
+    {
+        var root = FlowchartNode("flowchart-0affb8fb", [Node("writeline-1a75fea9", Text("hello"))]);
+        var publication = SourceOwnedPublication(
+            _flowchartActivity,
+            ActivityDefinitionVersionResolutionKind.AuthorableActivity);
+        var compiler = CompilerWithPublication(root, publication, _writeLineActivity, _flowchartActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("flowchart-0affb8fb", executable.RootActivity.ExecutableNodeId);
+        Assert.Equal(FlowchartActivity.StructureKind, executable.RootActivity.Structure?.Kind);
+        Assert.Equal("writeline-1a75fea9", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Legacy_source_owned_sequence_publication_compiles_authored_children_as_ordinary_structure()
+    {
+        var root = SequenceNode("sequence-source-owned", [Node("write-line", Text("hello"))]);
+        var publication = SourceOwnedPublication(
+            _sequenceActivity,
+            ActivityDefinitionVersionResolutionKind.Unspecified);
+        var compiler = CompilerWithPublication(root, publication, _writeLineActivity, _sequenceActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("sequence-source-owned", executable.RootActivity.ExecutableNodeId);
+        Assert.Equal(SequenceActivity.StructureKind, executable.RootActivity.Structure?.Kind);
+        Assert.Equal("write-line", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Reusable_template_boundary_with_authored_children_remains_rejected()
+    {
+        var publication = new ActivityDefinitionVersionPublication
+        {
+            Id = "version-reusable-with-authored-children",
+            DefinitionVersionId = "version-reusable-with-authored-children",
+            DefinitionId = "definition-reusable-with-authored-children",
+            Version = "1.0.0",
+            ActivityTypeKey = "activity.reusable",
+            SourceDraftId = "draft-reusable-with-authored-children",
+            Contract = new ActivityContract("1", [], [], []),
+            Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
+            TemplateId = "template-reusable-with-authored-children",
+            TemplateHash = "hash-reusable-with-authored-children",
+            SourceReferenceId = "source-reusable-with-authored-children",
+            ProviderFingerprint = "fingerprint",
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 0,
+            RuntimeRequirements = []
+        };
+        var root = SequenceNode(
+            "use-reusable-with-authored-children",
+            [Node("authored-child", Text("not allowed"))],
+            activityVersionId: publication.DefinitionVersionId);
+        var compiler = CompilerWithPublication(root, publication);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(
+            "Reusable activity node 'use-reusable-with-authored-children' cannot contain authored child activities; its structure is supplied by the exact published activity template.",
+            exception.Message);
     }
 
     [Fact]
@@ -232,7 +304,7 @@ public sealed class WorkflowExecutableCompilerTests
                 "layout-custom", ActivityInvocationOrigin.Empty, template.TemplateHash,
                 [new("local-root", "local-root", "local-root", 0, 0)], [])]));
         var placer = new ActivityTemplatePlacer(
-            new ReusablePublicationStore(publication),
+            new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
             new Sha256ActivityPlacementHasher());
@@ -1333,6 +1405,17 @@ public sealed class WorkflowExecutableCompilerTests
             registry);
     }
 
+    private WorkflowExecutableCompiler CompilerWithPublication(
+        ActivityNode root,
+        ActivityDefinitionVersionPublication publication,
+        params ActivityDefinitionVersion[] activityVersions) =>
+        TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(root)),
+            new FakeActivityVersionStore([.. activityVersions]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            new SinglePublicationStore(publication));
+
     private static WorkflowDefinitionVersion WorkflowVersion(
         ActivityNode? rootActivity,
         IReadOnlyCollection<InputDefinition>? inputs = null,
@@ -1370,16 +1453,49 @@ public sealed class WorkflowExecutableCompilerTests
     private static ActivityNode SequenceNode(
         string nodeId,
         IReadOnlyCollection<ActivityNode> activities,
-        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null,
+        string activityVersionId = "activity-sequence") =>
         new(
             nodeId,
-            "activity-sequence",
+            activityVersionId,
             Inputs: [],
             Outputs: [],
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
+
+    private static ActivityNode FlowchartNode(string nodeId, IReadOnlyCollection<ActivityNode> activities) =>
+        new(
+            nodeId,
+            "activity-flowchart",
+            Inputs: [],
+            Outputs: [],
+            Structure: new ActivityNodeStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(activities))));
+
+    private static ActivityDefinitionVersionPublication SourceOwnedPublication(
+        ActivityDefinitionVersion version,
+        ActivityDefinitionVersionResolutionKind resolutionKind) => new()
+    {
+        Id = version.Id,
+        DefinitionVersionId = version.Id,
+        DefinitionId = version.DefinitionId,
+        Version = version.Version,
+        ActivityTypeKey = version.Definition!.ActivityTypeKey,
+        ResolutionKind = resolutionKind,
+        Contract = new ActivityContract("1", [], [], []),
+        Provider = new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload),
+        TemplateId = "source-owned-template",
+        TemplateHash = "source-owned-hash",
+        SourceReferenceId = "source-owned-reference",
+        ProviderFingerprint = "source-owned-fingerprint",
+        DirectDependencyCount = 0,
+        ClosedTemplateCount = 0,
+        RuntimeRequirements = []
+    };
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
@@ -1449,6 +1565,7 @@ public sealed class WorkflowExecutableCompilerTests
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
         new ActivitiesSequenceFeature().ConfigureServices(services);
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }
@@ -1512,7 +1629,7 @@ public sealed class WorkflowExecutableCompilerTests
             ValueTask.FromResult<IReadOnlyCollection<string>>([]);
     }
 
-    private sealed class ReusablePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
+    private sealed class SinglePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
     {
         public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) => Task.FromResult(definitionVersionId == publication.DefinitionVersionId ? publication : null);
         public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>(definitionId == publication.DefinitionId ? [publication] : []);
