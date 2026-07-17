@@ -108,8 +108,20 @@ internal sealed class GroundworkDocumentStoreFixture(
                 return await QueryScopePageAsync(query, requireExpiry: false, cancellationToken);
             if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery)
                 return await QuerySingleValuePageAsync(query, ElsaRuntimeStorageManifest.TestScopeIdField, cancellationToken);
-            if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery)
-                return await QueryRecurringSchedulesDueAsync(query, cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.DurableTimerDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery)
+                return await QueryDateTimeLessThanOrEqualAsync(
+                    query,
+                    ElsaRuntimeStorageManifest.DurableTimerDueTimeField,
+                    "Groundwork durable timer due cursor must be non-null.",
+                    cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery)
+                return await QueryDateTimeLessThanOrEqualAsync(
+                    query,
+                    ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
+                    "Groundwork recurring schedule due cursor must be non-null.",
+                    cancellationToken);
 
             var (indexIdentity, value) = Resolve(query);
             var all = await store.QueryAsync(
@@ -197,18 +209,20 @@ internal sealed class GroundworkDocumentStoreFixture(
             return new DocumentQueryResult(window.ToArray(), matches.Length);
         }
 
-        private async Task<DocumentQueryResult> QueryRecurringSchedulesDueAsync(
+        private async Task<DocumentQueryResult> QueryDateTimeLessThanOrEqualAsync(
             DocumentQuery query,
+            string expectedPath,
+            string nullValueMessage,
             CancellationToken cancellationToken)
         {
             var comparison = query.Clauses
                 .SelectMany(clause => clause.Comparisons)
                 .Single();
             if (comparison.Operator != QueryComparisonOperator.LessThanOrEqual ||
-                comparison.Path != ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField ||
+                comparison.Path != expectedPath ||
                 comparison.Values.Count != 1 ||
                 query.Order.Count != 1 ||
-                query.Order[0].Path != ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField)
+                query.Order[0].Path != expectedPath)
             {
                 throw new InvalidOperationException(
                     $"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
@@ -218,13 +232,13 @@ internal sealed class GroundworkDocumentStoreFixture(
             var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
 #pragma warning restore GW0004
             var asOf = DateTimeOffset.Parse(
-                comparison.Values[0] ?? throw new InvalidOperationException("Groundwork recurring schedule due cursor must be non-null."),
+                comparison.Values[0] ?? throw new InvalidOperationException(nullValueMessage),
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind);
             var matches = all.Documents
                 .Select(document => (Document: document, NextOccurrence: ReadDateTimeOffset(
                     document,
-                    ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField)))
+                    expectedPath)))
                 .Where(entry => entry.NextOccurrence <= asOf)
                 .OrderBy(entry => entry.NextOccurrence)
                 .ThenBy(entry => entry.Document.Id, StringComparer.Ordinal)

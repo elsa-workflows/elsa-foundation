@@ -78,6 +78,25 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public void DurableTimer_Declares_Due_Date_Route()
+    {
+        var manifest = ElsaRuntimeStorageManifest.Create();
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.DurableTimerDocumentKind);
+
+        var byDueTime = Assert.Single(
+            unit.Indexes,
+            i => i.Identity == ElsaRuntimeStorageManifest.DurableTimerByDueTime);
+        Assert.Equal(IndexValueKind.DateTime, byDueTime.ValueKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, Assert.Single(byDueTime.Fields).Path);
+        Assert.Contains(PortableQueryOperation.LessThanOrEqual, byDueTime.SupportedOperations);
+
+        var query = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByDueTime, query.IndexIdentity);
+        Assert.Contains(PortableQueryOperation.LessThanOrEqual, query.Operations);
+        Assert.Equal(QuerySortSupport.Ascending, query.SortSupport);
+    }
+
+    [Fact]
     public void SchemaVersion_Stays_The_Frozen_Storage_Manifest_Version_Despite_The_Additive_Index()
     {
         // Adding an index must NOT change this storage-manifest version. Per-kind document versions are independent;
@@ -175,5 +194,18 @@ public sealed class ElsaRuntimeStorageManifestTests
             unit.PhysicalStorage!.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery);
         Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence, route.IndexIdentity);
+    }
+
+    [Fact]
+    public async Task Durable_timer_declares_physical_due_route()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.DurableTimerDocumentKind);
+
+        var route = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByDueTime, route.IndexIdentity);
     }
 }
