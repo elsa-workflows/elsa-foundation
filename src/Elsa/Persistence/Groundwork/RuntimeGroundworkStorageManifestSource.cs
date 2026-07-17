@@ -20,8 +20,9 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
         cancellationToken.ThrowIfCancellationRequested();
         var manifest = TestScopeStoragePhysicalizer.AddCompositeRoutes(
             WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                    LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ElsaRuntimeStorageManifest.Create()))));
+                BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                    WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                        LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ElsaRuntimeStorageManifest.Create())))));
 
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,

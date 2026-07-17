@@ -109,6 +109,15 @@ internal sealed class GroundworkDocumentStoreFixture(
                 return await QueryScopePageAsync(query, requireExpiry: false, cancellationToken);
             if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery)
                 return await QuerySingleValuePageAsync(query, ElsaRuntimeStorageManifest.TestScopeIdField, cancellationToken);
+            if (query.DocumentKind == ElsaRuntimeStorageManifest.BookmarkStateDocumentKind &&
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery)
+                return await QueryCompositeEqualityAsync(
+                    query,
+                    [
+                        ElsaRuntimeStorageManifest.StimulusHashField,
+                        ElsaRuntimeStorageManifest.StimulusTypeField
+                    ],
+                    cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.DurableTimerDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery)
                 return await QueryDateTimeLessThanOrEqualAsync(

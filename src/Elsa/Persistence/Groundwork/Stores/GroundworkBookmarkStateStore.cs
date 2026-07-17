@@ -68,13 +68,12 @@ public sealed class GroundworkBookmarkStateStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
 
-        // The cross-execution index is keyed by stimulus hash only (every provider supports single-field
-        // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
-        // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
         var bookmarks = await QueryBookmarksAsync(
-            ElsaRuntimeStorageManifest.ListBookmarksByStimulusQuery,
-            ElsaRuntimeStorageManifest.StimulusHashField,
-            stimulusHash,
+            ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery,
+            [
+                Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulusHash),
+                Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)
+            ],
             cancellationToken);
 
         return bookmarks
@@ -88,8 +87,7 @@ public sealed class GroundworkBookmarkStateStore(
 
         return await QueryBookmarksAsync(
             ElsaRuntimeStorageManifest.ListBookmarksByStimulusTypeQuery,
-            ElsaRuntimeStorageManifest.StimulusTypeField,
-            stimulusType,
+            [Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)],
             cancellationToken);
     }
 
@@ -97,14 +95,23 @@ public sealed class GroundworkBookmarkStateStore(
         string queryIdentity,
         string fieldPath,
         string value,
+        CancellationToken cancellationToken) =>
+        await QueryBookmarksAsync(queryIdentity, [Equal(fieldPath, value)], cancellationToken);
+
+    private async ValueTask<IReadOnlyCollection<BookmarkState>> QueryBookmarksAsync(
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
         CancellationToken cancellationToken)
     {
         var result = await Queries.QueryAsync(
             new DocumentQuery(
                 DocumentKind,
                 queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+                clauses),
             cancellationToken);
         return result.Documents.Select(Serializer.Deserialize<BookmarkState>).ToArray();
     }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 }

@@ -174,13 +174,15 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Scale-bearing lookup still relies on incomplete bounded-route evidence.",
       "performanceWorkload": "bookmark-lookup",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "find-by-workflow-and-bookmark",
-        "list-by-workflow-bounded"
+        "list-by-workflow-bounded",
+        "list-by-stimulus-and-type-bounded",
+        "list-by-stimulus-type-bounded"
       ],
       "concurrencySemantics": [
         "expected-version-save",
@@ -208,6 +210,7 @@
       "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkBookmarkStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/ElsaRuntimeStorageManifestTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
       ]
     },
