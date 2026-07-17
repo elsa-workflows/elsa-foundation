@@ -635,7 +635,7 @@
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
-      "status": "planned",
+      "status": "implemented",
       "initialGap": "Source-reference query shapes lack complete bounded-route/provider evidence.",
       "performanceWorkload": "trigger-binding-stimulus-lookup",
       "accessPolicy": "ordinary",
@@ -672,6 +672,7 @@
       "deliveryOwner": "#645/boundary-7-bounded-queries",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutableStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/ElsaRuntimeStorageManifestTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionRetentionTests.cs"
       ]
     },

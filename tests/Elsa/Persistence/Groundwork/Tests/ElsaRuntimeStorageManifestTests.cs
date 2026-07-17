@@ -43,6 +43,46 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public void WorkflowExecutableSourceReference_Declares_Bounded_Scope_Gc_And_Artifact_Routes()
+    {
+        var manifest = ElsaRuntimeStorageManifest.Create();
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+
+        Assert.Contains(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByCollectionIndex);
+        Assert.Contains(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
+
+        var byScope = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
+        Assert.Equal(ElsaRuntimeStorageManifest.ScopeField, Assert.Single(byScope.Fields).Path);
+
+        var byExpiresAt = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByExpiresAt);
+        Assert.Equal(IndexValueKind.DateTime, byExpiresAt.ValueKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, Assert.Single(byExpiresAt.Fields).Path);
+        Assert.Contains(PortableQueryOperation.LessThanOrEqual, byExpiresAt.SupportedOperations);
+
+        var byRetired = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
+        Assert.Equal(ElsaRuntimeStorageManifest.IsRetiredField, Assert.Single(byRetired.Fields).Path);
+
+        Assert.Contains(
+            unit.Queries,
+            q => q.Identity == ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByArtifactQuery &&
+                 q.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
+        Assert.Contains(
+            unit.Queries,
+            q => q.Identity == ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByScopeQuery &&
+                 q.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
+
+        var expired = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListExpiredWorkflowExecutableSourceReferencesQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByExpiresAt, expired.IndexIdentity);
+        Assert.Contains(PortableQueryOperation.LessThanOrEqual, expired.Operations);
+        Assert.Equal(QuerySortSupport.Ascending, expired.SortSupport);
+
+        Assert.Contains(
+            unit.Queries,
+            q => q.Identity == ElsaRuntimeStorageManifest.ListRetiredWorkflowExecutableSourceReferencesQuery &&
+                 q.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
+    }
+
+    [Fact]
     public void ActivityExecutionHierarchy_Declares_FlatEnvelope_Scope_And_Workflow_Indexes()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
@@ -244,5 +284,30 @@ public sealed class ElsaRuntimeStorageManifestTests
             unit.PhysicalStorage!.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery);
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByDueTime, route.IndexIdentity);
+    }
+
+    [Fact]
+    public async Task Workflow_executable_source_reference_declares_physical_bounded_routes()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+
+        Assert.Contains(
+            unit.PhysicalStorage!.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByArtifactQuery &&
+                     query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByScopeQuery &&
+                     query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListExpiredWorkflowExecutableSourceReferencesQuery &&
+                     query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByExpiresAt);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListRetiredWorkflowExecutableSourceReferencesQuery &&
+                     query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
     }
 }

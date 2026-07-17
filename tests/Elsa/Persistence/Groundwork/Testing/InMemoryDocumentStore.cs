@@ -143,7 +143,12 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
                 return null;
         }
 
-        return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String => element.GetString(),
+            _ => element.ToString()
+        };
     }
 
     // --- Closed-query (PortableDocumentQuery) surface. Only the clause-free "all documents of a kind" form
@@ -214,6 +219,9 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     private static bool Matches(string? actual, DocumentQueryComparison comparison)
     {
         var expected = comparison.Values.SingleOrDefault();
+        if (comparison.Operator != QueryComparisonOperator.Equal && (actual is null || expected is null))
+            return false;
+
         var order = StringComparer.Ordinal.Compare(actual, expected);
         return comparison.Operator switch
         {
