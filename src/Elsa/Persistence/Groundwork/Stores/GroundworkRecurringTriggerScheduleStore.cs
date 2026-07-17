@@ -86,10 +86,11 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         if (replacedPublicationId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
 
-        var candidateState = await LoadProjectionStateAsync(publicationId, cancellationToken);
-        if (candidateState is null)
+        var candidateStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
+        if (candidateStateEnvelope is null)
             throw new InvalidOperationException($"Publication '{publicationId}' has no prepared recurring-schedule projection.");
 
+        var candidateState = Serializer.Deserialize<PublicationProjectionState>(candidateStateEnvelope);
         var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
         var replaced = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
             ? []
@@ -97,9 +98,12 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         var updates = candidate.Select(schedule => schedule with { IsActive = true })
             .Concat(replaced.Select(schedule => schedule with { IsActive = false }))
             .ToArray();
-        var replacedState = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
+        var replacedStateEnvelope = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
             ? null
-            : await LoadProjectionStateAsync(replacedPublicationId, cancellationToken);
+            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId, cancellationToken);
+        var replacedState = replacedStateEnvelope is null
+            ? null
+            : Serializer.Deserialize<PublicationProjectionState>(replacedStateEnvelope);
 
         await CommitAtomicallyAsync(
             [],
@@ -107,7 +111,9 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             candidateState with { IsActive = true },
             deleteProjectionStateId: null,
             cancellationToken,
-            replacedState is null ? null : replacedState with { IsActive = false });
+            secondaryProjectionState: replacedState is null ? null : replacedState with { IsActive = false },
+            projectionStateExpectedVersion: candidateStateEnvelope.Version,
+            secondaryProjectionStateExpectedVersion: replacedStateEnvelope?.Version);
     }
 
     public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
@@ -225,16 +231,13 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         }
     }
 
-    private async ValueTask<PublicationProjectionState?> LoadProjectionStateAsync(
+    private async ValueTask<DocumentEnvelope?> LoadProjectionStateEnvelopeAsync(
         string publicationId,
-        CancellationToken cancellationToken)
-    {
-        var envelope = await Store.LoadAsync(
+        CancellationToken cancellationToken) =>
+        await Store.LoadAsync(
             ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
             ProjectionStateId(publicationId),
             cancellationToken);
-        return envelope is null ? null : Serializer.Deserialize<PublicationProjectionState>(envelope);
-    }
 
     private async ValueTask CommitAtomicallyAsync(
         IEnumerable<string> deleteIds,
@@ -242,7 +245,9 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         PublicationProjectionState? projectionState,
         string? deleteProjectionStateId,
         CancellationToken cancellationToken,
-        PublicationProjectionState? secondaryProjectionState = null)
+        PublicationProjectionState? secondaryProjectionState = null,
+        long? projectionStateExpectedVersion = null,
+        long? secondaryProjectionStateExpectedVersion = null)
     {
         await using var unitOfWork = await Store.BeginAsync(
             DocumentCommitScope.Of(DocumentKind, ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind),
@@ -261,9 +266,9 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
                 cancellationToken);
         }
         if (projectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, projectionState, cancellationToken);
+            await SaveProjectionStateAsync(unitOfWork, projectionState, projectionStateExpectedVersion, cancellationToken);
         if (secondaryProjectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, cancellationToken);
+            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, secondaryProjectionStateExpectedVersion, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
     }
@@ -271,18 +276,23 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     private async ValueTask SaveProjectionStateAsync(
         IDocumentUnitOfWork unitOfWork,
         PublicationProjectionState state,
+        long? expectedVersion,
         CancellationToken cancellationToken)
     {
         var (schemaVersion, content) = Serializer.Serialize(
             ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
             state);
-        await unitOfWork.SaveAsync(
+        var result = await unitOfWork.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
                 ProjectionStateId(state.PublicationId),
                 schemaVersion,
-                content),
+                content,
+                ExpectedVersion: expectedVersion),
             cancellationToken);
+        if (result.Status != DocumentStoreWriteStatus.Saved)
+            throw new InvalidOperationException(
+                $"Recurring-schedule publication projection '{state.PublicationId}' could not be saved because the stored projection version changed.");
     }
 
     private static string ProjectionStateId(string publicationId) =>

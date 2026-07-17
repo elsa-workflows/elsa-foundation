@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Manifests;
@@ -89,6 +90,41 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         Assert.Empty(await store.ListByStimulusTypeAsync("Signal"));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ActivatePublication_StagesProjectionStateWithLoadedVersions(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        var observingStore = new GroundworkFailureInjectingDocumentStore(
+            fixture.DocumentStore,
+            fixture.BoundedDocumentStore,
+            fixture.DocumentStore.Access,
+            new GroundworkFailureController());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            observingStore,
+            GroundworkTestSerialization.Serializer,
+            observingStore);
+
+        await store.PreparePublicationAsync(
+            "publication-1",
+            [PublicationBinding("publication-1", "artifact-1", "node-a", "slot-a")]);
+        await store.PreparePublicationAsync(
+            "publication-2",
+            [PublicationBinding("publication-2", "artifact-2", "node-b", "slot-b")]);
+
+        await store.ActivatePublicationAsync("publication-2", "publication-1");
+
+        var activationProjectionSaves = observingStore.StagedSaves
+            .Where(request =>
+                request.DocumentKind == ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind &&
+                request.ExpectedVersion is not null)
+            .ToArray();
+        Assert.Equal([1L, 1L], activationProjectionSaves.Select(request => request.ExpectedVersion));
+        Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-2", StringComparison.Ordinal));
+        Assert.Contains(activationProjectionSaves, request => request.Id.Contains("publication-1", StringComparison.Ordinal));
+    }
+
     private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>
         new(
             WorkflowTriggerBinding.BuildId(artifactId, nodeId, stimulusHash),
@@ -102,6 +138,23 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             "order-scope",
             new Dictionary<string, string> { ["slice"] = "w7" },
             new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero));
+
+    private static WorkflowTriggerBinding PublicationBinding(string publicationId, string artifactId, string nodeId, string slotId) =>
+        new(
+            WorkflowTriggerBinding.BuildId(publicationId, artifactId, nodeId, "hash-order"),
+            artifactId,
+            $"definition-{artifactId}",
+            "1.0.0",
+            $"hash-{artifactId}",
+            nodeId,
+            "Event",
+            "hash-order",
+            "order-scope",
+            new Dictionary<string, string> { ["slice"] = "w7" },
+            new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero),
+            PublicationId: publicationId,
+            SlotId: slotId,
+            IsActive: false);
 
     private static StorageManifest RuntimeManifest() =>
         new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync().GetAwaiter().GetResult().Manifest;
