@@ -12,6 +12,7 @@ public static class ActivityDesignApiCapabilities
         1,
         [
             new("activity-catalog", "design/activities/catalog"),
+            new("activity-authoring-capabilities", "design/activities/authoring-capabilities"),
             new("activity-definition-recommendation", "design/activities/definitions/{definitionId}/recommendation", true),
             new("recommended-activity-definitions", "design/activities/definitions/picker"),
             new("activity-availability", "design/activities/availability/settings"),

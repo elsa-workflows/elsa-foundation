@@ -51,6 +51,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         services.AddHttpContextAccessor();
         services.TryAddScoped<IActivityPublishingAuthorizationContext, HttpContextActivityPublishingAuthorizationContext>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityContractStorageDriverProvider, RuntimeActivityContractStorageDriverProvider>());
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.TryAddScoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>

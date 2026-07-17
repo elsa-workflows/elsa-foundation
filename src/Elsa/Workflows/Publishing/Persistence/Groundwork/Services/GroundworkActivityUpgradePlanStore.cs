@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
@@ -38,6 +39,8 @@ public sealed class GroundworkActivityUpgradePlanStore(
     IWorkflowDefinitionVersionStore workflowVersions,
     IWorkflowDefinitionVersionLayoutStore workflowLayouts,
     IActivityStructureService structureService,
+    IActivityProviderRegistry activityProviders,
+    ActivityContractAuthoringValidator contractValidator,
     IEnumerable<IActivityProviderReferenceRewriter> activityRewriters,
     IIdentityGenerator identityGenerator) : IActivityUpgradeDiscoverySource, IActivityUpgradePlanMutationStore
 {
@@ -337,6 +340,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
         var authoring = DeserializeActivity<ActivityDefinitionAuthoringState>(authoringEnvelope);
         EnsureActivitySnapshot(step, draft, authoring);
         draft.State = draft.State with { Provider = await RewriteActivityAsync(draft.State.Provider, step.Replacements, cancellationToken) };
+        EnsureMutableActivityState(draft);
         draft.Revision++;
         draft.LastModifiedAt = now;
         layout.Revision = draft.Revision;
@@ -376,11 +380,44 @@ public sealed class GroundworkActivityUpgradePlanStore(
         };
         var sourceLayout = await activityLayouts.FindVersionLayoutAsync(source.DefinitionVersionId, cancellationToken);
         var layout = new ActivityDefinitionDraftLayout { Id = identityGenerator.Generate(), DraftId = id, TenantId = source.TenantId, Revision = 1, Records = sourceLayout?.Records.ToList() ?? [], CreatedAt = now, LastModifiedAt = now };
+        EnsureMutableActivityState(draft);
         requests.Add(SaveActivity(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft, 0));
         requests.Add(SaveActivity(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout, 0));
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind);
         scopes.Add(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind);
         applied.Add(new("ActivityDraft", id, source.DefinitionId, 1, true));
+    }
+
+    private void EnsureMutableActivityState(ActivityDefinitionDraft draft)
+    {
+        IActivityProvider provider;
+        try
+        {
+            provider = activityProviders.Resolve(draft.State.Provider.ProviderKey, draft.State.Provider.SchemaVersion);
+        }
+        catch (InvalidOperationException)
+        {
+            throw new ActivityUpgradeApplyException(
+                422,
+                "activity.provider.schema-unavailable",
+                "The upgraded draft's exact provider schema is unavailable for authoring.");
+        }
+        if (provider.AuthoringCapabilities.ManifestSchemas.All(x =>
+                !StringComparer.Ordinal.Equals(x.SchemaVersion, draft.State.Provider.SchemaVersion) || !x.IsAuthorable))
+            throw new ActivityUpgradeApplyException(
+                422,
+                "activity.provider.schema-not-authorable",
+                "The upgraded draft's exact provider schema is not authorable.");
+
+        var diagnostics = contractValidator.Validate(
+            draft.State.Contract,
+            new("ActivityDraft", draft.Id, draft.DefinitionId, Revision: draft.Revision));
+        if (diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+            throw new ActivityUpgradeApplyException(
+                422,
+                "activity.contract.capability-rejected",
+                "The upgraded mutable contract uses unavailable authoring capabilities.",
+                diagnostics);
     }
 
     private async Task StageWorkflowDraftUpdateAsync(

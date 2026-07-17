@@ -24,7 +24,7 @@ Stable Activity Catalog identity and lineage.
 
 Invariants:
 
-- `(TenantId, ActivityTypeKey)` is unique.
+- `(TenantId, ActivityTypeKey)` is unique. Normal authoring never accepts this key: the server generates it from the display name plus the new definition identity, and it is immutable thereafter.
 - Changing display metadata does not create a version and does not affect behavior hashes.
 - `HeadVersionId` changes only inside successful publication.
 - Exact version resolution never uses `HeadVersionId`; it exists for authoring concurrency and convenience reads.
@@ -130,6 +130,13 @@ Publication always revalidates inside its atomic transition; a stored clean vali
 | `ContractSchemaVersion` | string | Platform public-contract schema, independent of provider schema. |
 
 The contract is authoritative. Providers validate or compile against it; they do not own it.
+Every mutable contract ingress is admitted through the activated provider-neutral type capability
+catalog. A capability records the stable alias, canonical collection kinds, default editor and
+presentation facts, null support, durability support, and compatible storage-driver keys.
+Compatible drivers are the intersection of descriptor declarations and Runtime's activated durable
+driver registry, projected through the Publishing bridge.
+Unavailable facts are rejected with structured diagnostics. Immutable historical contracts retain
+and return their exact stored facts even if a capability is later unavailable.
 
 ### 2.2 `ActivityInputContract`
 
@@ -175,6 +182,19 @@ Same stable identity, name, type, storage-driver, durability, requiredness, and 
 | `Payload` | opaque JSON | Stored and round-tripped by Design without universal deserialization. |
 
 Old provider schemas remain immutable. A provider migration clones a version into a new draft and deterministically transforms the clone; it never rewrites a version.
+
+### 2.7 Provider authoring capabilities and contract proposals
+
+Each provider declares structured authoring metadata for every supported manifest schema: whether
+the schema is authorable, exact migration sources, and required public outcomes. Registry activation
+fails when this metadata is missing, duplicated, or inconsistent with the supported schema set.
+
+A contract proposal is a read-only result bound to one exact draft revision, provider key/schema,
+and canonical manifest fingerprint. It contains ordered, typed member changes and safe diagnostics,
+not a replacement contract or opaque manifest. Applying explicitly selected changes reloads and
+recomputes that exact proposal, validates its fingerprint and the resulting capability-catalog
+contract, then atomically changes only the contract and draft/layout revision. Any stale binding or
+proposal fails without writing.
 
 ## 3. Immutable publication models
 

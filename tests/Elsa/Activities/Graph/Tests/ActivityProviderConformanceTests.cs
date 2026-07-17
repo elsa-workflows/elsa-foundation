@@ -26,16 +26,14 @@ public sealed class ActivityProviderConformanceTests
         var manifest = new ActivityProviderManifest(ScriptProvider.ProviderKey, "1", Json("{\"source\":\"return input;\"}"));
         var contract = Contract();
 
-        var proposal = await designRegistry.Resolve(ScriptProvider.ProviderKey, "1").ProposeContractAsync(manifest);
+        var proposal = await designRegistry.Resolve(ScriptProvider.ProviderKey, "1").ProposeContractAsync(new(manifest, contract));
         var validation = await designRegistry.Resolve(ScriptProvider.ProviderKey, "1").ValidateAsync(manifest, contract);
         var request = new ActivityTemplateCompilationRequest(
             "definition-1", "sample.script", "draft-1", 7, "1.0.0", contract, manifest, [], "script-compiler/1");
         var first = await compilerRegistry.Resolve(ScriptProvider.ProviderKey, "1").CompileAsync(request);
         var second = await compilerRegistry.Resolve(ScriptProvider.ProviderKey, "1").CompileAsync(request);
 
-        Assert.Equal(contract.ContractSchemaVersion, proposal.Contract.ContractSchemaVersion);
-        Assert.Equal(contract.Inputs.Select(x => x.ReferenceKey), proposal.Contract.Inputs.Select(x => x.ReferenceKey));
-        Assert.Equal(contract.Outcomes.Select(x => x.ReferenceKey), proposal.Contract.Outcomes.Select(x => x.ReferenceKey));
+        Assert.Empty(proposal.Changes);
         Assert.Empty(validation);
         Assert.Equal(first.ExecutableRoot!.Descriptor.ConsumerKey, second.ExecutableRoot!.Descriptor.ConsumerKey);
         Assert.Equal(first.ExecutableRoot.Descriptor.SchemaVersion, second.ExecutableRoot.Descriptor.SchemaVersion);
@@ -87,9 +85,13 @@ public sealed class ActivityProviderConformanceTests
         string IActivityTemplateProviderCompiler.ProviderKey => ProviderKey;
         string IActivityTemplateProviderCompiler.CompilerFingerprint => "sample.script/compiler/1";
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string>(StringComparer.Ordinal) { "1" };
+        public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
+            "Sample Script",
+            [new("1", true, new HashSet<string> { "1" })],
+            new([]));
 
-        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderManifest manifest, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ActivityContractProposal(Contract(), []));
+        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityContractProposal([], []));
 
         public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
             ActivityProviderManifest manifest,

@@ -215,6 +215,19 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 }
 
+namespace Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities
+{
+    internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
+        : ActivityAuthoringRequestEndpoint<GetActivityAuthoringCapabilities, ActivityAuthoringCapabilitiesView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Get(RouteConstants.GetRoute("authoring-capabilities"));
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
+        }
+    }
+}
+
 namespace Elsa.Activities.Design.Api.Endpoints.Drafts
 {
     internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
@@ -257,6 +270,26 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Post(RouteConstants.GetRoute("drafts/{draftId}/migrate-provider"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class ProposeContract(IRequestSender sender, ILogger<ProposeContract> logger)
+        : ActivityAuthoringRequestEndpoint<ProposeReusableActivityContract, ActivityContractProposalView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("drafts/{draftId}/contract-proposals"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class ApplyContractProposal(ICommandSender sender, ILogger<ApplyContractProposal> logger)
+        : ActivityAuthoringCommandEndpoint<ApplyReusableActivityContractProposal, ReusableActivityDraftView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("drafts/{draftId}/contract-proposals/apply"));
             ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }

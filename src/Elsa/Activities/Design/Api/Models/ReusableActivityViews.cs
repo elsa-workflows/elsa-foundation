@@ -116,19 +116,15 @@ public static class ActivityContractViewMappings
 
     public static TypeReference ToDomain(this ActivityTypeReferenceView view)
     {
-        var collectionKind = view.CollectionKind switch
-        {
-            var value when string.Equals(value, "None", StringComparison.OrdinalIgnoreCase) => CollectionKind.Single,
-            var value when string.Equals(value, "Single", StringComparison.OrdinalIgnoreCase) => CollectionKind.Single,
-            var value when Enum.TryParse<CollectionKind>(value, true, out var parsed) => parsed,
-            _ => throw new ArgumentException($"Collection kind '{view.CollectionKind}' is not supported.", nameof(view))
-        };
+        if (!Enum.TryParse<CollectionKind>(view.CollectionKind, false, out var collectionKind) ||
+            !StringComparer.Ordinal.Equals(collectionKind.ToString(), view.CollectionKind))
+            throw new ArgumentException($"Collection kind '{view.CollectionKind}' is not supported.", nameof(view));
         return new(view.Alias, collectionKind);
     }
 
     public static ActivityTypeReferenceView ToView(this TypeReference type) => new(
         type.Alias,
-        type.CollectionKind == CollectionKind.Single ? "None" : type.CollectionKind.ToString());
+        type.CollectionKind.ToString());
 
     private static JsonElement? Clone(JsonElement? value) => value is { } element ? element.Clone() : null;
 }
@@ -186,7 +182,56 @@ public sealed record ReusableActivityDraftSummaryView(
 public sealed record ActivityProviderManifestView(
     string ProviderKey,
     string SchemaVersion,
+    string ManifestFingerprint,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Payload);
+
+public sealed record ActivityProviderManifestSchemaCapabilityView(
+    string SchemaVersion,
+    bool IsAuthorable,
+    IReadOnlyList<string> MigratableFromSchemaVersions);
+
+public sealed record ActivityProviderAuthoringCapabilityView(
+    string ProviderKey,
+    string DisplayName,
+    IReadOnlyList<ActivityProviderManifestSchemaCapabilityView> ManifestSchemas,
+    IReadOnlyList<ActivityOutcomeContractView> RequiredOutcomes);
+
+public sealed record ActivityContractTypeCapabilityView(
+    string Alias,
+    string DisplayName,
+    string Category,
+    string DefaultEditor,
+    IReadOnlyList<string> SupportedCollectionKinds,
+    bool SupportsNull,
+    bool SupportsDurability,
+    IReadOnlyList<string> CompatibleStorageDriverKeys);
+
+public sealed record ActivityAuthoringCapabilitiesView(
+    IReadOnlyList<string> ContractSchemaVersions,
+    ActivityTypeKeyRules ActivityTypeKeyRules,
+    IReadOnlyList<ActivityProviderAuthoringCapabilityView> Providers,
+    IReadOnlyList<ActivityContractTypeCapabilityView> Types,
+    IReadOnlyList<string> StorageDriverKeys,
+    string SnapshotFingerprint);
+
+public sealed record ActivityContractProposalChangeView(
+    string ChangeId,
+    ActivityContractProposalOperation Operation,
+    ActivityContractMemberKind MemberKind,
+    string ReferenceKey,
+    ActivityInputContractView? Input,
+    ActivityOutputContractView? Output,
+    ActivityOutcomeContractView? Outcome);
+
+public sealed record ActivityContractProposalView(
+    string DraftId,
+    long Revision,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ManifestFingerprint,
+    string ProposalFingerprint,
+    IReadOnlyList<ActivityContractProposalChangeView> Changes,
+    IReadOnlyList<ActivityDiagnostic> Diagnostics);
 
 public sealed record ActivityDraftValidationView(
     string DraftId,

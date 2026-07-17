@@ -19,6 +19,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
     public static TheoryData<string, string, string> Routes => new()
     {
+        { "AuthoringCapabilities.Get", "GET", "design/activities/authoring-capabilities" },
         { "Definitions.Add", "POST", "design/activities/definitions" },
         { "Definitions.Fork", "POST", "design/activities/definitions/{definitionId}/forks" },
         { "Definitions.List", "GET", "design/activities/definitions" },
@@ -34,6 +35,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Drafts.Discard", "DELETE", "design/activities/drafts/{draftId}" },
         { "Drafts.Validate", "POST", "design/activities/drafts/{draftId}/validate" },
         { "Drafts.MigrateProvider", "POST", "design/activities/drafts/{draftId}/migrate-provider" },
+        { "Drafts.ProposeContract", "POST", "design/activities/drafts/{draftId}/contract-proposals" },
+        { "Drafts.ApplyContractProposal", "POST", "design/activities/drafts/{draftId}/contract-proposals/apply" },
         { "Drafts.Diff", "POST", "design/activities/drafts/{draftId}/diff" },
         { "Versions.Diff", "GET", "design/activities/versions/{fromVersionId}/diff/{toVersionId}" },
         { "Versions.Dependencies", "GET", "design/activities/versions/{versionId}/dependencies" },
@@ -47,12 +50,13 @@ public sealed class ActivityDefinitionAuthoringApiTests
     };
 
     [Fact]
-    public void Activity_design_capability_advertises_picker_and_templated_recommendation_relations()
+    public void Activity_design_capability_advertises_authoring_picker_and_templated_recommendation_relations()
     {
         var links = Elsa.Activities.Design.Api.Capabilities.ActivityDesignApiCapabilities.StaticDeclaration.Links;
 
         Assert.Contains(links, x => x.Rel == "recommended-activity-definitions" && x.Href == "design/activities/definitions/picker" && !x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-recommendation" && x.Href == "design/activities/definitions/{definitionId}/recommendation" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-authoring-capabilities" && x.Href == "design/activities/authoring-capabilities" && !x.Templated);
     }
 
     [Theory]
@@ -70,7 +74,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
     {
         object[] requests =
         [
-            new ForkReusableActivityDefinition("definition-route", "source-version", "activity.type", "Category", "Display", null, "provider", "1"),
+            new ForkReusableActivityDefinition("definition-route", "source-version", "Category", "Display", null, "provider", "1"),
             new CreateReusableActivityDraft("definition-route", null),
             new ReplaceReusableActivityDraft(
                 "draft-route",
@@ -81,6 +85,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
             new DiscardReusableActivityDraft("draft-route", 3),
             new ValidateReusableActivityDraft("draft-route", 3),
             new MigrateReusableActivityDraft("draft-route", 3, "provider", "2"),
+            new ProposeReusableActivityContract("draft-route", 3, "provider", "1", "sha256:manifest"),
+            new ApplyReusableActivityContractProposal("draft-route", 3, "provider", "1", "sha256:manifest", "sha256:proposal", ["change-1"]),
             new RetireReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
             new RestoreReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Retired, "reason"),
             new RevokeReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
@@ -127,7 +133,6 @@ public sealed class ActivityDefinitionAuthoringApiTests
     public void Create_request_uses_the_contract_shape_and_accepts_opaque_provider_payload()
     {
         var request = new CreateReusableActivityDefinition(
-            "acme.orders.calculate-total",
             "Orders",
             "Calculate order total",
             null,
@@ -137,7 +142,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
         var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Contains("\"activityTypeKey\":\"acme.orders.calculate-total\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("activityTypeKey", json, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"providerKey\":\"elsa.activity-graph\"", json, StringComparison.Ordinal);
         Assert.Contains("\"payload\":{\"secret\":42}", json, StringComparison.Ordinal);
         Assert.DoesNotContain("tenantId", json, StringComparison.OrdinalIgnoreCase);
@@ -163,17 +168,16 @@ public sealed class ActivityDefinitionAuthoringApiTests
     [Fact]
     public void Unauthorized_provider_projection_omits_payload_instead_of_leaking_or_fabricating_it()
     {
-        var view = new ActivityProviderManifestView("elsa.activity-graph", "1", null);
+        var view = new ActivityProviderManifestView("elsa.activity-graph", "1", "sha256:test", null);
 
         var json = JsonSerializer.Serialize(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Equal("{\"providerKey\":\"elsa.activity-graph\",\"schemaVersion\":\"1\"}", json);
+        Assert.Equal("{\"providerKey\":\"elsa.activity-graph\",\"schemaVersion\":\"1\",\"manifestFingerprint\":\"sha256:test\"}", json);
     }
 
     [Theory]
-    [InlineData("None")]
     [InlineData("Single")]
-    public void Scalar_type_reference_input_accepts_wire_name_and_single_alias(string collectionKind)
+    public void Scalar_type_reference_input_accepts_canonical_wire_name(string collectionKind)
     {
         var json = $$"""
             {
@@ -197,7 +201,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
     }
 
     [Fact]
-    public void Scalar_type_reference_response_always_emits_canonical_none_wire_name()
+    public void Scalar_type_reference_response_always_emits_canonical_single_wire_name()
     {
         var domain = new ActivityContract(
             "1",
@@ -207,8 +211,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
         var json = JsonSerializer.Serialize(domain.ToView(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Contains("\"collectionKind\":\"None\"", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"collectionKind\":\"Single\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"collectionKind\":\"Single\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"collectionKind\":\"None\"", json, StringComparison.Ordinal);
     }
 
     [Fact]

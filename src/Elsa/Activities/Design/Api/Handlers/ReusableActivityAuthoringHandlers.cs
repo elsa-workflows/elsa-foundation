@@ -29,6 +29,8 @@ public sealed class ReusableActivityAuthoringService(
     IStoreActivityDraftValidationCommand storeValidation,
     IActivityProviderRegistry providers,
     IActivityDraftValidator validator,
+    ActivityContractAuthoringValidator contractAuthoringValidator,
+    IActivityTypeKeyPolicy typeKeyPolicy,
     IIdentityGenerator identityGenerator,
     TimeProvider timeProvider,
     IActivityAuthoringContext context)
@@ -37,15 +39,17 @@ public sealed class ReusableActivityAuthoringService(
         CreateReusableActivityDefinition command,
         CancellationToken cancellationToken)
     {
-        EnsureProviderWrite(command.Provider.ProviderKey);
         EnsureDisplayName(command.DisplayName);
 
         var now = timeProvider.GetUtcNow();
         var definitionId = NewId("activity-def");
         var draftId = NewId("activity-draft");
-        var definition = NewDefinition(definitionId, command.ActivityTypeKey, command.Category, command.DisplayName, command.Description, now);
+        var contract = ToDomainContract(command.Contract);
+        EnsureAuthorableProvider(command.Provider);
+        EnsureAuthorableContract(contract, new("ActivityDraft", draftId, definitionId, Revision: 1));
+        var definition = NewDefinition(definitionId, typeKeyPolicy.Generate(command.DisplayName, definitionId), command.Category, command.DisplayName, command.Description, now);
         var authoring = NewAuthoring(definitionId, new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design), null, now);
-        var draft = NewDraft(draftId, definitionId, null, ToDomainContract(command.Contract), command.Provider, now);
+        var draft = NewDraft(draftId, definitionId, null, contract, command.Provider, now);
         var layout = NewDraftLayout(draftId, command.Layout, now);
 
         try
@@ -96,7 +100,9 @@ public sealed class ReusableActivityAuthoringService(
         var now = timeProvider.GetUtcNow();
         var definitionId = NewId("activity-def");
         var draftId = NewId("activity-draft");
-        var definition = NewDefinition(definitionId, command.ActivityTypeKey, command.Category, command.DisplayName, command.Description, now);
+        EnsureAuthorableProvider(migration.Manifest);
+        EnsureAuthorableContract(source.Contract, new("ActivityDraft", draftId, definitionId, Revision: 1));
+        var definition = NewDefinition(definitionId, typeKeyPolicy.Generate(command.DisplayName, definitionId), command.Category, command.DisplayName, command.Description, now);
         var authoring = NewAuthoring(
             definitionId,
             new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
@@ -176,9 +182,10 @@ public sealed class ReusableActivityAuthoringService(
             records = command.Layout;
         }
 
-        EnsureProviderWrite(provider.ProviderKey);
         var now = timeProvider.GetUtcNow();
         var draft = NewDraft(NewId("activity-draft"), command.DefinitionId, command.SourceVersionId, contract, provider, now);
+        EnsureAuthorableProvider(provider);
+        EnsureAuthorableContract(contract, new("ActivityDraft", draft.Id, draft.DefinitionId, Revision: draft.Revision));
         var layout = NewDraftLayout(draft.Id, records, now);
         try
         {
@@ -196,18 +203,20 @@ public sealed class ReusableActivityAuthoringService(
         ReplaceReusableActivityDraft command,
         CancellationToken cancellationToken)
     {
-        EnsureProviderWrite(command.Provider.ProviderKey);
         var current = await GetDraftAsync(command.DraftId, cancellationToken);
         var authoring = await GetAuthoringAsync(current.DefinitionId, cancellationToken);
         EnsureVisible(current.TenantId);
         EnsureDesignAuthority(authoring);
         EnsureActiveRevision(current, command.ExpectedRevision);
+        var contract = ToDomainContract(command.Contract);
+        EnsureAuthorableProvider(command.Provider);
+        EnsureAuthorableContract(contract, new("ActivityDraft", current.Id, current.DefinitionId, Revision: current.Revision));
 
         ActivityDefinitionDraft updated;
         try
         {
             updated = await replaceDraft.ExecuteAsync(
-                new(command.DraftId, command.ExpectedRevision, new(ToDomainContract(command.Contract), command.Provider, current.State.Options), command.Layout),
+                new(command.DraftId, command.ExpectedRevision, new(contract, command.Provider, current.State.Options), command.Layout),
                 cancellationToken);
         }
         catch (InvalidOperationException exception)
@@ -266,6 +275,9 @@ public sealed class ReusableActivityAuthoringService(
                 command.TargetSchemaVersion,
                 migration.Diagnostics);
         }
+
+        EnsureAuthorableProvider(migration.Manifest);
+        EnsureAuthorableContract(current.State.Contract, new("ActivityDraft", current.Id, current.DefinitionId, Revision: current.Revision));
 
         var currentLayout = await layoutStore.FindDraftLayoutAsync(current.Id, cancellationToken)
                             ?? throw OperationFailed("The source draft layout is unavailable.");
@@ -528,6 +540,45 @@ public sealed class ReusableActivityAuthoringService(
             throw Forbidden("The caller is not authorized to author this activity provider.");
     }
 
+    private void EnsureAuthorableProvider(ActivityProviderManifest manifest)
+    {
+        EnsureProviderWrite(manifest.ProviderKey);
+        IActivityProvider provider;
+        try
+        {
+            provider = providers.Resolve(manifest.ProviderKey, manifest.SchemaVersion);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new ActivityAuthoringException(
+                422,
+                "activity.provider.schema-unavailable",
+                "Activity provider schema is unavailable",
+                "The selected provider schema is not available for authoring.",
+                innerException: exception);
+        }
+
+        if (provider.AuthoringCapabilities.ManifestSchemas.All(x =>
+                !StringComparer.Ordinal.Equals(x.SchemaVersion, manifest.SchemaVersion) || !x.IsAuthorable))
+            throw new ActivityAuthoringException(
+                422,
+                "activity.provider.schema-not-authorable",
+                "Activity provider schema is not authorable",
+                "The selected provider schema may be readable historically but cannot be used for mutable authoring.");
+    }
+
+    private void EnsureAuthorableContract(ActivityContract contract, ActivityDiagnosticSubject subject)
+    {
+        var diagnostics = contractAuthoringValidator.Validate(contract, subject);
+        if (diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+            throw new ActivityAuthoringException(
+                422,
+                "activity.contract.capability-rejected",
+                "Activity contract is not authorable",
+                "The mutable activity contract contains types, collection kinds, or storage drivers outside the activated capability catalog.",
+                diagnostics);
+    }
+
     private void EnsureVisible(string? tenantId)
     {
         if (!IsVisible(tenantId))
@@ -562,6 +613,7 @@ public sealed class ReusableActivityAuthoringService(
     private ActivityProviderManifestView ToProviderView(ActivityProviderManifest provider) => new(
         provider.ProviderKey,
         provider.SchemaVersion,
+        ActivityProviderManifestFingerprint.Compute(provider),
         context.CanReadProviderPayload(provider.ProviderKey) ? provider.Payload.Clone() : null);
 
     private ActivityDefinitionIdentityView ToIdentity(ActivityDefinition definition, ActivityDefinitionAuthoringState authoring) => new(

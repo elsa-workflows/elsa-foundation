@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -127,6 +128,57 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Equal("updated", draft.State.Options["label"]);
         Assert.Equal(1, layout!.Revision);
         Assert.Equal("node-2", Assert.Single(layout.Records).NodeId);
+    }
+
+    [Fact]
+    public async Task ApplyContractProposal_Uses_Exact_Provider_Binding_And_Changes_Only_Contract_And_Revisions()
+    {
+        var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest());
+        var before = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!;
+        var fingerprint = ActivityProviderManifestFingerprint.Compute(before.State.Provider);
+        var contract = new ActivityContract("proposal", [], [], [new("done", "Done", true)]);
+
+        var applied = await harness.Stores.ExecuteAsync(new ApplyActivityContractProposalRequest(
+            before.Id,
+            before.TenantId,
+            before.Revision,
+            before.State.Provider.ProviderKey,
+            before.State.Provider.SchemaVersion,
+            fingerprint,
+            contract));
+
+        var layout = await harness.Stores.FindDraftLayoutAsync(before.Id);
+        Assert.Equal(1, applied.Revision);
+        Assert.Equal("proposal", applied.State.Contract.ContractSchemaVersion);
+        Assert.Equal(before.State.Provider.ProviderKey, applied.State.Provider.ProviderKey);
+        Assert.Equal(before.State.Provider.SchemaVersion, applied.State.Provider.SchemaVersion);
+        Assert.Equal(before.State.Provider.Payload.GetRawText(), applied.State.Provider.Payload.GetRawText());
+        Assert.Equal(before.State.Options["label"], applied.State.Options["label"]);
+        Assert.Equal(1, layout!.Revision);
+        Assert.Equal("node-1", Assert.Single(layout.Records).NodeId);
+    }
+
+    [Fact]
+    public async Task ApplyContractProposal_Rejects_Stale_Manifest_Fingerprint_Without_Writes()
+    {
+        var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest());
+        var before = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(new ApplyActivityContractProposalRequest(
+            before.Id,
+            before.TenantId,
+            before.Revision,
+            before.State.Provider.ProviderKey,
+            before.State.Provider.SchemaVersion,
+            "sha256:stale",
+            new("proposal", [], [], []))));
+
+        var persisted = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(before.Id))!;
+        Assert.Equal(before.Revision, persisted.Revision);
+        Assert.Equal(before.State.Contract, persisted.State.Contract);
+        Assert.Equal(before.Revision, (await harness.Stores.FindDraftLayoutAsync(before.Id))!.Revision);
     }
 
     [Theory]

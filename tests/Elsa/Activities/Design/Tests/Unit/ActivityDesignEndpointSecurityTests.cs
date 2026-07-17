@@ -27,6 +27,7 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Availability.GetSettings")]
     [InlineData("Availability.ListDiagnostics")]
     [InlineData("Availability.SaveSettings")]
+    [InlineData("AuthoringCapabilities.Get")]
     [InlineData("Catalog.List")]
     [InlineData("Definitions.Add")]
     [InlineData("Definitions.AddDraft")]
@@ -39,9 +40,11 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Definitions.Picker")]
     [InlineData("Definitions.Update")]
     [InlineData("Drafts.Diff")]
+    [InlineData("Drafts.ApplyContractProposal")]
     [InlineData("Drafts.Discard")]
     [InlineData("Drafts.Get")]
     [InlineData("Drafts.MigrateProvider")]
+    [InlineData("Drafts.ProposeContract")]
     [InlineData("Drafts.Replace")]
     [InlineData("Drafts.Validate")]
     [InlineData("Versions.Diff")]
@@ -76,6 +79,7 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Availability.GetSettings",
             "Availability.ListDiagnostics",
             "Availability.SaveSettings",
+            "AuthoringCapabilities.Get",
             "Catalog.List",
             "Definitions.Add",
             "Definitions.AddDraft",
@@ -88,9 +92,11 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Definitions.Picker",
             "Definitions.Update",
             "Drafts.Diff",
+            "Drafts.ApplyContractProposal",
             "Drafts.Discard",
             "Drafts.Get",
             "Drafts.MigrateProvider",
+            "Drafts.ProposeContract",
             "Drafts.Replace",
             "Drafts.Validate",
             "UpgradePlans.Apply",

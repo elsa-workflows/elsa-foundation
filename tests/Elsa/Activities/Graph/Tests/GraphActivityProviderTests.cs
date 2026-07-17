@@ -18,7 +18,9 @@ namespace Elsa.Activities.Graph.Tests;
 
 public sealed class GraphActivityProviderTests
 {
-    private readonly GraphActivityProvider _provider = new(new TestActivityStructureService());
+    private readonly GraphActivityProvider _provider = new(
+        new TestActivityStructureService(),
+        new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
 
     [Fact]
     public void Schema_one_round_trip_is_canonical_and_preserves_array_order()
@@ -26,7 +28,7 @@ public sealed class GraphActivityProviderTests
         var first = ParseJson("""
             {
               "variables": [{
-                "type": { "collectionKind": "None", "alias": "decimal" },
+                "type": { "collectionKind": "Single", "alias": "Decimal" },
                 "storageDriverKey": "elsa.json",
                 "name": "RunningTotal",
                 "referenceKey": "running-total",
@@ -63,7 +65,7 @@ public sealed class GraphActivityProviderTests
                 "referenceKey": "running-total",
                 "name": "RunningTotal",
                 "storageDriverKey": "elsa.json",
-                "type": { "alias": "decimal", "collectionKind": "None" }
+                "type": { "alias": "Decimal", "collectionKind": "Single" }
               }]
             }
             """);
@@ -79,14 +81,16 @@ public sealed class GraphActivityProviderTests
     [Fact]
     public async Task Contract_proposal_does_not_duplicate_public_contract_and_seeds_done()
     {
-        var proposal = await _provider.ProposeContractAsync(CreateManifest());
+        var proposal = await _provider.ProposeContractAsync(new(CreateManifest(), new ActivityContract("1", [], [], [])));
 
         Assert.Empty(proposal.Diagnostics);
-        Assert.Empty(proposal.Contract.Inputs);
-        Assert.Empty(proposal.Contract.Outputs);
-        var outcome = Assert.Single(proposal.Contract.Outcomes);
+        var change = Assert.Single(proposal.Changes);
+        Assert.Equal(ActivityContractProposalOperation.Add, change.Operation);
+        var outcome = Assert.IsType<ActivityOutcomeContract>(change.Outcome);
         Assert.Equal("done", outcome.ReferenceKey);
         Assert.True(outcome.IsEmitted);
+        var required = Assert.Single(_provider.AuthoringCapabilities.ContractConstraints.RequiredOutcomes);
+        Assert.Equal(outcome, required);
     }
 
     [Fact]
@@ -170,7 +174,7 @@ public sealed class GraphActivityProviderTests
               "variables": [{
                 "referenceKey": "counter",
                 "name": "Counter",
-                "type": { "alias": "int64", "collectionKind": "None" },
+                "type": { "alias": "Int64", "collectionKind": "Single" },
                 "storageDriverKey": "elsa.json",
                 "initialValue": { "syntax": "Literal", "value": 0 }
               }],
@@ -392,7 +396,7 @@ public sealed class GraphActivityProviderTests
         [new ActivityOutputContract(
             "total",
             "Total",
-            new TypeReference("int64"),
+            new TypeReference("Int64"),
             true,
             "elsa.json")],
         [new ActivityOutcomeContract("done", "Done", true)]);
@@ -420,8 +424,12 @@ public sealed class GraphActivityProviderTests
         public const string Key = "test.throwing";
         public string ProviderKey => Key;
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
+        public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
+            "Throwing Provider",
+            [new("1", true, new HashSet<string> { "1" })],
+            new([]));
 
-        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderManifest manifest, CancellationToken cancellationToken = default) =>
+        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("secret infrastructure detail");
 
         public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, ActivityContract contract, CancellationToken cancellationToken = default) =>
@@ -432,6 +440,25 @@ public sealed class GraphActivityProviderTests
 
         public ValueTask<ActivityManifestMigration> MigrateAsync(ActivityManifestMigrationRequest request, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("secret infrastructure detail");
+    }
+
+    private sealed class TestContractCapabilityCatalog : IActivityContractCapabilityCatalog
+    {
+        public IReadOnlyCollection<ActivityContractTypeCapability> Types { get; } =
+        [
+            Capability("Decimal"),
+            Capability("Int64")
+        ];
+
+        private static ActivityContractTypeCapability Capability(string alias) => new(
+            alias,
+            alias,
+            "Test",
+            "Test",
+            Enum.GetValues<CollectionKind>().ToHashSet(),
+            false,
+            true,
+            new HashSet<string>(StringComparer.Ordinal) { "elsa.json" });
     }
 
     private sealed class TestActivityStructureService : IActivityStructureService
