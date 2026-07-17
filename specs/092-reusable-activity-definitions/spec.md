@@ -110,6 +110,9 @@ Authors can maintain multiple drafts, clone from immutable versions, change prov
 4. **Given** a Design-owned draft, **When** its provider changes, **Then** the new draft is validated and published as a new immutable version while old manifests remain executable and inspectable.
 5. **Given** an activity draft test run, **When** it executes, **Then** it uses an expiring source reference and a synthetic wrapper workflow in the same artifact store and Runtime pipeline as published execution.
 6. **Given** a retired dependency already closed into a published parent template, **When** that parent runs, **Then** retirement alone does not invalidate the executable; revocation remains a distinct stronger decision.
+7. **Given** the same activity draft revision and Test Run idempotency key, **When** dispatch is repeated or its first acknowledgement is lost, **Then** one durable receipt and one Runtime execution are reused; a new key creates new evidence.
+8. **Given** a retained Test Run receipt, **When** status is read by Test Run identity or idempotency key, **Then** dispatch, execution, safe failure, source-reference expiry, Runtime Evidence retention, still-running, and eventual outer activity execution facts are returned without synthetic wrapper/provider payloads.
+9. **Given** an advertised cancellation capability, **When** policy allows cancellation of a non-terminal Test Run, **Then** an idempotent Runtime cancellation is requested and status reconciles through requested or cancelling to terminal; otherwise status reports unavailable.
 
 ---
 

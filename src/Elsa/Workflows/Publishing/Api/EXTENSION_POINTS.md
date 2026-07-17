@@ -16,6 +16,8 @@ separate add-don't-replace seams; see the Runtime catalog linked below.
 |---|---|---|
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
 | `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run results need shared/durable retention. |
+| `IActivityDraftTestRunStore` | `InMemoryActivityDraftTestRunStore` (singleton) | Activity draft Test Run receipts, idempotency, and status lookup must survive restart. The Groundwork Publishing package replaces this default. |
+| `IActivityDraftTestRunCancellationPolicy` | `DefaultActivityDraftTestRunCancellationPolicy` (singleton) | A host needs to suppress or further constrain cancellation while advertising the effective capability truthfully. |
 | `IPublicationSlotStore` | `InMemoryPublicationSlotStore` (singleton) | Slot authority and revision CAS must survive restart. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
 | `IPublicationPolicyStore` | `InMemoryPublicationPolicyStore` (singleton) | Host/workflow policy and revision CAS must survive restart. |
@@ -58,6 +60,24 @@ The supplied Groundwork provider implements these four contracts. Compose
 `services.AddGroundworkPublishingStores()` from `Elsa.Workflows.Publishing.Persistence.Groundwork`; its document
 kinds, indexes, CAS behavior, and serializers are provider-neutral with respect to the API feature.
 
+### Activity draft Test Runs
+
+- `IActivityDraftTestRunStore` owns one receipt per deterministic
+  `(OperationScope, DraftId, IdempotencyKey)` identity. Each tenant has a distinct durable operation scope and the
+  explicit tenantless operation scope is distinct from every tenant scope. Operation ownership is derived from
+  the caller tenant, independently of the resource tenant, so global activity drafts do not share receipts across
+  tenant callers. Implementations must preserve the original request fingerprint, compare-and-swap receipt
+  revisions, retain only the key hash, and keep the receipt beyond source-reference expiry so terminal and
+  retention facts remain discoverable.
+- `IActivityDraftTestRunCancellationPolicy` evaluates the durable receipt together with current Runtime Evidence.
+  Replacements must distinguish whether cancellation is advertised from whether it is currently allowed. A
+  denied or already-terminal request must not enqueue a Runtime command.
+- Dispatch, retry, and cancellation use stable Runtime idempotency keys. An ambiguous acknowledgement may be
+  retried, but must resolve to the same Test Run and workflow execution identity.
+- Status projection may expose safe codes and diagnostics, immutable artifact/source identities, and the eventual
+  outer activity execution identity. It must not expose synthetic wrapper/provider payloads or raw Runtime
+  exception messages.
+
 ### Policy and preflight
 
 `IPublicationPolicyResolver` must preserve the precedence and explicit coexistence rules in ADR 0043. It returns
@@ -81,11 +101,11 @@ after the durable serving set reaches its final state; Runtime HTTP consumes the
 
 A new Publishing persistence package should:
 
-1. Implement all four authority stores above and register them as one composition unit.
+1. Implement all four authority stores plus `IActivityDraftTestRunStore` and register them as one composition unit.
 2. Enforce unique slot identity and compare-and-swap revisions in storage, not only in process memory.
 3. Index publication records by slot and projection intents by publication.
 4. Version wire documents and provide upcasters/fixtures for every prior version.
-5. Prove restart behavior, stale-revision rejection, idempotent intent replay, and compensation with provider tests.
+5. Prove restart behavior, stale-revision rejection, idempotent intent replay, Test Run receipt CAS/retention, and compensation with provider tests.
 6. Keep Runtime executable/reference/trigger/schedule stores in their owning Runtime persistence module; do not
    move those contracts into Publishing merely because the publish flow consumes them.
 7. Persist activity publication receipts by opaque hashed operation identity and prove same-request

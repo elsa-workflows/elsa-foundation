@@ -93,7 +93,9 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddScoped<IActivityDefinitionPublisher, ActivityDefinitionPublisher>();
         services.TryAddScoped<IActivitySourceVersionPublisher, SourceOwnedActivityVersionPublisher>();
-        services.TryAddScoped<IActivityDraftTestRunPublisher, ActivityDraftTestRunPublisher>();
+        services.TryAddScoped<IActivityDraftTestRunService, ActivityDraftTestRunService>();
+        services.TryAddSingleton<IActivityDraftTestRunStore, InMemoryActivityDraftTestRunStore>();
+        services.TryAddSingleton<IActivityDraftTestRunCancellationPolicy, DefaultActivityDraftTestRunCancellationPolicy>();
         services.TryAddScoped<IActivityDraftDiffCandidateCompiler, ActivityDraftDiffCandidateCompiler>();
         services.TryAddScoped<IActivityUpgradePlanApplier, ApplyActivityUpgradePlanCommand>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
