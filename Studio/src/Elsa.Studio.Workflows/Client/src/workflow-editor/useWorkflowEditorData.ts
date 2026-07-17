@@ -127,8 +127,6 @@ export function projectRecommendedPalette(
   recommendations: RecommendedActivityDefinition[]
 ): ActivityCatalogItem[] {
   const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
-  const reusableActivityTypeKeys = new Set(recommendations.map(recommendation => recommendation.activityTypeKey));
-  const nativeActivities = catalog.filter(activity => !reusableActivityTypeKeys.has(activity.activityTypeKey));
   return recommendations.reduce<ActivityCatalogItem[]>((result, recommendation) => {
     if (!recommendation.isAvailable) return result;
     const activity = catalogByVersion.get(recommendation.versionId);
@@ -140,7 +138,7 @@ export function projectRecommendedPalette(
       activityDefinitionVersion: recommendation.version
     });
     return result;
-  }, nativeActivities);
+  }, []);
 }
 
 export function decorateReusableCatalog(

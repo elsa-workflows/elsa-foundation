@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { useWorkflowEditorData } from "../workflow-editor/useWorkflowEditorData";
+import { projectRecommendedPalette, useWorkflowEditorData } from "../workflow-editor/useWorkflowEditorData";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -228,9 +228,41 @@ describe("useWorkflowEditorData expression descriptor contract", () => {
     });
     const container = render(api.context);
 
-    await waitFor(() => expect(container.querySelector("[data-testid='palette']")?.textContent).toBe("write-line-v1,invoice-v2"));
+    await waitFor(() => expect(container.querySelector("[data-testid='palette']")?.textContent).toBe("invoice-v2"));
     expect(container.querySelector("[data-testid='catalog']")?.textContent)
       .toBe("write-line-v1:-,invoice-v10:10.0.0,invoice-v2:2.0.0");
+  });
+
+  it("removes a cleared recommendation and rejects retired, stale, or type-mismatched rows", () => {
+    const catalog = [{
+      activityVersionId: "invoice-v2",
+      activityTypeKey: "Contoso.Invoice",
+      version: "2.0.0",
+      displayName: "Invoice",
+      category: "Finance",
+      executionType: "Action",
+      available: true,
+      inputs: [],
+      outputs: [],
+      ports: [],
+      containerStructure: null,
+      authoringTemplate: { nodeId: "activity", activityVersionId: "invoice-v2", inputs: [], outputs: [], structure: null }
+    }];
+    const recommendation = {
+      definitionId: "invoice-definition",
+      activityTypeKey: "Contoso.Invoice",
+      category: "Finance",
+      displayName: "Invoice",
+      versionId: "invoice-v2",
+      version: "2.0.0",
+      isAvailable: true
+    };
+
+    expect(projectRecommendedPalette(catalog, [recommendation])).toHaveLength(1);
+    expect(projectRecommendedPalette(catalog, [])).toEqual([]);
+    expect(projectRecommendedPalette(catalog, [{ ...recommendation, isAvailable: false }])).toEqual([]);
+    expect(projectRecommendedPalette(catalog, [{ ...recommendation, versionId: "cleared-version" }])).toEqual([]);
+    expect(projectRecommendedPalette(catalog, [{ ...recommendation, activityTypeKey: "Contoso.Other" }])).toEqual([]);
   });
 });
 
