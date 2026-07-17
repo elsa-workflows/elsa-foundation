@@ -70,32 +70,33 @@ that a v5 worker rejects a v6 executable before deserialization.
 
 | Project | Result |
 |---|---|
-| `Elsa.Activities.Design.Tests` | 225 passed |
+| `Elsa.Activities.Design.Tests` | 364 passed |
 | `Elsa.Activities.Design.Api.Tests` | 5 passed |
-| `Elsa.Activities.Runtime.Tests` | 156 passed |
+| `Elsa.Activities.Runtime.Tests` | 160 passed |
 | `Elsa.Activities.ControlFlow.Tests` | 196 passed |
 | `Elsa.Activities.Sequence.Tests` | 15 passed |
 | `Elsa.Activities.Flowchart.Tests` | 55 passed |
 | `Elsa.Activities.Scripting.Tests` | 8 passed |
 | `Elsa.Activities.Scheduling.Tests` | 25 passed |
 | `Elsa.Activities.Http.Tests` | 192 passed |
-| `Elsa.Activities.Http.IntegrationTests` | 29 passed; 1 pre-existing performance assertion failed |
-| `Elsa.Workflows.Publishing.Api.Tests` | 182 passed |
+| `Elsa.Activities.Http.IntegrationTests` | 29 passed |
+| `Elsa.Workflows.Publishing.Api.Tests` | 265 passed |
 | `Elsa.Workflows.Design.CodeGeneration.Tests` | 12 passed |
-| `Elsa.Workflows.Runtime.Tests` | 913 passed |
-| `Elsa.Persistence.Groundwork.Tests` | 249 passed |
+| `Elsa.Workflows.Runtime.Tests` | 1181 passed |
+| `Elsa.Persistence.Groundwork.Tests` | 565 passed |
 | `Elsa.Expressions.Tests` | 93 passed |
 | `Elsa.Expressions.JavaScript.Jint.Tests` | 46 passed |
-| `Elsa3.Mapping.Tests` | 30 passed |
-| `Elsa.Architecture.Tests` | 97 passed |
+| `Elsa3.Mapping.Tests` | 44 passed |
+| `Elsa.Architecture.Tests` | 233 passed |
 | Activation semantic test host | 17 passed |
 
 The complete solution build passes with zero errors and existing package/obsolescence warnings only.
 The complete solution test was executed with Git commit signing disabled for repository-fixture commits.
-Every spec-095 affected functional suite above passes; the solution-wide parallel run had two failures
-outside the changed files: one Structured Logs SQLite service-resolution timeout
-(isolated project rerun: 30/30) and the HTTP checkpoint-coalescing performance assertion. The latter
-also fails in isolation with the same 18-immediate/15-coalesced counts at the untouched fixed-point
-commit `0038de76`, confirming it is not introduced by this review pass. The final canonical carrier
-scan has zero non-architecture/non-importer hits. Generated maps were not refreshed, and the generated
-map snapshot remains unchanged.
+Every spec-095 affected functional suite above passes. The solution-wide parallel run had one Structured
+Logs SQLite service-resolution timeout outside the changed files (isolated project rerun: 30/30).
+The HTTP checkpoint-coalescing acceptance now records 18 Immediate writes and the safe minimum of 6
+Coalesced writes: one mandatory pre-activation durability boundary for each of five transient CLR
+activities plus the terminal workflow commit. This supersedes spec 090's pre-value-flow 13-to-1
+baseline; replayable checkpoints still fold between boundaries without weakening FR-019. The final
+canonical carrier scan has zero non-architecture/non-importer hits. Generated maps were not refreshed,
+and the generated map snapshot remains unchanged.

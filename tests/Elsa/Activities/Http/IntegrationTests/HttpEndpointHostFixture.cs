@@ -404,8 +404,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: sequenceDescriptorPayload,
+            descriptor: ClrRuntimeDescriptor(sequenceDescriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, [startNode, callbackNode])],
@@ -584,8 +583,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: descriptorPayload,
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
@@ -643,8 +641,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: descriptorPayload,
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: inputBindings,
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
@@ -673,8 +670,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(StallingActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: descriptorPayload,
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 [durationKey] = TypedLiteralBinding(durationKey, duration, typeof(TimeSpan))
@@ -946,8 +942,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             authoredActivityId: $"authored-{nodeId ?? "node-http-endpoint"}",
             activityType: HttpEndpoint.ActivityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: descriptorPayload,
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: inputBindings,
             metadata: metadata,
             activityContract: contract);
@@ -1040,6 +1035,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     JsonSerializer.SerializeToElement(value, type),
                     ValueProtectionPolicy.InstanceInline));
     }
+
+    private static RuntimeActivityDescriptor ClrRuntimeDescriptor(JsonElement payload) =>
+        new(
+            WellKnownRuntimeActivityConsumers.ClrActivity,
+            RuntimeActivityDescriptor.InitialSchemaVersion,
+            payload);
 
     private static ActivityInputContract WriteResponseInputContract(string key, Type type) =>
         new(

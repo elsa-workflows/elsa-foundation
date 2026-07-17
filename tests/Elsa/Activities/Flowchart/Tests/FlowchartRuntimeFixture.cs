@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
@@ -49,8 +50,15 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
     {
         var states = await Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         var flowchartState = states.Single(state => state.Execution.ExecutableNodeId == "node-flowchart");
-        return flowchartState.PrivateState?.Value.InlineValue?.GetRawText()
-               ?? throw new InvalidOperationException("Flowchart private state is missing.");
+        var lastCommittedPrivateState = Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
+            .SelectMany(record => record.Commit.StateChanges.ActivityExecutions)
+            .Where(change => StringComparer.Ordinal.Equals(change.StateId, flowchartState.Execution.ActivityExecutionId))
+            .Select(change => change.State.PrivateState?.Value.InlineValue?.GetRawText())
+            .LastOrDefault(value => value is not null);
+        return flowchartState.PrivateState?.Value.InlineValue?.GetRawText() ?? lastCommittedPrivateState
+               ?? throw new InvalidOperationException(
+                   $"Flowchart private state is missing. Status: {flowchartState.Status}/{flowchartState.SubStatus}. " +
+                   $"Metadata: {string.Join(", ", flowchartState.Metadata.Select(item => $"{item.Key}={item.Value}"))}");
     }
 
     public WorkflowExecutable NewExecutable(

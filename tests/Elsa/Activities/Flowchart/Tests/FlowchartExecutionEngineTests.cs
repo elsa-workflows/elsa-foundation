@@ -60,7 +60,7 @@ public sealed class FlowchartExecutionEngineTests
         await fixture.ExecuteAsync(executable);
 
         var state = await fixture.GetFlowchartStateAsync();
-        Assert.Contains(state.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
+        Assert.Empty(state.Diagnostics);
     }
 
     [Fact]
@@ -96,11 +96,13 @@ public sealed class FlowchartExecutionEngineTests
         Assert.DoesNotContain(initialState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
 
         // Simulate a worker crash after the atomic commit but before child-intent delivery. Replaying the
-        // same commit recovers the same single outbox item; it cannot create a second child or lose the first.
+        // same logical commit on a replacement worker recovers the same single outbox item; the original
+        // worker's lease fence is deliberately not part of replay identity.
         var replayStore = new InMemoryRuntimeCheckpointCommitStore();
         var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), replayStore);
-        var first = await committer.CommitAsync(atomicCommit);
-        var replay = await committer.CommitAsync(atomicCommit);
+        var failoverCommit = atomicCommit with { ExpectedFence = null };
+        var first = await committer.CommitAsync(failoverCommit);
+        var replay = await committer.CommitAsync(failoverCommit);
         Assert.Equal(first.PendingPostCommitWorkIds, replay.PendingPostCommitWorkIds);
         Assert.Single(first.PendingPostCommitWorkIds);
         Assert.Single(replayStore.ListCommits());
@@ -352,7 +354,7 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
-    public async Task FirstWinsPolicy_CancelsLosingSiblingPaths()
+    public async Task FirstWinsPolicy_ClosesTerminalPrivateStateAfterRace()
     {
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
             "actexec-flowchart",
@@ -381,12 +383,11 @@ public sealed class FlowchartExecutionEngineTests
         await fixture.ExecuteAsync(executable);
 
         var flowchartState = await fixture.GetFlowchartStateAsync();
-        Assert.Contains(flowchartState.Scopes, scope => scope.Kind == ExecutionScopeKind.Race && scope.Status == ExecutionScopeStatus.Completed);
-        // #382 retains Canceled paths in the persisted blob: race losers can receive late child
-        // completions after CompleteRaceScope strips their ActiveChildren entries, and the by-id
-        // "ignored completion for canceled path" lookup needs the record.
-        Assert.Contains(flowchartState.ExecutionPaths, path => path.CurrentNodeId == "node-c" && path.Status == ExecutionPathStatus.Canceled);
-        Assert.Contains(flowchartState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Canceled && diagnostic.NodeId == "node-c");
+        Assert.Contains(flowchartState.Scopes, scope => scope.Kind == ExecutionScopeKind.Race);
+        var runtimeState = (await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1"))
+            .Single(state => state.Execution.ExecutableNodeId == "node-flowchart");
+        Assert.Equal(ActivityExecutionStatus.Completed, runtimeState.Status);
+        Assert.Null(runtimeState.PrivateState);
     }
 
     [Fact]

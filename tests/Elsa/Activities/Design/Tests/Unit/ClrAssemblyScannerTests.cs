@@ -76,8 +76,8 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
-        { typeof(HttpEndpoint), "59F652C537405F3E46B03987CA825C5DEDB412BA666A56ADD842C75D05016671" }
+        { typeof(TriggerFixtureActivity), "45A2C289FF070C8D4DFBB6D3384979D246479B44318D885844E00D24941F2E95" },
+        { typeof(HttpEndpoint), "DCB65DF73D91EA0C4F0E36A41287AB6499BF8FE024F4D64801FA9F1020AA56AB" }
     };
 
     [Theory]

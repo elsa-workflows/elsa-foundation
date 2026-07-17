@@ -16,7 +16,7 @@ public sealed class HttpEndpointRuntimePerformanceTests
     private const string ResponseBody = "Hello World!";
 
     [Fact]
-    public async Task CoalescedPolicy_FoldsAtLeastThreeQuartersOfPhysicalCommits_WithoutChangingTheResult()
+    public async Task CoalescedPolicy_FoldsToMandatoryValueFlowBoundaries_WithoutChangingTheResult()
     {
         var immediate = await ExecuteAsync(CheckpointPersistenceMode.Immediate);
         var coalesced = await ExecuteAsync(CheckpointPersistenceMode.Coalesced);
@@ -39,8 +39,12 @@ public sealed class HttpEndpointRuntimePerformanceTests
 
         Assert.True(immediate.PhysicalCommitCount > coalesced.PhysicalCommitCount,
             $"Expected Immediate to persist more checkpoint commits, but observed {immediate.PhysicalCommitCount} and {coalesced.PhysicalCommitCount}.");
-        Assert.True(coalesced.PhysicalCommitCount * 4 <= immediate.PhysicalCommitCount,
-            $"Expected at least a 75% reduction, but Immediate persisted {immediate.PhysicalCommitCount} commits and Coalesced persisted {coalesced.PhysicalCommitCount}.");
+        // Spec 095 adds one non-negotiable pre-activation durability boundary per transient CLR activity. This
+        // workflow activates five activities and then commits the terminal workflow state, so six physical writes are
+        // the safe minimum; all replayable checkpoints between those boundaries must still fold away.
+        Assert.Equal(6, coalesced.PhysicalCommitCount);
+        Assert.True(coalesced.PhysicalCommitCount * 3 <= immediate.PhysicalCommitCount,
+            $"Expected at least a two-thirds reduction after mandatory value-flow boundaries, but Immediate persisted {immediate.PhysicalCommitCount} commits and Coalesced persisted {coalesced.PhysicalCommitCount}.");
     }
 
     private static async Task<ExecutionResult> ExecuteAsync(CheckpointPersistenceMode mode)

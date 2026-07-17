@@ -70,6 +70,133 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ClaimsAcquiredAfterBoundaryFlush_AreCompletedAgainstDurableQueue()
+    {
+        const string workflowExecutionId = "wfexec-claim-boundary";
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var queue = new CoalescingWorkflowSchedulerWorkQueue(
+            new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner),
+            accessor);
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            inner,
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var workItem = new RuntimeSchedulerWorkItem(
+            "work-1",
+            workflowExecutionId,
+            "command-1",
+            WorkflowExecutionCommandKind.Start,
+            "envelope-1",
+            "idempotency-1",
+            Now,
+            Now);
+        await inner.EnqueueAsync(workItem);
+
+        using (accessor.Push(session))
+        {
+            var overlayClaim = await queue.ClaimAsync(NewClaimRequest(workflowExecutionId));
+            Assert.NotNull(overlayClaim);
+
+            session.Deactivate();
+            Assert.True((await queue.CompleteClaimAsync(overlayClaim!)).Succeeded);
+
+            var durableClaim = await queue.ClaimAsync(NewClaimRequest(workflowExecutionId));
+            Assert.NotNull(durableClaim);
+            Assert.True((await queue.CompleteClaimAsync(durableClaim!)).Succeeded);
+        }
+
+        Assert.Empty(await inner.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId)));
+    }
+
+    [Fact]
+    public async Task ActivityAttemptBoundary_FlushesBeforeActivation_AndStartsFreshSegment()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var startedState = NewRunningActivityState();
+        var claimedState = startedState with
+        {
+            Metadata = new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ActivityAttemptActivationClaim] = "attempt-1"
+            }
+        };
+
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityStarted) with
+            {
+                StateChanges = ActivityUpsert(startedState)
+            },
+            new(RuntimeCheckpointPersistenceMode.Deferred));
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.ActivityAttemptClaimed) with
+            {
+                StateChanges = ActivityUpsert(claimedState)
+            },
+            new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        var firstBoundary = Assert.Single(innerStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.ActivityAttemptClaimed, firstBoundary.Checkpoint.Name);
+        Assert.True(session.IsActive);
+        Assert.Equal(0, session.HopCount);
+        Assert.True(session.TryGetActivity("actexec-1", out var overlayState, out var tombstoned));
+        Assert.False(tombstoned);
+        Assert.Equal("attempt-1", overlayState!.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 3, RuntimeCheckpointNames.ActivityCompleted),
+            new(RuntimeCheckpointPersistenceMode.Deferred));
+        Assert.Equal(1, session.HopCount);
+        Assert.Single(innerStore.ListCommits());
+
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 4, RuntimeCheckpointNames.WorkflowCompleted),
+            new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        Assert.False(session.IsActive);
+        Assert.Equal(2, innerStore.ListCommits().Count);
+    }
+
+    [Fact]
+    public async Task ActivityAttemptBoundary_WithPendingSegmentOutbox_HandsOwnershipToDurableStore()
+    {
+        const string workflowExecutionId = "parent-dispatch";
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var pendingOutbox = Assert.Single(NewDispatchBoundaryCommit().StateChanges.PostCommitOutbox);
+        var deferred = NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityCompleted);
+
+        await store.CommitAsync(
+            deferred with
+            {
+                StateChanges = deferred.StateChanges.WithPostCommitOutbox([pendingOutbox])
+            },
+            new(RuntimeCheckpointPersistenceMode.Deferred));
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.ActivityAttemptClaimed),
+            new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        Assert.False(session.IsActive);
+        var persisted = Assert.Single(innerStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.ActivityAttemptClaimed, persisted.Checkpoint.Name);
+        Assert.Single(persisted.StateChanges.PostCommitOutbox);
+    }
+
+    [Fact]
     public async Task Coalescing_workflow_store_preserves_bounded_history_queries()
     {
         var services = new ServiceCollection();
@@ -330,6 +457,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             requestedBy: "runtime-test",
             requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
+    private static RuntimeSchedulerWorkClaimRequest NewClaimRequest(string workflowExecutionId) =>
+        new(
+            workflowExecutionId,
+            ownerId: "worker-1",
+            Now,
+            visibilityTimeout: TimeSpan.FromMinutes(1));
+
     private static WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
     {
         var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId);
@@ -353,12 +487,18 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     private static RuntimeCheckpointCommit NewEmptyDeferredCommit(int checkpoint) =>
+        NewEmptyCommit("wfexec-cap", checkpoint, "CapProbe");
+
+    private static RuntimeCheckpointCommit NewEmptyCommit(
+        string workflowExecutionId,
+        int checkpoint,
+        string checkpointName) =>
         new(
             CommitId: $"commit-cap-{checkpoint}",
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: $"checkpoint-cap-{checkpoint}",
-                Name: "CapProbe",
-                WorkflowExecutionId: "wfexec-cap",
+                Name: checkpointName,
+                WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: Now.AddTicks(checkpoint),
                 ActivityExecutionIds: [],
                 Metadata: new Dictionary<string, string>()),
@@ -372,6 +512,23 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
                 operational: []),
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
+
+    private static RuntimeCheckpointStateChangeSet ActivityUpsert(ActivityExecutionState state) =>
+        new(
+            workflowExecution: null,
+            scheduler: null,
+            activityExecutions:
+            [
+                new RuntimeStateChange<ActivityExecutionState>(
+                    state.Execution.ActivityExecutionId,
+                    RuntimeStateChangeOperation.Upsert,
+                    state,
+                    new Dictionary<string, string>())
+            ],
+            bookmarks: [],
+            durableValues: [],
+            incidents: [],
+            operational: []);
 
     private static RuntimeCheckpointCommit NewDispatchBoundaryCommit()
     {

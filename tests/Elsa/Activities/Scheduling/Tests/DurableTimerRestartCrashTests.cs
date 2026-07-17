@@ -40,7 +40,7 @@ public sealed class DurableTimerRestartCrashTests
     [Fact]
     public async Task Delay_SuspendsDurably_SurvivesRestart_AndResumesWhenTimerFires()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var store = new InMemoryDocumentStore(manifest);
         var clock = new MutableTimeProvider(T0);
 
@@ -81,7 +81,7 @@ public sealed class DurableTimerRestartCrashTests
     [Fact]
     public async Task TimerFire_IsIdempotent_UnderAtLeastOnceDuplicateDelivery()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var store = new InMemoryDocumentStore(manifest);
         var clock = new MutableTimeProvider(T0);
 
@@ -115,7 +115,7 @@ public sealed class DurableTimerRestartCrashTests
     [Fact]
     public async Task DeleteOnDispatched_IsSafe_ResumeSurvivesCrashBeforeDrain_AndConverges()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var store = new InMemoryDocumentStore(manifest);
         var clock = new MutableTimeProvider(T0);
 
