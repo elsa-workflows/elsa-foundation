@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -46,11 +47,73 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         await store.SaveAsync(Binding("artifact-2", "node-a", stimulusType: "Event", stimulusHash: "sha256:shared"));
         await store.SaveAsync(Binding("artifact-3", "node-a", stimulusType: "Signal", stimulusHash: "sha256:shared"));
 
-        var matches = await store.ListByStimulusAsync("Event", "sha256:shared");
+        var matches = (await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:shared"))).Items;
 
         Assert.Equal(
             ["artifact-1", "artifact-2"],
             matches.Select(binding => binding.ArtifactId).OrderBy(id => id, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task ListByStimulus_PagesOnlyActiveMatchesInStableBindingOrder()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(Binding("artifact-c", "node", stimulusHash: "sha256:shared"));
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusHash: "sha256:shared"));
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:shared") with { IsActive = false });
+        await store.SaveAsync(Binding("artifact-d", "node", stimulusHash: "sha256:shared"));
+
+        var first = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:shared", limit: 2));
+        var second = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery(
+                "Event",
+                "sha256:shared",
+                limit: 2,
+                continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(
+            ["artifact-a", "artifact-c"],
+            first.Items.Select(binding => binding.ArtifactId));
+        Assert.Equal(["artifact-d"], second.Items.Select(binding => binding.ArtifactId));
+        Assert.Equal(3, first.TotalCount);
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task ListByStimulus_RejectsAContinuationFromAnotherStimulus()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusHash: "sha256:shared"));
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:shared"));
+        var first = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:shared", limit: 1));
+
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowTriggerBindingPageQuery(
+                "Event",
+                "sha256:other",
+                limit: 1,
+                continuationToken: first.NextContinuationToken));
+    }
+
+    [Fact]
+    public async Task ListAllByStimulus_TraversesEveryBoundedPage()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        for (var index = 0; index <= WorkflowTriggerBindingPageQuery.MaximumLimit; index++)
+        {
+            await store.SaveAsync(Binding(
+                $"artifact-{index:D3}",
+                "node",
+                stimulusHash: "sha256:shared"));
+        }
+
+        var matches = await store.ListAllByStimulusAsync("Event", "sha256:shared");
+
+        Assert.Equal(WorkflowTriggerBindingPageQuery.MaximumLimit + 1, matches.Count);
+        Assert.Equal(matches.Count, matches.Select(binding => binding.TriggerBindingId).Distinct().Count());
     }
 
     [Fact]

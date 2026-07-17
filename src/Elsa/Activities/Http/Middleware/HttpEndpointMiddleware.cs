@@ -144,7 +144,10 @@ public sealed class HttpEndpointMiddleware(
 
         // Fetch the trigger claimants once (also the source of the endpoint options when present). The ambiguity
         // guard below shares this fetch rather than re-querying, and the router reuses it on the start path.
-        var claimants = await triggerBindingStore.ListByStimulusAsync(HttpEndpointStimulus.StimulusType, stimulusHash, context.RequestAborted);
+        var claimants = await triggerBindingStore.ListAllByStimulusAsync(
+            HttpEndpointStimulus.StimulusType,
+            stimulusHash,
+            context.RequestAborted);
 
         // Endpoint options ride the claimant binding's non-identity metadata (spec 089 C, FR-012..FR-014). Sibling
         // claimants of one definition share options; on an ambiguous route (rejected below) any claimant's
@@ -220,7 +223,8 @@ public sealed class HttpEndpointMiddleware(
         responseSink?.Populate(context);
 
         // Reuse the claimant set already fetched for the ambiguity guard + options: the router's start path would
-        // otherwise issue an identical ListByStimulusAsync(type, hash) for the same request (spec 089 efficiency #7).
+        // otherwise issue an identical bounded ListAllByStimulusAsync traversal for the same request
+        // (spec 089 efficiency #7).
         // StartAndResume (spec 089 D): start new instances from matching triggers AND resume waiting instances
         // suspended on this mid-flow endpoint. The router's snapshot-before-start guard prevents an instance
         // started by THIS request from also resuming itself.

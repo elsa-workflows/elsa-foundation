@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -75,6 +76,69 @@ public sealed class RuntimeBoundedQueryContractTests
             observation => AssertBounded(observation, ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery));
     }
 
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Active_trigger_binding_pages_are_equivalent_and_materialized_inside_the_requested_window(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync(
+            [new RuntimeUnitManifestSource(
+                "runtime-bounded-trigger-binding-contract",
+                ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind)]);
+
+        await using var client = await driver.OpenPhysicalClientAsync();
+        var bounded = new RecordingBoundedDocumentStore(
+            client.BoundedDocumentStore
+            ?? throw new InvalidOperationException(
+                "The physical provider did not expose its admitted bounded-query runtime."));
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            client.DocumentStore,
+            GroundworkProviderTestSerialization.Serializer,
+            bounded);
+
+        await store.SaveAsync(Binding("binding-a"));
+        await store.SaveAsync(Binding("binding-b", isActive: false));
+        await store.SaveAsync(Binding("binding-c"));
+        await store.SaveAsync(Binding("binding-d", isActive: false));
+        await store.SaveAsync(Binding("binding-e"));
+        await store.SaveAsync(Binding("binding-ignored", stimulusType: "Signal"));
+
+        var first = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "shared", limit: 2));
+        var second = await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery(
+                "Event",
+                "shared",
+                limit: 2,
+                continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(["binding-a", "binding-c"], first.Items.Select(binding => binding.TriggerBindingId));
+        Assert.Equal(["binding-e"], second.Items.Select(binding => binding.TriggerBindingId));
+        Assert.Equal(3, first.TotalCount);
+        Assert.Equal(3, second.TotalCount);
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Null(second.NextContinuationToken);
+        Assert.All(
+            bounded.Observations,
+            observation =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery, observation.Query.QueryIdentity);
+                Assert.Equal(2, observation.Query.Take);
+                Assert.InRange(observation.MaterializedDocuments, 0, 2);
+                Assert.Contains(
+                    observation.Query.Clauses.SelectMany(clause => clause.Comparisons),
+                    comparison =>
+                        comparison.Path == ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField &&
+                        comparison.Values.SequenceEqual([bool.TrueString.ToLowerInvariant()]));
+            });
+        Assert.Equal([0, 2], bounded.Observations.Select(observation => observation.Query.Skip));
+    }
+
     private static void AssertBounded(
         QueryObservation observation,
         string queryIdentity)
@@ -106,9 +170,34 @@ public sealed class RuntimeBoundedQueryContractTests
             Now.Add(nextOffset),
             Now);
 
-    private sealed class DueWorkManifestSource : IGroundworkStorageManifestSource
+    private static WorkflowTriggerBinding Binding(
+        string id,
+        bool isActive = true,
+        string stimulusType = "Event") =>
+        new(
+            id,
+            $"artifact-{id}",
+            $"definition-{id}",
+            "1",
+            $"hash-{id}",
+            $"node-{id}",
+            stimulusType,
+            "shared",
+            CorrelationScope: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: Now,
+            IsActive: isActive);
+
+    private sealed class DueWorkManifestSource() : RuntimeUnitManifestSource(
+        "runtime-bounded-due-work-contract",
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
+        ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind);
+
+    private class RuntimeUnitManifestSource(
+        string featureIdentity,
+        params string[] documentKinds) : IGroundworkStorageManifestSource
     {
-        public string FeatureIdentity => "runtime-bounded-due-work-contract";
+        public string FeatureIdentity => featureIdentity;
 
         public async ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
             CancellationToken cancellationToken = default)
@@ -120,9 +209,7 @@ public sealed class RuntimeBoundedQueryContractTests
                 runtime.Manifest with
                 {
                     StorageUnits = runtime.Manifest.StorageUnits
-                        .Where(unit => unit.Identity.Value is
-                            ElsaRuntimeStorageManifest.DurableTimerDocumentKind or
-                            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind)
+                        .Where(unit => documentKinds.Contains(unit.Identity.Value, StringComparer.Ordinal))
                         .ToArray()
                 },
                 [],

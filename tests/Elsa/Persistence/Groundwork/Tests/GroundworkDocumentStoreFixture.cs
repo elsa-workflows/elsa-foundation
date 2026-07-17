@@ -290,7 +290,7 @@ internal sealed class GroundworkDocumentStoreFixture(
                     throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have non-null comparison values."),
                 StringComparer.Ordinal);
             var matches = all.Documents
-                .Where(document => values.All(entry => StringComparer.Ordinal.Equals(ReadString(document, entry.Key), entry.Value)))
+                .Where(document => values.All(entry => ScalarEquals(ReadScalar(document, entry.Key), entry.Value)))
                 .OrderBy(document => document.Id, StringComparer.Ordinal)
                 .ToArray();
             IEnumerable<DocumentEnvelope> window = matches;
@@ -485,6 +485,12 @@ internal sealed class GroundworkDocumentStoreFixture(
                 _ => value.GetRawText()
             };
         }
+
+        private static bool ScalarEquals(string? actual, string expected) =>
+            StringComparer.Ordinal.Equals(actual, expected) ||
+            bool.TryParse(actual, out var actualBoolean) &&
+            bool.TryParse(expected, out var expectedBoolean) &&
+            actualBoolean == expectedBoolean;
 
         private static DateTimeOffset ReadExpiry(DocumentEnvelope envelope)
         {

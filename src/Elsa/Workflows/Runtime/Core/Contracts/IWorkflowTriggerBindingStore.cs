@@ -54,12 +54,13 @@ public interface IWorkflowTriggerBindingStore
     ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cross-artifact lookup used by the stimulus router: returns every start-trigger binding whose
-    /// stimulus identity matches, so a single stimulus can start instances of any workflow that triggers
-    /// on it. Keyed by stimulus hash; the store post-filters by stimulus type so a hash shared across two
-    /// stimulus types can never cross-match.
+    /// Cross-artifact lookup used by the stimulus router: returns one finite page of active start-trigger
+    /// bindings whose exact stimulus identity matches. Continue until the returned token is null when the
+    /// operation requires every matching workflow.
     /// </summary>
-    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default);
+    ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(
+        WorkflowTriggerBindingPageQuery query,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns every binding owned by the given artifact.</summary>
     ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
