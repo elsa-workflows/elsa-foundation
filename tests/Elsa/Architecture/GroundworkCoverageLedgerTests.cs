@@ -130,6 +130,25 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Composition_evidence_rejects_external_authority_relationship_drift()
+    {
+        var ledger = ReadLedger();
+        var evidence = ledger["compositionEvidence"]!.AsObject();
+        var links = evidence["externalAuthorityLinks"]!.AsArray().OfType<JsonObject>().ToArray();
+        Assert.Single(links, link => link["authority"]!.GetValue<string>() == "#644")["relationship"] = "linked-source-evidence";
+        Assert.Single(links, link => link["authority"]!.GetValue<string>() == "#660")["relationship"] = "adapter-only";
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition evidence: external authority '#644' must use relationship 'adapter-only', not 'linked-source-evidence'.",
+            findings);
+        Assert.Contains(
+            "composition evidence: external authority '#660' must use relationship 'linked-source-evidence', not 'adapter-only'.",
+            findings);
+    }
+
+    [Fact]
     public void Ledger_evidence_generation_matches_every_pinned_Groundwork_package_and_tool()
     {
         var ledgerVersion = ReadLedger()["groundworkVersion"]!.GetValue<string>();

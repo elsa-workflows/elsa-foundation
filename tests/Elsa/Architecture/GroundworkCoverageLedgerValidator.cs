@@ -104,13 +104,17 @@ internal sealed class GroundworkCoverageLedgerValidator
         foreach (var unknown in coveredSet.Where(id => !entriesById.ContainsKey(id)).Order(StringComparer.Ordinal))
             findings.Add($"composition evidence: coverage row '{unknown}' is outside the reviewed ledger denominator.");
 
-        var expectedExternalRows = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        var expectedExternalAuthorities = new Dictionary<string, ExpectedExternalAuthority>(StringComparer.Ordinal)
         {
-            ["#644"] = new HashSet<string>(["iam-user", "iam-role", "iam-external-identity"], StringComparer.Ordinal),
-            ["#660"] = new HashSet<string>(["runtime-diagnostics-settings"], StringComparer.Ordinal)
+            ["#644"] = new(
+                "adapter-only",
+                new HashSet<string>(["iam-user", "iam-role", "iam-external-identity"], StringComparer.Ordinal)),
+            ["#660"] = new(
+                "linked-source-evidence",
+                new HashSet<string>(["runtime-diagnostics-settings"], StringComparer.Ordinal))
         };
         var links = compositionEvidence["externalAuthorityLinks"] as JsonArray;
-        foreach (var (authority, expectedRows) in expectedExternalRows)
+        foreach (var (authority, expected) in expectedExternalAuthorities)
         {
             var link = links?.OfType<JsonObject>()
                 .FirstOrDefault(candidate => StringValue(candidate, "authority") == authority);
@@ -120,11 +124,18 @@ internal sealed class GroundworkCoverageLedgerValidator
                 continue;
             }
 
-            var linkedRows = StringArray(link, "coverageRows").ToHashSet(StringComparer.Ordinal);
-            if (!linkedRows.SetEquals(expectedRows))
+            var relationship = StringValue(link, "relationship");
+            if (relationship != expected.Relationship)
             {
                 findings.Add(
-                    $"composition evidence: external authority '{authority}' must link exactly [{string.Join(", ", expectedRows.Order(StringComparer.Ordinal))}].");
+                    $"composition evidence: external authority '{authority}' must use relationship '{expected.Relationship}', not '{relationship ?? "<missing>"}'.");
+            }
+
+            var linkedRows = StringArray(link, "coverageRows").ToHashSet(StringComparer.Ordinal);
+            if (!linkedRows.SetEquals(expected.Rows))
+            {
+                findings.Add(
+                    $"composition evidence: external authority '{authority}' must link exactly [{string.Join(", ", expected.Rows.Order(StringComparer.Ordinal))}].");
             }
 
             foreach (var row in linkedRows.Where(entriesById.ContainsKey))
@@ -141,6 +152,10 @@ internal sealed class GroundworkCoverageLedgerValidator
 
         ValidateCompositionArtifact(compositionEvidence, findings);
     }
+
+    private sealed record ExpectedExternalAuthority(
+        string Relationship,
+        IReadOnlySet<string> Rows);
 
     private void ValidateCompositionArtifact(
         JsonObject compositionEvidence,
