@@ -294,6 +294,7 @@ Content-Type: application/json
   "category": "Orders",
   "displayName": "Calculate order total",
   "description": null,
+  "activityTypeKey": "elsa.user.calculate-order-total.custom",
   "provider": {
     "providerKey": "elsa.activity-graph",
     "schemaVersion": "1",
@@ -326,7 +327,17 @@ Rules:
 
 - The API always creates `ContentAuthority.Kind = Design`; source-owned definitions enter through trusted reconciliation commands, not this endpoint.
 - The definition and initial draft are created atomically.
-- `activityTypeKey` is server-generated from the display name and definition identity, tenant-scoped, collision-safe, and immutable. It is never accepted from normal authoring requests.
+- `activityTypeKey` is optional. When omitted, the authoritative key policy generates it from the
+  display name and new definition identity.
+- Clients offer the advanced pre-creation override only when
+  `activityTypeKeyRules.allowsPreCreationOverride` is `true`. A supplied value when the active
+  policy disallows overrides returns `400 activity.request.invalid` and writes nothing.
+- A supplied override is trimmed, Unicode Form C normalized, invariant-lowercased, and then
+  validated by the authoritative key policy against its advertised prefix, pattern, and maximum
+  length. Invalid values return `400 activity.definition.key-invalid` and write nothing.
+- The normalized key is unique within the advertised `tenantId + activityTypeKey` collision scope.
+  A collision returns `409 activity.definition.key-conflict`; the server never appends a suffix.
+- The persisted `activityTypeKey` is immutable. No update route accepts it after creation.
 - The initial draft has no required author-supplied name. Its optional presentation label may be
   set later and is neither identity nor a uniqueness boundary.
 
@@ -535,6 +546,11 @@ provider-neutral type descriptor catalog, compatible storage drivers, canonical 
 nullability/durability facts, and server-owned activity type key rules. The deterministic
 `snapshotFingerprint` lets clients invalidate cached editor configuration without inspecting an
 opaque provider manifest.
+
+`activityTypeKeyRules` advertises `serverGenerated`, `allowsPreCreationOverride`, `immutable`,
+`prefix`, `pattern`, `maximumLength`, and `collisionScope`. Clients use
+`allowsPreCreationOverride` to gate the create-only advanced control and never probe by submitting
+an override when it is false.
 
 Compatible storage-driver keys are intersected with Runtime's actually activated driver registry
 through the Publishing bridge. A descriptor declaration alone cannot advertise or authorize an

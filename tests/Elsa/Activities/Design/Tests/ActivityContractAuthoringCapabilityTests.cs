@@ -127,6 +127,10 @@ public sealed class ActivityContractAuthoringCapabilityTests
         Assert.Equal("done", Assert.Single(provider.RequiredOutcomes).ReferenceKey);
         Assert.Equal(["elsa.json"], first.StorageDriverKeys);
         Assert.True(first.ActivityTypeKeyRules.AllowsPreCreationOverride);
+        Assert.Contains(
+            "\"allowsPreCreationOverride\":true",
+            JsonSerializer.Serialize(first.ActivityTypeKeyRules, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            StringComparison.Ordinal);
         Assert.Equal(first.SnapshotFingerprint, second.SnapshotFingerprint);
     }
 
