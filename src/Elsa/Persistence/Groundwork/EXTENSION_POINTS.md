@@ -14,17 +14,17 @@ neutral ports. Each provider feature registers a scoped access-bound `IDocumentS
 | Shell feature | Provider | Scope | Registration |
 |---|---|---|---|
 | `GroundworkRuntimePersistenceSqlite` | SQLite | Runtime only | `SqliteGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceSqlite` | SQLite | All seven persistence families | `AddGroundworkSqliteUnifiedPersistence` |
+| `GroundworkUnifiedPersistenceSqlite` | SQLite | Six provider-level families; Identity explicit | `AddGroundworkSqliteUnifiedPersistence` |
 | `GroundworkRuntimePersistencePostgreSql` | PostgreSQL | Runtime only | `PostgreSqlGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | All seven persistence families | `AddGroundworkPostgreSqlUnifiedPersistence` |
+| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | Six provider-level families; Identity explicit | `AddGroundworkPostgreSqlUnifiedPersistence` |
 | `GroundworkRuntimePersistenceSqlServer` | SQL Server | Runtime only | `SqlServerGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceSqlServer` | SQL Server | All seven persistence families | `AddGroundworkSqlServerUnifiedPersistence` |
+| `GroundworkUnifiedPersistenceSqlServer` | SQL Server | Six provider-level families; Identity explicit | `AddGroundworkSqlServerUnifiedPersistence` |
 | `GroundworkRuntimePersistenceMongoDb` | MongoDB replica set | Runtime only | `MongoDbGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceMongoDb` | MongoDB replica set | All seven persistence families | `AddGroundworkMongoDbUnifiedPersistence` |
+| `GroundworkUnifiedPersistenceMongoDb` | MongoDB replica set | Six provider-level families; Identity explicit | `AddGroundworkMongoDbUnifiedPersistence` |
 
-The unified features share one host-selected provider-neutral manifest snapshot, so Runtime, IAM, Secrets,
-Distributed Runtime, Workflows Design, Activities Design, and Publishing document kinds are defined once and
-admitted per provider. SQLite stays the default composition; PostgreSQL is opt-in via
+The unified features share one host-selected provider-neutral manifest snapshot for Runtime, Secrets,
+Distributed Runtime, Workflows Design, Activities Design, and Publishing. Identity contributes its own
+manifest only when the host explicitly selects it and uses the matching deployment schema. SQLite stays the default composition; PostgreSQL is opt-in via
 `shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
 
 **Startup admission — async initialization.** Runtime startup inspects the deployment-applied physical schema

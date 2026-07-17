@@ -164,7 +164,7 @@ Apply the same transition discipline to the scheduler work queue, durable timers
 
 - Groundwork #32 and #43–#48 provide scope, executable routes, applied state, planning, and four-provider execution. Elsa must consume them from one released version.
 - Groundwork MongoDB bounded mutations are merged. Portable Unicode/long-value work #70 and identity case-policy work #71 must land before their dependent Elsa lanes pin a release; the plan does not hard-code preview.42 as the final version.
-- #644 remains the authoritative user/role/external-login workstream. Its final adapter/document seam is a dependency of delivery boundary 6, not a reason to create interim duplicate documents.
+- #644 remains the authoritative user/role/external-login workstream. Spec 095 completes the ASP.NET Core Identity correctness lane with one Groundwork authority, four-provider/schema/highest-seam evidence, and the #646 `iam-normalized-lookup-update` handoff digest `719708f5192bc589a05bd319468b55e62c25801b9c45b6a02c5ec4770b4a9c49`; this does not complete #646 timing or #647 EF deletion.
 - #660 owns diagnostics-settings persistence and remains a coverage-ledger external-authority row.
 - #646 owns performance measurement and physical-form verdicts; this feature owns workload definitions and correctness baselines.
 - MongoDB atomic multi-document scenarios require a replica-set or sharded transaction-capable topology and fail startup clearly otherwise.

@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Scoping;
 using Groundwork.Core.Capabilities;
@@ -91,13 +92,12 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
                 _connectionString,
                 _databaseName,
                 cancellationToken);
-            var providerCapabilities = GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var providerCapabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
                 MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
                 topology,
-                RuntimeGroundworkStorageManifestSource.FeatureName,
-                [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]);
-
-            await using var scope = _scopeFactory.CreateAsyncScope();
+                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                cancellationToken);
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(

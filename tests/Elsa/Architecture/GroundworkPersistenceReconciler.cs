@@ -8,9 +8,9 @@ internal sealed class GroundworkPersistenceReconciler
     private static readonly IReadOnlySet<LocalDuplicateBaseline> Existing644Duplicates =
         new HashSet<LocalDuplicateBaseline>
         {
-            new("iam", "IUserStore", "GroundworkUserStore", "UserDocumentKind"),
-            new("iam", "IRoleStore", "GroundworkRoleStore", "RoleDocumentKind"),
-            new("iam", "IExternalIdentityStore", "GroundworkExternalIdentityStore", "ExternalIdentityDocumentKind")
+            new("iam", "IUserStore", "GroundworkUserStore", "IdentityUserDocumentKind"),
+            new("iam", "IRoleStore", "GroundworkRoleStore", "IdentityRoleDocumentKind"),
+            new("iam", "IExternalIdentityStore", "GroundworkExternalIdentityStore", "ExternalLoginDocumentKind")
         };
 
     private readonly IReadOnlyList<GroundworkPersistenceRowMapping> _mappings;
@@ -372,15 +372,27 @@ internal sealed class GroundworkPersistenceReconciler
         Map("runtime", "IWorkflowSchedulerWorkQueue", "runtime-scheduler-work-queue", "SchedulerWorkItemDocumentKind"),
         Map("runtime", "IWorkflowTriggerBindingStore", "runtime-trigger-binding", "WorkflowTriggerBindingDocumentKind"),
         Map("runtime", null, "runtime-publication-projection-state", "PublicationProjectionStateDocumentKind"),
-        Map("iam", "IUserStore", "iam-user", "UserDocumentKind"),
-        Map("iam", "IRoleStore", "iam-role", "RoleDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "IdentityUserDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserClaimDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserRoleDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserTokenDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserNameReservationDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "EmailReservationDocumentKind"),
+        Map("iam", null, "iam-user", "IdentityMutationReceiptDocumentKind"),
+        Map("iam", "IRevisionAwareUserStore", "iam-user", "IdentityUserDocumentKind"),
+        Map("iam", "IRoleStore", "iam-role", "IdentityRoleDocumentKind"),
+        Map("iam", "IRoleStore", "iam-role", "RoleClaimDocumentKind"),
+        Map("iam", "IRoleStore", "iam-role", "RoleNameReservationDocumentKind"),
+        Map("iam", "IRevisionAwareRoleStore", "iam-role", "IdentityRoleDocumentKind"),
         Map("iam", "IApplicationStore", "iam-application", "ApplicationDocumentKind"),
         Map("iam", "ICredentialStore", "iam-credential", "CredentialDocumentKind"),
-        Map("iam", "IExternalIdentityStore", "iam-external-identity", "ExternalIdentityDocumentKind"),
+        Map("iam", "IExternalIdentityStore", "iam-external-identity", "ExternalLoginDocumentKind"),
+        Map("iam", "IRevisionAwareExternalIdentityStore", "iam-external-identity", "ExternalLoginDocumentKind"),
         Map("iam", "IClaimMappingStore", "iam-claim-mapping", "ClaimMappingDocumentKind"),
         Map("iam", "IProviderConfigurationStore", "iam-provider-configuration-tenant", "ProviderConfigurationTenantDocumentKind"),
         Map("iam", "IProviderConfigurationStore", "iam-provider-configuration-global", "ProviderConfigurationGlobalDocumentKind"),
-        Map("iam", "ITenantMembershipStore", "iam-tenant-membership", "TenantMembershipDocumentKind"),
+        Map("iam", "ITenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
+        Map("iam", "IRevisionAwareTenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
         Map("secrets", "ISecretRepository", "secrets-repository", "SecretDocumentKind"),
         Map("distributed-runtime", "IExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
         Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind")

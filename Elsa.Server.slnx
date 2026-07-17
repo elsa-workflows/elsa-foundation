@@ -132,6 +132,7 @@
   <Folder Name="/src/Elsa/Foundation/Identity/AspNetCoreIdentity/">
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Foundation/Identity/Persistence/">
     <Project Path="src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
@@ -359,6 +360,9 @@
   <Folder Name="/tests/Elsa/Foundation/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/">
     <Project Path="tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/">
+    <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">

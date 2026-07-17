@@ -65,18 +65,18 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IDurableTimerStore"] = ["DurableTimerDocumentKind"],
             ["IWorkflowTriggerBindingStore"] = ["WorkflowTriggerBindingDocumentKind"],
             ["IRecurringTriggerScheduleStore"] = ["RecurringTriggerScheduleDocumentKind"],
-            ["IUserStore"] = ["UserDocumentKind"],
-            ["IRoleStore"] = ["RoleDocumentKind"],
+            ["IUserStore"] = ["IdentityUserDocumentKind"],
+            ["IRoleStore"] = ["IdentityRoleDocumentKind"],
             ["IApplicationStore"] = ["ApplicationDocumentKind"],
             ["ICredentialStore"] = ["CredentialDocumentKind"],
-            ["IExternalIdentityStore"] = ["ExternalIdentityDocumentKind"],
+            ["IExternalIdentityStore"] = ["ExternalLoginDocumentKind"],
             ["IClaimMappingStore"] = ["ClaimMappingDocumentKind"],
             ["IProviderConfigurationStore"] =
             [
                 "ProviderConfigurationTenantDocumentKind",
                 "ProviderConfigurationGlobalDocumentKind"
             ],
-            ["ITenantMembershipStore"] = ["TenantMembershipDocumentKind"],
+            ["ITenantMembershipStore"] = ["IdentityTenantMembershipDocumentKind"],
             ["ISecretRepository"] = ["SecretDocumentKind"],
             ["IExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
             ["IExecutionCommandTransport"] = ["ExecutionCommandTransportDocumentKind"]

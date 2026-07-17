@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Persistence.Core;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -20,6 +21,8 @@ public sealed class AspNetCoreIdentitySignInService(
     IPasswordHasher<AspNetCoreIdentityUser> passwordHasher,
     IAuthSessionService sessionService,
     IHttpContextAccessor httpContextAccessor,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IPersistenceAccessContextBinder accessContextBinder,
     IOptions<AspNetCoreIdentityOptions> options) : IIdentitySignInService
 {
     // A precomputed PBKDF2 hash of a throwaway password, verified against when the user is not found so the
@@ -32,8 +35,9 @@ public sealed class AspNetCoreIdentitySignInService(
     public async ValueTask<SignInOutcome> PasswordSignInAsync(string username, string password, string? tenantId, CancellationToken cancellationToken = default)
     {
         var effectiveTenant = string.IsNullOrWhiteSpace(tenantId) ? options.Value.DefaultTenantId : tenantId;
+        BindEffectiveTenant(effectiveTenant);
 
-        var user = await FindUserAsync(username, effectiveTenant);
+        var user = await FindUserAsync(username);
         if (user is null)
         {
             // Perform a dummy password verification against a fixed hash so an unknown username takes the same
@@ -63,16 +67,21 @@ public sealed class AspNetCoreIdentitySignInService(
         return SignInOutcome.Success(session);
     }
 
-    private async Task<AspNetCoreIdentityUser?> FindUserAsync(string username, string tenantId)
+    private async Task<AspNetCoreIdentityUser?> FindUserAsync(string username)
     {
         var byName = await userManager.FindByNameAsync(username);
-        if (byName is not null && TenantMatches(byName, tenantId))
+        if (byName is not null)
             return byName;
 
-        var byEmail = await userManager.FindByEmailAsync(username);
-        return byEmail is not null && TenantMatches(byEmail, tenantId) ? byEmail : null;
+        return await userManager.FindByEmailAsync(username);
     }
 
-    private static bool TenantMatches(AspNetCoreIdentityUser user, string tenantId) =>
-        string.IsNullOrEmpty(user.TenantId) || string.Equals(user.TenantId, tenantId, StringComparison.OrdinalIgnoreCase);
+    private void BindEffectiveTenant(string tenantId)
+    {
+        var scope = new PersistenceScope(tenantId);
+        if (accessContextAccessor.Current.Scope == scope)
+            return;
+
+        accessContextBinder.Bind(PersistenceAccessContext.Scoped(scope));
+    }
 }

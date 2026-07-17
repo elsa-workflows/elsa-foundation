@@ -27,6 +27,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     private readonly StorageManifest manifest;
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
     private readonly Lock _gate = new();
+    private readonly SemaphoreSlim _unitOfWorkGate = new(1, 1);
     private int _saveCount;
     private int _loadCount;
     private int _deleteCount;
@@ -229,10 +230,11 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     // provider's CrossUnitAtomic boundary (stage Save/Delete, read-your-writes, all-or-nothing commit). ---
     public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
 
-    public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
+    public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _beginCount);
-        return Task.FromResult<IDocumentUnitOfWork>(new InMemoryDocumentUnitOfWork(this));
+        await _unitOfWorkGate.WaitAsync(cancellationToken);
+        return new InMemoryDocumentUnitOfWork(this);
     }
 
     private sealed class InMemoryDocumentUnitOfWork(InMemoryDocumentStore store) : IDocumentUnitOfWork
@@ -240,6 +242,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         private readonly List<Func<Task>> _pending = new();
         private readonly Dictionary<(string Kind, string Id), DocumentEnvelope?> _staged = new();
         private bool _completed;
+        private int _disposed;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
         {
@@ -295,8 +298,11 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
 
         public ValueTask DisposeAsync()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return ValueTask.CompletedTask;
             // Dispose-without-commit rolls back: simply drop the staged operations.
             _completed = true;
+            store._unitOfWorkGate.Release();
             return ValueTask.CompletedTask;
         }
 

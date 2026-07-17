@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.MongoDb;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.Capabilities;
@@ -14,14 +15,17 @@ using Groundwork.MongoDb.Documents;
 using Groundwork.MongoDb.Materialization;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
+using MongoDB.Bson.IO;
 using MongoDB.Driver;
 using Testcontainers.MongoDb;
+using ElsaRuntimeSchemaAdmissionResult = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionResult;
 
 namespace Elsa.Persistence.Groundwork.Testing;
 
 /// <summary>Transaction-capable MongoDB replica-set mechanics for the shared Groundwork fixture.</summary>
 public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, IGroundworkTopologyRejectionProbe
 {
+    private const string ProviderKey = "mongodb";
     private const string Image = "mongo:7.0.24";
     private const string ReplicaSetName = "rs0";
     private const string ProtocolVersion = "1.0.0";
@@ -172,7 +176,9 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         _physicalSource = null;
     }
 
-    protected override async ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken)
+    protected override async ValueTask ResetPhysicalCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken)
     {
         using var client = new MongoClient(RequiredConnectionString());
         await client.DropDatabaseAsync(_databaseName, cancellationToken);
@@ -180,19 +186,14 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             RequiredConnectionString(),
             _databaseName,
             cancellationToken);
-        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
-            MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
-            topology,
-            MongoDbPhysicalNameNormalizer.Instance,
-            MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
-            cancellationToken);
+        var source = await CreatePhysicalSchemaSourceAsync(manifestSources, topology, cancellationToken);
         var executor = new MongoDbPhysicalSchemaExecutor(client.GetDatabase(_databaseName));
         var applied = await PhysicalSchemaApplication.ApplyAsync(
             source.PhysicalTarget,
             executor,
             cancellationToken: cancellationToken);
         EnsureSchemaApplied(applied);
-        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken);
+        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken: cancellationToken);
         if (!admission.IsReady)
             throw new InvalidOperationException("MongoDB physical provider driver did not admit its applied runtime target.");
         _physicalSource = source;
@@ -205,7 +206,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             clientId,
             ElsaRuntimeStorageManifest.Create(),
             GroundworkTestAccess.DefaultScoped,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
     protected override async ValueTask<GroundworkProviderClient> OpenClientCoreAsync(
         Guid clientId,
@@ -246,6 +247,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
 
     protected override async ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
         Guid clientId,
+        DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
         var source = _physicalSource ?? throw new InvalidOperationException("The MongoDB physical target has not been applied.");
@@ -254,7 +256,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             _databaseName,
             source.CreateManifest(),
             source.PhysicalTarget.Provider,
-            GroundworkTestAccess.DefaultScoped,
+            access,
             source.CreateNamePolicy(),
             cancellationToken: cancellationToken);
         if (!IsExactTarget(source, handle))
@@ -263,13 +265,15 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             throw new InvalidOperationException("The MongoDB physical provider driver opened a target different from the applied runtime target.");
         }
 
+        var store = handle.CreateStore(access);
         var services = new ServiceCollection()
-            .AddSingleton<IDocumentStore>(handle.Store)
+            .AddSingleton<IDocumentStore>(store)
+            .AddSingleton<IBoundedDocumentStore>(store)
             .BuildServiceProvider();
         return new GroundworkProviderClient(
             clientId,
             services,
-            handle.Store,
+            store,
             async () =>
             {
                 try
@@ -280,7 +284,30 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 {
                     await handle.DisposeAsync();
                 }
-            });
+            },
+            store);
+    }
+
+    private static ValueTask<GroundworkPhysicalSchemaManifestSource> CreatePhysicalSchemaSourceAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        GroundworkProviderTopologySnapshot topology,
+        CancellationToken cancellationToken)
+    {
+        var capabilityReport = MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment();
+        return manifestSources is null
+            ? GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+                capabilityReport,
+                topology,
+                MongoDbPhysicalNameNormalizer.Instance,
+                MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
+                cancellationToken)
+            : GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
+                capabilityReport,
+                topology,
+                MongoDbPhysicalNameNormalizer.Instance,
+                manifestSources,
+                MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
+                cancellationToken);
     }
 
     protected override ValueTask<GroundworkProcessProbeResult> RunInNewProcessCoreAsync(
@@ -366,6 +393,141 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             throw SanitizedProviderFailure("native-plan", exception);
         }
     }
+
+    protected override async ValueTask PrepareNativeRoutePlanDatasetCoreAsync(
+        IReadOnlyCollection<GroundworkNativeRoutePlanRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = new MongoClient(RequiredConnectionString());
+            var database = client.GetDatabase(_databaseName);
+            foreach (var group in requests.GroupBy(request => request.PhysicalName, StringComparer.Ordinal))
+            {
+                var collection = database.GetCollection<BsonDocument>(group.Key);
+                await EnsureNativeRouteDatasetAsync(collection, group.ToArray(), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (MongoException exception)
+        {
+            throw SanitizedProviderFailure("identity-native-route-dataset", exception);
+        }
+    }
+
+    protected override async ValueTask<GroundworkNativeRoutePlanResult> CaptureNativeRoutePlanCoreAsync(
+        GroundworkNativeRoutePlanRequest request,
+        PhysicalDocumentQueryExplanation explanation,
+        int materializedCandidateCount,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = new MongoClient(RequiredConnectionString());
+            var database = client.GetDatabase(_databaseName);
+            var collection = database.GetCollection<BsonDocument>(request.PhysicalName);
+            var expectedIndex = await ResolveNativeRouteIndexAsync(collection, request, cancellationToken);
+            var commands = explanation.Commands.Select((command, ordinal) =>
+            {
+                if (!string.Equals(command.NativePlanFormat, "mongodb-json", StringComparison.Ordinal))
+                    throw new InvalidOperationException($"MongoDB route '{request.QueryIdentity}' returned an unexpected native-plan format.");
+                var plan = BsonDocument.Parse(command.NativePlan);
+                var stages = new SortedSet<string>(StringComparer.Ordinal);
+                var indexes = new SortedSet<string>(StringComparer.Ordinal);
+                CollectPlanSummary(plan, stages, indexes);
+                if (!indexes.Contains(expectedIndex) || !stages.Contains("IXSCAN") || stages.Contains("COLLSCAN"))
+                {
+                    throw new InvalidOperationException(
+                        $"MongoDB route '{request.QueryIdentity}' command '{command.Identity}' was not scan-free through '{expectedIndex}'.");
+                }
+                return GroundworkNativeRouteCommandEvidence.Create(
+                    ordinal,
+                    command,
+                    "index-scan",
+                    [expectedIndex]);
+            }).ToArray();
+            var cardinality = await collection.CountDocumentsAsync(
+                FilterDefinition<BsonDocument>.Empty,
+                cancellationToken: cancellationToken);
+            return GroundworkNativeRoutePlanResult.Create(
+                request,
+                ProviderKey,
+                cardinality,
+                "index-scan",
+                expectedIndex,
+                request.Limit,
+                materializedCandidateCount,
+                commands);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (MongoException exception)
+        {
+            throw SanitizedProviderFailure("identity-native-route-plan", exception);
+        }
+    }
+
+    protected override async ValueTask<GroundworkPhysicalSchemaManifestSource> PrepareSchemaParityCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        CancellationToken cancellationToken)
+    {
+        using var client = new MongoClient(RequiredConnectionString());
+        await client.DropDatabaseAsync(_databaseName, cancellationToken);
+        _physicalSource = null;
+        var topology = await new MongoDbGroundworkRuntimeAdmission().InspectReplicaSetAsync(
+            RequiredConnectionString(),
+            _databaseName,
+            cancellationToken);
+        return await CreatePhysicalSchemaSourceAsync(manifestSources, topology, cancellationToken);
+    }
+
+    protected override async ValueTask<GroundworkProviderSchemaStateSnapshot> CaptureSchemaStateCoreAsync(
+        CancellationToken cancellationToken)
+    {
+        using var client = new MongoClient(RequiredConnectionString());
+        var database = client.GetDatabase(_databaseName);
+        var items = new List<string>();
+        using var collections = await database.ListCollectionsAsync(cancellationToken: cancellationToken);
+        var collectionDocuments = await collections.ToListAsync(cancellationToken);
+        foreach (var collectionDocument in collectionDocuments.OrderBy(
+                     document => document.GetValue("name", string.Empty).AsString,
+                     StringComparer.Ordinal))
+        {
+            var collectionName = collectionDocument.GetValue("name", string.Empty).AsString;
+            if (string.IsNullOrWhiteSpace(collectionName) || collectionName.StartsWith("system.", StringComparison.Ordinal))
+                continue;
+            items.Add($"collection\u001f{collectionName}\u001f{CanonicalBson(collectionDocument)}");
+            var collection = database.GetCollection<BsonDocument>(collectionName);
+            using (var indexes = await collection.Indexes.ListAsync(cancellationToken))
+            {
+                var indexDocuments = await indexes.ToListAsync(cancellationToken);
+                items.AddRange(indexDocuments.Select(index =>
+                    $"index\u001f{collectionName}\u001f{CanonicalBson(index)}"));
+            }
+            var documents = await collection.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(cancellationToken);
+            items.AddRange(documents.Select(document =>
+                $"document\u001f{collectionName}\u001f{CanonicalBson(document)}"));
+        }
+        return GroundworkProviderSchemaStateSnapshot.Create(ProviderKey, items);
+    }
+
+    protected override async ValueTask<ElsaRuntimeSchemaAdmissionResult> InspectSchemaParityAdmissionCoreAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken)
+    {
+        using var client = new MongoClient(RequiredConnectionString());
+        return await source.InspectRuntimeAdmissionAsync(
+            new MongoDbPhysicalSchemaExecutor(client.GetDatabase(_databaseName)),
+            cancellationToken: cancellationToken);
+    }
+
+    protected override SchemaToolConnection SchemaToolConnectionCore() =>
+        new(RequiredConnectionString(), _databaseName);
 
     protected override async ValueTask DisposeCoreAsync()
     {
@@ -547,6 +709,95 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             foreach (var item in array)
                 CollectPlanSummary(item, stages, indexes);
         }
+    }
+
+    private static string CanonicalBson(BsonValue value) => value.ToJson(new JsonWriterSettings
+    {
+        OutputMode = JsonOutputMode.CanonicalExtendedJson,
+        Indent = false
+    });
+
+    private static async Task EnsureNativeRouteDatasetAsync(
+        IMongoCollection<BsonDocument> collection,
+        IReadOnlyCollection<GroundworkNativeRoutePlanRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var dataset = GroundworkNativeRouteDataset.Create(requests);
+        await collection.DeleteManyAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken);
+        const int batchSize = 5_000;
+        for (var offset = 0; offset < dataset.AcceptanceCardinality; offset += batchSize)
+        {
+            var count = Math.Min(batchSize, dataset.AcceptanceCardinality - offset);
+            var documents = new List<BsonDocument>(count);
+            for (var index = 0; index < count; index++)
+            {
+                var ordinal = offset + index;
+                var id = ordinal == 0 ? dataset.CandidateDocumentId : $"native-{ordinal:D6}";
+                var storageScope = ordinal == 1 ? dataset.CrossScope : dataset.StorageScope;
+                var comparisonKey = ordinal == 0 ? dataset.CandidateComparisonKey : $"noise-comparison-{ordinal:D6}";
+                var lookupKey = ordinal == 0 ? dataset.CandidateLookupKey : $"noise-lookup-{ordinal:D6}";
+                var content = ordinal == 0
+                    ? BsonDocument.Parse(dataset.CandidateContentJson)
+                    : new BsonDocument();
+                var document = new BsonDocument
+                {
+                    ["_id"] = new BsonDocument
+                    {
+                        ["storage_scope"] = storageScope,
+                        ["id_lookup_key"] = lookupKey
+                    },
+                    ["document_kind"] = dataset.DocumentKind,
+                    ["storage_scope"] = storageScope,
+                    ["id"] = id,
+                    ["id_comparison_key"] = comparisonKey,
+                    ["id_lookup_key"] = lookupKey,
+                    ["schema_version"] = dataset.CandidateSchemaVersion,
+                    ["version"] = 1L,
+                    ["document"] = content.DeepClone(),
+                    ["_groundwork_content"] = content,
+                    ["_groundwork_incarnation"] = $"native-{ordinal:D32}",
+                    ["_groundwork_created_at"] = DateTime.UnixEpoch,
+                    ["_groundwork_updated_at"] = DateTime.UnixEpoch
+                };
+                foreach (var projectedField in dataset.ProjectedValues)
+                    document[projectedField.Key] = ordinal is 0 or 1 ? projectedField.Value : $"noise-{ordinal:D6}";
+                documents.Add(document);
+            }
+
+            await collection.InsertManyAsync(
+                documents,
+                new InsertManyOptions { IsOrdered = false },
+                cancellationToken);
+        }
+
+        var cardinality = await collection.CountDocumentsAsync(
+            FilterDefinition<BsonDocument>.Empty,
+            cancellationToken: cancellationToken);
+        if (cardinality != dataset.AcceptanceCardinality)
+            throw new InvalidOperationException(
+                $"MongoDB seeded {cardinality} documents in '{dataset.PhysicalName}', expected {dataset.AcceptanceCardinality}.");
+    }
+
+    private static async Task<string> ResolveNativeRouteIndexAsync(
+        IMongoCollection<BsonDocument> collection,
+        GroundworkNativeRoutePlanRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var cursor = await collection.Indexes.ListAsync(cancellationToken);
+        while (await cursor.MoveNextAsync(cancellationToken))
+        {
+            foreach (var index in cursor.Current)
+            {
+                var keys = index.GetValue("key", new BsonDocument()).AsBsonDocument.Elements.ToArray();
+                if (keys.Length >= 2 &&
+                    string.Equals(keys[0].Name, "storage_scope", StringComparison.Ordinal) &&
+                    string.Equals(keys[1].Name, request.RouteField, StringComparison.Ordinal))
+                    return index.GetValue("name", string.Empty).AsString;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"MongoDB route '{request.QueryIdentity}' has no physical index on storage_scope and {request.RouteField}.");
     }
 
     private string RequiredConnectionString() => _connectionString ??

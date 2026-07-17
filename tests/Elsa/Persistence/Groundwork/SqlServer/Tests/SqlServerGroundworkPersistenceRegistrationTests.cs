@@ -1,11 +1,16 @@
 using System.Reflection;
+using CShells;
+using CShells.Features;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
+using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.SqlServer.Unified;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
@@ -53,10 +58,10 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void Unified_feature_registers_builds_and_resolves_the_selected_seven_family_startup_leaf()
+    public void Unified_feature_registers_the_six_provider_families_without_selecting_identity()
     {
         var services = new ServiceCollection();
-        var feature = new SqlServerGroundworkUnifiedPersistenceShellFeature
+        var feature = new SqlServerGroundworkUnifiedPersistenceShellFeature(CreateBareShellContext())
         {
             ConnectionString = ConnectionString
         };
@@ -67,14 +72,34 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
         AssertRepresentativeFamilyContracts(
             services,
             typeof(IBookmarkStateStore),
-            typeof(IUserStore),
             typeof(ISecretRepository),
             typeof(IExecutionPlacementStore),
             typeof(IWorkflowDefinitionStore),
             typeof(IActivityDefinitionStore),
             typeof(IPublicationRecordStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
         AssertRegistrationDiagnosticsAreSanitized(services, RegistrationSecret, ConnectionString);
         Assert.False(typeof(SqlServerGroundworkUnifiedPersistenceShellFeature).IsSealed);
+    }
+
+    private static ShellFeatureContext CreateBareShellContext() =>
+        new(new ShellSettings(new ShellId("sqlserver-registration"), ["GroundworkUnifiedPersistenceSqlServer"]), []);
+
+    [Fact]
+    public async Task Explicit_identity_schema_and_feature_register_the_matching_SQL_Server_composition()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+            ConnectionString);
+        services.AddFoundationAspNetCoreIdentityGroundwork();
+
+        await using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
+        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
@@ -48,6 +49,44 @@ public static class GroundworkStoreInitialization
                     topology,
                     RuntimeGroundworkStorageManifestSource.FeatureName,
                     [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
+                providerNameNormalizer,
+                cancellationToken,
+                targetCompiler);
+    }
+
+    /// <summary>Compiles a physical target for the supplied manifest sources without selecting runtime implicitly.</summary>
+    public static async ValueTask<GroundworkPhysicalSchemaManifestSource> CreatePhysicalSchemaSourceAsync(
+        ProviderCapabilityReport capabilityReport,
+        GroundworkProviderTopologySnapshot topology,
+        IProviderPhysicalNameNormalizer providerNameNormalizer,
+        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        IGroundworkPhysicalSchemaTargetCompiler? targetCompiler = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(capabilityReport);
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(providerNameNormalizer);
+        ArgumentNullException.ThrowIfNull(manifestSources);
+        if (manifestSources.Count == 0)
+            throw new ArgumentException("At least one manifest source is required.", nameof(manifestSources));
+
+        var services = new ServiceCollection();
+        services.AddGroundworkStorageComposition();
+        foreach (var manifestSource in manifestSources)
+        {
+            services.AddScoped<IGroundworkStorageManifestSource>(_ => manifestSource);
+        }
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        return await scope.ServiceProvider
+            .GetRequiredService<GroundworkStorageCompositionFactory>()
+            .CreateSourceAsync(
+                await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
+                    capabilityReport,
+                    topology,
+                    manifestSources,
+                    cancellationToken),
                 providerNameNormalizer,
                 cancellationToken,
                 targetCompiler);
@@ -109,20 +148,21 @@ public static class GroundworkStoreInitialization
         CancellationToken cancellationToken)
     {
         await using var scope = provider.CreateAsyncScope();
+        var topology = new GroundworkProviderTopologySnapshot(
+            capabilityReport.Provider.Name,
+            topologyIdentity,
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+            });
         return await scope.ServiceProvider
             .GetRequiredService<GroundworkStorageCompositionFactory>()
             .CreateSourceAsync(
-                GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
+                await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
                     capabilityReport,
-                    new GroundworkProviderTopologySnapshot(
-                        capabilityReport.Provider.Name,
-                        topologyIdentity,
-                        new HashSet<string>(StringComparer.Ordinal)
-                        {
-                            RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
-                        }),
-                    RuntimeGroundworkStorageManifestSource.FeatureName,
-                    [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
+                    topology,
+                    scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                    cancellationToken),
                 providerNameNormalizer,
                 cancellationToken);
     }

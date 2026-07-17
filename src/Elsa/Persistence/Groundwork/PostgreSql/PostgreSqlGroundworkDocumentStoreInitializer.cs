@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
@@ -46,20 +47,21 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
                 return;
 
             await using var scope = scopeFactory.CreateAsyncScope();
+            var capabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
+                PostgreSqlGroundworkCapabilities.Runtime(),
+                new GroundworkProviderTopologySnapshot(
+                    PostgreSqlGroundworkCapabilities.Provider.Name,
+                    "postgresql-server",
+                    new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                    }),
+                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                cancellationToken);
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(
-                    GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
-                        PostgreSqlGroundworkCapabilities.Runtime(),
-                        new GroundworkProviderTopologySnapshot(
-                            PostgreSqlGroundworkCapabilities.Provider.Name,
-                            "postgresql-server",
-                            new HashSet<string>(StringComparer.Ordinal)
-                            {
-                                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
-                            }),
-                        RuntimeGroundworkStorageManifestSource.FeatureName,
-                        [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
+                    capabilities,
                     PostgreSqlGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 

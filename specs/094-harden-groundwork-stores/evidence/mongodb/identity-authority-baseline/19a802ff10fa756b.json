@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "sourceAuthority": "#644",
+  "sourceSpec": "095-groundwork-aspnetcore-identity",
+  "sourceEvidence": "specs/095-groundwork-aspnetcore-identity/evidence/providers/matrix.md",
+  "testRun": "artifacts/test-results/spec095-t083/conformance-preview56/spec095-t083-conformance-preview56.trx",
+  "testRunSha256": "a2cab2e1b2bb3d92816788cebfda1d36a64d00faf344577547681a2b9a4a4556",
+  "scenarioId": "identity-authority-baseline",
+  "resultHash": "719708f5192bc589a05bd319468b55e62c25801b9c45b6a02c5ec4770b4a9c49",
+  "inputFingerprint": "5d60763e3cbebda467e8a8375411a1b2fc0b51d8329222628fc548bc72e7ea35",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.56",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "19a802ff10fa756be64e7b5bc787ea3af2ab5d4d47fc7de22993598a5871db54",
+  "executionPath": "provider-driver/mongodb/identity-authority-baseline/19a802ff10fa756b",
+  "clients": 2,
+  "outcome": "pass",
+  "validatedCapabilities": [
+    "dispose-and-reopen-same-database",
+    "process-restart-same-database",
+    "winning-plan-index-scan",
+    "duplicate-create-race",
+    "standalone-topology-rejection",
+    "same-authority-adapter"
+  ]
+}

@@ -119,6 +119,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Draft | - | 102 | 0 | retained, deferred, out of scope |
 | [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 0 | 88 | - |
 | [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 45 | 60 | - |
+| [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
 | [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
 | [096-dispatch-workflow-fire-and-forget](../../specs/096-dispatch-workflow-fire-and-forget/spec.md) | Dispatch a Published Workflow Fire-and-Forget | Approved | - | 40 | 0 | retained, out of scope, construct-only |
 | [097-dispatch-dependency-hardening](../../specs/097-dispatch-dependency-hardening/spec.md) | Deterministic and Bounded Workflow Dispatch | Draft | - | 60 | 0 | retained, deferred, construct-only |

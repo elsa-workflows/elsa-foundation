@@ -2,7 +2,7 @@
   "$schema": "./contracts/coverage-ledger.schema.json",
   "schemaVersion": 1,
   "feature": "094-harden-groundwork-stores",
-  "groundworkVersion": "0.0.1-preview.58",
+  "groundworkVersion": "0.0.1-preview.60",
   "baselineRef": "c9aa5fd8f7cfa6c86b2f37885a2446f3f4b82103",
   "mandatoryProviders": [
     "sqlite",
@@ -975,7 +975,7 @@
     {
       "id": "iam-user",
       "family": "iam",
-      "contract": "IUserStore",
+      "contract": "IUserStore; IRevisionAwareUserStore",
       "outcome": "external-authority-adapter",
       "scope": "tenant-scoped",
       "authority": "#644",
@@ -1012,6 +1012,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
@@ -1020,7 +1022,7 @@
     {
       "id": "iam-role",
       "family": "iam",
-      "contract": "IRoleStore",
+      "contract": "IRoleStore; IRevisionAwareRoleStore",
       "outcome": "external-authority-adapter",
       "scope": "tenant-scoped",
       "authority": "#644",
@@ -1057,6 +1059,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
@@ -1149,7 +1153,7 @@
     {
       "id": "iam-external-identity",
       "family": "iam",
-      "contract": "IExternalIdentityStore",
+      "contract": "IExternalIdentityStore; IRevisionAwareExternalIdentityStore",
       "outcome": "external-authority-adapter",
       "scope": "tenant-scoped",
       "authority": "#644",
@@ -1185,6 +1189,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"
@@ -1322,7 +1328,7 @@
     {
       "id": "iam-tenant-membership",
       "family": "iam",
-      "contract": "ITenantMembershipStore",
+      "contract": "ITenantMembershipStore; IRevisionAwareTenantMembershipStore",
       "outcome": "ordinary-document",
       "scope": "tenant-scoped",
       "authority": "#645",
@@ -1357,6 +1363,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#645/boundary-6-iam-secrets-dependent-on-644",
       "behavioralBaseline": [
+        "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityGroundworkRegistrationTests.cs",
+        "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs",
         "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs",
         "tests/Elsa/Foundation/Identity/Tests/IamContractsTests.cs"

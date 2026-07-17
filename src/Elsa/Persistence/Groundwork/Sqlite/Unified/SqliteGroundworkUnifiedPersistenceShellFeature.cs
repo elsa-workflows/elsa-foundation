@@ -6,10 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
 
 /// <summary>
-/// Opt-in host feature that backs all seven shipped Elsa persistence families with one Groundwork
-/// SQLite target: workflow runtime, identity, secrets, distributed runtime, workflows design,
-/// activities design, and workflows publishing. Runtime, design, and domain code remain
-/// provider-neutral.
+/// Opt-in host feature that backs the six provider-level Elsa persistence families with one Groundwork
+/// SQLite target: workflow runtime, secrets, distributed runtime, workflows design, activities design,
+/// and workflows publishing. Identity remains an explicit host selection.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -18,10 +17,15 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceSqlite",
     DisplayName = "Groundwork SQLite Unified Persistence",
-    Description = "Backs all seven shipped Elsa persistence families with one admission-gated Groundwork SQLite target. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQLite target; Identity remains an explicit host selection. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
+    private readonly ShellFeatureContext _context;
+
+    public SqliteGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context) =>
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+
     public const string DefaultConnectionString = "Data Source=elsa-groundwork.db";
 
     [ManifestSetting(
@@ -40,6 +44,6 @@ public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeatu
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
-        services.AddGroundworkSqliteUnifiedPersistence(connectionString, AutoApplySchemaOnStartup);
+        services.AddGroundworkSqliteUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
     }
 }

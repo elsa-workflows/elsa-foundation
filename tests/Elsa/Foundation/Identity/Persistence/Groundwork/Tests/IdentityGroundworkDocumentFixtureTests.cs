@@ -23,10 +23,10 @@ public sealed class IdentityGroundworkDocumentFixtureTests
 
     public static TheoryData<string> Kinds() => new()
     {
-        IdentityStorageManifest.UserDocumentKind,
-        IdentityStorageManifest.RoleDocumentKind,
-        IdentityStorageManifest.ExternalIdentityDocumentKind,
-        IdentityStorageManifest.TenantMembershipDocumentKind,
+        IdentityStorageManifest.IdentityUserDocumentKind,
+        IdentityStorageManifest.IdentityRoleDocumentKind,
+        IdentityStorageManifest.ExternalLoginDocumentKind,
+        IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
     };
 
     [Theory]
@@ -82,16 +82,18 @@ public sealed class IdentityGroundworkDocumentFixtureTests
     {
         switch (kind)
         {
-            case var _ when kind == IdentityStorageManifest.UserDocumentKind:
+            case var _ when kind == IdentityStorageManifest.IdentityUserDocumentKind:
                 await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
                 break;
-            case var _ when kind == IdentityStorageManifest.RoleDocumentKind:
+            case var _ when kind == IdentityStorageManifest.IdentityRoleDocumentKind:
                 await IdentityGroundworkFixtures.RoleStore(docStore).SaveAsync(IdentityGroundworkFixtures.Role());
                 break;
-            case var _ when kind == IdentityStorageManifest.ExternalIdentityDocumentKind:
+            case var _ when kind == IdentityStorageManifest.ExternalLoginDocumentKind:
+                await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
                 await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).SaveAsync(IdentityGroundworkFixtures.ExternalIdentity());
                 break;
-            case var _ when kind == IdentityStorageManifest.TenantMembershipDocumentKind:
+            case var _ when kind == IdentityStorageManifest.IdentityTenantMembershipDocumentKind:
+                await IdentityGroundworkFixtures.UserStore(docStore).SaveAsync(IdentityGroundworkFixtures.User());
                 await IdentityGroundworkFixtures.TenantMembershipStore(docStore).SaveAsync(IdentityGroundworkFixtures.TenantMembership());
                 break;
             default:
@@ -101,23 +103,23 @@ public sealed class IdentityGroundworkDocumentFixtureTests
 
     private static async Task<string?> ReadSpotCheckAsync(string kind, IDocumentStore docStore)
     {
-        if (kind == IdentityStorageManifest.UserDocumentKind)
+        if (kind == IdentityStorageManifest.IdentityUserDocumentKind)
             return (await IdentityGroundworkFixtures.UserStore(docStore).FindAsync("tenant-1", "user-1"))?.UserName;
-        if (kind == IdentityStorageManifest.RoleDocumentKind)
+        if (kind == IdentityStorageManifest.IdentityRoleDocumentKind)
             return (await IdentityGroundworkFixtures.RoleStore(docStore).FindAsync("tenant-1", "role-1"))?.Name;
-        if (kind == IdentityStorageManifest.ExternalIdentityDocumentKind)
+        if (kind == IdentityStorageManifest.ExternalLoginDocumentKind)
             return (await IdentityGroundworkFixtures.ExternalIdentityStore(docStore).FindBySubjectAsync("tenant-1", "google", "sub-123"))?.UserId;
-        if (kind == IdentityStorageManifest.TenantMembershipDocumentKind)
+        if (kind == IdentityStorageManifest.IdentityTenantMembershipDocumentKind)
             return (await IdentityGroundworkFixtures.TenantMembershipStore(docStore).FindAsync("tenant-1", "user-1"))?.Status.ToString();
         throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown identity document kind.");
     }
 
     private static string ExpectedSpotValue(string kind)
     {
-        if (kind == IdentityStorageManifest.UserDocumentKind) return "alice";
-        if (kind == IdentityStorageManifest.RoleDocumentKind) return "Administrators";
-        if (kind == IdentityStorageManifest.ExternalIdentityDocumentKind) return "user-1";
-        if (kind == IdentityStorageManifest.TenantMembershipDocumentKind) return "Active";
+        if (kind == IdentityStorageManifest.IdentityUserDocumentKind) return "alice";
+        if (kind == IdentityStorageManifest.IdentityRoleDocumentKind) return "Administrators";
+        if (kind == IdentityStorageManifest.ExternalLoginDocumentKind) return "user-1";
+        if (kind == IdentityStorageManifest.IdentityTenantMembershipDocumentKind) return "Active";
         throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown identity document kind.");
     }
 

@@ -1,6 +1,7 @@
 using System.Data.SqlTypes;
 using System.Xml.Linq;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.SqlServer;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.Capabilities;
@@ -14,14 +15,17 @@ using Groundwork.SqlServer.PhysicalStorage;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.MsSql;
+using ElsaRuntimeSchemaAdmissionResult = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionResult;
 
 namespace Elsa.Persistence.Groundwork.Testing;
 
 /// <summary>Real SQL Server provider mechanics for the shared Groundwork conformance fixture.</summary>
 public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
 {
+    private const string ProviderKey = "sqlserver";
     private const string Image = "mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04";
     private const string ProtocolVersion = "1.0.0";
+    private const int AdministrativeCommandTimeoutSeconds = 120;
     private readonly MsSqlContainer _container = new MsSqlBuilder(Image).Build();
     private readonly string _databaseName = $"elsa_groundwork_driver_{Guid.NewGuid():N}";
     private readonly GroundworkProcessProbeRunner _processProbeRunner = new();
@@ -84,28 +88,19 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         _physicalSource = null;
     }
 
-    protected override async ValueTask ResetPhysicalCoreAsync(CancellationToken cancellationToken)
+    protected override async ValueTask ResetPhysicalCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken)
     {
         await ResetDatabaseAsync(cancellationToken);
-        var capabilityReport = SqlServerGroundworkCapabilities.Runtime();
-        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
-            capabilityReport,
-            new GroundworkProviderTopologySnapshot(
-                capabilityReport.Provider.Name,
-                "sqlserver",
-                new HashSet<string>(StringComparer.Ordinal)
-                {
-                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
-                }),
-            SqlServerGroundworkCapabilities.PhysicalNames,
-            cancellationToken: cancellationToken);
+        var source = await CreatePhysicalSchemaSourceAsync(manifestSources, cancellationToken);
         var executor = new SqlServerPhysicalSchemaExecutor(RequiredConnectionString());
         var applied = await PhysicalSchemaApplication.ApplyAsync(
             source.PhysicalTarget,
             executor,
             cancellationToken: cancellationToken);
         EnsureSchemaApplied(applied);
-        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken);
+        var admission = await source.InspectRuntimeAdmissionAsync(executor, cancellationToken: cancellationToken);
         if (!admission.IsReady)
             throw new InvalidOperationException("SQL Server physical provider driver did not admit its applied runtime target.");
         _physicalSource = source;
@@ -113,19 +108,36 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
 
     private async Task ResetDatabaseAsync(CancellationToken cancellationToken)
     {
+        if (_connectionString is not null)
+            ClearPool(_connectionString);
+        SqlConnection.ClearAllPools();
+
         await using var connection = new SqlConnection(AdminConnectionString());
         await connection.OpenAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
         var database = Quote(_databaseName);
-        command.CommandText = $"""
-            IF DB_ID(N'{_databaseName}') IS NOT NULL
-            BEGIN
-                ALTER DATABASE {database} SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-                DROP DATABASE {database};
-            END;
-            CREATE DATABASE {database};
-            """;
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        await ExecuteAdminNonQueryAsync(
+            connection,
+            $"""
+             IF DB_ID(@databaseName) IS NOT NULL
+             BEGIN
+                 DECLARE @killSql nvarchar(max) = N'';
+                 SELECT @killSql = @killSql + N'KILL ' + CONVERT(varchar(11), session_id) + N';'
+                 FROM sys.dm_exec_sessions
+                 WHERE database_id = DB_ID(@databaseName)
+                   AND session_id <> @@SPID;
+
+                 IF LEN(@killSql) > 0
+                     EXEC(@killSql);
+
+                 ALTER DATABASE {database} SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                 DROP DATABASE {database};
+             END;
+             """,
+            cancellationToken: cancellationToken);
+        await ExecuteAdminNonQueryAsync(
+            connection,
+            $"CREATE DATABASE {database};",
+            cancellationToken);
         _connectionString = TargetConnectionString();
     }
 
@@ -172,6 +184,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
 
     protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
         Guid clientId,
+        DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -180,13 +193,25 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         {
             ApplicationName = $"elsa-groundwork-physical-driver-{clientId:N}"
         }.ConnectionString;
+        var manifest = source.CreateManifest();
         var store = new SqlServerPhysicalDocumentStore(
             connectionString,
-            source.CreateManifest(),
+            manifest,
             source.PhysicalTarget.Routes,
-            GroundworkTestAccess.DefaultScoped);
+            access);
+        var boundedStore = new GroundworkBoundedDocumentStoreRouter(
+            source.PhysicalTarget.Routes.Select(route =>
+                KeyValuePair.Create<string, IBoundedDocumentStore>(
+                    route.StorageUnit.Value,
+                    SqlServerPhysicalQueryRuntime.Create(
+                        store,
+                        manifest,
+                        route,
+                        source.PhysicalTarget.Provider))));
         var services = new ServiceCollection()
             .AddSingleton<IDocumentStore>(store)
+            .AddSingleton(boundedStore)
+            .AddSingleton<IBoundedDocumentStore>(boundedStore)
             .BuildServiceProvider();
         return ValueTask.FromResult(new GroundworkProviderClient(
             clientId,
@@ -196,7 +221,34 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             {
                 await services.DisposeAsync();
                 ClearPool(connectionString);
-            }));
+            },
+            boundedStore));
+    }
+
+    private static ValueTask<GroundworkPhysicalSchemaManifestSource> CreatePhysicalSchemaSourceAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken)
+    {
+        var capabilityReport = SqlServerGroundworkCapabilities.Runtime();
+        var topology = new GroundworkProviderTopologySnapshot(
+            capabilityReport.Provider.Name,
+            "sqlserver",
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+            });
+        return manifestSources is null
+            ? GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+                capabilityReport,
+                topology,
+                SqlServerGroundworkCapabilities.PhysicalNames,
+                cancellationToken: cancellationToken)
+            : GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
+                capabilityReport,
+                topology,
+                SqlServerGroundworkCapabilities.PhysicalNames,
+                manifestSources,
+                cancellationToken: cancellationToken);
     }
 
     protected override ValueTask<GroundworkProcessProbeResult> RunInNewProcessCoreAsync(
@@ -290,6 +342,187 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         return GroundworkNativePlanEvidence.Create(executionPath, scenarioId, evidence);
     }
 
+    protected override async ValueTask PrepareNativeRoutePlanDatasetCoreAsync(
+        IReadOnlyCollection<GroundworkNativeRoutePlanRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(RequiredConnectionString());
+        await connection.OpenAsync(cancellationToken);
+        foreach (var group in requests.GroupBy(request => request.PhysicalName, StringComparer.Ordinal))
+            await EnsureNativeRouteDatasetAsync(connection, group.ToArray(), cancellationToken);
+    }
+
+    protected override async ValueTask<GroundworkNativeRoutePlanResult> CaptureNativeRoutePlanCoreAsync(
+        GroundworkNativeRoutePlanRequest request,
+        PhysicalDocumentQueryExplanation explanation,
+        int materializedCandidateCount,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(RequiredConnectionString());
+        await connection.OpenAsync(cancellationToken);
+        var expectedIndex = await ResolveNativeRouteIndexAsync(connection, request, cancellationToken);
+        var commands = explanation.Commands.Select((command, ordinal) =>
+        {
+            if (!string.Equals(command.NativePlanFormat, "sqlserver-statistics-xml", StringComparison.Ordinal))
+                throw new InvalidOperationException($"SQL Server route '{request.QueryIdentity}' returned an unexpected native-plan format.");
+            var document = XDocument.Parse(command.NativePlan, LoadOptions.None);
+            var operators = ExtractShowPlanOperators(document);
+            var indexes = ExtractShowPlanIndexes(document);
+            if (!indexes.Contains(expectedIndex, StringComparer.Ordinal) ||
+                !operators.Contains("Index Seek", StringComparer.Ordinal) ||
+                operators.Any(value => value.Contains("Scan", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"SQL Server route '{request.QueryIdentity}' command '{command.Identity}' was not a scan-free seek through '{expectedIndex}'.");
+            }
+            return GroundworkNativeRouteCommandEvidence.Create(
+                ordinal,
+                command,
+                "index-seek",
+                [expectedIndex]);
+        }).ToArray();
+        var cardinality = await CountPhysicalRowsAsync(connection, request.PhysicalName, cancellationToken);
+        return GroundworkNativeRoutePlanResult.Create(
+            request,
+            ProviderKey,
+            cardinality,
+            "index-seek",
+            expectedIndex,
+            request.Limit,
+            materializedCandidateCount,
+            commands);
+    }
+
+    protected override async ValueTask<GroundworkPhysicalSchemaManifestSource> PrepareSchemaParityCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        CancellationToken cancellationToken)
+    {
+        await ResetDatabaseAsync(cancellationToken);
+        _physicalSource = null;
+        return await CreatePhysicalSchemaSourceAsync(manifestSources, cancellationToken);
+    }
+
+    protected override async ValueTask<GroundworkProviderSchemaStateSnapshot> CaptureSchemaStateCoreAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(RequiredConnectionString());
+        await connection.OpenAsync(cancellationToken);
+        var catalog = new List<string>();
+        var tables = new List<string>();
+        await using (var tableCommand = connection.CreateCommand())
+        {
+            tableCommand.CommandText = """
+                SELECT s.name, t.name
+                FROM sys.tables t
+                INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+                WHERE t.is_ms_shipped = 0
+                ORDER BY s.name, t.name;
+                """;
+            await using var reader = await tableCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var schema = reader.GetString(0);
+                var table = reader.GetString(1);
+                catalog.Add($"table\u001f{schema}\u001f{table}");
+                if (string.Equals(schema, "dbo", StringComparison.Ordinal))
+                    tables.Add(table);
+            }
+        }
+        await using (var catalogCommand = connection.CreateCommand())
+        {
+            catalogCommand.CommandText = """
+                SELECT s.name, t.name, c.column_id, c.name, ty.name, c.max_length,
+                       c.precision, c.scale, c.is_nullable, c.is_computed,
+                       COALESCE(i.name, ''), COALESCE(i.is_unique, 0),
+                       COALESCE(ic.key_ordinal, 0), COALESCE(ic.is_included_column, 0)
+                FROM sys.tables t
+                INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+                INNER JOIN sys.columns c ON c.object_id = t.object_id
+                INNER JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+                LEFT JOIN sys.index_columns ic
+                  ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+                LEFT JOIN sys.indexes i
+                  ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                WHERE t.is_ms_shipped = 0
+                ORDER BY s.name, t.name, c.column_id, i.name, ic.key_ordinal;
+                """;
+            await using var reader = await catalogCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var values = Enumerable.Range(0, reader.FieldCount)
+                    .Select(ordinal => Convert.ToString(reader.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture));
+                catalog.Add($"column-index\u001f{string.Join('\u001f', values)}");
+            }
+        }
+        return await GroundworkRelationalSchemaStateReader.CaptureAsync(
+            ProviderKey,
+            connection,
+            catalog,
+            tables,
+            Quote,
+            cancellationToken);
+    }
+
+    protected override async ValueTask<ElsaRuntimeSchemaAdmissionResult> InspectSchemaParityAdmissionCoreAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken) =>
+        await source.InspectRuntimeAdmissionAsync(
+            new SqlServerPhysicalSchemaExecutor(RequiredConnectionString()),
+            cancellationToken: cancellationToken);
+
+    protected override SchemaToolConnection SchemaToolConnectionCore() =>
+        new(RequiredConnectionString());
+
+    public async ValueTask<GroundworkSanitizedEvidence> CaptureIdentityCompoundKeyBudgetAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqlConnection(RequiredConnectionString());
+        await connection.OpenAsync(cancellationToken);
+        var expectedIndex = await ResolveIdentityUserNormalizedNameIndexAsync(connection, cancellationToken);
+        await RefreshIdentityUsersStatisticsAsync(connection, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT
+                c.name,
+                c.max_length
+            FROM sys.indexes i
+            INNER JOIN sys.index_columns ic
+                ON ic.object_id = i.object_id
+               AND ic.index_id = i.index_id
+            INNER JOIN sys.columns c
+                ON c.object_id = ic.object_id
+               AND c.column_id = ic.column_id
+            WHERE i.object_id = OBJECT_ID(N'dbo.identity_users')
+              AND i.name = @index
+              AND ic.is_included_column = 0
+            ORDER BY ic.key_ordinal;
+            """;
+        command.Parameters.AddWithValue("@index", expectedIndex);
+        var columns = new List<string>();
+        var totalBytes = 0;
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var name = reader.GetString(0);
+                var maxLength = reader.GetInt16(1);
+                columns.Add($"{name}:{maxLength}");
+                totalBytes += maxLength;
+            }
+        }
+
+        if (columns.Count == 0)
+            throw new InvalidOperationException("SQL Server Identity compound-key budget evidence found no key columns.");
+
+        return GroundworkSanitizedEvidence.Create(
+            "compound-key-budget",
+            "provider=sqlserver\n" +
+            "table=identity_users\n" +
+            $"index={expectedIndex}\n" +
+            $"key-columns={string.Join(',', columns)}\n" +
+            $"declared-key-bytes={totalBytes}");
+    }
+
     protected override async ValueTask DisposeCoreAsync()
     {
         if (_connectionString is not null)
@@ -302,10 +535,23 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     {
         await using var connection = new SqlConnection(AdminConnectionString());
         await connection.OpenAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"CREATE DATABASE {Quote(_databaseName)};";
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        await ExecuteAdminNonQueryAsync(
+            connection,
+            $"CREATE DATABASE {Quote(_databaseName)};",
+            cancellationToken);
         _connectionString = TargetConnectionString();
+    }
+
+    private async Task ExecuteAdminNonQueryAsync(
+        SqlConnection connection,
+        string commandText,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = AdministrativeCommandTimeoutSeconds;
+        command.CommandText = commandText;
+        command.Parameters.AddWithValue("@databaseName", _databaseName);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private string AdminConnectionString() => new SqlConnectionStringBuilder(_container.GetConnectionString())
@@ -345,6 +591,167 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     }
 
     private static string Quote(string identifier) => $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
+
+    private static async Task<string> ResolveIdentityUserNormalizedNameIndexAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (1) i.name
+            FROM sys.indexes i
+            WHERE i.object_id = OBJECT_ID(N'dbo.identity_users')
+              AND i.name LIKE N'%identity%user%normalized%name%'
+            ORDER BY i.name;
+            """;
+        var value = await command.ExecuteScalarAsync(cancellationToken) as string;
+        return string.IsNullOrWhiteSpace(value)
+            ? throw new InvalidOperationException("SQL Server Identity normalized-user-name physical index was not found.")
+            : value;
+    }
+
+    private static async Task EnsureNativeRouteDatasetAsync(
+        SqlConnection connection,
+        IReadOnlyCollection<GroundworkNativeRoutePlanRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var dataset = GroundworkNativeRouteDataset.Create(requests);
+        var projectedColumns = string.Join(", ", dataset.ProjectedValues.Keys.Select(Quote));
+        var projectedValues = string.Join(", ", dataset.ProjectedValues.Keys.Select((_, index) =>
+            $"CASE WHEN value IN (0, 1) THEN @target{index} ELSE CONCAT('noise-', RIGHT(CONCAT('000000', value), 6)) END"));
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandTimeout = AdministrativeCommandTimeoutSeconds;
+            command.CommandText = $"""
+                DELETE FROM {Quote(dataset.PhysicalName)};
+                WITH sequence(value) AS (
+                    SELECT TOP (@cardinality)
+                           ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1
+                    FROM sys.all_objects first_set
+                    CROSS JOIN sys.all_objects second_set
+                )
+                INSERT INTO {Quote(dataset.PhysicalName)}
+                    ([document_kind], [storage_scope], [id], [id_comparison_key], [id_lookup_key],
+                     [schema_version], [version], [document], [created_utc], [updated_utc], {projectedColumns})
+                SELECT @kind,
+                       CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
+                       CASE WHEN value = 0 THEN @candidateId ELSE CONCAT('native-', RIGHT(CONCAT('000000', value), 6)) END,
+                       CASE WHEN value = 0 THEN @candidateComparison ELSE CONVERT(varbinary(1350), CONCAT('native-', RIGHT(CONCAT('000000', value), 6))) END,
+                       CASE WHEN value = 0 THEN @candidateLookup ELSE CONVERT(binary(32), HASHBYTES(
+                           'SHA2_256',
+                           CONVERT(varbinary(max), CONCAT('native-', RIGHT(CONCAT('000000', value), 6))))) END,
+                       @schemaVersion,
+                       1,
+                       CASE WHEN value = 0 THEN @candidateContent ELSE @emptyContent END,
+                       N'2000-01-01T00:00:00.0000000+00:00',
+                       N'2000-01-01T00:00:00.0000000+00:00',
+                       {projectedValues}
+                FROM sequence;
+                """;
+            command.Parameters.AddWithValue("@kind", dataset.DocumentKind);
+            command.Parameters.AddWithValue("@scope", dataset.StorageScope);
+            command.Parameters.AddWithValue("@crossScope", dataset.CrossScope);
+            command.Parameters.AddWithValue("@candidateId", dataset.CandidateDocumentId);
+            command.Parameters.AddWithValue("@candidateComparison", Convert.FromHexString(dataset.CandidateComparisonKey));
+            command.Parameters.AddWithValue("@candidateLookup", Convert.FromHexString(dataset.CandidateLookupKey));
+            command.Parameters.AddWithValue("@schemaVersion", dataset.CandidateSchemaVersion);
+            command.Parameters.AddWithValue("@candidateContent", dataset.CandidateContentJson);
+            command.Parameters.AddWithValue("@emptyContent", "{}");
+            command.Parameters.AddWithValue("@cardinality", dataset.AcceptanceCardinality);
+            var index = 0;
+            foreach (var value in dataset.ProjectedValues.Values)
+                command.Parameters.AddWithValue($"@target{index++}", value);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        await using (var statistics = connection.CreateCommand())
+        {
+            statistics.CommandText = $"UPDATE STATISTICS {Quote(dataset.PhysicalName)} WITH FULLSCAN;";
+            await statistics.ExecuteNonQueryAsync(cancellationToken);
+        }
+        var cardinality = await CountPhysicalRowsAsync(connection, dataset.PhysicalName, cancellationToken);
+        if (cardinality != dataset.AcceptanceCardinality)
+            throw new InvalidOperationException(
+                $"SQL Server seeded {cardinality} rows in '{dataset.PhysicalName}', expected {dataset.AcceptanceCardinality}.");
+    }
+
+    private static async Task<string> ResolveNativeRouteIndexAsync(
+        SqlConnection connection,
+        GroundworkNativeRoutePlanRequest request,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT i.name, ic.key_ordinal, c.name
+            FROM sys.indexes i
+            INNER JOIN sys.index_columns ic
+                ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+            INNER JOIN sys.columns c
+                ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            WHERE i.object_id = OBJECT_ID(@qualifiedTable)
+              AND ic.is_included_column = 0
+            ORDER BY i.name, ic.key_ordinal;
+            """;
+        command.Parameters.AddWithValue("@qualifiedTable", $"dbo.{request.PhysicalName}");
+        var indexes = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var name = reader.GetString(0);
+            if (!indexes.TryGetValue(name, out var columns))
+                indexes[name] = columns = [];
+            columns.Add(reader.GetString(2));
+        }
+        var match = indexes.FirstOrDefault(index =>
+            index.Value.Count >= 2 &&
+            string.Equals(index.Value[0], "storage_scope", StringComparison.Ordinal) &&
+            string.Equals(index.Value[1], request.RouteField, StringComparison.Ordinal));
+        return !string.IsNullOrWhiteSpace(match.Key)
+            ? match.Key
+            : throw new InvalidOperationException(
+                $"SQL Server route '{request.QueryIdentity}' has no physical index on storage_scope and {request.RouteField}.");
+    }
+
+    private static async Task<long> CountPhysicalRowsAsync(
+        SqlConnection connection,
+        string physicalName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT_BIG(*) FROM {Quote(physicalName)};";
+        return Convert.ToInt64(
+            await command.ExecuteScalarAsync(cancellationToken),
+            System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static Task RefreshIdentityUsersStatisticsAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = "UPDATE STATISTICS [identity_users] WITH FULLSCAN;";
+        return ExecuteAndDisposeAsync(command, cancellationToken);
+    }
+
+    private static string[] ExtractShowPlanOperators(XDocument document) =>
+        document.Descendants()
+            .Where(element => element.Name.LocalName == "RelOp")
+            .Select(element => (string?)element.Attribute("PhysicalOp"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray()!;
+
+    private static string[] ExtractShowPlanIndexes(XDocument document) =>
+        document.Descendants()
+            .Where(element => element.Name.LocalName == "Object")
+            .Select(element => ((string?)element.Attribute("Index"))?.Trim('[', ']'))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray()!;
 
     private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
     {

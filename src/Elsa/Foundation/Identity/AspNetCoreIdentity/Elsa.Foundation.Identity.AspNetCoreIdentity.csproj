@@ -17,15 +17,19 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+		<ProjectReference Include="..\..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
 		<ProjectReference Include="..\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- The EF Core persistence lives in its own nested project under this domain root; keep the base
-		     SDK globs from swallowing it. -->
+		<!-- Provider implementations live in their own nested projects under this domain root; keep the
+		     base SDK globs from swallowing them. -->
 		<Compile Remove="EntityFrameworkCore/**/*" />
 		<EmbeddedResource Remove="EntityFrameworkCore/**/*" />
 		<None Remove="EntityFrameworkCore/**/*" />
+		<Compile Remove="Groundwork/**/*" />
+		<EmbeddedResource Remove="Groundwork/**/*" />
+		<None Remove="Groundwork/**/*" />
 	</ItemGroup>
 
 </Project>

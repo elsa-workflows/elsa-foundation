@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
@@ -47,20 +48,21 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                 return;
 
             await using var scope = scopeFactory.CreateAsyncScope();
+            var capabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
+                SqliteGroundworkCapabilities.Runtime(),
+                new GroundworkProviderTopologySnapshot(
+                    SqliteGroundworkCapabilities.Provider.Name,
+                    "sqlite-file",
+                    new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                    }),
+                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                cancellationToken);
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(
-                    GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
-                        SqliteGroundworkCapabilities.Runtime(),
-                        new GroundworkProviderTopologySnapshot(
-                            SqliteGroundworkCapabilities.Provider.Name,
-                            "sqlite-file",
-                            new HashSet<string>(StringComparer.Ordinal)
-                            {
-                                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
-                            }),
-                        RuntimeGroundworkStorageManifestSource.FeatureName,
-                        [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]),
+                    capabilities,
                     SqliteGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 
@@ -90,11 +92,13 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                sessionSource.TrySet((access, ct) =>
+                sessionSource.TrySet(async (access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
+                    var connection = new SqliteConnection(connectionString);
+                    await connection.OpenAsync(ct);
                     var store = new SqlitePhysicalDocumentStore(
-                        connectionString,
+                        connection,
                         manifest,
                         source.PhysicalTarget.Routes,
                         access);
@@ -107,7 +111,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                                     manifest,
                                     route,
                                     source.PhysicalTarget.Provider))));
-                    return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
+                    return new GroundworkStoreSessionResources(store, boundedStore, connection);
                 });
             }
 
