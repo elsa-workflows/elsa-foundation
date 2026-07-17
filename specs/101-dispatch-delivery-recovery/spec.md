@@ -66,7 +66,7 @@ As an authorized operator, I can inspect a safe dead letter for an exhausted fir
 - A successful, duplicate, durably forwarded, cancelled-before-admission, or already-terminal start delivery cannot be converted into a dead letter by a stale failure report.
 - Wait-mode exhaustion permanently abandons start delivery even if the parent-resume responsibility has not yet been consumed; it is never operator-redrivable.
 - Fire-and-forget redrive is allowed only while the dispatch is `DispatchFailed` for exhausted start delivery. Completed, Faulted, Cancelled, active, wait-mode, or non-delivery failures are rejected.
-- A redrive racing with another caller, an expired claim, stale fencing, process restart, or late delivery result must preserve one current delivery generation and reject stale writers.
+- A redrive racing with another caller, an expired claim, stale fencing, process restart, late delivery result, or retention sweep must preserve one current delivery generation and reject stale writers or stale terminal deletion.
 - Incident, API, and telemetry surfaces exclude serialized inputs, outputs, authority metadata, exception messages/types, stack traces, provider payloads, and arbitrary metadata.
 - Cross-tenant lookup, enumeration, and redrive fail closed. Read and redrive authorization are separate decisions.
 - Redrive does not reopen, resume, or otherwise mutate the fire-and-forget parent.

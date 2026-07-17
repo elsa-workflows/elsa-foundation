@@ -97,7 +97,7 @@ A record is eligible only when:
 dispatch terminal AND parent execution absent AND child execution absent
 ```
 
-Both execution facts must be re-read immediately before deletion. Pending/Started status, cancellation, or read failure yields retain.
+Both execution facts must be re-read immediately before deletion. The delete then compares the complete selected terminal snapshot and provider version atomically. Pending/Started or otherwise changed state, a concurrency conflict, cancellation, or read failure yields retain.
 
 ## Deterministic Dispatch Start Materialization
 

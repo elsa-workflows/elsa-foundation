@@ -15,12 +15,12 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 internal sealed class FencingCommandExecutor : IWorkflowExecutionCommandExecutor
 {
     private readonly IRuntimeExecutionOwnershipService _ownership;
-    private readonly Func<WorkflowExecutionCommandEnvelope, CancellationToken, ValueTask>? _commitEffect;
+    private readonly Func<WorkflowExecutionCommandEnvelope, RuntimeExecutionLease, CancellationToken, ValueTask>? _commitEffect;
     private readonly ConcurrentQueue<string> _committed = new();
 
     public FencingCommandExecutor(
         IRuntimeExecutionOwnershipService ownership,
-        Func<WorkflowExecutionCommandEnvelope, CancellationToken, ValueTask>? commitEffect = null)
+        Func<WorkflowExecutionCommandEnvelope, RuntimeExecutionLease, CancellationToken, ValueTask>? commitEffect = null)
     {
         ArgumentNullException.ThrowIfNull(ownership);
         _ownership = ownership;
@@ -39,7 +39,7 @@ internal sealed class FencingCommandExecutor : IWorkflowExecutionCommandExecutor
         var lease = await _ownership.AcquireAsync(envelope.WorkflowExecutionId, cancellationToken);
         await _ownership.EnsureCurrentAsync(envelope.WorkflowExecutionId, lease.FencingToken, cancellationToken);
         if (_commitEffect is not null)
-            await _commitEffect(envelope, cancellationToken);
+            await _commitEffect(envelope, lease, cancellationToken);
         _committed.Enqueue(envelope.EnvelopeId);
 
         // An accepted outcome so the pump acks the transport item; the drain itself performed no scheduler work here.

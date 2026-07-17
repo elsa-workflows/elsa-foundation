@@ -60,6 +60,7 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
         return new ClusterState(
             new GroundworkExecutionPlacementStore(documentStore),
             new GroundworkExecutionCommandTransport(documentStore, new DefaultAccessContextAccessor()),
+            provider.GetRequiredService<IExecutionLivenessStateStore>(),
             OpenPersistence);
     }
 

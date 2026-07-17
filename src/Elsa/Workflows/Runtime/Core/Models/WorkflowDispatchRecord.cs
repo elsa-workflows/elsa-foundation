@@ -706,6 +706,12 @@ public static class WorkflowDispatchLifecycle
         return candidate;
     }
 
+    public static bool IsTerminal(WorkflowDispatchStatus status) => status is
+        WorkflowDispatchStatus.Completed or
+        WorkflowDispatchStatus.Faulted or
+        WorkflowDispatchStatus.Cancelled or
+        WorkflowDispatchStatus.DispatchFailed;
+
     public static void ValidateNew(WorkflowDispatchRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);

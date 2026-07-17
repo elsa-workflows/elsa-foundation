@@ -38,6 +38,6 @@ public static class GroundworkDistributedStoresRegistration
 
 internal sealed class GroundworkDistributionDurabilityEvidence : IWorkflowDispatchDurabilityEvidence
 {
-    public string Component => WorkflowDispatchDurabilityComponents.Distribution;
+    public string Component => WorkflowDispatchDurabilityComponents.DistributionPersistence;
     public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.Durable;
 }

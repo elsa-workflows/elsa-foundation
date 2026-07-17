@@ -37,9 +37,12 @@ public sealed class WorkflowDispatchReadinessInitializerTests
         var atomicOutbox = new InMemoryRuntimeCheckpointCommitStore();
         var evidence = WorkflowDispatchDurabilityComponents.Required
             .Append(WorkflowDispatchDurabilityComponents.Distribution)
+            .Append(WorkflowDispatchDurabilityComponents.DistributionPersistence)
             .Select(component => new WorkflowDispatchDurabilityEvidence(
                 component,
-                WorkflowDispatchDurabilityLevel.Durable));
+                component == WorkflowDispatchDurabilityComponents.Distribution
+                    ? WorkflowDispatchDurabilityLevel.ProcessLocal
+                    : WorkflowDispatchDurabilityLevel.Durable));
         var services = new ServiceCollection()
             .AddSingleton<IWorkflowDispatchStore, InMemoryWorkflowDispatchStore>()
             .AddSingleton<IRuntimePostCommitOutboxStore>(atomicOutbox)

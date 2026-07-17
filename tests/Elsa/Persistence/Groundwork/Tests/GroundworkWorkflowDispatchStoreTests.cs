@@ -127,15 +127,18 @@ public sealed class GroundworkWorkflowDispatchStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
-    public async Task Delete_is_idempotent(string provider)
+    public async Task Conditional_terminal_delete_is_idempotent(string provider)
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
         var store = CreateStore(fixture);
-        var record = Pending("parent-1", "activity-1");
+        var pending = Pending("parent-1", "activity-1");
+        var record = pending.TransitionTo(WorkflowDispatchStatus.Completed, Now.AddSeconds(1));
+        await store.SaveAsync(pending);
+        Assert.False(await store.TryDeleteAsync(pending));
         await store.SaveAsync(record);
 
-        await store.DeleteAsync(record.DispatchId);
-        await store.DeleteAsync(record.DispatchId);
+        Assert.True(await store.TryDeleteAsync(record));
+        Assert.True(await store.TryDeleteAsync(record));
 
         Assert.Null(await store.FindAsync(record.DispatchId));
     }

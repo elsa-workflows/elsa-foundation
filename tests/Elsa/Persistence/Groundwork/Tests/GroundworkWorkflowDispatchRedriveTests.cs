@@ -59,6 +59,33 @@ public sealed class GroundworkWorkflowDispatchRedriveTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task RetentionSnapshotCapturedBeforeRedrive_CannotDeleteReopenedDispatch(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        var seed = await SeedFailureAsync(fixture, WorkflowDispatchMode.FireAndForget);
+        var terminalSnapshot = Assert.IsType<WorkflowDispatchRecord>(
+            await seed.Dispatches.FindAsync(seed.Dispatch.DispatchId));
+        await seed.Outbox.RedriveAsync(new WorkflowDispatchRedriveRequest(
+            seed.Dispatch.DispatchId,
+            "redrive-retention-race",
+            Now.AddMinutes(1)));
+
+        var deleted = await seed.Dispatches.TryDeleteAsync(terminalSnapshot);
+        var dispatch = Assert.IsType<WorkflowDispatchRecord>(
+            await seed.Dispatches.FindAsync(seed.Dispatch.DispatchId));
+
+        Assert.False(deleted);
+        Assert.Equal(WorkflowDispatchStatus.Pending, dispatch.Status);
+        Assert.Equal(1, WorkflowDispatchLifecycle.ReadDeliveryGeneration(dispatch));
+        Assert.Equal("redrive-retention-race", WorkflowDispatchLifecycle.ReadDeliveryRedriveRequestId(dispatch));
+        Assert.Equal(
+            RuntimePostCommitOutboxStatus.Pending,
+            (await seed.Outbox.FindAsync(seed.Start.OutboxItemId))!.Status);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task SameRequestIsIdempotent_AndDistinctActiveRequestConflicts(string provider)
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create(provider);

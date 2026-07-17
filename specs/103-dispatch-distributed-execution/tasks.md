@@ -79,7 +79,7 @@
 
 ## Completion Evidence
 
-- T001/T007/T014/T020/T026/T030: Focused distributed runtime tests pass with `/usr/local/share/dotnet/dotnet test tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj --no-restore --nologo` (45/45). Full verification also passes: DispatchWorkflow 178/178, Runtime 1148/1148, distributed Groundwork 51/51, Groundwork 455/455, Runtime API 60/60, Architecture 225/225.
+- T001/T007/T014/T020/T026/T030: Focused distributed runtime tests pass with `/usr/local/share/dotnet/dotnet test tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj --no-restore --nologo` (45/45). Full verification also passes: DispatchWorkflow 178/178, Runtime 1152/1152, distributed Groundwork 54/54, Groundwork 457/457, Runtime API 60/60, resumption 16/16, Architecture 226/226.
 - T002/T003/T004/T006: #683 and #674 authority reviewed from GitHub; existing two-node in-memory and Groundwork harnesses were inventoried and reused.
 - T005/T011/T012: Existing `ForwardingWorkflowExecutionActor` emits safe distributed forwarding metadata and `ChildStartExecutor` acknowledges only complete durable forwarding evidence; existing child-start metadata tests remain in place.
 - T008/T015/T021/T022: Added `DispatchWorkflowChildStart_CommittedOnOneNode_ConvergesAfterBothNodesRestart` to the shared two-node acceptance suite so it runs against both in-memory and Groundwork-backed checkpoint/outbox, dispatch, execution-state, placement, and transport state.

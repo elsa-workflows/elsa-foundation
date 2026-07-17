@@ -116,11 +116,28 @@ public abstract class TwoNodeAcceptanceTests
     public async Task DispatchWorkflowChildStart_CommittedOnOneNode_ConvergesAfterBothNodesRestart()
     {
         var clusterState = CreateClusterState();
-        using var commitNode = clusterState.OpenDispatchPersistence();
-        var dispatch = await CommitDispatchAsync(commitNode);
-        var cluster = NewCluster(
-            clusterState,
-            (envelope, cancellationToken) => CommitChildExecutionAsync(commitNode, dispatch, envelope, cancellationToken));
+        CommittedDispatch dispatch;
+        using (var commitNode = clusterState.OpenDispatchPersistence())
+            dispatch = await CommitDispatchAsync(commitNode);
+
+        RuntimeExecutionFence? deadNodeFence = null;
+        async ValueTask CommitEffectAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            RuntimeExecutionLease lease,
+            CancellationToken cancellationToken)
+        {
+            if (StringComparer.Ordinal.Equals(lease.OwnerId, NodeA))
+                deadNodeFence = lease.ToFence();
+            await CommitChildInFreshPersistenceAsync(
+                clusterState,
+                dispatch,
+                envelope,
+                lease.ToFence(),
+                commitSuffix: "current",
+                cancellationToken: cancellationToken);
+        }
+
+        var cluster = NewCluster(clusterState, CommitEffectAsync);
 
         // Node A owns the child placement. Node B is recreated after node A committed the checkpoint/outbox, proving
         // the handler does not depend on process-local intent state.
@@ -158,7 +175,7 @@ public abstract class TwoNodeAcceptanceTests
         var firstDispatch = await firstOwner.DispatchAsync(dispatch.Record.ChildWorkflowExecutionId, leased.Envelope);
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, firstDispatch.Status);
         cluster.Clock.Advance(LeaseDuration + TimeSpan.FromSeconds(1));
-        var restartedOwner = cluster.RestartNodeA();
+        var restartedOwner = cluster.RestartNodeB();
 
         var sweep = await restartedOwner.Pump.SweepAsync();
 
@@ -166,8 +183,22 @@ public abstract class TwoNodeAcceptanceTests
         // one logical child with the original tenant, authority, partition, run-kind, and nesting-depth provenance.
         Assert.Equal(2, sweep.DispatchedCommandCount);
         Assert.Equal(2, sweep.AckedCount);
-        Assert.Empty(cluster.ExecutorB.Committed);
         Assert.Equal(0, await cluster.Transport.CountPendingAsync(dispatch.Record.ChildWorkflowExecutionId));
+        Assert.Equal(
+            NodeB,
+            (await restartedOwner.PlacementService.FindOwnerAsync(dispatch.Record.ChildWorkflowExecutionId))!.OwnerId);
+        var staleFence = Assert.IsType<RuntimeExecutionFence>(deadNodeFence);
+        using (var staleNode = clusterState.OpenDispatchPersistence())
+        {
+            await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() =>
+                CommitChildExecutionAsync(
+                    staleNode,
+                    dispatch,
+                    leased.Envelope,
+                    staleFence,
+                    commitSuffix: "stale-late-writer",
+                    cancellationToken: CancellationToken.None).AsTask());
+        }
 
         using var inspectionNode = clusterState.OpenDispatchPersistence();
         var child = Assert.IsType<WorkflowExecutionState>(
@@ -210,39 +241,62 @@ public abstract class TwoNodeAcceptanceTests
 
     private Cluster NewCluster(
         ClusterState? clusterState = null,
-        Func<WorkflowExecutionCommandEnvelope, CancellationToken, ValueTask>? commitEffectA = null)
+        Func<WorkflowExecutionCommandEnvelope, RuntimeExecutionLease, CancellationToken, ValueTask>? commitEffect = null)
     {
         clusterState ??= CreateClusterState();
         var placementStore = clusterState.PlacementStore;
         var transport = clusterState.Transport;
-        var livenessStore = new InMemoryExecutionLivenessStateStore();
+        var livenessStore = clusterState.LivenessStore;
         var clock = new MutableTimeProvider(_now);
 
         var ownershipA = new RuntimeExecutionOwnershipService(livenessStore, clock, new RuntimeExecutionOwnershipOptions { OwnerId = NodeA, LeaseDuration = FenceDuration });
         var ownershipB = new RuntimeExecutionOwnershipService(livenessStore, clock, new RuntimeExecutionOwnershipOptions { OwnerId = NodeB, LeaseDuration = FenceDuration });
 
-        var executorA = new FencingCommandExecutor(ownershipA, commitEffectA);
-        var executorB = new FencingCommandExecutor(ownershipB);
+        var executorA = new FencingCommandExecutor(ownershipA, commitEffect);
+        var executorB = new FencingCommandExecutor(ownershipB, commitEffect);
 
         var nodeA = new NodeHarness(NodeA, placementStore, transport, clock, executorA, LeaseDuration);
         var nodeB = new NodeHarness(NodeB, placementStore, transport, clock, executorB, LeaseDuration);
 
-        return new Cluster(placementStore, transport, clock, ownershipA, ownershipB, executorA, executorB, nodeA, nodeB);
+        return new Cluster(
+            placementStore,
+            transport,
+            livenessStore,
+            clock,
+            ownershipA,
+            ownershipB,
+            executorA,
+            executorB,
+            nodeA,
+            nodeB,
+            commitEffect);
     }
 
     private sealed record Cluster(
         IExecutionPlacementStore PlacementStore,
         IExecutionCommandTransport Transport,
+        IExecutionLivenessStateStore LivenessStore,
         MutableTimeProvider Clock,
         IRuntimeExecutionOwnershipService OwnershipA,
         IRuntimeExecutionOwnershipService OwnershipB,
         FencingCommandExecutor ExecutorA,
         FencingCommandExecutor ExecutorB,
         NodeHarness NodeA,
-        NodeHarness NodeB)
+        NodeHarness NodeB,
+        Func<WorkflowExecutionCommandEnvelope, RuntimeExecutionLease, CancellationToken, ValueTask>? CommitEffect)
     {
-        public NodeHarness RestartNodeA() => new(TwoNodeAcceptanceTests.NodeA, PlacementStore, Transport, Clock, ExecutorA, LeaseDuration);
-        public NodeHarness RestartNodeB() => new(TwoNodeAcceptanceTests.NodeB, PlacementStore, Transport, Clock, ExecutorB, LeaseDuration);
+        public NodeHarness RestartNodeA() => Restart(TwoNodeAcceptanceTests.NodeA);
+        public NodeHarness RestartNodeB() => Restart(TwoNodeAcceptanceTests.NodeB);
+
+        private NodeHarness Restart(string nodeId)
+        {
+            var ownership = new RuntimeExecutionOwnershipService(
+                LivenessStore,
+                Clock,
+                new RuntimeExecutionOwnershipOptions { OwnerId = nodeId, LeaseDuration = FenceDuration });
+            var executor = new FencingCommandExecutor(ownership, CommitEffect);
+            return new NodeHarness(nodeId, PlacementStore, Transport, Clock, executor, LeaseDuration);
+        }
     }
 
     private sealed record CommittedDispatch(
@@ -389,10 +443,30 @@ public abstract class TwoNodeAcceptanceTests
         return new ChildStartExecutor(startDispatcher, persistence.DispatchStore, new FixedTimeProvider(_now.AddSeconds(1)));
     }
 
+    private async ValueTask CommitChildInFreshPersistenceAsync(
+        ClusterState clusterState,
+        CommittedDispatch dispatch,
+        WorkflowExecutionCommandEnvelope envelope,
+        RuntimeExecutionFence expectedFence,
+        string commitSuffix,
+        CancellationToken cancellationToken)
+    {
+        using var persistence = clusterState.OpenDispatchPersistence();
+        await CommitChildExecutionAsync(
+            persistence,
+            dispatch,
+            envelope,
+            expectedFence,
+            commitSuffix,
+            cancellationToken);
+    }
+
     private async ValueTask CommitChildExecutionAsync(
         DispatchPersistence persistence,
         CommittedDispatch dispatch,
         WorkflowExecutionCommandEnvelope envelope,
+        RuntimeExecutionFence expectedFence,
+        string commitSuffix,
         CancellationToken cancellationToken)
     {
         var payload = envelope.Command.Payload?.Deserialize<WorkflowExecutionStartCommandPayload>(
@@ -432,9 +506,9 @@ public abstract class TwoNodeAcceptanceTests
             DispatchNestingDepth = payload.DispatchNestingDepth
         };
         var commit = new RuntimeCheckpointCommit(
-            $"checkpoint-commit:{dispatch.Record.DispatchId}:child-start",
+            $"checkpoint-commit:{dispatch.Record.DispatchId}:child-start:{commitSuffix}",
             new RuntimeCheckpoint(
-                $"checkpoint:{dispatch.Record.DispatchId}:child-start",
+                $"checkpoint:{dispatch.Record.DispatchId}:child-start:{commitSuffix}",
                 "WorkflowStarted",
                 envelope.WorkflowExecutionId,
                 _now,
@@ -453,7 +527,10 @@ public abstract class TwoNodeAcceptanceTests
                 incidents: [],
                 operational: []),
             [],
-            new Dictionary<string, string>());
+            new Dictionary<string, string>())
+        {
+            ExpectedFence = expectedFence
+        };
         var result = await NewCommitter(persistence.CheckpointStore).CommitAsync(commit, cancellationToken);
         Assert.True(result.Succeeded);
     }
@@ -582,6 +659,7 @@ public abstract class TwoNodeAcceptanceTests
     protected sealed record ClusterState(
         IExecutionPlacementStore PlacementStore,
         IExecutionCommandTransport Transport,
+        IExecutionLivenessStateStore LivenessStore,
         Func<DispatchPersistence> OpenDispatchPersistence);
 
     protected sealed class DispatchPersistence(
@@ -631,6 +709,7 @@ public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
     {
         var checkpointState = new InMemoryRuntimeCheckpointStoreState();
         var workflowExecutionStore = new InMemoryWorkflowExecutionStateStore();
+        var livenessStore = new InMemoryExecutionLivenessStateStore();
         var executableStore = new InMemoryWorkflowExecutableStore();
         var sourceReferenceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
         var accessContext = new FixedAccessContextAccessor("tenant-distributed");
@@ -640,6 +719,7 @@ public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
             var dispatchStore = new InMemoryWorkflowDispatchStore(checkpointState);
             var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
                 workflowExecutionStateStore: workflowExecutionStore,
+                operationalStateStore: livenessStore,
                 rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance,
                 state: checkpointState,
                 workflowDispatchStore: dispatchStore);
@@ -656,6 +736,7 @@ public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
         return new ClusterState(
             new InMemoryExecutionPlacementStore(),
             new InMemoryExecutionCommandTransport(),
+            livenessStore,
             OpenPersistence);
     }
 }

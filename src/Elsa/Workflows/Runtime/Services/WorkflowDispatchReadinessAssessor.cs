@@ -32,21 +32,24 @@ public sealed class WorkflowDispatchReadinessAssessor(
         var hasDistribution = contributions.TryGetValue(
             WorkflowDispatchDurabilityComponents.Distribution,
             out var distributionLevel);
-        var guarantee = (baseGuarantee, hasDistribution, distributionLevel) switch
+        var hasDistributionPersistence = contributions.TryGetValue(
+            WorkflowDispatchDurabilityComponents.DistributionPersistence,
+            out var distributionPersistenceLevel);
+        var guarantee = (baseGuarantee, hasDistribution, distributionLevel, hasDistributionPersistence, distributionPersistenceLevel) switch
         {
-            (WorkflowDispatchReadinessGuarantee.DurableReady, false, _) =>
+            (WorkflowDispatchReadinessGuarantee.DurableReady, false, _, _, _) =>
                 WorkflowDispatchReadinessGuarantee.DurableReady,
-            (WorkflowDispatchReadinessGuarantee.DurableReady, true, WorkflowDispatchDurabilityLevel.Durable) =>
+            (WorkflowDispatchReadinessGuarantee.DurableReady, true, _, true, WorkflowDispatchDurabilityLevel.Durable) =>
                 WorkflowDispatchReadinessGuarantee.DistributedReady,
-            (WorkflowDispatchReadinessGuarantee.ProcessLocal, false, _) =>
+            (WorkflowDispatchReadinessGuarantee.ProcessLocal, false, _, _, _) =>
                 WorkflowDispatchReadinessGuarantee.ProcessLocal,
-            (WorkflowDispatchReadinessGuarantee.ProcessLocal, true, WorkflowDispatchDurabilityLevel.ProcessLocal) =>
+            (WorkflowDispatchReadinessGuarantee.ProcessLocal, true, WorkflowDispatchDurabilityLevel.ProcessLocal, _, _) =>
                 WorkflowDispatchReadinessGuarantee.ProcessLocal,
             _ => WorkflowDispatchReadinessGuarantee.Unsafe
         };
-        var componentNames = hasDistribution
-            ? WorkflowDispatchDurabilityComponents.Required.Append(WorkflowDispatchDurabilityComponents.Distribution)
-            : WorkflowDispatchDurabilityComponents.Required;
+        var componentNames = WorkflowDispatchDurabilityComponents.Required
+            .Concat(hasDistribution ? [WorkflowDispatchDurabilityComponents.Distribution] : [])
+            .Concat(hasDistributionPersistence ? [WorkflowDispatchDurabilityComponents.DistributionPersistence] : []);
         var components = componentNames
             .Select(component => contributions.TryGetValue(component, out var level)
                 ? new WorkflowDispatchReadinessComponent(
@@ -54,13 +57,11 @@ public sealed class WorkflowDispatchReadinessAssessor(
                     component == WorkflowDispatchDurabilityComponents.Resumption && guarantee == WorkflowDispatchReadinessGuarantee.ProcessLocal
                         ? WorkflowDispatchDurabilityLevel.ProcessLocal
                         : level,
-                    guarantee == WorkflowDispatchReadinessGuarantee.ProcessLocal || level == WorkflowDispatchDurabilityLevel.ProcessLocal
-                        ? "process-local"
-                        : "durable")
+                    GetReasonCode(component, level, guarantee))
                 : new WorkflowDispatchReadinessComponent(component, null, $"missing-{component}"))
             .ToArray();
         var reasonCodes = components
-            .Where(component => component.ReasonCode != "durable")
+            .Where(component => component.ReasonCode is not ("durable" or "distributed-runtime"))
             .Select(component => component.ReasonCode)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -71,6 +72,21 @@ public sealed class WorkflowDispatchReadinessAssessor(
                 WorkflowDispatchReadinessGuarantee.DistributedReady,
             components,
             reasonCodes));
+    }
+
+    private static string GetReasonCode(
+        string component,
+        WorkflowDispatchDurabilityLevel level,
+        WorkflowDispatchReadinessGuarantee guarantee)
+    {
+        if (component == WorkflowDispatchDurabilityComponents.Distribution &&
+            guarantee == WorkflowDispatchReadinessGuarantee.DistributedReady)
+            return "distributed-runtime";
+
+        return guarantee == WorkflowDispatchReadinessGuarantee.ProcessLocal ||
+            level == WorkflowDispatchDurabilityLevel.ProcessLocal
+                ? "process-local"
+                : "durable";
     }
 }
 

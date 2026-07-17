@@ -49,7 +49,10 @@ public sealed class WorkflowDispatchDurabilityContractTests
         Assert.Equal(first.DispatchId, Assert.Single(childStarted).DispatchId);
         Assert.Throws<ArgumentOutOfRangeException>(() => new WorkflowDispatchQuery(status: WorkflowDispatchStatus.Pending, take: 101));
 
-        await store.DeleteAsync(first.DispatchId);
+        Assert.False(await store.TryDeleteAsync(first.TransitionTo(WorkflowDispatchStatus.Started, Now.AddMinutes(1))));
+        var terminal = first.TransitionTo(WorkflowDispatchStatus.Completed, Now.AddMinutes(2));
+        await store.SaveAsync(terminal);
+        Assert.True(await store.TryDeleteAsync(terminal));
         Assert.Null(await store.FindAsync(first.DispatchId));
     }
 

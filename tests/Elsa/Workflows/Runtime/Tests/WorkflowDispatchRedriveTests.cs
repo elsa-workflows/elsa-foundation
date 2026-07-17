@@ -70,6 +70,26 @@ public sealed class WorkflowDispatchRedriveTests
     }
 
     [Fact]
+    public async Task Retention_snapshot_captured_before_redrive_cannot_delete_the_reopened_dispatch()
+    {
+        var fixture = await CreateFailureAsync();
+        var terminalSnapshot = fixture.FailedDispatch;
+        await fixture.RedriveStore.RedriveAsync(new(fixture.Identity.DispatchId, "request-retention-race", RedriveAt));
+
+        var deleted = await fixture.DispatchStore.TryDeleteAsync(terminalSnapshot);
+        var dispatch = Assert.IsType<WorkflowDispatchRecord>(
+            await fixture.DispatchStore.FindAsync(fixture.Identity.DispatchId));
+
+        Assert.False(deleted);
+        Assert.Equal(WorkflowDispatchStatus.Pending, dispatch.Status);
+        Assert.Equal(1, WorkflowDispatchLifecycle.ReadDeliveryGeneration(dispatch));
+        Assert.Equal("request-retention-race", WorkflowDispatchLifecycle.ReadDeliveryRedriveRequestId(dispatch));
+        Assert.Equal(
+            RuntimePostCommitOutboxStatus.Pending,
+            (await fixture.Store.FindAsync(fixture.DeadLetter.OutboxItemId))!.Status);
+    }
+
+    [Fact]
     public async Task Same_request_is_idempotent_without_advancing_generation_or_fence_twice()
     {
         var fixture = await CreateFailureAsync();

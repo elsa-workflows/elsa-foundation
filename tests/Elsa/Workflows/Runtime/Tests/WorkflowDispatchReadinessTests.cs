@@ -59,8 +59,8 @@ public sealed class WorkflowDispatchReadinessTests
     {
         var report = await NewAssessor(
             WorkflowDispatchDurabilityLevel.Durable,
-            WorkflowDispatchDurabilityLevel.ProcessLocal,
-            WorkflowDispatchDurabilityLevel.Durable).AssessAsync();
+            includeDistributedRuntime: true,
+            includeDistributedPersistence: true).AssessAsync();
 
         Assert.Equal(WorkflowDispatchReadinessGuarantee.DistributedReady, report.Guarantee);
         Assert.True(report.Ready);
@@ -68,7 +68,12 @@ public sealed class WorkflowDispatchReadinessTests
         var distribution = Assert.Single(
             report.Components,
             component => component.Component == WorkflowDispatchDurabilityComponents.Distribution);
-        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, distribution.Level);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, distribution.Level);
+        Assert.Equal("distributed-runtime", distribution.ReasonCode);
+        var persistence = Assert.Single(
+            report.Components,
+            component => component.Component == WorkflowDispatchDurabilityComponents.DistributionPersistence);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, persistence.Level);
     }
 
     [Fact]
@@ -76,7 +81,7 @@ public sealed class WorkflowDispatchReadinessTests
     {
         var report = await NewAssessor(
             WorkflowDispatchDurabilityLevel.Durable,
-            WorkflowDispatchDurabilityLevel.ProcessLocal).AssessAsync();
+            includeDistributedRuntime: true).AssessAsync();
 
         Assert.Equal(WorkflowDispatchReadinessGuarantee.Unsafe, report.Guarantee);
         Assert.False(report.Ready);
@@ -88,10 +93,21 @@ public sealed class WorkflowDispatchReadinessTests
     {
         var report = await NewAssessor(
             WorkflowDispatchDurabilityLevel.ProcessLocal,
-            WorkflowDispatchDurabilityLevel.ProcessLocal).AssessAsync();
+            includeDistributedRuntime: true).AssessAsync();
 
         Assert.Equal(WorkflowDispatchReadinessGuarantee.ProcessLocal, report.Guarantee);
         Assert.False(report.Ready);
+    }
+
+    [Fact]
+    public async Task DurableDistributionPersistenceWithoutDistributedRuntime_RemainsDurableReady()
+    {
+        var report = await NewAssessor(
+            WorkflowDispatchDurabilityLevel.Durable,
+            includeDistributedPersistence: true).AssessAsync();
+
+        Assert.Equal(WorkflowDispatchReadinessGuarantee.DurableReady, report.Guarantee);
+        Assert.True(report.Ready);
     }
 
     [Fact]
@@ -125,13 +141,21 @@ public sealed class WorkflowDispatchReadinessTests
 
     private static WorkflowDispatchReadinessAssessor NewAssessor(
         WorkflowDispatchDurabilityLevel level,
-        params WorkflowDispatchDurabilityLevel[] distributionLevels)
+        bool includeDistributedRuntime = false,
+        bool includeDistributedPersistence = false)
     {
         var evidence = WorkflowDispatchDurabilityComponents.Required
             .Select(component => new WorkflowDispatchDurabilityEvidence(component, level))
-            .Concat(distributionLevels.Select(distributionLevel => new WorkflowDispatchDurabilityEvidence(
-                WorkflowDispatchDurabilityComponents.Distribution,
-                distributionLevel)));
+            .Concat(includeDistributedRuntime
+                ? [new WorkflowDispatchDurabilityEvidence(
+                    WorkflowDispatchDurabilityComponents.Distribution,
+                    WorkflowDispatchDurabilityLevel.ProcessLocal)]
+                : [])
+            .Concat(includeDistributedPersistence
+                ? [new WorkflowDispatchDurabilityEvidence(
+                    WorkflowDispatchDurabilityComponents.DistributionPersistence,
+                    WorkflowDispatchDurabilityLevel.Durable)]
+                : []);
 
         return new WorkflowDispatchReadinessAssessor(evidence);
     }

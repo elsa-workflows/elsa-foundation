@@ -48,7 +48,7 @@ Checkpoint ownership is status-sensitive: Pending creation belongs to the parent
 
 ## Decision 6: Add query and delete capabilities without widening the existing store
 
-**Decision**: Keep `IWorkflowDispatchStore` unchanged. Add `IWorkflowDispatchQueryStore.QueryAsync(WorkflowDispatchQuery)` and `IWorkflowDispatchDeleteStore.DeleteAsync(dispatchId)`, implemented by built-in in-memory and Groundwork stores. Queries accept optional parent, child, status, and bounded `Take`; tenant comes only from persistence access context, never the request.
+**Decision**: Keep `IWorkflowDispatchStore` unchanged. Add `IWorkflowDispatchQueryStore.QueryAsync(WorkflowDispatchQuery)` and snapshot-fenced `IWorkflowDispatchDeleteStore.TryDeleteAsync(expected)`, implemented by built-in in-memory and Groundwork stores. Queries accept optional parent, child, status, and bounded `Take`; tenant comes only from persistence access context, never the request. Conditional deletion compares the complete terminal record and provider version so a concurrent lifecycle change or redrive wins over retention.
 
 **Rationale**: One explicit query prevents an overload explosion and expresses supported intersections. Separate contracts preserve third-party implementers of the public #676 store. Groundwork chooses the narrowest declared index, then applies every remaining predicate before `Take`; it uses composite routes or continuation-based candidate reads and never caps an intermediate candidate set before post-filtering.
 
@@ -60,7 +60,7 @@ Checkpoint ownership is status-sensitive: Pending creation belongs to the parent
 
 ## Decision 8: Retain while either execution exists
 
-**Decision**: Add a bounded collector that considers only terminal records whose parent and child execution look absent, repeats both reads immediately before delete, and retains nonterminal records or any read failure. A separate delete capability avoids changing the base store and no store performs cascading delete.
+**Decision**: Add a bounded collector that considers only terminal records whose parent and child execution look absent, repeats both reads immediately before delete, and conditionally deletes the exact terminal snapshot. A changed snapshot, nonterminal record, provider concurrency conflict, or read failure is retained. A separate delete capability avoids changing the base store and no store performs cascading delete.
 
 **Rationale**: Existing execution retention is authoritative and already treats terminal states as retained roots. A guarded sweep composes with that policy without inventing durations or weakening fail-closed behavior.
 

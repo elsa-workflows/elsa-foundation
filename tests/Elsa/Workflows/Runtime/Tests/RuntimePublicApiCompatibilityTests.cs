@@ -90,6 +90,23 @@ public sealed class RuntimePublicApiCompatibilityTests
     }
 
     [Fact]
+    public async Task Dispatch_retention_preserves_legacy_delete_without_compatibility_diagnostics()
+    {
+        var legacyDelete = typeof(IWorkflowDispatchDeleteStore).GetMethod(
+            "DeleteAsync",
+            [typeof(string), typeof(CancellationToken)]);
+        Assert.NotNull(legacyDelete);
+        Assert.Empty(legacyDelete.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false));
+        Assert.NotNull(typeof(IWorkflowDispatchDeleteStore).GetMethod(
+            nameof(IWorkflowDispatchDeleteStore.TryDeleteAsync),
+            [typeof(WorkflowDispatchRecord), typeof(CancellationToken)]));
+
+        IWorkflowDispatchDeleteStore legacyStore = new LegacyWorkflowDispatchDeleteStore();
+        await legacyStore.DeleteAsync("dispatch-legacy");
+        Assert.Equal("dispatch-legacy", Assert.IsType<LegacyWorkflowDispatchDeleteStore>(legacyStore).DeletedDispatchId);
+    }
+
+    [Fact]
     public void SourceReference_PreservesPreTenantDeconstructionShape()
     {
         var reference = new WorkflowExecutableSourceReference(
@@ -144,4 +161,16 @@ public sealed class RuntimePublicApiCompatibilityTests
 
     private static void AssertConstructor(Type type, params Type[] parameterTypes) =>
         Assert.NotNull(type.GetConstructor(parameterTypes));
+
+    private sealed class LegacyWorkflowDispatchDeleteStore : IWorkflowDispatchDeleteStore
+    {
+        public string? DeletedDispatchId { get; private set; }
+
+        public ValueTask DeleteAsync(string dispatchId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DeletedDispatchId = dispatchId;
+            return ValueTask.CompletedTask;
+        }
+    }
 }

@@ -8,7 +8,7 @@
 - `FindAsync(dispatchId)` returns one access-scoped record.
 - `ListAsync(parentExecutionId)` remains source compatible.
 - `IWorkflowDispatchQueryStore.QueryAsync(query)` additively supports bounded parent, child, status, and intersection filtering with deterministic order.
-- `IWorkflowDispatchDeleteStore.DeleteAsync(dispatchId)` additively removes only the requested record; retention policy belongs to the collector.
+- `IWorkflowDispatchDeleteStore.TryDeleteAsync(expected)` additively removes only the exact terminal snapshot selected by retention; a changed lifecycle snapshot or provider concurrency conflict returns `false` without deletion.
 
 Provider implementations must not silently ignore checkpoint dispatch changes.
 
@@ -48,7 +48,7 @@ Before persistence fingerprinting, the runtime finds dispatches whose child exec
 
 ## Retention contract
 
-The collector never cascades from one execution deletion. It deletes only a terminal dispatch after two successful rounds of reads prove both linked executions absent. Nonterminal state, failure, or cancellation retains.
+The collector never cascades from one execution deletion. It deletes only a terminal dispatch after two successful rounds of reads prove both linked executions absent and a provider-atomic full-record snapshot fence still matches. Nonterminal or changed state, provider conflict, failure, or cancellation retains.
 
 ## Readiness contract
 

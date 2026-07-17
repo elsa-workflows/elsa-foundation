@@ -61,6 +61,24 @@ public sealed class WorkflowDispatchRetentionCollectorTests
     }
 
     [Fact]
+    public async Task Sweep_retains_when_the_terminal_snapshot_loses_its_delete_fence()
+    {
+        var dispatchStore = await NewTerminalDispatchStoreAsync();
+        var record = Assert.Single(await dispatchStore.QueryAsync(new WorkflowDispatchQuery(status: WorkflowDispatchStatus.Completed)));
+        var collector = new WorkflowDispatchRetentionCollector(
+            dispatchStore,
+            new SnapshotConflictDeleteStore(),
+            new InMemoryWorkflowExecutionStateStore(),
+            NullLogger<WorkflowDispatchRetentionCollector>.Instance);
+
+        var result = await collector.SweepAsync();
+
+        Assert.Equal(0, result.DeletedCount);
+        Assert.Equal(1, result.RetainedCount);
+        Assert.NotNull(await dispatchStore.FindAsync(record.DispatchId));
+    }
+
+    [Fact]
     public async Task Sweep_retains_on_execution_read_failure()
     {
         var dispatchStore = await NewTerminalDispatchStoreAsync();
@@ -188,5 +206,13 @@ public sealed class WorkflowDispatchRetentionCollectorTests
             _parentReads++;
             return ValueTask.FromResult<WorkflowExecutionState?>(_parentReads == 1 ? null : NewExecution(workflowExecutionId));
         }
+    }
+
+    private sealed class SnapshotConflictDeleteStore : IWorkflowDispatchDeleteStore
+    {
+        public ValueTask<bool> TryDeleteAsync(
+            WorkflowDispatchRecord expected,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
     }
 }

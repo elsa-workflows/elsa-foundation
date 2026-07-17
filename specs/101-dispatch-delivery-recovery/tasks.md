@@ -132,14 +132,23 @@
 
 ---
 
+## Phase 7: Post-completion Retention/Redrive Race Correction
+
+- [x] T058 Add red-before-green collector, in-memory redrive, and Groundwork redrive regressions proving a stale terminal retention snapshot cannot delete a reopened dispatch
+- [x] T059 Replace ID-only retention deletion with provider-atomic full-record snapshot fencing in Runtime Core, in-memory, and Groundwork stores
+- [x] T060 Run focused Runtime/Groundwork tests, proportional full suites, completion audit, and create the required local corrective commit
+
+---
+
 ## Completion Audit Evidence
 
 - **FR-001–FR-004 / SC-001**: host-owned finite retry, fixed classification, identity retention, positive backoff, fenced claims, and admitted-child precedence are covered by `ChildStartExecutorTests`, `RuntimePostCommitOutboxProcessorTests`, `WorkflowDispatchDeliveryFailureProjectorTests`, and Groundwork finalization tests.
 - **FR-005–FR-011 / SC-002–SC-004**: provider-atomic exhaustion, safe incident/dead-letter evidence, wait-only deterministic resume, normal `DispatchFailed` completion, duplicate convergence, permanent wait non-redrive, and unchanged detached parents are covered by processor/store, end-to-end, and `DispatchWorkflowDeliveryRecoveryCrashTests` scenarios.
 - **FR-012–FR-017 / SC-005 / SC-007**: allowlisted inspection, distinct read/manage permissions, tenant-scoped authorization-pipeline behavior, exact eligible redrive, identity/payload/policy retention, generation/fence advancement, and 100-way convergence are covered by runtime redrive, Groundwork redrive, API contract, and TestServer authorization suites.
 - **FR-018–FR-020 / SC-006 / SC-008**: stable safe event IDs cover attempt, retry, final failure, incident, resume queued/consumed, redrive, and eventual success; Groundwork recreation covers retry scheduling, exhaustion, claim expiry, bookmark consumption, uncertain acknowledgement, redrive response loss, admission, and stale writers.
-- **FR-021–FR-023 / SC-009–SC-010**: successful start/wait/detached, terminal child, cancellation, retention, missing-metadata defaults, and unsupported-kind safe-failure regressions remain green; no Studio, broker, #682, #683, or `WorkflowDefinitionActivity` scope was added.
+- **FR-021–FR-023 / SC-009–SC-010**: successful start/wait/detached, terminal child, cancellation, retention, missing/legacy-metadata defaults, and unsupported-kind safe-failure regressions remain green; no Studio, broker, #682, #683, or `WorkflowDefinitionActivity` scope was added.
 - **Final test run at original work-unit completion**: DispatchWorkflow 154/154; Runtime 1049/1049; Resumption 16/16; Runtime API 51/51; Groundwork 416/416; Architecture 201/201. Two independent cross-artifact/code-review passes were remediated through closure, including order-independent replacement enforcement, constitutional type naming, exhaustive dead-letter rejection branches, projector guards/conflicts, and matching-tenant manage behavior. Generated maps are intentionally outside automatic completion and remain user-invoked.
+- **Retention/redrive race correction**: deterministic collector, in-memory, SQLite, and Groundwork in-memory-provider regressions prove that redrive winning after retention selection preserves the reopened `Pending` dispatch, its incremented generation/request identity, and its pending outbox item. Full-record provider-atomic snapshot fencing is green across Runtime 1076/1076, Groundwork 447/447, DispatchWorkflow 161/161, and Architecture 201/201. Automatic map refresh was intentionally not run for this correction per the active user preference.
 
 ## Dependencies & Execution Order
 

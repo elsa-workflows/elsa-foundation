@@ -349,6 +349,40 @@ public sealed class GroundworkWorkflowDispatchStore :
         return records;
     }
 
+    public async ValueTask<bool> TryDeleteAsync(
+        WorkflowDispatchRecord expected,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        cancellationToken.ThrowIfCancellationRequested();
+        _accessContextAccessor.Current.EnsureTenantScope(expected.TenantId);
+        if (!WorkflowDispatchLifecycle.IsTerminal(expected.Status))
+            return false;
+
+        var loaded = await LoadAsync(expected.DispatchId, cancellationToken);
+        if (loaded is null)
+            return true;
+        _accessContextAccessor.Current.EnsureTenantScope(loaded.Record.TenantId);
+        if (!WorkflowDispatchLifecycle.RecordsEqual(loaded.Record, expected) ||
+            !WorkflowDispatchLifecycle.IsTerminal(loaded.Record.Status))
+        {
+            return false;
+        }
+
+        var result = await _store.DeleteAsync(
+            new DeleteDocumentRequest(
+                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
+                GroundworkPhysicalDocumentId.FromLogicalId(expected.DispatchId),
+                loaded.Version),
+            cancellationToken);
+        if (result.Status is DocumentStoreWriteStatus.Deleted or DocumentStoreWriteStatus.NotFound)
+            return true;
+        if (result.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+            return false;
+        throw new InvalidOperationException(
+            $"Groundwork rejected deletion of workflow dispatch '{expected.DispatchId}' with status '{result.Status}'.");
+    }
+
     public async ValueTask DeleteAsync(string dispatchId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
@@ -357,6 +391,7 @@ public sealed class GroundworkWorkflowDispatchStore :
         var loaded = await LoadAsync(dispatchId, cancellationToken);
         if (loaded is null)
             return;
+        _accessContextAccessor.Current.EnsureTenantScope(loaded.Record.TenantId);
 
         var result = await _store.DeleteAsync(
             new DeleteDocumentRequest(

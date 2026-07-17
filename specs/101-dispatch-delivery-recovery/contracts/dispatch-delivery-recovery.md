@@ -18,7 +18,7 @@ The existing bookmark route accepts `DispatchFailed`, no outputs, fixed `child-s
 
 ## Detached failure and redrive
 
-Fire-and-forget exhaustion creates no parent work. Redrive accepts only fire-and-forget + delivery-caused `DispatchFailed` + matching `FailedFinal`. It advances generation/fence, records request ID, moves the same dispatch and same outbox to Pending, resets current attempt/failure scheduling state, and preserves all original identities, payload, and retry policy. Same request is `AlreadyApplied`; different active request conflicts.
+Fire-and-forget exhaustion creates no parent work. Redrive accepts only fire-and-forget + delivery-caused `DispatchFailed` + matching `FailedFinal`. It advances generation/fence, records request ID, moves the same dispatch and same outbox to Pending, resets current attempt/failure scheduling state, and preserves all original identities, payload, and retry policy. Same request is `AlreadyApplied`; different active request conflicts. Retention deletion is fenced against the complete terminal snapshot, so an accepted redrive or any other lifecycle change wins over a stale collector candidate.
 
 ## Authenticated API
 

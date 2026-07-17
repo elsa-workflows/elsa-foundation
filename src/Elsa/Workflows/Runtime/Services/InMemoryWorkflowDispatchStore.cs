@@ -191,6 +191,29 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         }
     }
 
+    public ValueTask<bool> TryDeleteAsync(
+        WorkflowDispatchRecord expected,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!WorkflowDispatchLifecycle.IsTerminal(expected.Status))
+            return ValueTask.FromResult(false);
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.WorkflowDispatches.TryGetValue(expected.DispatchId, out var current))
+                return ValueTask.FromResult(true);
+            if (!WorkflowDispatchLifecycle.RecordsEqual(current, expected) ||
+                !WorkflowDispatchLifecycle.IsTerminal(current.Status))
+            {
+                return ValueTask.FromResult(false);
+            }
+
+            return ValueTask.FromResult(_state.WorkflowDispatches.Remove(expected.DispatchId));
+        }
+    }
+
     public ValueTask DeleteAsync(string dispatchId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);

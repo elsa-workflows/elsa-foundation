@@ -49,14 +49,13 @@ public sealed class GroundworkDistributedRegistrationTests
 
         Assert.IsType<GroundworkExecutionPlacementStore>(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
         Assert.IsType<GroundworkExecutionCommandTransport>(scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>());
-        var distributionLevels = scope.ServiceProvider
+        var distributionEvidence = scope.ServiceProvider
             .GetServices<IWorkflowDispatchDurabilityEvidence>()
-            .Where(evidence => evidence.Component == WorkflowDispatchDurabilityComponents.Distribution)
-            .Select(evidence => evidence.Level)
-            .Order()
-            .ToArray();
-        Assert.Equal(
-            [WorkflowDispatchDurabilityLevel.ProcessLocal, WorkflowDispatchDurabilityLevel.Durable],
-            distributionLevels);
+            .Where(evidence => evidence.Component is
+                WorkflowDispatchDurabilityComponents.Distribution or
+                WorkflowDispatchDurabilityComponents.DistributionPersistence)
+            .ToDictionary(evidence => evidence.Component, evidence => evidence.Level, StringComparer.Ordinal);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, distributionEvidence[WorkflowDispatchDurabilityComponents.Distribution]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, distributionEvidence[WorkflowDispatchDurabilityComponents.DistributionPersistence]);
     }
 }

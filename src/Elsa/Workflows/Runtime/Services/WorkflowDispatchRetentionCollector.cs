@@ -74,8 +74,10 @@ public sealed class WorkflowDispatchRetentionCollector(
                     continue;
                 }
 
-                await deleteStore.DeleteAsync(candidate.DispatchId, cancellationToken);
-                deleted++;
+                if (await deleteStore.TryDeleteAsync(candidate, cancellationToken))
+                    deleted++;
+                else
+                    retained++;
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {

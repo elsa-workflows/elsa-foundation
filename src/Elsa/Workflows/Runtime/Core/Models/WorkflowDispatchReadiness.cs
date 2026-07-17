@@ -8,6 +8,7 @@ public static class WorkflowDispatchDurabilityComponents
     public const string Scheduler = "scheduler";
     public const string Resumption = "resumption";
     public const string Distribution = "distribution";
+    public const string DistributionPersistence = "distribution-persistence";
 
     public static readonly IReadOnlyCollection<string> Required =
     [Checkpoint, DispatchStore, Outbox, Scheduler, Resumption];
