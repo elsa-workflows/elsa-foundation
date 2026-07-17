@@ -13,6 +13,7 @@ public static class Elsa3ImportStorageManifest
     public const string SchemaVersion = "1.0.0";
     public const string CollectionDocumentKind = "elsa3ReusableImportCollection";
     public const string ReceiptDocumentKind = "elsa3ReusableImportReceipt";
+    public const string DefinitionBindingDocumentKind = "elsa3ReusableImportDefinitionBinding";
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa3-reusable-activity-import"),
@@ -20,7 +21,8 @@ public static class Elsa3ImportStorageManifest
         new StorageManifestVersion(SchemaVersion),
         [
             Unit(CollectionDocumentKind, "Elsa 3 reusable import collection"),
-            Unit(ReceiptDocumentKind, "Elsa 3 reusable import receipt")
+            Unit(ReceiptDocumentKind, "Elsa 3 reusable import receipt"),
+            Unit(DefinitionBindingDocumentKind, "Elsa 3 reusable import definition binding")
         ],
         new HashSet<string> { "optimistic-concurrency" },
         []);

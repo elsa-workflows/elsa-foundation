@@ -93,11 +93,17 @@ public sealed class ReusableActivityImportRegistrationTests
     }
 
     [Fact]
-    public void Import_storage_manifest_declares_uploaded_collections_and_receipts_append_only()
+    public void Import_storage_manifest_declares_collections_receipts_and_definition_bindings_append_only()
     {
         var units = Elsa3ImportStorageManifest.Create().StorageUnits;
 
-        Assert.Equal(2, units.Count);
+        Assert.Equal(
+            [
+                Elsa3ImportStorageManifest.CollectionDocumentKind,
+                Elsa3ImportStorageManifest.DefinitionBindingDocumentKind,
+                Elsa3ImportStorageManifest.ReceiptDocumentKind
+            ],
+            units.Select(x => x.Identity.Value).Order(StringComparer.Ordinal));
         Assert.All(units, unit => Assert.Equal(LifecyclePolicy.AppendOnly, unit.Lifecycle));
     }
 
