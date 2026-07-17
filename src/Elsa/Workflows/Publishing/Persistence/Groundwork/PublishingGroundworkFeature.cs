@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Publishing.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -24,7 +25,7 @@ public sealed class PublishingGroundworkFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.TryAddScoped<GroundworkActivityManagementProjectionWriter>();
-        services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, GroundworkActivityPublicationCommand>();
+        services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>, GroundworkActivityPublicationCommand>();
         services.AddScoped<ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, GroundworkSourceActivityPublicationCommand>();
         services.AddScoped<GroundworkActivityUpgradePlanStore>();
         services.AddScoped<IActivityUpgradeDiscoverySource>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());

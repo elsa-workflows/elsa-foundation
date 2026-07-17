@@ -9,9 +9,10 @@ namespace Elsa.Activities.Design.Tests.Fixtures;
 
 /// <summary>
 /// Default object-backed reusable-activity conformance fixture. Tests that need typed executable
-/// artifacts can use <see cref="InMemoryReusableActivityStores{TExecutableTemplate,TSourceReference}"/>.
+/// artifacts can use
+/// <see cref="InMemoryReusableActivityStores{TExecutableTemplate,TSourceReference,TReceipt}"/>.
 /// </summary>
-public sealed class InMemoryReusableActivityStores : InMemoryReusableActivityStores<object, object>
+public sealed class InMemoryReusableActivityStores : InMemoryReusableActivityStores<object, object, object>
 {
 }
 
@@ -20,7 +21,7 @@ public sealed class InMemoryReusableActivityStores : InMemoryReusableActivitySto
 /// the transaction boundary, optimistic revisions/heads, and immutable publication behavior expected
 /// from the eventual Groundwork adapters rather than acting as independent per-port dictionaries.
 /// </summary>
-public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReference> :
+public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReference, TReceipt> :
     IActivityDefinitionStore,
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
@@ -42,9 +43,10 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IStoreActivityDraftValidationCommand,
     IChangeActivityVersionLifecycleCommand,
     ISetActivityDefinitionRecommendationCommand,
-    ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference>
+    ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference, TReceipt>
     where TExecutableTemplate : class
     where TSourceReference : class
+    where TReceipt : class
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<string, ActivityDefinition> _definitions = new(StringComparer.Ordinal);
@@ -648,7 +650,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     }
 
     public Task<ActivityPublicationResult> ExecuteAsync(
-        ActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
+        ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt> commit,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

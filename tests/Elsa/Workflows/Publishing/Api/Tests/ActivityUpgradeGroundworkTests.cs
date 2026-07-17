@@ -22,6 +22,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 using Elsa.Workflows.Publishing.Core.Services;
+using PublishingUpgradePlanStore = Elsa.Workflows.Publishing.Persistence.Groundwork.Services.GroundworkActivityUpgradePlanStore;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -96,10 +97,10 @@ public sealed class ActivityUpgradeGroundworkTests
         IPayloadSerializer payloads,
         VersionStore versions,
         ActivityDependencyProjection projection,
-        GroundworkActivityUpgradePlanStore subject,
+        PublishingUpgradePlanStore subject,
         ActivityUpgradePlan plan)
     {
-        public GroundworkActivityUpgradePlanStore Subject { get; } = subject;
+        public PublishingUpgradePlanStore Subject { get; } = subject;
         public ActivityUpgradePlan Plan { get; } = plan;
 
         public static async Task<Harness> CreateAsync(long workflowExpectedRevision)
@@ -148,7 +149,7 @@ public sealed class ActivityUpgradeGroundworkTests
                     DependencyItem("ActivityDraft", "definition", "activity-draft", 2, "activity-root", from),
                     DependencyItem("WorkflowDraft", "workflow-definition", "workflow-draft", 1, "workflow-root", from)
                 ]));
-            var subject = new GroundworkActivityUpgradePlanStore(
+            var subject = new PublishingUpgradePlanStore(
                 documents,
                 documents,
                 payloads,

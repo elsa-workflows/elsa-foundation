@@ -13,6 +13,7 @@ public static class PublishingGroundworkStorageManifest
     public const string PublicationPolicyDocumentKind = "publishingPublicationPolicy";
     public const string ProjectionIntentDocumentKind = "publishingProjectionIntent";
     public const string SnapshotReviewDocumentKind = "publishingSnapshotReview";
+    public const string ActivityPublicationReceiptDocumentKind = "publishingActivityPublicationReceipt";
     public const string ByDefinitionIndex = "by-definition";
     public const string BySlotIndex = "by-slot";
     public const string ByPublicationIndex = "by-publication";
@@ -48,7 +49,8 @@ public static class PublishingGroundworkStorageManifest
                     DeleteExpiredQuery,
                     ByExpiresAtIndex,
                     new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
-                    QuerySortSupport.Ascending)])
+                    QuerySortSupport.Ascending)]),
+            Unit(ActivityPublicationReceiptDocumentKind, "Activity publication receipt", [], [])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);

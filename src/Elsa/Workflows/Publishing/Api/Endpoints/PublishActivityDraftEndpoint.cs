@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Publishing.Api.Endpoints;
 internal sealed class PublishActivityDraftEndpoint(
     IRequestSender requestSender,
     ILogger<PublishActivityDraftEndpoint> logger)
-    : ElsaEndpoint<PublishActivityDraft, PublishedActivityDefinitionView>
+    : ElsaEndpoint<PublishActivityDraft, ActivityPublicationReceiptView>
 {
     public override void Configure()
     {
@@ -25,7 +25,8 @@ internal sealed class PublishActivityDraftEndpoint(
         try
         {
             var response = await requestSender.Send(request, cancellationToken);
-            HttpContext.Response.Headers.Location = $"/design/activities/versions/{response.VersionId}";
+            HttpContext.Response.Headers.Location =
+                $"/design/activities/publications/{Uri.EscapeDataString(response.IdempotencyKey)}";
             await Send.ResponseAsync(response, StatusCodes.Status201Created, cancellationToken);
         }
         catch (ActivityPublicationRejectedException exception)

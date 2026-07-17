@@ -161,16 +161,19 @@ public sealed record ActivityPublicationDesignMutation(
     IReadOnlyList<ActivityDependencyEdge> DirectDependencies);
 
 /// <summary>
-/// Complete atomic publication input. Generic artifact types keep this Design persistence contract
-/// independent of Runtime while allowing the Publishing Groundwork bridge to close it over Runtime's
-/// executable-template and Source Reference types and commit every document in one transaction.
+/// Complete atomic publication input. Generic artifact and receipt types keep this Design
+/// persistence contract independent of Runtime and Publishing while allowing their Groundwork
+/// bridge to commit every authoritative document and the durable outcome in one transaction.
 /// </summary>
-public sealed record ActivityPublicationCommit<TExecutableTemplate, TSourceReference>(
+public sealed record ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt>(
+    string? OperationTenantId,
     ActivityPublicationDesignMutation Design,
     TExecutableTemplate ExecutableTemplate,
-    TSourceReference SourceReference)
+    TSourceReference SourceReference,
+    TReceipt Receipt)
     where TExecutableTemplate : class
-    where TSourceReference : class;
+    where TSourceReference : class
+    where TReceipt : class;
 
 public sealed record ActivityPublicationResult(
     string DefinitionId,
@@ -180,12 +183,13 @@ public sealed record ActivityPublicationResult(
     string SourceReferenceId,
     DateTimeOffset PublishedAt);
 
-public interface ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference>
+public interface ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference, TReceipt>
     where TExecutableTemplate : class
     where TSourceReference : class
+    where TReceipt : class
 {
     Task<ActivityPublicationResult> ExecuteAsync(
-        ActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
+        ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt> commit,
         CancellationToken cancellationToken = default);
 }
 

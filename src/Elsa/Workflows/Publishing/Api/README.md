@@ -30,6 +30,11 @@ The registration replaces (or, when composed first, prevents) the API feature's 
 The host must also compose the Runtime persistence used for executable artifacts, source references, trigger
 bindings, and recurring schedules.
 
+Groundwork also replaces the process-local activity publication receipt store. Activity publication
+requires this durable store and the cross-domain Groundwork commit command to share one transaction:
+an Applied receipt, immutable activity version, definition head, executable template, Source
+Reference, layout, and dependency edges become visible together or not at all.
+
 ## Publication lifecycle
 
 The management flow is capability-oriented but the authority transition is one coordinated Publishing
@@ -71,8 +76,16 @@ All routes are relative to the host's Elsa API base path.
 | `PUT` | `publishing/workflows/{definitionId}/policy` | `WorkflowPublishingManage` | CAS-update workflow publication policy. |
 | `POST` | `publishing/workflows/{versionId}/test-runs` | `WorkflowPublishingManage` | Compile and run a persisted Design version without granting publication authority. |
 | `POST` | `publishing/workflows/drafts/test-runs` | `WorkflowPublishingManage` | Compile and run a supplied draft snapshot without granting publication authority. |
+| `POST` | `design/activities/drafts/{draftId}/publication-preflight` | `WorkflowPublishingManage` | Return exact draft/head-bound diagnostics, diff, dependencies, readiness, SemVer choices, and review token. |
+| `POST` | `design/activities/drafts/{draftId}/publish` | `WorkflowPublishingManage` | Recheck and atomically apply an idempotent reviewed activity publication. |
+| `GET` | `design/activities/publications/{idempotencyKey}` | `WorkflowPublishingRead` | Read the durable activity publication receipt and terminal outcome. |
 
 The version route excludes the reserved literal `drafts`, so the two test-run routes cannot overlap.
+
+Activity publication clients must preflight immediately before publish and submit the returned
+opaque review token, one exact offered version, and a caller-stable idempotency key. Replaying the
+same operation identity returns the recorded receipt without another publication. `Stale` requires
+a new preflight; `OutcomeUnknown` requires receipt reconciliation before choosing a new key.
 
 ## Failure and recovery expectations
 

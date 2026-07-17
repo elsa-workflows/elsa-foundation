@@ -508,6 +508,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             StorageDriverType: null,
             DisplayName: name,
             Category: null,
+            IsNullable: !isRequired,
             IsRequired: isRequired,
             DefaultValue: defaultValue,
             DefaultSyntax: defaultSyntax);

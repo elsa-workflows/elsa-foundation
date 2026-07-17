@@ -183,6 +183,8 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `409` | `activity.definition.content-authority` | General authoring command attempted against a source-owned lineage. |
 | `409` | `activity.draft.stale-revision` | Expected optimistic revision differs from current revision. |
 | `409` | `activity.definition.stale-head` | Expected definition head differs under publication lock. |
+| `409` | `activity.publication.review-stale` | Draft, head, compiled evidence, readiness, diagnostics, or valid version choices changed after preflight. Run preflight again. |
+| `409` | `activity.publication.idempotency-conflict` | The operation key is already bound to different reviewed publication material. |
 | `409` | `activity.version.conflict` | Requested semantic version already exists for the definition. |
 | `409` | `activity.version.stale-lifecycle` | Lifecycle command observed a different current state. |
 | `409` | `activity.upgrade.stale-plan` | At least one pinned draft revision/head changed before apply. |
@@ -190,12 +192,17 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `410` | `activity.cursor.expired` | A retained management snapshot, non-management cursor snapshot, or watermark is no longer valid. Recovery may instruct the client to restart without a cursor. |
 | `422` | `activity.publication.invalid` | One or more deterministic publication diagnostics block publication. |
 | `422` | `activity.contract.capability-rejected` | A mutable contract uses a type, collection kind, storage driver, durability, or nullability fact unavailable in the activated authoring capability catalog. |
+| `422` | `activity.version.choice-invalid` | Requested version was not one of the exact choices in the reviewed preflight. |
+| `422` | `activity.runtime.consumer-missing` | A required Runtime consumer is not registered. Usually included under publication invalid. |
+| `422` | `activity.runtime.consumer-schema-unsupported` | A Runtime consumer exists but not for the required exact schema. Usually included under publication invalid. |
+| `422` | `activity.runtime.storage-driver-missing` | A required durable value storage driver is not registered. Usually included under publication invalid. |
 | `422` | `activity.version.bump-insufficient` | Requested SemVer does not meet the calculated minimum. Usually included under publication invalid. |
 | `422` | `activity.dependency.cycle` | Exact dependency cycle detected. Usually included under publication invalid. |
 | `422` | `activity.provider.compilation-failed` | Provider rejected or could not deterministically compile valid source. |
 | `422` | `activity.provider.migration-unsupported` | No deterministic migration exists for the requested provider schema transition. |
 | `422` | `activity.admission.rejected` | Host/tenant policy rejects measured resource requirements. |
 | `500` | `activity.operation.failed` | Unexpected domain operation failure after infrastructure exceptions are wrapped/logged. Details remain non-disclosing. |
+| `500` | `activity.publication.outcome-unknown` | The server cannot prove whether an operation was applied; query the receipt before retrying with a new key. |
 | `503` | `activity.runtime.requirement-unavailable` | Requested activation cannot proceed because a required Runtime consumer/schema is unavailable. Runtime also records an activation incident. |
 
 An endpoint may choose the operation-level code (`activity.publication.invalid`) while individual diagnostics carry more specific codes (`activity.dependency.cycle`, `activity.version.bump-insufficient`).

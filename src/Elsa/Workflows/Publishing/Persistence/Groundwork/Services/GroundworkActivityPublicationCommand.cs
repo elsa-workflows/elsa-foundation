@@ -13,6 +13,9 @@ using Elsa.Primitives.Entities;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -29,13 +32,14 @@ public sealed class GroundworkActivityPublicationCommand(
     IGroundworkRuntimeDocumentSerializer runtimeSerializer,
     IActivityDefinitionVersionPublicationStore publications,
     GroundworkActivityDependencyProjection dependencyProjection,
-    GroundworkActivityManagementProjectionWriter managementProjectionWriter)
-    : ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter,
+    PublishingGroundworkDocumentSerializer publishingSerializer)
+    : ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
 {
     private static readonly JsonSerializerOptions DesignJson = GroundworkActivitiesDesignJson.Options;
 
     public async Task<ActivityPublicationResult> ExecuteAsync(
-        ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commit,
+        ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
@@ -61,6 +65,12 @@ public sealed class GroundworkActivityPublicationCommand(
         foreach (var edge in commit.Design.DirectDependencies)
             await EnsureAbsentAsync(ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind, edge.Id, cancellationToken);
         await EnsureAbsentAsync(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, commit.SourceReference.SourceReferenceId, cancellationToken);
+        await EnsureAbsentAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            GroundworkActivityPublicationReceiptStore.Id(
+                commit.Receipt.TenantId,
+                commit.Receipt.IdempotencyKey),
+            cancellationToken);
 
         var requests = new List<SaveDocumentRequest>();
         var templateRequest = await CreateTemplateRequestAsync(commit.ExecutableTemplate, cancellationToken);
@@ -78,6 +88,17 @@ public sealed class GroundworkActivityPublicationCommand(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
             commit.Design.CatalogVersion,
+            0));
+        var (receiptSchemaVersion, receiptContent) = publishingSerializer.Serialize(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            commit.Receipt);
+        requests.Add(new(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            GroundworkActivityPublicationReceiptStore.Id(
+                commit.Receipt.TenantId,
+                commit.Receipt.IdempotencyKey),
+            receiptSchemaVersion,
+            receiptContent,
             0));
         requests.Add(CreateDesignRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
@@ -135,7 +156,8 @@ public sealed class GroundworkActivityPublicationCommand(
                     ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
                     ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
                     ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
-                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+                    PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind
                 ],
                 requests,
                 cancellationToken);
@@ -282,17 +304,44 @@ public sealed class GroundworkActivityPublicationCommand(
             throw Conflict("The activity definition is not Design-owned.");
     }
 
-    private static void ValidateCommit(ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commit)
+    private static void ValidateCommit(ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit)
     {
         var design = commit.Design;
         var publication = design.Publication;
         var template = commit.ExecutableTemplate;
         var source = commit.SourceReference;
+        var receipt = commit.Receipt;
+        var expectedRequestFingerprint = ActivityPublicationRequestFingerprint.Compute(
+            receipt.DraftId,
+            receipt.ExpectedDraftRevision,
+            receipt.ExpectedDefinitionHeadVersionId,
+            receipt.RequestedVersion,
+            receipt.ReviewToken);
         if (!StringComparer.Ordinal.Equals(design.DefinitionId, publication.DefinitionId) ||
             !StringComparer.Ordinal.Equals(design.CatalogVersion.DefinitionId, publication.DefinitionId) ||
             !StringComparer.Ordinal.Equals(design.CatalogVersion.Id, publication.DefinitionVersionId) ||
             !StringComparer.Ordinal.Equals(design.Layout.DefinitionVersionId, publication.DefinitionVersionId))
             throw new ArgumentException("Publication definition/version identities do not align.", nameof(commit));
+        if (receipt.Status != ActivityPublicationReceiptStatus.Applied ||
+            receipt.Outcome is null ||
+            string.IsNullOrWhiteSpace(receipt.IdempotencyKey) ||
+            !StringComparer.Ordinal.Equals(receipt.RequestFingerprint, expectedRequestFingerprint) ||
+            string.IsNullOrWhiteSpace(receipt.ReviewToken) ||
+            !StringComparer.Ordinal.Equals(receipt.TenantId, commit.OperationTenantId) ||
+            !StringComparer.Ordinal.Equals(receipt.DraftId, design.DraftId) ||
+            receipt.ExpectedDraftRevision != design.ExpectedDraftRevision ||
+            !StringComparer.Ordinal.Equals(receipt.ExpectedDefinitionHeadVersionId, design.ExpectedDefinitionHeadVersionId) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.DefinitionId, publication.DefinitionId) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.DefinitionVersionId, publication.DefinitionVersionId) ||
+            !StringComparer.Ordinal.Equals(receipt.RequestedVersion, publication.Version) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.Version, publication.Version) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.DraftId, design.DraftId) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.TemplateId, template.TemplateId) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.TemplateHash, template.TemplateHash) ||
+            !StringComparer.Ordinal.Equals(receipt.Outcome.SourceReferenceId, source.SourceReferenceId) ||
+            receipt.Outcome.PublishedAt != publication.PublishedAt ||
+            receipt.UpdatedAt != publication.PublishedAt)
+            throw new ArgumentException("Publication receipt does not match authoritative publication material.", nameof(commit));
         if (!StringComparer.Ordinal.Equals(publication.TemplateId, template.TemplateId) ||
             !StringComparer.Ordinal.Equals(publication.TemplateHash, template.TemplateHash) ||
             !StringComparer.Ordinal.Equals(source.ArtifactId, template.TemplateId) ||
