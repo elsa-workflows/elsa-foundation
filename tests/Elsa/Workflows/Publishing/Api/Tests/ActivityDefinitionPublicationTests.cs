@@ -162,6 +162,7 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.Equal("1.0.0", result.SourceReference.ArtifactVersion);
         Assert.Equal(result.SourceReference.SourceReferenceId, commit.Design.Publication.SourceReferenceId);
         Assert.Equal(template.TemplateHash, commit.Design.Publication.TemplateHash);
+        Assert.Equal(ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary, commit.Design.Publication.ResolutionKind);
         Assert.Equal(1, harness.Commit.CallCount);
     }
 
@@ -401,6 +402,9 @@ public sealed class ActivityDefinitionPublicationTests
             DefinitionVersionId = source.DefinitionVersionId,
             Version = version,
             ActivityTypeKey = source.ActivityTypeKey,
+            ResolutionKind = source.ResolutionKind,
+            SourceDraftId = source.SourceDraftId,
+            SourceVersionId = source.SourceVersionId,
             Contract = source.Contract,
             Provider = source.Provider,
             TemplateId = source.TemplateId,
@@ -424,6 +428,8 @@ public sealed class ActivityDefinitionPublicationTests
             DefinitionVersionId = versionId,
             Version = "1.0.0",
             ActivityTypeKey = activityTypeKey,
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+            SourceDraftId = $"draft-{versionId}",
             Contract = Contract(),
             Provider = Provider(),
             TemplateId = template.TemplateId,
@@ -881,6 +887,7 @@ public sealed class ActivityDefinitionPublicationTests
                 DefinitionId = "definition-1",
                 Version = "1.0.0",
                 ActivityTypeKey = "test.activity",
+                ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
                 SourceDraftId = "draft-1",
                 Contract = Contract(),
                 Provider = Provider(),

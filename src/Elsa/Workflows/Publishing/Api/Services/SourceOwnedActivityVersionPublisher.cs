@@ -103,6 +103,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
             DefinitionId = definition.Id,
             Version = version.Version,
             ActivityTypeKey = definition.ActivityTypeKey,
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.AuthorableActivity,
             Contract = contract,
             Provider = new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload),
             TemplateId = templateId,

@@ -30,6 +30,7 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, commit.ExecutableTemplate.Root.Descriptor.ConsumerKey);
         Assert.Equal(commit.ExecutableTemplate.TemplateId, commit.Publication.TemplateId);
         Assert.Equal(commit.ExecutableTemplate.TemplateHash, commit.Publication.TemplateHash);
+        Assert.Equal(ActivityDefinitionVersionResolutionKind.AuthorableActivity, commit.Publication.ResolutionKind);
     }
 
     [Fact]
