@@ -182,6 +182,36 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(2, (await store.ListAsync()).Count);
     }
 
+    [Fact]
+    public async Task SchedulerState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        await using var fixture = CreateStore("memory");
+        ISchedulerStateStore seedStore = new GroundworkSchedulerStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(Scheduler("wf-1", version: 1));
+
+        var competingStore = new GroundworkSchedulerStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(fixture.DocumentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.SchedulerStateDocumentKind, request.DocumentKind);
+                Assert.Equal("wf-1", request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(Scheduler("wf-1", version: 5));
+            }
+        };
+        ISchedulerStateStore store = new GroundworkSchedulerStateStore(
+            interceptingStore,
+            GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Scheduler("wf-1", version: 2)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1");
+        Assert.Equal(5, winner!.Version);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
