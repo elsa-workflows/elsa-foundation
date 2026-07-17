@@ -50,6 +50,10 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>();
 
         services.AddScoped<GroundworkReusableActivityStores>();
+        services.AddScoped<GroundworkActivityManagementProjectionWriter>();
+        services.AddScoped<GroundworkActivityManagementProjectionRetention>();
+        services.RemoveAll<IActivityDefinitionManagementProjectionStore>();
+        services.AddScoped<IActivityDefinitionManagementProjectionStore, GroundworkActivityDefinitionManagementProjectionStore>();
         services.RemoveAll<IActivityDefinitionAuthoringStore>();
         services.AddScoped<IActivityDefinitionAuthoringStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDefinitionDraftStore>();

@@ -27,7 +27,8 @@ public sealed class GroundworkReusableActivityStores(
     IDocumentStore store,
     ISystemClock clock,
     IDistributedLockProvider lockProvider,
-    IBoundedDocumentStore? boundedStore = null) :
+    IBoundedDocumentStore boundedStore,
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter) :
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
@@ -124,14 +125,12 @@ public sealed class GroundworkReusableActivityStores(
         if (limit is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(limit));
 
-        var reader = boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-            "Recommended activity picker queries require an admitted bounded document-store runtime.");
         var items = new List<RecommendedActivityDefinitionPickerItem>(limit);
         var sourceOffset = offset;
         long totalCount = offset;
         while (items.Count < limit)
         {
-            var result = await reader.QueryAsync(
+            var result = await boundedStore.QueryAsync(
                 new DocumentQuery(
                     ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                     ActivitiesDesignStorageManifest.ListAllQuery,
@@ -296,18 +295,24 @@ public sealed class GroundworkReusableActivityStores(
         if (await FindDraftLayoutAsync(request.InitialDraft.Id, cancellationToken) is not null)
             throw Conflict($"Activity draft layout '{request.InitialDraft.Id}' already exists.");
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await CommitWithManagementProjectionAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
             [
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionCollection, request.Definition, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, request.AuthoringState, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, request.InitialDraft, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, request.InitialLayout, 0)
             ],
+            new(
+                request.Definition.LastModifiedAt,
+                [new(request.Definition, request.AuthoringState)],
+                [request.InitialDraft],
+                []),
             cancellationToken);
     }
 
@@ -332,13 +337,18 @@ public sealed class GroundworkReusableActivityStores(
         definition.Entity.Description = request.Description;
         definition.Entity.LastModifiedAt = request.LastModifiedAt;
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+        await CommitWithManagementProjectionAsync(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind],
             [Save(
                 ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
                 definition.Entity,
                 definition.Envelope.Version)],
+            new(
+                request.LastModifiedAt,
+                [new(definition.Entity, authoring.Entity)],
+                [],
+                []),
             cancellationToken);
         return definition.Entity;
     }
@@ -356,16 +366,18 @@ public sealed class GroundworkReusableActivityStores(
         if (await FindDraftLayoutAsync(request.Draft.Id, cancellationToken) is not null)
             throw Conflict($"Activity draft layout '{request.Draft.Id}' already exists.");
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await CommitWithManagementProjectionAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
             [
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, authoring.Entity, authoring.Envelope.Version),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, request.Draft, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, request.Layout, 0)
             ],
+            new(request.Draft.LastModifiedAt, [], [request.Draft], []),
             cancellationToken);
     }
 
@@ -390,14 +402,16 @@ public sealed class GroundworkReusableActivityStores(
         layout.Entity.Records = request.Layout.ToList();
         layout.Entity.LastModifiedAt = now;
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await CommitWithManagementProjectionAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
             [
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout.Entity, layout.Envelope.Version)
             ],
+            new(now, [], [draft.Entity], []),
             cancellationToken);
 
         return draft.Entity;
@@ -427,14 +441,16 @@ public sealed class GroundworkReusableActivityStores(
         draft.Entity.LastModifiedAt = now;
         layout.Entity.Revision = draft.Entity.Revision;
         layout.Entity.LastModifiedAt = now;
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await CommitWithManagementProjectionAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
             [
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout.Entity, layout.Envelope.Version)
             ],
+            new(now, [], [draft.Entity], []),
             cancellationToken);
         return draft.Entity;
     }
@@ -450,9 +466,10 @@ public sealed class GroundworkReusableActivityStores(
         draft.Entity.Status = ActivityDefinitionDraftStatus.Discarded;
         draft.Entity.LastModifiedAt = clock.UtcNow;
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind),
+        await CommitWithManagementProjectionAsync(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind],
             [Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version)],
+            new(draft.Entity.LastModifiedAt, [], [draft.Entity], []),
             cancellationToken);
     }
 
@@ -542,13 +559,29 @@ public sealed class GroundworkReusableActivityStores(
             requests.Add(Save(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, authoring.Entity, authoring.Envelope.Version));
         if (replacement is not null)
             requests.Add(Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, replacement.Entity, replacement.Envelope.Version));
-        await store.SaveAllAsync(
+        var definitionChanges = new List<ActivityManagementDefinitionChange>();
+        var changesDefinitionReference =
+            StringComparer.Ordinal.Equals(authoring.Entity.HeadVersionId, publication.Entity.DefinitionVersionId) ||
+            StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, publication.Entity.DefinitionVersionId) ||
+            invalidatesRecommendation;
+        if (changesDefinitionReference)
+        {
+            var definition = await RequiredDefinitionAsync(publication.Entity.DefinitionId, cancellationToken);
+            definitionChanges.Add(new(definition.Entity, authoring.Entity));
+        }
+        await CommitWithManagementProjectionAsync(
             invalidatesRecommendation
-                ? DocumentCommitScope.Of(
+                ? [
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind)
-                : DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind),
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind
+                ]
+                : [ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind],
             requests,
+            new(
+                publication.Entity.LastModifiedAt,
+                definitionChanges,
+                [],
+                [publication.Entity]),
             cancellationToken);
         return publication.Entity;
     }
@@ -600,13 +633,16 @@ public sealed class GroundworkReusableActivityStores(
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection,
                 target.Entity,
                 target.Envelope.Version));
-        await store.SaveAllAsync(
+        var definition = await RequiredDefinitionAsync(request.DefinitionId, cancellationToken);
+        await CommitWithManagementProjectionAsync(
             target is null
-                ? DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind)
-                : DocumentCommitScope.Of(
+                ? [ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind]
+                : [
                     ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind),
+                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind
+                ],
             requests,
+            new(request.ChangedAt, [new(definition.Entity, authoring.Entity)], [], []),
             cancellationToken);
         return authoring.Entity;
     }
@@ -618,6 +654,13 @@ public sealed class GroundworkReusableActivityStores(
             definitionId,
             cancellationToken)
         ?? throw Missing($"Activity definition authoring state '{definitionId}' was not found.");
+
+    private async Task<Stored<ActivityDefinition>> RequiredDefinitionAsync(string definitionId, CancellationToken cancellationToken) =>
+        await LoadAsync<ActivityDefinition>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            definitionId,
+            cancellationToken)
+        ?? throw Missing($"Activity definition '{definitionId}' was not found.");
 
     private async Task<Stored<ActivityDefinitionDraft>> RequiredDraftAsync(string draftId, CancellationToken cancellationToken) =>
         await LoadAsync<ActivityDefinitionDraft>(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, draftId, cancellationToken)
@@ -694,14 +737,12 @@ public sealed class GroundworkReusableActivityStores(
             ActivitiesDesignStorageManifest.ByDependencyVersionIndex => ("list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField),
             _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The activity-design query index is not declared.")
         };
-        var result = await (boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-                "Reusable-activity design queries require an admitted bounded document-store runtime."))
-            .QueryAsync(
-                new DocumentQuery(
-                    kind,
-                    queryIdentity,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
-                cancellationToken);
+        var result = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                kind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+            cancellationToken);
         return result.Documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
     }
 
@@ -719,6 +760,16 @@ public sealed class GroundworkReusableActivityStores(
     {
         var request = GroundworkDocumentWriter.ToSaveRequest(kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, JsonOptions);
         return new SaveDocumentRequest(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
+    }
+
+    private async Task CommitWithManagementProjectionAsync(
+        IReadOnlyCollection<string> documentKinds,
+        IReadOnlyList<SaveDocumentRequest> requests,
+        ActivityManagementProjectionMutation mutation,
+        CancellationToken cancellationToken)
+    {
+        await using var update = await managementProjectionWriter.PrepareAsync(mutation, cancellationToken);
+        await update.CommitAsync(documentKinds, requests, cancellationToken);
     }
 
     private static void ValidateCreate(CreateActivityDefinitionRequest request)

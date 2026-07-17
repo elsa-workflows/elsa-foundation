@@ -70,12 +70,14 @@ Mutable authoring aggregate header.
 | `Revision` | long | Monotonic optimistic revision; every successful mutation increments it once. |
 | `SourceVersionId` | string? | Immutable lineage to the version cloned or migrated from. |
 | `Status` | enum | `Active`, `Published`, or `Discarded`. |
+| `PresentationLabel` | string? | Optional non-unique author-facing label; the server-generated draft identity remains authoritative. |
 | `State` | `ActivityDefinitionDraftState` | Complete desired authoring document. |
 | `CreatedAt`, `UpdatedAt` | timestamps | Audit facts. |
 
 Invariants:
 
 - Multiple active drafts may share a `DefinitionId`.
+- Draft labels are optional and need not be unique within a definition; creating or autosaving a draft never requires the author to invent a unique name.
 - `SourceVersionId` never changes after draft creation.
 - Full-state update requires `ExpectedRevision == Revision`; stale updates return a conflict and write nothing.
 - Only `Active` drafts can be updated or published.
@@ -117,6 +119,26 @@ Derived sibling record for the latest validated draft revision.
 | `Diagnostics` | ordered diagnostics | Structured `ActivityDiagnostic` values. |
 
 Publication always revalidates inside its atomic transition; a stored clean validation from an older revision is never sufficient.
+
+### 1.8 Activity management temporal projections
+
+Catalog definition, draft, and version lists read provider-queryable safe summaries rather than
+scanning or deserializing authoring aggregates. Each summary revision uses a durable monotonic
+sequence interval `[ValidFromSequence, ValidToSequenceExclusive)`, with `long.MaxValue` denoting
+the current open interval. One mutation batch advances the scope watermark once and atomically
+commits the authoritative documents, closed prior summary revisions, new summary revisions, the
+snapshot marker, and the watermark compare-and-swap.
+
+The projections contain only list-safe facts: identities, tenant/global visibility, presentation
+metadata, authority, status/lifecycle, provider/schema keys, head/recommendation references, counts,
+normalized search text, and deterministic sort keys. Provider payloads, graph source, compiled
+descriptors, contract defaults, and other protected authoring content are never projected.
+
+List queries bind to one exact sequence and apply tenant visibility, temporal interval, search,
+filters, deterministic ordering, offset paging, and exact total count in the selected Groundwork
+provider. Hidden rows therefore affect neither items nor totals. A retention operation may remove
+closed revisions and advances `RetainedFromSequence` atomically; reads below that floor return a
+stable snapshot-expired diagnostic and never restart at the current snapshot.
 
 ## 2. Public contract and provider source
 

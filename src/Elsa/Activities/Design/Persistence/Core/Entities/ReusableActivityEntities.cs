@@ -37,6 +37,9 @@ public sealed class ActivityDefinitionDraft : TenantEntity
     public ActivityDefinitionDraftState State { get; set; } = null!;
 
     public string? PublishedVersionId { get; set; }
+
+    /// <summary>Optional non-unique author-facing label kept outside behavior state.</summary>
+    public string? PresentationLabel { get; set; }
 }
 
 public sealed class ActivityDefinitionDraftLayout : TenantEntity

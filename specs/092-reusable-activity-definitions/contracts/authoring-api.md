@@ -34,6 +34,20 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 
 Version diff, dependency, upgrade, and runtime inspection routes are defined in their focused contracts.
 
+### Temporal list snapshot contract
+
+Definition, draft, and version list responses bind their first page to the current activity
+management projection sequence. Continuation requests carry that opaque snapshot binding and read
+the same `[validFrom, validTo)` view even when concurrent authoring or publication advances the
+current watermark. Search, tenant/global visibility, filters, ordering, paging, and exact total
+count are evaluated by the selected persistence provider against that same snapshot; inaccessible
+rows do not influence totals or continuation behavior.
+
+The snapshot binding is replayable only while retained and only for the original query and
+authorization scope. A malformed or mismatched binding is rejected. A valid binding below the
+retention floor returns the stable snapshot-expired diagnostic; the server never silently restarts
+the list from the newest snapshot.
+
 ### Update definition presentation metadata
 
 ```http

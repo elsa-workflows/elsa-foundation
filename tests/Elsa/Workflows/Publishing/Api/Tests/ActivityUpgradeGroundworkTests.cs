@@ -6,6 +6,8 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using ActivityDependencyProjection = Elsa.Activities.Design.Persistence.Groundwork.Services.GroundworkActivityDependencyProjection;
+using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
@@ -109,7 +111,12 @@ public sealed class ActivityUpgradeGroundworkTests
             var to = Version("new", ActivityDefinitionVersionLifecycle.Active);
             var versions = new VersionStore(from, to);
             var projection = new ActivityDependencyProjection(documents, versions);
+            var managementProjection = new GroundworkActivityManagementProjectionWriter(
+                documents,
+                new ImmediateLockProvider(),
+                documents);
             var plan = CreatePlan(workflowExpectedRevision);
+            await SaveActivityAsync(documents, ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionCollection, Definition());
             await SaveActivityAsync(documents, ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, ActivityDraft());
             await SaveActivityAsync(documents, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, ActivityLayout());
             await SaveActivityAsync(documents, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, Authoring());
@@ -125,6 +132,14 @@ public sealed class ActivityUpgradeGroundworkTests
                 WorkflowsDesignStorageManifest.SchemaVersion,
                 new WorkflowDraftDocument(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection, WorkflowDraft(), []),
                 workflowJson));
+            await using (var initialManagementProjection = await managementProjection.PrepareAsync(new(
+                             Now,
+                             [new(Definition(), Authoring())],
+                             [ActivityDraft()],
+                             [])))
+            {
+                await initialManagementProjection.CommitAsync([], []);
+            }
             await projection.RebuildAsync(new(
                 "seed",
                 1,
@@ -149,7 +164,8 @@ public sealed class ActivityUpgradeGroundworkTests
                 new ActivityProviderRegistry([new TestProvider()]),
                 new ActivityContractAuthoringValidator(new EmptyCapabilityCatalog()),
                 [new TestManifestRewriter()],
-                new Ids());
+                new Ids(),
+                managementProjection);
             return new(documents, workflowJson, payloads, versions, projection, subject, plan);
         }
 
@@ -239,6 +255,11 @@ public sealed class ActivityUpgradeGroundworkTests
             CreatedAt = Now, LastModifiedAt = Now
         };
         private static ActivityDefinitionDraftLayout ActivityLayout() => new() { Id = "layout", DraftId = "activity-draft", Revision = 2, Records = [], CreatedAt = Now, LastModifiedAt = Now };
+        private static ActivityDefinition Definition() => new()
+        {
+            Id = "definition", ActivityTypeKey = "test.definition", Category = "Tests", DisplayName = "Definition",
+            CreatedAt = Now, LastModifiedAt = Now
+        };
         private static ActivityDefinitionAuthoringState Authoring() => new() { Id = "authoring", DefinitionId = "definition", HeadVersionId = "head", ContentAuthority = new(ActivityContentAuthorityKind.Design, "design"), CreatedAt = Now, LastModifiedAt = Now };
         private static WorkflowDefinitionDraft WorkflowDraft() => new()
         {
@@ -341,5 +362,19 @@ public sealed class ActivityUpgradeGroundworkTests
     {
         private int _id;
         public string Generate() => $"generated-{++_id}";
+    }
+
+    private sealed class ImmediateLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }
