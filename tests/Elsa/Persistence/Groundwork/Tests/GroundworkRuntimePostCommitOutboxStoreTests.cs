@@ -4,6 +4,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Groundwork.Documents.Store;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -213,17 +214,155 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task GetDeliverable_SelectsEarliestCandidateAcrossBoundedProviderPages()
     {
         await using var fixture = CreateStore("memory");
-        var store = new GroundworkRuntimePostCommitOutboxStore(
+        var seedStore = new GroundworkRuntimePostCommitOutboxStore(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
             fixture.BoundedDocumentStore);
-        for (var index = 0; index < 100; index++)
-            await store.SavePendingAsync(PendingAt($"a-{index:D3}", Now.AddHours(1)));
-        await store.SavePendingAsync(PendingAt("z-earliest", Now));
+        for (var index = 0; index < 300; index++)
+            await seedStore.SavePendingAsync(PendingAt($"a-{index:D3}", Now.AddHours(1)));
+        await seedStore.SavePendingAsync(PendingAt("z-earliest", Now));
+        var recording = new RecordingBoundedDocumentStore(fixture.BoundedDocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            recording);
 
         var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now.AddHours(2), 1));
 
         Assert.Equal("z-earliest", Assert.Single(deliverable).OutboxItemId);
+        Assert.Equal(4, recording.Queries.Count);
+        Assert.All(recording.Queries, query => Assert.Equal(1, query.Take));
+        Assert.InRange(recording.ReturnedDocumentCounts.Sum(), 1, 4);
+    }
+
+    [Fact]
+    public async Task Claim_limit_bounds_total_provider_results_independent_of_history()
+    {
+        await using var fixture = CreateStore("memory");
+        var seedStore = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        for (var index = 0; index < 300; index++)
+            await seedStore.SavePendingAsync(PendingAt($"future-{index:D3}", Now.AddHours(1)));
+        await seedStore.SavePendingAsync(PendingAt("due-now", Now));
+        var recording = new RecordingBoundedDocumentStore(fixture.BoundedDocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            recording);
+
+        var claim = Assert.Single(await store.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest(
+                "bounded-owner",
+                Now,
+                TimeSpan.FromMinutes(1),
+                1)));
+
+        Assert.Equal("due-now", claim.OutboxItemId);
+        Assert.Equal(5, recording.Queries.Count);
+        Assert.All(recording.Queries, query => Assert.Equal(1, query.Take));
+        Assert.InRange(recording.ReturnedDocumentCounts.Sum(), 1, 5);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Null_available_at_remains_immediately_deliverable_and_claimable(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        for (var index = 0; index < 25; index++)
+            await store.SavePendingAsync(PendingAt($"future-{index:D2}", Now, Now.AddHours(1)));
+        await store.SavePendingAsync(PendingWithoutAvailability("immediate-null"));
+
+        var deliverable = Assert.Single(await store.GetDeliverableAsync(
+            new RuntimePostCommitOutboxQuery(Now, 1)));
+        var claim = Assert.Single(await store.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest(
+                "null-owner",
+                Now,
+                TimeSpan.FromMinutes(1),
+                1)));
+
+        Assert.Equal("immediate-null", deliverable.OutboxItemId);
+        Assert.Equal("immediate-null", claim.OutboxItemId);
+        Assert.Null(deliverable.AvailableAt);
+        Assert.Null(claim.Item.AvailableAt);
+    }
+
+    [Fact]
+    public async Task Maximum_limit_does_not_overflow_candidate_collection_capacity()
+    {
+        await using var fixture = CreateStore("memory");
+        var recording = new EmptyRecordingBoundedDocumentStore();
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            recording);
+
+        Assert.Empty(await store.GetDeliverableAsync(
+            new RuntimePostCommitOutboxQuery(Now, int.MaxValue)));
+        Assert.Equal(4, recording.Queries.Count);
+        Assert.All(recording.Queries, query => Assert.Equal(int.MaxValue, query.Take));
+        Assert.All(
+            recording.Queries.Where(query =>
+                query.QueryIdentity.StartsWith("list-immediate", StringComparison.Ordinal)),
+            query =>
+            {
+                var availability = query.Clauses
+                    .SelectMany(clause => clause.Comparisons)
+                    .Single(comparison =>
+                        comparison.Path == ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField);
+                Assert.Equal(QueryComparisonOperator.Equal, availability.Operator);
+                Assert.Null(Assert.Single(availability.Values));
+            });
+
+        recording.Queries.Clear();
+        Assert.Empty(await store.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest(
+                "maximum-owner",
+                Now,
+                TimeSpan.FromMinutes(1),
+                int.MaxValue)));
+        Assert.Equal(5, recording.Queries.Count);
+        Assert.All(recording.Queries, query => Assert.Equal(int.MaxValue, query.Take));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Claim_orders_fresh_and_expired_work_by_their_next_claimable_time(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        await store.SavePendingAsync(PendingAt(
+            "expired-claim",
+            Now.AddHours(-10),
+            Now.AddHours(-10)));
+        await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "original-owner",
+            Now.AddMinutes(-2),
+            TimeSpan.FromMinutes(1),
+            1));
+        await store.SavePendingAsync(PendingAt(
+            "fresh-pending",
+            Now.AddHours(-3),
+            Now.AddMinutes(-2)));
+
+        var claim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "next-owner",
+            Now,
+            TimeSpan.FromMinutes(1),
+            1)));
+
+        Assert.Equal("fresh-pending", claim.OutboxItemId);
     }
 
     [Fact]
@@ -541,7 +680,10 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         Authority = dispatch.Authority
     };
 
-    private static RuntimePostCommitOutboxItem PendingAt(string outboxItemId, DateTimeOffset recordedAt) => new(
+    private static RuntimePostCommitOutboxItem PendingAt(
+        string outboxItemId,
+        DateTimeOffset recordedAt,
+        DateTimeOffset? availableAt = null) => new(
         outboxItemId,
         new RuntimePostCommitIntent(
             $"intent-{outboxItemId}",
@@ -553,7 +695,21 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
             payload: null),
         RuntimePostCommitOutboxStatus.Pending,
         recordedAt,
-        Now);
+        availableAt ?? Now);
+
+    private static RuntimePostCommitOutboxItem PendingWithoutAvailability(string outboxItemId) => new(
+        outboxItemId,
+        new RuntimePostCommitIntent(
+            $"intent-{outboxItemId}",
+            "wf-paged",
+            "publish",
+            Now,
+            activityExecutionId: null,
+            idempotencyKey: null,
+            payload: null),
+        RuntimePostCommitOutboxStatus.Pending,
+        Now,
+        availableAt: null);
 
     private static RuntimePostCommitOutboxItem PendingDispatch(
         string outboxItemId,

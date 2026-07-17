@@ -47,7 +47,7 @@ internal sealed class GroundworkDocumentStoreFixture(
             connectionString = database.ConnectionString;
         }
 
-        var selectedManifest = manifest ?? ElsaRuntimeStorageManifest.Create();
+        var selectedManifest = manifest ?? RuntimeManifest();
         var store = SqliteDocumentStoreFactory
             .CreateAsync(
                 connectionString,
@@ -67,9 +67,16 @@ internal sealed class GroundworkDocumentStoreFixture(
         StorageManifest? manifest,
         DocumentStoreAccess? access)
     {
-        var store = new InMemoryDocumentStore(manifest ?? ElsaRuntimeStorageManifest.Create(), access);
+        var store = new InMemoryDocumentStore(manifest ?? RuntimeManifest(), access);
         return new GroundworkDocumentStoreFixture(store, store);
     }
+
+    private static StorageManifest RuntimeManifest() =>
+        new RuntimeGroundworkStorageManifestSource()
+            .CreateDeclarationAsync()
+            .GetAwaiter()
+            .GetResult()
+            .Manifest;
 
     public async ValueTask DisposeAsync()
     {
@@ -109,6 +116,8 @@ internal sealed class GroundworkDocumentStoreFixture(
                 return await QueryScopePageAsync(query, requireExpiry: false, cancellationToken);
             if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery)
                 return await QuerySingleValuePageAsync(query, ElsaRuntimeStorageManifest.TestScopeIdField, cancellationToken);
+            if (IsOrderedRangeRoute(query.QueryIdentity))
+                return await QueryOrderedRangeAsync(query, cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.BookmarkStateDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery)
                 return await QueryCompositeEqualityAsync(
@@ -156,6 +165,92 @@ internal sealed class GroundworkDocumentStoreFixture(
                 window = window.Take(take);
             return new DocumentQueryResult(window.ToArray(), all.Count);
         }
+
+        private async Task<DocumentQueryResult> QueryOrderedRangeAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken)
+        {
+#pragma warning disable GW0004
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+#pragma warning restore GW0004
+            var comparisons = query.Clauses.SelectMany(clause => clause.Comparisons).ToArray();
+            var matches = all.Documents
+                .Where(document => comparisons.All(comparison => Matches(document, comparison)))
+                .ToArray();
+            Array.Sort(matches, (left, right) => Compare(left, right, query.Order));
+            IEnumerable<DocumentEnvelope> window = matches;
+            if (query.Skip is { } skip)
+                window = window.Skip(skip);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
+        private static bool IsOrderedRangeRoute(string identity) =>
+            identity.StartsWith("page-", StringComparison.Ordinal) ||
+            identity.StartsWith("list-deliverable", StringComparison.Ordinal) ||
+            identity.StartsWith("list-immediate", StringComparison.Ordinal) ||
+            identity.StartsWith("list-expired-claims", StringComparison.Ordinal);
+
+        private static bool Matches(DocumentEnvelope document, DocumentQueryComparison comparison)
+        {
+            var expected = comparison.Values.Single();
+            var actual = ReadComparable(document, comparison.Path);
+            if (comparison.Operator == QueryComparisonOperator.Equal && expected is null)
+                return actual is null;
+            if (expected is null)
+                throw new InvalidOperationException("Only Groundwork test equality comparisons may use null.");
+            if (actual is null)
+                return false;
+            var compared = StringComparer.Ordinal.Compare(actual, NormalizeComparable(comparison.Path, expected));
+            return comparison.Operator switch
+            {
+                QueryComparisonOperator.Equal => compared == 0,
+                QueryComparisonOperator.GreaterThan => compared > 0,
+                QueryComparisonOperator.LessThanOrEqual => compared <= 0,
+                _ => throw new InvalidOperationException(
+                    $"Groundwork test range comparison '{comparison.Operator}' is unsupported.")
+            };
+        }
+
+        private static int Compare(
+            DocumentEnvelope left,
+            DocumentEnvelope right,
+            IReadOnlyList<DocumentQueryOrder> order)
+        {
+            foreach (var item in order)
+            {
+                var compared = StringComparer.Ordinal.Compare(
+                    ReadComparable(left, item.Path),
+                    ReadComparable(right, item.Path));
+                if (compared != 0)
+                    return compared;
+            }
+            return StringComparer.Ordinal.Compare(left.Id, right.Id);
+        }
+
+        private static string? ReadComparable(DocumentEnvelope document, string path)
+        {
+            using var content = JsonDocument.Parse(document.ContentJson);
+            var value = GetPropertyPath(content.RootElement, path);
+            if (value.ValueKind == JsonValueKind.Null)
+                return null;
+            if (IsDateTimeField(path))
+                return value.GetDateTimeOffset().UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
+            return value.ValueKind == JsonValueKind.Number ? value.GetRawText() : value.GetString();
+        }
+
+        private static string NormalizeComparable(string path, string value) =>
+            IsDateTimeField(path)
+                ? DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                    .UtcTicks.ToString("D19", CultureInfo.InvariantCulture)
+                : value;
+
+        private static bool IsDateTimeField(string path) =>
+            path is ElsaRuntimeStorageManifest.WorkflowDispatchCreatedAtField or
+                ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField or
+                ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField or
+                ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField;
 
         private async Task<DocumentQueryResult> QueryCompositeEqualityAsync(
             DocumentQuery query,
@@ -482,4 +577,55 @@ internal sealed class GroundworkDocumentStoreFixture(
         public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             queries.AnyAsync(query, cancellationToken);
     }
+}
+
+internal sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner) : IBoundedDocumentStore
+{
+    public List<DocumentQuery> Queries { get; } = [];
+    public List<int> ReturnedDocumentCounts { get; } = [];
+
+    public async Task<DocumentQueryResult> QueryAsync(
+        DocumentQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        Queries.Add(query);
+        var result = await inner.QueryAsync(query, cancellationToken);
+        ReturnedDocumentCounts.Add(result.Documents.Count);
+        return result;
+    }
+
+    public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        inner.CountAsync(query, cancellationToken);
+
+    public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+        DocumentQuery query,
+        CancellationToken cancellationToken = default) =>
+        inner.FirstOrDefaultAsync(query, cancellationToken);
+
+    public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        inner.AnyAsync(query, cancellationToken);
+}
+
+internal sealed class EmptyRecordingBoundedDocumentStore : IBoundedDocumentStore
+{
+    public List<DocumentQuery> Queries { get; } = [];
+
+    public Task<DocumentQueryResult> QueryAsync(
+        DocumentQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        Queries.Add(query);
+        return Task.FromResult(new DocumentQueryResult([], 0));
+    }
+
+    public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        Task.FromResult(0L);
+
+    public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+        DocumentQuery query,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<DocumentEnvelope?>(null);
+
+    public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
 }

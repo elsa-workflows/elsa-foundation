@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
+using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
@@ -185,6 +187,10 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         var indexIdentity = declaration?.IndexIdentity ?? legacyDeclaration?.IndexIdentity
             ?? throw new InvalidOperationException(
                 $"Document kind '{query.DocumentKind}' does not declare bounded query '{query.QueryIdentity}'.");
+        var indexFields = declaration is null
+            ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields
+            : unit.PhysicalStorage!.LogicalIndexes.Single(index => index.Identity == indexIdentity).Fields;
+        var fieldKinds = indexFields.ToDictionary(field => field.Path, field => field.ValueKind, StringComparer.Ordinal);
         var predicatePaths = declaration is null || declaration.PredicateFields.Count == 0
             ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields.Select(field => field.Path)
             : declaration.PredicateFields.Select(field => field.Path);
@@ -199,16 +205,25 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         foreach (var clause in query.Clauses)
         {
             matches = matches.Where(document => clause.Comparisons.All(comparison =>
-                Matches(ReadField(document.ContentJson, comparison.Path), comparison)));
+                Matches(
+                    ReadField(document.ContentJson, comparison.Path),
+                    comparison,
+                    fieldKinds[comparison.Path])));
         }
 
         IOrderedEnumerable<DocumentEnvelope> ordered = query.Order.Count > 0
             ? matches.OrderBy(
-                document => ReadField(document.ContentJson, query.Order[0].Path),
+                document => Comparable(
+                    ReadField(document.ContentJson, query.Order[0].Path),
+                    fieldKinds[query.Order[0].Path]),
                 StringComparer.Ordinal)
             : matches.OrderBy(document => document.Id, StringComparer.Ordinal);
         foreach (var order in query.Order.Skip(1))
-            ordered = ordered.ThenBy(document => ReadField(document.ContentJson, order.Path), StringComparer.Ordinal);
+        {
+            ordered = ordered.ThenBy(
+                document => Comparable(ReadField(document.ContentJson, order.Path), fieldKinds[order.Path]),
+                StringComparer.Ordinal);
+        }
         var all = ordered.ThenBy(document => document.Id, StringComparer.Ordinal).ToArray();
         var window = all.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
@@ -216,13 +231,18 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
     }
 
-    private static bool Matches(string? actual, DocumentQueryComparison comparison)
+    private static bool Matches(
+        string? actual,
+        DocumentQueryComparison comparison,
+        IndexValueKind? valueKind)
     {
         var expected = comparison.Values.SingleOrDefault();
         if (comparison.Operator != QueryComparisonOperator.Equal && (actual is null || expected is null))
             return false;
 
-        var order = StringComparer.Ordinal.Compare(actual, expected);
+        var order = StringComparer.Ordinal.Compare(
+            Comparable(actual, valueKind),
+            Comparable(expected, valueKind));
         return comparison.Operator switch
         {
             QueryComparisonOperator.Equal => order == 0,
@@ -232,6 +252,15 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             QueryComparisonOperator.LessThanOrEqual => order <= 0,
             _ => throw new NotSupportedException($"The in-memory bounded-query test double does not support {comparison.Operator}.")
         };
+    }
+
+    private static string? Comparable(string? value, IndexValueKind? valueKind)
+    {
+        if (value is null || valueKind != IndexValueKind.DateTime)
+            return value;
+
+        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            .UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
     }
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>

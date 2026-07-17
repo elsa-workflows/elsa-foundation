@@ -1,3 +1,4 @@
+using System.Globalization;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -23,7 +24,6 @@ public sealed class GroundworkWorkflowDispatchStore :
     IWorkflowDispatchAdmissionStore,
     IWorkflowDispatchCancellationStore
 {
-    private const int CandidatePageSize = WorkflowDispatchQuery.MaximumTake;
     private readonly IDocumentStore _store;
     private readonly IGroundworkRuntimeDocumentSerializer _serializer;
     private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
@@ -293,53 +293,52 @@ public sealed class GroundworkWorkflowDispatchStore :
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var (identity, clauses) = SelectRoute(query);
-        // Every provider read is bounded. Continue through declared offset pages so predicates not carried by
-        // the selected index are still applied before the public Take, while retaining only the best bounded
-        // result set in memory.
-        var selected = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
-        var skip = 0;
-        while (true)
+        var route = SelectRoute(query);
+        IReadOnlyCollection<DocumentEnvelope> documents;
+        if (route.IsUnique)
         {
-            var result = await BoundedStore.QueryAsync(
-                new DocumentQuery(
-                    ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
-                    identity,
-                    clauses,
-                    skip: skip,
-                    take: CandidatePageSize),
-                cancellationToken);
-            var documents = result.Documents;
-            foreach (var record in documents
-                         .Select(_serializer.Deserialize<WorkflowDispatchDocument>)
-                         .Select(document => document.Record)
-                         .Where(record => Matches(record, query)))
+            documents = (await QueryRouteAsync(route, route.Clauses, take: 1, cancellationToken)).Documents;
+        }
+        else if (query.AfterCreatedAt is not { } afterCreatedAt)
+        {
+            documents = (await QueryRouteAsync(route, route.Clauses, query.Take, cancellationToken)).Documents;
+        }
+        else
+        {
+            // Lexicographic (CreatedAt, DispatchId) continuation is represented as the union of two bounded
+            // provider reads: the remainder of the equal timestamp and the strictly later timestamp range.
+            // This keeps the total provider work at no more than 2 * Take regardless of retained history.
+            var sameTimestampClauses = route.Clauses.Concat(
+            [
+                Equal(
+                    ElsaRuntimeStorageManifest.WorkflowDispatchCreatedAtField,
+                    afterCreatedAt.ToString("O", CultureInfo.InvariantCulture)),
+                GreaterThan(ElsaRuntimeStorageManifest.WorkflowDispatchIdField, query.AfterDispatchId!)
+            ]).ToArray();
+            var laterTimestampClauses = route.Clauses.Append(
+                GreaterThan(
+                    ElsaRuntimeStorageManifest.WorkflowDispatchCreatedAtField,
+                    afterCreatedAt.ToString("O", CultureInfo.InvariantCulture))).ToArray();
+            var sameTimestamp = await QueryRouteAsync(route, sameTimestampClauses, query.Take, cancellationToken);
+            var laterTimestamp = await QueryRouteAsync(route, laterTimestampClauses, query.Take, cancellationToken);
+            documents = sameTimestamp.Documents.Concat(laterTimestamp.Documents).ToArray();
+        }
+
+        var records = documents
+            .Select(_serializer.Deserialize<WorkflowDispatchDocument>)
+            .Select(document => document.Record)
+            .Where(record => Matches(record, query))
+            .GroupBy(record => record.DispatchId, StringComparer.Ordinal)
+            .Select(group =>
             {
-                if (selected.TryGetValue(record.DispatchId, out var duplicate) &&
-                    !WorkflowDispatchLifecycle.RecordsEqual(duplicate, record))
+                var record = group.First();
+                if (group.Skip(1).Any(candidate => !WorkflowDispatchLifecycle.RecordsEqual(record, candidate)))
                 {
                     throw new InvalidOperationException(
                         $"Groundwork returned conflicting workflow dispatch documents for '{record.DispatchId}'.");
                 }
-
-                selected[record.DispatchId] = record;
-            }
-
-            if (selected.Count > query.Take)
-            {
-                selected = selected.Values
-                    .OrderBy(record => record.CreatedAt)
-                    .ThenBy(record => record.DispatchId, StringComparer.Ordinal)
-                    .Take(query.Take)
-                    .ToDictionary(record => record.DispatchId, StringComparer.Ordinal);
-            }
-
-            if (documents.Count < CandidatePageSize)
-                break;
-            skip += documents.Count;
-        }
-
-        var records = selected.Values
+                return record;
+            })
             .OrderBy(record => record.CreatedAt)
             .ThenBy(record => record.DispatchId, StringComparer.Ordinal)
             .Take(query.Take)
@@ -348,6 +347,20 @@ public sealed class GroundworkWorkflowDispatchStore :
             _accessContextAccessor.Current.EnsureTenantScope(record.TenantId);
         return records;
     }
+
+    private ValueTask<DocumentQueryResult> QueryRouteAsync(
+        WorkflowDispatchQueryRoute route,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        int take,
+        CancellationToken cancellationToken) =>
+        new(BoundedStore.QueryAsync(
+            new DocumentQuery(
+                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
+                route.Identity,
+                clauses,
+                route.OrderFields.Select(field => new DocumentQueryOrder(field)).ToArray(),
+                take: take),
+            cancellationToken));
 
     public async ValueTask<bool> TryDeleteAsync(
         WorkflowDispatchRecord expected,
@@ -496,49 +509,69 @@ public sealed class GroundworkWorkflowDispatchStore :
             .ToArray();
     }
 
-    private static (string QueryIdentity, IReadOnlyList<DocumentQueryClause> Clauses) SelectRoute(
+    private static WorkflowDispatchQueryRoute SelectRoute(
         WorkflowDispatchQuery query)
     {
         var status = query.Status?.ToString();
 
-        // A child identity deterministically identifies one dispatch, so it remains the narrowest route
-        // when the caller also supplies parent context. Status intersections use the declared composite.
+        // A child identity deterministically identifies one dispatch, so it remains the narrowest route and
+        // never needs provider paging or sorting.
         if (query.ChildWorkflowExecutionId is { } child)
         {
-            return status is null
-                ? (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildQuery,
-                    [Equal(ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField, child)])
-                : (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildAndStatusQuery,
+            return new WorkflowDispatchQueryRoute(
+                status is null
+                    ? ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildQuery
+                    : ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildAndStatusQuery,
+                status is null
+                    ? [Equal(ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField, child)]
+                    :
                     [
                         Equal(ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField, child),
                         Equal(ElsaRuntimeStorageManifest.StatusField, status)
-                    ]);
+                    ],
+                [],
+                IsUnique: true);
         }
 
+        var filterFields = new List<string>(3);
+        var clauses = new List<DocumentQueryClause>(3);
         if (query.ParentWorkflowExecutionId is { } parent)
         {
-            return status is null
-                ? (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery,
-                    [Equal(ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField, parent)])
-                : (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentAndStatusQuery,
-                    [
-                        Equal(ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField, parent),
-                        Equal(ElsaRuntimeStorageManifest.StatusField, status)
-                    ]);
+            filterFields.Add(ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField);
+            clauses.Add(Equal(ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField, parent));
         }
-
+        if (status is not null)
+        {
+            filterFields.Add(ElsaRuntimeStorageManifest.StatusField);
+            clauses.Add(Equal(ElsaRuntimeStorageManifest.StatusField, status));
+        }
         if (query.TestScopeId is { } testScopeId)
         {
-            return (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery,
-                [Equal(ElsaRuntimeStorageManifest.TestScopeIdField, testScopeId)]);
+            filterFields.Add(ElsaRuntimeStorageManifest.TestScopeIdField);
+            clauses.Add(Equal(ElsaRuntimeStorageManifest.TestScopeIdField, testScopeId));
         }
 
-        return (ElsaRuntimeStorageManifest.ListWorkflowDispatchesByStatusQuery,
-            [Equal(ElsaRuntimeStorageManifest.StatusField, status!)]);
+        var identity = (query.ParentWorkflowExecutionId is not null, query.Status is not null, query.TestScopeId is not null) switch
+        {
+            (true, false, false) => ElsaRuntimeStorageManifest.PageWorkflowDispatchesByParentQuery,
+            (false, true, false) => ElsaRuntimeStorageManifest.PageWorkflowDispatchesByStatusQuery,
+            (false, false, true) => ElsaRuntimeStorageManifest.PageWorkflowDispatchesByTestScopeQuery,
+            (true, true, false) => ElsaRuntimeStorageManifest.PageWorkflowDispatchesByParentAndStatusQuery,
+            (true, false, true) => ElsaRuntimeStorageManifest.PageWorkflowDispatchesByParentAndTestScopeQuery,
+            (false, true, true) => ElsaRuntimeStorageManifest.PageWorkflowDispatchesByStatusAndTestScopeQuery,
+            (true, true, true) => ElsaRuntimeStorageManifest.PageWorkflowDispatchesByParentStatusAndTestScopeQuery,
+            _ => throw new InvalidOperationException("A workflow dispatch query has no provider route.")
+        };
+        filterFields.Add(ElsaRuntimeStorageManifest.WorkflowDispatchCreatedAtField);
+        filterFields.Add(ElsaRuntimeStorageManifest.WorkflowDispatchIdField);
+        return new WorkflowDispatchQueryRoute(identity, clauses, filterFields, IsUnique: false);
     }
 
     private static DocumentQueryClause Equal(string path, string value) =>
         DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value));
+
+    private static DocumentQueryClause GreaterThan(string path, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.GreaterThan(path, value));
 
     private static bool Matches(WorkflowDispatchRecord record, WorkflowDispatchQuery query) =>
         (query.ParentWorkflowExecutionId is null ||
@@ -553,6 +586,12 @@ public sealed class GroundworkWorkflowDispatchStore :
          StringComparer.Ordinal.Compare(record.DispatchId, query.AfterDispatchId) > 0);
 
     private sealed record LoadedDispatch(WorkflowDispatchRecord Record, long Version);
+
+    private sealed record WorkflowDispatchQueryRoute(
+        string Identity,
+        IReadOnlyList<DocumentQueryClause> Clauses,
+        IReadOnlyList<string> OrderFields,
+        bool IsUnique);
 }
 
 internal sealed record WorkflowDispatchDocument(

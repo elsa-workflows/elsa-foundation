@@ -319,6 +319,44 @@ public sealed class GroundworkWorkflowTestScopeTests
     [Theory]
     [InlineData("memory")]
     [InlineData("sqlite")]
+    public async Task Concurrent_cleaners_and_response_loss_replay_cancel_pending_child_once(string provider)
+    {
+        await using var fixture = CreateFixture(provider);
+        var stores = CreateStores(fixture);
+        var scope = Scope("scope-concurrent-cleaners", Now.AddHours(1));
+        var pending = Dispatch("parent-concurrent-cleaners", "activity-1", scope);
+        await stores.Scope.CreateAsync(scope, Now);
+        await stores.Dispatch.SaveAsync(pending);
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 10).Select(async _ =>
+        {
+            var cleaner = new WorkflowTestScopeCleaner(stores.Scope, stores.Cleanup, stores.Dispatch);
+            return await cleaner.CloseAsync(
+                scope.ScopeId,
+                WorkflowTestScopeCloseReason.ExplicitTeardown,
+                Now.AddMinutes(2));
+        }));
+
+        Assert.Equal(1, results.Sum(result => result.CancelledBeforeAdmission));
+        var cancelled = Assert.IsType<WorkflowDispatchRecord>(await stores.Dispatch.FindAsync(pending.DispatchId));
+        Assert.True(WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(cancelled));
+
+        var recreated = CreateStores(fixture);
+        var replay = await new WorkflowTestScopeCleaner(recreated.Scope, recreated.Cleanup, recreated.Dispatch)
+            .CloseAsync(
+                scope.ScopeId,
+                WorkflowTestScopeCloseReason.ExplicitTeardown,
+                Now.AddMinutes(20));
+
+        Assert.Equal(0, replay.CancelledBeforeAdmission);
+        Assert.True(WorkflowDispatchLifecycle.RecordsEqual(
+            cancelled,
+            Assert.IsType<WorkflowDispatchRecord>(await recreated.Dispatch.FindAsync(pending.DispatchId))));
+    }
+
+    [Theory]
+    [InlineData("memory")]
+    [InlineData("sqlite")]
     public async Task Started_cleanup_rolls_back_marker_when_outbox_staging_fails_and_retry_converges(
         string provider)
     {

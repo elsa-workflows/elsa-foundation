@@ -17,6 +17,8 @@ namespace Elsa.Workflows.Runtime.Resumption.Tests;
 
 public sealed class WorkflowsRuntimeResumptionFeatureTests
 {
+    private static readonly DateTimeOffset ObservedAt = new(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
+
     [Fact]
     public void RegistersResumptionServiceAndPumpTask()
     {
@@ -122,6 +124,34 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
     }
 
     [Fact]
+    public async Task Pump_sweeps_test_scopes_before_runtime_resumption_in_every_persistence_scope()
+    {
+        var events = new List<string>();
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(ObservedAt));
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddSingleton<IPersistenceScopeSource>(new TestPersistenceScopeSource("tenant-a", "tenant-b"));
+        new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+        services.RemoveAll<IRuntimeResumptionService>();
+        services.AddScoped<IRuntimeResumptionService>(sp => new OrderedResumptionProbe(events, CurrentScope(sp)));
+        services.AddScoped<IWorkflowTestScopeCleaner>(sp => new OrderedScopeCleanerProbe(events, CurrentScope(sp)));
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var pump = Assert.Single(provider.GetServices<IRecurringTask>().OfType<RuntimeResumptionPumpTask>());
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(
+            [
+                $"cleanup:tenant-a:{ObservedAt:O}",
+                "resumption:tenant-a",
+                $"cleanup:tenant-b:{ObservedAt:O}",
+                "resumption:tenant-b"
+            ],
+            events);
+    }
+
+    [Fact]
     public async Task PerExecutionBackoffDoesNotLeakAcrossPersistenceScopes()
     {
         var observations = new BackoffObservations();
@@ -200,6 +230,42 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
                 : [];
             return new(new RuntimeResumptionSweepResult(0, 0, 0, dispatches));
         }
+    }
+
+    private sealed class OrderedResumptionProbe(ICollection<string> events, string persistenceScope)
+        : IRuntimeResumptionService
+    {
+        public ValueTask<RuntimeResumptionSweepResult> SweepAsync(
+            RuntimeResumptionSweepRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            events.Add($"resumption:{persistenceScope}");
+            return new(new RuntimeResumptionSweepResult(0, 0, 0, []));
+        }
+    }
+
+    private sealed class OrderedScopeCleanerProbe(ICollection<string> events, string persistenceScope)
+        : IWorkflowTestScopeCleaner
+    {
+        public ValueTask<WorkflowTestScopeCleanupResult> CloseAsync(
+            string scopeId,
+            WorkflowTestScopeCloseReason reason,
+            DateTimeOffset requestedAt,
+            CancellationToken cancellationToken = default) =>
+            new(new WorkflowTestScopeCleanupResult(0, 0, 0, 0, 0));
+
+        public ValueTask<int> SweepAsync(
+            DateTimeOffset observedAt,
+            CancellationToken cancellationToken = default)
+        {
+            events.Add($"cleanup:{persistenceScope}:{observedAt:O}");
+            return ValueTask.FromResult(0);
+        }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private static string CurrentScope(IServiceProvider serviceProvider) => serviceProvider

@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current feature plan: [specs/097-dispatch-dependency-hardening/plan.md](specs/097-dispatch-dependency-hardening/plan.md)
+Current feature plan: [specs/104-dispatch-parent-audit/plan.md](specs/104-dispatch-parent-audit/plan.md)
 <!-- SPECKIT END -->

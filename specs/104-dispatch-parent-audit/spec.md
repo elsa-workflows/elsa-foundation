@@ -1,8 +1,8 @@
 # Feature Specification: DispatchWorkflow Parent Audit Remediation
 
-**Feature Branch**: `codex/dispatch-674-audit`  
+**Feature Branch**: `codex/dispatch-674-remediation`
 **Created**: 2026-07-17  
-**Input**: GitHub issue #674, "Add a transport-neutral DispatchWorkflow activity", plus the completed `674b7125..f8fcd063` program review.
+**Input**: GitHub issue #674, "Add a transport-neutral DispatchWorkflow activity", the completed program review, and the replacement implementation merged by PR #717.
 
 ## User Story 1 - Preserve dispatch work across crashes (Priority: P1)
 
@@ -31,14 +31,14 @@ As the parent-program owner, I need the checked task ledgers and parent audit to
 ## Functional Requirements
 
 - **FR-001**: Final child-start delivery failure MUST remain durably replayable until the dispatch failure projection, safe incident, and required waited-parent resume work all exist.
-- **FR-002**: Redrive MUST classify an active dispatch without durable redrive evidence as rejected, and MUST converge after crashes or concurrent requests without exposing `Pending` unless deliverable redrive work exists.
-- **FR-003**: Parent-resume and child-cancellation post-commit work MUST use a bounded retry/backoff policy and remain idempotent.
-- **FR-004**: Distributed forwarding MUST expose a durable admitted lifecycle state, and cancellation racing with child admission MUST converge on either no child or a cancelled admitted child.
+- **FR-002**: Redrive MUST return the safe disposition defined by spec 101, distinguish same-request replay from a conflicting active request, and converge after crashes or concurrent requests without exposing `Pending` unless deliverable redrive work exists.
+- **FR-003**: Parent-resume and child-cancellation post-commit work MUST retry until acknowledged with positive backoff and remain idempotent.
+- **FR-004**: Distributed forwarding MUST expose durable admission through the existing `Started` lifecycle state, and cancellation racing with child admission MUST converge on either no child or a cancelled admitted child.
 - **FR-005**: Retention deletion MUST be conditional on the exact terminal snapshot inspected and MUST make progress beyond retained pages.
 - **FR-006**: TestRun cleanup MUST make bounded progress through every matching child, including more than one query page.
-- **FR-007**: Redrive rejection MUST use the documented Runtime API error shape; list and detail inspection MUST expose the same safe failure evidence.
+- **FR-007**: Redrive MUST use the safe disposition response documented by spec 101; list and detail inspection MUST expose the same safe failure evidence.
 - **FR-008**: Failure classification and identifiers MUST be projected from known values or deterministic identities rather than arbitrary incident metadata.
-- **FR-009**: Groundwork dispatch queries and outbox claims MUST apply stable ordering and limits in the provider query rather than after materializing all matches.
+- **FR-009**: Groundwork dispatch queries and outbox claims MUST apply stable ordering and limits in the provider query rather than scanning every matching provider page.
 - **FR-010**: Safe retry scheduling and attempt evidence required by #681 MUST be produced by runtime code and exposed without payload leakage.
 - **FR-011**: Groundwork convergence, waited TestRun terminal outcomes, child run-kind inspection, published-child selection, and integrated two-node DispatchWorkflow behavior MUST have executable acceptance tests.
 - **FR-012**: The parent audit and task ledgers MUST state only evidence supported by existing tests and commits.

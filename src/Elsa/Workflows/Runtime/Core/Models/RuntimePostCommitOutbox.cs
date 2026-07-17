@@ -294,6 +294,14 @@ public static class RuntimePostCommitOutboxClaimTransitions
 {
     public const string FirstDeliveryAttemptedAtMetadataKey = "runtime.delivery.firstAttemptedAt";
 
+    public static DateTimeOffset ClaimableAt(RuntimePostCommitOutboxItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Status == RuntimePostCommitOutboxStatus.Delivering
+            ? item.DeliveryVisibleAfter ?? DateTimeOffset.MaxValue
+            : item.AvailableAt ?? DateTimeOffset.MinValue;
+    }
+
     public static DateTimeOffset? ReadFirstDeliveryAttemptedAt(RuntimePostCommitOutboxItem item)
     {
         ArgumentNullException.ThrowIfNull(item);

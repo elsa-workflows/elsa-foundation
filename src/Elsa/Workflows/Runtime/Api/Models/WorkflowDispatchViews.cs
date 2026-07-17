@@ -1,3 +1,4 @@
+using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
@@ -43,6 +44,7 @@ public sealed record WorkflowDispatchView(
     public static WorkflowDispatchView From(WorkflowDispatchRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
+        var deliveryIdentifiers = ReadSafeDeliveryIdentifiers(record);
 
         return new(
             record.DispatchId,
@@ -69,14 +71,41 @@ public sealed record WorkflowDispatchView(
             WorkflowDispatchLifecycle.ReadSafeDiagnosticCode(record),
             WorkflowDispatchLifecycle.ReadSafeDiagnosticCategory(record))
         {
-            DeliveryIncidentId = WorkflowDispatchLifecycle.ReadDeliveryIncidentId(record),
-            DeliveryDeadLetterId = WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(record),
+            DeliveryIncidentId = deliveryIdentifiers.IncidentId,
+            DeliveryDeadLetterId = deliveryIdentifiers.DeadLetterId,
             DeliveryGeneration = WorkflowDispatchLifecycle.ReadDeliveryGeneration(record),
             DeliveryAttemptCount = WorkflowDispatchLifecycle.ReadDeliveryAttemptCount(record),
             DeliveryFirstAttemptAt = WorkflowDispatchLifecycle.ReadDeliveryFirstAttemptAt(record),
             DeliveryFailedAt = WorkflowDispatchLifecycle.ReadDeliveryFailedAt(record),
-            RedriveEligible = WorkflowDispatchLifecycle.IsRedriveEligible(record)
+            RedriveEligible = deliveryIdentifiers.IncidentId is not null &&
+                              deliveryIdentifiers.DeadLetterId is not null &&
+                              WorkflowDispatchLifecycle.IsRedriveEligible(record)
         };
+    }
+
+    private static (string? IncidentId, string? DeadLetterId) ReadSafeDeliveryIdentifiers(
+        WorkflowDispatchRecord record)
+    {
+        var persistedIncidentId = WorkflowDispatchLifecycle.ReadDeliveryIncidentId(record);
+        var persistedDeadLetterId = WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(record);
+        if (persistedIncidentId is null ||
+            persistedDeadLetterId is null ||
+            !record.Metadata.TryGetValue(WorkflowDispatchLifecycle.DeliveryGenerationMetadataKey, out var rawGeneration) ||
+            !int.TryParse(rawGeneration, NumberStyles.None, CultureInfo.InvariantCulture, out var generation) ||
+            generation < 0)
+        {
+            return (null, null);
+        }
+
+        var identity = new WorkflowDispatchIdentity(
+            record.ParentWorkflowExecutionId,
+            record.ParentActivityExecutionId);
+        var expectedIncidentId = identity.DeliveryIncidentId(generation);
+
+        return StringComparer.Ordinal.Equals(persistedIncidentId, expectedIncidentId) &&
+               identity.MatchesStartOutboxItemId(persistedDeadLetterId)
+            ? (expectedIncidentId, persistedDeadLetterId)
+            : (null, null);
     }
 }
 

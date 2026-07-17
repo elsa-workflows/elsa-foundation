@@ -77,7 +77,7 @@ public sealed class ActivityDraftTestRunTests
     [Fact]
     public async Task Draft_test_run_denies_a_foreign_exact_draft_before_compilation_without_disclosure()
     {
-        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var authoring = AuthoringState.Create("tenant-b");
         await using var provider = BuildProvider(
             documents,
@@ -369,7 +369,7 @@ public sealed class ActivityDraftTestRunTests
     private static async Task<IDocumentStore> OpenSqliteAsync(string connectionString) =>
         await SqliteDocumentStoreFactory.CreateAsync(
             connectionString,
-            ElsaRuntimeStorageManifest.Create(),
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
             GroundworkTestAccess.DefaultScoped);
 

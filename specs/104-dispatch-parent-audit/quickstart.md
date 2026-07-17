@@ -10,7 +10,7 @@ dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.
 dotnet test tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj --no-restore
 dotnet test tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj --no-restore
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore
-dotnet test Elsa.slnx --no-restore
+dotnet test Elsa.Server.slnx --no-restore
 git diff --check
 ```
 

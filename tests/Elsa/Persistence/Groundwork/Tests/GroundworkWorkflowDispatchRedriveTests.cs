@@ -208,7 +208,7 @@ public sealed class GroundworkWorkflowDispatchRedriveTests
     [Fact]
     public async Task DispatchWriteFailureRollsBackAlreadyStagedOutboxRedrive()
     {
-        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var failing = new DispatchSaveFailingDocumentStore(inner);
         await using var fixture = new GroundworkDocumentStoreFixture(failing, inner);
         var seed = await SeedFailureAsync(fixture, WorkflowDispatchMode.FireAndForget);

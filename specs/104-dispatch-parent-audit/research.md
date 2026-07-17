@@ -12,6 +12,12 @@
 
 **Alternatives considered**: state-first persistence leaves `Pending` without work; work-first persistence without execution-time reconciliation can admit the child while the dispatch still reads `DispatchFailed`.
 
+## Decision: spec 101 safe dispositions supersede the draft error-shape finding
+
+**Rationale**: The merged replacement program ratified an authenticated redrive API that returns a bounded disposition view for accepted, idempotent, conflicting, ineligible, and missing requests. Replacing those responses with a different error envelope would contradict the narrower canonical feature contract.
+
+**Alternatives considered**: preserving the earlier parent-review expectation would rewrite an accepted public contract without a product decision.
+
 ## Decision: retries are explicit durable intent metadata
 
 **Rationale**: Parent resume and cancellation delivery already use the runtime outbox retry model. Stamping bounded retry metadata preserves provider neutrality and makes the intended behavior visible in stored work.
@@ -27,6 +33,30 @@
 ## Decision: API failure projection is allowlisted
 
 **Rationale**: Incident metadata is persistence input, not trusted API output. Classification is parsed to a known enum, counts are bounded numeric values, and incident/dead-letter identifiers are deterministic or validated.
+
+## Decision: bounded outbox selection preserves null-as-immediate availability
+
+**Rationale**: The runtime contract treats a null `AvailableAt` as immediately eligible. Groundwork
+therefore uses a separate, null-aware bounded route with an exact null predicate and merges its
+results with the ordinary due-time route. This keeps every provider request bounded without relying
+on provider-specific null ordering, changing the public outbox model, or silently abandoning
+already-persisted null values.
+
+**Alternatives considered**: normalizing null to a sentinel during save would change round-trip
+semantics, while filtering only `AvailableAt <= now` excludes valid work.
+
+## Decision: caller limits do not become collection capacities
+
+**Rationale**: Positive query limits include `int.MaxValue`; multiplying or preallocating directly
+from that value can overflow or attempt an unnecessary allocation before the bounded provider query
+runs. Candidate and claim collections therefore grow only from actual returned rows.
+
+## Decision: boundedness evidence distinguishes requests from physical I/O
+
+**Rationale**: Store tests prove a fixed number of admitted queries, stable ordering, propagated
+`Take`, and bounded returned rows. SQLite tests prove functional provider behavior. The legacy
+SQLite test adapter materializes before emulating new routes, so it is not evidence of physical rows
+scanned and the audit does not present it as such.
 
 ## Decision: generated maps remain untouched by generators
 

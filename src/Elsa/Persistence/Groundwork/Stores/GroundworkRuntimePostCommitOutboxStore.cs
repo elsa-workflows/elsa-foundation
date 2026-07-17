@@ -1,3 +1,4 @@
+using System.Globalization;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -33,7 +34,6 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
     IRuntimePostCommitOutboxClaimCompletionStore,
     IWorkflowDispatchRedriveStore
 {
-    private const int CandidatePageSize = 100;
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
 
     internal IDocumentStore DocumentStore => store;
@@ -144,7 +144,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
             request.WorkflowExecutionId,
             intentKind: request.IntentKind);
         var candidates = await QueryCandidatesAsync(query, includeExpiredClaims: true, request.Limit, cancellationToken);
-        var claims = new List<RuntimePostCommitOutboxClaim>(request.Limit);
+        var claims = new List<RuntimePostCommitOutboxClaim>();
         foreach (var candidate in candidates)
         {
             if (claims.Count == request.Limit)
@@ -413,51 +413,142 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         int maximumResults,
         CancellationToken cancellationToken)
     {
-        var (queryIdentity, clauses) = query.WorkflowExecutionId is { } workflowExecutionId
-            ? (ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
-                (IReadOnlyList<DocumentQueryClause>)
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, workflowExecutionId))])
-            : (ElsaRuntimeStorageManifest.ListAllQuery,
-                (IReadOnlyList<DocumentQueryClause>)
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                    ElsaRuntimeStorageManifest.CollectionField,
-                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind))]);
-        var candidates = new List<RuntimePostCommitOutboxItem>(maximumResults);
-        var skip = 0;
-        while (true)
+        var candidates = new List<RuntimePostCommitOutboxItem>();
+        candidates.AddRange(await QueryCandidateStatusAsync(
+            query,
+            RuntimePostCommitOutboxStatus.Pending,
+            CandidateTemporalSelection.Due,
+            maximumResults,
+            cancellationToken));
+        candidates.AddRange(await QueryCandidateStatusAsync(
+            query,
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            CandidateTemporalSelection.Due,
+            maximumResults,
+            cancellationToken));
+        candidates.AddRange(await QueryCandidateStatusAsync(
+            query,
+            RuntimePostCommitOutboxStatus.Pending,
+            CandidateTemporalSelection.Immediate,
+            maximumResults,
+            cancellationToken));
+        candidates.AddRange(await QueryCandidateStatusAsync(
+            query,
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            CandidateTemporalSelection.Immediate,
+            maximumResults,
+            cancellationToken));
+        if (includeExpiredClaims)
         {
-            var documentQuery = new DocumentQuery(
-                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
-                queryIdentity,
-                clauses,
-                skip: skip,
-                take: CandidatePageSize);
-            var envelopes = (await BoundedStore.QueryAsync(documentQuery, cancellationToken)).Documents;
-            candidates.AddRange(envelopes
-                .Select(Map)
-                .Where(item => includeExpiredClaims
-                    ? IsClaimCandidate(item, query)
-                    : IsDeliverable(item, query)));
-            if (candidates.Count > maximumResults)
-            {
-                candidates = candidates
-                    .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
-                    .ThenBy(item => item.RecordedAt)
-                    .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
-                    .Take(maximumResults)
-                    .ToList();
-            }
-            if (envelopes.Count < CandidatePageSize)
-                break;
-            skip += envelopes.Count;
+            candidates.AddRange(await QueryCandidateStatusAsync(
+                query,
+                RuntimePostCommitOutboxStatus.Delivering,
+                CandidateTemporalSelection.ExpiredClaim,
+                maximumResults,
+                cancellationToken));
         }
 
-        return candidates
-            .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
+        var ordered = candidates
+            .GroupBy(item => item.OutboxItemId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Where(item => includeExpiredClaims
+                ? IsClaimCandidate(item, query)
+                : IsDeliverable(item, query));
+        return (includeExpiredClaims
+                ? ordered.OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
+                : ordered.OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue))
             .ThenBy(item => item.RecordedAt)
             .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
             .Take(maximumResults)
             .ToArray();
+    }
+
+    private async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> QueryCandidateStatusAsync(
+        RuntimePostCommitOutboxQuery query,
+        RuntimePostCommitOutboxStatus status,
+        CandidateTemporalSelection temporalSelection,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var clauses = new List<DocumentQueryClause>
+        {
+            Equal(
+                ElsaRuntimeStorageManifest.PostCommitOutboxStatusField,
+                ((int)status).ToString(CultureInfo.InvariantCulture))
+        };
+        var orderFields = new List<string>
+        {
+            ElsaRuntimeStorageManifest.PostCommitOutboxStatusField
+        };
+        if (query.WorkflowExecutionId is { } workflowExecutionId)
+        {
+            clauses.Add(Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, workflowExecutionId));
+            orderFields.Add(ElsaRuntimeStorageManifest.WorkflowExecutionIdField);
+        }
+        if (query.IntentKind is { } intentKind)
+        {
+            clauses.Add(Equal(ElsaRuntimeStorageManifest.PostCommitOutboxIntentKindField, intentKind));
+            orderFields.Add(ElsaRuntimeStorageManifest.PostCommitOutboxIntentKindField);
+        }
+        var temporalField = temporalSelection == CandidateTemporalSelection.ExpiredClaim
+            ? ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField
+            : ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField;
+        if (temporalSelection == CandidateTemporalSelection.Immediate)
+        {
+            clauses.Add(Equal(temporalField, null));
+        }
+        else
+        {
+            clauses.Add(LessThanOrEqual(
+                temporalField,
+                query.Now.ToString("O", CultureInfo.InvariantCulture)));
+        }
+        orderFields.Add(temporalField);
+        orderFields.Add(ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField);
+        orderFields.Add(ElsaRuntimeStorageManifest.PostCommitOutboxItemIdField);
+
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+                SelectCandidateRoute(query, temporalSelection),
+                clauses,
+                orderFields.Select(field => new DocumentQueryOrder(field)).ToArray(),
+                take: take),
+            cancellationToken);
+        return result.Documents.Select(Map).ToArray();
+    }
+
+    private static string SelectCandidateRoute(
+        RuntimePostCommitOutboxQuery query,
+        CandidateTemporalSelection temporalSelection) =>
+        (temporalSelection, query.WorkflowExecutionId is not null, query.IntentKind is not null) switch
+        {
+            (CandidateTemporalSelection.Due, false, false) => ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxQuery,
+            (CandidateTemporalSelection.Due, true, false) => ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByWorkflowQuery,
+            (CandidateTemporalSelection.Due, false, true) => ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByIntentKindQuery,
+            (CandidateTemporalSelection.Due, true, true) => ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByWorkflowAndIntentKindQuery,
+            (CandidateTemporalSelection.Immediate, false, false) => ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxQuery,
+            (CandidateTemporalSelection.Immediate, true, false) => ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByWorkflowQuery,
+            (CandidateTemporalSelection.Immediate, false, true) => ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByIntentKindQuery,
+            (CandidateTemporalSelection.Immediate, true, true) => ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByWorkflowAndIntentKindQuery,
+            (CandidateTemporalSelection.ExpiredClaim, false, false) => ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsQuery,
+            (CandidateTemporalSelection.ExpiredClaim, true, false) => ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsByWorkflowQuery,
+            (CandidateTemporalSelection.ExpiredClaim, false, true) => ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsByIntentKindQuery,
+            (CandidateTemporalSelection.ExpiredClaim, true, true) => ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsByWorkflowAndIntentKindQuery,
+            _ => throw new ArgumentOutOfRangeException(nameof(temporalSelection), temporalSelection, null)
+        };
+
+    private static DocumentQueryClause Equal(string path, string? value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value));
+
+    private static DocumentQueryClause LessThanOrEqual(string path, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(path, value));
+
+    private enum CandidateTemporalSelection
+    {
+        Due,
+        Immediate,
+        ExpiredClaim
     }
 
     // Two pending saves of the same item must be idempotent. Comparing the serialized intent under the shared

@@ -127,7 +127,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         services.AddSingleton<IDocumentStore>(documentStore);
         services.AddSingleton<IBoundedDocumentStore>(documentStore);
         services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(PassThroughRootWriteLeaseManager.Instance);
@@ -180,7 +180,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized()));
         services.AddWorkflowRuntime();
 
         services.AddGroundworkRuntimeStores();
@@ -259,7 +259,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized()));
         services.AddSingleton<IDocumentJsonUpcaster>(new ForeignDocumentJsonUpcaster());
 
         services.AddGroundworkRuntimeStores();

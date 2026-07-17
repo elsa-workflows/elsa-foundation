@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
@@ -40,6 +41,14 @@ public static class ElsaRuntimeStorageManifest
     public const string ByStateAndExpiresAtIndex = "by-state-and-expires-at";
     public const string ByParentWorkflowExecutionAndStatusIndex = "by-parent-workflow-execution-and-status";
     public const string ByChildWorkflowExecutionAndStatusIndex = "by-child-workflow-execution-and-status";
+    public const string ByCreatedAtIndex = "by-created-at";
+    public const string ByDispatchIdIndex = "by-dispatch-id";
+    public const string ByOutboxStatusIndex = "by-outbox-status";
+    public const string ByOutboxAvailableAtIndex = "by-outbox-available-at";
+    public const string ByOutboxVisibleAfterIndex = "by-outbox-visible-after";
+    public const string ByOutboxRecordedAtIndex = "by-outbox-recorded-at";
+    public const string ByOutboxItemIdIndex = "by-outbox-item-id";
+    public const string ByOutboxIntentKindIndex = "by-outbox-intent-kind";
     public const string ByStimulusAndTypeIndex = "by-stimulus-and-type";
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
@@ -69,6 +78,14 @@ public static class ElsaRuntimeStorageManifest
     public const string ExpiresAtField = "expiresAt";
     public const string IsRetiredField = "isRetired";
     public const string StateField = "state";
+    public const string WorkflowDispatchCreatedAtField = "record.createdAt";
+    public const string WorkflowDispatchIdField = "record.dispatchId";
+    public const string PostCommitOutboxStatusField = "item.status";
+    public const string PostCommitOutboxAvailableAtField = "item.availableAt";
+    public const string PostCommitOutboxVisibleAfterField = "item.deliveryVisibleAfter";
+    public const string PostCommitOutboxRecordedAtField = "item.recordedAt";
+    public const string PostCommitOutboxItemIdField = "item.outboxItemId";
+    public const string PostCommitOutboxIntentKindField = "item.intent.kind";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
@@ -183,6 +200,18 @@ public static class ElsaRuntimeStorageManifest
     public const string ListCheckpointCommitsQuery = ListAllQuery;
 
     public const string PostCommitOutboxDocumentKind = "postCommitOutbox";
+    public const string ListDeliverablePostCommitOutboxQuery = "list-deliverable";
+    public const string ListDeliverablePostCommitOutboxByWorkflowQuery = "list-deliverable-by-workflow";
+    public const string ListDeliverablePostCommitOutboxByIntentKindQuery = "list-deliverable-by-intent-kind";
+    public const string ListDeliverablePostCommitOutboxByWorkflowAndIntentKindQuery = "list-deliverable-by-workflow-and-intent-kind";
+    public const string ListImmediatePostCommitOutboxQuery = "list-immediate";
+    public const string ListImmediatePostCommitOutboxByWorkflowQuery = "list-immediate-by-workflow";
+    public const string ListImmediatePostCommitOutboxByIntentKindQuery = "list-immediate-by-intent-kind";
+    public const string ListImmediatePostCommitOutboxByWorkflowAndIntentKindQuery = "list-immediate-by-workflow-and-intent-kind";
+    public const string ListExpiredPostCommitOutboxClaimsQuery = "list-expired-claims";
+    public const string ListExpiredPostCommitOutboxClaimsByWorkflowQuery = "list-expired-claims-by-workflow";
+    public const string ListExpiredPostCommitOutboxClaimsByIntentKindQuery = "list-expired-claims-by-intent-kind";
+    public const string ListExpiredPostCommitOutboxClaimsByWorkflowAndIntentKindQuery = "list-expired-claims-by-workflow-and-intent-kind";
 
     // Durable detached-dispatch lifecycle. The collection route supports bounded internal retention
     // enumeration; parent/child/status and their common intersections serve operational inspection.
@@ -194,6 +223,16 @@ public static class ElsaRuntimeStorageManifest
     public const string ListWorkflowDispatchesByTestScopeQuery = "list-by-test-scope";
     public const string ListWorkflowDispatchesByParentAndStatusQuery = "list-by-parent-workflow-execution-and-status";
     public const string ListWorkflowDispatchesByChildAndStatusQuery = "list-by-child-workflow-execution-and-status";
+    public const string ListWorkflowDispatchesByParentAndTestScopeQuery = "list-by-parent-workflow-execution-and-test-scope";
+    public const string ListWorkflowDispatchesByStatusAndTestScopeQuery = "list-by-status-and-test-scope";
+    public const string ListWorkflowDispatchesByParentStatusAndTestScopeQuery = "list-by-parent-workflow-execution-status-and-test-scope";
+    public const string PageWorkflowDispatchesByParentQuery = "page-by-parent-workflow-execution";
+    public const string PageWorkflowDispatchesByStatusQuery = "page-by-status";
+    public const string PageWorkflowDispatchesByTestScopeQuery = "page-by-test-scope";
+    public const string PageWorkflowDispatchesByParentAndStatusQuery = "page-by-parent-workflow-execution-and-status";
+    public const string PageWorkflowDispatchesByParentAndTestScopeQuery = "page-by-parent-workflow-execution-and-test-scope";
+    public const string PageWorkflowDispatchesByStatusAndTestScopeQuery = "page-by-status-and-test-scope";
+    public const string PageWorkflowDispatchesByParentStatusAndTestScopeQuery = "page-by-parent-workflow-execution-status-and-test-scope";
     public const string ListWorkflowDispatchesQuery = ListAllQuery;
 
     // Durable scheduler work queue. Each queued work item is a document so the queue survives process
@@ -274,6 +313,18 @@ public static class ElsaRuntimeStorageManifest
 
     public const string ListRecurringTriggerSchedulesByPublicationQuery = "list-by-publication";
     public const string ListDueRecurringTriggerSchedulesQuery = "list-due";
+
+    /// <summary>
+    /// Creates the provider-facing runtime manifest, including every bounded composite route layered
+    /// over the provider-neutral legacy declarations.
+    /// </summary>
+    public static StorageManifest CreatePhysicalized() =>
+        PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
+            TestScopeStoragePhysicalizer.AddCompositeRoutes(
+                WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                    BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                        WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))));
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
@@ -427,7 +478,13 @@ public static class ElsaRuntimeStorageManifest
                 "Post-commit outbox",
                 [
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
-                    Keyword(ByCollectionIndex, CollectionField)
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(ByOutboxStatusIndex, PostCommitOutboxStatusField),
+                    DateTime(ByOutboxAvailableAtIndex, PostCommitOutboxAvailableAtField),
+                    DateTime(ByOutboxVisibleAfterIndex, PostCommitOutboxVisibleAfterField),
+                    DateTime(ByOutboxRecordedAtIndex, PostCommitOutboxRecordedAtField),
+                    Keyword(ByOutboxItemIdIndex, PostCommitOutboxItemIdField),
+                    Keyword(ByOutboxIntentKindIndex, PostCommitOutboxIntentKindField)
                 ],
                 [
                     Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
@@ -441,7 +498,9 @@ public static class ElsaRuntimeStorageManifest
                     Keyword(ByParentWorkflowExecutionIndex, ParentWorkflowExecutionIdField),
                     Keyword(ByChildWorkflowExecutionIndex, ChildWorkflowExecutionIdField),
                     Keyword(ByStatusIndex, StatusField),
-                    Keyword(ByTestScopeIndex, TestScopeIdField)
+                    Keyword(ByTestScopeIndex, TestScopeIdField),
+                    DateTime(ByCreatedAtIndex, WorkflowDispatchCreatedAtField),
+                    Keyword(ByDispatchIdIndex, WorkflowDispatchIdField)
                 ],
                 [
                     Query(ListWorkflowDispatchesQuery, ByCollectionIndex),

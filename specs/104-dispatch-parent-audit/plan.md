@@ -1,11 +1,11 @@
 # Implementation Plan: DispatchWorkflow Parent Audit Remediation
 
-**Branch**: `codex/dispatch-674-audit`  
+**Branch**: `codex/dispatch-674-remediation`
 **Spec**: [spec.md](spec.md)
 
 ## Summary
 
-Resolve every actionable finding from the parent-program review, add the missing acceptance evidence, and rewrite the audit so it reflects verified behavior. Preserve provider-neutral runtime contracts, deterministic identities, bounded operations, and the explicit `WorkflowDefinitionActivity`/Studio exclusions. Do not refresh generated maps.
+Revalidate every parent-program finding against the replacement implementation merged by PR #717, resolve the findings that remain actionable, add or correct acceptance evidence, and publish a verified audit. Preserve provider-neutral runtime contracts, deterministic identities, bounded operations, and the explicit `WorkflowDefinitionActivity`/Studio exclusions. Do not refresh generated maps.
 
 ## Technical Context
 
@@ -24,9 +24,9 @@ Resolve every actionable finding from the parent-program review, add the missing
   - `specs/098-dispatch-durability-inspection/`
   - `specs/099-dispatch-wait-success/`
   - `specs/100-dispatch-fault-cancellation/`
-  - `specs/101-dispatch-redrive-failures/`
+  - `specs/101-dispatch-delivery-recovery/`
   - `specs/102-dispatch-test-run-scope/`
-  - `specs/103-dispatch-distributed-nodes/`
+  - `specs/103-dispatch-distributed-execution/`
 - Final verification commands recorded in the audit report.
 - The findings captured in [research.md](research.md) and remediation contracts under [contracts/](contracts/).
 
@@ -43,7 +43,7 @@ Resolve every actionable finding from the parent-program review, add the missing
 ## Deliverables
 
 - `docs/reports/dispatch-workflow-674-parent-audit.md`
-- Crash-safe final-failure/redrive/resume behavior and regression tests
+- Verified crash-safe final-failure/redrive/resume behavior and regression tests
 - Race-safe lifecycle, retention, and TestRun cleanup behavior and regression tests
 - Contract-correct safe Runtime API inspection/redrive behavior
 - Provider-bounded dispatch/outbox queries

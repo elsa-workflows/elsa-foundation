@@ -67,7 +67,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     {
         if (kind is ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind or ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind)
         {
-            var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+            var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
             await DriveSaveAsync(kind, store);
             var documentId = kind == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind
                 ? CommitId
@@ -86,7 +86,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     // the store's identity composition.
     public static async Task<InMemoryDocumentStore> SeedFixtureAsync(string kind, int version, string fixtureContent)
     {
-        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         await DriveSaveAsync(kind, store);
 
         foreach (var envelope in store.Snapshot(kind))

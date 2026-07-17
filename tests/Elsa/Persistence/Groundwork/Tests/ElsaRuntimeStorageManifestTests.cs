@@ -190,6 +190,8 @@ public sealed class ElsaRuntimeStorageManifestTests
             [
                 ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex,
                 ElsaRuntimeStorageManifest.ByCollectionIndex,
+                ElsaRuntimeStorageManifest.ByCreatedAtIndex,
+                ElsaRuntimeStorageManifest.ByDispatchIdIndex,
                 ElsaRuntimeStorageManifest.ByParentWorkflowExecutionIndex,
                 ElsaRuntimeStorageManifest.ByStatusIndex,
                 ElsaRuntimeStorageManifest.ByTestScopeIndex
@@ -217,6 +219,50 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(
             physical.Indexes,
             index => index.LogicalName == ElsaRuntimeStorageManifest.ByChildWorkflowExecutionAndStatusIndex && index.Columns.Count == 3);
+    }
+
+    [Fact]
+    public async Task Post_commit_outbox_declares_null_aware_immediate_availability_route()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind);
+
+        var immediate = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxQuery);
+        var immediateIndex = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == immediate.IndexIdentity);
+        Assert.Equal(MissingValueBehavior.IncludedAsNull, immediateIndex.MissingValueBehavior);
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
+            unit.PhysicalStorage.Policy).Definition;
+        var immediatePhysicalIndex = Assert.Single(
+            physical.Indexes,
+            index => index.LogicalName == immediate.IndexIdentity);
+        Assert.Equal(
+            MissingValueBehavior.IncludedAsNull,
+            immediatePhysicalIndex.MissingValueBehavior);
+        var immediateAvailability = Assert.Single(
+            immediate.PredicateFields,
+            field => field.Path == ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField);
+        Assert.Equal(
+            new[] { PortableQueryOperation.Equal },
+            immediateAvailability.Operations);
+        Assert.Contains(
+            immediate.SortFields,
+            field => field.Path == ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField);
+
+        var due = Assert.Single(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxQuery);
+        var dueIndex = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == due.IndexIdentity);
+        Assert.Equal(MissingValueBehavior.Excluded, dueIndex.MissingValueBehavior);
+        Assert.Contains(
+            due.PredicateFields,
+            field => field.Path == ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField);
     }
 
     [Fact]
