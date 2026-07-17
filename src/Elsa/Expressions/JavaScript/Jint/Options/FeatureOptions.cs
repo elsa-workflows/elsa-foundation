@@ -31,6 +31,15 @@ public sealed class FeatureOptions
     /// <summary>Maximum length of a JavaScript array, including sparse arrays.</summary>
     public uint? MaxArrayLength { get; set; } = 100_000;
 
+    /// <summary>Maximum aggregate UTF-8 size of declared JSON parameter values.</summary>
+    public int MaxInputBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>Maximum nesting depth of a declared JSON parameter value.</summary>
+    public int MaxInputDepth { get; set; } = 64;
+
+    /// <summary>Maximum aggregate number of JSON values across declared parameters.</summary>
+    public int MaxInputNodes { get; set; } = 100_000;
+
     /// <summary>Maximum UTF-8 size of a materialized JSON result.</summary>
     public int MaxResultBytes { get; set; } = 1024 * 1024;
 

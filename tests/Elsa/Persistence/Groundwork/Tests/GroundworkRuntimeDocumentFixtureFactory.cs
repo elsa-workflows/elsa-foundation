@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Models;
@@ -286,13 +287,39 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
 
     private static WorkflowExecutable Executable()
     {
+        var childDescriptor = Json("""{ "kind": "Send" }""");
+        var childContract = new ActivityContract(
+            "Elsa.SendEmail",
+            "1.0.0",
+            "Elsa.Activities.SendEmailDescriptor",
+            childDescriptor,
+            [
+                new ActivityInputContract(
+                    "to",
+                    "to",
+                    new ValueTypeDescriptor("String"),
+                    isRequired: true,
+                    hasDefault: false,
+                    defaultValue: null,
+                    ActivityValuePolicy.Default)
+                {
+                    IsNullable = false
+                }
+            ],
+            new ActivityResultContract(
+                new ValueTypeDescriptor("Unit"),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            ["Done"],
+            new ActivityActivationRequirement("Elsa.Activities.SendEmailDescriptor", "Elsa.SendEmail"));
         var child = new ExecutableNode(
             executableNodeId: "child",
             authoredActivityId: "authored-child",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
             descriptorType: "Elsa.Activities.SendEmailDescriptor",
-            descriptorPayload: Json("""{ "kind": "Send" }"""),
+            descriptorPayload: childDescriptor,
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
@@ -302,7 +329,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                     source: RuntimeInputBindingSource.WorkflowRequest,
                     workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
             },
-            metadata: new Dictionary<string, string> { ["role"] = "leaf" });
+            metadata: new Dictionary<string, string> { ["role"] = "leaf" },
+            activityContract: childContract);
 
         var root = new ExecutableNode(
             executableNodeId: "root",

@@ -7,6 +7,7 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -55,6 +56,47 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         var parent = run.State("node-parent");
         Assert.Equal(ActivityExecutionStatus.Completed, parent.Status);
         Assert.Null(parent.PrivateState);
+    }
+
+    [Fact]
+    public async Task ChildCompletionWithoutCallback_DisposalFailureFaultsBeforeDeferredCheckpoint()
+    {
+        var probe = new CallbackDisposalProbe();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .ConfigureServices(services => services.AddSingleton(probe))
+            .Build("actexec-parent", "actexec-child");
+
+        var run = await harness.RunAsync(NewExecutable(typeof(DisposalFailingNonCallbackStructuralActivity)));
+
+        var parent = run.State("node-parent");
+        var child = run.State("node-child");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("ActivityDisposalFailed", parent.SubStatus);
+        Assert.Contains("callback disposal failed", parent.Fault!.Message, StringComparison.Ordinal);
+        Assert.False(child.Metadata.ContainsKey(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
+        Assert.Equal(2, probe.Activations);
+        Assert.Equal(2, probe.Disposals);
+    }
+
+    [Fact]
+    public async Task ChildCompletionCallbackAndDisposalFailures_AreAggregatedIntoOneFault()
+    {
+        var probe = new CallbackDisposalProbe();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .ConfigureServices(services => services.AddSingleton(probe))
+            .Build("actexec-parent", "actexec-child");
+
+        var run = await harness.RunAsync(NewExecutable(typeof(CallbackAndDisposalFailingStructuralActivity)));
+
+        var parent = run.State("node-parent");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("ActivityDisposalFailed", parent.SubStatus);
+        Assert.Contains("Activity execution and activation disposal both failed", parent.Fault!.Message, StringComparison.Ordinal);
+        Assert.Single(parent.IncidentIds);
+        Assert.Equal(2, probe.Activations);
+        Assert.Equal(2, probe.Disposals);
     }
 
     private static WorkflowExecutable NewExecutable() =>
@@ -113,5 +155,54 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
                 new ValueTypeDescriptor("test/structural-state"),
                 JsonSerializer.SerializeToElement(new { step }),
                 ValueProtectionPolicy.InstanceInline);
+    }
+
+    public sealed class DisposalFailingNonCallbackStructuralActivity(CallbackDisposalProbe probe) :
+        CallbackDisposalFailingStructuralActivity(probe);
+
+    public sealed class CallbackAndDisposalFailingStructuralActivity(CallbackDisposalProbe probe) :
+        CallbackDisposalFailingStructuralActivity(probe),
+        IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            throw new InvalidOperationException("callback execution failed");
+    }
+
+    public abstract class CallbackDisposalFailingStructuralActivity : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IAsyncDisposable
+    {
+        private readonly CallbackDisposalProbe _probe;
+        private readonly int _activationOrdinal;
+
+        protected CallbackDisposalFailingStructuralActivity(CallbackDisposalProbe probe)
+        {
+            _probe = probe;
+            _activationOrdinal = probe.RecordActivation();
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _probe.RecordDisposal();
+            if (_activationOrdinal == 2)
+                throw new InvalidOperationException("callback disposal failed");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    public sealed class CallbackDisposalProbe
+    {
+        public int Activations { get; private set; }
+        public int Disposals { get; private set; }
+
+        public int RecordActivation() => ++Activations;
+        public void RecordDisposal() => ++Disposals;
     }
 }

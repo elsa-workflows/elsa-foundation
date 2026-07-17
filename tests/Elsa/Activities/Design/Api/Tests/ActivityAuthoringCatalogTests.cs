@@ -63,6 +63,15 @@ public sealed class ActivityAuthoringCatalogTests
             "Ports",
             "ContainerStructure",
             "AuthoringTemplate");
+
+        var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
+        Assert.Equal(typeof(bool?), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
+        var inputConstructor = inputDescriptor.GetConstructors().Single();
+        Assert.Equal(12, inputConstructor.GetParameters().Length);
+        Assert.DoesNotContain(inputConstructor.GetParameters(), parameter =>
+            StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
+        Assert.Contains(inputDescriptor.GetMethods(), method =>
+            method.Name == "Deconstruct" && method.GetParameters().Length == 12);
     }
 
     [Fact]

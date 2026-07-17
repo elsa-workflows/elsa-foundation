@@ -3,6 +3,7 @@ using CShells.Features;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Exceptions;
@@ -131,7 +132,7 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
                 continue;
             }
 
-            foreach (var property in properties.Where(property => property.GetCustomAttribute<ActivityInputAttribute>(inherit: true) is not null))
+            foreach (var property in properties.Where(property => ActivityInputPropertyResolver.FindAttribute(property) is not null))
                 yield return TypeReferenceFactory.Decompose(property.PropertyType).ElementType;
 
             foreach (var resultType in GetActivityResultTypes(activityType))

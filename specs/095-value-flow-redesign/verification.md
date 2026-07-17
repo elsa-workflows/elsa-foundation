@@ -19,8 +19,8 @@ not a partial audit.
 | FR-001–FR-006 | Pass | Canonical role-owned binding records, compiler goldens, code-first/dynamic conformance, and artifact scans distinguish requests, inputs, results, variables, state, and triggers while lowering all authoring forms to one executable. |
 | FR-007–FR-009 | Pass | Typed workflow request/result builder contracts, request pinning, terminal-result validation, and deterministic compiler/fingerprint tests. |
 | FR-010–FR-013 | Pass | Plain `[ActivityInput]` members, one atomic typed result, read-only projections, stable keys/fingerprints, CLR rename compatibility, and scanner/contract tests. |
-| FR-014–FR-018 | Pass | `IActivityActivator`, constructor injection, reduced typed execution context, pinned defaults, reflection/generated/manual metadata conformance, activation requirements, and 218 Activities Design tests. |
-| FR-019–FR-026 | Pass | Invocation/snapshot/attempt/completion records, retry/resume identity, normalized faults, durability-policy rejection, atomic checkpoint tests, distributed recovery, and 246 Groundwork tests. |
+| FR-014–FR-018 | Pass | `IActivityActivator`, constructor injection, reduced typed execution context, pinned defaults, reflection/generated/manual metadata conformance, activation requirements, and 225 Activities Design tests. |
+| FR-019–FR-026 | Pass | Invocation/snapshot/attempt/completion records, retry/resume identity, normalized faults, durability-policy rejection, atomic checkpoint tests, distributed recovery, and 249 Groundwork tests. |
 | FR-027–FR-031 | Pass | Root/container/iteration `VariableFrameState`, materialization-time reads, intrinsic `Set`, immutable expression inputs, and concurrent-write publication diagnostics. |
 | FR-032–FR-036 | Pass | Structural/causal result resolution, explicit scope returns and back-edge state, unavailable/ambiguous producer diagnostics, and deterministic branch/iteration ordering across randomized completion. |
 | FR-037–FR-040 | Pass | Portable expression definitions, immutable declared parameters, JavaScript/Liquid binding-path prohibition tests, deleted ambient evaluator/context/handler, raw Jint engine/configurator, delegate-host-function, and configuration/preprocessor seams, zero-reference architecture guard, and typed isolated script activity results. |
@@ -61,11 +61,18 @@ private-state cleanup. It additionally covers canonical absent optional inputs, 
 payload decoding, bounded/redacted trigger-delivery history, stale bookmark-creation suppression,
 cancellation-safe and timeout-bounded lifecycle notification, closed bookmark-resume checkpoint
 transitions, token-aware cancellation faulting, and disposal-before-checkpoint activation cleanup.
+The self-review loop further covers bounded JavaScript input conversion with exact UTF-8 byte
+accounting, validated immutable external references, C# `required` input reconciliation,
+optional-Absent persistence round trips, nullable CLR hydration, and disposal-before-checkpoint
+structural child callbacks. Workflow-executable v6 coverage pins explicit input nullability, preserves
+v5 unknown-nullability contracts and their fingerprints through deterministic upcasting, and proves
+that a v5 worker rejects a v6 executable before deserialization.
 
 | Project | Result |
 |---|---|
-| `Elsa.Activities.Design.Tests` | 218 passed |
-| `Elsa.Activities.Runtime.Tests` | 150 passed |
+| `Elsa.Activities.Design.Tests` | 225 passed |
+| `Elsa.Activities.Design.Api.Tests` | 5 passed |
+| `Elsa.Activities.Runtime.Tests` | 156 passed |
 | `Elsa.Activities.ControlFlow.Tests` | 196 passed |
 | `Elsa.Activities.Sequence.Tests` | 15 passed |
 | `Elsa.Activities.Flowchart.Tests` | 55 passed |
@@ -73,18 +80,18 @@ transitions, token-aware cancellation faulting, and disposal-before-checkpoint a
 | `Elsa.Activities.Scheduling.Tests` | 25 passed |
 | `Elsa.Activities.Http.Tests` | 192 passed |
 | `Elsa.Activities.Http.IntegrationTests` | 29 passed; 1 pre-existing performance assertion failed |
-| `Elsa.Workflows.Publishing.Api.Tests` | 173 passed |
+| `Elsa.Workflows.Publishing.Api.Tests` | 182 passed |
 | `Elsa.Workflows.Design.CodeGeneration.Tests` | 12 passed |
-| `Elsa.Workflows.Runtime.Tests` | 905 passed |
-| `Elsa.Persistence.Groundwork.Tests` | 246 passed |
+| `Elsa.Workflows.Runtime.Tests` | 913 passed |
+| `Elsa.Persistence.Groundwork.Tests` | 249 passed |
 | `Elsa.Expressions.Tests` | 93 passed |
-| `Elsa.Expressions.JavaScript.Jint.Tests` | 38 passed |
+| `Elsa.Expressions.JavaScript.Jint.Tests` | 46 passed |
 | `Elsa3.Mapping.Tests` | 30 passed |
 | `Elsa.Architecture.Tests` | 97 passed |
 | Activation semantic test host | 17 passed |
 
-The complete solution build passes with zero errors and one existing package-pruning warning. The
-complete solution test was executed with Git commit signing disabled for repository-fixture commits.
+The complete solution build passes with zero errors and existing package/obsolescence warnings only.
+The complete solution test was executed with Git commit signing disabled for repository-fixture commits.
 Every spec-095 affected functional suite above passes; the solution-wide parallel run had two failures
 outside the changed files: one Structured Logs SQLite service-resolution timeout
 (isolated project rerun: 30/30) and the HTTP checkpoint-coalescing performance assertion. The latter

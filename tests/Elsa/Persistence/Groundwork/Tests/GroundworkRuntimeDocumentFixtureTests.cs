@@ -1,6 +1,11 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Documents.Store;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -24,9 +29,9 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
                 ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
 
     [Fact]
-    public void Workflow_executable_shape_is_explicitly_versioned_at_v5() =>
+    public void Workflow_executable_shape_is_explicitly_versioned_at_v6() =>
         Assert.Equal(
-            5,
+            6,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
 
@@ -85,6 +90,20 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         var upcasted = GroundworkTestSerialization.UpcasterRegistry.Upcast(kind, 4, 5, historical);
 
         AssertJsonSemanticallyEqual(ReadCommittedFixture(kind, 5), upcasted.ToJsonString(), kind, 5);
+    }
+
+    [Fact]
+    public async Task Current_worker_loads_v5_unknown_and_v6_explicit_input_nullability()
+    {
+        var legacy = await LoadWorkflowExecutableFixtureAsync(5, "workflowExecutable-input-contract.json");
+        var current = await LoadWorkflowExecutableFixtureAsync(6, "workflowExecutable.json");
+
+        Assert.NotNull(legacy.RootActivity.ActivityContract);
+        Assert.NotNull(current.RootActivity.ChildSlots.Single().Activities.Single().ActivityContract);
+        var legacyInput = Assert.Single(legacy.RootActivity.ActivityContract!.Inputs).Value;
+        var currentInput = Assert.Single(current.RootActivity.ChildSlots.Single().Activities.Single().ActivityContract!.Inputs).Value;
+        Assert.Null(legacyInput.IsNullable);
+        Assert.False(currentInput.IsNullable);
     }
 
     [Theory]
@@ -170,12 +189,32 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
 
     private static string ReadCommittedFixture(string kind, int version)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", kind + ".json");
+        return ReadCommittedFixtureFile(version, kind + ".json");
+    }
+
+    private static string ReadCommittedFixtureFile(int version, string fileName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", fileName);
         Assert.True(
             File.Exists(path),
-            $"Missing committed golden fixture for kind '{kind}' at '{path}'. " +
+            $"Missing committed golden fixture at '{path}'. " +
             "Run this project with GROUNDWORK_FIXTURE_REGEN=1 to generate it.");
         return File.ReadAllText(path);
+    }
+
+    private static async Task<WorkflowExecutable> LoadWorkflowExecutableFixtureAsync(int version, string fileName)
+    {
+        const string kind = ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind;
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        await store.SaveAsync(new SaveDocumentRequest(
+            kind,
+            "artifact-1",
+            ElsaRuntimeDocumentVersions.Stamp(version),
+            ReadCommittedFixtureFile(version, fileName)));
+
+        return await new GroundworkWorkflowExecutableStore(store, GroundworkTestSerialization.Serializer)
+                   .FindAsync("artifact-1")
+               ?? throw new InvalidOperationException($"Workflow executable fixture v{version}/{fileName} did not load.");
     }
 
     private static void WriteFixtureToSource(string kind, int version, string contentJson)

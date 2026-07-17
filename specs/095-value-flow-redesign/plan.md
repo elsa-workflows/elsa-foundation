@@ -9,7 +9,7 @@
 Replace the Elsa 3 memory-address programming surface with a single role-specific path from authored
 bindings to durable invocation records. Publishing emits alias-typed literal, workflow-request,
 variable, causal result, or explicit expression bindings. Runtime materialization pins one immutable
-input snapshot before transient CLR activation, hydrates plain `[Input]` properties, and commits one
+input snapshot before transient CLR activation, hydrates plain `[ActivityInput]` properties, and commits one
 typed completion result plus outcome atomically. Variables remain lexical mutable frames changed only
 by explicit intrinsic operations; expressions receive explicit immutable parameters; Elsa 3 memory
 references are lowered only inside the importer. Code-first workflows compile through an IDE-guided

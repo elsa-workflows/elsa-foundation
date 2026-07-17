@@ -60,12 +60,7 @@ public sealed class GroundworkRuntimeDocumentSerializer(IGroundworkRuntimeDocume
         var foundVersion = ElsaRuntimeDocumentVersions.Parse(documentKind, envelope.SchemaVersion);
         var currentVersion = ElsaRuntimeDocumentVersions.CurrentFor(documentKind);
 
-        if (foundVersion > currentVersion)
-        {
-            throw new GroundworkRuntimeDocumentVersionException(
-                $"Document '{envelope.Id}' of kind '{documentKind}' carries schema version {foundVersion}, but this build only supports " +
-                $"versions up to {currentVersion}. It was written by a newer version of Elsa; refusing to deserialize.");
-        }
+        ElsaRuntimeDocumentVersions.EnsureSupported(documentKind, envelope.Id, foundVersion, currentVersion);
 
         if (foundVersion == currentVersion)
             return DeserializeContent<T>(documentKind, envelope.Id, envelope.ContentJson);

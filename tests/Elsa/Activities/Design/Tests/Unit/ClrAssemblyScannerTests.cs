@@ -77,7 +77,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
-        { typeof(HttpEndpoint), "EA46E473944EE477E49F5138463660731F62CDF93479B4F032547D190432F2B7" }
+        { typeof(HttpEndpoint), "59F652C537405F3E46B03987CA825C5DEDB412BA666A56ADD842C75D05016671" }
     };
 
     [Theory]
@@ -121,6 +121,48 @@ public sealed class ClrAssemblyScannerTests
         var input = InputFor<UnannotatedFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(UnannotatedFixtureActivity.Message));
 
         Assert.True(input.IsRequired);
+    }
+
+    [Fact]
+    public void CSharpRequiredMember_MapsIsRequired()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(RequiredKeywordFixtureActivity).Assembly);
+
+        var input = InputFor<RequiredKeywordFixtureActivity>(
+            CreateScanner().Scan(folder.Path),
+            nameof(RequiredKeywordFixtureActivity.Message));
+
+        Assert.True(input.IsRequired);
+    }
+
+    [Fact]
+    public void NullableReferenceMetadata_MapsIndependentlyFromRequiredness()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(RequiredKeywordFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+
+        var nonNullableRequired = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.Message));
+        var nullableOptional = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.OptionalNote));
+        var nullableRequired = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.RequiredNullableNote));
+        var nullableValue = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.OptionalCount));
+
+        Assert.True(nonNullableRequired.IsRequired);
+        Assert.False(nonNullableRequired.IsNullable);
+        Assert.False(nullableOptional.IsRequired);
+        Assert.True(nullableOptional.IsNullable);
+        Assert.True(nullableRequired.IsRequired);
+        Assert.True(nullableRequired.IsNullable);
+        Assert.False(nullableValue.IsRequired);
+        Assert.True(nullableValue.IsNullable);
+        Assert.Equal("Int32?", nullableValue.Type.Alias);
     }
 
     [Fact]

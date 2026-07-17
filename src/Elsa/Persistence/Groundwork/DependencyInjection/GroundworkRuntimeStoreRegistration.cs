@@ -65,6 +65,7 @@ public static class GroundworkRuntimeStoreRegistration
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV2ToV3Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV3ToV4Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV4ToV5Upcaster>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV5ToV6Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, ActivityExecutionStateDocumentV1ToV2Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, ActivityExecutionStateDocumentV2ToV3Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, ActivityExecutionStateDocumentV3ToV4Upcaster>());

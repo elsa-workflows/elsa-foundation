@@ -17,6 +17,7 @@ internal static class GroundworkTestSerialization
             new WorkflowExecutableDocumentV2ToV3Upcaster(),
             new WorkflowExecutableDocumentV3ToV4Upcaster(),
             new WorkflowExecutableDocumentV4ToV5Upcaster(),
+            new WorkflowExecutableDocumentV5ToV6Upcaster(),
             new ActivityExecutionStateDocumentV1ToV2Upcaster(),
             new ActivityExecutionStateDocumentV2ToV3Upcaster(),
             new ActivityExecutionStateDocumentV3ToV4Upcaster(),

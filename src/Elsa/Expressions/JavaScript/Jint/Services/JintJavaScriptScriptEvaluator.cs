@@ -15,10 +15,7 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
         request.CancellationToken.ThrowIfCancellationRequested();
 
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
-        var arguments = request.Arguments.EnumerateObject()
-            .OrderBy(property => property.Name, StringComparer.Ordinal)
-            .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
-        IsolatedJintEngine.SetReadOnlyArgs(engine, arguments);
+        IsolatedJintEngine.SetReadOnlyArgs(engine, request.Arguments, featureOptions.Value);
 
         var result = engine.Evaluate($"\"use strict\"; (() => {{ {request.Source} }})()");
         if (result.IsUndefined())

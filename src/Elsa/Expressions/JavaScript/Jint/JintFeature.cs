@@ -41,6 +41,15 @@ public class JintFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max array length", Description = "Maximum JavaScript array length, including sparse arrays; empty or zero disables the limit.", Category = "Security", Advanced = true)]
     public uint? MaxArrayLength { get; set; } = 100_000;
 
+    [ManifestSetting(DisplayName = "Max input bytes", Description = "Maximum aggregate UTF-8 size of declared JSON parameter values before JavaScript evaluation.", Category = "Security", Advanced = true)]
+    public int MaxInputBytes { get; set; } = 1024 * 1024;
+
+    [ManifestSetting(DisplayName = "Max input depth", Description = "Maximum nesting depth of a declared JSON parameter value before JavaScript evaluation.", Category = "Security", Advanced = true)]
+    public int MaxInputDepth { get; set; } = 64;
+
+    [ManifestSetting(DisplayName = "Max input nodes", Description = "Maximum aggregate number of JSON values across declared parameters before JavaScript evaluation.", Category = "Security", Advanced = true)]
+    public int MaxInputNodes { get; set; } = 100_000;
+
     [ManifestSetting(DisplayName = "Max result bytes", Description = "Maximum UTF-8 size of a JavaScript result after canonical JSON conversion.", Category = "Security", Advanced = true)]
     public int MaxResultBytes { get; set; } = 1024 * 1024;
 
@@ -59,6 +68,9 @@ public class JintFeature : IShellFeature
             options.MaxRecursionDepth = MaxRecursionDepth;
             options.MaxMemoryBytes = MaxMemoryBytes;
             options.MaxArrayLength = MaxArrayLength;
+            options.MaxInputBytes = MaxInputBytes;
+            options.MaxInputDepth = MaxInputDepth;
+            options.MaxInputNodes = MaxInputNodes;
             options.MaxResultBytes = MaxResultBytes;
             options.MaxResultDepth = MaxResultDepth;
             options.MaxResultNodes = MaxResultNodes;

@@ -162,6 +162,125 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
+    public async Task Rejects_parameter_arrays_larger_than_the_configured_sandbox_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxArrayLength = 2 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator
+            .EvaluateAsync(Request(
+                "args.items.length",
+                new Dictionary<string, JsonElement>
+                {
+                    ["items"] = JsonSerializer.SerializeToElement(new[] { 1, 2, 3 })
+                }))
+            .AsTask());
+
+        Assert.Contains("2 items", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rejects_parameters_larger_than_the_configured_input_byte_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxInputBytes = 32 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator
+            .EvaluateAsync(Request(
+                "args.value",
+                new Dictionary<string, JsonElement>
+                {
+                    ["value"] = JsonSerializer.SerializeToElement(new string('x', 100))
+                }))
+            .AsTask());
+
+        Assert.Contains("32 bytes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Input_byte_limit_counts_materialized_utf8_instead_of_json_encoder_expansion()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxInputBytes = 16 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var result = await evaluator.EvaluateAsync(Request(
+            "args.value",
+            new Dictionary<string, JsonElement>
+            {
+                ["value"] = JsonSerializer.SerializeToElement("é<&")
+            }));
+
+        Assert.Equal("é<&", result.GetString());
+    }
+
+    [Fact]
+    public async Task Rejects_parameters_deeper_than_the_configured_input_depth_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxInputDepth = 3 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator
+            .EvaluateAsync(Request(
+                "args.value",
+                new Dictionary<string, JsonElement>
+                {
+                    ["value"] = JsonSerializer.SerializeToElement(new { a = new { b = new { c = 1 } } })
+                }))
+            .AsTask());
+
+        Assert.Contains("depth limit of 3", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rejects_parameters_with_more_than_the_configured_input_node_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxInputNodes = 4 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator
+            .EvaluateAsync(Request(
+                "args.items.length",
+                new Dictionary<string, JsonElement>
+                {
+                    ["items"] = JsonSerializer.SerializeToElement(new[] { 1, 2, 3, 4 })
+                }))
+            .AsTask());
+
+        Assert.Contains("4 nodes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Accepts_nested_parameters_within_all_configured_input_limits()
+    {
+        await using var provider = BuildProvider(new JintFeature
+        {
+            MaxArrayLength = 2,
+            MaxInputBytes = 128,
+            MaxInputDepth = 4,
+            MaxInputNodes = 6
+        });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var result = await evaluator.EvaluateAsync(Request(
+            "args.order.lines[1].quantity",
+            new Dictionary<string, JsonElement>
+            {
+                ["order"] = JsonSerializer.SerializeToElement(new
+                {
+                    lines = new[] { new { quantity = 1 }, new { quantity = 3 } }
+                })
+            }));
+
+        Assert.Equal(3, result.GetInt32());
+    }
+
+    [Fact]
     public async Task Rejects_expression_results_larger_than_the_configured_json_limit()
     {
         await using var provider = BuildProvider(new JintFeature { MaxResultBytes = 32 });

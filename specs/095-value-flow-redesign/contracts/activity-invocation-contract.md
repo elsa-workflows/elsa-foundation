@@ -13,10 +13,10 @@ through plain annotated properties.
 ```csharp
 public sealed class ChargeCard(IPaymentGateway gateway) : Activity<ChargeCardResult>
 {
-    [Input(Key = "customer-id")]
+    [ActivityInput(Key = "customer-id")]
     public required string CustomerId { get; init; }
 
-    [Input(Key = "amount")]
+    [ActivityInput(Key = "amount")]
     public required decimal Amount { get; init; }
 
     protected override async ValueTask<ActivityTransition<ChargeCardResult>> ExecuteAsync(
@@ -59,7 +59,7 @@ public interface IStatefulActivity<TResult, TState, TTrigger>
 ```
 
 The generic bases erase their typed transition only at the engine boundary. Constructor parameters
-are services. `[Input]` properties are workflow data. Activity code MUST NOT receive an
+are services. `[ActivityInput]` properties are workflow data. Activity code MUST NOT receive an
 `IServiceProvider`, memory register, mutable output context, variable writer, or a generic value bag.
 
 ## 2. Closed transition algebra
@@ -124,7 +124,7 @@ Every executable activity node pins the following immutable contract:
 Stable keys, not CLR member names, identify inputs and projections. Serialized type identity uses the
 alias registry and schema descriptors. Assembly-qualified CLR names are forbidden. The schema
 fingerprint covers input keys/types/requiredness/defaults/policies, the result schema and projection
-paths, outcome keys, activation descriptor, and contract version.
+paths, input nullability, outcome keys, activation descriptor, and contract version.
 
 Publication MUST fail if the pinned contract, constructor, generated/manual hydrator, or required
 activation capability is missing or incompatible. Missing activation capability is a deployment or
@@ -210,7 +210,7 @@ The runtime activation seam is:
 ```csharp
 public interface IActivityActivator
 {
-    ValueTask<ActivityActivation> ActivateAsync(
+    ValueTask<ActivityActivationLease> ActivateAsync(
         ActivityActivationRequest request,
         CancellationToken cancellationToken = default);
 }
@@ -219,16 +219,16 @@ public sealed record ActivityActivationRequest(
     ActivityContract Contract,
     ActivityInputSnapshot Inputs,
     ActivityAttempt Attempt,
-    PersistedValue? PrivateState,
-    TriggerDelivery? Trigger);
+    ActivityPrivateState? PrivateState = null,
+    ActivityTriggerDelivery? Trigger = null);
 
-public sealed class ActivityActivation : IAsyncDisposable
+public sealed class ActivityActivationLease : IAsyncDisposable
 {
-    public required IActivity Activity { get; init; }
+    public IActivity Activity { get; }
 }
 ```
 
-`ActivityActivation` owns the CLR object and whichever DI scope is selected by the benchmark decision.
+`ActivityActivationLease` owns the CLR object and whichever DI scope is selected by the benchmark decision.
 Disposal occurs for complete, suspend, fault, cancel, activation failure, hydration failure, and host
 cancellation. Engine intrinsics do not call `IActivityActivator` and create no activity DI scope.
 
@@ -236,6 +236,7 @@ Generated, manual, and reflection-based hydrators MUST produce identical observa
 
 - assign by stable input key;
 - distinguish omitted, explicit `null`, and pinned default;
+- preserve CLR nullable-reference intent independently of requiredness in the pinned input contract;
 - reject a missing required input;
 - reject `null` for a non-nullable input;
 - reject unknown or duplicate input keys;

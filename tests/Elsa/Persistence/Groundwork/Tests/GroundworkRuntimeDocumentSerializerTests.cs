@@ -376,6 +376,47 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
+    public void WorkflowExecutableV5ToV6Upcaster_preserves_legacy_unknown_and_explicit_nullability()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "executable": {
+                "rootActivity": {
+                  "activityContract": {
+                    "inputs": {
+                      "legacy": { "isRequired": false },
+                      "explicit": { "isRequired": true, "isNullable": false }
+                    }
+                  }
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var result = new WorkflowExecutableDocumentV5ToV6Upcaster().Upcast(content);
+        var inputs = Assert.IsType<JsonObject>(result["executable"]!["rootActivity"]!["activityContract"]!["inputs"]);
+
+        Assert.Same(content, result);
+        Assert.False(inputs["legacy"]!.AsObject().ContainsKey("isNullable"));
+        Assert.False(inputs["explicit"]!["isNullable"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void WorkflowExecutableV6_is_rejected_at_a_frozen_v5_worker_gate()
+    {
+        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
+            ElsaRuntimeDocumentVersions.EnsureSupported(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+                "artifact-1",
+                foundVersion: 6,
+                supportedVersion: 5));
+
+        Assert.Contains(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, exception.Message);
+        Assert.Contains("schema version 6", exception.Message);
+        Assert.Contains("versions up to 5", exception.Message);
+    }
+
+    [Fact]
     public void ActivityExecutionStateV2ToV3Upcaster_adds_a_neutral_variable_frame()
     {
         var content = JsonNode.Parse("""{"state":{"invocationId":"ae-1"}}""")!.AsObject();
@@ -518,6 +559,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             new WorkflowExecutableDocumentV2ToV3Upcaster(),
             new WorkflowExecutableDocumentV3ToV4Upcaster(),
             new WorkflowExecutableDocumentV4ToV5Upcaster(),
+            new WorkflowExecutableDocumentV5ToV6Upcaster(),
             new ActivityExecutionStateDocumentV1ToV2Upcaster(),
             new ActivityExecutionStateDocumentV2ToV3Upcaster(),
             new ActivityExecutionStateDocumentV3ToV4Upcaster(),

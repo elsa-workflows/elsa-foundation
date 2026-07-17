@@ -26,18 +26,22 @@ public sealed class ActivityCallGeneratorTests
                     [property: Output(Key = "approved")] bool Approved,
                     [property: Output(Key = "receipt-id")] string ReceiptId);
 
-                [Version("2.0.0")]
-                [ActivityOutcome("completed")]
-                [ActivityOutcome("declined")]
-                public sealed class ChargeCard : IActivity, IActivityResult<ChargeCardResult>
+                public abstract class ChargeCardBase : IActivity
                 {
                     [ActivityInput(Key = "customer-id", Order = 0)]
                     [Required]
-                    public string CustomerId { get; set; } = "";
+                    public virtual string CustomerId { get; set; } = "";
+                }
+
+                [Version("2.0.0")]
+                [ActivityOutcome("completed")]
+                [ActivityOutcome("declined")]
+                public sealed class ChargeCard : ChargeCardBase, IActivityResult<ChargeCardResult>
+                {
+                    public new string CustomerId { get; set; } = "";
 
                     [ActivityInput(Key = "amount", Order = 1)]
-                    [Required]
-                    public decimal Amount { get; set; }
+                    public required decimal Amount { get; set; }
                 }
             }
             """;

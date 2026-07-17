@@ -103,6 +103,298 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task RejectsOmittedOptionalNonNullableReferenceInput()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-optional",
+            "Test.Optional",
+            [new InputDefinition(
+                "value",
+                "Value",
+                new TypeReference("String"),
+                null,
+                "Value",
+                null,
+                IsRequired: false)
+            {
+                IsNullable = false
+            }]);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("optional", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("non-nullable type alias 'String'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires an authored binding or pinned default", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsExplicitNullForNonNullableReferenceInput()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-optional",
+            "Test.Optional",
+            [new InputDefinition(
+                "value",
+                "Value",
+                new TypeReference("String"),
+                null,
+                "Value",
+                null,
+                IsRequired: false)
+            {
+                IsNullable = false
+            }]);
+        var explicitNull = new WorkflowArgumentState("value", new ArgumentValue(null, "Literal"), null, null, null, null);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("optional", activityVersion.Id, [explicitNull], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-004", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("does not accept null", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyClrCatalogRow_RejectsOmittedInputFromNonNullablePropertyMetadata()
+    {
+        var activityVersion = LegacyNullabilityActivityVersion();
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(
+            typeof(LegacyNullabilityActivity),
+            TypeAliasConvention.CanonicalAlias(typeof(LegacyNullabilityActivity)));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("legacy-nullability", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("non-nullable type alias 'String'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires an authored binding or pinned default", exception.Message, StringComparison.Ordinal);
+        Assert.Null(Assert.Single(activityVersion.Inputs, input => input.ReferenceKey == "nonNullable").IsNullable);
+    }
+
+    [Fact]
+    public async Task LegacyClrCatalogRow_PinsResolvedPropertyNullabilityAndAllowsNullableOmission()
+    {
+        var activityVersion = LegacyNullabilityActivityVersion();
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(
+            typeof(LegacyNullabilityActivity),
+            TypeAliasConvention.CanonicalAlias(typeof(LegacyNullabilityActivity)));
+        var nonNullable = new WorkflowArgumentState(
+            "nonNullable",
+            new ArgumentValue("present", "Literal"),
+            null,
+            null,
+            null,
+            null);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("legacy-nullability", activityVersion.Id, [nonNullable], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var nullableBinding = Assert.Contains("nullable", executable.RootActivity.InputBindings);
+        Assert.Equal(ValuePresence.Absent, nullableBinding.Literal!.Presence);
+        var contract = Assert.IsType<ActivityContract>(executable.RootActivity.ActivityContract);
+        Assert.False(contract.Inputs["nonNullable"].IsNullable);
+        Assert.True(contract.Inputs["nullable"].IsNullable);
+        Assert.All(activityVersion.Inputs, input => Assert.Null(input.IsNullable));
+    }
+
+    [Fact]
+    public async Task LegacyClrCatalogRow_ResolvesInheritedInputAttributeOnHiddenProperty()
+    {
+        var activityType = typeof(LegacyHiddenInputActivity);
+        var activityVersion = new ActivityDefinitionVersion("1.0.0", "legacy-hidden-input-definition")
+        {
+            Id = "activity-legacy-hidden-input",
+            Definition = new ActivityDefinition
+            {
+                Id = "legacy-hidden-input-definition",
+                ActivityTypeKey = activityType.FullName!,
+                Category = "Test"
+            },
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            Inputs =
+            [
+                new InputDefinition(
+                    "inheritedKey",
+                    nameof(LegacyHiddenInputActivity.Value),
+                    new TypeReference("String"),
+                    StorageDriverType: null,
+                    DisplayName: "Value",
+                    Category: null)
+            ]
+        };
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("legacy-hidden", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("non-nullable type alias 'String'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires an authored binding or pinned default", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyClrCatalogRow_WithUnknownInputStableKeyFailsPublication()
+    {
+        var activityType = typeof(LegacyNullabilityActivity);
+        var activityVersion = new ActivityDefinitionVersion("1.0.0", "legacy-missing-input-definition")
+        {
+            Id = "activity-legacy-missing-input",
+            Definition = new ActivityDefinition
+            {
+                Id = "legacy-missing-input-definition",
+                ActivityTypeKey = activityType.FullName!,
+                Category = "Test"
+            },
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            Inputs =
+            [
+                new InputDefinition(
+                    "missing",
+                    "Missing",
+                    new TypeReference("String"),
+                    StorageDriverType: null,
+                    DisplayName: "Missing",
+                    Category: null)
+            ]
+        };
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("legacy-missing", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-003", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("unknown nullability", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("does not match an annotated public activity property", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsExplicitObjectNullForNonNullableReferenceInputWithStableDiagnostic()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-optional",
+            "Test.Optional",
+            [new InputDefinition(
+                "value",
+                "Value",
+                new TypeReference("String"),
+                null,
+                "Value",
+                null,
+                IsRequired: false)
+            {
+                IsNullable = false
+            }]);
+        var explicitNull = new WorkflowArgumentState("value", new ArgumentValue(null, "Object"), null, null, null, null);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("optional", activityVersion.Id, [explicitNull], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-004", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("does not accept null", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("object value cannot be converted", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CompilesExplicitNullForRequiredNullableReferenceInput()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-required-nullable",
+            "Test.RequiredNullable",
+            [new InputDefinition(
+                "value",
+                "Value",
+                new TypeReference("String"),
+                null,
+                "Value",
+                null,
+                IsRequired: true)
+            {
+                IsNullable = true
+            }]);
+        var explicitNull = new WorkflowArgumentState("value", new ArgumentValue(null, "Literal"), null, null, null, null);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("required-nullable", activityVersion.Id, [explicitNull], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = Assert.Contains("value", executable.RootActivity.InputBindings);
+        Assert.Equal(ValuePresence.ExplicitNull, binding.Literal!.Presence);
+    }
+
+    [Fact]
+    public async Task CompilesOmittedOptionalNullableValueInput()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-optional-nullable-value",
+            "Test.OptionalNullableValue",
+            [new InputDefinition(
+                "value",
+                "Value",
+                new TypeReference("Int32?"),
+                null,
+                "Value",
+                null,
+                IsRequired: false)
+            {
+                IsNullable = true
+            }]);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("optional-nullable-value", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = Assert.Contains("value", executable.RootActivity.InputBindings);
+        Assert.Equal(ValuePresence.Absent, binding.Literal!.Presence);
+    }
+
+    [Fact]
     public async Task RejectsOmittedOptionalNonNullableValueInputWithoutPinnedDefault()
     {
         var activityVersion = ActivityVersion(
@@ -834,10 +1126,72 @@ public sealed class WorkflowExecutableCompilerTests
             Inputs = []
         };
 
+    private static ActivityDefinitionVersion LegacyNullabilityActivityVersion()
+    {
+        var activityType = typeof(LegacyNullabilityActivity);
+        return new ActivityDefinitionVersion("1.0.0", "legacy-nullability-definition")
+        {
+            Id = "activity-legacy-nullability",
+            Definition = new ActivityDefinition
+            {
+                Id = "legacy-nullability-definition",
+                ActivityTypeKey = activityType.FullName!,
+                Category = "Test"
+            },
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            Inputs =
+            [
+                new InputDefinition(
+                    "nonNullable",
+                    nameof(LegacyNullabilityActivity.NonNullable),
+                    new TypeReference("String"),
+                    StorageDriverType: null,
+                    DisplayName: "Non nullable",
+                    Category: null),
+                new InputDefinition(
+                    "nullable",
+                    nameof(LegacyNullabilityActivity.Nullable),
+                    new TypeReference("String"),
+                    StorageDriverType: null,
+                    DisplayName: "Nullable",
+                    Category: null)
+            ]
+        };
+    }
+
     [TriggerActivity]
     private sealed class LegacyTriggerActivity
     {
         public const string ActivityType = "Elsa.Test.LegacyTrigger";
+    }
+
+    private sealed class LegacyNullabilityActivity : Activity
+    {
+        [ActivityInput(Key = "nonNullable")]
+        public string NonNullable { get; set; } = string.Empty;
+
+        [ActivityInput(Key = "nullable")]
+        public string? Nullable { get; set; }
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private abstract class LegacyHiddenInputActivityBase : Activity
+    {
+        [ActivityInput(Key = "inheritedKey")]
+        public string? Value { get; set; }
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class LegacyHiddenInputActivity : LegacyHiddenInputActivityBase
+    {
+        public new string Value { get; set; } = string.Empty;
     }
 
     private static IActivityStructureService ActivityStructureService()

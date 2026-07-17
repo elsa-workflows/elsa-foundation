@@ -53,7 +53,7 @@ public sealed class ActivityInputHydrator
         var result = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
         foreach (var property in activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            var attribute = property.GetCustomAttribute<ActivityInputAttribute>(inherit: true);
+            var attribute = ActivityInputPropertyResolver.FindAttribute(property);
             if (attribute is null)
                 continue;
 
@@ -75,19 +75,14 @@ public sealed class ActivityInputHydrator
     {
         if (envelope.Presence == ValuePresence.Absent)
         {
-            var isNullableTarget = !property.PropertyType.IsValueType || Nullable.GetUnderlyingType(property.PropertyType) is not null;
-            if (input.IsRequired || !isNullableTarget)
+            if (input.IsRequired || input.IsNullable is false || !AcceptsNull(property))
                 throw new InvalidOperationException($"Activity input '{input.Key}' does not accept absence.");
             return null;
         }
 
         if (envelope.Presence == ValuePresence.ExplicitNull)
         {
-            var isNonNullableValueType = property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) is null;
-            var isRequiredNonNullableReference = input.IsRequired &&
-                                                 !property.PropertyType.IsValueType &&
-                                                 _nullability.Create(property).WriteState == NullabilityState.NotNull;
-            if (isNonNullableValueType || isRequiredNonNullableReference)
+            if (input.IsNullable is false || !AcceptsNull(property))
                 throw new InvalidOperationException($"Activity input '{input.Key}' does not accept null.");
             return null;
         }
@@ -106,4 +101,9 @@ public sealed class ActivityInputHydrator
             throw new InvalidOperationException($"Activity input '{input.Key}' cannot be materialized as '{property.PropertyType.FullName}'.", exception);
         }
     }
+
+    private bool AcceptsNull(PropertyInfo property) =>
+        Nullable.GetUnderlyingType(property.PropertyType) is not null ||
+        !property.PropertyType.IsValueType &&
+        _nullability.Create(property).WriteState is not NullabilityState.NotNull;
 }

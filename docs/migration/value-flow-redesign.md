@@ -49,9 +49,13 @@ retry or resume receiving the same CLR object.
 ## Removed APIs
 
 Canonical packages no longer expose `IMemoryBlock*`, `IMemoryRegister`, `Argument`, `InputArgument<T>`,
-`OutputArgument<T>`, activity constructor/factory registries, synthetic activity property bags, active output
-registers, or ambient execution-expression carriers. Elsa 3 import code may still recognize the serialized
-legacy concepts at the importer boundary and lowers provable relationships to canonical bindings.
+`OutputArgument<T>`, the no-op `ActivityBase`/`CodeActivity` authoring bases, activity
+constructor/factory registries, synthetic activity property bags, active output registers, or ambient
+execution-expression carriers. Derive ordinary activities from `Activity` or `Activity<TResult>`.
+Direct `IActivity` implementations now return an atomic transition from
+`ExecuteAsync(ActivityExecutionContext)` instead of receiving `IActivityExecutionContext`. Elsa 3
+import code may still recognize the serialized legacy concepts at the importer boundary and lowers
+provable relationships to canonical bindings.
 
 For executable contracts and edge-case rules, see
 [spec 095](../../specs/095-value-flow-redesign/spec.md) and

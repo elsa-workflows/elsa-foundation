@@ -27,7 +27,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
             throw new InvalidOperationException("The JavaScript binding-pure-v1 evaluator does not support evaluator options.");
 
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
-        IsolatedJintEngine.SetReadOnlyArgs(engine, request.ParameterValues);
+        IsolatedJintEngine.SetReadOnlyArgs(engine, request.ParameterValues, featureOptions.Value);
 
         var result = engine.Evaluate($"\"use strict\"; ({definition.Source})");
         if (result.IsUndefined())

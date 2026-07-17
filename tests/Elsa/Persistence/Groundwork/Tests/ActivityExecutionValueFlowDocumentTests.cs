@@ -89,7 +89,7 @@ public sealed class ActivityExecutionValueFlowDocumentTests
     }
 
     [Fact]
-    public void Input_snapshot_is_complete_immutable_and_rejects_absent_values()
+    public void Input_snapshot_is_complete_immutable_and_preserves_absent_values()
     {
         var values = new Dictionary<string, ValueEnvelope> { ["message"] = Inline(StringType, "before") };
         var snapshot = new ActivityInputSnapshot(
@@ -102,7 +102,7 @@ public sealed class ActivityExecutionValueFlowDocumentTests
         values["message"] = Inline(StringType, "after");
 
         Assert.Equal("before", snapshot.Values["message"].InlineValue!.Value.GetString());
-        Assert.Throws<ArgumentException>(() => new ActivityInputSnapshot(
+        var absentSnapshot = new ActivityInputSnapshot(
             "invocation-1",
             "contract-sha256",
             "bindings-sha256",
@@ -110,7 +110,11 @@ public sealed class ActivityExecutionValueFlowDocumentTests
             {
                 ["message"] = ValueEnvelope.Absent(StringType, ValueProtectionPolicy.InstanceInline)
             },
-            DateTimeOffset.UtcNow));
+            DateTimeOffset.UtcNow);
+        var json = JsonSerializer.Serialize(absentSnapshot, JsonOptions);
+        var copy = JsonSerializer.Deserialize<ActivityInputSnapshot>(json, JsonOptions)!;
+
+        Assert.Equal(ValuePresence.Absent, copy.Values["message"].Presence);
     }
 
     [Fact]

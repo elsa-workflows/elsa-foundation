@@ -45,7 +45,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
 
     /// <summary>
     /// Preserves an omitted optional argument as a canonical absent literal. Only nullable CLR targets
-    /// can represent omission; non-nullable value inputs require an authored binding or pinned default.
+    /// can represent omission; non-nullable inputs require an authored binding or pinned default.
     /// </summary>
     public RuntimeInputBinding CompileOmitted(InputDefinition inputDefinition)
     {
@@ -53,7 +53,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         var inputType = ResolveInputType(inputDefinition);
         var targetType = ToValueTypeDescriptor(inputDefinition);
         var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
-        if (inputType.IsValueType && Nullable.GetUnderlyingType(inputType) is null)
+        if (!AcceptsNull(inputDefinition, inputType))
         {
             throw new ArgumentException(
                 $"VF-ACT-003: Optional input '{inputDefinition.ReferenceKey}' with non-nullable type alias '{inputDefinition.Type.Alias}' " +
@@ -193,6 +193,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{value.Value}' cannot be converted to alias '{inputDefinition.Type.Alias}'.", exception);
         }
 
+        ValidateNull(inputDefinition, inputType, converted, nodeId);
         var literal = JsonSerializer.SerializeToElement(converted, inputType);
         var targetType = ToValueTypeDescriptor(inputDefinition);
         return new RuntimeInputBinding(
@@ -209,6 +210,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     private RuntimeInputBinding CompileObjectInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy policy)
     {
         var inputType = ResolveInputType(inputDefinition);
+        object? converted;
         try
         {
             var authored = value.Value is JsonElement jsonElement
@@ -217,7 +219,20 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             var structured = authored.ValueKind == JsonValueKind.String
                 ? JsonSerializer.Deserialize<JsonElement>(authored.GetString()!)
                 : authored;
-            var converted = structured.Deserialize(inputType);
+            converted = structured.Deserialize(inputType);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        {
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                exception);
+        }
+
+        // Keep the contract violation outside the conversion catch so VF-ACT-004 remains the direct,
+        // stable publication diagnostic instead of being wrapped as malformed object syntax.
+        ValidateNull(inputDefinition, inputType, converted, nodeId);
+        try
+        {
             var literal = JsonSerializer.SerializeToElement(converted, inputType);
             var targetType = ToValueTypeDescriptor(inputDefinition);
             return new RuntimeInputBinding(
@@ -385,6 +400,19 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
 
     private static ValueTypeDescriptor ToValueTypeDescriptor(InputDefinition inputDefinition) =>
         new(inputDefinition.Type.Alias, inputDefinition.Type.CollectionKind);
+
+    private static bool AcceptsNull(InputDefinition inputDefinition, Type inputType) =>
+        inputDefinition.IsNullable ??
+        (Nullable.GetUnderlyingType(inputType) is not null || !inputType.IsValueType);
+
+    private static void ValidateNull(InputDefinition inputDefinition, Type inputType, object? value, string nodeId)
+    {
+        if (value is null && !AcceptsNull(inputDefinition, inputType))
+        {
+            throw new ArgumentException(
+                $"VF-ACT-004: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not accept null.");
+        }
+    }
 
     private static object? ConvertLiteral(object? value, Type targetType)
     {

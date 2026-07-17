@@ -1,0 +1,163 @@
+{
+  "collection": "workflowExecutable",
+  "deletionGuard": null,
+  "executable": {
+    "compatibilityMetadata": {
+      "slice": "slice-1"
+    },
+    "createdAt": "1970-01-01T00:00:00\u002B00:00",
+    "identity": {
+      "artifactHash": "hash-artifact-1",
+      "artifactId": "artifact-1",
+      "artifactVersion": "1",
+      "definitionId": "definition-1",
+      "definitionVersionId": "version-1"
+    },
+    "resumeTargets": {
+      "resume-1": {
+        "executableNodeId": "node-child",
+        "handlerKey": "Bookmark",
+        "metadata": {
+          "stimulus": "Http"
+        },
+        "resumeTargetId": "resume-1"
+      }
+    },
+    "rootActivity": {
+      "activityContract": null,
+      "activityType": "Elsa.Sequence",
+      "activityTypeVersion": "1.0.0",
+      "authoredActivityId": "authored-root",
+      "childSlots": [
+        {
+          "activities": [
+            {
+              "activityContract": {
+                "activation": {
+                  "capability": "Elsa.SendEmail",
+                  "descriptorKind": "Elsa.Activities.SendEmailDescriptor"
+                },
+                "activityTypeKey": "Elsa.SendEmail",
+                "contractVersion": "1.0.0",
+                "descriptorKind": "Elsa.Activities.SendEmailDescriptor",
+                "descriptorPayload": {
+                  "kind": "Send"
+                },
+                "inputs": {
+                  "to": {
+                    "defaultValue": null,
+                    "editorMetadata": {},
+                    "hasDefault": false,
+                    "isNullable": false,
+                    "isRequired": true,
+                    "key": "to",
+                    "name": "to",
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "lifecycle": 0,
+                      "redactionMode": null,
+                      "requiresEncryption": false,
+                      "retentionPolicy": null,
+                      "storage": 0,
+                      "storageProfile": null
+                    },
+                    "type": {
+                      "alias": "String",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    }
+                  }
+                },
+                "outcomes": [
+                  "Done"
+                ],
+                "result": {
+                  "isRequired": true,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "lifecycle": 0,
+                    "redactionMode": null,
+                    "requiresEncryption": false,
+                    "retentionPolicy": null,
+                    "storage": 0,
+                    "storageProfile": null
+                  },
+                  "projections": {},
+                  "type": {
+                    "alias": "Unit",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  }
+                },
+                "schemaFingerprint": "sha256:b56726ca9b946992d06ccd417f35201a3e5a9b50f1bffa66e820a97fcf93eeef"
+              },
+              "activityType": "Elsa.SendEmail",
+              "activityTypeVersion": "1.0.0",
+              "authoredActivityId": "authored-child",
+              "childSlots": [],
+              "descriptorPayload": {
+                "kind": "Send"
+              },
+              "descriptorType": "Elsa.Activities.SendEmailDescriptor",
+              "executableNodeId": "child",
+              "inputBindings": {
+                "to": {
+                  "activityResult": null,
+                  "effectivePolicy": {
+                    "isSensitive": false,
+                    "lifecycle": 1,
+                    "metadata": {},
+                    "redactionMode": null,
+                    "requiresEncryption": false,
+                    "retentionPolicy": null,
+                    "storage": 1
+                  },
+                  "expression": null,
+                  "inputKey": "to",
+                  "inputName": "to",
+                  "literal": null,
+                  "literalValue": null,
+                  "metadata": {},
+                  "source": 2,
+                  "targetType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "variable": null,
+                  "workflowRequest": {
+                    "memberKey": "customerEmail",
+                    "path": null
+                  }
+                }
+              },
+              "intrinsicKind": null,
+              "intrinsicVariable": null,
+              "metadata": {
+                "role": "leaf"
+              },
+              "structure": null
+            }
+          ],
+          "name": "Body"
+        }
+      ],
+      "descriptorPayload": {
+        "kind": "Send"
+      },
+      "descriptorType": "Elsa.Activities.SequenceDescriptor",
+      "executableNodeId": "root",
+      "inputBindings": {},
+      "intrinsicKind": null,
+      "intrinsicVariable": null,
+      "metadata": {},
+      "structure": null
+    }
+  },
+  "rootWriteLeases": {}
+}

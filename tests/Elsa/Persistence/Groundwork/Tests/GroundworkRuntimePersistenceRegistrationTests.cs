@@ -104,6 +104,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
                 typeof(WorkflowExecutableDocumentV2ToV3Upcaster),
                 typeof(WorkflowExecutableDocumentV3ToV4Upcaster),
                 typeof(WorkflowExecutableDocumentV4ToV5Upcaster),
+                typeof(WorkflowExecutableDocumentV5ToV6Upcaster),
                 typeof(ActivityExecutionStateDocumentV1ToV2Upcaster),
                 typeof(ActivityExecutionStateDocumentV2ToV3Upcaster),
                 typeof(ActivityExecutionStateDocumentV3ToV4Upcaster),

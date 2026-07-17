@@ -21,6 +21,7 @@ public class JintSandboxConstraintTests
             f.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
             f.MaxStatements = null;
             f.MaxRecursionDepth = null;
+            f.MaxMemoryBytes = null;
         });
         using var scope = provider.CreateScope();
         var evaluator = scope.ScriptEvaluator();
@@ -90,6 +91,48 @@ public class JintSandboxConstraintTests
     }
 
     [Fact]
+    public async Task ScriptArgumentsDeeperThanConfiguredInputLimitAreRejected()
+    {
+        await using var provider = JintTestHost.Build(feature => feature.MaxInputDepth = 3);
+        using var scope = provider.CreateScope();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EvaluateAsync(
+                    scope.ScriptEvaluator(),
+                    "return args.value;",
+                    arguments: JsonSerializer.SerializeToElement(new { value = new { a = new { b = new { c = 1 } } } }))
+                .AsTask());
+
+        Assert.Contains("depth limit of 3", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ScriptArgumentsWithinConfiguredInputLimitsRemainAvailable()
+    {
+        await using var provider = JintTestHost.Build(feature =>
+        {
+            feature.MaxArrayLength = 2;
+            feature.MaxInputBytes = 128;
+            feature.MaxInputDepth = 4;
+            feature.MaxInputNodes = 6;
+        });
+        using var scope = provider.CreateScope();
+
+        var result = await EvaluateAsync(
+            scope.ScriptEvaluator(),
+            "return args.order.lines[1].quantity;",
+            arguments: JsonSerializer.SerializeToElement(new
+            {
+                order = new
+                {
+                    lines = new[] { new { quantity = 1 }, new { quantity = 3 } }
+                }
+            }));
+
+        Assert.Equal(3, result!.Value.GetInt32());
+    }
+
+    [Fact]
     public async Task EachCreateRebindsItsOwnToken()
     {
         // The cancellation constraint is registered once on the cached options; every Create rebinds it to
@@ -152,9 +195,10 @@ public class JintSandboxConstraintTests
     private static ValueTask<JsonElement?> EvaluateAsync(
         IJavaScriptScriptEvaluator evaluator,
         string source,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        JsonElement? arguments = null) =>
         evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
             source,
-            JsonSerializer.SerializeToElement(new { }),
+            arguments ?? JsonSerializer.SerializeToElement(new { }),
             cancellationToken));
 }

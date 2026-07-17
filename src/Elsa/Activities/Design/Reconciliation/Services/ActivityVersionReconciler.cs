@@ -29,8 +29,10 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 ///    with immutable provenance (including ProvisioningHash).
 /// 4. If <c>(DefinitionId, Version)</c> is already persisted, compute the incoming hash
 ///    and compare to the persisted ProvisioningHash:
-///    - Hashes differ → <see cref="ActivityVersionHashMismatchException"/> (the source is
-///      broken — same logical identity, different content).
+///    - Hashes differ only because a CLR catalog candidate enriches a pre-nullability row with
+///      <see cref="InputDefinition.IsNullable"/> metadata → skip as a compatible catalog upgrade.
+///    - Any other hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
+///      is broken — same logical identity, different content).
 ///    - Hashes match → skip or throw per the <see cref="DuplicateHandling"/> option.
 ///
 /// No per-pass mutating state is carried by any entity in this domain. Source disappearance
@@ -156,6 +158,12 @@ public sealed class ActivityVersionReconciler(
                 return;
             }
 
+            if (IsNullabilityMetadataEnrichment(existingVersion, incomingVersion))
+            {
+                LogSkipNullabilityMetadataEnrichment(definition.Id, definition.ActivityTypeKey, incomingVersion.Version);
+                return;
+            }
+
             // Same identity, different content — the source is broken. Throw loudly.
             throw new ActivityVersionHashMismatchException(
                 definitionId: definition.Id,
@@ -245,6 +253,56 @@ public sealed class ActivityVersionReconciler(
                 definitionId,
                 persistedVersion,
                 incomingVersion);
+    }
+
+    private bool IsNullabilityMetadataEnrichment(
+        IActivityDefinitionVersion existingVersion,
+        IActivityDefinitionVersion incomingVersion)
+    {
+        // This compatibility path is intentionally restricted to CLR catalog rows. Nullability was
+        // added to the CLR scanner after catalog versions had already been persisted, so the old row
+        // cannot be rewritten in place without violating catalog immutability.
+        if (!StringComparer.Ordinal.Equals(existingVersion.SourceKind, "CLR") ||
+            !StringComparer.Ordinal.Equals(incomingVersion.SourceKind, "CLR"))
+            return false;
+
+        var incomingInputs = incomingVersion.Inputs.ToArray();
+        if (!incomingInputs.Any(input => input.IsNullable.HasValue))
+            return false;
+
+        // Recreate exactly the pre-nullability projection. Comparing this hash to the persisted hash
+        // proves that IsNullable enrichment is the only content delta; description, descriptor,
+        // requiredness, type, defaults, facets, and every other drift signal remain protected.
+        var preNullabilityProjection = new ActivityDefinitionVersionModel(
+            Id: incomingVersion.Id,
+            Version: incomingVersion.Version,
+            DefinitionId: incomingVersion.DefinitionId,
+            DescriptorType: incomingVersion.DescriptorType,
+            DescriptorPayload: incomingVersion.DescriptorPayload,
+            SourceKind: incomingVersion.SourceKind,
+            SourceId: incomingVersion.SourceId,
+            Definition: incomingVersion.Definition,
+            Inputs: incomingInputs.Select(input => input with { IsNullable = null }).ToArray(),
+            Outputs: incomingVersion.Outputs,
+            DesignFacets: incomingVersion.DesignFacets,
+            ExecutionType: incomingVersion.ExecutionType,
+            Hash: string.Empty);
+
+        var compatibilityHash = hasher.Hash(incomingVersion.Definition, preNullabilityProjection);
+        return string.Equals(existingVersion.Hash, compatibilityHash, StringComparison.Ordinal);
+    }
+
+    private void LogSkipNullabilityMetadataEnrichment(
+        string definitionId,
+        string activityTypeKey,
+        string version)
+    {
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation(
+                "Reconciliation: skipping compatible CLR nullability-metadata enrichment. Definition '{key}' (id = '{id}'), version {version}.",
+                activityTypeKey,
+                definitionId,
+                version);
     }
 
     /// <summary>

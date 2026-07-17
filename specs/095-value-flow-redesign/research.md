@@ -52,9 +52,9 @@ completion exceptions (rejected: control flow disguised as failure).
 
 **Decision**: Replace `IActivityFactory.Create` plus `ActivityArgumentBinder` with
 `IActivityActivator.ActivateAsync(ActivityActivationRequest)`. The returned async-disposable
-`ActivityActivation` owns the fresh CLR object and any DI scope. The request carries descriptor data,
+`ActivityActivationLease` owns the fresh CLR object and any DI scope. The request carries descriptor data,
 the pinned input snapshot, contract identity, attempt identity, private state, and optional trigger.
-One hydrator assigns plain `[Input]` properties exactly once after constructor injection.
+One hydrator assigns plain `[ActivityInput]` properties exactly once after constructor injection.
 
 **Rationale**: This is the stable seam behind which burst, per-attempt, and conditional DI strategies
 can be benchmarked without changing activity authoring or invocation semantics.

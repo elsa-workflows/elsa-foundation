@@ -112,6 +112,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 resolutionContext,
                 cancellationToken);
 
+            ValidatePresence(input, value, node.ExecutableNodeId);
             values.Add(input.Key, value);
         }
 
@@ -338,6 +339,15 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         if (!policy.Satisfies(ValuePolicyCombiner.ToProtectionPolicy(input.Policy)))
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' would downgrade its contract protection policy.");
+    }
+
+    private static void ValidatePresence(ActivityInputContract input, ValueEnvelope value, string nodeId)
+    {
+        if (value.Presence == ValuePresence.Absent && input.IsRequired)
+            throw new InvalidOperationException($"VF-ACT-003: Required input '{input.Key}' on executable node '{nodeId}' cannot materialize as absent.");
+
+        if (value.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull && input.IsNullable is false)
+            throw new InvalidOperationException($"VF-ACT-004: Input '{input.Key}' on executable node '{nodeId}' does not accept null or absence.");
     }
 
     private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>

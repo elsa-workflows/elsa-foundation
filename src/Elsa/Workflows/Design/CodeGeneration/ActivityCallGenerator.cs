@@ -164,7 +164,7 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
 
     private static AttributeData? FindPropertyAttribute(IPropertySymbol property, string metadataName)
     {
-        for (var current = property; current is not null; current = current.OverriddenProperty)
+        foreach (var current in EnumeratePropertyChain(property))
         {
             var attribute = current.GetAttributes().FirstOrDefault(candidate => IsAttribute(candidate, metadataName));
             if (attribute is not null)
@@ -172,6 +172,22 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         }
 
         return null;
+    }
+
+    private static IEnumerable<IPropertySymbol> EnumeratePropertyChain(IPropertySymbol property)
+    {
+        yield return property;
+
+        for (var current = property.ContainingType.BaseType; current is not null; current = current.BaseType)
+        {
+            var baseProperty = current.GetMembers(property.Name)
+                .OfType<IPropertySymbol>()
+                .FirstOrDefault(candidate =>
+                    !candidate.IsStatic &&
+                    candidate.DeclaredAccessibility == Accessibility.Public);
+            if (baseProperty is not null)
+                yield return baseProperty;
+        }
     }
 
     private static IEnumerable<AttributeData> EnumerateTypeAttributes(INamedTypeSymbol type, string metadataName)
@@ -187,7 +203,9 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
     {
         var key = ReadNamedString(attribute, "Key") ?? property.Name;
         var order = ReadNamedSingle(attribute, "Order");
-        var required = FindPropertyAttribute(property, RequiredAttributeName) is not null;
+        var required = EnumeratePropertyChain(property).Any(candidate =>
+            candidate.IsRequired ||
+            candidate.GetAttributes().Any(attribute => IsAttribute(attribute, RequiredAttributeName)));
         return new InputMetadata(ToParameterName(property.Name), key, property.Type, order, required);
     }
 

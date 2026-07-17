@@ -28,7 +28,7 @@ public static class ElsaRuntimeDocumentVersions
     private static readonly IReadOnlyDictionary<string, int> Current = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 5,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 6,
         [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 1,
@@ -77,6 +77,29 @@ public static class ElsaRuntimeDocumentVersions
         throw new GroundworkRuntimeDocumentVersionException(
             $"Document kind '{documentKind}' carries unrecognized schema version stamp '{schemaVersion}'. " +
             $"Expected a positive integer or the legacy stamp '{LegacySchemaVersion}'. Refusing to deserialize.");
+    }
+
+    /// <summary>
+    /// Rejects a document written beyond a worker's supported version before its content is deserialized.
+    /// Keeping this check independent of the current-version table makes rolling-version compatibility
+    /// explicit and testable for both the current worker and a frozen older-worker boundary.
+    /// </summary>
+    /// <exception cref="GroundworkRuntimeDocumentVersionException">
+    /// The found version is newer than the worker's supported version.
+    /// </exception>
+    public static void EnsureSupported(string documentKind, string documentId, int foundVersion, int supportedVersion)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentKind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        ArgumentOutOfRangeException.ThrowIfLessThan(foundVersion, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(supportedVersion, 1);
+
+        if (foundVersion <= supportedVersion)
+            return;
+
+        throw new GroundworkRuntimeDocumentVersionException(
+            $"Document '{documentId}' of kind '{documentKind}' carries schema version {foundVersion}, but this build only supports " +
+            $"versions up to {supportedVersion}. It was written by a newer version of Elsa; refusing to deserialize.");
     }
 
     /// <summary>Formats a version as the stamp written to <c>SaveDocumentRequest.SchemaVersion</c>.</summary>

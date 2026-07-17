@@ -64,7 +64,7 @@ adapter still supplies existing behavior.
 
 ## Phase 3: User Story 1 — Plain transient activities and atomic typed results (Priority: P1) 🎯 MVP
 
-**Goal**: Activity authors use constructor injection, plain `[Input]` properties, and one returned
+**Goal**: Activity authors use constructor injection, plain `[ActivityInput]` properties, and one returned
 typed result/outcome with no memory or argument API.
 
 **Independent Test**: Invoke a service-bearing activity with required/defaulted inputs, typed result

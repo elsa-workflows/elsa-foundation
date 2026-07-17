@@ -33,7 +33,10 @@ public sealed record ActivityInputDescriptorView(
     string? UiHint,
     JsonElement? DefaultValue,
     string? DefaultSyntax,
-    JsonElement? UiSpecifications);
+    JsonElement? UiSpecifications)
+{
+    public bool? IsNullable { get; init; }
+}
 
 public sealed record ActivityOutputDescriptorView(
     string Name,

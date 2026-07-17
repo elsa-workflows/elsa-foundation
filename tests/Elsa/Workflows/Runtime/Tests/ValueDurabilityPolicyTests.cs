@@ -66,6 +66,44 @@ public sealed class ValueDurabilityPolicyTests
         Assert.Contains("VF-ACT-005", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(ValuePresence.Absent)]
+    [InlineData(ValuePresence.ExplicitNull)]
+    public async Task Snapshot_materialization_rejects_nullish_value_for_non_nullable_contract(ValuePresence presence)
+    {
+        var value = presence == ValuePresence.Absent
+            ? ValueEnvelope.Absent(StringType, ValueProtectionPolicy.InstanceInline)
+            : ValueEnvelope.Null(StringType, ValueProtectionPolicy.InstanceInline);
+        var node = NewTypedNode(
+            value,
+            ValueProtectionPolicy.InstanceInline,
+            ActivityValuePolicy.Default,
+            isRequired: false,
+            isNullable: false);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewMaterializer().MaterializeSnapshotAsync(node, "invocation-1", NewResolutionContext(), Now).AsTask());
+
+        Assert.Contains("VF-ACT-004", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("does not accept null or absence", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Snapshot_materialization_allows_explicit_null_for_required_nullable_contract()
+    {
+        var node = NewTypedNode(
+            ValueEnvelope.Null(StringType, ValueProtectionPolicy.InstanceInline),
+            ValueProtectionPolicy.InstanceInline,
+            ActivityValuePolicy.Default,
+            isRequired: true,
+            isNullable: true);
+
+        var snapshot = await NewMaterializer()
+            .MaterializeSnapshotAsync(node, "invocation-1", NewResolutionContext(), Now);
+
+        Assert.Equal(ValuePresence.ExplicitNull, snapshot.Values["message"].Presence);
+    }
+
     [Fact]
     public async Task Snapshot_materialization_propagates_stricter_source_sensitivity()
     {
@@ -271,7 +309,7 @@ public sealed class ValueDurabilityPolicyTests
             new Dictionary<string, JsonElement>(),
             returnedLocator: " ");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
                 .MaterializeSnapshotAsync(
                     NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "encrypted-inputs")),
@@ -280,6 +318,7 @@ public sealed class ValueDurabilityPolicyTests
                     Now)
                 .AsTask());
 
+        Assert.Equal("Locator", exception.ParamName);
         Assert.Contains("locator", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -505,7 +544,9 @@ public sealed class ValueDurabilityPolicyTests
     private static ExecutableNode NewTypedNode(
         ValueEnvelope literal,
         ValueProtectionPolicy effectivePolicy,
-        ActivityValuePolicy contractPolicy)
+        ActivityValuePolicy contractPolicy,
+        bool isRequired = true,
+        bool? isNullable = null)
     {
         var binding = new RuntimeInputBinding(
             "message",
@@ -514,10 +555,14 @@ public sealed class ValueDurabilityPolicyTests
             RuntimeInputBindingSource.Literal,
             literal: literal);
 
-        return NewTypedNode(binding, contractPolicy);
+        return NewTypedNode(binding, contractPolicy, isRequired, isNullable);
     }
 
-    private static ExecutableNode NewTypedNode(RuntimeInputBinding binding, ActivityValuePolicy contractPolicy)
+    private static ExecutableNode NewTypedNode(
+        RuntimeInputBinding binding,
+        ActivityValuePolicy contractPolicy,
+        bool isRequired = true,
+        bool? isNullable = null)
     {
         using var descriptor = JsonDocument.Parse("""{"type":"test"}""");
         var contract = new ActivityContract(
@@ -525,7 +570,7 @@ public sealed class ValueDurabilityPolicyTests
             "1.0.0",
             "test",
             descriptor.RootElement,
-            [new ActivityInputContract("message", "Message", StringType, true, false, null, contractPolicy)],
+            [new ActivityInputContract("message", "Message", StringType, isRequired, false, null, contractPolicy) { IsNullable = isNullable }],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/activity"));

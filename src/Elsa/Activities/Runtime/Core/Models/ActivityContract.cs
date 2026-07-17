@@ -86,15 +86,7 @@ public sealed class ActivityContract
             descriptorPayload = DescriptorPayload,
             inputs = Inputs.Values
                 .OrderBy(x => x.Key, StringComparer.Ordinal)
-                .Select(x => new
-                {
-                    x.Key,
-                    x.Type,
-                    x.IsRequired,
-                    x.HasDefault,
-                    x.DefaultValue,
-                    x.Policy
-                }),
+                .Select(BuildInputFingerprintProjection),
             result = new
             {
                 Result.Type,
@@ -112,6 +104,26 @@ public sealed class ActivityContract
         var canonical = SortNode(JsonNode.Parse(json)!).ToJsonString();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+    }
+
+    private static IReadOnlyDictionary<string, object?> BuildInputFingerprintProjection(ActivityInputContract input)
+    {
+        // Keep the original property names and insertion order intact. In particular, do not serialize a null
+        // IsNullable member: contracts persisted before nullability was introduced must reproduce their original
+        // schema fingerprint. Explicit true/false values remain behaviorally relevant and are inserted beside
+        // IsRequired in the canonical input shape.
+        var projection = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [nameof(input.Key)] = input.Key,
+            [nameof(input.Type)] = input.Type,
+            [nameof(input.IsRequired)] = input.IsRequired
+        };
+        if (input.IsNullable is { } isNullable)
+            projection[nameof(input.IsNullable)] = isNullable;
+        projection[nameof(input.HasDefault)] = input.HasDefault;
+        projection[nameof(input.DefaultValue)] = input.DefaultValue;
+        projection[nameof(input.Policy)] = input.Policy;
+        return projection;
     }
 
     private static void ValidateUnique(IEnumerable<string> keys, string role)
@@ -178,6 +190,7 @@ public sealed class ActivityInputContract
     public bool HasDefault { get; }
     public JsonElement? DefaultValue { get; }
     public ActivityValuePolicy Policy { get; }
+    public bool? IsNullable { get; init; }
     public IReadOnlyDictionary<string, string> EditorMetadata { get; }
 }
 

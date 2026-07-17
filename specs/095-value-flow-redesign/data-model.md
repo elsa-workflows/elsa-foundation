@@ -25,7 +25,7 @@ Portable identity for a value type.
 | Field | Meaning |
 | --- | --- |
 | `Alias` | Stable alias registered for the scalar or element type |
-| `CollectionShape` | Scalar, nullable, list, set, dictionary, or another registered structural shape |
+| `CollectionShape` | Scalar, list, set, dictionary, or another registered structural shape |
 | `Schema` | Optional immutable JSON schema or registered schema descriptor |
 | `SchemaVersion` | Optional version of the schema contract |
 
@@ -94,7 +94,7 @@ must normalize to equivalent values for every behaviorally relevant field.
 
 ### `ActivityInputDefinition`
 
-Definition of one independently bindable plain `[Input]` property.
+Definition of one independently bindable plain `[ActivityInput]` property.
 
 | Field | Meaning |
 | --- | --- |
@@ -102,16 +102,28 @@ Definition of one independently bindable plain `[Input]` property.
 | `Name` | Current author/editor display name |
 | `Type` | Portable value type descriptor |
 | `Required` | Whether omission is invalid |
+| `Nullable` | Whether an explicit `null` (and, when optional, canonical `Absent`) is valid independently of requiredness |
 | `Default` | Optional pinned default `ValueEnvelope` |
 | `Policy` | Minimum value-protection policy |
 | `EditorMetadata` | Ordering, category, UI hint, options, and provider metadata |
 
 An omitted binding, explicit null, and a literal default are distinct authored states. Publication
 must reject omission for a required input, lower it to the pinned literal default when one exists,
-or preserve accepted optional omission as an `Absent` literal for nullable targets. A non-nullable
-input without a binding or pinned default is invalid. The executable and complete invocation snapshot
-remain authoritative; hydration deterministically maps optional `Absent` to null instead of consulting
-transient CLR property initializers.
+or preserve accepted optional omission as an `Absent` literal for nullable targets. Requiredness and
+nullability are independent: a required nullable input accepts explicit `null` but not omission. A
+non-nullable input without a binding or pinned default is invalid, and explicit `null` is invalid for
+that input. The executable and complete invocation snapshot remain authoritative; hydration
+deterministically maps optional nullable `Absent` to null instead of consulting transient CLR property
+initializers.
+
+CLR catalog rows persisted before nullable metadata was introduced retain `Nullable = unknown`; they
+are not mutated in place. Same-version reconciliation may treat an incoming CLR row as compatible
+only when clearing the incoming nullable fields reproduces the persisted content hash exactly.
+Publication must then derive each unknown CLR input from the resolved annotated property's nullable
+reference metadata before compiling bindings and pinning the activity contract. If a resolved CLR
+activity has an unknown input that does not match exactly one annotated property by stable key,
+publication must fail instead of guessing. Unknown nullability for non-CLR descriptions remains
+tri-state metadata.
 
 ### `ActivityResultDefinition`
 
@@ -506,8 +518,14 @@ preserve ordering and idempotency but are not allowed to weaken the canonical ch
    into Authored entities or path-specific diagnostics, and Elsa 3 DTOs never enter executable or
    runtime state.
 8. Contract compatibility permits a CLR member rename only when stable keys, aliases, schema,
-   requiredness, defaults, policies, result projections, outcomes, and activation requirements remain
-   compatible. Incompatible changes require a new contract version and artifact identity.
+   requiredness, nullability, defaults, policies, result projections, outcomes, and activation
+   requirements remain compatible. Incompatible changes require a new contract version and artifact
+   identity.
+9. `WorkflowExecutable` v6 is the first format that permits explicit activity-input nullability.
+   The deterministic v5-to-v6 upcaster preserves a missing nullable member as `unknown` so the legacy
+   contract fingerprint remains valid; it must not infer a value from mutable CLR or Design state.
+   During a rolling deployment, v5 workers reject v6 executables at the version gate, while v6
+   workers accept both v5 legacy contracts and v6 explicit-nullability contracts.
 
 ## Explicitly removed or non-persisted concepts
 
@@ -530,7 +548,7 @@ The following exist only transiently and are never persisted:
 
 - CLR activity objects and their fields;
 - constructor-injected services and DI scopes;
-- `ActivityActivation` leases;
+- `ActivityActivationLease` instances;
 - code-first `WorkflowDefinition<TRequest,TResult>` compiler objects;
 - generated `ActivityArgument<T>`, call handles, builder sources, and callbacks;
 - evaluator-native JavaScript/Liquid objects created from immutable parameter envelopes.

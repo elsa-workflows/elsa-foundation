@@ -99,10 +99,62 @@ public sealed record RuntimeValueTypeDescriptor(
     string? Id,
     JsonElement? Schema);
 
-public sealed record DurableValueExternalReference(
-    string StorageProfile,
-    string Locator,
-    IReadOnlyDictionary<string, string> Metadata);
+public sealed record DurableValueExternalReference
+{
+    private string _storageProfile = null!;
+    private string _locator = null!;
+    private IReadOnlyDictionary<string, string> _metadata = null!;
+
+    public DurableValueExternalReference(
+        string StorageProfile,
+        string Locator,
+        IReadOnlyDictionary<string, string> Metadata)
+    {
+        this.StorageProfile = StorageProfile;
+        this.Locator = Locator;
+        this.Metadata = Metadata;
+    }
+
+    public string StorageProfile
+    {
+        get => _storageProfile;
+        init
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value, nameof(StorageProfile));
+            _storageProfile = value;
+        }
+    }
+
+    public string Locator
+    {
+        get => _locator;
+        init
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value, nameof(Locator));
+            _locator = value;
+        }
+    }
+
+    public IReadOnlyDictionary<string, string> Metadata
+    {
+        get => _metadata;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value, nameof(Metadata));
+            _metadata = RuntimeModelMetadata.Snapshot(value);
+        }
+    }
+
+    public void Deconstruct(
+        out string StorageProfile,
+        out string Locator,
+        out IReadOnlyDictionary<string, string> Metadata)
+    {
+        StorageProfile = this.StorageProfile;
+        Locator = this.Locator;
+        Metadata = this.Metadata;
+    }
+}
 
 public enum DurableValueLifecycle
 {

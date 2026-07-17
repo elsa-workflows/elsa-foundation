@@ -28,6 +28,23 @@ public sealed class UnannotatedFixtureActivity : Activity<UnannotatedFixtureResu
 
 public sealed record UnannotatedFixtureResult([property: Output] string Result);
 
+/// <summary>An activity that uses the C# required-member syntax instead of Elsa's marker attribute.</summary>
+public sealed class RequiredKeywordFixtureActivity : FixtureActivity
+{
+    [ActivityInput]
+    public required string Message { get; set; }
+
+    [ActivityInput]
+    public string? OptionalNote { get; set; }
+
+    [ActivityInput]
+    [Required]
+    public string? RequiredNullableNote { get; set; }
+
+    [ActivityInput]
+    public int? OptionalCount { get; set; }
+}
+
 /// <summary>
 /// An activity whose <c>[Version]</c> attribute overrides the assembly version — the scanner must
 /// record <c>3.0.0</c>, not the assembly's <c>2.1.0</c>.

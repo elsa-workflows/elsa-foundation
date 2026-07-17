@@ -7,6 +7,7 @@ using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -34,6 +35,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityInterfaceFullName = typeof(IActivity).FullName!;
     private static readonly string ActivityResultInterfaceFullName = typeof(IActivityResult<>).FullName!;
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
+    private static readonly string RequiredMemberAttributeFullName = typeof(RequiredMemberAttribute).FullName!;
     private static readonly string ActivityInputAttributeFullName = typeof(ActivityInputAttribute).FullName!;
     private static readonly string OutputAttributeFullName = typeof(OutputAttribute).FullName!;
     private static readonly string ActivityInputOptionAttributeFullName = typeof(ActivityInputOptionAttribute).FullName!;
@@ -143,7 +145,10 @@ public sealed class ClrAssemblyScanner(
                 UISpecifications: metadata.UiSpecifications,
                 IsRequired: HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
-                DefaultSyntax: metadata.DefaultSyntax));
+                DefaultSyntax: metadata.DefaultSyntax)
+            {
+                IsNullable = IsNullable(property)
+            });
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -288,11 +293,29 @@ public sealed class ClrAssemblyScanner(
     private static bool IsRecoverableReflectionException(Exception exception) =>
         exception is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException;
 
-    // Walk the base-property chain: a [Required] declared on a base class's input property must
+    // Walk the base-property chain: requiredness declared on a base class's input property must
     // be honoured even though a reflection-only MetadataLoadContext gives no inherit-aware attribute
-    // read (issue #417 item 3).
+    // read (issue #417 item 3). Support both Elsa's [Required] marker and the metadata emitted by
+    // C# `required` properties so the documented activity-authoring syntax maps to the same contract.
     private static bool HasRequired(PropertyInfo property) =>
-        ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredAttributeFullName);
+        ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredAttributeFullName) ||
+        ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredMemberAttributeFullName);
+
+    private static bool IsNullable(PropertyInfo property)
+    {
+        var propertyType = property.PropertyType;
+        if (propertyType.IsValueType)
+        {
+            return propertyType.IsGenericType &&
+                   StringComparer.Ordinal.Equals(
+                       propertyType.GetGenericTypeDefinition().FullName,
+                       typeof(Nullable<>).FullName);
+        }
+
+        // Unknown is intentionally treated as nullable for assemblies compiled without nullable metadata.
+        // Only an explicit NotNull annotation may tighten the published contract.
+        return new NullabilityInfoContext().Create(property).WriteState is not NullabilityState.NotNull;
+    }
 
     private static ActivityInputMetadata ReadActivityInputMetadata(
         PropertyInfo property,

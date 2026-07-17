@@ -137,7 +137,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             "test",
             JsonSerializer.SerializeToElement(new { }),
-            [new ActivityInputContract("message", "Message", StringType, true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("message", "Message", StringType, true, false, null, ActivityValuePolicy.Default) { IsNullable = true }],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/required-nullable"));
@@ -155,6 +155,66 @@ public sealed class ClrActivityActivatorTests
         new ActivityInputHydrator().Hydrate(activity, contract, snapshot);
 
         Assert.Null(activity.Message);
+    }
+
+    [Fact]
+    public void Hydrator_honors_pinned_non_nullable_contract_when_the_current_clr_property_is_nullable()
+    {
+        var contract = new ActivityContract(
+            "test/pinned-non-nullable",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { }),
+            [new ActivityInputContract("message", "Message", StringType, false, false, null, ActivityValuePolicy.Default) { IsNullable = false }],
+            new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/pinned-non-nullable"));
+        var snapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["message"] = ValueEnvelope.Null(StringType, ValueProtectionPolicy.InstanceInline)
+            },
+            DateTimeOffset.UtcNow);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ActivityInputHydrator().Hydrate(new RequiredNullableActivity(), contract, snapshot));
+
+        Assert.Contains("does not accept null", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hydrator_uses_inherited_input_key_to_assign_hidden_derived_property()
+    {
+        var contract = new ActivityContract(
+            "test/hidden-input",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { }),
+            [new ActivityInputContract("inheritedKey", "Value", StringType, false, false, null, ActivityValuePolicy.Default) { IsNullable = false }],
+            new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/hidden-input"));
+        var snapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["inheritedKey"] = ValueEnvelope.Inline(
+                    StringType,
+                    JsonSerializer.SerializeToElement("hydrated"),
+                    ValueProtectionPolicy.InstanceInline)
+            },
+            DateTimeOffset.UtcNow);
+        var activity = new HiddenInputActivity();
+
+        new ActivityInputHydrator().Hydrate(activity, contract, snapshot);
+
+        Assert.Equal("hydrated", activity.Value);
+        Assert.Null(((HiddenInputActivityBase)activity).Value);
     }
 
     [Fact]
@@ -183,6 +243,36 @@ public sealed class ClrActivityActivatorTests
             new ActivityInputHydrator().Hydrate(new OptionalInt32Activity(), contract, snapshot));
 
         Assert.Contains("does not accept absence", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Hydrator_rejects_absence_and_explicit_null_for_an_optional_non_nullable_reference_input(bool absent)
+    {
+        var contract = new ActivityContract(
+            "test/optional-non-nullable-reference",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { }),
+            [new ActivityInputContract("message", "Message", StringType, false, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/optional-non-nullable-reference"));
+        var envelope = absent
+            ? ValueEnvelope.Absent(StringType, ValueProtectionPolicy.InstanceInline)
+            : ValueEnvelope.Null(StringType, ValueProtectionPolicy.InstanceInline);
+        var snapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope> { ["message"] = envelope },
+            DateTimeOffset.UtcNow);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ActivityInputHydrator().Hydrate(new OptionalNonNullableReferenceActivity(), contract, snapshot));
+
+        Assert.Contains(absent ? "does not accept absence" : "does not accept null", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -309,6 +399,29 @@ public sealed class ClrActivityActivatorTests
 
         protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class OptionalNonNullableReferenceActivity : Activity
+    {
+        [ActivityInput(Key = "message")]
+        public string Message { get; set; } = "initializer";
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private abstract class HiddenInputActivityBase : Activity
+    {
+        [ActivityInput(Key = "inheritedKey")]
+        public string? Value { get; set; }
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class HiddenInputActivity : HiddenInputActivityBase
+    {
+        public new string Value { get; set; } = string.Empty;
     }
 
     private sealed class ThrowingDisposableActivity : Activity, IDisposable

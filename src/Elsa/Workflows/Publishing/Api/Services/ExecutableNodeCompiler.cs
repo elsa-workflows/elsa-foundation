@@ -44,8 +44,10 @@ public sealed class ExecutableNodeCompiler(
             return CompileIntrinsicNode(activity, projection, activityRows);
 
         var activityVersion = activityRows[activity.ActivityVersionId];
+        var clrActivityType = ResolveClrActivityType(activityVersion.DescriptorType, activityVersion.DescriptorPayload);
+        var inputDefinitions = NormalizeLegacyClrInputNullability(activityVersion.Inputs, clrActivityType);
 
-        var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        var inputDefinitionsByReferenceKey = inputDefinitions.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows);
 
@@ -63,7 +65,7 @@ public sealed class ExecutableNodeCompiler(
             }
         }
 
-        foreach (var inputDefinition in activityVersion.Inputs.Where(input => !inputBindings.ContainsKey(input.ReferenceKey)))
+        foreach (var inputDefinition in inputDefinitions.Where(input => !inputBindings.ContainsKey(input.ReferenceKey)))
         {
             if (inputDefinition.DefaultValue.HasValue)
             {
@@ -89,7 +91,6 @@ public sealed class ExecutableNodeCompiler(
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");
-        var clrActivityType = ResolveClrActivityType(activityVersion.DescriptorType, activityVersion.DescriptorPayload);
         var activityType = clrActivityType is null
             ? catalogActivityType
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
@@ -97,7 +98,9 @@ public sealed class ExecutableNodeCompiler(
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
         var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
-        var activityContract = clrActivityType is null ? null : BuildActivityContract(activity, activityVersion, clrActivityType, activityType, structure);
+        var activityContract = clrActivityType is null
+            ? null
+            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure);
 
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
@@ -222,6 +225,7 @@ public sealed class ExecutableNodeCompiler(
     private static ActivityContract? BuildActivityContract(
         ActivityNode activity,
         ActivityDefinitionVersion activityVersion,
+        IReadOnlyCollection<InputDefinition> inputDefinitions,
         Type activityType,
         string activityTypeKey,
         ExecutableActivityStructure? structure)
@@ -231,7 +235,7 @@ public sealed class ExecutableNodeCompiler(
             return null;
 
         var inputStates = activity.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
-        var inputs = activityVersion.Inputs.Select(input =>
+        var inputs = inputDefinitions.Select(input =>
         {
             inputStates.TryGetValue(input.ReferenceKey, out var state);
             return new ActivityInputContract(
@@ -241,7 +245,10 @@ public sealed class ExecutableNodeCompiler(
                 input.IsRequired,
                 input.DefaultValue.HasValue,
                 input.DefaultValue,
-                CompileActivityPolicy(input.StorageDriverType, state, $"Input '{input.ReferenceKey}' on activity node '{activity.NodeId}'"));
+                CompileActivityPolicy(input.StorageDriverType, state, $"Input '{input.ReferenceKey}' on activity node '{activity.NodeId}'"))
+            {
+                IsNullable = input.IsNullable
+            };
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
@@ -286,6 +293,71 @@ public sealed class ExecutableNodeCompiler(
                 projections),
             outcomes,
             new ActivityActivationRequirement(activityVersion.DescriptorType, TypeAliasConvention.CanonicalAlias(activityType)));
+    }
+
+    private static IReadOnlyCollection<InputDefinition> NormalizeLegacyClrInputNullability(
+        IEnumerable<InputDefinition> inputDefinitions,
+        Type? clrActivityType)
+    {
+        var inputs = inputDefinitions as IReadOnlyCollection<InputDefinition> ?? inputDefinitions.ToArray();
+        if (clrActivityType is null || inputs.All(input => input.IsNullable.HasValue))
+            return inputs;
+
+        var propertiesByKey = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+        foreach (var property in clrActivityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var attribute = FindActivityInputAttribute(property);
+            if (attribute is null)
+                continue;
+
+            var key = attribute.Key ?? property.Name;
+            ArgumentException.ThrowIfNullOrWhiteSpace(key);
+            if (!propertiesByKey.TryAdd(key, property))
+                throw new ArgumentException($"Activity '{clrActivityType.FullName}' declares duplicate input key '{key}'.");
+        }
+
+        var nullabilityContext = new NullabilityInfoContext();
+        return inputs
+            .Select(input =>
+            {
+                if (input.IsNullable.HasValue)
+                    return input;
+
+                if (!propertiesByKey.TryGetValue(input.ReferenceKey, out var property))
+                {
+                    throw new ArgumentException(
+                        $"VF-ACT-003: Legacy CLR input '{input.ReferenceKey}' on activity '{clrActivityType.FullName}' has unknown nullability " +
+                        "and does not match an annotated public activity property by stable key.");
+                }
+
+                return input with { IsNullable = IsNullable(property, nullabilityContext) };
+            })
+            .ToArray();
+    }
+
+    private static ActivityInputAttribute? FindActivityInputAttribute(PropertyInfo property)
+    {
+        for (var declaringType = property.DeclaringType; declaringType is not null; declaringType = declaringType.BaseType)
+        {
+            var declaredProperty = declaringType.GetProperty(
+                property.Name,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            var attribute = declaredProperty?.GetCustomAttribute<ActivityInputAttribute>(inherit: false);
+            if (attribute is not null)
+                return attribute;
+        }
+
+        return null;
+    }
+
+    private static bool IsNullable(PropertyInfo property, NullabilityInfoContext nullabilityContext)
+    {
+        if (property.PropertyType.IsValueType)
+            return Nullable.GetUnderlyingType(property.PropertyType) is not null;
+
+        // Assemblies without nullable-reference metadata retain the permissive CLR interpretation.
+        // Only an explicit NotNull annotation may tighten a legacy catalog input at publication.
+        return nullabilityContext.Create(property).WriteState is not NullabilityState.NotNull;
     }
 
     private static ActivityValuePolicy CompileActivityPolicy(

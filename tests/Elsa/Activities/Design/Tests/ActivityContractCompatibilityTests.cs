@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Xunit;
@@ -7,6 +8,103 @@ namespace Elsa.Activities.Design.Tests;
 
 public sealed class ActivityContractCompatibilityTests
 {
+    [Fact]
+    public void AdditiveNullabilityMetadata_PreservesEstablishedPublicSignatures()
+    {
+        Assert.Contains(typeof(InputDefinition).GetConstructors(), constructor =>
+            constructor.GetParameters().Length == 16);
+        Assert.Contains(typeof(InputDefinition).GetMethods(), method =>
+            method.Name == "Deconstruct" && method.GetParameters().Length == 16);
+        Assert.Contains(typeof(ActivityInputContract).GetConstructors(), constructor =>
+            constructor.GetParameters().Length == 8);
+    }
+
+    [Fact]
+    public void PreNullabilityContractJson_PreservesItsCapturedSchemaFingerprint()
+    {
+        const string json =
+            """
+            {
+              "activityTypeKey": "test/activity",
+              "contractVersion": "1.0.0",
+              "schemaFingerprint": "sha256:d5e16c02a4ea7eb05c9869468b94d3edbb5c37718a03c55204e18bd1b3f567c8",
+              "descriptorKind": "test",
+              "descriptorPayload": {},
+              "inputs": {
+                "message": {
+                  "key": "message",
+                  "name": "Message",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": 0,
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                }
+              },
+              "result": {
+                "type": {
+                  "alias": "Unit",
+                  "collectionKind": 0,
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": false,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 0,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "projections": {}
+              },
+              "outcomes": ["Done"],
+              "activation": {
+                "descriptorKind": "test",
+                "capability": "test/activity"
+              }
+            }
+            """;
+
+        var contract = JsonSerializer.Deserialize<ActivityContract>(
+            json,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(contract);
+        Assert.Null(contract.Inputs["message"].IsNullable);
+        Assert.Equal("sha256:d5e16c02a4ea7eb05c9869468b94d3edbb5c37718a03c55204e18bd1b3f567c8", contract.SchemaFingerprint);
+    }
+
+    [Fact]
+    public void ExplicitNullabilityValues_AreBehaviorallyHashed()
+    {
+        var legacyUnknown = NullabilityContract(null);
+        var nullable = NullabilityContract(true);
+        var nonNullable = NullabilityContract(false);
+
+        Assert.NotEqual(legacyUnknown.SchemaFingerprint, nullable.SchemaFingerprint);
+        Assert.NotEqual(legacyUnknown.SchemaFingerprint, nonNullable.SchemaFingerprint);
+        Assert.NotEqual(nullable.SchemaFingerprint, nonNullable.SchemaFingerprint);
+    }
+
     [Fact]
     public void StableKeyClrRename_PreservesSchemaFingerprint()
     {
@@ -76,6 +174,34 @@ public sealed class ActivityContractCompatibilityTests
             result: Result(),
             outcomes: ["completed", "declined"],
             activation: new ActivityActivationRequirement("clr", "Payments.ChargeCard"));
+
+    private static ActivityContract NullabilityContract(bool? isNullable) =>
+        new(
+            activityTypeKey: "test/activity",
+            contractVersion: "1.0.0",
+            descriptorKind: "test",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputs:
+            [
+                new ActivityInputContract(
+                    "message",
+                    "Message",
+                    new ValueTypeDescriptor("String"),
+                    isRequired: false,
+                    hasDefault: false,
+                    defaultValue: null,
+                    ActivityValuePolicy.Default)
+                {
+                    IsNullable = isNullable
+                }
+            ],
+            result: new ActivityResultContract(
+                new ValueTypeDescriptor("Unit"),
+                isRequired: false,
+                ActivityValuePolicy.Default,
+                []),
+            outcomes: ["Done"],
+            activation: new ActivityActivationRequirement("test", "test/activity"));
 
     private static ActivityInputContract Input(string name, string key, ValueTypeDescriptor type) =>
         new(
