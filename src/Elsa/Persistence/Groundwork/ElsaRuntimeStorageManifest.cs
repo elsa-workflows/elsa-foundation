@@ -190,9 +190,11 @@ public static class ElsaRuntimeStorageManifest
     public const string SchedulerPoisonDocumentKind = "schedulerPoison";
 
     // Durable timer store. Each pending timer is a document so timers survive process restarts; the
-    // by-collection partition serves the due-timer sweep through an equality index (Groundwork is
-    // equality-only, so due-time filtering/ordering happens in memory — see GroundworkDurableTimerStore).
+    // by-due-time route bounds the due-timer sweep by the persisted deadline.
     public const string DurableTimerDocumentKind = "durableTimer";
+    public const string DurableTimerDueTimeField = "timer.dueTime";
+    public const string DurableTimerByDueTime = "by-due-time";
+    public const string ListDueDurableTimersQuery = "list-due";
 
     // Durable trigger index over PUBLISHED artifacts (W7, E3-1). Each start-trigger activity in a
     // published executable becomes one document, so an external stimulus with no execution id can be
@@ -431,8 +433,18 @@ public static class ElsaRuntimeStorageManifest
             Unit(
                 DurableTimerDocumentKind,
                 "Durable timer",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)]),
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    DateTime(DurableTimerByDueTime, DurableTimerDueTimeField)
+                ],
+                [
+                    Query("list-all", ByCollectionIndex),
+                    Query(
+                        ListDueDurableTimersQuery,
+                        DurableTimerByDueTime,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending)
+                ]),
             Unit(
                 WorkflowTriggerBindingDocumentKind,
                 "Workflow trigger binding",
