@@ -22,7 +22,10 @@ public static class RuntimeApiCapabilities
             new("workflow-instances-page", "runtime/workflows/instances/page"),
             new("workflow-instance", "runtime/workflows/instances/{workflowExecutionId}", templated: true),
             new("activity-execution", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true),
-            new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true)
+            new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true),
+            new("workflow-dispatches", "runtime/workflows/dispatches"),
+            new("workflow-dispatch", "runtime/workflows/dispatches/{dispatchId}", templated: true),
+            new("workflow-dispatch-redrive", "runtime/workflows/dispatches/{dispatchId}/redrive", templated: true)
         ],
         SourceFeatureId);
 }

@@ -18,7 +18,9 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ElsaRuntimeStorageManifest.Create());
+        var manifest = TestScopeStoragePhysicalizer.AddCompositeRoutes(
+            WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ElsaRuntimeStorageManifest.Create())));
 
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,
@@ -31,6 +33,9 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IActivityExecutionInspectionStore),
                 typeof(IActivityExecutionInspectionWriter),
                 typeof(IWorkflowExecutionStateStore),
+                typeof(IWorkflowTestScopeStore),
+                typeof(IWorkflowTestScopeAdmissionStore),
+                typeof(IWorkflowTestScopeCleanupStore),
                 typeof(IDurableValueStateStore),
                 typeof(ISchedulerStateStore),
                 typeof(IExecutionLivenessStateStore),
@@ -38,6 +43,16 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IIncidentStateStore),
                 typeof(IRuntimeCheckpointCommitStore),
                 typeof(IRuntimePostCommitOutboxStore),
+                typeof(IPostCommitOutboxLookupStore),
+                typeof(IRuntimePostCommitOutboxClaimStore),
+                typeof(IRuntimePostCommitOutboxClaimCompletionStore),
+                typeof(IWorkflowDispatchStore),
+                typeof(IWorkflowDispatchQueryStore),
+                typeof(IWorkflowDispatchDeleteStore),
+                typeof(IWorkflowDispatchRetentionRootStore),
+                typeof(IWorkflowDispatchAdmissionStore),
+                typeof(IWorkflowDispatchCancellationStore),
+                typeof(IWorkflowDispatchRedriveStore),
                 typeof(IWorkflowSchedulerWorkQueue),
                 typeof(IDurableTimerStore),
                 typeof(IWorkflowTriggerBindingStore),

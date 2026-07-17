@@ -194,18 +194,36 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         foreach (var clause in query.Clauses)
         {
             matches = matches.Where(document => clause.Comparisons.Any(comparison =>
-                comparison.Operator == QueryComparisonOperator.Equal &&
-                string.Equals(
-                    ReadField(document.ContentJson, comparison.Path),
-                    comparison.Values.Single(),
-                    StringComparison.Ordinal)));
+                Matches(ReadField(document.ContentJson, comparison.Path), comparison)));
         }
 
-        var all = matches.OrderBy(document => document.Id, StringComparer.Ordinal).ToArray();
+        IOrderedEnumerable<DocumentEnvelope> ordered = query.Order.Count > 0
+            ? matches.OrderBy(
+                document => ReadField(document.ContentJson, query.Order[0].Path),
+                StringComparer.Ordinal)
+            : matches.OrderBy(document => document.Id, StringComparer.Ordinal);
+        foreach (var order in query.Order.Skip(1))
+            ordered = ordered.ThenBy(document => ReadField(document.ContentJson, order.Path), StringComparer.Ordinal);
+        var all = ordered.ThenBy(document => document.Id, StringComparer.Ordinal).ToArray();
         var window = all.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
             window = window.Take(take);
         return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
+    }
+
+    private static bool Matches(string? actual, DocumentQueryComparison comparison)
+    {
+        var expected = comparison.Values.SingleOrDefault();
+        var order = StringComparer.Ordinal.Compare(actual, expected);
+        return comparison.Operator switch
+        {
+            QueryComparisonOperator.Equal => order == 0,
+            QueryComparisonOperator.GreaterThan => order > 0,
+            QueryComparisonOperator.GreaterThanOrEqual => order >= 0,
+            QueryComparisonOperator.LessThan => order < 0,
+            QueryComparisonOperator.LessThanOrEqual => order <= 0,
+            _ => throw new NotSupportedException($"The in-memory bounded-query test double does not support {comparison.Operator}.")
+        };
     }
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>

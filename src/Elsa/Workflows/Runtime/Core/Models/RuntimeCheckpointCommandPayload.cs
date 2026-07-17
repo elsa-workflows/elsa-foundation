@@ -77,7 +77,8 @@ public sealed class RuntimeCheckpointCommandPayload
             tenantId,
             partition,
             authority,
-            dispatchNestingDepth: 0)
+            dispatchNestingDepth: 0,
+            testScope: null)
     {
     }
 
@@ -99,7 +100,8 @@ public sealed class RuntimeCheckpointCommandPayload
         string? tenantId,
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority,
-        int dispatchNestingDepth)
+        int dispatchNestingDepth,
+        WorkflowTestScope? testScope = null)
     {
         if (pinnedExecutable is null)
             throw new RuntimeCheckpointCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
@@ -114,6 +116,15 @@ public sealed class RuntimeCheckpointCommandPayload
         ValidateOptional(tenantId, nameof(tenantId));
         if (dispatchNestingDepth < 0)
             throw new RuntimeCheckpointCommandPayloadValidationException("Dispatch nesting depth cannot be negative.", nameof(dispatchNestingDepth));
+        if (testScope is not null)
+        {
+            if (runKind != WorkflowRunKind.TestRun)
+                throw new RuntimeCheckpointCommandPayloadValidationException("A workflow test scope requires TestRun run kind.", nameof(testScope));
+            if (!StringComparer.Ordinal.Equals(tenantId, testScope.TenantId))
+                throw new RuntimeCheckpointCommandPayloadValidationException("The workflow test scope tenant must match the checkpoint tenant.", nameof(testScope));
+            if (partition is not null && !Equals(partition, testScope.Partition))
+                throw new RuntimeCheckpointCommandPayloadValidationException("The workflow test scope partition must match the checkpoint partition.", nameof(testScope));
+        }
 
         var activityExecutionIdSnapshot = (activityExecutionIds ?? []).ToArray();
         if (activityExecutionIdSnapshot.Any(string.IsNullOrWhiteSpace))
@@ -149,6 +160,7 @@ public sealed class RuntimeCheckpointCommandPayload
         Partition = partition;
         Authority = authority;
         DispatchNestingDepth = dispatchNestingDepth;
+        TestScope = testScope;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -199,6 +211,9 @@ public sealed class RuntimeCheckpointCommandPayload
 
     /// <summary>Durable cross-workflow dispatch depth. Missing legacy values default to zero.</summary>
     public int DispatchNestingDepth { get; }
+
+    /// <summary>Authoritative finite test-run scope. Null for non-test and legacy checkpoints.</summary>
+    public WorkflowTestScope? TestScope { get; }
 
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);

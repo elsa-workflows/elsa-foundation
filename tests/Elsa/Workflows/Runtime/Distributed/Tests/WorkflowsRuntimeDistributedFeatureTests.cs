@@ -42,6 +42,10 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>());
         Assert.Contains(provider.GetServices<IRecurringTask>(), task => task is ExecutionPlacementPumpTask);
+        var distributionEvidence = Assert.Single(
+            provider.GetServices<IWorkflowDispatchDurabilityEvidence>(),
+            evidence => evidence.Component == WorkflowDispatchDurabilityComponents.Distribution);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, distributionEvidence.Level);
     }
 
     [Fact]

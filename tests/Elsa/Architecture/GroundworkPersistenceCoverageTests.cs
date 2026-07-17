@@ -30,7 +30,7 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
-    public void Workflow_dispatch_persistence_is_explicitly_deferred_to_678()
+    public void Workflow_dispatch_persistence_has_an_explicit_ledger_mapping()
     {
         var findings = Reconcile(
             ReadLedger(),
@@ -40,7 +40,7 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
-    public void Deferred_workflow_dispatch_persistence_cannot_be_registered_without_replacing_the_deferral()
+    public void Workflow_dispatch_registration_matches_its_manifest_storage_unit()
     {
         var findings = Reconcile(
             ReadLedger(),
@@ -53,11 +53,10 @@ public sealed class GroundworkPersistenceCoverageTests
                         "IWorkflowDispatchStore",
                         "GroundworkWorkflowDispatchStore",
                         "WorkflowDispatchDocumentKind")
-                ]));
+                ],
+                manifestStorageUnits: [ManifestUnit("runtime", "WorkflowDispatchDocumentKind")]));
 
-        Assert.Equal(
-            ["GroundworkWorkflowDispatchStore (IWorkflowDispatchStore): Groundwork persistence is explicitly deferred to #678; remove the deferral and add a coverage-ledger mapping before registration."],
-            findings);
+        Assert.Empty(findings);
     }
 
     [Fact]

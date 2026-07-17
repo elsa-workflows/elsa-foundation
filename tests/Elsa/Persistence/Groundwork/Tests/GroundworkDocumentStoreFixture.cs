@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
@@ -100,6 +102,13 @@ internal sealed class GroundworkDocumentStoreFixture(
             DocumentQuery query,
             CancellationToken cancellationToken = default)
         {
+            if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListExpiredOpenWorkflowTestScopesQuery)
+                return await QueryScopePageAsync(query, requireExpiry: true, cancellationToken);
+            if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowTestScopesByStatePageQuery)
+                return await QueryScopePageAsync(query, requireExpiry: false, cancellationToken);
+            if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery)
+                return await QuerySingleValuePageAsync(query, ElsaRuntimeStorageManifest.TestScopeIdField, cancellationToken);
+
             var (indexIdentity, value) = Resolve(query);
             var all = await store.QueryAsync(
                 new DocumentStoreQuery(query.DocumentKind, indexIdentity, value),
@@ -110,6 +119,106 @@ internal sealed class GroundworkDocumentStoreFixture(
             if (query.Take is { } take)
                 window = window.Take(take);
             return new DocumentQueryResult(window.ToArray(), all.Count);
+        }
+
+        private async Task<DocumentQueryResult> QuerySingleValuePageAsync(
+            DocumentQuery query,
+            string expectedPath,
+            CancellationToken cancellationToken)
+        {
+            var comparison = query.Clauses
+                .SelectMany(clause => clause.Comparisons)
+                .Single();
+            if (comparison.Operator != QueryComparisonOperator.Equal ||
+                comparison.Path != expectedPath ||
+                comparison.Values.Count != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
+            }
+
+#pragma warning disable GW0004
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+#pragma warning restore GW0004
+            var expectedValue = comparison.Values[0];
+            var matches = all.Documents
+                .Where(document => StringComparer.Ordinal.Equals(ReadString(document, expectedPath), expectedValue))
+                .OrderBy(document => document.Id, StringComparer.Ordinal)
+                .ToArray();
+            IEnumerable<DocumentEnvelope> window = matches;
+            if (query.Skip is { } skip)
+                window = window.Skip(skip);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
+        private async Task<DocumentQueryResult> QueryScopePageAsync(
+            DocumentQuery query,
+            bool requireExpiry,
+            CancellationToken cancellationToken)
+        {
+            var comparisons = query.Clauses.SelectMany(clause => clause.Comparisons).ToArray();
+            var state = comparisons.Single(comparison => comparison.Path == ElsaRuntimeStorageManifest.StateField);
+            var expiry = comparisons.SingleOrDefault(comparison => comparison.Path == ElsaRuntimeStorageManifest.ExpiresAtField);
+            var afterScope = comparisons.SingleOrDefault(comparison => comparison.Path == ElsaRuntimeStorageManifest.ScopeIdField);
+            if (state.Operator != QueryComparisonOperator.Equal || state.Values.Count != 1 ||
+                requireExpiry && (expiry is null || expiry.Operator != QueryComparisonOperator.LessThanOrEqual || expiry.Values.Count != 1) ||
+                afterScope is not null && (afterScope.Operator != QueryComparisonOperator.GreaterThan || afterScope.Values.Count != 1))
+            {
+                throw new InvalidOperationException("Groundwork test-scope page query has an unexpected shape.");
+            }
+
+            var stateValue = state.Values[0]
+                ?? throw new InvalidOperationException("Groundwork test-scope state must be non-null.");
+            var expiryValue = expiry is null
+                ? (DateTimeOffset?)null
+                : DateTimeOffset.Parse(
+                    expiry.Values[0] ?? throw new InvalidOperationException("Groundwork test-scope expiry must be non-null."),
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind);
+            var afterScopeId = afterScope?.Values[0];
+            var all = await store.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
+            var candidates = all.Documents;
+            var matches = candidates
+                .Where(document => StringComparer.Ordinal.Equals(ReadState(document), stateValue))
+                .Where(document => expiryValue is null || ReadExpiry(document) <= expiryValue)
+                .Where(document => afterScopeId is null ||
+                    StringComparer.Ordinal.Compare(ReadScopeId(document), afterScopeId) > 0)
+                .OrderBy(ReadScopeId, StringComparer.Ordinal)
+                .ToArray();
+            IEnumerable<DocumentEnvelope> window = matches;
+            if (query.Skip is { } skip)
+                window = window.Skip(skip);
+            if (query.Take is { } take)
+                window = window.Take(take);
+            return new DocumentQueryResult(window.ToArray(), matches.Length);
+        }
+
+        private static DateTimeOffset ReadExpiry(DocumentEnvelope envelope)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            return document.RootElement.GetProperty(ElsaRuntimeStorageManifest.ExpiresAtField).GetDateTimeOffset();
+        }
+
+        private static string? ReadState(DocumentEnvelope envelope)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            return document.RootElement.GetProperty(ElsaRuntimeStorageManifest.StateField).GetString();
+        }
+
+        private static string ReadScopeId(DocumentEnvelope envelope)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            return document.RootElement.GetProperty(ElsaRuntimeStorageManifest.ScopeIdField).GetString()
+                ?? throw new InvalidOperationException("Groundwork test-scope document requires scopeId.");
+        }
+
+        private static string? ReadString(DocumentEnvelope envelope, string path)
+        {
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            var value = document.RootElement.GetProperty(path);
+            return value.ValueKind == JsonValueKind.Null ? null : value.GetString();
         }
 
         public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>

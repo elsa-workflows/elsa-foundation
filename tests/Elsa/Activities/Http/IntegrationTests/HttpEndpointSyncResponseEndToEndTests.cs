@@ -94,7 +94,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
             path: "sync/slow",
             method: "POST",
             resultValueId: "sync-slow-result",
-            requestTimeout: TimeSpan.FromMilliseconds(150),
+            requestTimeout: TimeSpan.FromSeconds(1),
             stallDuration: TimeSpan.FromSeconds(30));
 
         var response = await _fixture.Client.PostAsync($"{BasePath}sync/slow",
@@ -105,8 +105,9 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         // Durable state remains valid (review-fix strengthening): the run persisted, its state row loads, and the
         // endpoint's captured result survived the aborted wait — the instance continues per normal runtime
         // semantics rather than merely still being counted.
-        var execution = await _fixture.SingleWorkflowExecutionAsync();
-        var capturedResult = await _fixture.ReadCapturedOutputAsync(execution.WorkflowExecutionId, "sync-slow-result");
+        var (_, capturedResult) = await _fixture.WaitForSingleWorkflowExecutionWithCapturedOutputAsync(
+            "sync-slow-result",
+            TimeSpan.FromSeconds(5));
         Assert.Equal(JsonValueKind.Object, capturedResult.ValueKind);
     }
 

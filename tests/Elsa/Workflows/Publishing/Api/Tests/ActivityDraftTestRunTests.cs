@@ -198,7 +198,13 @@ public sealed class ActivityDraftTestRunTests
                 await using var generation2 = BuildRuntimeOnlyProvider(generation2Documents, clock);
                 await ResumeAsync(generation2, first.WorkflowExecutionId);
                 await ResumeAsync(generation2, second.WorkflowExecutionId);
-                Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(generation2, first.WorkflowExecutionId));
+                var resumedFirstStatus = await StatusAsync(generation2, first.WorkflowExecutionId);
+                if (resumedFirstStatus != WorkflowExecutionStatus.Completed)
+                {
+                    var poison = await generation2.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(first.WorkflowExecutionId);
+                    var incidents = await generation2.GetRequiredService<IIncidentStateStore>().ListAsync(first.WorkflowExecutionId);
+                    throw new Xunit.Sdk.XunitException($"Expected completed run after restart. Status={resumedFirstStatus} Poison={JsonSerializer.Serialize(poison)} Incidents={JsonSerializer.Serialize(incidents)}");
+                }
                 Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(generation2, second.WorkflowExecutionId));
 
                 var resumedExecutions = await generation2.GetRequiredService<IActivityExecutionStateStore>().ListAsync(first.WorkflowExecutionId);

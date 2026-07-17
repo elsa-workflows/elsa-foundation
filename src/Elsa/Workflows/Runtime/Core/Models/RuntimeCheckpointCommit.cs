@@ -63,11 +63,41 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null,
         IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups = null)
+        : this(
+            workflowExecution,
+            scheduler,
+            activityExecutions,
+            bookmarks,
+            durableValues,
+            incidents,
+            operational,
+            workflowDispatches,
+            activityExecutionInspections,
+            postCommitOutbox,
+            activityScopeCleanups,
+            null)
+    {
+    }
+
+    public RuntimeCheckpointStateChangeSet(
+        RuntimeStateChange<WorkflowExecutionState>? workflowExecution,
+        RuntimeStateChange<SchedulerState>? scheduler,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions,
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> operational,
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>>? workflowDispatches,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox,
+        IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups,
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest>? workflowDispatchCancellations)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
         workflowDispatches ??= [];
         activityScopeCleanups ??= [];
+        workflowDispatchCancellations ??= [];
         ValidateStateIdMatches(activityExecutions, state => state.Execution.ActivityExecutionId, "Activity execution state change StateId must match ActivityExecutionState.Execution.ActivityExecutionId.", nameof(activityExecutions));
         ValidateStateIdMatches(bookmarks, state => state.BookmarkId, "Bookmark state change StateId must match BookmarkState.BookmarkId.", nameof(bookmarks));
         ValidateStateIdMatches(activityExecutionInspections, state => state.ActivityExecutionId, "Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", nameof(activityExecutionInspections));
@@ -88,6 +118,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         PostCommitOutbox = postCommitOutbox;
         ActivityScopeCleanups = activityScopeCleanups;
         WorkflowDispatches = workflowDispatches;
+        WorkflowDispatchCancellations = NormalizeCancellations(workflowDispatchCancellations);
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -102,6 +133,9 @@ public sealed class RuntimeCheckpointStateChangeSet
 
     /// <summary>Workflow-dispatch lifecycle records applied atomically with their checkpoint and outbox intent.</summary>
     public IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> WorkflowDispatches { get; }
+
+    /// <summary>Query-independent parent-cancellation requests resolved by the provider at commit time.</summary>
+    public IReadOnlyCollection<WorkflowDispatchCancellationRequest> WorkflowDispatchCancellations { get; }
 
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
@@ -125,7 +159,61 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatches,
             ActivityExecutionInspections,
             postCommitOutbox,
-            ActivityScopeCleanups);
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations);
+
+    /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
+    public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> workflowDispatches) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            workflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations);
+
+    /// <summary>Returns a copy with the supplied provider-resolved dispatch cancellation requests.</summary>
+    public RuntimeCheckpointStateChangeSet WithWorkflowDispatchCancellations(
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest> workflowDispatchCancellations) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            workflowDispatchCancellations);
+
+    private static IReadOnlyCollection<WorkflowDispatchCancellationRequest> NormalizeCancellations(
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest> requests)
+    {
+        var normalized = new Dictionary<string, WorkflowDispatchCancellationRequest>(StringComparer.Ordinal);
+        foreach (var request in requests)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            if (normalized.TryGetValue(request.DispatchId, out var existing) &&
+                !WorkflowDispatchCancellationRequest.Equivalent(existing, request))
+            {
+                throw new ArgumentException(
+                    $"Workflow dispatch cancellation request '{request.DispatchId}' occurs more than once with conflicting state.",
+                    nameof(requests));
+            }
+            normalized[request.DispatchId] = request;
+        }
+        return normalized.Values.OrderBy(request => request.DispatchId, StringComparer.Ordinal).ToArray();
+    }
 
     private static void ValidateStateIdMatches<TState>(
         IReadOnlyCollection<RuntimeStateChange<TState>> changes,

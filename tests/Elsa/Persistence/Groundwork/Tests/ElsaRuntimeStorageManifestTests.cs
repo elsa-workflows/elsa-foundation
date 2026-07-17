@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Indexing;
+using Groundwork.Core.PhysicalStorage;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -78,5 +79,68 @@ public sealed class ElsaRuntimeStorageManifestTests
                 Assert.Equal(IndexPhysicalizationPolicy.Optimized, index.Physicalization);
             }
         }
+    }
+
+    [Fact]
+    public async Task WorkflowDispatch_declares_single_and_composite_bounded_query_routes()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind);
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
+
+        Assert.Equal(
+            [
+                ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex,
+                ElsaRuntimeStorageManifest.ByCollectionIndex,
+                ElsaRuntimeStorageManifest.ByParentWorkflowExecutionIndex,
+                ElsaRuntimeStorageManifest.ByStatusIndex,
+                ElsaRuntimeStorageManifest.ByTestScopeIndex
+            ],
+            unit.Indexes.Select(index => index.Identity).Order(StringComparer.Ordinal));
+        Assert.Contains(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.ByParentWorkflowExecutionAndStatusIndex && index.Fields.Count == 2);
+        Assert.Contains(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.ByChildWorkflowExecutionAndStatusIndex && index.Fields.Count == 2);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentAndStatusQuery && query.PredicateFields.Count == 2);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildAndStatusQuery && query.PredicateFields.Count == 2);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery &&
+                     query.IndexIdentity == ElsaRuntimeStorageManifest.ByTestScopeIndex);
+        Assert.Contains(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByParentWorkflowExecutionAndStatusIndex && index.Columns.Count == 3);
+        Assert.Contains(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByChildWorkflowExecutionAndStatusIndex && index.Columns.Count == 3);
+    }
+
+    [Fact]
+    public async Task Workflow_test_scope_declares_bounded_open_expiry_route()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind);
+
+        var route = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListExpiredOpenWorkflowTestScopesQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.ByStateAndExpiresAtIndex, route.IndexIdentity);
+        Assert.Collection(
+            route.PredicateFields,
+            state => Assert.Equal(ElsaRuntimeStorageManifest.StateField, state.Path),
+            scope => Assert.Equal(ElsaRuntimeStorageManifest.ScopeIdField, scope.Path),
+            expiry => Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, expiry.Path));
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowTestScopesByStatePageQuery &&
+                     query.IndexIdentity == ElsaRuntimeStorageManifest.ByStateAndScopeIdIndex);
     }
 }

@@ -523,26 +523,37 @@
     {
       "id": "runtime-post-commit-outbox",
       "family": "runtime",
-      "contract": "IRuntimePostCommitOutboxStore",
+      "contract": "IRuntimePostCommitOutboxStore; IPostCommitOutboxLookupStore; IRuntimePostCommitOutboxClaimStore; IRuntimePostCommitOutboxClaimCompletionStore; IWorkflowDispatchStore; IWorkflowDispatchQueryStore; IWorkflowDispatchDeleteStore; IWorkflowDispatchRetentionRootStore; IWorkflowDispatchAdmissionStore; IWorkflowDispatchCancellationStore; IWorkflowDispatchRedriveStore; IWorkflowTestScopeStore; IWorkflowTestScopeAdmissionStore; IWorkflowTestScopeCleanupStore",
       "outcome": "operational-store",
       "scope": "tenant-scoped",
-      "authority": "#645",
+      "authority": "#682",
       "status": "planned",
       "initialGap": "Deliverable reads do not claim atomically and completion has no stale-ack token.",
       "performanceWorkload": "outbox-drain",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "claim-deliverable-bounded-by-due-order",
-        "find-by-outbox-id"
+        "find-by-outbox-id",
+        "find-dispatch-by-id",
+        "list-dispatch-by-parent-child-status-bounded",
+        "find-test-scope-by-id",
+        "list-expired-or-closing-test-scopes-bounded",
+        "list-dispatch-by-exact-test-scope-bounded",
+        "redrive-dispatch-and-linked-failed-final-outbox-by-id"
       ],
       "concurrencySemantics": [
         "create-only-intent",
         "expected-version-claim",
         "claim-token-completion",
         "stale-acknowledgement-rejection",
-        "conditional-retry"
+        "conditional-retry",
+        "dispatch-identity-and-lifecycle-cas",
+        "test-scope-lifecycle-and-admission-fence",
+        "detached-scope-cleanup-and-cancel-outbox-atomicity",
+        "checkpoint-bundle-write",
+        "generation-and-fence-advancing-redrive"
       ],
-      "atomicBoundary": "Each claim/completion/retry is one expected-version transition; pending items join checkpoint commit atomically.",
+      "atomicBoundary": "The #678 claim/fencing foundation and #681 recovery boundary are extended by #682: pending outbox, dispatch, and test-scope state join checkpoint commit atomically; child-start admission is fenced against scope closure; detached cleanup marks or cancels the dispatch and commits deterministic child-cancel responsibility in one cross-unit transaction; #681 failure projection and authorized redrive retain their existing atomic boundaries.",
       "failureWindows": [
         "before-provider-decision",
         "during-provider-decision",
@@ -564,6 +575,13 @@
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxStoreTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePostCommitOutboxContinuityTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchCancellationTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowDispatchRedriveTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowTestScopeTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/DispatchWorkflowDeliveryRecoveryCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDispatchCancellationCheckpointTests.cs",
         "tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs"
       ]
     },

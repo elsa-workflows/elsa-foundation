@@ -89,7 +89,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||
         commit.StateChanges.Bookmarks.Count > 0 ||
-        commit.StateChanges.WorkflowDispatches.Count > 0;
+        commit.StateChanges.WorkflowDispatches.Count > 0 ||
+        commit.StateChanges.WorkflowDispatchCancellations.Count > 0;
 
     private static RuntimeCheckpointCommitStoreResult OwnOutbox(RuntimeCheckpointCommit commit) =>
         new(commit.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId).ToArray());

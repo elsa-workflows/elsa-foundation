@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.Core.Transactions;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -92,7 +93,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                sessionSource.TrySet(async (access, ct) =>
+                sessionSource.TrySetAdmitted(async (access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     var connection = new SqliteConnection(connectionString);
@@ -112,7 +113,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                                     route,
                                     source.PhysicalTarget.Provider))));
                     return new GroundworkStoreSessionResources(store, boundedStore, connection);
-                });
+                }, TransactionBoundary.CrossUnitAtomic);
             }
 
             initialized = true;

@@ -7,6 +7,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Options;
@@ -47,9 +48,6 @@ public sealed class DispatchWorkflow : CodeActivity
 
     protected override async ValueTask ExecuteAsync(IActivityExecutionContext context)
     {
-        if (context.Get(WaitForCompletion))
-            throw new NotSupportedException("WaitForCompletion=true is reserved for DispatchWorkflow lifecycle slice #679.");
-
         if (context is not IRuntimeActivityExecutionContext runtimeContext ||
             context is not IWorkflowDispatchStagingContext dispatchStagingContext)
         {
@@ -120,7 +118,12 @@ public sealed class DispatchWorkflow : CodeActivity
         }
         var jsonInputs = inputValidation.NormalizedInputs;
         var identity = new WorkflowDispatchIdentity(runtimeContext.WorkflowExecutionId, runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId);
-        var now = context.GetRequiredService<TimeProvider>().GetUtcNow();
+        var waitForCompletion = context.Get(WaitForCompletion);
+        // Wait mode needs the durable invoke event time for replay stability. Fire-and-forget retains its
+        // established wall-clock timestamp contract.
+        var now = waitForCompletion
+            ? runtimeContext.SchedulerWorkItem.RecordedAt
+            : context.GetRequiredService<TimeProvider>().GetUtcNow();
         var provenance = pin.Source
             ?? throw new InvalidOperationException("DispatchWorkflow child executable pin does not carry source provenance.");
         var dispatchNodeId = runtimeContext.ExecutableNode.ExecutableNodeId;
@@ -131,6 +134,19 @@ public sealed class DispatchWorkflow : CodeActivity
                 StringComparer.Ordinal.Equals(dependency.ArtifactId, pin.Executable.ArtifactId) &&
                 StringComparer.Ordinal.Equals(dependency.ArtifactHash, pin.Executable.ArtifactHash) &&
                 dependency.DispatchNodeIds.Contains(dispatchNodeId, StringComparer.Ordinal));
+        var dispatchMode = waitForCompletion
+            ? WorkflowDispatchMode.WaitForCompletion
+            : WorkflowDispatchMode.FireAndForget;
+        var dispatchMetadata = new Dictionary<string, string>
+        {
+            ["runtime.sourceReferenceId"] = provenance.SourceReferenceId
+        };
+        var cancelChildOnParentCancellation = CancelChildOnParentCancellation is null ||
+                                              context.Get(CancelChildOnParentCancellation);
+        WorkflowDispatchLifecycle.SetEffectiveCancellationPolicy(
+            dispatchMetadata,
+            dispatchMode,
+            cancelChildOnParentCancellation);
         var record = new WorkflowDispatchRecord(
             dispatchId: identity.DispatchId,
             parentWorkflowExecutionId: runtimeContext.WorkflowExecutionId,
@@ -138,7 +154,7 @@ public sealed class DispatchWorkflow : CodeActivity
             childWorkflowExecutionId: identity.ChildWorkflowExecutionId,
             childExecutable: pin.Executable,
             childSource: provenance,
-            mode: WorkflowDispatchMode.FireAndForget,
+            mode: dispatchMode,
             status: WorkflowDispatchStatus.Pending,
             correlationId: correlationId,
             tenantId: parent.TenantId,
@@ -148,11 +164,9 @@ public sealed class DispatchWorkflow : CodeActivity
             inputDescriptors: jsonInputs.Select(item => new WorkflowDispatchInputDescriptor(item.Key, DescribeType(item.Value))).ToArray(),
             createdAt: now,
             updatedAt: now,
-            metadata: new Dictionary<string, string>
-            {
-                ["runtime.sourceReferenceId"] = provenance.SourceReferenceId
-            },
-            dispatchNestingDepth: childNestingDepth);
+            metadata: dispatchMetadata,
+            dispatchNestingDepth: childNestingDepth,
+            testScope: parent.TestScope);
         var startPayload = new WorkflowDispatchStartPayload(
             identity.DispatchId,
             runtimeContext.WorkflowExecutionId,
@@ -168,7 +182,8 @@ public sealed class DispatchWorkflow : CodeActivity
             childAuthority,
             hasRetainedEdge ? parent.PinnedExecutable : null,
             hasRetainedEdge ? dispatchNodeId : null,
-            childNestingDepth);
+            childNestingDepth,
+            parent.TestScope);
         var startIntent = new RuntimePostCommitIntent(
             intentId: identity.StartIntentId,
             workflowExecutionId: runtimeContext.WorkflowExecutionId,
@@ -177,11 +192,66 @@ public sealed class DispatchWorkflow : CodeActivity
             activityExecutionId: runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
             idempotencyKey: identity.StartIdempotencyKey,
             payload: JsonSerializer.SerializeToElement(startPayload, SerializerOptions),
-            metadata: new Dictionary<string, string> { ["runtime.dispatchId"] = identity.DispatchId });
+            metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = identity.DispatchId });
 
-        dispatchStagingContext.StageWorkflowDispatch(new WorkflowDispatchCheckpointRequest(record, startIntent));
+        var waitBookmark = waitForCompletion
+            ? new ActivityBookmarkRequest(
+                bookmarkId: identity.WaitBookmarkId,
+                resumeTargetId: DispatchWorkflowConstants.CompletionResumeTargetId,
+                stimulusType: DispatchWorkflowConstants.WaitStimulusType,
+                stimulusHash: identity.WaitStimulusHash,
+                expiresAt: null,
+                metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = identity.DispatchId })
+            : null;
+
+        dispatchStagingContext.StageWorkflowDispatch(waitBookmark is null
+            ? new WorkflowDispatchCheckpointRequest(record, startIntent)
+            : new WorkflowDispatchCheckpointRequest(
+                record,
+                startIntent,
+                waitBookmark,
+                DispatchWorkflowConstants.CompletionResumeTargetId,
+                DispatchWorkflowConstants.WaitStimulusType));
         context.Set(ChildWorkflowExecutionId, identity.ChildWorkflowExecutionId, nameof(ChildWorkflowExecutionId));
-        context.SetOutcomes([DispatchWorkflowOutcomes.Dispatched]);
+        if (!waitForCompletion)
+            context.SetOutcomes([DispatchWorkflowOutcomes.Dispatched]);
+    }
+
+    [ResumeTarget(DispatchWorkflowConstants.CompletionResumeTargetId)]
+    private void OnChildCompletedAsync(IActivityExecutionContext context)
+    {
+        if (context is not IRuntimeActivityExecutionContext runtimeContext ||
+            context is not IExecutionExpressionState { ResumeInput: { } resumeInput })
+        {
+            throw new InvalidOperationException("DispatchWorkflow completion resume requires the runtime execution identity and resume input.");
+        }
+
+        var payload = resumeInput.Deserialize<WorkflowDispatchParentResumePayload>(SerializerOptions)
+            ?? throw new InvalidOperationException("DispatchWorkflow completion resume payload is invalid.");
+        var parentActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
+        var identity = new WorkflowDispatchIdentity(runtimeContext.WorkflowExecutionId, parentActivityExecutionId);
+        if (!StringComparer.Ordinal.Equals(payload.ParentWorkflowExecutionId, runtimeContext.WorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(payload.ParentActivityExecutionId, parentActivityExecutionId) ||
+            !StringComparer.Ordinal.Equals(payload.DispatchId, identity.DispatchId) ||
+            !StringComparer.Ordinal.Equals(payload.ChildWorkflowExecutionId, identity.ChildWorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(payload.BookmarkId, identity.WaitBookmarkId) ||
+            !StringComparer.Ordinal.Equals(payload.StimulusType, DispatchWorkflowConstants.WaitStimulusType) ||
+            !StringComparer.Ordinal.Equals(payload.StimulusHash, identity.WaitStimulusHash) ||
+            !DispatchWorkflowResult.SupportsParentResume(payload.Result.Status))
+        {
+            throw new InvalidOperationException("DispatchWorkflow completion resume payload does not match the current activity execution.");
+        }
+
+        context.Set(ChildWorkflowExecutionId, payload.ChildWorkflowExecutionId, nameof(ChildWorkflowExecutionId));
+        context.Set(Result, payload.Result, nameof(Result));
+        context.SetOutcomes([payload.Result.Status switch
+        {
+            WorkflowDispatchStatus.Completed => DispatchWorkflowOutcomes.Completed,
+            WorkflowDispatchStatus.Faulted => DispatchWorkflowOutcomes.Faulted,
+            WorkflowDispatchStatus.Cancelled => DispatchWorkflowOutcomes.Cancelled,
+            WorkflowDispatchStatus.DispatchFailed => DispatchWorkflowOutcomes.DispatchFailed,
+            _ => throw new InvalidOperationException("DispatchWorkflow completion resume payload has an unsupported child terminal status.")
+        }]);
     }
 
     private static void ValidatePin(DispatchWorkflowPin pin, string definitionId)

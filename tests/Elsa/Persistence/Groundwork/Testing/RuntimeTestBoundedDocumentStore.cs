@@ -26,6 +26,14 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                 (ElsaRuntimeStorageManifest.ByStimulusTypeIndex, ElsaRuntimeStorageManifest.StimulusTypeField),
             ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery =>
                 (ElsaRuntimeStorageManifest.ByTemplateHashIndex, ElsaRuntimeStorageManifest.TemplateHashField),
+            ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery =>
+                (ElsaRuntimeStorageManifest.ByParentWorkflowExecutionIndex, ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField),
+            ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildQuery =>
+                (ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex, ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField),
+            ElsaRuntimeStorageManifest.ListWorkflowDispatchesByStatusQuery =>
+                (ElsaRuntimeStorageManifest.ByStatusIndex, ElsaRuntimeStorageManifest.StatusField),
+            ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery =>
+                (ElsaRuntimeStorageManifest.ByTestScopeIndex, ElsaRuntimeStorageManifest.TestScopeIdField),
             "list-by-execution-scope" =>
                 (ElsaRuntimeStorageManifest.ByExecutionScopeIndex, ElsaRuntimeStorageManifest.ExecutionScopeIdField),
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery =>
@@ -60,4 +68,5 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
 
     public async Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
         await FirstOrDefaultAsync(query, cancellationToken) is not null;
+
 }

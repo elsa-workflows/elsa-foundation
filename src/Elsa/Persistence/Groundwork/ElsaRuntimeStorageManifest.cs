@@ -30,6 +30,16 @@ public static class ElsaRuntimeStorageManifest
     public const string ByExecutionScopeIndex = "by-execution-scope";
     public const string ByPublicationIndex = "by-publication";
     public const string ByParentActivityExecutionIndex = "by-parent-activity-execution";
+    public const string ByParentWorkflowExecutionIndex = "by-parent-workflow-execution";
+    public const string ByChildWorkflowExecutionIndex = "by-child-workflow-execution";
+    public const string ByStatusIndex = "by-status";
+    public const string ByTestScopeIndex = "by-test-scope";
+    public const string ByScopeIdIndex = "by-scope-id";
+    public const string ByExpiresAtIndex = "by-expires-at";
+    public const string ByStateAndScopeIdIndex = "by-state-and-scope-id";
+    public const string ByStateAndExpiresAtIndex = "by-state-and-expires-at";
+    public const string ByParentWorkflowExecutionAndStatusIndex = "by-parent-workflow-execution-and-status";
+    public const string ByChildWorkflowExecutionAndStatusIndex = "by-child-workflow-execution-and-status";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
@@ -47,6 +57,13 @@ public static class ElsaRuntimeStorageManifest
     // field without changing the document shape. Groundwork index fields are dot-paths resolved by walking
     // nested JSON (relational RelationalPhysicalizationValues.TryGetPropertyPath, Mongo content.<path> BSON key).
     public const string ParentActivityExecutionIdField = "state.parentActivityExecutionId";
+    public const string ParentWorkflowExecutionIdField = "parentWorkflowExecutionId";
+    public const string ChildWorkflowExecutionIdField = "childWorkflowExecutionId";
+    public const string StatusField = "status";
+    public const string TestScopeIdField = "testScopeId";
+    public const string ScopeIdField = "scopeId";
+    public const string ExpiresAtField = "expiresAt";
+    public const string StateField = "state";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
@@ -127,6 +144,12 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
     public const string WorkflowExecutionStateCollection = "workflowExecutionState";
     public const string ListWorkflowExecutionsQuery = ListAllQuery;
+    public const string WorkflowTestScopeDocumentKind = "workflowTestScope";
+    public const string WorkflowTestScopeCollection = "workflowTestScope";
+    public const string ListWorkflowTestScopesQuery = ListAllQuery;
+    public const string ListWorkflowTestScopesByStateQuery = "list-by-state";
+    public const string ListWorkflowTestScopesByStatePageQuery = "list-by-state-page";
+    public const string ListExpiredOpenWorkflowTestScopesQuery = "list-open-by-expiry";
     public const string DurableValueStateDocumentKind = "durableValueState";
     public const string SchedulerStateDocumentKind = "schedulerState";
     // Persisted wire identifiers — the string values predate the W14 type renames
@@ -145,6 +168,18 @@ public static class ElsaRuntimeStorageManifest
     public const string ListCheckpointCommitsQuery = ListAllQuery;
 
     public const string PostCommitOutboxDocumentKind = "postCommitOutbox";
+
+    // Durable detached-dispatch lifecycle. The collection route supports bounded internal retention
+    // enumeration; parent/child/status and their common intersections serve operational inspection.
+    public const string WorkflowDispatchDocumentKind = "workflowDispatch";
+    public const string WorkflowDispatchCollection = "workflowDispatch";
+    public const string ListWorkflowDispatchesByParentQuery = "list-by-parent-workflow-execution";
+    public const string ListWorkflowDispatchesByChildQuery = "list-by-child-workflow-execution";
+    public const string ListWorkflowDispatchesByStatusQuery = "list-by-status";
+    public const string ListWorkflowDispatchesByTestScopeQuery = "list-by-test-scope";
+    public const string ListWorkflowDispatchesByParentAndStatusQuery = "list-by-parent-workflow-execution-and-status";
+    public const string ListWorkflowDispatchesByChildAndStatusQuery = "list-by-child-workflow-execution-and-status";
+    public const string ListWorkflowDispatchesQuery = ListAllQuery;
 
     // Durable scheduler work queue. Each queued work item is a document so the queue survives process
     // restarts; the by-collection partition supports the system-wide pending-executions sweep.
@@ -277,6 +312,19 @@ public static class ElsaRuntimeStorageManifest
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)]),
             Unit(
+                WorkflowTestScopeDocumentKind,
+                "Workflow test scope",
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(ByStatusIndex, StateField),
+                    Keyword(ByScopeIdIndex, ScopeIdField),
+                    DateTime(ByExpiresAtIndex, ExpiresAtField)
+                ],
+                [
+                    Query(ListWorkflowTestScopesQuery, ByCollectionIndex),
+                    Query(ListWorkflowTestScopesByStateQuery, ByStatusIndex)
+                ]),
+            Unit(
                 DurableValueStateDocumentKind,
                 "Durable value state",
                 [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
@@ -328,6 +376,23 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
                     Query("list-all", ByCollectionIndex)
+                ]),
+            Unit(
+                WorkflowDispatchDocumentKind,
+                "Workflow dispatch",
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(ByParentWorkflowExecutionIndex, ParentWorkflowExecutionIdField),
+                    Keyword(ByChildWorkflowExecutionIndex, ChildWorkflowExecutionIdField),
+                    Keyword(ByStatusIndex, StatusField),
+                    Keyword(ByTestScopeIndex, TestScopeIdField)
+                ],
+                [
+                    Query(ListWorkflowDispatchesQuery, ByCollectionIndex),
+                    Query(ListWorkflowDispatchesByParentQuery, ByParentWorkflowExecutionIndex),
+                    Query(ListWorkflowDispatchesByChildQuery, ByChildWorkflowExecutionIndex),
+                    Query(ListWorkflowDispatchesByStatusQuery, ByStatusIndex),
+                    Query(ListWorkflowDispatchesByTestScopeQuery, ByTestScopeIndex)
                 ]),
             Unit(
                 SchedulerWorkItemDocumentKind,
@@ -397,11 +462,15 @@ public static class ElsaRuntimeStorageManifest
         queries,
         PhysicalizationPolicy.Portable);
 
-    private static PortableQueryDeclaration Query(string name, string indexName) => new(
+    private static PortableQueryDeclaration Query(
+        string name,
+        string indexName,
+        IReadOnlySet<PortableQueryOperation>? operations = null,
+        QuerySortSupport sortSupport = QuerySortSupport.None) => new(
         name,
         indexName,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        QuerySortSupport.None,
+        operations ?? new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        sortSupport,
         QueryPagingSupport.Offset);
 
     private static IndexDeclaration Keyword(string identity, string field, bool isUnique = false) => new(
@@ -413,4 +482,15 @@ public static class ElsaRuntimeStorageManifest
         MissingValueBehavior.Excluded,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         IndexPhysicalizationPolicy.Optimized);
+
+    private static IndexDeclaration DateTime(string identity, string field) => new(
+        identity,
+        [new IndexField(field)],
+        IndexValueKind.DateTime,
+        false,
+        true,
+        MissingValueBehavior.Excluded,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
+        IndexPhysicalizationPolicy.Optimized);
+
 }

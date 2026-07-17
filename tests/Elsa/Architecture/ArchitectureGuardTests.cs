@@ -221,11 +221,11 @@ public sealed class ArchitectureGuardTests
         var warningsAsErrors = productionTargets.Descendants("WarningsAsErrors").Single().Value;
         Assert.Contains("GW0004", warningsAsErrors.Split(';', StringSplitOptions.RemoveEmptyEntries));
 
-        const string checkpointAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs";
-        var checkpointSource = File.ReadAllText(Path.Combine(RepoRoot, checkpointAdapterPath));
-        Assert.Single(Regex.Matches(checkpointSource, @"\bDocumentStoreQuery\b").Cast<Match>());
-        Assert.Equal(3, Regex.Matches(checkpointSource, @"\bPortableDocumentQuery\b").Count);
-        Assert.Equal(4, Regex.Matches(checkpointSource, "Runtime checkpoint commit unit-of-work does not query documents.").Count);
+        const string unitOfWorkAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkDocumentUnitOfWorkStore.cs";
+        var unitOfWorkSource = File.ReadAllText(Path.Combine(RepoRoot, unitOfWorkAdapterPath));
+        Assert.Single(Regex.Matches(unitOfWorkSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(unitOfWorkSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Single(Regex.Matches(unitOfWorkSource, "Groundwork document unit-of-work adapter does not query documents.").Cast<Match>());
 
         const string scopedAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkScopedDocumentStore.cs";
         var scopedAdapterSource = File.ReadAllText(Path.Combine(RepoRoot, scopedAdapterPath));
@@ -242,7 +242,7 @@ public sealed class ArchitectureGuardTests
             })
             .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
             .Where(candidate =>
-                !StringComparer.Ordinal.Equals(candidate.RelativePath, checkpointAdapterPath) &&
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, unitOfWorkAdapterPath) &&
                 !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterPath))
             .SelectMany(candidate =>
             {
@@ -329,6 +329,10 @@ public sealed class ArchitectureGuardTests
         Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);
         Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(PackageReferences(design), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
 
         var sourceFiles = new[] { runtime, design }
             .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories));
@@ -337,6 +341,26 @@ public sealed class ArchitectureGuardTests
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .ToArray();
         Assert.Empty(workflowDefinitionActivityReferences);
+
+        var forbiddenContractTerms = new[]
+        {
+            "MassTransit",
+            "ServiceBus",
+            "RoutingChannel",
+            "TransportSelection",
+            "Priority",
+            "Affinity"
+        };
+        var transportContractReferences = sourceFiles
+            .SelectMany(file =>
+            {
+                var text = StripCommentsAndStringLiterals(File.ReadAllText(file));
+                return forbiddenContractTerms
+                    .Where(term => text.Contains(term, StringComparison.Ordinal))
+                    .Select(term => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {term}");
+            })
+            .ToArray();
+        Assert.Empty(transportContractReferences);
     }
 
     [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).

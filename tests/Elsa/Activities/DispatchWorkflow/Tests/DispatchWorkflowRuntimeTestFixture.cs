@@ -30,25 +30,36 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ServiceProvider _provider;
+    private readonly AdjustableTimeProvider _timeProvider;
 
-    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider) => _provider = provider;
+    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider, AdjustableTimeProvider timeProvider)
+    {
+        _provider = provider;
+        _timeProvider = timeProvider;
+    }
 
     internal IServiceProvider Services => _provider;
     internal CheckpointRecorder Checkpoints => _provider.GetRequiredService<CheckpointRecorder>();
     internal RecordingWorkflowExecutionActorProvider Actors => _provider.GetRequiredService<RecordingWorkflowExecutionActorProvider>();
     internal ChildExecutionProbe ChildProbe => _provider.GetRequiredService<ChildExecutionProbe>();
+    internal RecordingDispatchBookmarkObserver BookmarkObserver => _provider.GetRequiredService<RecordingDispatchBookmarkObserver>();
+    internal void AdvanceTime(TimeSpan duration) => _timeProvider.Advance(duration);
 
     internal static async ValueTask<DispatchWorkflowRuntimeTestFixture> CreateAsync(
-        int maxNestingDepth = DispatchWorkflowOptions.DefaultMaxNestingDepth)
+        int maxNestingDepth = DispatchWorkflowOptions.DefaultMaxNestingDepth,
+        bool failDispatchCommit = false)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        var timeProvider = new AdjustableTimeProvider(Now);
+        services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<CheckpointRecorder>();
         services.AddSingleton<ChildExecutionProbe>();
         var typeRegistry = new WellKnownTypeRegistry();
         typeRegistry.RegisterType(typeof(string), "String");
         typeRegistry.RegisterType(typeof(int), "Int32");
         services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
+        services.AddSingleton<RecordingDispatchBookmarkObserver>();
+        services.AddSingleton<IBookmarkLifecycleObserver>(serviceProvider => serviceProvider.GetRequiredService<RecordingDispatchBookmarkObserver>());
         services.AddSingleton<IActivityConstructor, DispatchActivityConstructor>();
         services.AddSingleton<IActivityConstructor, ChildProbeActivityConstructor>();
 
@@ -67,12 +78,13 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         services.Replace(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitStore>(serviceProvider =>
             new RecordingRuntimeCheckpointCommitStore(
                 serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
-                serviceProvider.GetRequiredService<CheckpointRecorder>())));
+                serviceProvider.GetRequiredService<CheckpointRecorder>(),
+                failDispatchCommit)));
 
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         provider.GetRequiredService<IActivityConstructorRegistry>()
             .AddAll(provider.GetServices<IActivityConstructor>());
-        var fixture = new DispatchWorkflowRuntimeTestFixture(provider);
+        var fixture = new DispatchWorkflowRuntimeTestFixture(provider, timeProvider);
         await fixture.SeedChildAsync();
         return fixture;
     }
@@ -84,9 +96,20 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         string? correlationOverride = null,
         IReadOnlyDictionary<string, object?>? dispatchInputs = null,
         int dispatchNestingDepth = 0,
-        string? parentDefinitionId = null)
+        string? parentDefinitionId = null,
+        Func<ValueTask>? beforeStart = null,
+        bool waitForCompletion = false,
+        bool? cancelChildOnParentCancellation = null,
+        WorkflowRunKind runKind = WorkflowRunKind.BackgroundWeaverRun,
+        WorkflowTestScope? testScope = null)
     {
-        var parentExecutable = NewParentExecutable(caseId, correlationOverride, dispatchInputs, parentDefinitionId);
+        var parentExecutable = NewParentExecutable(
+            caseId,
+            correlationOverride,
+            dispatchInputs,
+            parentDefinitionId,
+            waitForCompletion,
+            cancelChildOnParentCancellation);
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
@@ -94,6 +117,14 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             slotId: $"slot-parent-{caseId}");
         await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(parentExecutable);
         await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(parentReference);
+        if (testScope is not null)
+        {
+            await _provider.GetRequiredService<IWorkflowTestScopeStore>().CreateAsync(
+                testScope,
+                Now.AddMinutes(-1));
+        }
+        if (beforeStart is not null)
+            await beforeStart();
 
         var authority = new WorkflowExecutionAuthoritySnapshot(
             systemIdentity: "parent-caller",
@@ -111,7 +142,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 inputs: null,
                 stimulusInput: null,
                 triggerNodeId: null,
-                runKind: WorkflowRunKind.BackgroundWeaverRun,
+                runKind: runKind,
                 sourceSelection: new WorkflowExecutableSourceSelection(parentReference.SourceReferenceId),
                 provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
                 parentWorkflowExecutionId: null,
@@ -120,7 +151,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 partition: new WorkflowExecutionPartition("partition-eu"),
                 authority: authority,
                 startAuthority: null,
-                dispatchNestingDepth: dispatchNestingDepth));
+                dispatchNestingDepth: dispatchNestingDepth,
+                testScope: testScope));
 
         var activityState = AssertSingle(await _provider.GetRequiredService<IActivityExecutionStateStore>()
             .ListAsync(parentWorkflowExecutionId));
@@ -136,6 +168,53 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         var commit = Checkpoints.SingleDispatchCommit(identity.DispatchId);
         return new ParentDispatchRun(start, activityState, identity, dispatch, commit);
     }
+
+    internal async ValueTask<WorkflowExecutionStartDispatchResult> StartParentExpectingFailureAsync(
+        string caseId,
+        string parentWorkflowExecutionId,
+        bool waitForCompletion)
+    {
+        var parentExecutable = NewParentExecutable(
+            caseId,
+            correlationOverride: null,
+            dispatchInputs: null,
+            parentDefinitionId: null,
+            waitForCompletion,
+            cancelChildOnParentCancellation: null);
+        var parentReference = NewSourceReference(
+            sourceReferenceId: $"source-parent-{caseId}",
+            identity: parentExecutable.Identity,
+            publicationId: $"publication-parent-{caseId}",
+            slotId: $"slot-parent-{caseId}");
+        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(parentExecutable);
+        await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(parentReference);
+        var authority = new WorkflowExecutionAuthoritySnapshot("parent-caller", "root-initiator");
+        await using var scope = _provider.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest(
+                artifactId: parentExecutable.Identity.ArtifactId,
+                requestedBy: authority.SystemIdentity,
+                workflowExecutionId: parentWorkflowExecutionId,
+                idempotencyKey: $"start:{parentWorkflowExecutionId}",
+                metadata: null,
+                variables: null,
+                inputs: null,
+                stimulusInput: null,
+                triggerNodeId: null,
+                runKind: WorkflowRunKind.BackgroundWeaverRun,
+                sourceSelection: new WorkflowExecutableSourceSelection(parentReference.SourceReferenceId),
+                provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                parentWorkflowExecutionId: null,
+                correlationId: "correlation-parent",
+                tenantId: "tenant-42",
+                partition: new WorkflowExecutionPartition("partition-eu"),
+                authority: authority,
+                startAuthority: null,
+                dispatchNestingDepth: 0));
+    }
+
+    internal async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListActivitiesAsync(string workflowExecutionId) =>
+        await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId);
 
     internal async ValueTask<RuntimeResumptionSweepResult> SweepAsync()
     {
@@ -182,6 +261,13 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             "slot-child"));
     }
 
+    internal ValueTask<BookmarkState?> FindBookmarkAsync(string workflowExecutionId, string bookmarkId) =>
+        _provider.GetRequiredService<IBookmarkStateStore>().FindAsync(workflowExecutionId, bookmarkId);
+
+    internal ValueTask RetireChildPublicationAsync() => ReplaceOrUnpublishChildAsync(replace: false);
+
+    internal ValueTask ReplaceChildPublicationAsync() => ReplaceOrUnpublishChildAsync(replace: true);
+
     public ValueTask DisposeAsync() => _provider.DisposeAsync();
 
     private async ValueTask SeedChildAsync()
@@ -222,7 +308,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         string caseId,
         string? correlationOverride,
         IReadOnlyDictionary<string, object?>? dispatchInputs,
-        string? parentDefinitionId)
+        string? parentDefinitionId,
+        bool waitForCompletion,
+        bool? cancelChildOnParentCancellation)
     {
         dispatchInputs ??= new Dictionary<string, object?>
         {
@@ -248,6 +336,20 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 correlationOverride,
                 typeof(string));
         }
+        if (waitForCompletion)
+        {
+            inputs[nameof(DispatchWorkflowActivity.WaitForCompletion)] = LiteralBinding(
+                nameof(DispatchWorkflowActivity.WaitForCompletion),
+                true,
+                typeof(bool));
+        }
+        if (cancelChildOnParentCancellation is not null)
+        {
+            inputs[nameof(DispatchWorkflowActivity.CancelChildOnParentCancellation)] = LiteralBinding(
+                nameof(DispatchWorkflowActivity.CancelChildOnParentCancellation),
+                cancelChildOnParentCancellation.Value,
+                typeof(bool));
+        }
 
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -269,6 +371,13 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     type: new RuntimeValueTypeDescriptor("clr", typeof(string).FullName, null),
                     lifecycle: DurableValueLifecycle.Instance,
                     storage: DurableValueStorage.Inline,
+                    captureOnSuccessfulCompletion: true),
+                [nameof(DispatchWorkflowActivity.Result)] = new(
+                    outputName: nameof(DispatchWorkflowActivity.Result),
+                    valueId: $"dispatch-result-{caseId}",
+                    type: new RuntimeValueTypeDescriptor("clr", typeof(DispatchWorkflowResult).FullName, null),
+                    lifecycle: DurableValueLifecycle.Result,
+                    storage: DurableValueStorage.Inline,
                     captureOnSuccessfulCompletion: true)
             },
             metadata: metadata);
@@ -280,7 +389,14 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 "1.0.0",
                 $"sha256:parent-{caseId}"),
             rootActivity: node,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
+            {
+                [DispatchWorkflowConstants.CompletionResumeTargetId] = new(
+                    DispatchWorkflowConstants.CompletionResumeTargetId,
+                    node.ExecutableNodeId,
+                    "OnChildCompletedAsync",
+                    new Dictionary<string, string>())
+            },
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
             inputContract: null,
@@ -370,10 +486,16 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     activity.Inputs = (InputArgument<IReadOnlyDictionary<string, object?>>)dispatchInputs;
                 if (inputs.TryGetValue(nameof(activity.CorrelationId), out var correlationId))
                     activity.CorrelationId = (InputArgument<string>)correlationId;
+                if (inputs.TryGetValue(nameof(activity.WaitForCompletion), out var waitForCompletion))
+                    activity.WaitForCompletion = (InputArgument<bool>)waitForCompletion;
+                if (inputs.TryGetValue(nameof(activity.CancelChildOnParentCancellation), out var cancelChild))
+                    activity.CancelChildOnParentCancellation = (InputArgument<bool>)cancelChild;
             }
 
             if (outputs is not null && outputs.TryGetValue(nameof(activity.ChildWorkflowExecutionId), out var childId))
                 activity.ChildWorkflowExecutionId = new OutputArgument<string>(childId.MemoryBlockReference());
+            if (outputs is not null && outputs.TryGetValue(nameof(activity.Result), out var result))
+                activity.Result = new OutputArgument<DispatchWorkflowResult>(result.MemoryBlockReference());
             return new(activity);
         }
     }
@@ -410,9 +532,13 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         }
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class AdjustableTimeProvider(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        private DateTimeOffset _now = now;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        internal void Advance(TimeSpan duration) => _now += duration;
     }
 }
 
@@ -422,6 +548,27 @@ internal sealed record ParentDispatchRun(
     WorkflowDispatchIdentity Identity,
     WorkflowDispatchRecord Dispatch,
     RuntimeCheckpointCommit CompletionCommit);
+
+internal sealed class RecordingDispatchBookmarkObserver : IBookmarkLifecycleObserver
+{
+    private readonly Lock _gate = new();
+    private readonly List<BookmarkState> _created = [];
+
+    internal IReadOnlyCollection<BookmarkState> Created
+    {
+        get { lock (_gate) return _created.ToArray(); }
+    }
+
+    public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+            _created.Add(bookmark);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask OnBookmarkConsumedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
+}
 
 internal sealed class CheckpointRecorder
 {
@@ -439,11 +586,18 @@ internal sealed class CheckpointRecorder
         lock (_gate)
             return _commits.Single(commit => commit.StateChanges.WorkflowDispatches.Any(change => change.StateId == dispatchId));
     }
+
+    internal RuntimeCheckpointCommit SingleIntentCommit(string intentKind)
+    {
+        lock (_gate)
+            return _commits.Single(commit => commit.PostCommitIntents.Any(intent => intent.Kind == intentKind));
+    }
 }
 
 internal sealed class RecordingRuntimeCheckpointCommitStore(
     InMemoryRuntimeCheckpointCommitStore inner,
-    CheckpointRecorder recorder) : IRuntimeCheckpointCommitStore
+    CheckpointRecorder recorder,
+    bool failDispatchCommit = false) : IRuntimeCheckpointCommitStore
 {
     public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
@@ -451,6 +605,8 @@ internal sealed class RecordingRuntimeCheckpointCommitStore(
         CancellationToken cancellationToken = default)
     {
         recorder.Record(commit);
+        if (failDispatchCommit && commit.StateChanges.WorkflowDispatches.Count > 0)
+            throw new InvalidOperationException("Injected workflow-dispatch checkpoint failure.");
         return inner.CommitAsync(commit, decision, cancellationToken);
     }
 }

@@ -1,4 +1,5 @@
 using Groundwork.Documents.Scoping;
+using Groundwork.Core.Transactions;
 
 namespace Elsa.Persistence.Groundwork.Scoping;
 
@@ -17,9 +18,28 @@ public sealed class GroundworkStoreSessionSource : IGroundworkStoreSessionSource
 
     public bool IsInitialized => Volatile.Read(ref _publication) is not null;
 
+    /// <summary>
+    /// Gets the transaction boundary proven by the admitted provider publication. A missing value means
+    /// the legacy publication path supplied no durability evidence and must not be treated as restart-safe.
+    /// </summary>
+    public TransactionBoundary? AdmittedTransactionBoundary => Volatile.Read(ref _publication)?.TransactionBoundary;
+
     public bool TrySet(
         Func<DocumentStoreAccess, CancellationToken, ValueTask<GroundworkStoreSessionResources>> openSession,
         IAsyncDisposable? providerLease = null)
+        => TrySetCore(openSession, transactionBoundary: null, providerLease);
+
+    /// <summary>Publishes a provider session together with its admitted transaction capability.</summary>
+    public bool TrySetAdmitted(
+        Func<DocumentStoreAccess, CancellationToken, ValueTask<GroundworkStoreSessionResources>> openSession,
+        TransactionBoundary transactionBoundary,
+        IAsyncDisposable? providerLease = null)
+        => TrySetCore(openSession, transactionBoundary, providerLease);
+
+    private bool TrySetCore(
+        Func<DocumentStoreAccess, CancellationToken, ValueTask<GroundworkStoreSessionResources>> openSession,
+        TransactionBoundary? transactionBoundary,
+        IAsyncDisposable? providerLease)
     {
         ArgumentNullException.ThrowIfNull(openSession);
         lock (_gate)
@@ -27,7 +47,7 @@ public sealed class GroundworkStoreSessionSource : IGroundworkStoreSessionSource
             if (_disposed || _publication is not null)
                 return false;
 
-            Volatile.Write(ref _publication, new(openSession, providerLease));
+            Volatile.Write(ref _publication, new(openSession, transactionBoundary, providerLease));
             return true;
         }
     }
@@ -106,5 +126,6 @@ public sealed class GroundworkStoreSessionSource : IGroundworkStoreSessionSource
 
     private sealed record Publication(
         Func<DocumentStoreAccess, CancellationToken, ValueTask<GroundworkStoreSessionResources>> OpenSession,
+        TransactionBoundary? TransactionBoundary,
         IAsyncDisposable? ProviderLease);
 }

@@ -233,7 +233,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
             Partition = priorWorkflowState?.Partition ?? payload.Partition,
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
-            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth
+            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
+            TestScope = priorWorkflowState?.TestScope ?? payload.TestScope
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -287,7 +288,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
             Partition = priorWorkflowState?.Partition ?? payload.Partition,
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
-            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth
+            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
+            TestScope = priorWorkflowState?.TestScope ?? payload.TestScope
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);

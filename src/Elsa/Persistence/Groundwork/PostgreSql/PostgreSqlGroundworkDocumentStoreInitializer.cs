@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.Core.Transactions;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -90,7 +91,7 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                sessionSource.TrySet((access, ct) =>
+                sessionSource.TrySetAdmitted((access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     var store = new PostgreSqlPhysicalDocumentStore(
@@ -108,7 +109,7 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
                                     route,
                                     source.PhysicalTarget.Provider))));
                     return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
-                });
+                }, TransactionBoundary.CrossUnitAtomic);
             }
 
             initialized = true;

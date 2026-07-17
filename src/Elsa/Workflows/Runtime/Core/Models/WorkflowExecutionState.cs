@@ -53,6 +53,10 @@ public sealed record WorkflowExecutionState(
             _dispatchNestingDepth = value;
         }
     }
+
+    /// <summary>Authoritative finite test-run scope. Null for non-test and legacy execution state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestScope? TestScope { get; init; }
 }
 
 public enum WorkflowRunKind

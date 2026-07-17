@@ -7,7 +7,7 @@ metadata:
   author: "elsa-foundation"
   source: "docs/skills/catalog.md#refresh-generated-maps"
 user-invocable: true
-disable-model-invocation: false
+disable-model-invocation: true
 ---
 
 ## User Input
@@ -19,10 +19,10 @@ $ARGUMENTS
 ## Outline
 
 1. Read `docs/skills/catalog.md#refresh-generated-maps` and `AGENTS.md#refresh-generated-maps`.
-2. Check `docs/maps/manifest.json` if present.
+2. Check `docs/maps/manifest.json` if present when the user explicitly requests a refresh.
 3. Choose the narrowest map generator that matches the changed inputs.
 4. Prefer PowerShell scripts on Windows and Bash scripts where appropriate.
-5. Run map generators only when map freshness is required for the approved task.
+5. Run map generators only when the user explicitly requests a refresh (or explicitly authorizes it as part of an approved task).
 6. Record findings in reports; do not hand-edit generated map facts.
 
 If a map refresh is follow-through for an approved change, run it. Otherwise return the proposed refresh command(s) first.
