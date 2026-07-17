@@ -114,6 +114,86 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   expect(state.draft.contract).toMatchObject({ inputs: [{ referenceKey: "customer-note", isRequired: false, isNullable: true, default: { syntax: "Literal", value: null }, storageDriverKey: "elsa.json", durability: "Required" }] });
 });
 
+test("Activity Definition validation distinguishes valid, invalid, unavailable, forbidden, missing, unknown, and stale outcomes", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await page.goto("/?mode=activity-definitions");
+  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.getByRole("textbox", { name: "Display name" }).fill("Diagnostic browser activity");
+  await page.getByRole("button", { name: "Create definition" }).click();
+  await expect(page.getByText("Saved revision 1")).toBeVisible();
+
+  state.validationMode = "invalid";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByText("Draft rejected")).toBeVisible();
+  await expect(page.getByLabel("Diagnostic severity counts")).toContainText("2 errors");
+  await expect(page.getByLabel("Diagnostic severity counts")).toContainText("2 warnings");
+
+  const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
+  await contractDiagnostic.click();
+  await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
+  await page.getByRole("button", { name: "Return to diagnostic" }).click();
+  await expect(contractDiagnostic).toBeFocused();
+
+  await page.getByRole("button", { name: "Focus activity.graph.root-required" }).click();
+  await expect(page.getByRole("combobox", { name: "Root activity" })).toBeFocused();
+  await page.getByRole("button", { name: "Return to diagnostic" }).click();
+
+  await page.getByRole("button", { name: "Focus activity.future-location" }).click();
+  await expect(page.getByText(/exact diagnostic location is unavailable/i)).toBeVisible();
+
+  const missingProviderDiagnostic = page.getByRole("button", { name: "Focus activity.provider.editor-unavailable" });
+  await missingProviderDiagnostic.click();
+  await expect(page.getByText(/exact diagnostic location is unavailable/i)).toBeVisible();
+  await expect(missingProviderDiagnostic).toBeFocused();
+  await expect(missingProviderDiagnostic).toBeVisible();
+  await expect(page.getByRole("button", { name: "Return to diagnostic" })).toHaveCount(0);
+  await expect(page.getByText("hidden.provider")).toHaveCount(0);
+  await expect(page.getByText("hidden-provider-subject-id")).toHaveCount(0);
+
+  state.validationMode = "valid";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByText("Valid draft")).toBeVisible();
+  await expect(page.getByText(/Revision 1 passed validation/)).toBeVisible();
+
+  state.validationMode = "forbidden";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByText(/Draft validation is not authorized/)).toBeVisible();
+  await expect(page.getByText("hidden validation identity")).toHaveCount(0);
+
+  state.validationMode = "not-found";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByText(/exact authorized draft could not be confirmed/)).toBeVisible();
+  await expect(page.getByText("hidden validation identity")).toHaveCount(0);
+
+  state.validationMode = "unavailable";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByText(/Draft validation is unavailable/)).toBeVisible();
+  await expect(page.getByText("hidden validation identity")).toHaveCount(0);
+
+  state.validationMode = "stale";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByText(/backend rejected validation/)).toBeVisible();
+  await expect(page.getByText(/server draft advanced to revision 2/i)).toBeVisible();
+  await expect(page.getByText(/Runtime rejection is reported by the Test Run experience/)).toBeVisible();
+});
+
+test("Activity Graph diagnostics focus accessible root context while the exact control is pending", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  state.catalogBlocked = true;
+  await page.goto("/?mode=activity-definitions");
+  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.getByRole("textbox", { name: "Display name" }).fill("Pending catalog activity");
+  await page.getByRole("button", { name: "Create definition" }).click();
+  await expect(page.getByText("Saved revision 1")).toBeVisible();
+
+  state.validationMode = "invalid";
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await page.getByRole("button", { name: "Focus activity.graph.root-required" }).click();
+  await expect(page.locator("[data-graph-root-location]")).toBeFocused();
+  await expect(page.getByText(/Focused the provider-owned Activity Graph location/)).toBeVisible();
+  state.releaseCatalog();
+});
+
 async function mockActivityDefinitions(page: Page, collectionHandler?: Parameters<Page["route"]>[1]) {
   await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(capabilities()) }));
   await page.route(/\/design\/activities\/definitions\?.*/, collectionHandler ?? (route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(collectionPage()) })));
@@ -145,13 +225,22 @@ async function mockActivityDefinitionAuthoring(page: Page) {
   const state = {
     conflictNextSave: false,
     conflictCopyPayload: null as unknown,
+    validationMode: "invalid" as "invalid" | "valid" | "forbidden" | "not-found" | "unavailable" | "stale",
+    catalogBlocked: false,
+    releaseCatalog: () => {},
     draft: authoringDraft("activity-draft-browser", 1, initialGraphPayload())
   };
+  let releaseCatalog!: () => void;
+  const catalogGate = new Promise<void>(resolve => { releaseCatalog = resolve; });
+  state.releaseCatalog = releaseCatalog;
   await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(authoringApiCapabilities()) }));
   await page.route(/\/design\/activities\/definitions\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([])) }));
   await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(authoringCapabilities()) }));
   await page.route("**/expressions/descriptors", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [{ type: "Python", displayName: "Python", editingMode: "text" }] }) }));
-  await page.route("**/design/activities/catalog", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ activities: [catalogActivity("sequence-v1", "Sequence"), catalogActivity("flowchart-v1", "Flowchart"), catalogActivity("write-line-v1", "Write line"), catalogActivity("delay-v1", "Delay")] }) }));
+  await page.route("**/design/activities/catalog", async route => {
+    if (state.catalogBlocked) await catalogGate;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ activities: [catalogActivity("sequence-v1", "Sequence"), catalogActivity("flowchart-v1", "Flowchart"), catalogActivity("write-line-v1", "Write line"), catalogActivity("delay-v1", "Delay")] }) });
+  });
   await page.route("**/design/activities/definitions", async route => {
     if (route.request().method() !== "POST") return route.fallback();
     const body = route.request().postDataJSON() as { provider: { payload: unknown } };
@@ -176,6 +265,78 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     state.conflictCopyPayload = body.provider.payload;
     state.draft = { ...authoringDraft("activity-draft-recovery", 1, body.provider.payload), layout: body.layout, contract: body.contract, presentationLabel: body.presentationLabel ?? null };
     await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(state.draft) });
+  });
+  await page.route("**/design/activities/drafts/activity-draft-browser/validate", async route => {
+    const body = route.request().postDataJSON() as { expectedRevision: number };
+    if (state.validationMode === "forbidden") {
+      return route.fulfill({ status: 403, contentType: "application/problem+json", body: JSON.stringify({ title: "hidden validation identity" }) });
+    }
+    if (state.validationMode === "not-found") {
+      return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ title: "hidden validation identity" }) });
+    }
+    if (state.validationMode === "unavailable") {
+      return route.fulfill({ status: 503, contentType: "application/problem+json", body: JSON.stringify({ title: "hidden validation identity" }) });
+    }
+    if (state.validationMode === "stale") {
+      return route.fulfill({
+        status: 409,
+        contentType: "application/problem+json",
+        body: JSON.stringify({
+          title: "Stale revision",
+          errorCode: "activity.draft.stale-revision",
+          recovery: { currentRevision: state.draft.revision + 1 }
+        })
+      });
+    }
+    const diagnostics = state.validationMode === "valid" ? [] : [
+      {
+        code: "activity.contract.outcome-required",
+        severity: "Error",
+        message: "The required outcome must be retained.",
+        subject: { kind: "ActivityDraft", id: state.draft.draftId, revision: body.expectedRevision },
+        location: { jsonPointer: "/contract/outcomes/0/referenceKey", referenceKey: "done" },
+        remediation: "Retain the provider-required outcome.",
+        metadata: {}
+      },
+      {
+        code: "activity.graph.root-required",
+        severity: "Error",
+        message: "Choose a root activity.",
+        subject: { kind: "ActivityDraft", id: state.draft.draftId, revision: body.expectedRevision },
+        location: { providerKey: "elsa.activity-graph", jsonPointer: "/rootActivity/activityVersionId", referenceKey: "root" },
+        remediation: "Choose an exact root activity version.",
+        metadata: {}
+      },
+      {
+        code: "activity.future-location",
+        severity: "Warning",
+        message: "A future location needs attention.",
+        subject: { kind: "ActivityDraft", id: state.draft.draftId, revision: body.expectedRevision },
+        location: { jsonPointer: "/future/location" },
+        remediation: "Use an authorized editor that supports this location.",
+        metadata: {}
+      },
+      {
+        code: "activity.provider.editor-unavailable",
+        severity: "Warning",
+        message: "The provider-owned location needs attention.",
+        subject: { kind: "ActivityDraft", id: "hidden-provider-subject-id", revision: body.expectedRevision },
+        location: { providerKey: "hidden.provider", jsonPointer: "/hidden/provider-location", referenceKey: "hidden-reference" },
+        remediation: "Use an authorized provider editor when one is available.",
+        metadata: {}
+      }
+    ];
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        draftId: state.draft.draftId,
+        revision: body.expectedRevision,
+        isValid: diagnostics.length === 0,
+        validatedAt: new Date().toISOString(),
+        diagnostics
+      })
+    });
   });
   await page.route("**/design/activities/drafts/activity-draft-recovery", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) }));
   return state;
