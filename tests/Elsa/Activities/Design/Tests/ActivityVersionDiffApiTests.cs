@@ -236,6 +236,7 @@ public sealed class ActivityVersionDiffApiTests
     private sealed class TestAuthoringContext : IActivityAuthoringContext
     {
         public string? TenantId => "tenant-a";
+        public string AuthorizationProfile => "tenant-a/read";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => false;
     }

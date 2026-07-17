@@ -141,13 +141,19 @@ public sealed class FeatureRegistrationTests
 
         using var provider = services.BuildServiceProvider();
         var codec = provider.GetRequiredService<IActivityDependencyCursorCodec>();
+        var managementCodec = provider.GetRequiredService<IActivityManagementCursorCodec>();
         var state = new ActivityDependencyCursorState("tenant", "profile", "version", "Outbound", false, ["Versions"], "watermark", 1);
+        var managementState = new ActivityManagementCursorState("scope", 25, 42);
 
         var decoded = codec.Decode(codec.Encode(state));
+        var decodedManagement = managementCodec.Decode(managementCodec.Encode(managementState));
         Assert.Equal(state.TenantScope, decoded.TenantScope);
         Assert.Equal(state.RootVersionId, decoded.RootVersionId);
         Assert.Equal(state.Include, decoded.Include);
         Assert.Equal(state.Position, decoded.Position);
+        Assert.Equal(managementState, decodedManagement);
+        Assert.Throws<ActivityManagementCursorInvalidException>(() =>
+            managementCodec.Decode(managementCodec.Encode(new("scope", 25, -1))));
     }
 
     [Fact]

@@ -77,11 +77,21 @@ Mutable authoring aggregate header.
 Invariants:
 
 - Multiple active drafts may share a `DefinitionId`.
-- Draft labels are optional and need not be unique within a definition; creating or autosaving a draft never requires the author to invent a unique name.
+- Draft labels are optional and need not be unique within a definition; creating or autosaving a
+  draft never requires the author to invent a unique name. A label is not identity, lineage,
+  provider source, or behavior-hash input.
 - `SourceVersionId` never changes after draft creation.
-- Full-state update requires `ExpectedRevision == Revision`; stale updates return a conflict and write nothing.
+- Full-state update and presentation-label update both require `ExpectedRevision == Revision` and
+  participate in the same autosave revision stream. A successful mutation increments `Revision`
+  exactly once and updates the sibling layout revision atomically, including a label-only change.
+  Stale updates return a conflict and write nothing.
 - Only `Active` drafts can be updated or published.
 - Successful publication records the published version identity and marks the draft `Published`; rejected publication leaves it active and unchanged.
+- Conflict-copy recovery requires the exact current source revision and atomically creates a new
+  active draft at revision `1` from the submitted complete contract, provider, layout, and optional
+  presentation label. The copy inherits definition, tenant, immutable `SourceVersionId`, and
+  provider-neutral internal options; it receives a server-generated draft identity and never
+  overwrites or merges the source draft.
 
 ### 1.5 `ActivityDefinitionDraftState`
 
@@ -120,7 +130,28 @@ Derived sibling record for the latest validated draft revision.
 
 Publication always revalidates inside its atomic transition; a stored clean validation from an older revision is never sufficient.
 
-### 1.8 Activity management temporal projections
+### 1.8 Bounded temporal management projections
+
+Definition, draft, and version management collections return
+`ActivityManagementPageView<T>` rather than unbounded relationship arrays.
+
+| Field | Shape | Rules |
+|---|---|---|
+| `Items` | ordered list | Compact authorization-filtered management views only. |
+| `Count` | integer | Number of items in this response. |
+| `TotalCount` | long | Exact count within the same authorized query snapshot; never a global count. |
+| `HasMore` | bool | Whether the same bound snapshot has another page. |
+| `Continuation` | string? | Opaque scope/query/authorization-bound continuation, null on the terminal page. |
+| `Snapshot` | `{SnapshotId, AsOf}` | Stable sequence-derived identity and timestamp for the management snapshot. |
+
+`ReusableActivityDefinitionManagementView` contains only `Definition`, a bounded `Lifecycle`
+summary, typed `Actions`, and `UpdatedAt`; definition detail never embeds draft or version arrays.
+Drafts and versions are paged through their advertised capability relations.
+
+Action availability is represented as ordered `ActivityActionAvailabilityView` entries:
+`{Action, Allowed, UnavailableCode}`. `UnavailableCode` is null when allowed and otherwise carries a
+stable privacy-safe reason code. The projection is a convenience for rendering; every mutation
+rechecks authorization, authority, lifecycle, provider capability, and optimistic preconditions.
 
 Catalog definition, draft, and version lists read provider-queryable safe summaries rather than
 scanning or deserializing authoring aggregates. Each summary revision uses a durable monotonic
@@ -159,6 +190,9 @@ Compatible drivers are the intersection of descriptor declarations and Runtime's
 driver registry, projected through the Publishing bridge.
 Unavailable facts are rejected with structured diagnostics. Immutable historical contracts retain
 and return their exact stored facts even if a capability is later unavailable.
+The pre-release mutable authoring contract is a clean break: it has no legacy type-alias fallback,
+compatibility ingress, or workflow-definition-as-activity representation. Historical immutability
+applies only to versions successfully published under this contract.
 
 ### 2.2 `ActivityInputContract`
 
@@ -471,4 +505,9 @@ No descendant work is scheduled before entry commits; no parent continuation obs
 - A global definition may reference only global versions.
 - Exact identifiers never bypass tenancy.
 - Authoring authority, lifecycle administration, structure inspection, and sensitive-value inspection are distinct authorization decisions.
+- Management items, lifecycle counts, `TotalCount`, and action availability are projected only
+  after visibility and authorization filtering. They never reveal pre-authorization inventory.
+- A `404` reports absence in the caller's authorized scope without confirming hidden existence. A
+  `403` reports an operation or tenant-reference denial with a generic privacy-safe body; neither
+  response includes hidden names, identifiers, counts, action maps, or provider facts.
 - Error and diagnostic projections never include opaque provider payloads, compiled descriptor payloads, captured sensitive values, or unauthorized cross-tenant identities.

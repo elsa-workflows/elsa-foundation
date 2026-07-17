@@ -101,6 +101,31 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
     }
 
     [Fact]
+    public async Task Pre_watermark_snapshot_remains_a_valid_empty_view_when_the_first_write_races()
+    {
+        var documents = new TemporalProjectionDocumentStore();
+        var writer = new GroundworkActivityManagementProjectionWriter(documents, new ImmediateDistributedLockProvider());
+        var reader = Reader(documents);
+        var emptySnapshot = await reader.GetCurrentSnapshotAsync();
+        var changedAt = new DateTimeOffset(2026, 7, 17, 8, 30, 0, TimeSpan.Zero);
+
+        await CommitAsync(documents, await writer.PrepareAsync(new(
+            changedAt,
+            [DefinitionChange("definition-first", null, "First", changedAt)],
+            [],
+            [])));
+
+        var racedFirstPage = await reader.ReadDefinitionsAsync(new(null, emptySnapshot.Sequence, 0, 25));
+        var freshFirstPage = await reader.ReadDefinitionsAsync(new(null, null, 0, 25));
+        Assert.Equal(0, emptySnapshot.Sequence);
+        Assert.Empty(racedFirstPage.Items);
+        Assert.Equal(0, racedFirstPage.TotalCount);
+        Assert.Equal(0, racedFirstPage.Snapshot.Sequence);
+        Assert.Equal("definition-first", Assert.Single(freshFirstPage.Items).DefinitionId);
+        Assert.Equal(1, freshFirstPage.Snapshot.Sequence);
+    }
+
+    [Fact]
     public async Task Provider_applies_visibility_search_sort_page_and_exact_count_with_more_than_500_noise_rows()
     {
         var documents = new TemporalProjectionDocumentStore();

@@ -164,10 +164,9 @@ public sealed record RecommendedActivityDefinitionPageView(
     IReadOnlyList<RecommendedActivityDefinitionView> Items,
     int? NextOffset);
 
-public sealed record ReusableActivityDefinitionDetailsView(
+public sealed record ReusableActivityDefinitionMutationView(
     ActivityDefinitionIdentityView Definition,
-    IReadOnlyList<ReusableActivityDraftSummaryView> Drafts,
-    IReadOnlyList<ReusableActivityVersionSummaryView> Versions);
+    ReusableActivityDraftSummaryView Draft);
 
 public sealed record ReusableActivityDraftSummaryView(
     string DraftId,
@@ -177,7 +176,50 @@ public sealed record ReusableActivityDraftSummaryView(
     ActivityDefinitionDraftStatus Status,
     string ProviderKey,
     string ProviderSchemaVersion,
+    DateTimeOffset UpdatedAt,
+    string? PresentationLabel = null);
+
+public sealed record ActivityManagementSnapshotView(string SnapshotId, DateTimeOffset AsOf);
+
+public sealed record ActivityManagementPageView<T>(
+    IReadOnlyList<T> Items,
+    int Count,
+    long TotalCount,
+    bool HasMore,
+    string? Continuation,
+    ActivityManagementSnapshotView Snapshot);
+
+public sealed record ActivityDefinitionVersionReferenceView(
+    string VersionId,
+    string Version,
+    ActivityDefinitionVersionLifecycle Lifecycle,
+    string ProviderKey,
+    string ProviderSchemaVersion);
+
+public sealed record ActivityDefinitionLifecycleSummaryView(
+    long DraftCount,
+    long VersionCount,
+    ActivityDefinitionVersionReferenceView? Head,
+    ActivityDefinitionVersionReferenceView? Recommendation);
+
+public sealed record ReusableActivityDefinitionManagementView(
+    ActivityDefinitionIdentityView Definition,
+    ActivityDefinitionLifecycleSummaryView Lifecycle,
+    IReadOnlyList<ActivityActionAvailabilityView> Actions,
     DateTimeOffset UpdatedAt);
+
+public sealed record ActivityActionAvailabilityView(string Action, bool Allowed, string? UnavailableCode = null);
+
+public sealed record ReusableActivityDraftManagementView(
+    ReusableActivityDraftSummaryView Draft,
+    IReadOnlyList<ActivityActionAvailabilityView> Actions);
+
+public sealed record ReusableActivityVersionManagementView(
+    ReusableActivityVersionSummaryView Version,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    bool IsRecommended,
+    IReadOnlyList<ActivityActionAvailabilityView> Actions);
 
 public sealed record ActivityProviderManifestView(
     string ProviderKey,
@@ -252,7 +294,8 @@ public sealed record ReusableActivityDraftView(
     IReadOnlyList<ActivityLayoutRecord> Layout,
     ActivityDraftValidationView? Validation,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? PresentationLabel = null);
 
 public sealed record ReusableActivityVersionSummaryView(
     string VersionId,
@@ -294,10 +337,12 @@ public sealed class ActivityAuthoringException(
     string title,
     string message,
     IReadOnlyList<ActivityDiagnostic>? diagnostics = null,
-    Exception? innerException = null) : Exception(message, innerException)
+    Exception? innerException = null,
+    ActivityRecoveryView? recovery = null) : Exception(message, innerException)
 {
     public int StatusCode { get; } = statusCode;
     public string ErrorCode { get; } = errorCode;
     public string Title { get; } = title;
     public IReadOnlyList<ActivityDiagnostic> Diagnostics { get; } = diagnostics ?? [];
+    public ActivityRecoveryView? Recovery { get; } = recovery;
 }

@@ -6,25 +6,27 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 
 | Method | Route | Purpose |
 |---|---|---|
-| `GET` | `/design/activities/definitions` | List catalog definitions visible to the caller. |
+| `GET` | `/design/activities/definitions` | Page authorization-safe definition management summaries. |
 | `GET` | `/design/activities/authoring-capabilities` | Read the authorization-filtered provider, contract type, storage-driver, and server key rules snapshot. |
 | `POST` | `/design/activities/definitions` | Create a Design-owned definition and initial draft. |
-| `GET` | `/design/activities/definitions/{definitionId}` | Read definition metadata, authority, fork provenance, head, drafts, and version lifecycle summaries. |
+| `GET` | `/design/activities/definitions/{definitionId}` | Read one definition workbench header and bounded relationship summaries; drafts and versions remain separate pages. |
 | `PATCH` | `/design/activities/definitions/{definitionId}` | Change presentation metadata only. |
 | `PUT` | `/design/activities/definitions/{definitionId}/recommendation` | Replace or explicitly clear the exact recommended active version under reviewed preconditions. |
 | `GET` | `/design/activities/definitions/picker` | Page one authorization-safe exact recommended active version per definition. |
 | `POST` | `/design/activities/definitions/{definitionId}/forks` | Fork an exact source-owned version into a new Design-owned identity and draft. |
 | `POST` | `/design/activities/definitions/{definitionId}/drafts` | Create a fresh draft or clone an exact version. |
-| `GET` | `/design/activities/definitions/{definitionId}/drafts` | List drafts for a definition. |
+| `GET` | `/design/activities/definitions/{definitionId}/drafts` | Page authorization-safe draft management summaries for one definition. |
 | `GET` | `/design/activities/drafts/{draftId}` | Read one draft, state, layout, revision, and current validation. |
 | `PUT` | `/design/activities/drafts/{draftId}` | Replace complete draft state and layout under an expected revision. |
+| `PATCH` | `/design/activities/drafts/{draftId}/presentation` | Replace the optional draft presentation label under the same expected revision stream. |
+| `POST` | `/design/activities/drafts/{draftId}/conflict-copies` | Atomically preserve reviewed full state as a new parallel draft after a stale-revision conflict. |
 | `DELETE` | `/design/activities/drafts/{draftId}` | Discard an active draft under an expected revision. |
 | `POST` | `/design/activities/drafts/{draftId}/validate` | Revalidate an exact draft revision. |
 | `POST` | `/design/activities/drafts/{draftId}/publish` | Atomically publish a draft as an immutable version. |
 | `POST` | `/design/activities/drafts/{draftId}/migrate-provider` | Clone/migrate a provider manifest into a new draft. |
 | `POST` | `/design/activities/drafts/{draftId}/contract-proposals` | Compute a typed, read-only provider proposal for one exact draft binding. |
 | `POST` | `/design/activities/drafts/{draftId}/contract-proposals/apply` | Apply explicitly selected changes from an unchanged exact proposal. |
-| `GET` | `/design/activities/definitions/{definitionId}/versions` | List immutable versions. |
+| `GET` | `/design/activities/definitions/{definitionId}/versions` | Page authorization-safe immutable version management summaries. |
 | `GET` | `/design/activities/versions/{versionId}` | Read one version and its public publication facts. |
 | `POST` | `/design/activities/versions/{versionId}/retire` | Block new direct selection. |
 | `POST` | `/design/activities/versions/{versionId}/restore` | Restore direct selection after retirement. |
@@ -34,19 +36,82 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 
 Version diff, dependency, upgrade, and runtime inspection routes are defined in their focused contracts.
 
-### Temporal list snapshot contract
+### Activity Design capability relations
 
-Definition, draft, and version list responses bind their first page to the current activity
-management projection sequence. Continuation requests carry that opaque snapshot binding and read
-the same `[validFrom, validTo)` view even when concurrent authoring or publication advances the
-current watermark. Search, tenant/global visibility, filters, ordering, paging, and exact total
-count are evaluated by the selected persistence provider against that same snapshot; inaccessible
-rows do not influence totals or continuation behavior.
+The `elsa.api.activity-design` capability advertises these canonical entry and resource relations.
+Clients use them to discover the supported API surface rather than probing legacy alternates;
+subordinate operations follow this capability-major contract.
+
+| Relation | Template | Purpose |
+|---|---|---|
+| `activity-catalog` | `design/activities/catalog` | Activity catalog projection. |
+| `activity-authoring-capabilities` | `design/activities/authoring-capabilities` | Authorization-filtered provider and contract capabilities. |
+| `activity-definitions` | `design/activities/definitions` | Definition collection and creation. |
+| `activity-definition` | `design/activities/definitions/{definitionId}` | One stable definition detail. |
+| `activity-definition-drafts` | `design/activities/definitions/{definitionId}/drafts` | Draft collection and creation for one definition. |
+| `activity-definition-draft` | `design/activities/drafts/{draftId}` | One mutable draft detail/update/discard target. |
+| `activity-definition-versions` | `design/activities/definitions/{definitionId}/versions` | Immutable version collection for one definition. |
+| `activity-definition-version` | `design/activities/versions/{versionId}` | One immutable version detail. |
+| `activity-draft-conflict-copies` | `design/activities/drafts/{draftId}/conflict-copies` | Conflict-copy recovery for one draft. |
+| `activity-definition-recommendation` | `design/activities/definitions/{definitionId}/recommendation` | Exact recommendation replacement or clearing. |
+| `recommended-activity-definitions` | `design/activities/definitions/picker` | One recommended active version per visible definition. |
+| `activity-availability` | `design/activities/availability/settings` | Activity availability settings. |
+| `activity-availability-diagnostics` | `design/activities/availability/diagnostics` | Activity availability diagnostics. |
+
+Templated relations declare `templated: true`. A missing relation means the Contribution is
+unavailable; it is never permission to fall back to the removed workflow-as-activity contract.
+
+### Bounded management collection contract
+
+Definition, draft, and version management collections share one bounded cursor contract. The
+supported first-page query shapes are:
+
+```http
+GET /design/activities/definitions?limit=25&cursor={opaque}&search={term}&authority={authority}&providerKey={providerKey}&sort=identity-asc
+GET /design/activities/definitions/{definitionId}/drafts?limit=25&cursor={opaque}&search={term}&providerKey={providerKey}&status={status}&sort=identity-asc
+GET /design/activities/definitions/{definitionId}/versions?limit=25&cursor={opaque}&search={term}&providerKey={providerKey}&lifecycle={lifecycle}&sort=identity-asc
+```
+
+- `limit` is a requested page size between `1` and `100`. Omitting it uses the bounded server
+  default of `25`.
+- Omitting `cursor` starts a new authorization-filtered snapshot at the current activity management
+  projection sequence. The opaque continuation binds tenant/visibility scope, caller authorization
+  profile, collection/definition scope, normalized query inputs, requested limit, snapshot sequence,
+  snapshot time, and continuation offset. The cursor is signed and
+  cannot be altered or forged without rejection.
+- `search`, collection-specific filters, `sort`, and `limit` must remain compatible with the
+  cursor binding. An invalid or mismatched cursor returns
+  `400 activity.management.cursor-invalid` with recovery instruction `restart-without-cursor`; the
+  server does not silently restart the page chain.
+- `identity-asc` is the supported deterministic ordering for these management pages.
+
+```json
+{
+  "items": [],
+  "count": 0,
+  "totalCount": 123,
+  "hasMore": true,
+  "continuation": "opaque",
+  "snapshot": {
+    "snapshotId": "activity-management-snapshot-42",
+    "asOf": "2026-07-15T12:00:00Z"
+  }
+}
+```
+
+`totalCount` is the exact count of resources visible under the bound query and authorization
+snapshot, never a global or pre-authorization count. `count` is the number of items in this
+response. `hasMore` and `continuation` describe only the same `[validFrom, validTo)` projection
+view, even when concurrent authoring or publication advances the current watermark. Search,
+tenant/global visibility, filters, ordering, paging, and exact total count are evaluated by the
+selected persistence provider against that same snapshot; inaccessible rows do not influence
+totals or continuation behavior. A terminal page returns `hasMore: false` and `continuation: null`.
 
 The snapshot binding is replayable only while retained and only for the original query and
-authorization scope. A malformed or mismatched binding is rejected. A valid binding below the
-retention floor returns the stable snapshot-expired diagnostic; the server never silently restarts
-the list from the newest snapshot.
+authorization scope. A malformed or mismatched binding returns
+`400 activity.management.cursor-invalid`. A valid binding below the retention floor returns
+`410 activity.cursor.expired` with recovery instruction `restart-without-cursor`; the server never
+silently restarts the list from the newest snapshot.
 
 ### Update definition presentation metadata
 
@@ -68,9 +133,9 @@ provenance, and head identity are immutable through this route.
 
 Only a tenant-visible, Design-owned definition can be updated. A blank required field returns
 `400 activity.request.invalid`; a source-owned definition returns
-`409 activity.definition.content-authority`; an out-of-scope definition returns
-`403 activity.tenant.reference-denied`. Success returns `200 OK` with the complete
-`ReusableActivityDefinitionDetailsView`.
+`409 activity.definition.content-authority`; an out-of-scope definition returns a privacy-safe
+authorization or not-found response. Success returns `200 OK` with
+`ActivityDefinitionIdentityView`.
 
 ## 2. Shared views
 
@@ -94,11 +159,53 @@ Only a tenant-visible, Design-owned definition can be updated. A blank required 
     "versionId": "activity-ver-clr-3",
     "version": "3.0.0"
   },
-  "headVersionId": "activity-ver-2"
+  "headVersionId": "activity-ver-2",
+  "recommendedVersionId": "activity-ver-2"
 }
 ```
 
 `forkedFrom` is null for definitions that were not created by a fork. It is audit provenance only: it does not grant authority over, or establish version lineage with, the source definition.
+Disclosure-safe management projections also return it as null because source lineage identities may
+no longer be visible to the caller; mutation responses may include it when the fork was authorized.
+
+### Management summaries, detail, and action availability
+
+Collection items are compact management summaries. A definition management view contains
+`definition`, a `lifecycle` summary with authorized draft/version counts plus head and
+recommendation references, `actions`, and `updatedAt`. A draft management view contains `draft`
+summary plus `actions`; its draft summary includes `draftId`, `definitionId`, revision, source
+version, status, provider key/schema, `updatedAt`, and optional `presentationLabel`. A version
+management view contains `version`, provider key/schema, `isRecommended`, and `actions`. None of
+these summaries contains contract state, provider payload, layout, or diagnostic free text.
+
+`GET /design/activities/definitions/{definitionId}` returns one
+`ReusableActivityDefinitionManagementView`. It contains `definition`, `lifecycle`, `actions`, and
+`updatedAt`. It **does not** embed draft or version arrays. Clients follow
+`activity-definition-drafts` and
+`activity-definition-versions` and page those collections independently.
+
+Every visible management resource carries a typed `actions` array. Each entry has this shape:
+
+```json
+{
+  "action": "edit-draft",
+  "allowed": true,
+  "unavailableCode": null
+}
+```
+
+`action` and `unavailableCode` are stable codes; clients never parse explanatory text. When
+`allowed` is true, `unavailableCode` is null. The current action vocabulary includes definition
+actions `edit-definition`, `create-draft`, `set-recommendation`, and `fork-definition`; draft
+actions `edit-draft`, `edit-draft-label`, `discard-draft`, `validate-draft`, `publish-draft`,
+`migrate-draft-provider`, `propose-contract`, `apply-contract-proposal`, and
+`create-conflict-copy`; and version actions `clone-draft`, `fork-definition`,
+`set-recommendation`, `retire-version`, `restore-version`, and `revoke-version`.
+
+Action availability is an authorization-safe convenience projection, not a write precondition.
+Every command rechecks authority, lifecycle, provider availability, and optimistic preconditions.
+Actions and counts are returned only for resources already visible to the caller; errors never
+echo an action map for a hidden target.
 
 ### `ActivityContractView`
 
@@ -204,24 +311,14 @@ Content-Type: application/json
 }
 ```
 
-Response: `201 Created` with `ActivityDefinitionDetailsView` and `Location` pointing to the definition.
+Response: `201 Created` with `ReusableActivityDefinitionMutationView` and `Location` pointing to
+the definition. The response contains the one atomically created draft, not embedded collection
+pages.
 
 ```json
 {
   "definition": {},
-  "drafts": [
-    {
-      "draftId": "activity-draft-1",
-      "definitionId": "activity-def-1",
-      "revision": 1,
-      "sourceVersionId": null,
-      "status": "Active",
-      "providerKey": "elsa.activity-graph",
-      "providerSchemaVersion": "1",
-      "updatedAt": "2026-07-15T12:00:00Z"
-    }
-  ],
-  "versions": []
+  "draft": {}
 }
 ```
 
@@ -230,6 +327,8 @@ Rules:
 - The API always creates `ContentAuthority.Kind = Design`; source-owned definitions enter through trusted reconciliation commands, not this endpoint.
 - The definition and initial draft are created atomically.
 - `activityTypeKey` is server-generated from the display name and definition identity, tenant-scoped, collision-safe, and immutable. It is never accepted from normal authoring requests.
+- The initial draft has no required author-supplied name. Its optional presentation label may be
+  set later and is neither identity nor a uniqueness boundary.
 
 ## 4. Fork a source-owned version
 
@@ -248,7 +347,8 @@ POST /design/activities/definitions/{definitionId}/forks
 }
 ```
 
-Response: `201 Created` with a new `ActivityDefinitionDetailsView` containing one active draft.
+Response: `201 Created` with `ReusableActivityDefinitionMutationView` containing `definition` and
+its one exact initial `draft`.
 
 Rules:
 
@@ -256,7 +356,8 @@ Rules:
 - The new definition belongs to the caller's tenant and has `ContentAuthority.Kind = Design`.
 - The source public contract is copied. Provider source is cloned or deterministically migrated through the requested target provider; if no supported conversion exists, the request returns `422 activity.provider.migration-unsupported` and creates nothing.
 - The new definition records fork provenance for audit/inspection, but it is not part of the source definition's lineage or content authority.
-- The fork receives a new server-generated immutable activity type key; authors do not name individual drafts or keys.
+- The fork receives a new server-generated immutable activity type key. Its initial draft does not
+  require a user-supplied unique name.
 
 ## 5. Create or clone a draft
 
@@ -269,6 +370,7 @@ Fresh draft:
 ```json
 {
   "sourceVersionId": null,
+  "presentationLabel": null,
   "provider": {
     "providerKey": "elsa.activity-graph",
     "schemaVersion": "1",
@@ -290,11 +392,16 @@ Clone exact version:
 
 ```json
 {
-  "sourceVersionId": "activity-ver-2"
+  "sourceVersionId": "activity-ver-2",
+  "presentationLabel": "Try the new tax contract"
 }
 ```
 
-Response: `201 Created` with `ActivityDefinitionDraftView`. Cloning deep-copies contract, provider manifest, and version layout. The source version remains immutable.
+Response: `201 Created` with `ReusableActivityDraftView`. Cloning deep-copies contract, provider
+manifest, and version layout. The source version remains immutable.
+
+`presentationLabel` is optional, non-unique, and stored on the draft header outside behavior
+state. Multiple drafts under one definition may use the same label or no label.
 
 Source-owned definitions reject draft creation with `409 activity.definition.content-authority` unless the operation is the explicit “fork to new identity” command. Forking creates a new Design-owned definition; it never changes the source-owned lineage.
 
@@ -311,6 +418,7 @@ GET /design/activities/drafts/{draftId}
   "draftId": "activity-draft-1",
   "definitionId": "activity-def-1",
   "tenantId": "tenant-a",
+  "presentationLabel": "Try the new tax contract",
   "revision": 7,
   "sourceVersionId": "activity-ver-1",
   "status": "Active",
@@ -340,7 +448,8 @@ Content-Type: application/json
   "expectedRevision": 7,
   "contract": {},
   "provider": {},
-  "layout": []
+  "layout": [],
+  "presentationLabel": "Try the new tax contract"
 }
 ```
 
@@ -349,10 +458,74 @@ Response: `200 OK` with the complete draft at revision `8`.
 Rules:
 
 - This is full-state-always, consistent with workflow draft mutation; there is no JSON Patch contract.
-- State, layout, revision, and derived validation outcome persist atomically.
+- Contract, provider, layout, optional `presentationLabel`, and revision persist atomically.
+  Autosave, label edits, provider proposals, and ordinary editing all share this one draft revision
+  stream; there is no separate presentation revision or ETag. Validation remains a derived sibling
+  keyed to an exact revision, so a new revision has no current validation until it is revalidated.
+  Provider-neutral internal options are not a public wire field and remain unchanged.
+- Every successful full-state update increments `revision` exactly once, including a label-only or
+  layout-only update. A rejected write increments nothing.
 - `providerKey` may change only for a Design-owned lineage; changing it is a behavioral change later classified by the version diff.
-- A stale revision returns `409 activity.draft.stale-revision` with expected and actual revision in safe diagnostic metadata.
+- A stale revision returns `409 activity.draft.stale-revision` with typed `ActivityRecoveryView`
+  metadata. The source draft is unchanged.
 - Every mutable contract write accepts only activated catalog aliases, canonical collection-kind names, compatible storage drivers, nullability, and durability. Unsupported facts return `422 activity.contract.capability-rejected`; immutable historical reads remain exact.
+
+### Presentation-label update
+
+```http
+PATCH /design/activities/drafts/{draftId}/presentation
+Content-Type: application/json
+
+{
+  "expectedRevision": 8,
+  "presentationLabel": "Alternative tax approach"
+}
+```
+
+Response: `200 OK` with the complete draft at revision `9`. The label is optional and non-unique.
+This route is a convenience mutation over the same autosave revision stream: it increments the
+draft revision exactly once, updates the sibling layout revision atomically, and follows the same
+stale-revision recovery contract as the full `PUT`. Full-state autosave also carries
+`presentationLabel`, so clients do not need a second save stream. The new revision has no current
+validation until it is revalidated.
+
+### Conflict-copy recovery
+
+After receiving an authorized stale-revision response, a client may preserve its reviewed full
+local state as a new parallel draft:
+
+```http
+POST /design/activities/drafts/{draftId}/conflict-copies
+Content-Type: application/json
+```
+
+```json
+{
+  "expectedSourceRevision": 8,
+  "contract": {},
+  "provider": {},
+  "layout": [],
+  "presentationLabel": "Recovered autosave copy"
+}
+```
+
+Response: `201 Created` with the complete new `ReusableActivityDraftView`, revision `1`, and a
+`Location` for that exact server-generated draft.
+
+Rules:
+
+- `expectedSourceRevision` must still equal the source draft's current revision. If another write
+  wins before copy creation, the command returns `409 activity.draft.stale-revision` and writes
+  nothing.
+- The server rechecks current authorization, Design content authority, and source draft ownership.
+  It does not overwrite or merge the source draft.
+- The submitted contract, provider, layout, and optional `presentationLabel` are the complete
+  reviewed public desired state. The new draft inherits the source draft's definition, tenant,
+  immutable `SourceVersionId`, and provider-neutral internal options; the presentation label
+  remains non-unique metadata outside behavior state.
+- Creation of the draft header, behavior state, and layout is atomic. Failure writes nothing. The
+  new revision has no current validation until it is validated. No endpoint accepts
+  force-overwrite as conflict recovery.
 
 ## 7. Provider authoring capabilities and contract proposals
 
@@ -366,6 +539,11 @@ opaque provider manifest.
 Compatible storage-driver keys are intersected with Runtime's actually activated driver registry
 through the Publishing bridge. A descriptor declaration alone cannot advertise or authorize an
 unavailable driver.
+
+This is a clean break for the pre-release authoring surface: normal create, clone, replace,
+proposal-apply, and conflict-copy commands accept only the current capability-catalog contract
+types. There is no legacy alias fallback, compatibility request shape, or workflow-definition-as-
+activity ingress.
 
 Proposal requests bind all mutable facts explicitly:
 

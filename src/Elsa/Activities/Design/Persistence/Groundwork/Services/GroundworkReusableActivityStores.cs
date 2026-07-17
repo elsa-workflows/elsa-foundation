@@ -40,6 +40,8 @@ public sealed class GroundworkReusableActivityStores(
     ICreateActivityDefinitionCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
+    IUpdateActivityDraftPresentationCommand,
+    ICreateActivityDraftConflictCopyCommand,
     IReplaceActivityDraftCommand,
     IApplyActivityContractProposalCommand,
     IDiscardActivityDraftCommand,
@@ -382,6 +384,68 @@ public sealed class GroundworkReusableActivityStores(
     }
 
     public async Task<ActivityDefinitionDraft> ExecuteAsync(
+        UpdateActivityDraftPresentationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
+        EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
+        var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
+        EnsureDesignAuthority(authoring.Entity);
+        EnsureTenant(authoring.Entity, draft.Entity);
+        var layout = await RequiredDraftLayoutAsync(request.DraftId, cancellationToken);
+        if (layout.Entity.Revision != draft.Entity.Revision)
+            throw Conflict($"Draft '{request.DraftId}' and its layout do not have the same revision.");
+        draft.Entity.Revision = checked(draft.Entity.Revision + 1);
+        draft.Entity.PresentationLabel = request.PresentationLabel;
+        draft.Entity.LastModifiedAt = request.ChangedAt;
+        layout.Entity.Revision = draft.Entity.Revision;
+        layout.Entity.LastModifiedAt = request.ChangedAt;
+        await CommitWithManagementProjectionAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
+            [
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout.Entity, layout.Envelope.Version)
+            ],
+            new(request.ChangedAt, [], [draft.Entity], []),
+            cancellationToken);
+        return draft.Entity;
+    }
+
+    public async Task ExecuteAsync(
+        CreateActivityDraftConflictCopyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDraftAndLayout(request.ConflictCopy, request.Layout);
+        var source = await RequiredDraftAsync(request.SourceDraftId, cancellationToken);
+        EnsureActiveRevision(source.Entity, request.ExpectedSourceRevision);
+        var authoring = await RequiredAuthoringAsync(source.Entity.DefinitionId, cancellationToken);
+        EnsureDesignAuthority(authoring.Entity);
+        EnsureTenant(authoring.Entity, source.Entity);
+        if (!StringComparer.Ordinal.Equals(source.Entity.DefinitionId, request.ConflictCopy.DefinitionId) ||
+            !StringComparer.Ordinal.Equals(source.Entity.TenantId, request.ConflictCopy.TenantId) ||
+            !StringComparer.Ordinal.Equals(source.Entity.SourceVersionId, request.ConflictCopy.SourceVersionId))
+            throw new ArgumentException("The conflict copy must inherit its source draft lineage.", nameof(request));
+        await EnsureAbsentAsync<ActivityDefinitionDraft>(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, request.ConflictCopy.Id, cancellationToken);
+        if (await FindDraftLayoutAsync(request.ConflictCopy.Id, cancellationToken) is not null)
+            throw Conflict($"Activity draft layout '{request.ConflictCopy.Id}' already exists.");
+        await CommitWithManagementProjectionAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
+            [
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, source.Entity, source.Envelope.Version),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, request.ConflictCopy, 0),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, request.Layout, 0)
+            ],
+            new(request.ConflictCopy.LastModifiedAt, [], [request.ConflictCopy], []),
+            cancellationToken);
+    }
+
+    public async Task<ActivityDefinitionDraft> ExecuteAsync(
         ReplaceActivityDraftRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -397,6 +461,7 @@ public sealed class GroundworkReusableActivityStores(
         var now = clock.UtcNow;
         draft.Entity.Revision = checked(draft.Entity.Revision + 1);
         draft.Entity.State = request.State;
+        draft.Entity.PresentationLabel = request.PresentationLabel;
         draft.Entity.LastModifiedAt = now;
         layout.Entity.Revision = draft.Entity.Revision;
         layout.Entity.Records = request.Layout.ToList();

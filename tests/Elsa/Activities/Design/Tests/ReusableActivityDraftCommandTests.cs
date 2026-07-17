@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -25,10 +26,10 @@ public sealed class ReusableActivityDraftCommandTests
 
         Assert.Equal("tenant-a", result.Definition.TenantId);
         Assert.Equal(ActivityContentAuthorityKind.Design, result.Definition.ContentAuthority.Kind);
-        Assert.Equal(1, Assert.Single(result.Drafts).Revision);
+        Assert.Equal(1, result.Draft.Revision);
         Assert.Single(harness.Stores.Definitions);
         Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(result.Definition.DefinitionId));
-        Assert.NotNull(await harness.Stores.FindDraftLayoutAsync(result.Drafts[0].DraftId));
+        Assert.NotNull(await harness.Stores.FindDraftLayoutAsync(result.Draft.DraftId));
     }
 
     [Fact]
@@ -64,14 +65,16 @@ public sealed class ReusableActivityDraftCommandTests
             "Updated description"), default);
 
         var persisted = Assert.Single(harness.Stores.Definitions);
-        Assert.Equal("Finance", result.Definition.Category);
-        Assert.Equal("Calculate invoice total", result.Definition.DisplayName);
-        Assert.Equal("Updated description", result.Definition.Description);
+        Assert.Equal("Finance", result.Category);
+        Assert.Equal("Calculate invoice total", result.DisplayName);
+        Assert.Equal("Updated description", result.Description);
         Assert.Equal(before.ActivityTypeKey, persisted.ActivityTypeKey);
         Assert.Equal(before.TenantId, persisted.TenantId);
-        Assert.Equal(created.Definition.ContentAuthority, result.Definition.ContentAuthority);
-        Assert.Equal(created.Definition.HeadVersionId, result.Definition.HeadVersionId);
-        Assert.Equal(created.Drafts, result.Drafts);
+        Assert.Equal(created.Definition.ContentAuthority, result.ContentAuthority);
+        Assert.Equal(created.Definition.HeadVersionId, result.HeadVersionId);
+        var unchangedDraft = Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(created.Definition.DefinitionId));
+        Assert.Equal(created.Draft.DraftId, unchangedDraft.Id);
+        Assert.Equal(created.Draft.Revision, unchangedDraft.Revision);
     }
 
     [Theory]
@@ -146,11 +149,32 @@ public sealed class ReusableActivityDraftCommandTests
         var harness = new Harness(canReadProviderPayload: false);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
 
-        var view = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
-        var persisted = await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(created.Drafts[0].DraftId);
+        var view = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
+        var persisted = await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(created.Draft.DraftId);
 
         Assert.Null(view.Provider.Payload);
         Assert.Equal(42, persisted!.State.Provider.Payload.GetProperty("secret").GetInt32());
+    }
+
+    [Fact]
+    public async Task Hidden_draft_and_version_reads_are_indistinguishable_from_missing_resources()
+    {
+        var stores = new InMemoryReusableActivityStores();
+        var owner = new Harness(tenantId: "tenant-owner", stores: stores);
+        var caller = new Harness(tenantId: "tenant-caller", stores: stores);
+        var seeded = await owner.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
+        var draft = Assert.Single(await ((IActivityDefinitionDraftStore)stores).ListByDefinitionAsync(seeded.DefinitionId));
+        owner.SeedVersion(seeded.DefinitionId, "version-hidden", Harness.Manifest("{}"), Harness.Contract());
+
+        var hiddenDraft = await Assert.ThrowsAsync<ActivityAuthoringException>(() => caller.Service.GetDraftViewAsync(draft.Id, default));
+        var missingDraft = await Assert.ThrowsAsync<ActivityAuthoringException>(() => caller.Service.GetDraftViewAsync("missing-draft", default));
+        var hiddenVersion = await Assert.ThrowsAsync<ActivityAuthoringException>(() => caller.Service.GetVersionAsync("version-hidden", default));
+        var missingVersion = await Assert.ThrowsAsync<ActivityAuthoringException>(() => caller.Service.GetVersionAsync("missing-version", default));
+
+        Assert.Equal((missingDraft.StatusCode, missingDraft.ErrorCode, missingDraft.Title, missingDraft.Message),
+            (hiddenDraft.StatusCode, hiddenDraft.ErrorCode, hiddenDraft.Title, hiddenDraft.Message));
+        Assert.Equal((missingVersion.StatusCode, missingVersion.ErrorCode, missingVersion.Title, missingVersion.Message),
+            (hiddenVersion.StatusCode, hiddenVersion.ErrorCode, hiddenVersion.Title, hiddenVersion.Message));
     }
 
     [Fact]
@@ -178,12 +202,12 @@ public sealed class ReusableActivityDraftCommandTests
     {
         var harness = new Harness();
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draftId = created.Drafts[0].DraftId;
+        var draftId = created.Draft.DraftId;
         var replacementProvider = Harness.Manifest("{\"replacement\":true}");
         var replacementLayout = new[] { new ActivityLayoutRecord("root", Harness.Json("{\"x\":10}")) };
 
         var replaced = await harness.Service.ReplaceDraftAsync(
-            new(draftId, 1, Harness.Contract("replacement").ToView(), replacementProvider, replacementLayout),
+            new(draftId, 1, Harness.Contract("replacement").ToView(), replacementProvider, replacementLayout, "Review candidate"),
             default);
         var stale = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.ReplaceDraftAsync(
             new(draftId, 1, Harness.Contract("stale").ToView(), Harness.Manifest("{}"), []),
@@ -191,13 +215,60 @@ public sealed class ReusableActivityDraftCommandTests
 
         Assert.Equal(2, replaced.Revision);
         Assert.Equal("replacement", replaced.Contract.ContractSchemaVersion);
+        Assert.Equal("Review candidate", replaced.PresentationLabel);
         Assert.Equal("activity.draft.stale-revision", stale.ErrorCode);
+        Assert.Equal(2, stale.Recovery?.CurrentRevision);
+        Assert.Equal("activity-draft-conflict-copies", stale.Recovery?.Relation);
+        Assert.Equal($"design/activities/drafts/{draftId}/conflict-copies", stale.Recovery?.Href);
         var diagnostic = Assert.Single(stale.Diagnostics);
         Assert.Equal("1", diagnostic.Metadata!["expectedRevision"]);
         Assert.Equal("2", diagnostic.Metadata["actualRevision"]);
         var persisted = await harness.Service.GetDraftViewAsync(draftId, default);
         Assert.Equal("replacement", persisted.Contract.ContractSchemaVersion);
+        Assert.Equal("Review candidate", persisted.PresentationLabel);
         Assert.Equal(10, persisted.Layout[0].Data.GetProperty("x").GetInt32());
+    }
+
+    [Fact]
+    public async Task Conflict_copy_uses_submitted_full_state_preserves_server_lineage_and_rechecks_source_revision()
+    {
+        var harness = new Harness();
+        var seeded = await harness.SeedDefinitionAsync(
+            ActivityContentAuthorityKind.Design,
+            new Dictionary<string, string> { ["mode"] = "strict" });
+        var source = Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(seeded.DefinitionId));
+
+        var copy = await harness.Service.CreateConflictCopyAsync(new(
+            source.Id,
+            1,
+            Harness.Contract("recovered").ToView(),
+            Harness.Manifest("{\"local\":true}"),
+            [new("root", Harness.Json("{\"x\":42}"))],
+            "Recovered local work"), default);
+
+        Assert.NotEqual(source.Id, copy.DraftId);
+        Assert.Equal(source.DefinitionId, copy.DefinitionId);
+        Assert.Equal(source.SourceVersionId, copy.SourceVersionId);
+        Assert.Equal(1, copy.Revision);
+        Assert.Equal("Recovered local work", copy.PresentationLabel);
+        Assert.Equal("recovered", copy.Contract.ContractSchemaVersion);
+        Assert.Equal(42, copy.Layout.Single().Data.GetProperty("x").GetInt32());
+        var persistedCopy = await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(copy.DraftId);
+        Assert.Equal("strict", persistedCopy!.State.Options["mode"]);
+        Assert.Equal(1, (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(source.Id))!.Revision);
+
+        await harness.Service.UpdateDraftPresentationAsync(new(source.Id, 1, "Server changed"), default);
+        var before = (await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(source.DefinitionId)).Count;
+        var stale = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.CreateConflictCopyAsync(new(
+            source.Id,
+            1,
+            Harness.Contract("stale").ToView(),
+            Harness.Manifest("{}"),
+            [],
+            "Must not persist"), default));
+
+        Assert.Equal("activity.draft.stale-revision", stale.ErrorCode);
+        Assert.Equal(before, (await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(source.DefinitionId)).Count);
     }
 
     [Fact]
@@ -205,7 +276,7 @@ public sealed class ReusableActivityDraftCommandTests
     {
         var harness = new Harness();
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draftId = created.Drafts[0].DraftId;
+        var draftId = created.Draft.DraftId;
         var contract = new ActivityContract(
             "1",
             [],
@@ -243,7 +314,7 @@ public sealed class ReusableActivityDraftCommandTests
             []));
         var harness = new Harness(provider: provider);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
 
         var proposal = await harness.Proposals.ProposeAsync(new(
             draft.DraftId,
@@ -268,7 +339,7 @@ public sealed class ReusableActivityDraftCommandTests
             []));
         var harness = new Harness(provider: provider);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var before = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var before = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
         var proposal = await harness.Proposals.ProposeAsync(new(
             before.DraftId,
             before.Revision,
@@ -297,7 +368,7 @@ public sealed class ReusableActivityDraftCommandTests
         var provider = new ProposalProvider(_ => new([], []));
         var harness = new Harness(provider: provider);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ProposeAsync(new(
             draft.DraftId,
@@ -317,7 +388,7 @@ public sealed class ReusableActivityDraftCommandTests
         var provider = new ProposalProvider(_ => new([], []));
         var owner = new Harness(stores: stores, provider: provider);
         var created = await owner.Service.CreateDefinitionAsync(owner.CreateDefinitionCommand(), default);
-        var draft = await owner.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var draft = await owner.Service.GetDraftViewAsync(created.Draft.DraftId, default);
         var caller = new Harness(stores: stores, provider: provider, canAuthorProvider: false);
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => caller.Proposals.ProposeAsync(new(
@@ -360,7 +431,7 @@ public sealed class ReusableActivityDraftCommandTests
             []));
         var harness = new Harness(provider: provider);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ApplyAsync(new(
             draft.DraftId,
@@ -384,7 +455,7 @@ public sealed class ReusableActivityDraftCommandTests
             [new($"activity.test.warning.{++phase}", ActivityDiagnosticSeverity.Warning, "Review warning.", new("ActivityDraft", "draft"))]));
         var harness = new Harness(provider: provider);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
         var proposal = await harness.Proposals.ProposeAsync(new(
             draft.DraftId,
             draft.Revision,
@@ -413,7 +484,7 @@ public sealed class ReusableActivityDraftCommandTests
             []));
         var harness = new Harness(provider: provider);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draft = await harness.Service.GetDraftViewAsync(created.Drafts[0].DraftId, default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Proposals.ProposeAsync(new(
             draft.DraftId,
@@ -478,7 +549,7 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.Equal(ActivityContentAuthorityKind.Design, fork.Definition.ContentAuthority.Kind);
         Assert.Equal(WellKnownActivityContentAuthorities.Design, fork.Definition.ContentAuthority.AuthorityKey);
         Assert.Equal(new(source.DefinitionId, "source-version", "1.0.0"), fork.Definition.ForkedFrom);
-        Assert.Equal("source-version", Assert.Single(fork.Drafts).SourceVersionId);
+        Assert.Equal("source-version", fork.Draft.SourceVersionId);
         Assert.Equal(ActivityContentAuthorityKind.ProviderSource, (await harness.Stores.FindAsync(source.DefinitionId))!.ContentAuthority.Kind);
     }
 
@@ -510,7 +581,7 @@ public sealed class ReusableActivityDraftCommandTests
     {
         var harness = new Harness(invalidValidation: true);
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draftId = created.Drafts[0].DraftId;
+        var draftId = created.Draft.DraftId;
 
         var result = await harness.Service.ValidateDraftAsync(new(draftId, 1), default);
 
@@ -522,22 +593,11 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
-    public async Task Definition_read_uses_activity_type_key_when_an_adopted_definition_has_no_display_name()
-    {
-        var harness = new Harness();
-        var adopted = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource, displayName: null);
-
-        var view = await harness.Service.GetDefinitionAsync(adopted.DefinitionId, default);
-
-        Assert.Equal($"seed.{adopted.DefinitionId}", view.Definition.DisplayName);
-    }
-
-    [Fact]
     public async Task Discard_requires_the_exact_active_revision()
     {
         var harness = new Harness();
         var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
-        var draftId = created.Drafts[0].DraftId;
+        var draftId = created.Draft.DraftId;
 
         await harness.Service.DiscardDraftAsync(new(draftId, 1), default);
         var discarded = await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(draftId);
@@ -568,6 +628,8 @@ public sealed class ReusableActivityDraftCommandTests
             Stores = stores ?? new();
             var registry = new ActivityProviderRegistry([provider ?? new MigratingProvider("elsa.activity-graph"), new MigratingProvider("target.provider")]);
             Service = new(
+                Stores,
+                Stores,
                 Stores,
                 Stores,
                 Stores,
@@ -705,6 +767,7 @@ public sealed class ReusableActivityDraftCommandTests
     private sealed class TestAuthoringContext(string? tenantId, bool canReadProviderPayload, bool canAuthorProvider) : IActivityAuthoringContext
     {
         public string? TenantId => tenantId;
+        public string AuthorizationProfile => $"{tenantId ?? "global"}/{canReadProviderPayload}/{canAuthorProvider}";
         public bool CanAuthorProvider(string providerKey) => canAuthorProvider;
         public bool CanReadProviderPayload(string providerKey) => canReadProviderPayload;
     }

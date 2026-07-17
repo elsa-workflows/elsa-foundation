@@ -34,6 +34,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     ICreateActivityDefinitionCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
+    IUpdateActivityDraftPresentationCommand,
+    ICreateActivityDraftConflictCopyCommand,
     IReplaceActivityDraftCommand,
     IApplyActivityContractProposalCommand,
     IDiscardActivityDraftCommand,
@@ -412,6 +414,54 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     }
 
     public Task<ActivityDefinitionDraft> ExecuteAsync(
+        UpdateActivityDraftPresentationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var draft = ActiveDraft(request.DraftId, request.ExpectedRevision);
+            EnsureDesignAuthority(Authoring(draft.DefinitionId));
+            var updated = Clone(draft);
+            updated.Revision = checked(updated.Revision + 1);
+            updated.PresentationLabel = request.PresentationLabel;
+            updated.LastModifiedAt = request.ChangedAt;
+            var layout = Clone(_draftLayouts[request.DraftId]);
+            layout.Revision = updated.Revision;
+            layout.LastModifiedAt = request.ChangedAt;
+            _drafts[request.DraftId] = updated;
+            _draftLayouts[request.DraftId] = layout;
+            _sequence++;
+            return Task.FromResult(Clone(updated));
+        }
+    }
+
+    public Task ExecuteAsync(
+        CreateActivityDraftConflictCopyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateDraftAndLayout(request.ConflictCopy, request.Layout);
+        lock (_gate)
+        {
+            var source = Draft(request.SourceDraftId);
+            if (source.Status != ActivityDefinitionDraftStatus.Active || source.Revision != request.ExpectedSourceRevision)
+                throw Conflict($"Activity draft '{request.SourceDraftId}' changed before its conflict copy could be created.");
+            EnsureDesignAuthority(Authoring(source.DefinitionId));
+            if (!StringComparer.Ordinal.Equals(source.DefinitionId, request.ConflictCopy.DefinitionId) ||
+                !StringComparer.Ordinal.Equals(source.TenantId, request.ConflictCopy.TenantId) ||
+                !StringComparer.Ordinal.Equals(source.SourceVersionId, request.ConflictCopy.SourceVersionId))
+                throw new ArgumentException("The conflict copy must inherit its source draft lineage.", nameof(request));
+            if (_drafts.ContainsKey(request.ConflictCopy.Id) || _draftLayouts.ContainsKey(request.Layout.DraftId))
+                throw Conflict($"Activity draft '{request.ConflictCopy.Id}' already exists.");
+            _drafts.Add(request.ConflictCopy.Id, Clone(request.ConflictCopy));
+            _draftLayouts.Add(request.ConflictCopy.Id, Clone(request.Layout));
+            _sequence++;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<ActivityDefinitionDraft> ExecuteAsync(
         ReplaceActivityDraftRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -424,6 +474,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             var updated = Clone(draft);
             updated.Revision = nextRevision;
             updated.State = Clone(request.State);
+            updated.PresentationLabel = request.PresentationLabel;
             updated.LastModifiedAt = DateTimeOffset.UtcNow;
 
             var layout = Clone(_draftLayouts[request.DraftId]);
@@ -871,6 +922,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         DefinitionId = source.DefinitionId,
         Revision = source.Revision,
         SourceVersionId = source.SourceVersionId,
+        PresentationLabel = source.PresentationLabel,
         Status = source.Status,
         State = Clone(source.State),
         PublishedVersionId = source.PublishedVersionId,
@@ -1011,7 +1063,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                 NodeOrigin = source.Location.NodeOrigin?.ToArray(),
                 DependencyPath = source.Location.DependencyPath?.ToArray()
             },
-        Metadata = source.Metadata?.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
+        Metadata = source.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
     };
 
     private static System.Text.Json.JsonElement? Clone(System.Text.Json.JsonElement? source) =>

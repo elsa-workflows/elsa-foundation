@@ -23,8 +23,26 @@ Rules:
 - `errorCode` is the stable machine-action code for the failed operation. Clients branch on this value, not on `title` or `detail`.
 - `traceId` correlates the response to logs/traces and is not a domain identity.
 - `diagnostics` is an ordered array. It may be empty for failures that have no safe structured detail.
+- `recovery` is an optional typed recovery object. It is omitted when the server has no safe
+  machine-actionable recovery to advertise.
 - Existing framework validation members may remain additive, but activity authoring clients use `diagnostics` as the cross-domain location model.
 - Unknown top-level extensions and unknown diagnostic fields must be ignored by clients.
+
+### Typed recovery
+
+```json
+{
+  "currentRevision": 8,
+  "relation": "activity-draft-conflict-copies",
+  "href": "design/activities/drafts/activity-draft-1/conflict-copies",
+  "instruction": "review-current-revision-and-create-conflict-copy"
+}
+```
+
+All four fields are optional for forward-compatible recovery kinds. Clients branch on stable
+`relation` and `instruction` values rather than parsing `detail`, diagnostic messages, or URLs. For
+a stale draft revision, `currentRevision` is the revision the server actually observed, `relation`
+identifies the capability relation, and `href` is the resolved recovery target.
 
 ## 2. `ActivityDiagnosticView`
 
@@ -154,6 +172,7 @@ This makes CI output and publication retries stable. Providers return findings; 
 | Status | Error code | Meaning |
 |---|---|---|
 | `400` | `activity.request.invalid` | Malformed route/body, invalid enum/syntax envelope, or impossible request combination. |
+| `400` | `activity.management.cursor-invalid` | Management continuation is malformed or belongs to another authorization/filter snapshot. Recovery instructs the client to restart without a cursor. |
 | `403` | `activity.authorization.denied` | Caller lacks authoring/lifecycle/inspection permission. |
 | `403` | `activity.tenant.reference-denied` | An exact identifier resolves but is outside allowed tenant/global visibility. The response does not disclose unauthorized target details. |
 | `404` | `activity.definition.not-found` | Definition absent in authorized scope. |
@@ -167,8 +186,8 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `409` | `activity.version.conflict` | Requested semantic version already exists for the definition. |
 | `409` | `activity.version.stale-lifecycle` | Lifecycle command observed a different current state. |
 | `409` | `activity.upgrade.stale-plan` | At least one pinned draft revision/head changed before apply. |
-| `409` | `activity.cursor.binding-mismatch` | Opaque cursor belongs to another tenant, root, query, or authorization profile. |
-| `410` | `activity.cursor.expired` | Cursor or its retained snapshot/watermark is no longer valid. |
+| `409` | `activity.cursor.binding-mismatch` | A non-management opaque cursor belongs to another tenant, root, query, or authorization profile. |
+| `410` | `activity.cursor.expired` | A retained management snapshot, non-management cursor snapshot, or watermark is no longer valid. Recovery may instruct the client to restart without a cursor. |
 | `422` | `activity.publication.invalid` | One or more deterministic publication diagnostics block publication. |
 | `422` | `activity.version.bump-insufficient` | Requested SemVer does not meet the calculated minimum. Usually included under publication invalid. |
 | `422` | `activity.dependency.cycle` | Exact dependency cycle detected. Usually included under publication invalid. |
@@ -207,6 +226,12 @@ Publication returns `422` when those or additional in-lock findings block the st
   "instance": "/design/activities/drafts/activity-draft-1",
   "errorCode": "activity.draft.stale-revision",
   "traceId": "00-...",
+  "recovery": {
+    "currentRevision": 8,
+    "relation": "activity-draft-conflict-copies",
+    "href": "design/activities/drafts/activity-draft-1/conflict-copies",
+    "instruction": "review-current-revision-and-create-conflict-copy"
+  },
   "diagnostics": [
     {
       "code": "activity.draft.stale-revision",
@@ -241,3 +266,12 @@ Diagnostics and Problem Details MUST NOT include:
 - secrets embedded in expression source or reference resolution.
 
 Provider validators are given a diagnostic builder that accepts the stable fields above; raw provider exceptions are wrapped into provider-scoped domain failures before crossing the feature boundary.
+
+Management and authoring failures apply the same disclosure boundary:
+
+- `404` means the resource is absent in the caller's authorized scope and does not confirm whether
+  a hidden resource exists.
+- `403` means the visible operation or exact tenant reference is denied. Its title, detail,
+  diagnostics, and recovery remain generic and do not reveal hidden resource facts.
+- Neither status returns hidden display names, identifiers, collection counts, action availability,
+  provider facts, or recovery links whose presence would disclose a protected target.

@@ -32,6 +32,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Definitions.ListVersions", "GET", "design/activities/definitions/{definitionId}/versions" },
         { "Drafts.Get", "GET", "design/activities/drafts/{draftId}" },
         { "Drafts.Replace", "PUT", "design/activities/drafts/{draftId}" },
+        { "Drafts.UpdatePresentation", "PATCH", "design/activities/drafts/{draftId}/presentation" },
+        { "Drafts.ConflictCopy", "POST", "design/activities/drafts/{draftId}/conflict-copies" },
         { "Drafts.Discard", "DELETE", "design/activities/drafts/{draftId}" },
         { "Drafts.Validate", "POST", "design/activities/drafts/{draftId}/validate" },
         { "Drafts.MigrateProvider", "POST", "design/activities/drafts/{draftId}/migrate-provider" },
@@ -50,13 +52,19 @@ public sealed class ActivityDefinitionAuthoringApiTests
     };
 
     [Fact]
-    public void Activity_design_capability_advertises_authoring_picker_and_templated_recommendation_relations()
+    public void Activity_design_capability_advertises_management_authoring_picker_and_recommendation_relations()
     {
         var links = Elsa.Activities.Design.Api.Capabilities.ActivityDesignApiCapabilities.StaticDeclaration.Links;
 
         Assert.Contains(links, x => x.Rel == "recommended-activity-definitions" && x.Href == "design/activities/definitions/picker" && !x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-recommendation" && x.Href == "design/activities/definitions/{definitionId}/recommendation" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-authoring-capabilities" && x.Href == "design/activities/authoring-capabilities" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definitions" && x.Href == "design/activities/definitions" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition" && x.Href == "design/activities/definitions/{definitionId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-drafts" && x.Href == "design/activities/definitions/{definitionId}/drafts" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-draft" && x.Href == "design/activities/drafts/{draftId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-versions" && x.Href == "design/activities/definitions/{definitionId}/versions" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-version" && x.Href == "design/activities/versions/{versionId}" && x.Templated);
     }
 
     [Theory]
@@ -82,6 +90,14 @@ public sealed class ActivityDefinitionAuthoringApiTests
                 new("1", [], [], []),
                 new("provider", "1", Json("{}")),
                 []),
+            new UpdateReusableActivityDraftPresentation("draft-route", 3, "Review candidate"),
+            new CreateReusableActivityDraftConflictCopy(
+                "draft-route",
+                3,
+                new("1", [], [], []),
+                new("provider", "1", Json("{}")),
+                [],
+                "Recovered local work"),
             new DiscardReusableActivityDraft("draft-route", 3),
             new ValidateReusableActivityDraft("draft-route", 3),
             new MigrateReusableActivityDraft("draft-route", 3, "provider", "2"),
@@ -233,6 +249,31 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains("\"errorCode\":\"activity.draft.stale-revision\"", json, StringComparison.Ordinal);
         Assert.Contains("\"diagnostics\":[]", json, StringComparison.Ordinal);
         Assert.DoesNotContain("providerManifest", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Problem_details_projects_typed_conflict_copy_recovery_without_internal_state()
+    {
+        var context = new DefaultHttpContext { TraceIdentifier = "trace-1" };
+        context.Request.Path = "/design/activities/drafts/draft-1";
+        var problem = ActivityProblemDetails.From(new ActivityAuthoringException(
+            409,
+            "activity.draft.stale-revision",
+            "Activity draft revision is stale",
+            "The draft changed after the submitted revision was read.",
+            recovery: new(
+                8,
+                "activity-draft-conflict-copies",
+                "design/activities/drafts/draft-1/conflict-copies",
+                "review-current-revision-and-create-conflict-copy")), context);
+
+        var json = JsonSerializer.Serialize(problem, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"currentRevision\":8", json, StringComparison.Ordinal);
+        Assert.Contains("\"relation\":\"activity-draft-conflict-copies\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"instruction\":\"review-current-revision-and-create-conflict-copy\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("layout", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

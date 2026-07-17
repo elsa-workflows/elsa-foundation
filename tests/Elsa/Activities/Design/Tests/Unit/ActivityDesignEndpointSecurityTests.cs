@@ -41,11 +41,13 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Definitions.Update")]
     [InlineData("Drafts.Diff")]
     [InlineData("Drafts.ApplyContractProposal")]
+    [InlineData("Drafts.ConflictCopy")]
     [InlineData("Drafts.Discard")]
     [InlineData("Drafts.Get")]
     [InlineData("Drafts.MigrateProvider")]
     [InlineData("Drafts.ProposeContract")]
     [InlineData("Drafts.Replace")]
+    [InlineData("Drafts.UpdatePresentation")]
     [InlineData("Drafts.Validate")]
     [InlineData("Versions.Diff")]
     [InlineData("Versions.Dependencies")]
@@ -93,11 +95,13 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Definitions.Update",
             "Drafts.Diff",
             "Drafts.ApplyContractProposal",
+            "Drafts.ConflictCopy",
             "Drafts.Discard",
             "Drafts.Get",
             "Drafts.MigrateProvider",
             "Drafts.ProposeContract",
             "Drafts.Replace",
+            "Drafts.UpdatePresentation",
             "Drafts.Validate",
             "UpgradePlans.Apply",
             "UpgradePlans.Create",

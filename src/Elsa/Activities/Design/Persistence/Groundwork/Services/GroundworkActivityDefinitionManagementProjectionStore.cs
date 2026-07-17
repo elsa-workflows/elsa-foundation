@@ -196,6 +196,8 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
             watermarkEnvelope,
             ActivitiesDesignStorageManifest.ActivityManagementProjectionWatermarkDocumentKind);
         var sequence = requestedSequence ?? watermark.Sequence;
+        if (sequence == 0)
+            return new ActivityManagementSnapshot(0, DateTimeOffset.UnixEpoch);
         if (sequence < watermark.RetainedFromSequence || sequence > watermark.Sequence)
             throw new ActivityManagementSnapshotExpiredException(sequence);
         if (sequence == watermark.Sequence)
