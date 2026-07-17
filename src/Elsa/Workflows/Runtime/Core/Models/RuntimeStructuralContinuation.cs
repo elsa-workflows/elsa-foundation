@@ -1,6 +1,5 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
-using System.Collections.ObjectModel;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -14,15 +13,13 @@ public sealed class RuntimeStructuralContinuation
         string? outcomeName,
         ActivityFault? fault,
         string? cancellationReason,
-        IReadOnlyDictionary<string, string>? privateMetadata = null)
+        RuntimeStructuralStateUpdate? stateUpdate = null)
     {
         Kind = kind;
         OutcomeName = outcomeName;
         Fault = fault;
         CancellationReason = cancellationReason;
-        PrivateMetadata = privateMetadata is null
-            ? ReadOnlyDictionary<string, string>.Empty
-            : new ReadOnlyDictionary<string, string>(privateMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        StateUpdate = stateUpdate;
     }
 
     public RuntimeStructuralContinuationKind Kind { get; }
@@ -31,11 +28,8 @@ public sealed class RuntimeStructuralContinuation
     public string? OutcomeName { get; }
     public ActivityFault? Fault { get; }
     public string? CancellationReason { get; }
-    /// <summary>
-    /// Runtime-owned metadata staged by the structural engine. The runtime folds this patch into the
-    /// activity execution state in the same checkpoint as the returned decision and child schedule intents.
-    /// </summary>
-    public IReadOnlyDictionary<string, string> PrivateMetadata { get; }
+    /// <summary>One typed structural-state document staged for the continuation checkpoint.</summary>
+    public RuntimeStructuralStateUpdate? StateUpdate { get; }
 
     public static RuntimeStructuralContinuation Defer { get; } = new(RuntimeStructuralContinuationKind.Defer, null, null, null);
 
@@ -57,23 +51,39 @@ public sealed class RuntimeStructuralContinuation
     }
 
     /// <summary>
-    /// Returns a new continuation carrying structural private-state metadata. This does not mutate the
-    /// activity execution state; the runtime applies the patch only when it commits the continuation.
+    /// Returns a new continuation carrying one complete structural private-state document. This does not
+    /// mutate execution state; the runtime applies it only when it commits the continuation.
     /// </summary>
-    public RuntimeStructuralContinuation WithPrivateMetadata(IReadOnlyDictionary<string, string> metadata)
+    public RuntimeStructuralContinuation WithState(ValueEnvelope value, int stateVersion = 1)
     {
-        ArgumentNullException.ThrowIfNull(metadata);
-
-        var merged = PrivateMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        foreach (var (key, value) in metadata)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(key);
-            ArgumentNullException.ThrowIfNull(value);
-            merged[key] = value;
-        }
-
-        return new RuntimeStructuralContinuation(Kind, OutcomeName, Fault, CancellationReason, merged);
+        return new RuntimeStructuralContinuation(
+            Kind,
+            OutcomeName,
+            Fault,
+            CancellationReason,
+            new RuntimeStructuralStateUpdate(stateVersion, value));
     }
+}
+
+/// <summary>Typed, versioned state produced by one structural evaluation.</summary>
+public sealed record RuntimeStructuralStateUpdate
+{
+    public RuntimeStructuralStateUpdate(int stateVersion, ValueEnvelope value)
+    {
+        if (stateVersion <= 0)
+            throw new ArgumentOutOfRangeException(nameof(stateVersion), stateVersion, "Structural state version must be positive.");
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Presence != ValuePresence.Present || value.InlineValue is null)
+            throw new ArgumentException("Structural state must be a present inline document.", nameof(value));
+        if (value.Policy.Lifecycle == DurableValueLifecycle.None || value.Policy.Storage != DurableValueStorage.Inline)
+            throw new ArgumentException("Structural state must use a persistable inline policy.", nameof(value));
+
+        StateVersion = stateVersion;
+        Value = value;
+    }
+
+    public int StateVersion { get; }
+    public ValueEnvelope Value { get; }
 }
 
 public enum RuntimeStructuralContinuationKind

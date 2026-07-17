@@ -60,10 +60,10 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // Notify bookmark-lifecycle observers AFTER the durable commit (spec 089 D). Observer failures are caught
         // and logged inside the notifier — they never fault this run. The created bookmark rides the commit's
         // upsert state change, so we read it back rather than re-deriving it.
-        await NotifyBookmarksCreatedAsync(commit, cancellationToken);
+        await NotifyBookmarksCreatedAsync(commit);
     }
 
-    private async ValueTask NotifyBookmarksCreatedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask NotifyBookmarksCreatedAsync(RuntimeCheckpointCommit commit)
     {
         if (_bookmarkLifecycleNotifier is null)
             return;
@@ -71,7 +71,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         foreach (var change in commit.StateChanges.Bookmarks)
         {
             if (change is { Operation: RuntimeStateChangeOperation.Upsert, State: { } bookmark })
-                await _bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, cancellationToken);
+                await _bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, CancellationToken.None);
         }
     }
 
@@ -115,12 +115,53 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (state.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
             return null;
 
+        // Stateful activity bookmarks are emitted as independent post-commit work items. One trigger can be
+        // selected before a delayed sibling CreateBookmark item is dispatched, so only a registration that is
+        // still owned by the currently suspended invocation may create a bookmark. Treat stale work as an
+        // idempotent no-op; otherwise it could roll the claimed Running state back to Suspended and resurrect a
+        // sibling that the trigger-claim checkpoint already retired.
+        if (!IsLiveTypedRegistration(state, payload))
+            return null;
+
         if (state.Status is not ActivityExecutionStatus.Running and not ActivityExecutionStatus.Suspended)
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' cannot create a durable bookmark for activity execution '{payload.ActivityExecutionId}' while it is '{state.Status}'.");
 
         var bookmark = NewBookmark(workItem, payload);
         var suspendedState = SuspendActivity(workItem, payload, state);
         return await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
+    }
+
+    private static bool IsLiveTypedRegistration(
+        ActivityExecutionState state,
+        RuntimeCreateBookmarkCommandPayload payload)
+    {
+        // Legacy/non-stateful bookmark work has no typed private-state/registration protocol and retains its
+        // existing Running -> Suspended behavior.
+        if (state.PrivateState is null && state.TriggerRegistrations is not { Count: > 0 })
+            return true;
+
+        if (state.Status != ActivityExecutionStatus.Suspended)
+            return false;
+
+        var registrations = state.TriggerRegistrations?
+            .Where(candidate => StringComparer.Ordinal.Equals(candidate.RegistrationId, payload.BookmarkId))
+            .ToArray() ?? [];
+        if (registrations.Length == 0)
+            return false;
+        if (registrations.Length != 1)
+            throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' owns duplicate trigger registration '{payload.BookmarkId}'.");
+
+        var registration = registrations[0];
+        if (!StringComparer.Ordinal.Equals(registration.InvocationId, state.InvocationId) ||
+            !StringComparer.Ordinal.Equals(registration.ResumeTargetKey, payload.ResumeTargetId) ||
+            !StringComparer.Ordinal.Equals(registration.StimulusType, payload.StimulusType) ||
+            !StringComparer.Ordinal.Equals(registration.StimulusHash, payload.StimulusHash))
+        {
+            throw new InvalidOperationException(
+                $"VF-ACT-008: CreateBookmark scheduler work item '{payload.BookmarkId}' does not match its live trigger registration on activity invocation '{state.InvocationId}'.");
+        }
+
+        return true;
     }
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(

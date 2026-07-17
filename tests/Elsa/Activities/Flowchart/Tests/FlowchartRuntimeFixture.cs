@@ -49,7 +49,8 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
     {
         var states = await Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         var flowchartState = states.Single(state => state.Execution.ExecutableNodeId == "node-flowchart");
-        return flowchartState.Metadata[FlowchartExecutionEngine.StateMetadataKey];
+        return flowchartState.PrivateState?.Value.InlineValue?.GetRawText()
+               ?? throw new InvalidOperationException("Flowchart private state is missing.");
     }
 
     public WorkflowExecutable NewExecutable(

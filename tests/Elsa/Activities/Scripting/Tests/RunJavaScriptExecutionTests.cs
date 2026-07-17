@@ -89,7 +89,7 @@ public sealed class RunJavaScriptExecutionTests
             CancellationToken.None,
             invocationId: "script-1",
             executableNodeId: "script-node");
-        return await ((IActivity)activity).ExecuteAsync(context);
+        return await ((IActivity)activity).ExecuteAsync(context.ToActivityExecutionContext());
     }
 
     private static ServiceProvider BuildProvider(int? maxStatements = null)

@@ -1,25 +1,34 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Applies the private metadata staged by a structural continuation to an activity execution state.
+/// Applies the typed private state staged by a structural continuation to an activity execution state.
 /// The returned state is still only a projection; callers own the atomic checkpoint that persists it.
 /// </summary>
 public static class RuntimeStructuralStateProjector
 {
     public static ActivityExecutionState Apply(
         ActivityExecutionState state,
-        RuntimeStructuralContinuation continuation)
+        RuntimeStructuralContinuation continuation,
+        DateTimeOffset committedAt)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(continuation);
 
-        if (continuation.PrivateMetadata.Count == 0)
+        if (continuation.StateUpdate is not { } update)
             return state;
 
-        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        foreach (var (key, value) in continuation.PrivateMetadata)
-            metadata[key] = value;
+        var attempt = state.Attempts?.SingleOrDefault(candidate => candidate.EndedAt is null)
+            ?? throw new InvalidOperationException(
+                $"Structural activity invocation '{state.InvocationId}' must have exactly one open attempt before staging private state.");
 
-        return state with { Metadata = metadata };
+        return state with
+        {
+            PrivateState = new ActivityPrivateState(
+                state.InvocationId,
+                update.StateVersion,
+                update.Value,
+                attempt.AttemptId,
+                committedAt)
+        };
     }
 }

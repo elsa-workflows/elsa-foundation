@@ -231,6 +231,59 @@ public sealed class ValueDurabilityPolicyTests
     }
 
     [Fact]
+    public async Task Externalization_rejects_a_provider_response_with_a_different_storage_profile()
+    {
+        var policy = ExternalPolicy("encrypted-inputs");
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("secret"), policy));
+        var store = new RecordingExternalPayloadStore(
+            new Dictionary<string, JsonElement>(),
+            returnedProfile: "plain-inputs");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "encrypted-inputs")),
+                    "invocation-1",
+                    NewResolutionContext(),
+                    Now)
+                .AsTask());
+
+        Assert.Contains("storage profile", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("plain-inputs", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Externalization_rejects_a_provider_response_with_a_blank_locator()
+    {
+        var policy = ExternalPolicy("encrypted-inputs");
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("secret"), policy));
+        var store = new RecordingExternalPayloadStore(
+            new Dictionary<string, JsonElement>(),
+            returnedLocator: " ");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "encrypted-inputs")),
+                    "invocation-1",
+                    NewResolutionContext(),
+                    Now)
+                .AsTask());
+
+        Assert.Contains("locator", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Conflicting_input_retention_policies_are_rejected()
     {
         var sourcePolicy = new ValueProtectionPolicy(
@@ -355,16 +408,13 @@ public sealed class ValueDurabilityPolicyTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: expression);
-        var services = new ServiceCollection().AddSingleton<IPortableExpressionEvaluator, EchoPortableEvaluator>();
-        await using var provider = services.BuildServiceProvider();
         var context = NewResolutionContext(
             workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
             {
                 ["source"] = ValueEnvelope.External(StringType, reference, dependencyPolicy)
-            },
-            serviceProvider: provider);
+            });
 
-        var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new StringTypeRegistry(), store)
+        var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new StringTypeRegistry(), new EchoPortableEvaluator(), store)
             .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", context, Now);
 
         var value = snapshot.Values["message"];
@@ -385,19 +435,58 @@ public sealed class ValueDurabilityPolicyTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: expression);
-        var services = new ServiceCollection().AddSingleton<IPortableExpressionEvaluator, ThrowingPortableEvaluator>();
-        await using var provider = services.BuildServiceProvider();
-
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new StringTypeRegistry(), externalPayloadStore: null)
+            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new StringTypeRegistry(), new ThrowingPortableEvaluator(), externalPayloadStore: null)
                 .MaterializeSnapshotAsync(
                     NewTypedNode(binding, ActivityValuePolicy.Default),
                     "invocation-1",
-                    NewResolutionContext(serviceProvider: provider),
+                    NewResolutionContext(),
                     Now)
                 .AsTask());
 
         Assert.Contains("portable 'test' expression", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("fingerprint 'sha256:", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Sensitive_expression_failure_does_not_retain_the_evaluator_exception()
+    {
+        const string secret = "customer-secret-token";
+        var sensitivePolicy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            isSensitive: true,
+            redactionMode: "Full");
+        var expression = new RuntimeExpressionBinding(
+            "test",
+            "throwSecret()",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["secret"] = new WorkflowRequestExpressionParameterBinding("secret")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+        var context = NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+        {
+            ["secret"] = ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(secret), sensitivePolicy)
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeActivityInputMaterializer(
+                    new RuntimeInputBindingResolver(),
+                    new StringTypeRegistry(),
+                    new SecretThrowingPortableEvaluator(secret),
+                    externalPayloadStore: null)
+                .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", context, Now)
+                .AsTask());
+
+        Assert.NotNull(exception.InnerException);
+        Assert.Contains(typeof(InvalidOperationException).FullName!, exception.InnerException!.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
         Assert.Contains("fingerprint 'sha256:", exception.Message, StringComparison.Ordinal);
     }
 
@@ -406,14 +495,12 @@ public sealed class ValueDurabilityPolicyTests
 
     private static RuntimeInputBindingResolutionContext NewResolutionContext(
         IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes = null,
-        IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
-        IServiceProvider? serviceProvider = null) =>
+        IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null) =>
         new(
             "workflow-1",
             "invocation-1",
             workflowInputEnvelopes: workflowInputEnvelopes,
-            variableEnvelopes: variableEnvelopes,
-            serviceProvider: serviceProvider);
+            variableEnvelopes: variableEnvelopes);
 
     private static ExecutableNode NewTypedNode(
         ValueEnvelope literal,
@@ -474,7 +561,10 @@ public sealed class ValueDurabilityPolicyTests
         return new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.External, metadata: metadata);
     }
 
-    private sealed class RecordingExternalPayloadStore(IReadOnlyDictionary<string, JsonElement> payloads) : IExternalPayloadStore
+    private sealed class RecordingExternalPayloadStore(
+        IReadOnlyDictionary<string, JsonElement> payloads,
+        string? returnedProfile = null,
+        string? returnedLocator = null) : IExternalPayloadStore
     {
         public List<ExternalPayloadWriteRequest> Writes { get; } = [];
 
@@ -484,8 +574,8 @@ public sealed class ValueDurabilityPolicyTests
         {
             Writes.Add(request);
             return ValueTask.FromResult(new DurableValueExternalReference(
-                request.StorageProfile,
-                $"payloads/{request.OwnerKey}",
+                returnedProfile ?? request.StorageProfile,
+                returnedLocator ?? $"payloads/{request.OwnerKey}",
                 new Dictionary<string, string>()));
         }
 
@@ -505,6 +595,12 @@ public sealed class ValueDurabilityPolicyTests
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
             ValueTask.FromException<JsonElement>(new InvalidOperationException("Evaluation failed."));
+    }
+
+    private sealed class SecretThrowingPortableEvaluator(string secret) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromException<JsonElement>(new InvalidOperationException(secret));
     }
 
     private sealed class StringTypeRegistry : IWellKnownTypeRegistry

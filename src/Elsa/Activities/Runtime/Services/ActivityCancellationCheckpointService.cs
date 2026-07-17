@@ -22,7 +22,6 @@ internal static class ActivityCancellationCheckpointService
         ActivityExecutionState state,
         string reason,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        BookmarkState? consumedBookmark = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
@@ -41,7 +40,8 @@ internal static class ActivityCancellationCheckpointService
         metadata[RuntimeMetadataKeys.CancellationReason] = reason;
         metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
 
-        var cancelledState = RuntimeContainerScopeService.CloseOwnedFrames(EndOpenAttempt(state, occurredAt) with
+        var endedState = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(EndOpenAttempt(state, occurredAt));
+        var cancelledState = RuntimeContainerScopeService.CloseOwnedFrames(endedState with
         {
             Status = ActivityExecutionStatus.Cancelled,
             SubStatus = CancellationSubStatus,
@@ -80,16 +80,7 @@ internal static class ActivityCancellationCheckpointService
                         cancelledState,
                         metadata)
                 ],
-                bookmarks: consumedBookmark is null
-                    ? []
-                    :
-                    [
-                        new RuntimeStateChange<BookmarkState>(
-                            consumedBookmark.BookmarkId,
-                            RuntimeStateChangeOperation.Delete,
-                            consumedBookmark,
-                            metadata)
-                    ],
+                bookmarks: [],
                 durableValues: [],
                 incidents: [],
                 operational: [],

@@ -102,7 +102,7 @@ public sealed class EventTriggerStimulusProviderTests
             invocationId: "event-invocation",
             executableNodeId: "event-node");
 
-        var transition = await ((IActivity)activity).ExecuteAsync(context);
+        var transition = await ((IActivity)activity).ExecuteAsync(context.ToActivityExecutionContext());
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
 
         Assert.Equal("order-shipped", completion.Result.EventName);

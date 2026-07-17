@@ -56,9 +56,6 @@ public sealed record ActivityInputSnapshot
             ArgumentException.ThrowIfNullOrWhiteSpace(key, nameof(values));
             ArgumentNullException.ThrowIfNull(value);
 
-            if (value.Presence == ValuePresence.Absent)
-                throw new ArgumentException($"Pinned activity input '{key}' cannot be absent.", nameof(values));
-
             if (!snapshot.TryAdd(key, value))
                 throw new ArgumentException($"Pinned activity input key '{key}' occurs more than once.", nameof(values));
         }
@@ -353,8 +350,8 @@ public sealed record ActivityTriggerDelivery
         ArgumentException.ThrowIfNullOrWhiteSpace(providerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(deduplicationKey);
 
-        if (payload.Presence == ValuePresence.Absent)
-            throw new ArgumentException("A trigger delivery payload cannot be absent.", nameof(payload));
+        if (payload.Presence == ValuePresence.Absent && status != ActivityTriggerDeliveryStatus.Consumed)
+            throw new ArgumentException("Only a consumed historical trigger delivery may omit its retired payload.", nameof(payload));
 
         if (payload.Policy.Lifecycle == DurableValueLifecycle.None)
             throw new ArgumentException("A trigger delivery payload must be persistable.", nameof(payload));

@@ -50,7 +50,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         return Task.FromResult(work.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!);
     }
 
-    private ServiceProvider NewProvider(IActivityActivator activityActivator)
+    private ServiceProvider NewProvider(
+        IActivityActivator activityActivator,
+        IBookmarkLifecycleObserver? bookmarkLifecycleObserver = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityActivator>(activityActivator);
@@ -69,9 +71,13 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
+        if (bookmarkLifecycleObserver is not null)
+            services.AddSingleton(bookmarkLifecycleObserver);
+        services.AddSingleton<BookmarkLifecycleNotifier>();
         services.AddSingleton(sp => new ActivityFaultIncidentRecorder(
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetService<IRuntimeActivityExecutionInspectionAccumulator>()));
+            sp.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault()));
         services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         services.AddSingleton<ActivityCompletionProjector>();
         return services.BuildServiceProvider();
@@ -198,7 +204,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         }
     }
 
-    private sealed class TypedResumeTargetActivity(string text) : ActivityBase, IDisposable
+    private sealed class TypedResumeTargetActivity(string text) : Activity, IDisposable
     {
         public string? ObservedText { get; private set; }
         public string? ObservedAttemptId { get; private set; }
@@ -210,6 +216,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             ObservedText = text;
             ObservedAttemptId = ((SimpleActivityExecutionContext)context).AttemptId;
         }
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 
         public void Dispose() => Disposed = true;
     }

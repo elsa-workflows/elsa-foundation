@@ -303,14 +303,14 @@ public sealed class ClrAssemblyScannerTests
         }
     }
 
-    private abstract class ConflictingOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class ConflictingOptionsActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(Options = ["one"])]
         [ActivityInputOption("Two", "two")]
         public string Value { get; set; } = null!;
     }
 
-    private abstract class DuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class DuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput]
         [ActivityInputOption("One", 1)]
@@ -318,26 +318,26 @@ public sealed class ClrAssemblyScannerTests
         public int Value { get; set; }
     }
 
-    private abstract class BlankOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class BlankOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(Options = [""])]
         public string Value { get; set; } = null!;
     }
 
-    private abstract class IncompatibleOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class IncompatibleOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput]
         [ActivityInputOption("Wrong", true)]
         public int Value { get; set; }
     }
 
-    private abstract class UnknownDependencyActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class UnknownDependencyActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(OptionsProvider = "fixture", OptionsProviderDependencies = ["Missing"])]
         public string Value { get; set; } = null!;
     }
 
-    private abstract class DependenciesWithoutProviderActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class DependenciesWithoutProviderActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(OptionsProviderDependencies = [nameof(Other)])]
         public string Value { get; set; } = null!;
@@ -346,28 +346,28 @@ public sealed class ClrAssemblyScannerTests
         public string Other { get; set; } = null!;
     }
 
-    private abstract class UnsafePositiveIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class UnsafePositiveIntegerOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput]
         [ActivityInputOption("Unsafe", 9007199254740992L)]
         public long Value { get; set; }
     }
 
-    private abstract class UnsafeNegativeIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class UnsafeNegativeIntegerOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput]
         [ActivityInputOption("Unsafe", -9007199254740992L)]
         public long Value { get; set; }
     }
 
-    private abstract class NonFiniteOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class NonFiniteOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput]
         [ActivityInputOption("Infinite", double.PositiveInfinity)]
         public double Value { get; set; }
     }
 
-    private abstract class NumericDuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class NumericDuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput]
         [ActivityInputOption("Integer", 1)]
@@ -389,7 +389,7 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains(nameof(DecimalFidelityActivity.Value), error.Message, StringComparison.Ordinal);
     }
 
-    private abstract class DecimalFidelityActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class DecimalFidelityActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput]
         public decimal Value { get; set; }

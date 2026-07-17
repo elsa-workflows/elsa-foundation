@@ -14,7 +14,9 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// Parameter lookup, external payload dereferencing, result projection, and dependency-policy
 /// propagation are kept together so every runtime consumer observes the same durable boundary.
 /// </summary>
-internal sealed class RuntimePortableExpressionEvaluator(IExternalPayloadStore? externalPayloadStore)
+internal sealed class RuntimePortableExpressionEvaluator(
+    IPortableExpressionEvaluator? portableExpressionEvaluator,
+    IExternalPayloadStore? externalPayloadStore)
 {
     public async ValueTask<PortableExpressionEvaluation> EvaluateAsync(
         RuntimeExpressionBinding expression,
@@ -30,9 +32,7 @@ internal sealed class RuntimePortableExpressionEvaluator(IExternalPayloadStore? 
         if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
             throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
 
-        var serviceProvider = resolutionContext.ServiceProvider
-            ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no service provider was supplied to evaluate it.");
-        var portableEvaluator = serviceProvider.GetService(typeof(IPortableExpressionEvaluator)) as IPortableExpressionEvaluator
+        var portableEvaluator = portableExpressionEvaluator
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no '{nameof(IPortableExpressionEvaluator)}' is registered.");
         var definition = new ExpressionDefinition(
             expression.Language,
@@ -42,31 +42,84 @@ internal sealed class RuntimePortableExpressionEvaluator(IExternalPayloadStore? 
             expression.Options,
             expression.CapabilityProfile,
             expression.Metadata);
-        var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
-        var request = new ExpressionEvaluationRequest(definition, parameters.Values, cancellationToken);
-        var effectivePolicy = parameters.DependencyPolicy is null
+        var dependencyPolicy = DetermineDependencyPolicy(expression, resolutionContext, nodeId, inputName);
+        var effectivePolicy = dependencyPolicy is null
             ? ownerPolicy
             : ValuePolicyCombiner.Combine(
                 ownerPolicy,
-                parameters.DependencyPolicy,
+                dependencyPolicy,
                 $"Portable expression input '{inputName}' on executable node '{nodeId}'");
 
         try
         {
+            var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
+            var request = new ExpressionEvaluationRequest(definition, parameters.Values, cancellationToken);
             return new PortableExpressionEvaluation(
                 await portableEvaluator.EvaluateAsync(request),
                 effectivePolicy);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception exception)
         {
-            throw new InvalidOperationException(
-                $"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.",
-                exception);
+            var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
+            if (effectivePolicy.IsSensitive ||
+                effectivePolicy.RequiresEncryption ||
+                !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode))
+                throw new InvalidOperationException(message, new RedactedPortableExpressionException(exception.GetType()));
+
+            throw new InvalidOperationException(message, exception);
         }
+    }
+
+    private static ValueProtectionPolicy? DetermineDependencyPolicy(
+        RuntimeExpressionBinding expression,
+        RuntimeInputBindingResolutionContext context,
+        string nodeId,
+        string inputName)
+    {
+        ValueProtectionPolicy? dependencyPolicy = null;
+        foreach (var (name, binding) in expression.Parameters.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            var parameterPolicy = binding switch
+            {
+                LiteralExpressionParameterBinding => null,
+                WorkflowRequestExpressionParameterBinding request =>
+                    context.WorkflowInputEnvelopes.GetValueOrDefault(request.MemberKey)?.Policy,
+                VariableExpressionParameterBinding variable =>
+                    context.VariableEnvelopes.GetValueOrDefault(
+                        new RuntimeVariableValueAddress(variable.DeclaringScopeNodeId, variable.VariableKey))?.Policy,
+                ActivityResultExpressionParameterBinding result => DetermineActivityResultPolicy(result, context, name, nodeId, inputName),
+                _ => null
+            };
+            if (parameterPolicy is null)
+                continue;
+
+            dependencyPolicy = dependencyPolicy is null
+                ? parameterPolicy
+                : ValuePolicyCombiner.Combine(
+                    dependencyPolicy,
+                    parameterPolicy,
+                    $"Portable expression input '{inputName}' on executable node '{nodeId}'");
+        }
+
+        return dependencyPolicy;
+    }
+
+    private static ValueProtectionPolicy? DetermineActivityResultPolicy(
+        ActivityResultExpressionParameterBinding binding,
+        RuntimeInputBindingResolutionContext context,
+        string parameterName,
+        string nodeId,
+        string inputName)
+    {
+        var consumer = context.ConsumerInvocation
+            ?? throw NewParameterException(parameterName, nodeId, inputName, "requires a consumer invocation identity");
+        return new CausalActivityResultResolver()
+            .Resolve(binding, consumer, context.RuntimeView)?
+            .Completion.Result.Policy;
     }
 
     private async ValueTask<PortableExpressionParameters> MaterializeParametersAsync(
@@ -243,6 +296,9 @@ internal sealed class RuntimePortableExpressionEvaluator(IExternalPayloadStore? 
         string reason) =>
         new($"Portable expression parameter '{parameterName}' for input '{inputName}' on executable node '{nodeId}' {reason}.");
 }
+
+internal sealed class RedactedPortableExpressionException(Type evaluatorExceptionType)
+    : Exception($"Portable expression evaluator failure of type '{evaluatorExceptionType.FullName ?? evaluatorExceptionType.Name}' was redacted by value-protection policy.");
 
 internal sealed record PortableExpressionEvaluation(JsonElement Value, ValueProtectionPolicy EffectivePolicy);
 

@@ -58,7 +58,7 @@ namespace Elsa.Activities.Do.Activities;
 /// </remarks>
 [ActivityStructure("elsa.do.structure", "1.0.0")]
 [ActivityChildSlot("Do.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class Do : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "Do.Body";
     public const string StructureKind = "elsa.do.structure";

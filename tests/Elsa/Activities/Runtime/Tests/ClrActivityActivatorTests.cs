@@ -18,6 +18,7 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class ClrActivityActivatorTests
 {
     private static readonly ValueTypeDescriptor StringType = new("String");
+    private static readonly ValueTypeDescriptor Int32Type = new("Int32");
 
     [Fact]
     public async Task Each_attempt_gets_a_fresh_hydrated_activity_and_scoped_service()
@@ -63,6 +64,23 @@ public sealed class ClrActivityActivatorTests
     }
 
     [Fact]
+    public async Task ActivationLease_WhenActivityAndScopeDisposalFail_AttemptsBothAndAggregatesFailures()
+    {
+        var activity = new ThrowingDisposableActivity();
+        var scope = new ThrowingAsyncDisposableScope();
+        var lease = new ActivityActivationLease(activity, scope);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => lease.DisposeAsync().AsTask());
+
+        Assert.True(activity.DisposeAttempted);
+        Assert.True(scope.DisposeAttempted);
+        Assert.Collection(
+            exception.InnerExceptions,
+            inner => Assert.Equal("Activity disposal failed.", inner.Message),
+            inner => Assert.Equal("Scope disposal failed.", inner.Message));
+    }
+
+    [Fact]
     public void Hydrator_rejects_a_second_write_to_the_same_activity_instance()
     {
         var dependency = new ScopedDependency();
@@ -75,6 +93,96 @@ public sealed class ClrActivityActivatorTests
 
         Assert.Throws<InvalidOperationException>(() => hydrator.Hydrate(activity, contract, snapshot));
         dependency.Dispose();
+    }
+
+    [Fact]
+    public void Hydrator_replays_pinned_optional_absence_across_changed_property_initializers()
+    {
+        var contract = new ActivityContract(
+            "test/optional-initializer",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { }),
+            [new ActivityInputContract("message", "Message", StringType, false, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/optional-initializer"));
+        var snapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["message"] = ValueEnvelope.Absent(StringType, ValueProtectionPolicy.InstanceInline)
+            },
+            DateTimeOffset.UtcNow);
+
+        OptionalInitializerActivity.Initializer = "version-one-initializer";
+        var firstAttempt = new OptionalInitializerActivity();
+        OptionalInitializerActivity.Initializer = "version-two-initializer";
+        var retriedAfterDeployment = new OptionalInitializerActivity();
+        var hydrator = new ActivityInputHydrator();
+        hydrator.Hydrate(firstAttempt, contract, snapshot);
+        hydrator.Hydrate(retriedAfterDeployment, contract, snapshot);
+
+        Assert.Null(firstAttempt.Message);
+        Assert.Null(retriedAfterDeployment.Message);
+    }
+
+    [Fact]
+    public void Hydrator_accepts_explicit_null_for_a_required_nullable_reference_input()
+    {
+        var contract = new ActivityContract(
+            "test/required-nullable",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { }),
+            [new ActivityInputContract("message", "Message", StringType, true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/required-nullable"));
+        var snapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["message"] = ValueEnvelope.Null(StringType, ValueProtectionPolicy.InstanceInline)
+            },
+            DateTimeOffset.UtcNow);
+        var activity = new RequiredNullableActivity();
+
+        new ActivityInputHydrator().Hydrate(activity, contract, snapshot);
+
+        Assert.Null(activity.Message);
+    }
+
+    [Fact]
+    public void Hydrator_rejects_absence_for_an_optional_non_nullable_value_input()
+    {
+        var contract = new ActivityContract(
+            "test/optional-int32",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { }),
+            [new ActivityInputContract("value", "Value", Int32Type, false, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/optional-int32"));
+        var snapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["value"] = ValueEnvelope.Absent(Int32Type, ValueProtectionPolicy.InstanceInline)
+            },
+            DateTimeOffset.UtcNow);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ActivityInputHydrator().Hydrate(new OptionalInt32Activity(), contract, snapshot));
+
+        Assert.Contains("does not accept absence", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -163,12 +271,69 @@ public sealed class ClrActivityActivatorTests
             },
             DateTimeOffset.UtcNow);
 
-    private sealed class ServiceBearingActivity(ScopedDependency dependency) : ActivityBase
+    private sealed class ServiceBearingActivity(ScopedDependency dependency) : Activity
     {
         public ScopedDependency Dependency { get; } = dependency;
 
         [ActivityInput(Key = "message")]
         public string Message { get; set; } = null!;
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class OptionalInitializerActivity : Activity
+    {
+        public static string Initializer { get; set; } = "initializer";
+
+        [ActivityInput(Key = "message")]
+        public string? Message { get; set; } = Initializer;
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class RequiredNullableActivity : Activity
+    {
+        [ActivityInput(Key = "message")]
+        public string? Message { get; set; } = "initializer";
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class OptionalInt32Activity : Activity
+    {
+        [ActivityInput(Key = "value")]
+        public int Value { get; set; } = 42;
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class ThrowingDisposableActivity : Activity, IDisposable
+    {
+        public bool DisposeAttempted { get; private set; }
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+
+        public void Dispose()
+        {
+            DisposeAttempted = true;
+            throw new InvalidOperationException("Activity disposal failed.");
+        }
+    }
+
+    private sealed class ThrowingAsyncDisposableScope : IAsyncDisposable
+    {
+        public bool DisposeAttempted { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            DisposeAttempted = true;
+            return ValueTask.FromException(new InvalidOperationException("Scope disposal failed."));
+        }
     }
 
     private sealed class ScopedDependency : IDisposable

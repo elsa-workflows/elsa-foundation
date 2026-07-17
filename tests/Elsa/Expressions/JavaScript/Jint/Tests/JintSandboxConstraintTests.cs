@@ -112,6 +112,43 @@ public class JintSandboxConstraintTests
         Assert.Equal(5, result!.Value.GetInt32());
     }
 
+    [Fact]
+    public async Task ScriptResultLargerThanConfiguredJsonLimitIsRejected()
+    {
+        await using var provider = JintTestHost.Build(feature => feature.MaxResultBytes = 32);
+        using var scope = provider.CreateScope();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EvaluateAsync(scope.ScriptEvaluator(), "return 'x'.repeat(100);").AsTask());
+
+        Assert.Contains("32 bytes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ScriptResultDeeperThanConfiguredJsonLimitIsRejected()
+    {
+        await using var provider = JintTestHost.Build(feature => feature.MaxResultDepth = 3);
+        using var scope = provider.CreateScope();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EvaluateAsync(scope.ScriptEvaluator(), "return { a: { b: { c: 1 } } };").AsTask());
+
+        Assert.Contains("depth", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ScriptResultMaterializationUsesTheCapturedIntrinsicSerializer()
+    {
+        await using var provider = JintTestHost.Build();
+        using var scope = provider.CreateScope();
+
+        var result = await EvaluateAsync(
+            scope.ScriptEvaluator(),
+            "JSON.stringify = () => '\"tampered\"'; return { answer: 42 };");
+
+        Assert.Equal(42, result!.Value.GetProperty("answer").GetInt32());
+    }
+
     private static ValueTask<JsonElement?> EvaluateAsync(
         IJavaScriptScriptEvaluator evaluator,
         string source,

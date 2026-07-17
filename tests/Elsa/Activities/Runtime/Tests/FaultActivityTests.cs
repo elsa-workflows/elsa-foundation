@@ -20,7 +20,7 @@ public sealed class FaultActivityTests : IDisposable
         var fault = new Fault { Message = "custom fault" };
         var context = NewContext(fault);
 
-        var transition = await ((IActivity)fault).ExecuteAsync(context);
+        var transition = await ((IActivity)fault).ExecuteAsync(context.ToActivityExecutionContext());
 
         var returnedFault = Assert.IsAssignableFrom<IActivityFaultTransition>(transition).Fault;
         Assert.Equal("workflow.fault", returnedFault.Code);
@@ -33,7 +33,7 @@ public sealed class FaultActivityTests : IDisposable
         var fault = new Fault();
         var context = NewContext(fault);
 
-        var transition = await ((IActivity)fault).ExecuteAsync(context);
+        var transition = await ((IActivity)fault).ExecuteAsync(context.ToActivityExecutionContext());
 
         var returnedFault = Assert.IsAssignableFrom<IActivityFaultTransition>(transition).Fault;
         Assert.Equal("The workflow faulted.", returnedFault.Message);

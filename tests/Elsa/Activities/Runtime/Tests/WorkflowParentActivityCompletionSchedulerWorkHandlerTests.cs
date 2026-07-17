@@ -43,13 +43,30 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             });
     }
 
-    private static WorkflowExecutable NewExecutable()
+    [Fact]
+    public async Task ChildCompletionCallback_CompletingParent_DiscardsPrivateState()
+    {
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .Build("actexec-parent", "actexec-child");
+
+        var run = await harness.RunAsync(NewExecutable(typeof(StateUpdatingStructuralActivity)));
+
+        var parent = run.State("node-parent");
+        Assert.Equal(ActivityExecutionStatus.Completed, parent.Status);
+        Assert.Null(parent.PrivateState);
+    }
+
+    private static WorkflowExecutable NewExecutable() =>
+        NewExecutable(typeof(UndeclaredOutcomeStructuralActivity));
+
+    private static WorkflowExecutable NewExecutable(Type activityType)
     {
         var child = WorkflowExecutionHarness.NewProbeNode("node-child");
         var root = new ExecutableNode(
             executableNodeId: "node-parent",
             authoredActivityId: "authored-parent",
-            activityType: typeof(UndeclaredOutcomeStructuralActivity).FullName!,
+            activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: "test/structural",
             descriptorPayload: JsonSerializer.SerializeToElement(new { type = "structural" }),
@@ -60,8 +77,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         return WorkflowExecutionHarness.NewExecutable(root);
     }
 
-    public sealed class UndeclaredOutcomeStructuralActivity : ActivityBase,
-        IActivityResult<ActivityUnit>,
+    public sealed class UndeclaredOutcomeStructuralActivity : StructuralActivity,
         IRuntimeStructuralActivity,
         IRuntimeActivityChildCompletionHandler
     {
@@ -76,5 +92,26 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
 
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete("Undeclared"));
+    }
+
+    public sealed class StateUpdatingStructuralActivity : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer.WithState(StateValue(1)));
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete().WithState(StateValue(2)));
+
+        private static ValueEnvelope StateValue(int step) =>
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("test/structural-state"),
+                JsonSerializer.SerializeToElement(new { step }),
+                ValueProtectionPolicy.InstanceInline);
     }
 }

@@ -51,7 +51,7 @@ namespace Elsa.Activities.While.Activities;
 /// </remarks>
 [ActivityStructure("elsa.while.structure", "1.0.0")]
 [ActivityChildSlot("While.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class While : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "While.Body";
     public const string StructureKind = "elsa.while.structure";

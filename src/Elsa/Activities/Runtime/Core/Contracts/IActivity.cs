@@ -10,5 +10,5 @@ public interface IActivity
     /// <summary>
     /// Invoked when the activity executes.
     /// </summary>
-    ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context);
+    ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context);
 }

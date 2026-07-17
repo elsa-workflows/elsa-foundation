@@ -107,7 +107,11 @@ Definition of one independently bindable plain `[Input]` property.
 | `EditorMetadata` | Ordering, category, UI hint, options, and provider metadata |
 
 An omitted binding, explicit null, and a literal default are distinct authored states. Publication
-must either reject omission or lower it to an explicit literal binding using the pinned default.
+must reject omission for a required input, lower it to the pinned literal default when one exists,
+or preserve accepted optional omission as an `Absent` literal for nullable targets. A non-nullable
+input without a binding or pinned default is invalid. The executable and complete invocation snapshot
+remain authoritative; hydration deterministically maps optional `Absent` to null instead of consulting
+transient CLR property initializers.
 
 ### `ActivityResultDefinition`
 
@@ -330,7 +334,8 @@ Complete materialized input set pinned before any CLR activity construction or u
 Invariants:
 
 - The keys exactly equal the pinned contract's normalized input set.
-- Every required value is present and type/policy compatible.
+- Every required key carries a non-`Absent`, type/policy-compatible value; an optional key may carry
+  `Absent`.
 - Durable execution accepts only persistable envelopes.
 - The snapshot is created while transitioning Scheduled → Running and committed atomically with the
   first attempt and the post-commit invocation intent.
@@ -529,4 +534,3 @@ The following exist only transiently and are never persisted:
 - code-first `WorkflowDefinition<TRequest,TResult>` compiler objects;
 - generated `ActivityArgument<T>`, call handles, builder sources, and callbacks;
 - evaluator-native JavaScript/Liquid objects created from immutable parameter envelopes.
-

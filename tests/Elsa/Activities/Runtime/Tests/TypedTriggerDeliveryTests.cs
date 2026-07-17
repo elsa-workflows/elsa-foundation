@@ -6,12 +6,39 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
 public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 {
+    [Fact]
+    public async Task HandleAsync_MalformedTargetedStartTrigger_FaultsWithoutRunningBusinessLogic()
+    {
+        var activity = new CountingStartTriggerActivity();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        foreach (var change in RuntimeWorkflowStateSeed.BuildSeedChanges(
+                     "wfexec-1",
+                     variables: null,
+                     inputs: null,
+                     capturedAt: _now,
+                     stimulusInput: Json("\"not-an-approval-trigger\""),
+                     triggerNodeId: "node-start"))
+        {
+            await _durableValueStateStore.SaveAsync(change.State!);
+        }
+        await using var provider = NewProvider(new FixedActivityActivator(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.NotEmpty(state.IncidentIds);
+        Assert.Equal(0, activity.ExecuteCount);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -91,11 +118,11 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             ValueTask.FromResult(new ActivityActivationLease(Activity));
     }
 
-    private sealed class PayloadOnlySuspendingActivity(ActivityTransition transition) : ActivityBase, IDisposable
+    private sealed class PayloadOnlySuspendingActivity(ActivityTransition transition) : IActivity, IDisposable
     {
         public bool Disposed { get; private set; }
 
-        protected override ValueTask<ActivityTransition> ExecuteTransitionAsync(IActivityExecutionContext context) =>
+        public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(transition);
 
         public void Dispose() => Disposed = true;
@@ -141,6 +168,22 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     private sealed record ApprovalTrigger(string Decision);
+
+    private sealed record ApprovalState(int Step);
+
+    private sealed class CountingStartTriggerActivity : StatefulTriggerActivity<TypedResult, ApprovalState, ApprovalTrigger>
+    {
+        public int ExecuteCount { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult, ApprovalState>> ExecuteAsync(ActivityStartContext<ApprovalTrigger> context)
+        {
+            ExecuteCount++;
+            return ValueTask.FromResult(Complete(new TypedResult(0)));
+        }
+
+        protected override ValueTask<ActivityTransition<TypedResult, ApprovalState>> ResumeAsync(ActivityResumeContext<ApprovalState, ApprovalTrigger> context) =>
+            ValueTask.FromResult(Complete(new TypedResult(0)));
+    }
 
     private static WorkflowExecutable NewTypedStatefulExecutable()
     {

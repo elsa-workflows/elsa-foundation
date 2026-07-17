@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -32,17 +33,40 @@ public sealed class ActivityActivationLease(
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        switch (Activity)
+        Exception? activityException = null;
+        Exception? scopeException = null;
+        try
         {
-            case IAsyncDisposable asyncDisposable:
-                await asyncDisposable.DisposeAsync();
-                break;
-            case IDisposable disposable:
-                disposable.Dispose();
-                break;
+            switch (Activity)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync();
+                    break;
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+        catch (Exception exception)
+        {
+            activityException = exception;
         }
 
-        if (ownedScope is not null)
-            await ownedScope.DisposeAsync();
+        try
+        {
+            if (ownedScope is not null)
+                await ownedScope.DisposeAsync();
+        }
+        catch (Exception exception)
+        {
+            scopeException = exception;
+        }
+
+        if (activityException is not null && scopeException is not null)
+            throw new AggregateException("Both activity and activation-scope disposal failed.", activityException, scopeException);
+        if (activityException is not null)
+            ExceptionDispatchInfo.Capture(activityException).Throw();
+        if (scopeException is not null)
+            ExceptionDispatchInfo.Capture(scopeException).Throw();
     }
 }

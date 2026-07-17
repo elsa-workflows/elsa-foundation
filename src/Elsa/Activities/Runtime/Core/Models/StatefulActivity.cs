@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
-using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Primitives.Models;
 
@@ -18,7 +17,7 @@ namespace Elsa.Activities.Runtime.Core.Models;
 /// and constructor-injected service instances are deliberately absent from the resume contract.
 /// </remarks>
 public abstract class StatefulActivity<TResult, TState, TTrigger> :
-    ActivityBase,
+    IActivity,
     IActivityResult<TResult>,
     IStatefulActivity<TResult, TState, TTrigger>
 {
@@ -49,11 +48,11 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
     protected static ActivityTransition<TResult, TState> Cancel(string reason) =>
         ActivityTransition<TResult, TState>.Cancel(reason);
 
-    protected sealed override async ValueTask<ActivityTransition> ExecuteTransitionAsync(IActivityExecutionContext context)
+    async ValueTask<ActivityTransition> IActivity.ExecuteAsync(ActivityExecutionContext context)
     {
         BeginAttempt();
         EnsureDeclaredValueTypes();
-        return ValidateTransition(await ExecuteAsync(ActivityExecutionContext.FromRuntime(context)));
+        return ValidateTransition(await ExecuteAsync(context));
     }
 
     async ValueTask<ActivityTransition<TResult, TState>> IStatefulActivity<TResult, TState, TTrigger>.ExecuteAsync(
@@ -196,19 +195,23 @@ public sealed class ActivityStartContext<TTrigger>
         if (!StringComparer.Ordinal.Equals(attempt.TriggerNodeId, attempt.ExecutableNodeId))
             return new ActivityStartContext<TTrigger>(attempt, false, default);
 
-        if (attempt.TriggerPayload is not { } payload || payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        if (attempt.TriggerPayload is not { } payload)
             return new ActivityStartContext<TTrigger>(attempt, false, default);
 
         try
         {
-            var trigger = payload.Deserialize<TTrigger>();
-            return trigger is null
-                ? new ActivityStartContext<TTrigger>(attempt, false, default)
-                : new ActivityStartContext<TTrigger>(attempt, true, PersistableActivityValue.SnapshotAndMaterialize(trigger, "start trigger"));
+            var trigger = payload.Deserialize<TTrigger>()
+                ?? throw new JsonException("The targeted start trigger payload resolved to null.");
+            return new ActivityStartContext<TTrigger>(
+                attempt,
+                true,
+                PersistableActivityValue.SnapshotAndMaterialize(trigger, "start trigger"));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
-            return new ActivityStartContext<TTrigger>(attempt, false, default);
+            throw new InvalidOperationException(
+                $"The targeted start trigger payload does not match the declared trigger type '{typeof(TTrigger).FullName}'.",
+                exception);
         }
     }
 }

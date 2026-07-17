@@ -2,14 +2,16 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class ActivityInputSnapshotCheckpointTests
+public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 16, 10, 0, 0, TimeSpan.Zero);
     private static readonly ValueTypeDescriptor StringType = new("String");
@@ -19,6 +21,9 @@ public sealed class ActivityInputSnapshotCheckpointTests
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
+    private readonly ServiceProvider _serviceProvider = new ServiceCollection()
+        .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()))
+        .BuildServiceProvider();
 
     [Fact]
     public async Task ActivityStarted_checkpoint_commits_complete_input_snapshot_and_first_attempt_before_invoke_intent()
@@ -83,9 +88,11 @@ public sealed class ActivityInputSnapshotCheckpointTests
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(Now),
-            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()),
+            _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             _durableValueStateStore,
             workflowExecutionStateStore: _workflowStateStore);
+
+    public void Dispose() => _serviceProvider.Dispose();
 
     private ValueTask<WorkflowExecutionState> SaveWorkflowStateAsync(WorkflowExecutableIdentity identity)
     {

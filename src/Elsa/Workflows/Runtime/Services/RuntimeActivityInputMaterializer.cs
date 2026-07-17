@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Constants;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -30,7 +31,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
 
         _inputBindingResolver = inputBindingResolver;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(externalPayloadStore: null);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: null);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore: null);
     }
 
@@ -43,7 +44,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         _inputBindingResolver = inputBindingResolver;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -58,7 +59,24 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _inputBindingResolver = inputBindingResolver;
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
+        _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IPortableExpressionEvaluator portableExpressionEvaluator,
+        IExternalPayloadStore? externalPayloadStore = null)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+        ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
+        ArgumentNullException.ThrowIfNull(portableExpressionEvaluator);
+
+        _inputBindingResolver = inputBindingResolver;
+        _wellKnownTypeRegistry = wellKnownTypeRegistry;
+        _externalPayloadStore = externalPayloadStore;
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -156,14 +174,15 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType))
             throw new InvalidOperationException($"VF-ACT-004: Literal input '{input.Key}' on executable node '{node.ExecutableNodeId}' does not match its declared portable type.");
-        if (source.Presence == ValuePresence.Absent)
-            throw new InvalidOperationException($"VF-ACT-003: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' is absent after binding normalization.");
         if (source.Policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has a transient source at a durable invocation boundary.");
         var effectivePolicy = ValuePolicyCombiner.Combine(
             binding.EffectivePolicy,
             source.Policy,
             $"Input '{input.Key}' on executable node '{node.ExecutableNodeId}'");
+
+        if (source.Presence == ValuePresence.Absent && input.IsRequired)
+            throw new InvalidOperationException($"VF-ACT-003: Required input '{input.Key}' on executable node '{node.ExecutableNodeId}' cannot materialize as absent.");
 
         if (source.ExternalReference is not null && HasExternalProjection(binding))
             return await MaterializeExternalProjectionAsync(node, invocationId, input, binding, source, effectivePolicy, resolutionContext, cancellationToken);

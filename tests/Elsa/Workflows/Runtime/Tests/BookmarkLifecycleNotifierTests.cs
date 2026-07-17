@@ -50,11 +50,75 @@ public sealed class BookmarkLifecycleNotifierTests
     }
 
     [Fact]
+    public async Task NeverCompletingObserver_TimesOut_AndLaterObserversReceiveCreatedAndConsumed()
+    {
+        var recording = new RecordingBookmarkLifecycleObserver();
+        var notifier = new BookmarkLifecycleNotifier(
+            [new NeverCompletingBookmarkLifecycleObserver(), recording],
+            observerTimeout: TimeSpan.FromMilliseconds(25));
+
+        await notifier.NotifyCreatedAsync(Bookmark);
+        await notifier.NotifyConsumedAsync(Bookmark);
+
+        Assert.Equal("bk-1", Assert.Single(recording.Created).BookmarkId);
+        Assert.Equal("bk-1", Assert.Single(recording.Consumed).BookmarkId);
+    }
+
+    [Fact]
+    public async Task CooperativeObserver_ReceivesTimeoutCancellation_AndLaterObserverStillRuns()
+    {
+        var cooperative = new CooperativeTimeoutBookmarkLifecycleObserver();
+        var recording = new RecordingBookmarkLifecycleObserver();
+        var notifier = new BookmarkLifecycleNotifier(
+            [cooperative, recording],
+            observerTimeout: TimeSpan.FromMilliseconds(25));
+
+        await notifier.NotifyCreatedAsync(Bookmark);
+
+        Assert.True(cooperative.CancellationObserved);
+        Assert.Equal("bk-1", Assert.Single(recording.Created).BookmarkId);
+    }
+
+    [Fact]
     public async Task NoObservers_IsANoOp()
     {
         var notifier = new BookmarkLifecycleNotifier();
 
         await notifier.NotifyCreatedAsync(Bookmark);
         await notifier.NotifyConsumedAsync(Bookmark);
+    }
+
+    private sealed class NeverCompletingBookmarkLifecycleObserver : IBookmarkLifecycleObserver
+    {
+        private readonly TaskCompletionSource _neverCompletes = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+            new(_neverCompletes.Task);
+
+        public ValueTask OnBookmarkConsumedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+            new(_neverCompletes.Task);
+    }
+
+    private sealed class CooperativeTimeoutBookmarkLifecycleObserver : IBookmarkLifecycleObserver
+    {
+        public bool CancellationObserved { get; private set; }
+
+        public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+            WaitForCancellationAsync(cancellationToken);
+
+        public ValueTask OnBookmarkConsumedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
+        private async ValueTask WaitForCancellationAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            finally
+            {
+                CancellationObserved = cancellationToken.IsCancellationRequested;
+            }
+        }
     }
 }

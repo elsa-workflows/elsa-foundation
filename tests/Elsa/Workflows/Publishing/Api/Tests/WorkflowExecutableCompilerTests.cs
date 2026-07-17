@@ -62,7 +62,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task RejectsOmittedOptionalInputWithoutPinnedDefault()
+    public async Task CompilesOmittedOptionalReferenceInputAsCanonicalAbsentLiteral()
     {
         var activityVersion = ActivityVersion(
             "activity-optional",
@@ -74,10 +74,71 @@ public sealed class WorkflowExecutableCompilerTests
             _activityStructureService,
             TestWellKnownTypeRegistry.Create());
 
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = Assert.Contains("value", executable.RootActivity.InputBindings);
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(ValuePresence.Absent, binding.Literal!.Presence);
+    }
+
+    [Fact]
+    public async Task CompilesExplicitNullDistinctFromOmittedOptionalInput()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-optional",
+            "Test.Optional",
+            [new InputDefinition("value", "Value", new TypeReference("String"), null, "Value", null, IsRequired: false)]);
+        var explicitNull = new WorkflowArgumentState("value", new ArgumentValue(null, "Literal"), null, null, null, null);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("optional", activityVersion.Id, [explicitNull], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = Assert.Contains("value", executable.RootActivity.InputBindings);
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(ValuePresence.ExplicitNull, binding.Literal!.Presence);
+    }
+
+    [Fact]
+    public async Task RejectsOmittedOptionalNonNullableValueInputWithoutPinnedDefault()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-optional",
+            "Test.Optional",
+            [new InputDefinition("value", "Value", new TypeReference("Int32"), null, "Value", null, IsRequired: false)]);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("optional", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
-        Assert.Contains("omits input 'value'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("non-nullable type alias 'Int32'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires an authored binding or pinned default", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsOmittedRequiredInputWithoutPinnedDefault()
+    {
+        var activityVersion = ActivityVersion(
+            "activity-required",
+            "Test.Required",
+            [new InputDefinition("value", "Value", new TypeReference("String"), null, "Value", null, IsRequired: true)]);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("required", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("omits required input 'value'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("no pinned default", exception.Message, StringComparison.Ordinal);
     }
 

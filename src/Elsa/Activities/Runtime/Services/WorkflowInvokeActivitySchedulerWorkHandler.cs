@@ -111,15 +111,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' references executable node '{invokePayload.ExecutableNodeId}', but activity execution '{invokePayload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
 
         if (state.Status == ActivityExecutionStatus.Completed)
-        {
-            await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, invokePayload, state, cancellationToken);
             return;
-        }
 
         if (state.Status != ActivityExecutionStatus.Running)
             return;
 
-        if (ActivityAttemptActivationClaimer.WasActivationCompleted(state, workItem.WorkItemId))
+        if (ActivityAttemptActivationClaimer.WasInitialActivationCompleted(state, workItem.WorkItemId))
             return;
 
         state.EnsureValueFlowCompatible();
@@ -177,7 +174,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             if (state.InputSnapshot is null)
                 throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no committed input snapshot.");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
@@ -245,13 +242,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
                 triggerNodeId: projections.TriggerNodeId);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            if (disposalException is not null)
+                throw new AggregateException("Activity activation cancellation and disposal both failed.", cancellationException, disposalException);
             throw;
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, exception, "ActivityConstructionFailed", valueSnapshots, cancellationToken);
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            var fault = disposalException is null
+                ? exception
+                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+            var subStatus = disposalException is null ? "ActivityConstructionFailed" : "ActivityDisposalFailed";
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -261,12 +268,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityTransition? returnedTransition = null;
         ActivityCompletionProjection? valueFlowCompletion = null;
         ActivityExecutionState? typedSuspendedState = null;
+        ActivityFault? returnedFault = null;
+        string? returnedCancellationReason = null;
+        var stagedState = state;
         try
         {
             if (activity is IRuntimeStructuralActivity structuralActivity)
             {
                 structuralContinuation = await structuralActivity.ExecuteStructureAsync(context);
-                state = RuntimeStructuralStateProjector.Apply(state, structuralContinuation);
+                stagedState = RuntimeStructuralStateProjector.Apply(stagedState, structuralContinuation, _timeProvider.GetUtcNow());
                 returnedTransition = structuralContinuation.Kind switch
                 {
                     RuntimeStructuralContinuationKind.Complete => ActivityTransition.Complete(ActivityUnit.Value, structuralContinuation.OutcomeName!),
@@ -277,7 +287,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 };
             }
             else
-                returnedTransition = await activity.ExecuteAsync(context);
+                returnedTransition = await activity.ExecuteAsync(context.ToActivityExecutionContext());
 
             var childScheduleRequests = context.GetChildActivityScheduleRequests();
             if (structuralContinuation is null && childScheduleRequests.Count > 0)
@@ -297,57 +307,27 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
                 ValidateStatefulSuspensionRegistrations(executable, executableNode, statefulSuspension);
                 typedSuspendedState = StatefulActivitySuspensionProjector.Project(
-                    state,
+                    stagedState,
                     valueFlowAttempt,
                     statefulSuspension,
                     _timeProvider.GetUtcNow());
             }
             else if (returnedTransition is IActivityFaultTransition faultTransition)
             {
-                var fault = faultTransition.Fault;
-                var faultedState = state with
-                {
-                    Fault = new NormalizedActivityFault(
-                        fault.Code,
-                        typeof(ActivityFault).FullName!,
-                        fault.Message,
-                        sanitizedStackTrace: null,
-                        fault.IsRetryable)
-                };
-                await RecordFaultAsync(
-                    activityFaultIncidentRecorder,
-                    activityExecutionStateStore,
-                    checkpointCommitter,
-                    workItem,
-                    invokePayload,
-                    faultedState,
-                    new ActivityTransitionFaultException(fault),
-                    "ActivityReturnedFault",
-                    valueSnapshots,
-                    cancellationToken);
-                return;
+                returnedFault = faultTransition.Fault;
             }
             else if (returnedTransition is IActivityCancellationTransition cancellationTransition)
             {
-                await ActivityCancellationCheckpointService.CommitAsync(
-                    checkpointCommitter,
-                    inspectionAccumulator,
-                    _timeProvider,
-                    workItem,
-                    state,
-                    cancellationTransition.Reason,
-                    valueSnapshots,
-                    cancellationToken: cancellationToken);
-                return;
+                returnedCancellationReason = cancellationTransition.Reason;
             }
             else if (childScheduleRequests.Count > 0)
             {
                 var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
-                state = ActivityAttemptActivationClaimer.EndOpenAttempt(
-                    state,
+                stagedState = ActivityAttemptActivationClaimer.EndOpenAttempt(
+                    stagedState,
                     Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
                     _timeProvider.GetUtcNow());
-                state = ActivityAttemptActivationClaimer.MarkActivationCompleted(state, workItem.WorkItemId);
+                stagedState = ActivityAttemptActivationClaimer.MarkInitialActivationCompleted(stagedState, workItem.WorkItemId);
                 pendingChildScheduling = (idGenerator, childScheduleRequests);
             }
             else if (structuralContinuation?.IsDeferred != true)
@@ -364,7 +344,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     : structuralContinuation?.IsComplete == true
                         ? [structuralContinuation.OutcomeName!]
                         : [ActivityOutcomes.Done];
-                completedState = CompleteActivity(workItem, invokePayload, state, outcomeNames, skipped: false);
+                completedState = CompleteActivity(workItem, invokePayload, stagedState, outcomeNames, skipped: false);
                 if (valueFlowCompletion is not null)
                 {
                     var endedAt = completedState.CompletedAt ?? _timeProvider.GetUtcNow();
@@ -377,7 +357,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         endedAt,
                         valueFlowAttempt.TriggerDeliveryId,
                         Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete);
-                    var priorAttempts = state.Attempts?.Where(attempt => attempt.AttemptId != completedAttempt.AttemptId) ?? [];
+                    var priorAttempts = stagedState.Attempts?.Where(attempt => attempt.AttemptId != completedAttempt.AttemptId) ?? [];
                     completedState = completedState with
                     {
                         ContractIdentity = new ActivityInvocationContractIdentity(
@@ -396,7 +376,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 if (structuralContinuation?.IsComplete == true)
                 {
                     var containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
-                        payloadCapturePolicy, scopeService, executableNode, state,
+                        payloadCapturePolicy, scopeService, executableNode, stagedState,
                         workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, workItem.WorkItemId, _timeProvider.GetUtcNow());
                     if (containerVariableSnapshots.Count > 0)
                     {
@@ -406,20 +386,45 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            if (disposalException is not null)
+                throw new AggregateException("Activity execution cancellation and disposal both failed.", cancellationException, disposalException);
             throw;
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, exception, "ActivityFaulted", valueSnapshots, cancellationToken);
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            var fault = disposalException is null
+                ? exception
+                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+            var subStatus = disposalException is null ? "ActivityFaulted" : "ActivityDisposalFailed";
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
-        finally
+
+        var activationDisposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+        activationLease = null;
+        if (activationDisposalException is not null)
         {
-            if (activationLease is not null)
-                await activationLease.DisposeAsync();
+            await RecordFaultAsync(
+                activityFaultIncidentRecorder,
+                activityExecutionStateStore,
+                checkpointCommitter,
+                workItem,
+                invokePayload,
+                state,
+                activationDisposalException,
+                "ActivityDisposalFailed",
+                valueSnapshots,
+                cancellationToken);
+            return;
         }
+
+        state = stagedState;
 
         async ValueTask<IReadOnlyCollection<RecordedActivityOutput>> ProjectReturnedCompletionAsync(ActivityContract activityContract)
         {
@@ -440,6 +445,45 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     item.Key,
                     item.Value.Presence == ValuePresence.ExplicitNull ? null : item.Value.InlineValue))
                 .ToArray();
+        }
+
+        if (returnedFault is not null)
+        {
+            var faultedState = state with
+            {
+                Fault = new NormalizedActivityFault(
+                    returnedFault.Code,
+                    typeof(ActivityFault).FullName!,
+                    returnedFault.Message,
+                    sanitizedStackTrace: null,
+                    returnedFault.IsRetryable)
+            };
+            await RecordFaultAsync(
+                activityFaultIncidentRecorder,
+                activityExecutionStateStore,
+                checkpointCommitter,
+                workItem,
+                invokePayload,
+                faultedState,
+                new ActivityTransitionFaultException(returnedFault),
+                "ActivityReturnedFault",
+                valueSnapshots,
+                cancellationToken);
+            return;
+        }
+
+        if (returnedCancellationReason is not null)
+        {
+            await ActivityCancellationCheckpointService.CommitAsync(
+                checkpointCommitter,
+                inspectionAccumulator,
+                _timeProvider,
+                workItem,
+                state,
+                returnedCancellationReason,
+                valueSnapshots,
+                cancellationToken: cancellationToken);
+            return;
         }
 
         if (typedSuspendedState is not null)
@@ -817,17 +861,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return metadata;
     }
 
-    private async ValueTask EnqueueCompletionWorkAsync(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        RuntimeSchedulerWorkItem invokeWorkItem,
-        RuntimeInvokeActivityCommandPayload invokePayload,
-        ActivityExecutionState completedState,
-        CancellationToken cancellationToken)
-    {
-        var workItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState);
-        await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
-    }
-
     private async ValueTask CommitCompletedActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
@@ -972,6 +1005,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             Status = ActivityExecutionStatus.Completed,
             SubStatus = skipped ? SkippedSubStatus : null,
             CompletedAt = _timeProvider.GetUtcNow(),
+            PrivateState = null,
             Metadata = metadata
         });
     }

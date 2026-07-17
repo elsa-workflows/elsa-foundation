@@ -43,6 +43,33 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             value,
             ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType)));
 
+    /// <summary>
+    /// Preserves an omitted optional argument as a canonical absent literal. Only nullable CLR targets
+    /// can represent omission; non-nullable value inputs require an authored binding or pinned default.
+    /// </summary>
+    public RuntimeInputBinding CompileOmitted(InputDefinition inputDefinition)
+    {
+        ArgumentNullException.ThrowIfNull(inputDefinition);
+        var inputType = ResolveInputType(inputDefinition);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
+        if (inputType.IsValueType && Nullable.GetUnderlyingType(inputType) is null)
+        {
+            throw new ArgumentException(
+                $"VF-ACT-003: Optional input '{inputDefinition.ReferenceKey}' with non-nullable type alias '{inputDefinition.Type.Alias}' " +
+                "requires an authored binding or pinned default.",
+                nameof(inputDefinition));
+        }
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: targetType,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Absent(targetType, policy),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
     private RuntimeInputBinding Compile(
         string nodeId,
         InputDefinition inputDefinition,

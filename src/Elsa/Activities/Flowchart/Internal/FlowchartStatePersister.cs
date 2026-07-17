@@ -9,8 +9,8 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// Loads and stages the <see cref="FlowchartExecutionState"/> blob and owns the #382 prune-on-save
 /// behavior. Serializes with <see cref="JsonSerializerDefaults.Web"/> and no string-enum converter, so all
 /// state enums persist as ordinals — the frozen §E6 wire surface pinned by the golden fixtures. The persisted
-/// blob is carried under <see cref="FlowchartExecutionEngine.StateMetadataKey"/> as structural private
-/// metadata. The runtime folds that metadata into the same checkpoint as the structural continuation and
+/// blob is carried as one typed, versioned structural private-state document. The runtime folds that state
+/// into the same checkpoint as the structural continuation and
 /// its child schedule intents; this service never commits state independently.
 /// </summary>
 public sealed class FlowchartStatePersister
@@ -33,13 +33,20 @@ public sealed class FlowchartStatePersister
 
     public static FlowchartExecutionState? LoadState(ActivityExecutionState activityExecutionState)
     {
-        if (!activityExecutionState.Metadata.TryGetValue(FlowchartExecutionEngine.StateMetadataKey, out var serialized) || string.IsNullOrWhiteSpace(serialized))
+        if (activityExecutionState.PrivateState is not { } privateState)
             return null;
+
+        if (privateState.StateVersion != FlowchartExecutionEngine.StateSchemaVersion ||
+            !StringComparer.Ordinal.Equals(privateState.Value.Type.Alias, FlowchartExecutionEngine.StateTypeAlias) ||
+            privateState.Value.InlineValue is not { } payload)
+        {
+            throw new FlowchartExecutionException("Flowchart private state does not match the required type and schema version.");
+        }
 
         try
         {
-            return JsonSerializer.Deserialize<FlowchartExecutionState>(serialized, SerializerOptions)
-                   ?? throw new FlowchartExecutionException("Flowchart execution state metadata resolved to null.");
+            return payload.Deserialize<FlowchartExecutionState>(SerializerOptions)
+                   ?? throw new FlowchartExecutionException("Flowchart private state resolved to null.");
         }
         catch (FlowchartExecutionException)
         {
@@ -47,7 +54,7 @@ public sealed class FlowchartStatePersister
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
-            throw new FlowchartExecutionException("Flowchart execution state metadata is invalid.", exception);
+            throw new FlowchartExecutionException("Flowchart private state is invalid.", exception);
         }
     }
 
@@ -131,9 +138,13 @@ public sealed class FlowchartStatePersister
         ArgumentNullException.ThrowIfNull(continuation);
         ArgumentNullException.ThrowIfNull(state);
 
-        return continuation.WithPrivateMetadata(new Dictionary<string, string>
-        {
-            [FlowchartExecutionEngine.StateMetadataKey] = JsonSerializer.Serialize(PruneForPersistence(state), SerializerOptions)
-        });
+        var value = ValueEnvelope.Inline(
+            new Elsa.Primitives.Models.ValueTypeDescriptor(
+                FlowchartExecutionEngine.StateTypeAlias,
+                schemaVersion: FlowchartExecutionEngine.StateSchemaVersion),
+            JsonSerializer.SerializeToElement(PruneForPersistence(state), SerializerOptions),
+            ValueProtectionPolicy.InstanceInline);
+
+        return continuation.WithState(value, FlowchartExecutionEngine.StateSchemaVersion);
     }
 }

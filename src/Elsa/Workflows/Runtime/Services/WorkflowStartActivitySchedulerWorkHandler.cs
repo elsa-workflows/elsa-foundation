@@ -15,32 +15,31 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
-    private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
-    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
+    private readonly RuntimeCheckpointCommitter _checkpointCommitter;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
-    private readonly IRuntimeActivityInputMaterializer? _inputMaterializer;
     private readonly IDurableValueStateStore? _durableValueStateStore;
-    private readonly IServiceScopeFactory? _serviceScopeFactory;
-    private readonly WorkflowIntrinsicExecutor? _intrinsicExecutor;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
 
     public WorkflowStartActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        RuntimeCheckpointCommitter? checkpointCommitter,
-        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
         TimeProvider timeProvider,
-        IRuntimeActivityInputMaterializer? inputMaterializer = null,
+        IServiceScopeFactory serviceScopeFactory,
         IDurableValueStateStore? durableValueStateStore = null,
-        IServiceScopeFactory? serviceScopeFactory = null,
-        WorkflowIntrinsicExecutor? intrinsicExecutor = null,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
+        ArgumentNullException.ThrowIfNull(checkpointCommitter);
+        ArgumentNullException.ThrowIfNull(inspectionAccumulator);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(serviceScopeFactory);
 
         _workflowExecutableStore = workflowExecutableStore;
         _activityExecutionStateStore = activityExecutionStateStore;
@@ -48,10 +47,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
-        _inputMaterializer = inputMaterializer;
         _durableValueStateStore = durableValueStateStore;
         _serviceScopeFactory = serviceScopeFactory;
-        _intrinsicExecutor = intrinsicExecutor;
         _workflowExecutionStateStore = workflowExecutionStateStore;
     }
 
@@ -70,7 +67,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         var commit = await ExecuteWithServicesAsync(workItem, ambientServices: null, cancellationToken);
 
         if (commit is not null)
-            await _checkpointCommitter!.CommitAsync(commit, cancellationToken);
+            await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     /// <summary>Pipeline dispatch (Move 2): run the handler in the Invoke slot and stage its commit for the Checkpoint slot.</summary>
@@ -87,7 +84,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         IServiceProvider? ambientServices,
         CancellationToken cancellationToken)
     {
-        if (ambientServices is not null || _serviceScopeFactory is null)
+        if (ambientServices is not null)
             return await ExecuteAsync(workItem, ambientServices, cancellationToken);
 
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
@@ -96,7 +93,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
     private async ValueTask<RuntimeCheckpointCommit?> ExecuteAsync(
         RuntimeSchedulerWorkItem workItem,
-        IServiceProvider? serviceProvider,
+        IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -127,7 +124,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         if (state.Status == ActivityExecutionStatus.Scheduled && requiresFrameActivation)
         {
             var workflowExecutionStateStore = _workflowExecutionStateStore
-                ?? serviceProvider?.GetService<IWorkflowExecutionStateStore>()
+                ?? serviceProvider.GetService<IWorkflowExecutionStateStore>()
                 ?? throw new InvalidOperationException($"Activity '{state.InvocationId}' requires the workflow variable-frame owner store.");
             state = await new RuntimeContainerScopeService(_activityExecutionStateStore, workflowExecutionStateStore)
                 .ActivateOwnedFramesAsync(executable, executableNode, state, state.IterationFrameRequest, cancellationToken);
@@ -140,7 +137,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             if (state.Status != ActivityExecutionStatus.Scheduled)
                 throw new InvalidOperationException($"Intrinsic execution '{state.InvocationId}' must be Scheduled before execution; current status is '{state.Status}'.");
 
-            var executor = _intrinsicExecutor
+            var executor = serviceProvider.GetService<WorkflowIntrinsicExecutor>()
                 ?? throw new InvalidOperationException($"Executable node '{executableNode.ExecutableNodeId}' requires the workflow intrinsic executor.");
             return await executor.ExecuteAsync(
                 workItem,
@@ -148,7 +145,6 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
                 executable,
                 executableNode,
                 state,
-                serviceProvider,
                 cancellationToken);
         }
 
@@ -183,13 +179,6 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             startedAt);
 
         var runningState = StartActivity(workItem, startPayload, state, executableNode.ActivityContract, inputSnapshot, firstAttempt, startedAt);
-        if (_checkpointCommitter is null || _inspectionAccumulator is null)
-        {
-            await _activityExecutionStateStore.SaveAsync(runningState, cancellationToken);
-            await EnqueueInvokeActivityAsync(workItem, startPayload, cancellationToken);
-            return null;
-        }
-
         return await NewCommitAsync(workItem, startPayload, runningState, cancellationToken);
     }
 
@@ -241,11 +230,11 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
-        IServiceProvider? serviceProvider,
+        IServiceProvider serviceProvider,
         DateTimeOffset materializedAt,
         CancellationToken cancellationToken)
     {
-        var inputMaterializer = _inputMaterializer
+        var inputMaterializer = serviceProvider.GetService<IRuntimeActivityInputMaterializer>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
         var durableValueStateStore = _durableValueStateStore
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
@@ -253,7 +242,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         var runtimeView = await _activityExecutionStateStore.ListAsync(state.Execution.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var workflowExecutionStateStore = _workflowExecutionStateStore
-            ?? serviceProvider?.GetService<IWorkflowExecutionStateStore>()
+            ?? serviceProvider.GetService<IWorkflowExecutionStateStore>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires the canonical workflow variable-frame owner store.");
         var variableEnvelopes = (await new RuntimeContainerScopeService(_activityExecutionStateStore, workflowExecutionStateStore)
                 .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken))
@@ -261,7 +250,6 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
-            serviceProvider: serviceProvider,
             consumerInvocation: state,
             runtimeView: runtimeView,
             executable: executable,
@@ -296,7 +284,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             [RuntimeMetadataKeys.ExecutableArtifactVersion] = startPayload.PinnedExecutable.ArtifactVersion,
             [RuntimeMetadataKeys.ExecutableArtifactHash] = startPayload.PinnedExecutable.ArtifactHash
         });
-        var inspection = await _inspectionAccumulator!.BuildProjectionAsync(runningState, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
+        var inspection = await _inspectionAccumulator.BuildProjectionAsync(runningState, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
         var invokeWorkItem = NewInvokeActivityWorkItem(workItem, startPayload);
 
         return new RuntimeCheckpointCommit(

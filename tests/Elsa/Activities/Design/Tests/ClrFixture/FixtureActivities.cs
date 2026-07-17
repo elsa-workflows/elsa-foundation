@@ -5,6 +5,12 @@ using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Design.Tests.ClrFixture;
 
+public abstract class FixtureActivity : Activity<ActivityUnit>
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
+
 /// <summary>
 /// An activity with no <c>[Version]</c> attribute. The scanner must fall back to the declaring
 /// assembly's version (pinned to <c>2.1.0</c> in the fixture csproj). Carries a required input to
@@ -27,7 +33,7 @@ public sealed record UnannotatedFixtureResult([property: Output] string Result);
 /// record <c>3.0.0</c>, not the assembly's <c>2.1.0</c>.
 /// </summary>
 [Version("3.0.0")]
-public sealed class VersionedFixtureActivity : ActivityBase;
+public sealed class VersionedFixtureActivity : FixtureActivity;
 
 /// <summary>
 /// A base activity carrying a class-level <c>[Version]</c>. A reflection-only scan honours it only if
@@ -35,7 +41,7 @@ public sealed class VersionedFixtureActivity : ActivityBase;
 /// declares no <c>[Version]</c> of its own and must inherit this value.
 /// </summary>
 [Version("4.0.0")]
-public abstract class VersionedBaseActivity : ActivityBase;
+public abstract class VersionedBaseActivity : FixtureActivity;
 
 /// <summary>
 /// An activity with no <c>[Version]</c> of its own; it must inherit <c>4.0.0</c> from
@@ -49,7 +55,7 @@ public sealed class InheritedVersionFixtureActivity : VersionedBaseActivity;
 /// lives only on this base declaration — the scanner must walk the base-property chain to see it
 /// (issue #417 item 3).
 /// </summary>
-public abstract class RequiredInputBaseActivity : ActivityBase
+public abstract class RequiredInputBaseActivity : FixtureActivity
 {
     [Required]
     [ActivityInput(Order = 42, Category = "Advanced", DefaultValue = "inherited-default", DefaultSyntax = "Literal")]
@@ -87,7 +93,7 @@ public sealed class FixturePayload
 /// <c>FullName</c>) for these non-primitive element types, and the runtime registration pass registers those
 /// same aliases so they resolve back to the real CLR type instead of <c>object</c> (FR-004b).
 /// </summary>
-public sealed class ComplexInputFixtureActivity : ActivityBase
+public sealed class ComplexInputFixtureActivity : FixtureActivity
 {
     [ActivityInput(Order = 20)]
     public FixturePayload Payload { get; set; } = null!;
@@ -103,7 +109,7 @@ public sealed class ComplexInputFixtureActivity : ActivityBase
 }
 
 /// <summary>Valid option declarations used by the reflection-only scanner contract tests.</summary>
-public sealed class InputOptionsFixtureActivity : ActivityBase
+public sealed class InputOptionsFixtureActivity : FixtureActivity
 {
     [ActivityInput(UIHint = "dropdown", Options = ["red", "green"])]
     public string Color { get; set; } = null!;
@@ -135,7 +141,7 @@ public sealed class InputOptionsFixtureActivity : ActivityBase
     public string Entity { get; set; } = null!;
 }
 
-public abstract class InheritedInputOptionsBaseActivity : ActivityBase
+public abstract class InheritedInputOptionsBaseActivity : FixtureActivity
 {
     [ActivityInput(UIHint = "dropdown", Options = ["base-a", "base-b"])]
     public virtual string Choice { get; set; } = null!;
@@ -146,7 +152,7 @@ public sealed class InheritedInputOptionsFixtureActivity : InheritedInputOptions
     public override string Choice { get; set; } = null!;
 }
 
-public abstract class ReplacedInputOptionsBaseActivity : ActivityBase
+public abstract class ReplacedInputOptionsBaseActivity : FixtureActivity
 {
     [ActivityInput(UIHint = "dropdown")]
     [ActivityInputOption("Base", 1)]
@@ -167,13 +173,17 @@ public sealed class ReplacedInputOptionsFixtureActivity : ReplacedInputOptionsBa
 [ActivityStructure("fixture.structure", "1.0.0", Mode = "sequence", SupportsScopedVariables = true)]
 [ActivityChildSlot("Fixture.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityChildSlot("Fixture.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class StructuredFixtureActivity : ActivityBase, IActivityResult<StructuredFixtureResult>;
+public sealed class StructuredFixtureActivity : Activity<StructuredFixtureResult>
+{
+    protected override ValueTask<ActivityTransition<StructuredFixtureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new StructuredFixtureResult(string.Empty)));
+}
 
 public sealed record StructuredFixtureResult([property: Output(Key = "summary")] string Summary);
 
 /// <summary>A trigger fixture that declares both its execution shape and stable catalog key.</summary>
 [TriggerActivity]
-public sealed class TriggerFixtureActivity : ActivityBase
+public sealed class TriggerFixtureActivity : FixtureActivity
 {
     public const string ActivityType = "Elsa.Fixture.Trigger";
 }

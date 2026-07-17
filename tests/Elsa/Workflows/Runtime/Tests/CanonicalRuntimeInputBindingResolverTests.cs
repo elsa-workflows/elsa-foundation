@@ -30,7 +30,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         var resolved = _resolver.Resolve(binding, context);
 
-        Assert.Equal("customer-7", resolved.Value!.Value.GetString());
+        Assert.Equal("customer-7", resolved.Envelope!.InlineValue!.Value.GetString());
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         var resolved = _resolver.Resolve(binding, context);
 
-        Assert.Equal("customer-7", resolved.Value!.Value.GetString());
+        Assert.Equal("customer-7", resolved.Envelope!.InlineValue!.Value.GetString());
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         Assert.Equal("results/producer-1", resolved.Envelope!.ExternalReference!.Locator);
         Assert.Equal(policy, resolved.Envelope.Policy);
-        Assert.Null(resolved.Value);
+        Assert.Null(resolved.Envelope.InlineValue);
     }
 
     [Fact]
@@ -183,6 +183,51 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         Assert.Equal(DurableValueLifecycle.Result, snapshot.Values["customer-id"].Policy.Lifecycle);
         Assert.Equal("customer-7", snapshot.Values["customer-id"].InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Materialization_preserves_a_canonical_absent_optional_input_in_the_complete_snapshot()
+    {
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Absent(StringType, ValueProtectionPolicy.InstanceInline));
+
+        var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
+            .MaterializeSnapshotAsync(
+                NewConsumerNode(binding, isRequired: false),
+                "consumer",
+                NewContext(),
+                DateTimeOffset.UnixEpoch);
+
+        var value = Assert.Contains("customer-id", snapshot.Values);
+        Assert.Equal(ValuePresence.Absent, value.Presence);
+        Assert.Equal(StringType, value.Type);
+    }
+
+    [Fact]
+    public async Task Materialization_rejects_a_canonical_absent_required_input()
+    {
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Absent(StringType, ValueProtectionPolicy.InstanceInline));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeActivityInputMaterializer(_resolver)
+                .MaterializeSnapshotAsync(
+                    NewConsumerNode(binding),
+                    "consumer",
+                    NewContext(),
+                    DateTimeOffset.UnixEpoch)
+                .AsTask());
+
+        Assert.Contains("Required input 'customer-id'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("cannot materialize as absent", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -285,7 +330,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             new Dictionary<string, string>());
     }
 
-    private static ExecutableNode NewConsumerNode(RuntimeInputBinding binding)
+    private static ExecutableNode NewConsumerNode(RuntimeInputBinding binding, bool isRequired = true)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "consumer" });
         var contract = new ActivityContract(
@@ -293,7 +338,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             "1.0.0",
             "test",
             descriptor,
-            [new ActivityInputContract("customer-id", "Customer ID", StringType, true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("customer-id", "Customer ID", StringType, isRequired, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/consumer"));

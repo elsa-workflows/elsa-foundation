@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,9 +18,10 @@ public sealed class WorkflowIntrinsicExecutor(
     IDurableValueStateStore durableValueStateStore,
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
     TimeProvider timeProvider,
-    IExternalPayloadStore? externalPayloadStore = null)
+    IExternalPayloadStore? externalPayloadStore = null,
+    IPortableExpressionEvaluator? portableExpressionEvaluator = null)
 {
-    private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(externalPayloadStore);
+    private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore);
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
 
     public async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(
@@ -28,7 +30,6 @@ public sealed class WorkflowIntrinsicExecutor(
         WorkflowExecutable executable,
         ExecutableNode node,
         ActivityExecutionState intrinsicState,
-        IServiceProvider? serviceProvider = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(startWorkItem);
@@ -55,7 +56,6 @@ public sealed class WorkflowIntrinsicExecutor(
                 node,
                 intrinsicState,
                 intrinsicKind,
-                serviceProvider,
                 cancellationToken),
             WorkflowIntrinsicKind.Return or WorkflowIntrinsicKind.Control => await ExecuteResultAsync(
                 startWorkItem,
@@ -64,7 +64,6 @@ public sealed class WorkflowIntrinsicExecutor(
                 node,
                 intrinsicState,
                 intrinsicKind,
-                serviceProvider,
                 cancellationToken),
             WorkflowIntrinsicKind.SetCorrelationId or WorkflowIntrinsicKind.SetInstanceName => await ExecuteIdentityEffectAsync(
                 startWorkItem,
@@ -73,7 +72,6 @@ public sealed class WorkflowIntrinsicExecutor(
                 node,
                 intrinsicState,
                 intrinsicKind,
-                serviceProvider,
                 cancellationToken),
             WorkflowIntrinsicKind.SetOutput => await ExecuteSetOutputAsync(
                 startWorkItem,
@@ -81,7 +79,6 @@ public sealed class WorkflowIntrinsicExecutor(
                 executable,
                 node,
                 intrinsicState,
-                serviceProvider,
                 cancellationToken),
             WorkflowIntrinsicKind.Finish => await ExecuteFinishAsync(
                 startWorkItem,
@@ -101,7 +98,6 @@ public sealed class WorkflowIntrinsicExecutor(
         ExecutableNode node,
         ActivityExecutionState intrinsicState,
         WorkflowIntrinsicKind intrinsicKind,
-        IServiceProvider? serviceProvider,
         CancellationToken cancellationToken)
     {
         var target = node.IntrinsicVariable
@@ -119,7 +115,6 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             executable,
             runtimeView,
-            serviceProvider,
             cancellationToken);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
@@ -158,7 +153,6 @@ public sealed class WorkflowIntrinsicExecutor(
         ExecutableNode node,
         ActivityExecutionState intrinsicState,
         WorkflowIntrinsicKind intrinsicKind,
-        IServiceProvider? serviceProvider,
         CancellationToken cancellationToken)
     {
         var inputKey = intrinsicKind == WorkflowIntrinsicKind.Control
@@ -176,7 +170,6 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             executable,
             runtimeView,
-            serviceProvider,
             cancellationToken);
 
         string outcome;
@@ -225,7 +218,6 @@ public sealed class WorkflowIntrinsicExecutor(
         ExecutableNode node,
         ActivityExecutionState intrinsicState,
         WorkflowIntrinsicKind intrinsicKind,
-        IServiceProvider? serviceProvider,
         CancellationToken cancellationToken)
     {
         var value = await MaterializeRequiredInputAsync(
@@ -234,7 +226,6 @@ public sealed class WorkflowIntrinsicExecutor(
             executable,
             node,
             intrinsicState,
-            serviceProvider,
             cancellationToken);
         var assigned = ReadOptionalString(value, intrinsicKind, node.ExecutableNodeId);
         var occurredAt = timeProvider.GetUtcNow();
@@ -276,7 +267,6 @@ public sealed class WorkflowIntrinsicExecutor(
         WorkflowExecutable executable,
         ExecutableNode node,
         ActivityExecutionState intrinsicState,
-        IServiceProvider? serviceProvider,
         CancellationToken cancellationToken)
     {
         var nameBinding = node.InputBindings[WorkflowIntrinsicInputKeys.Name];
@@ -289,7 +279,6 @@ public sealed class WorkflowIntrinsicExecutor(
             executable,
             node,
             intrinsicState,
-            serviceProvider,
             cancellationToken);
         var durableChange = NewWorkflowOutputChange(
             startWorkItem.WorkflowExecutionId,
@@ -476,7 +465,6 @@ public sealed class WorkflowIntrinsicExecutor(
         WorkflowExecutable executable,
         ExecutableNode node,
         ActivityExecutionState intrinsicState,
-        IServiceProvider? serviceProvider,
         CancellationToken cancellationToken)
     {
         if (!node.InputBindings.TryGetValue(inputKey, out var binding))
@@ -484,7 +472,7 @@ public sealed class WorkflowIntrinsicExecutor(
         var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"{node.IntrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
         var runtimeView = await activityExecutionStateStore.ListAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
-        return await MaterializeValueAsync(binding, workflowState, intrinsicState, executable, runtimeView, serviceProvider, cancellationToken);
+        return await MaterializeValueAsync(binding, workflowState, intrinsicState, executable, runtimeView, cancellationToken);
     }
 
     private static ValueEnvelope UnitResult() => ValueEnvelope.Inline(
@@ -573,7 +561,6 @@ public sealed class WorkflowIntrinsicExecutor(
         ActivityExecutionState intrinsicState,
         WorkflowExecutable executable,
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
-        IServiceProvider? serviceProvider,
         CancellationToken cancellationToken)
     {
         var durableValues = await durableValueStateStore.ListAsync(workflowState.WorkflowExecutionId, cancellationToken);
@@ -583,7 +570,6 @@ public sealed class WorkflowIntrinsicExecutor(
         var context = new RuntimeInputBindingResolutionContext(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
-            serviceProvider,
             consumerInvocation: intrinsicState,
             runtimeView: runtimeView,
             executable: executable,

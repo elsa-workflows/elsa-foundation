@@ -30,7 +30,8 @@ public sealed class FlowchartExecutionEngine(
     FlowchartPolicyApplier policyApplier,
     FlowchartStatePersister persister)
 {
-    public const string StateMetadataKey = "elsa.flowchart.executionState";
+    public const string StateTypeAlias = "Elsa.Flowchart.ExecutionState";
+    public const int StateSchemaVersion = 1;
     public const string ParentActivityExecutionIdMetadataKey = "flowchart.parentActivityExecutionId";
     public const string ExecutionPathIdMetadataKey = "flowchart.executionPathId";
     public const string ExecutionScopeIdMetadataKey = "flowchart.executionScopeId";

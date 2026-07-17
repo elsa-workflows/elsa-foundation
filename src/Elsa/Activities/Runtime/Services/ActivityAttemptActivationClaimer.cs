@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -7,6 +6,8 @@ namespace Elsa.Activities.Runtime.Services;
 
 internal static class ActivityAttemptActivationClaimer
 {
+    internal const int MaxRetainedAttempts = 32;
+    internal const int MaxRetainedTriggerDeliveries = 32;
     public static ValueTask<ActivityAttemptActivationClaim> ClaimInvokeAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
         TimeProvider timeProvider,
@@ -53,29 +54,100 @@ internal static class ActivityAttemptActivationClaimer
             triggerDelivery: null,
             cancellationToken);
 
-    public static ValueTask<ActivityAttemptActivationClaim> ClaimTypedResumeAsync(
-        RuntimeCheckpointCommitter checkpointCommitter,
+    public static ActivityAttemptActivationClaim PrepareTypedResumeClaim(
         TimeProvider timeProvider,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload payload,
         ActivityExecutionState state,
-        ActivityTriggerDelivery triggerDelivery,
-        CancellationToken cancellationToken) =>
-        ClaimAsync(
-            checkpointCommitter,
-            timeProvider,
-            workItem,
-            payload.PinnedExecutable,
-            payload.ExecutableNodeId,
-            payload.ActivityExecutionId,
-            payload.Reason,
-            state,
-            freshAttemptReason: ActivityAttemptReason.Resume,
-            claimedReplacementReason: ActivityAttemptReason.Resume,
-            triggerDeliveryId: triggerDelivery.DeliveryId,
-            requireFreshAttempt: true,
-            triggerDelivery,
-            cancellationToken);
+        ActivityTriggerDelivery triggerDelivery)
+    {
+        if (state.Status != ActivityExecutionStatus.Suspended)
+            throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' is not suspended and cannot claim a trigger delivery.");
+        if (state.Completion is not null)
+            throw new InvalidOperationException($"VF-ACT-007: Completed activity invocation '{state.InvocationId}' cannot create another attempt.");
+
+        var occurredAt = timeProvider.GetUtcNow();
+        var attempts = state.Attempts?.OrderBy(attempt => attempt.Ordinal).ToArray() ?? [];
+        var openAttempt = attempts.LastOrDefault(attempt => attempt.EndedAt is null);
+        if (openAttempt is not null)
+        {
+            var endedAttempt = EndAttempt(openAttempt, Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, occurredAt);
+            attempts = attempts
+                .Where(attempt => !StringComparer.Ordinal.Equals(attempt.AttemptId, endedAttempt.AttemptId))
+                .Append(endedAttempt)
+                .OrderBy(attempt => attempt.Ordinal)
+                .ToArray();
+        }
+
+        var ordinal = NextAttemptOrdinal(state, attempts);
+        var attempt = new ActivityAttempt(
+            $"{state.InvocationId}:attempt:{ordinal}",
+            state.InvocationId,
+            ordinal,
+            ActivityAttemptReason.Resume,
+            occurredAt,
+            triggerDeliveryId: triggerDelivery.DeliveryId);
+        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim] = attempt.AttemptId;
+        metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId] = workItem.WorkItemId;
+        var consumedDelivery = WithDeliveryStatus(triggerDelivery, ActivityTriggerDeliveryStatus.Consumed);
+        var claimedState = CompactAttemptHistory(state with
+        {
+            Status = ActivityExecutionStatus.Running,
+            SubStatus = null,
+            Attempts = attempts.Append(attempt).ToArray(),
+            TriggerDeliveries = AppendTriggerDelivery(state.TriggerDeliveries, consumedDelivery),
+            TriggerRegistrations = [],
+            BookmarkIds = [],
+            Metadata = RuntimeModelMetadata.Snapshot(metadata)
+        });
+        return new ActivityAttemptActivationClaim(claimedState, attempt);
+    }
+
+    public static ActivityAttemptActivationClaim PrepareTypedResumeRedeliveryClaim(
+        TimeProvider timeProvider,
+        RuntimeSchedulerWorkItem workItem,
+        ActivityExecutionState state,
+        ActivityTriggerDelivery consumedDelivery)
+    {
+        if (state.Status != ActivityExecutionStatus.Running || consumedDelivery.Status != ActivityTriggerDeliveryStatus.Consumed)
+            throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' has no consumed running resume claim to redeliver.");
+        if (!state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId, out var claimedWorkItemId) ||
+            !StringComparer.Ordinal.Equals(claimedWorkItemId, workItem.WorkItemId) ||
+            !state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaim, out var claimedAttemptId))
+            throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' is not claimed by resume work item '{workItem.WorkItemId}'.");
+
+        var occurredAt = timeProvider.GetUtcNow();
+        var attempts = state.Attempts?.OrderBy(attempt => attempt.Ordinal).ToArray() ?? [];
+        var abandonedAttempt = attempts.SingleOrDefault(attempt =>
+            attempt.EndedAt is null && StringComparer.Ordinal.Equals(attempt.AttemptId, claimedAttemptId));
+        if (abandonedAttempt is null || !StringComparer.Ordinal.Equals(abandonedAttempt.TriggerDeliveryId, consumedDelivery.DeliveryId))
+            throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' has no open attempt for consumed delivery '{consumedDelivery.DeliveryId}'.");
+
+        var endedAttempt = EndAttempt(abandonedAttempt, Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, occurredAt);
+        attempts = attempts
+            .Where(attempt => !StringComparer.Ordinal.Equals(attempt.AttemptId, endedAttempt.AttemptId))
+            .Append(endedAttempt)
+            .OrderBy(attempt => attempt.Ordinal)
+            .ToArray();
+        var ordinal = NextAttemptOrdinal(state, attempts);
+        var replacementAttempt = new ActivityAttempt(
+            $"{state.InvocationId}:attempt:{ordinal}",
+            state.InvocationId,
+            ordinal,
+            ActivityAttemptReason.Resume,
+            occurredAt,
+            triggerDeliveryId: consumedDelivery.DeliveryId);
+        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim] = replacementAttempt.AttemptId;
+        metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId] = workItem.WorkItemId;
+        var claimedState = CompactAttemptHistory(state with
+        {
+            Attempts = attempts.Append(replacementAttempt).ToArray(),
+            Metadata = RuntimeModelMetadata.Snapshot(metadata)
+        });
+        return new ActivityAttemptActivationClaim(claimedState, replacementAttempt);
+    }
 
     public static ActivityExecutionState EndOpenAttempt(
         ActivityExecutionState state,
@@ -88,48 +160,117 @@ internal static class ActivityAttemptActivationClaimer
             return state;
 
         var endedAttempt = EndAttempt(openAttempt, transitionKind, endedAt);
-        return state with
+        return CompactAttemptHistory(state with
         {
             Attempts = attempts
                 .Where(attempt => !StringComparer.Ordinal.Equals(attempt.AttemptId, endedAttempt.AttemptId))
                 .Append(endedAttempt)
                 .OrderBy(attempt => attempt.Ordinal)
                 .ToArray()
-        };
+        });
     }
 
-    public static ActivityExecutionState MarkActivationCompleted(ActivityExecutionState state, string workItemId)
+    public static ActivityExecutionState MarkInitialActivationCompleted(ActivityExecutionState state, string workItemId)
     {
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        var completedWorkItemIds = ReadCompletedWorkItemIds(metadata);
-        if (!completedWorkItemIds.Contains(workItemId, StringComparer.Ordinal))
-            completedWorkItemIds = completedWorkItemIds.Append(workItemId).ToArray();
-
-        metadata[RuntimeMetadataKeys.ActivityActivationCompletedWorkItemIds] = JsonSerializer.Serialize(completedWorkItemIds);
+        metadata[RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId] = workItemId;
         return state with { Metadata = RuntimeModelMetadata.Snapshot(metadata) };
     }
 
-    public static bool WasActivationCompleted(ActivityExecutionState state, string workItemId) =>
-        ReadCompletedWorkItemIds(state.Metadata).Contains(workItemId, StringComparer.Ordinal);
+    public static bool WasInitialActivationCompleted(ActivityExecutionState state, string workItemId) =>
+        state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId, out var completedWorkItemId) &&
+        StringComparer.Ordinal.Equals(completedWorkItemId, workItemId);
 
-    private static IReadOnlyCollection<string> ReadCompletedWorkItemIds(IReadOnlyDictionary<string, string> metadata)
+    public static ActivityExecutionState MarkParentCompletionProcessed(ActivityExecutionState completedChildState, string workItemId)
     {
-        if (!metadata.TryGetValue(RuntimeMetadataKeys.ActivityActivationCompletedWorkItemIds, out var serialized))
-            return [];
+        var metadata = completedChildState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = workItemId;
+        return completedChildState with { Metadata = RuntimeModelMetadata.Snapshot(metadata) };
+    }
 
-        try
-        {
-            var workItemIds = JsonSerializer.Deserialize<string[]>(serialized)
-                              ?? throw new InvalidOperationException("Activity activation completion history resolved to null.");
-            if (workItemIds.Any(string.IsNullOrWhiteSpace))
-                throw new InvalidOperationException("Activity activation completion history contains a blank scheduler work-item ID.");
+    public static bool WasParentCompletionProcessed(ActivityExecutionState completedChildState) =>
+        completedChildState.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var workItemId) &&
+        !string.IsNullOrWhiteSpace(workItemId);
 
-            return workItemIds.Distinct(StringComparer.Ordinal).ToArray();
-        }
-        catch (JsonException exception)
+    internal static ActivityExecutionState CompactAttemptHistory(ActivityExecutionState state)
+    {
+        var attempts = state.Attempts?.OrderBy(attempt => attempt.Ordinal).ToArray() ?? [];
+        if (attempts.Length == 0)
+            return state;
+
+        var highWatermark = attempts.Max(attempt => attempt.Ordinal);
+        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark, out var serializedHighWatermark) &&
+            int.TryParse(serializedHighWatermark, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var persistedHighWatermark))
+            highWatermark = Math.Max(highWatermark, persistedHighWatermark);
+
+        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark] = highWatermark.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // Keep the first attempt as invocation-origin evidence and the newest attempts for current diagnostics.
+        // The high-watermark preserves monotonic IDs without repeatedly sorting/serializing the full invocation history.
+        var retained = attempts.Length <= MaxRetainedAttempts
+            ? attempts
+            : attempts.Take(1).Concat(attempts.TakeLast(MaxRetainedAttempts - 1)).ToArray();
+        return CompactTriggerDeliveryHistory(state with
         {
-            throw new InvalidOperationException("Activity activation completion history is invalid.", exception);
+            Attempts = retained,
+            Metadata = RuntimeModelMetadata.Snapshot(metadata)
+        });
+    }
+
+    /// <summary>
+    /// Bounds durable trigger-delivery diagnostics while preserving every delivery still needed by an open
+    /// activation claim or live registration. Historical records retain routing/deduplication identity but drop
+    /// their payload once no attempt can consume it.
+    /// </summary>
+    internal static ActivityExecutionState CompactTriggerDeliveryHistory(ActivityExecutionState state)
+    {
+        var deliveries = state.TriggerDeliveries?
+            .OrderBy(delivery => delivery.ReceivedAt)
+            .ThenBy(delivery => delivery.DeliveryId, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        if (deliveries.Length == 0)
+            return state;
+
+        var liveRegistrationIds = (state.TriggerRegistrations ?? [])
+            .Select(registration => registration.RegistrationId)
+            .ToHashSet(StringComparer.Ordinal);
+        var openAttemptDeliveryIds = (state.Attempts ?? [])
+            .Where(attempt => attempt.EndedAt is null && attempt.TriggerDeliveryId is not null)
+            .Select(attempt => attempt.TriggerDeliveryId!)
+            .ToHashSet(StringComparer.Ordinal);
+        var diagnosticDeliveryIds = (state.Attempts ?? [])
+            .Where(attempt => attempt.TriggerDeliveryId is not null)
+            .Select(attempt => attempt.TriggerDeliveryId!)
+            .ToHashSet(StringComparer.Ordinal);
+        var required = deliveries
+            .Where(delivery =>
+                liveRegistrationIds.Contains(delivery.RegistrationId) ||
+                openAttemptDeliveryIds.Contains(delivery.DeliveryId) ||
+                diagnosticDeliveryIds.Contains(delivery.DeliveryId))
+            .ToArray();
+        if (required.Length > MaxRetainedTriggerDeliveries)
+        {
+            throw new InvalidOperationException(
+                $"VF-ACT-008: Activity invocation '{state.InvocationId}' requires {required.Length} trigger-delivery records, exceeding the limit of {MaxRetainedTriggerDeliveries}.");
         }
+
+        var retainedIds = required
+            .Select(delivery => delivery.DeliveryId)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var historical in deliveries
+                     .Where(delivery => !retainedIds.Contains(delivery.DeliveryId))
+                     .TakeLast(MaxRetainedTriggerDeliveries - required.Length))
+            retainedIds.Add(historical.DeliveryId);
+
+        var retained = deliveries
+            .Where(delivery => retainedIds.Contains(delivery.DeliveryId))
+            .Select(delivery =>
+                liveRegistrationIds.Contains(delivery.RegistrationId) || openAttemptDeliveryIds.Contains(delivery.DeliveryId)
+                    ? delivery
+                    : WithoutPayload(delivery))
+            .ToArray();
+        return state with { TriggerDeliveries = retained };
     }
 
     private static async ValueTask<ActivityAttemptActivationClaim> ClaimAsync(
@@ -176,7 +317,7 @@ internal static class ActivityAttemptActivationClaimer
         {
             var reason = openAttemptWasClaimed ? claimedReplacementReason : freshAttemptReason;
             var deliveryId = reason == ActivityAttemptReason.Resume ? triggerDeliveryId : null;
-            var ordinal = attempts.Length == 0 ? 1 : attempts.Max(attempt => attempt.Ordinal) + 1;
+            var ordinal = NextAttemptOrdinal(state, attempts);
             openAttempt = new ActivityAttempt(
                 $"{state.InvocationId}:attempt:{ordinal}",
                 state.InvocationId,
@@ -190,12 +331,12 @@ internal static class ActivityAttemptActivationClaimer
         var activityMetadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         activityMetadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim] = openAttempt.AttemptId;
         activityMetadata[RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId] = workItem.WorkItemId;
-        var claimedState = state with
+        var claimedState = CompactAttemptHistory(state with
         {
             Attempts = attempts,
             TriggerDeliveries = AppendTriggerDelivery(state.TriggerDeliveries, triggerDelivery),
             Metadata = RuntimeModelMetadata.Snapshot(activityMetadata)
-        };
+        });
         var checkpointMetadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
             [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
@@ -256,6 +397,16 @@ internal static class ActivityAttemptActivationClaimer
             attempt.TriggerDeliveryId,
             transitionKind);
 
+    private static int NextAttemptOrdinal(ActivityExecutionState state, IReadOnlyCollection<ActivityAttempt> attempts)
+    {
+        var highWatermark = attempts.Count == 0 ? 0 : attempts.Max(attempt => attempt.Ordinal);
+        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark, out var serializedHighWatermark) &&
+            int.TryParse(serializedHighWatermark, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var persistedHighWatermark))
+            highWatermark = Math.Max(highWatermark, persistedHighWatermark);
+
+        return checked(highWatermark + 1);
+    }
+
     private static IReadOnlyCollection<ActivityTriggerDelivery>? AppendTriggerDelivery(
         IReadOnlyCollection<ActivityTriggerDelivery>? deliveries,
         ActivityTriggerDelivery? delivery)
@@ -268,6 +419,30 @@ internal static class ActivityAttemptActivationClaimer
             ? existing
             : existing.Append(delivery).ToArray();
     }
+
+    private static ActivityTriggerDelivery WithDeliveryStatus(
+        ActivityTriggerDelivery delivery,
+        ActivityTriggerDeliveryStatus status) =>
+        new(
+            delivery.DeliveryId,
+            delivery.RegistrationId,
+            delivery.PayloadType,
+            delivery.Payload,
+            delivery.ProviderId,
+            delivery.ReceivedAt,
+            delivery.DeduplicationKey,
+            status);
+
+    private static ActivityTriggerDelivery WithoutPayload(ActivityTriggerDelivery delivery) =>
+        new(
+            delivery.DeliveryId,
+            delivery.RegistrationId,
+            delivery.PayloadType,
+            ValueEnvelope.Absent(delivery.PayloadType, delivery.Payload.Policy),
+            delivery.ProviderId,
+            delivery.ReceivedAt,
+            delivery.DeduplicationKey,
+            ActivityTriggerDeliveryStatus.Consumed);
 }
 
 internal sealed record ActivityAttemptActivationClaim(ActivityExecutionState State, ActivityAttempt Attempt);

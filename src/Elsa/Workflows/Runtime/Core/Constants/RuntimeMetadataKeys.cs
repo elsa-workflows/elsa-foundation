@@ -16,10 +16,17 @@ public static class RuntimeMetadataKeys
     /// <summary>Scheduler work item that owns the active attempt claim, used to distinguish redelivery from a duplicate command.</summary>
     public const string ActivityAttemptActivationClaimWorkItemId = "runtime.activityAttemptActivationClaimWorkItemId";
     /// <summary>
-    /// JSON array of scheduler work-item IDs whose claimed structural activation completed a durable continuation.
-    /// The history is append-only so delayed at-least-once replays remain recognizable after newer callbacks finish.
+    /// Scheduler work item whose initial activity activation durably completed. An invocation has exactly one
+    /// initial activation, so this marker remains constant-size for the invocation lifetime.
     /// </summary>
-    public const string ActivityActivationCompletedWorkItemIds = "runtime.activityActivationCompletedWorkItemIds";
+    public const string ActivityActivationCompletedWorkItemId = "runtime.activityActivationCompletedWorkItemId";
+    /// <summary>
+    /// Scheduler work item that durably processed a completed child notification. Stored on the completed child,
+    /// which owns exactly one parent-completion notification, instead of in an append-only parent history.
+    /// </summary>
+    public const string ParentCompletionProcessedWorkItemId = "runtime.parentCompletionProcessedWorkItemId";
+    /// <summary>Highest activity-attempt ordinal allocated before bounded diagnostic-history compaction.</summary>
+    public const string ActivityAttemptOrdinalHighWatermark = "runtime.activityAttemptOrdinalHighWatermark";
     public const string BookmarkId = "runtime.bookmarkId";
     public const string CheckpointReason = "runtime.checkpointReason";
     public const string CancellationReason = "runtime.cancellationReason";

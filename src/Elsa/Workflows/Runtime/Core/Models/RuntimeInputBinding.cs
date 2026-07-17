@@ -198,12 +198,8 @@ public sealed class RuntimeExpressionBinding
 public sealed record RuntimeResolvedInput(
     string InputName,
     RuntimeInputBindingSource Source,
-    JsonElement? Value,
     RuntimeExpressionBinding? Expression)
 {
-    /// <summary>
-    /// Canonical materialized source including its effective protection policy and payload location.
-    /// Legacy bindings may expose only <see cref="Value"/> until their compatibility adapter is removed.
-    /// </summary>
+    /// <summary>Canonical materialized source including its effective protection policy and payload location.</summary>
     public ValueEnvelope? Envelope { get; init; }
 }

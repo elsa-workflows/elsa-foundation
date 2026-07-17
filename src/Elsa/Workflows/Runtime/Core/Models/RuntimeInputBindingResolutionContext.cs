@@ -7,7 +7,6 @@ public sealed class RuntimeInputBindingResolutionContext
     public RuntimeInputBindingResolutionContext(
         string workflowExecutionId,
         string activityExecutionId,
-        IServiceProvider? serviceProvider = null,
         ActivityExecutionState? consumerInvocation = null,
         IReadOnlyCollection<ActivityExecutionState>? runtimeView = null,
         WorkflowExecutable? executable = null,
@@ -19,7 +18,6 @@ public sealed class RuntimeInputBindingResolutionContext
 
         WorkflowExecutionId = workflowExecutionId;
         ActivityExecutionId = activityExecutionId;
-        ServiceProvider = serviceProvider;
         ConsumerInvocation = consumerInvocation;
         RuntimeView = runtimeView?.ToArray() ?? [];
         Executable = executable;
@@ -29,13 +27,6 @@ public sealed class RuntimeInputBindingResolutionContext
 
     public string WorkflowExecutionId { get; }
     public string ActivityExecutionId { get; }
-
-    /// <summary>
-    /// The request-scoped service provider used to evaluate <see cref="RuntimeInputBindingSource.Expression"/>
-    /// bindings (e.g. JavaScript/Liquid). Null when only value-carrying bindings are expected, such as the
-    /// literal-only resume path.
-    /// </summary>
-    public IServiceProvider? ServiceProvider { get; }
 
     public ActivityExecutionState? ConsumerInvocation { get; }
     public IReadOnlyCollection<ActivityExecutionState> RuntimeView { get; }

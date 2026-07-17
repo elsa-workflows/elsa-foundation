@@ -16,11 +16,11 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
 
         return binding.Source switch
         {
-            RuntimeInputBindingSource.Literal => new RuntimeResolvedInput(binding.InputName, binding.Source, binding.LiteralValue, null)
+            RuntimeInputBindingSource.Literal => new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = binding.Literal
             },
-            RuntimeInputBindingSource.Expression => new RuntimeResolvedInput(binding.InputName, binding.Source, null, binding.Expression),
+            RuntimeInputBindingSource.Expression => new RuntimeResolvedInput(binding.InputName, binding.Source, binding.Expression),
             RuntimeInputBindingSource.WorkflowRequest => ResolveWorkflowRequest(binding, context),
             RuntimeInputBindingSource.VariableRead => ResolveVariable(binding, context),
             RuntimeInputBindingSource.ActivityResult => ResolveActivityResult(binding, context),
@@ -42,7 +42,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var address = new RuntimeVariableValueAddress(reference.DeclaringScopeId, reference.VariableKey);
         if (context.VariableEnvelopes.TryGetValue(address, out var envelope))
         {
-            return new RuntimeResolvedInput(binding.InputName, binding.Source, envelope.InlineValue, null)
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = Retype(envelope, binding.TargetType)
             };
@@ -60,7 +60,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         if (resolution is null)
         {
             var unavailable = ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy);
-            return new RuntimeResolvedInput(binding.InputName, binding.Source, unavailable.InlineValue, null)
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = unavailable
             };
@@ -69,7 +69,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var result = resolution.Completion.Result;
         if (StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result"))
         {
-            return new RuntimeResolvedInput(binding.InputName, binding.Source, result.InlineValue, null)
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = Retype(result, binding.TargetType)
             };
@@ -87,7 +87,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         if (result.Presence == ValuePresence.ExplicitNull)
         {
             var projectedNull = ValueEnvelope.Null(binding.TargetType, projectedPolicy);
-            return new RuntimeResolvedInput(binding.InputName, binding.Source, null, null)
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = projectedNull
             };
@@ -95,7 +95,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         if (!result.InlineValue.HasValue && result.ExternalReference is not null)
         {
             var externalProjectionSource = ValueEnvelope.External(binding.TargetType, result.ExternalReference, projectedPolicy);
-            return new RuntimeResolvedInput(binding.InputName, binding.Source, null, null)
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = externalProjectionSource
             };
@@ -113,7 +113,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var projectedEnvelope = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? ValueEnvelope.Null(binding.TargetType, projectedPolicy)
             : ValueEnvelope.Inline(binding.TargetType, value, projectedPolicy);
-        return new RuntimeResolvedInput(binding.InputName, binding.Source, projectedEnvelope.InlineValue, null)
+        return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
         {
             Envelope = projectedEnvelope
         };
@@ -144,7 +144,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         if (string.IsNullOrWhiteSpace(reference.Path))
         {
             var wholeEnvelope = Retype(source, binding.TargetType);
-            return new RuntimeResolvedInput(binding.InputName, binding.Source, wholeEnvelope.InlineValue, null)
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = wholeEnvelope
             };
@@ -153,7 +153,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         if (!source.InlineValue.HasValue && source.ExternalReference is not null)
         {
             var externalProjectionSource = ValueEnvelope.External(binding.TargetType, source.ExternalReference, source.Policy);
-            return new RuntimeResolvedInput(binding.InputName, binding.Source, null, null)
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = externalProjectionSource
             };
@@ -173,7 +173,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var envelope = json.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? ValueEnvelope.Null(binding.TargetType, source.Policy)
             : ValueEnvelope.Inline(binding.TargetType, json, source.Policy);
-        return new RuntimeResolvedInput(binding.InputName, binding.Source, envelope.InlineValue, null)
+        return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
         {
             Envelope = envelope
         };

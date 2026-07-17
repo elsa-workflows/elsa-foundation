@@ -147,12 +147,82 @@ public sealed class ExplicitExpressionParametersTests
         Assert.Equal("undefined:undefined:undefined:undefined:undefined:undefined:undefined", result.GetString());
     }
 
-    private static ServiceProvider BuildProvider()
+    [Fact]
+    public async Task Rejects_arrays_larger_than_the_configured_sandbox_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxArrayLength = 8 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => evaluator
+            .EvaluateAsync(Request("new Array(9)", new Dictionary<string, JsonElement>()))
+            .AsTask());
+
+        Assert.Contains("array", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Rejects_expression_results_larger_than_the_configured_json_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxResultBytes = 32 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator
+            .EvaluateAsync(Request("'x'.repeat(100)", new Dictionary<string, JsonElement>()))
+            .AsTask());
+
+        Assert.Contains("32 bytes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rejects_expression_results_deeper_than_the_configured_json_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxResultDepth = 3 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator
+            .EvaluateAsync(Request("({ a: { b: { c: 1 } } })", new Dictionary<string, JsonElement>()))
+            .AsTask());
+
+        Assert.Contains("depth", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Rejects_expression_results_with_more_than_the_configured_json_node_limit()
+    {
+        await using var provider = BuildProvider(new JintFeature { MaxResultNodes = 4 });
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator
+            .EvaluateAsync(Request("[1, 2, 3, 4]", new Dictionary<string, JsonElement>()))
+            .AsTask());
+
+        Assert.Contains("4 nodes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Result_materialization_uses_the_captured_intrinsic_serializer()
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var result = await evaluator.EvaluateAsync(Request(
+            "(() => { JSON.stringify = () => '\"tampered\"'; return { answer: 42 }; })()",
+            new Dictionary<string, JsonElement>()));
+
+        Assert.Equal(42, result.GetProperty("answer").GetInt32());
+    }
+
+    private static ServiceProvider BuildProvider(JintFeature? jintFeature = null)
     {
         var services = new ServiceCollection();
         new ExpressionsFeature().ConfigureServices(services);
         new JavaScriptFeature().ConfigureServices(services);
-        new JintFeature().ConfigureServices(services);
+        (jintFeature ?? new JintFeature()).ConfigureServices(services);
         return services.BuildServiceProvider();
     }
 

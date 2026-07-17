@@ -42,7 +42,7 @@ public sealed class RunJavaScriptContractTests
             invocationId: "invocation-1",
             executableNodeId: "script-node");
 
-        var transition = await ((IActivity)activity).ExecuteAsync(context);
+        var transition = await ((IActivity)activity).ExecuteAsync(context.ToActivityExecutionContext());
 
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(transition);
         Assert.Equal(42, completion.Result.Value!.Value.GetProperty("total").GetInt32());

@@ -24,4 +24,19 @@ public sealed class FeatureOptions
     /// recursion constraint. Default 300.
     /// </summary>
     public int? MaxRecursionDepth { get; set; } = 300;
+
+    /// <summary>Maximum managed memory, in bytes, that Jint may allocate during one evaluation.</summary>
+    public long? MaxMemoryBytes { get; set; } = 64 * 1024 * 1024;
+
+    /// <summary>Maximum length of a JavaScript array, including sparse arrays.</summary>
+    public uint? MaxArrayLength { get; set; } = 100_000;
+
+    /// <summary>Maximum UTF-8 size of a materialized JSON result.</summary>
+    public int MaxResultBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>Maximum nesting depth of a materialized JSON result.</summary>
+    public int MaxResultDepth { get; set; } = 64;
+
+    /// <summary>Maximum number of JSON values in a materialized result.</summary>
+    public int MaxResultNodes { get; set; } = 100_000;
 }

@@ -134,13 +134,12 @@ public sealed class HttpEndpointExecutionTests
     }
 
     [Theory]
-    [InlineData("\"not-a-request-model\"")] // JSON string — not an object
     [InlineData("""{"foo":1}""")] // foreign JSON object — deserializes but has no Path/Method
     [InlineData("""{"Path":"x"}""")] // half-shaped object — Method missing
-    public async Task FallsBackToAuthoredRoute_WhenStimulusInputIsForeignOrMalformed(string foreignPayload)
+    public async Task FallsBackToAuthoredRoute_WhenTargetedPayloadDeserializesWithoutRequestIdentity(string foreignPayload)
     {
-        // A foreign stimulus payload (another trigger module started this artifact) must never surface as a
-        // half-populated request model — identifying members (Path, Method) are validated after deserialize.
+        // The wire model is forward-compatible and therefore permits missing members during deserialization.
+        // HttpEndpoint applies its own Path/Method identity validation before accepting that model.
         await using var harness = NewHarness();
         using var document = JsonDocument.Parse(foreignPayload);
 
@@ -151,6 +150,22 @@ public sealed class HttpEndpointExecutionTests
         var result = await ResultAsync(harness);
         Assert.Equal("orders/webhook", RequestProperty(result, nameof(HttpRequestModel.Path)).GetString());
         Assert.Equal("*", RequestProperty(result, nameof(HttpRequestModel.Method)).GetString());
+    }
+
+    [Fact]
+    public async Task TargetedMalformedStimulus_FaultsInsteadOfFallingBackToDirectInvocation()
+    {
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(
+            NewEndpointExecutable("orders/webhook", canStartWorkflow: true),
+            JsonSerializer.SerializeToElement("not-a-request-model"),
+            triggerNodeId: NodeId);
+
+        var endpoint = run.State(NodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, endpoint.Status);
+        Assert.NotEmpty(endpoint.IncidentIds);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
     }
 
     [Fact]

@@ -70,7 +70,7 @@ internal static class StatefulActivitySuspensionProjector
             endedAttempt.AttemptId,
             occurredAt);
 
-        return state with
+        return ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(state with
         {
             Status = ActivityExecutionStatus.Suspended,
             SubStatus = SuspendedSubStatus,
@@ -80,6 +80,6 @@ internal static class StatefulActivitySuspensionProjector
             Completion = null,
             Fault = null,
             TriggerRegistrations = registrations
-        };
+        });
     }
 }

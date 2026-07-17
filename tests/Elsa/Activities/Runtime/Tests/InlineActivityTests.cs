@@ -43,7 +43,7 @@ public sealed class InlineActivityTests : IDisposable
 
     private async Task<IActivityCompletionTransition<object?>> ExecuteAsync(Inline inline)
     {
-        var transition = await ((IActivity)inline).ExecuteAsync(NewContext(inline));
+        var transition = await ((IActivity)inline).ExecuteAsync(NewContext(inline).ToActivityExecutionContext());
         return Assert.IsAssignableFrom<IActivityCompletionTransition<object?>>(transition);
     }
 

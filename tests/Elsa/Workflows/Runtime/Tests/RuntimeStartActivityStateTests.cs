@@ -6,11 +6,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class RuntimeStartActivityStateTests
+public sealed class RuntimeStartActivityStateTests : IDisposable
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
@@ -19,6 +20,9 @@ public sealed class RuntimeStartActivityStateTests
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
+    private readonly ServiceProvider _serviceProvider = new ServiceCollection()
+        .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()))
+        .BuildServiceProvider();
 
     [Fact]
     public async Task HandleAsync_TransitionsScheduledActivityExecutionStateToRunning()
@@ -39,12 +43,7 @@ public sealed class RuntimeStartActivityStateTests
         Assert.Equal("node-start", state.Execution.ExecutableNodeId);
         Assert.Equal(RuntimeStartActivityCommandPayload.ScheduledActivityReason, state.Metadata["runtime.startReason"]);
         Assert.Equal("start-work", state.Metadata["runtime.startSchedulerWorkItemId"]);
-        var invokeWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
-        var invokePayload = invokeWork.Payload!.Value.Deserialize<RuntimeInvokeActivityCommandPayload>()!;
-        Assert.Equal("actexec-1", invokePayload.ActivityExecutionId);
-        Assert.Equal("node-start", invokePayload.ExecutableNodeId);
-        Assert.Equal(RuntimeInvokeActivityCommandPayload.StartedActivityReason, invokePayload.Reason);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -229,10 +228,12 @@ public sealed class RuntimeStartActivityStateTests
             _executableStore,
             _activityStateStore,
             _schedulerWorkQueue,
-            checkpointCommitter: null,
-            inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(_now),
-            inputMaterializer: new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()),
+            new RuntimeCheckpointCommitter(
+                new ImmediateRuntimeCheckpointPersistencePolicy(),
+                new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore)),
+            new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
+            new FixedTimeProvider(_now),
+            _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             durableValueStateStore: _durableValueStateStore,
             workflowExecutionStateStore: _workflowStateStore);
 
@@ -246,9 +247,11 @@ public sealed class RuntimeStartActivityStateTests
                 checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now),
-            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()),
+            _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             _durableValueStateStore,
             workflowExecutionStateStore: _workflowStateStore);
+
+    public void Dispose() => _serviceProvider.Dispose();
 
     private ValueTask<WorkflowExecutionState> SaveWorkflowStateAsync(WorkflowExecutableIdentity identity)
     {

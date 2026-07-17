@@ -33,6 +33,6 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         if (result.IsUndefined())
             throw new InvalidOperationException("A portable JavaScript expression cannot return undefined.");
 
-        return ValueTask.FromResult(JsonSerializer.SerializeToElement(result.ToObject()));
+        return ValueTask.FromResult(JintResultMaterializer.Materialize(engine, result, featureOptions.Value));
     }
 }

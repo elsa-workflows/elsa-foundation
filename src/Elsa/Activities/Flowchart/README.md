@@ -6,6 +6,7 @@ The Flowchart activity is a scoped composite activity. `FlowchartExecutionEngine
 
 - A Flowchart run starts with a root execution scope and root execution path.
 - Scheduled child activities receive generic `flowchart.executionPathId` and `flowchart.executionScopeId` metadata.
+- The flowchart engine snapshot is one typed, versioned activity private-state envelope (`Elsa.Flowchart.ExecutionState`, schema version 1); structural activities cannot patch arbitrary runtime metadata.
 - Multi-inbound nodes use an implicit activation-aware join by default: the target waits only for inbound branches that are still active and can still arrive.
 - Loopbacks create loop-iteration scopes so arrivals from one iteration cannot satisfy joins in another iteration.
 - Branch faults are fault-aware (#308): a Flowchart join requires every inbound branch, so a faulted inbound branch can never let the join fire. Rather than hang, the Flowchart's runtime structural fault callback returns a fault decision for the composite (surfacing a composite incident), mirroring the `Parallel` fork/join composite; the faulted leaf keeps its own blocking incident.

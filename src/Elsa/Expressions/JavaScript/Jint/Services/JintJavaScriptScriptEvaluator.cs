@@ -24,6 +24,6 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
         if (result.IsUndefined())
             return ValueTask.FromResult<JsonElement?>(null);
 
-        return ValueTask.FromResult<JsonElement?>(JsonSerializer.SerializeToElement(result.ToObject()));
+        return ValueTask.FromResult<JsonElement?>(JintResultMaterializer.Materialize(engine, result, featureOptions.Value));
     }
 }

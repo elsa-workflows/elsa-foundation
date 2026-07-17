@@ -15,8 +15,29 @@ public sealed class TypedActivityAuthoringContractTests
 
         Assert.Equal(nameof(IActivity.ExecuteAsync), method.Name);
         Assert.Equal(typeof(ValueTask<ActivityTransition>), method.ReturnType);
-        Assert.Equal([typeof(IActivityExecutionContext)], method.GetParameters().Select(x => x.ParameterType));
+        Assert.Equal([typeof(ActivityExecutionContext)], method.GetParameters().Select(x => x.ParameterType));
         Assert.Empty(typeof(IActivity).GetProperties());
+    }
+
+    [Fact]
+    public void Activity_contract_has_no_legacy_no_op_authoring_base()
+    {
+        var assembly = typeof(IActivity).Assembly;
+
+        Assert.Null(assembly.GetType("Elsa.Activities.Runtime.Core.Abstractions.ActivityBase"));
+        Assert.Null(assembly.GetType("Elsa.Activities.Runtime.Core.Abstractions.CodeActivity"));
+    }
+
+    [Fact]
+    public async Task Structural_activity_rejects_the_ordinary_activity_path()
+    {
+        var activity = new TestStructuralActivity();
+        var context = new ActivityExecutionContext("workflow-1", "invocation-1", "attempt-1", "node-1", default);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await ((IActivity)activity).ExecuteAsync(context));
+
+        Assert.Contains("runtime structural protocol", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -25,11 +46,12 @@ public sealed class TypedActivityAuthoringContractTests
         await using var services = new ServiceCollection().BuildServiceProvider();
         using var cancellation = new CancellationTokenSource();
         var activity = new GreetingActivity { Recipient = "Ada" };
-        var runtimeContext = new SimpleActivityExecutionContext(
-            activity,
-            cancellation.Token,
+        var runtimeContext = new ActivityExecutionContext(
+            workflowExecutionId: "workflow-1",
             invocationId: "invocation-1",
-            executableNodeId: "node-1");
+            attemptId: "attempt-1",
+            executableNodeId: "node-1",
+            cancellation.Token);
 
         var transition = await ((IActivity)activity).ExecuteAsync(runtimeContext);
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<Greeting>>(transition);
@@ -54,4 +76,6 @@ public sealed class TypedActivityAuthoringContractTests
     }
 
     private sealed record Greeting(string Message);
+
+    private sealed class TestStructuralActivity : Elsa.Activities.Runtime.Core.Abstractions.StructuralActivity;
 }

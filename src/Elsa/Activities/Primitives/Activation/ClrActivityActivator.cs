@@ -43,13 +43,36 @@ public sealed class ClrActivityActivator(
             hydrator.Hydrate(activity, request.Contract, activationInputs);
             return new ActivityActivationLease(activity, scope);
         }
-        catch
+        catch (Exception activationException)
         {
-            if (activity is IAsyncDisposable asyncDisposable)
-                await asyncDisposable.DisposeAsync();
-            else if (activity is IDisposable disposable)
-                disposable.Dispose();
-            await scope.DisposeAsync();
+            Exception? disposalException;
+            if (activity is not null)
+            {
+                try
+                {
+                    await new ActivityActivationLease(activity, scope).DisposeAsync();
+                    disposalException = null;
+                }
+                catch (Exception exception)
+                {
+                    disposalException = exception;
+                }
+            }
+            else
+            {
+                try
+                {
+                    await scope.DisposeAsync();
+                    disposalException = null;
+                }
+                catch (Exception exception)
+                {
+                    disposalException = exception;
+                }
+            }
+
+            if (disposalException is not null)
+                throw new AggregateException("Activity activation and activation cleanup both failed.", activationException, disposalException);
             throw;
         }
     }

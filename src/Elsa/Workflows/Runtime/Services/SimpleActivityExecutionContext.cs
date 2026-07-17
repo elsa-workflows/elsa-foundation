@@ -26,7 +26,7 @@ public sealed class SimpleActivityExecutionContext(
     string? triggerNodeId = null,
     string? invocationId = null,
     string? executableNodeId = null)
-    : IRuntimeActivityExecutionContext, IActivityInvocationIdentity
+    : IRuntimeActivityExecutionContext
 {
     // The single construction path for a runtime activity context.
     public static SimpleActivityExecutionContext ForExecution(
@@ -92,6 +92,17 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
         _childActivityScheduleRequests.ToArray();
+
+    /// <summary>Projects the engine context to the deliberately smaller ordinary activity context.</summary>
+    public ActivityExecutionContext ToActivityExecutionContext() =>
+        new(
+            WorkflowExecutionId,
+            InvocationId,
+            AttemptId,
+            ExecutableNodeId,
+            CancellationToken,
+            TriggerPayload,
+            TriggerNodeId);
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution

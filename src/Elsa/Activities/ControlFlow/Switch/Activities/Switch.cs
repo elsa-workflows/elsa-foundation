@@ -37,7 +37,7 @@ namespace Elsa.Activities.Switch.Activities;
     LabelProperty = "match",
     SlotNameTemplate = "Switch.Case[{match}]")]
 [ActivityChildSlot("Switch.Default", "default", "Default", ActivityChildSlotCardinalities.Single)]
-public sealed class Switch : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string DefaultSlotName = "Switch.Default";
     public const string CaseSlotPrefix = "Switch.Case[";

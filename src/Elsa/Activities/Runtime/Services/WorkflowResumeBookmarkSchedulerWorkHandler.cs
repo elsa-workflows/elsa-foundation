@@ -82,12 +82,25 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         var bookmark = await bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken);
 
+        if (TryResolveClaimedResume(state, workItem, resumePayload, out var claimedDelivery, out var claimedAttempt))
+        {
+            await ResumeActivityAsync(scope.ServiceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, null, [], executable, executableNode, state, claimedDelivery!, claimedAttempt, cancellationToken);
+            return;
+        }
+
         if (state.Status == ActivityExecutionStatus.Completed)
         {
             if (bookmark is not null)
             {
                 ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
-                await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, state, NewCompletionWorkItem(workItem, resumePayload, state)), cancellationToken);
+                await bookmarkConsumptionCheckpointService.CommitAsync(
+                    BookmarkConsumptionCheckpointRequest.ForStaleBookmarkConsumption(
+                        workItem,
+                        resumePayload,
+                        bookmark,
+                        state,
+                        NewCompletionWorkItem(workItem, resumePayload, state)),
+                    cancellationToken);
             }
 
             return;
@@ -106,7 +119,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!TryResolveTypedTriggerDelivery(state, bookmark, resumePayload, workItem, out var triggerDelivery))
             return;
 
-        await ResumeActivityAsync(scope.ServiceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executable, executableNode, state, triggerDelivery!, cancellationToken);
+        var siblingBookmarks = await LoadOwnedSiblingBookmarksAsync(bookmarkStateStore, workItem, state, bookmark, cancellationToken);
+        await ResumeActivityAsync(scope.ServiceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, siblingBookmarks, executable, executableNode, state, triggerDelivery!, null, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -119,36 +133,69 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
-        BookmarkState bookmark,
+        BookmarkState? bookmark,
+        IReadOnlyCollection<BookmarkState> siblingBookmarks,
         WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
         ActivityTriggerDelivery triggerDelivery,
+        ActivityAttempt? claimedAttempt,
         CancellationToken cancellationToken)
     {
         ActivityExecutionState executionState = state;
         ActivityAttempt resumeAttempt;
-        try
+        if (claimedAttempt is null)
         {
-            var snapshot = RequireCommittedSnapshot(state, executableNode.ActivityContract!);
-            var activationClaim = await ActivityAttemptActivationClaimer.ClaimTypedResumeAsync(
-                checkpointCommitter,
+            var bookmarkToConsume = bookmark
+                ?? throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' cannot claim trigger delivery without bookmark '{resumePayload.BookmarkId}'.");
+            var activationClaim = ActivityAttemptActivationClaimer.PrepareTypedResumeClaim(
                 _timeProvider,
                 workItem,
                 resumePayload,
                 state,
-                triggerDelivery,
+                triggerDelivery);
+            await bookmarkConsumptionCheckpointService.CommitAsync(
+                BookmarkConsumptionCheckpointRequest.ForInitialTriggerClaim(
+                    workItem,
+                    resumePayload,
+                    bookmarkToConsume,
+                    activationClaim.State,
+                    activationClaim.Attempt.AttemptId,
+                    siblingBookmarks),
                 cancellationToken);
             resumeAttempt = activationClaim.Attempt;
-            executionState = activationClaim.State with { InputSnapshot = snapshot };
+            executionState = activationClaim.State;
         }
-        catch (OperationCanceledException)
+        else
+        {
+            var replacementClaim = ActivityAttemptActivationClaimer.PrepareTypedResumeRedeliveryClaim(
+                _timeProvider,
+                workItem,
+                state,
+                triggerDelivery);
+            await bookmarkConsumptionCheckpointService.CommitAsync(
+                BookmarkConsumptionCheckpointRequest.ForRedeliveryClaim(
+                    workItem,
+                    resumePayload,
+                    replacementClaim.State,
+                    replacementClaim.Attempt.AttemptId),
+                cancellationToken);
+            resumeAttempt = replacementClaim.Attempt;
+            executionState = replacementClaim.State;
+        }
+
+        try
+        {
+            var snapshot = RequireCommittedSnapshot(executionState, executableNode.ActivityContract!);
+            executionState = executionState with { InputSnapshot = snapshot };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, exception, "InputMaterializationFailed", [], cancellationToken);
             return;
         }
         var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
@@ -189,20 +236,30 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executionState,
                 variableScope: null);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            if (disposalException is not null)
+                throw new AggregateException("Activity activation cancellation and disposal both failed.", cancellationException, disposalException);
             throw;
         }
         catch (Exception exception)
         {
-            if (activationLease is not null)
-                await activationLease.DisposeAsync();
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, exception, "ActivityResumeConstructionFailed", valueSnapshots, cancellationToken);
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            var fault = disposalException is null
+                ? exception
+                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+            var subStatus = disposalException is null ? "ActivityResumeConstructionFailed" : "ActivityDisposalFailed";
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
         ActivityCompletionProjection? typedCompletion = null;
         ActivityExecutionState? replacementSuspendedState = null;
+        ActivityFault? returnedFault = null;
+        string? returnedCancellationReason = null;
         try
         {
             var contract = executableNode.ActivityContract!;
@@ -223,17 +280,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     executionState,
                     resumeAttempt,
                     suspension,
-                    _timeProvider.GetUtcNow()) with
-                {
-                    TriggerDeliveries = MarkTriggerConsumed(executionState.TriggerDeliveries!, triggerDelivery.DeliveryId),
-                    BookmarkIds = RemoveBookmark(executionState.BookmarkIds, bookmark.BookmarkId)
-                };
+                    _timeProvider.GetUtcNow());
             }
             else if (transition is IActivityCompletionTransition)
             {
                 typedCompletion = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                     workItem.WorkflowExecutionId,
-                    state.InvocationId,
+                    executionState.InvocationId,
                     resumeAttempt,
                     contract,
                     transition,
@@ -242,47 +295,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             }
             else if (transition is IActivityFaultTransition faultTransition)
             {
-                var fault = faultTransition.Fault;
-                executionState = executionState with
-                {
-                    Fault = new NormalizedActivityFault(
-                        fault.Code,
-                        typeof(ActivityFault).FullName!,
-                        fault.Message,
-                        sanitizedStackTrace: null,
-                        fault.IsRetryable)
-                };
-                await RecordFaultAsync(
-                    serviceProvider,
-                    activityFaultIncidentRecorder,
-                    checkpointCommitter,
-                    workItem,
-                    resumePayload,
-                    executionState,
-                    new ActivityTransitionFaultException(fault),
-                    "ActivityReturnedFault",
-                    valueSnapshots,
-                    cancellationToken);
-                return;
+                returnedFault = faultTransition.Fault;
             }
             else if (transition is IActivityCancellationTransition cancellationTransition)
             {
-                executionState = executionState with
-                {
-                    TriggerDeliveries = MarkTriggerConsumed(executionState.TriggerDeliveries!, triggerDelivery.DeliveryId),
-                    BookmarkIds = RemoveBookmark(executionState.BookmarkIds, bookmark.BookmarkId)
-                };
-                await ActivityCancellationCheckpointService.CommitAsync(
-                    checkpointCommitter,
-                    serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
-                    _timeProvider,
-                    workItem,
-                    executionState,
-                    cancellationTransition.Reason,
-                    valueSnapshots,
-                    consumedBookmark: bookmark,
-                    cancellationToken: cancellationToken);
-                return;
+                executionState = executionState with { TriggerRegistrations = [], BookmarkIds = [] };
+                returnedCancellationReason = cancellationTransition.Reason;
             }
             else
             {
@@ -290,19 +308,81 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     $"Stateful resume transition '{transition.Kind}' is not yet supported by the resume checkpoint path.");
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            if (disposalException is not null)
+                throw new AggregateException("Activity resume cancellation and disposal both failed.", cancellationException, disposalException);
             throw;
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, exception, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            activationLease = null;
+            var fault = disposalException is null
+                ? exception
+                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+            var subStatus = disposalException is null ? "ActivityResumeFaulted" : "ActivityDisposalFailed";
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
-        finally
+
+        var activationDisposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+        activationLease = null;
+        if (activationDisposalException is not null)
         {
-            if (activationLease is not null)
-                await activationLease.DisposeAsync();
+            await RecordFaultAsync(
+                serviceProvider,
+                activityFaultIncidentRecorder,
+                checkpointCommitter,
+                workItem,
+                resumePayload,
+                executionState,
+                activationDisposalException,
+                "ActivityDisposalFailed",
+                valueSnapshots,
+                cancellationToken);
+            return;
+        }
+
+        if (returnedFault is not null)
+        {
+            var faultedState = executionState with
+            {
+                Fault = new NormalizedActivityFault(
+                    returnedFault.Code,
+                    typeof(ActivityFault).FullName!,
+                    returnedFault.Message,
+                    sanitizedStackTrace: null,
+                    returnedFault.IsRetryable)
+            };
+            await RecordFaultAsync(
+                serviceProvider,
+                activityFaultIncidentRecorder,
+                checkpointCommitter,
+                workItem,
+                resumePayload,
+                faultedState,
+                new ActivityTransitionFaultException(returnedFault),
+                "ActivityReturnedFault",
+                valueSnapshots,
+                cancellationToken);
+            return;
+        }
+
+        if (returnedCancellationReason is not null)
+        {
+            await ActivityCancellationCheckpointService.CommitAsync(
+                checkpointCommitter,
+                serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
+                _timeProvider,
+                workItem,
+                executionState,
+                returnedCancellationReason,
+                valueSnapshots,
+                cancellationToken: cancellationToken);
+            return;
         }
 
         var recordedOutputs = typedCompletion is null
@@ -327,14 +407,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         {
             var replacementWorkItems = NewReplacementBookmarkWorkItems(workItem, resumePayload, replacementSuspendedState).ToArray();
             await bookmarkConsumptionCheckpointService.CommitAsync(
-                new BookmarkConsumptionCheckpointRequest(
+                BookmarkConsumptionCheckpointRequest.ForSuspension(
                     workItem,
                     resumePayload,
-                    bookmark,
                     replacementSuspendedState,
-                    valueSnapshots: valueSnapshots,
-                    durableValueChanges: [],
-                    continuationWorkItems: replacementWorkItems),
+                    replacementWorkItems,
+                    valueSnapshots,
+                    []),
                 cancellationToken);
             return;
         }
@@ -349,12 +428,87 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             {
                 Completion = typedCompletion.Completion,
                 PrivateState = null,
-                TriggerRegistrations = [],
-                TriggerDeliveries = MarkTriggerConsumed(completedState.TriggerDeliveries!, triggerDelivery.DeliveryId),
-                BookmarkIds = RemoveBookmark(completedState.BookmarkIds, bookmark.BookmarkId)
+                TriggerRegistrations = []
             };
         }
-        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, []), cancellationToken);
+        completedState = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(completedState);
+        await bookmarkConsumptionCheckpointService.CommitAsync(
+            BookmarkConsumptionCheckpointRequest.ForCompletion(
+                workItem,
+                resumePayload,
+                completedState,
+                NewCompletionWorkItem(workItem, resumePayload, completedState),
+                valueSnapshots,
+                []),
+            cancellationToken);
+    }
+
+    private static async ValueTask<IReadOnlyCollection<BookmarkState>> LoadOwnedSiblingBookmarksAsync(
+        IBookmarkStateStore bookmarkStateStore,
+        RuntimeSchedulerWorkItem workItem,
+        ActivityExecutionState state,
+        BookmarkState selectedBookmark,
+        CancellationToken cancellationToken)
+    {
+        var registrations = (state.TriggerRegistrations ?? [])
+            .ToDictionary(registration => registration.RegistrationId, StringComparer.Ordinal);
+        var siblings = new List<BookmarkState>();
+        var siblingIds = state.BookmarkIds
+            .Concat(registrations.Keys)
+            .Where(id => !StringComparer.Ordinal.Equals(id, selectedBookmark.BookmarkId))
+            .Distinct(StringComparer.Ordinal);
+        foreach (var bookmarkId in siblingIds)
+        {
+            if (!registrations.TryGetValue(bookmarkId, out var registration))
+                throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' owns bookmark '{bookmarkId}' without a matching trigger registration.");
+
+            var sibling = await bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, bookmarkId, cancellationToken);
+            if (sibling is null)
+                continue;
+            if (!StringComparer.Ordinal.Equals(sibling.WorkflowExecutionId, workItem.WorkflowExecutionId) ||
+                !StringComparer.Ordinal.Equals(sibling.ActivityExecutionId, state.Execution.ActivityExecutionId) ||
+                !StringComparer.Ordinal.Equals(sibling.ExecutableNodeId, state.Execution.ExecutableNodeId) ||
+                !StringComparer.Ordinal.Equals(sibling.ResumeTargetId, registration.ResumeTargetKey) ||
+                !StringComparer.Ordinal.Equals(sibling.StimulusType, registration.StimulusType) ||
+                !StringComparer.Ordinal.Equals(sibling.StimulusHash, registration.StimulusHash))
+                throw new InvalidOperationException($"VF-ACT-008: Sibling bookmark '{bookmarkId}' does not match its owned trigger registration on activity invocation '{state.InvocationId}'.");
+
+            siblings.Add(sibling);
+        }
+
+        return siblings;
+    }
+
+    private static bool TryResolveClaimedResume(
+        ActivityExecutionState state,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        out ActivityTriggerDelivery? delivery,
+        out ActivityAttempt? attempt)
+    {
+        delivery = null;
+        attempt = null;
+        if (state.Status != ActivityExecutionStatus.Running ||
+            state.PrivateState is null ||
+            resumePayload.TriggerDelivery is not { } metadata ||
+            !state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId, out var claimedWorkItemId) ||
+            !StringComparer.Ordinal.Equals(claimedWorkItemId, workItem.WorkItemId) ||
+            !state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaim, out var claimedAttemptId))
+            return false;
+
+        attempt = state.Attempts?
+            .SingleOrDefault(candidate => candidate.EndedAt is null && StringComparer.Ordinal.Equals(candidate.AttemptId, claimedAttemptId));
+        if (attempt is null || !StringComparer.Ordinal.Equals(attempt.TriggerDeliveryId, metadata.DeliveryId))
+            return false;
+
+        delivery = state.TriggerDeliveries?
+            .SingleOrDefault(candidate =>
+                candidate.Status == ActivityTriggerDeliveryStatus.Consumed &&
+                StringComparer.Ordinal.Equals(candidate.DeliveryId, metadata.DeliveryId) &&
+                StringComparer.Ordinal.Equals(candidate.ProviderId, metadata.ProviderId) &&
+                StringComparer.Ordinal.Equals(candidate.DeduplicationKey, metadata.DeduplicationKey) &&
+                SameType(candidate.PayloadType, metadata.PayloadType));
+        return delivery is not null;
     }
 
     private static bool TryResolveTypedTriggerDelivery(
@@ -519,28 +673,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ValuePresence.ExplicitNull => JsonSerializer.SerializeToElement<object?>(null),
         _ => throw new InvalidOperationException($"Typed activity {role} must carry an inline persistable payload.")
     };
-
-    private static IReadOnlyCollection<ActivityTriggerDelivery> MarkTriggerConsumed(
-        IReadOnlyCollection<ActivityTriggerDelivery> deliveries,
-        string deliveryId) =>
-        deliveries
-            .Select(delivery => !StringComparer.Ordinal.Equals(delivery.DeliveryId, deliveryId)
-                ? delivery
-                : new ActivityTriggerDelivery(
-                    delivery.DeliveryId,
-                    delivery.RegistrationId,
-                    delivery.PayloadType,
-                    delivery.Payload,
-                    delivery.ProviderId,
-                    delivery.ReceivedAt,
-                    delivery.DeduplicationKey,
-                    ActivityTriggerDeliveryStatus.Consumed))
-            .ToArray();
-
-    private static IReadOnlyCollection<string> RemoveBookmark(
-        IReadOnlyCollection<string> bookmarkIds,
-        string bookmarkId) =>
-        bookmarkIds.Where(candidate => !StringComparer.Ordinal.Equals(candidate, bookmarkId)).ToArray();
 
     private static bool SameType(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
@@ -726,7 +858,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         CancellationToken cancellationToken)
     {
         var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, resumePayload.ActivityExecutionId, subStatus);
-        state = EndOpenAttempt(state, Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, _timeProvider.GetUtcNow(), incidentId);
+        state = EndOpenAttempt(
+            state with { TriggerRegistrations = [], BookmarkIds = [] },
+            Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault,
+            _timeProvider.GetUtcNow(),
+            incidentId);
+        state = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(state);
         var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, subStatus, valueSnapshots);
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(

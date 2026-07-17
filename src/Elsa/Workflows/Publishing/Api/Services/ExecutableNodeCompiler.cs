@@ -75,8 +75,15 @@ public sealed class ExecutableNodeCompiler(
                 continue;
             }
 
+            if (!inputDefinition.IsRequired)
+            {
+                var binding = inputBindingCompiler.CompileOmitted(inputDefinition);
+                inputBindings.Add(binding.InputName, binding);
+                continue;
+            }
+
             throw new ArgumentException(
-                $"VF-ACT-003: Activity node '{activity.NodeId}' omits input '{inputDefinition.ReferenceKey}', which has no pinned default. " +
+                $"VF-ACT-003: Activity node '{activity.NodeId}' omits required input '{inputDefinition.ReferenceKey}', which has no pinned default. " +
                 "Every published input must lower to exactly one canonical binding.");
         }
 

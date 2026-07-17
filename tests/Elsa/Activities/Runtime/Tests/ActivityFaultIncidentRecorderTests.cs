@@ -1,8 +1,19 @@
+using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Expressions;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Jint;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -61,7 +72,7 @@ public sealed class ActivityFaultIncidentRecorderTests
         Assert.Equal("boom", state.Fault.Message);
         var endedAttempt = Assert.Single(state.Attempts!);
         Assert.NotNull(endedAttempt.EndedAt);
-        Assert.Equal(ActivityTransitionKind.Fault, endedAttempt.TransitionKind);
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, endedAttempt.TransitionKind);
         Assert.Equal(Assert.Single(state.IncidentIds), endedAttempt.IncidentId);
     }
 
@@ -82,6 +93,122 @@ public sealed class ActivityFaultIncidentRecorderTests
         var activity = Assert.Single(commit.StateChanges.ActivityExecutions).State;
         Assert.Equal("[scrubbed]", incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
         Assert.Equal("[scrubbed]", activity.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+        Assert.DoesNotContain(secret, string.Join('\n', incident.Metadata.Values), StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, string.Join('\n', activity.Metadata.Values), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Sensitive_JavaScript_failure_cannot_reach_durable_incident_metadata()
+    {
+        const string secret = "customer-secret-token";
+        var services = new ServiceCollection();
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+        var sensitivePolicy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            isSensitive: true,
+            redactionMode: "Full");
+        var expression = new RuntimeExpressionBinding(
+            "JavaScript",
+            "(() => { throw new Error(args.secret); })()",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["secret"] = new WorkflowRequestExpressionParameterBinding("secret")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+        var materializer = new RuntimeActivityInputMaterializer(
+            new RuntimeInputBindingResolver(),
+            new StringTypeRegistry(),
+            evaluator);
+        var context = new RuntimeInputBindingResolutionContext(
+            "wfexec-1",
+            "actexec-1",
+            workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+            {
+                ["secret"] = ValueEnvelope.Inline(
+                    new ValueTypeDescriptor("String"),
+                    JsonSerializer.SerializeToElement(secret),
+                    sensitivePolicy)
+            });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer
+            .MaterializeSnapshotAsync(NewExpressionNode(binding), "actexec-1", context, Now)
+            .AsTask());
+        var recorder = new ActivityFaultIncidentRecorder(TimeProvider.System);
+        await recorder.CommitAsync(NewRequest(exception));
+
+        var commit = Assert.IsType<RuntimeCheckpointCommit>(_store.Commit);
+        var incident = Assert.Single(commit.StateChanges.Incidents).State;
+        var activity = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Contains("was redacted", incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage], StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, string.Join('\n', incident.Metadata.Values), StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, string.Join('\n', activity.Metadata.Values), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Sensitive_external_provider_cancellation_shaped_failure_cannot_reach_durable_incident_metadata()
+    {
+        const string secret = "external-provider-secret-token";
+        var services = new ServiceCollection();
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+        var sensitivePolicy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.External,
+            isSensitive: true,
+            requiresEncryption: true,
+            redactionMode: "Full");
+        var reference = new DurableValueExternalReference("encrypted", "payloads/secret", new Dictionary<string, string>());
+        var expression = new RuntimeExpressionBinding(
+            "JavaScript",
+            "args.secret",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["secret"] = new WorkflowRequestExpressionParameterBinding("secret")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+        var materializer = new RuntimeActivityInputMaterializer(
+            new RuntimeInputBindingResolver(),
+            new StringTypeRegistry(),
+            evaluator,
+            new SecretThrowingExternalPayloadStore(secret));
+        var context = new RuntimeInputBindingResolutionContext(
+            "wfexec-1",
+            "actexec-1",
+            workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+            {
+                ["secret"] = ValueEnvelope.External(new ValueTypeDescriptor("String"), reference, sensitivePolicy)
+            });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer
+            .MaterializeSnapshotAsync(NewExpressionNode(binding), "actexec-1", context, Now)
+            .AsTask());
+        var recorder = new ActivityFaultIncidentRecorder(TimeProvider.System);
+        await recorder.CommitAsync(NewRequest(exception));
+
+        var commit = Assert.IsType<RuntimeCheckpointCommit>(_store.Commit);
+        var incident = Assert.Single(commit.StateChanges.Incidents).State;
+        var activity = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Contains("was redacted", incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage], StringComparison.Ordinal);
         Assert.DoesNotContain(secret, string.Join('\n', incident.Metadata.Values), StringComparison.Ordinal);
         Assert.DoesNotContain(secret, string.Join('\n', activity.Metadata.Values), StringComparison.Ordinal);
     }
@@ -158,6 +285,63 @@ public sealed class ActivityFaultIncidentRecorderTests
         {
             return exception;
         }
+    }
+
+    private static ExecutableNode NewExpressionNode(RuntimeInputBinding binding)
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var contract = new ActivityContract(
+            "test/activity",
+            "1.0.0",
+            "test",
+            descriptor.RootElement,
+            [new ActivityInputContract("message", "Message", new ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test/activity"));
+        return new ExecutableNode(
+            "node-1",
+            "authored-node-1",
+            "test/activity",
+            "1.0.0",
+            "test",
+            descriptor.RootElement,
+            new Dictionary<string, RuntimeInputBinding> { ["message"] = binding },
+            new Dictionary<string, string>(),
+            activityContract: contract);
+    }
+
+    private sealed class StringTypeRegistry : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+        public bool TryGetAlias(Type type, out string alias)
+        {
+            alias = "String";
+            return type == typeof(string);
+        }
+
+        public bool TryGetType(string alias, out Type type) => TryGetTypeOrDefault(alias, out type);
+        public IEnumerable<Type> ListTypes() => [typeof(string)];
+        public string GetAliasOrDefault(Type type) => type == typeof(string) ? "String" : type.FullName!;
+        public Type GetTypeOrDefault(string alias) => TryGetTypeOrDefault(alias, out var type) ? type : typeof(object);
+        public bool TryGetTypeOrDefault(string alias, out Type type)
+        {
+            type = typeof(string);
+            return StringComparer.Ordinal.Equals(alias, "String");
+        }
+    }
+
+    private sealed class SecretThrowingExternalPayloadStore(string secret) : IExternalPayloadStore
+    {
+        public ValueTask<DurableValueExternalReference> WriteAsync(
+            ExternalPayloadWriteRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<JsonElement> ReadAsync(
+            DurableValueExternalReference reference,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<JsonElement>(new OperationCanceledException(secret));
     }
 
     private sealed class CapturingCheckpointCommitStore : IRuntimeCheckpointCommitStore

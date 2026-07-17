@@ -1,4 +1,3 @@
-using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using System.Text.Json;
 
@@ -20,7 +19,7 @@ public sealed record ActivityExecutionContext
     {
     }
 
-    internal ActivityExecutionContext(
+    public ActivityExecutionContext(
         string workflowExecutionId,
         string invocationId,
         string attemptId,
@@ -51,38 +50,16 @@ public sealed record ActivityExecutionContext
     internal JsonElement? TriggerPayload { get; }
     internal string? TriggerNodeId { get; }
 
-    internal static ActivityExecutionContext FromRuntime(IActivityExecutionContext context)
-    {
-        if (context is not IActivityInvocationIdentity identity)
-            throw new InvalidOperationException($"Activity execution context '{context.GetType().FullName}' does not provide runtime-owned invocation identity.");
-
-        return new(
-            workflowExecutionId: identity.WorkflowExecutionId,
-            invocationId: identity.InvocationId,
-            attemptId: identity.AttemptId,
-            executableNodeId: identity.ExecutableNodeId,
-            context.CancellationToken,
-            identity.TriggerPayload,
-            identity.TriggerNodeId);
-    }
-}
-
-/// <summary>Identity carrier implemented by the engine's private execution context adapter.</summary>
-public interface IActivityInvocationIdentity
-{
-    string WorkflowExecutionId { get; }
-    string InvocationId { get; }
-    string AttemptId { get; }
-    string ExecutableNodeId { get; }
-    JsonElement? TriggerPayload { get; }
-    string? TriggerNodeId { get; }
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>
-public abstract class Activity<TResult> : ActivityBase, IActivityResult<TResult>
+public abstract class Activity<TResult> : IActivity, IActivityResult<TResult>
 {
     protected abstract ValueTask<ActivityTransition<TResult>> ExecuteAsync(ActivityExecutionContext context);
 
-    protected sealed override async ValueTask<ActivityTransition> ExecuteTransitionAsync(IActivityExecutionContext context) =>
-        await ExecuteAsync(ActivityExecutionContext.FromRuntime(context));
+    async ValueTask<ActivityTransition> IActivity.ExecuteAsync(ActivityExecutionContext context) =>
+        await ExecuteAsync(context);
 }
+
+/// <summary>Author-facing base for a transient activity whose atomic result is <see cref="ActivityUnit"/>.</summary>
+public abstract class Activity : Activity<ActivityUnit>;

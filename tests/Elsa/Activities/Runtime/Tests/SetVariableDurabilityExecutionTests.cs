@@ -24,7 +24,7 @@ public sealed class SetVariableDurabilityExecutionTests
     public async Task Variable_write_intrinsic_commits_frame_change_before_continuation_and_recovery_does_not_reapply_it(
         WorkflowIntrinsicKind intrinsicKind)
     {
-        var harness = await CreateHarnessAsync(NewVariableWriteNode(intrinsicKind));
+        await using var harness = await CreateHarnessAsync(NewVariableWriteNode(intrinsicKind));
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -55,11 +55,9 @@ public sealed class SetVariableDurabilityExecutionTests
     public async Task Set_intrinsic_evaluates_only_declared_portable_expression_parameters()
     {
         var evaluator = new RecordingPortableEvaluator();
-        var services = new ServiceCollection().AddSingleton<IPortableExpressionEvaluator>(evaluator);
-        await using var provider = services.BuildServiceProvider();
-        var harness = await CreateHarnessAsync(
+        await using var harness = await CreateHarnessAsync(
             NewPortableExpressionVariableWriteNode(),
-            provider.GetRequiredService<IServiceScopeFactory>());
+            portableExpressionEvaluator: evaluator);
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -79,7 +77,7 @@ public sealed class SetVariableDurabilityExecutionTests
         string expectedOutcome,
         string? expectedResult)
     {
-        var harness = await CreateHarnessAsync(NewTerminalNode(intrinsicKind));
+        await using var harness = await CreateHarnessAsync(NewTerminalNode(intrinsicKind));
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -107,7 +105,7 @@ public sealed class SetVariableDurabilityExecutionTests
         WorkflowIntrinsicKind intrinsicKind,
         string assignedValue)
     {
-        var harness = await CreateHarnessAsync(NewEffectNode(intrinsicKind, assignedValue));
+        await using var harness = await CreateHarnessAsync(NewEffectNode(intrinsicKind, assignedValue));
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -131,7 +129,7 @@ public sealed class SetVariableDurabilityExecutionTests
     [Fact]
     public async Task Set_output_intrinsic_commits_typed_named_value_before_continuation()
     {
-        var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.SetOutput, "accepted"));
+        await using var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.SetOutput, "accepted"));
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -147,7 +145,7 @@ public sealed class SetVariableDurabilityExecutionTests
     [Fact]
     public async Task Finish_intrinsic_commits_terminal_workflow_checkpoint_and_schedules_no_continuation()
     {
-        var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.Finish, "Aborted"));
+        await using var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.Finish, "Aborted"));
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -279,7 +277,7 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private static async Task<Harness> CreateHarnessAsync(
         ExecutableNode node,
-        IServiceScopeFactory? serviceScopeFactory = null)
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null)
     {
         var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
         var executable = new WorkflowExecutable(identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>());
@@ -304,7 +302,11 @@ public sealed class SetVariableDurabilityExecutionTests
             new RuntimeInputBindingResolver(),
             new InMemoryDurableValueStateStore(),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            portableExpressionEvaluator: portableExpressionEvaluator);
+        var services = new ServiceCollection();
+        services.AddScoped(_ => executor);
+        var serviceProvider = services.BuildServiceProvider();
         var handler = new WorkflowStartActivitySchedulerWorkHandler(
             executableStore,
             activityStore,
@@ -312,13 +314,13 @@ public sealed class SetVariableDurabilityExecutionTests
             committer,
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             new FixedTimeProvider(Now),
-            serviceScopeFactory: serviceScopeFactory,
-            intrinsicExecutor: executor);
+            serviceProvider.GetRequiredService<IServiceScopeFactory>());
         return new Harness(
             handler,
             NewStartWorkItem(identity, node),
             commitStore,
-            workflowStore);
+            workflowStore,
+            serviceProvider);
     }
 
     private static WorkflowExecutionState NewWorkflowState(WorkflowExecutableIdentity identity) =>
@@ -407,7 +409,11 @@ public sealed class SetVariableDurabilityExecutionTests
         WorkflowStartActivitySchedulerWorkHandler Handler,
         RuntimeSchedulerWorkItem WorkItem,
         InMemoryRuntimeCheckpointCommitStore CommitStore,
-        InMemoryWorkflowExecutionStateStore WorkflowStore);
+        InMemoryWorkflowExecutionStateStore WorkflowStore,
+        ServiceProvider ServiceProvider) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => ServiceProvider.DisposeAsync();
+    }
 
     private sealed class PassThroughRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager
     {

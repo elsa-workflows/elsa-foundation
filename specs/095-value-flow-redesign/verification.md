@@ -53,29 +53,42 @@ not a partial audit.
 
 ## Focused verification matrix
 
+The final review pass also covers pinned optional-input defaults, sanitized expression incidents,
+bounded Jint result materialization, external-storage response validation, scoped evaluator
+composition, completed-work replay, bounded attempt diagnostics, child-callback deduplication,
+fresh attempt identity on crash redelivery, atomic alternative-bookmark retirement, and terminal
+private-state cleanup. It additionally covers canonical absent optional inputs, fail-closed trigger
+payload decoding, bounded/redacted trigger-delivery history, stale bookmark-creation suppression,
+cancellation-safe and timeout-bounded lifecycle notification, closed bookmark-resume checkpoint
+transitions, token-aware cancellation faulting, and disposal-before-checkpoint activation cleanup.
+
 | Project | Result |
 |---|---|
 | `Elsa.Activities.Design.Tests` | 218 passed |
-| `Elsa.Activities.Runtime.Tests` | 127 passed |
+| `Elsa.Activities.Runtime.Tests` | 150 passed |
 | `Elsa.Activities.ControlFlow.Tests` | 196 passed |
 | `Elsa.Activities.Sequence.Tests` | 15 passed |
 | `Elsa.Activities.Flowchart.Tests` | 55 passed |
 | `Elsa.Activities.Scripting.Tests` | 8 passed |
 | `Elsa.Activities.Scheduling.Tests` | 25 passed |
 | `Elsa.Activities.Http.Tests` | 192 passed |
-| `Elsa.Activities.Http.IntegrationTests` | 29 passed |
-| `Elsa.Workflows.Publishing.Api.Tests` | 170 passed |
+| `Elsa.Activities.Http.IntegrationTests` | 29 passed; 1 pre-existing performance assertion failed |
+| `Elsa.Workflows.Publishing.Api.Tests` | 173 passed |
 | `Elsa.Workflows.Design.CodeGeneration.Tests` | 12 passed |
-| `Elsa.Workflows.Runtime.Tests` | 891 passed |
+| `Elsa.Workflows.Runtime.Tests` | 905 passed |
 | `Elsa.Persistence.Groundwork.Tests` | 246 passed |
 | `Elsa.Expressions.Tests` | 93 passed |
-| `Elsa.Expressions.JavaScript.Jint.Tests` | 30 passed |
+| `Elsa.Expressions.JavaScript.Jint.Tests` | 38 passed |
 | `Elsa3.Mapping.Tests` | 30 passed |
 | `Elsa.Architecture.Tests` | 97 passed |
 | Activation semantic test host | 17 passed |
 
-The complete solution build passes with zero errors. The complete solution test was executed with Git
-commit signing disabled for repository-fixture commits. Every spec-095 affected suite above passes; the
-solution-wide parallel run exposed three timing failures in the unchanged Structured Logs persistence
-suite, whose isolated rerun passed 29/30 and retained one five-second service-resolution timeout. The
-final canonical carrier scan has zero non-architecture/non-importer hits.
+The complete solution build passes with zero errors and one existing package-pruning warning. The
+complete solution test was executed with Git commit signing disabled for repository-fixture commits.
+Every spec-095 affected functional suite above passes; the solution-wide parallel run had two failures
+outside the changed files: one Structured Logs SQLite service-resolution timeout
+(isolated project rerun: 30/30) and the HTTP checkpoint-coalescing performance assertion. The latter
+also fails in isolation with the same 18-immediate/15-coalesced counts at the untouched fixed-point
+commit `0038de76`, confirming it is not introduced by this review pass. The final canonical carrier
+scan has zero non-architecture/non-importer hits. Generated maps were not refreshed, and the generated
+map snapshot remains unchanged.

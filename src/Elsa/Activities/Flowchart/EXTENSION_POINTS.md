@@ -2,7 +2,7 @@
 
 ## Scoped execution seam
 
-`FlowchartExecutionEngine` is the activity-owned scoped execution seam. It owns Flowchart runtime state mutation, child scheduling metadata, arrival recording, implicit join evaluation, loop/race scope creation, diagnostics, and deferred composite completion.
+`FlowchartExecutionEngine` is the activity-owned scoped execution seam. It owns Flowchart runtime state mutation, child scheduling metadata, arrival recording, implicit join evaluation, loop/race scope creation, diagnostics, and deferred composite completion. Its durable snapshot is staged as one typed, versioned structural private-state document; it does not patch the activity metadata bag.
 
 The scoped execution model is intentionally not an extension point directly: custom gateway behavior crosses the public policy contract below, and `FlowchartExecutionEngine` remains the authority that validates and applies policy commands.
 

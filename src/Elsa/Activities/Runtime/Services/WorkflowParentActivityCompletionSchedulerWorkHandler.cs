@@ -144,7 +144,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (parentState.Status != ActivityExecutionStatus.Running)
             return;
 
-        if (ActivityAttemptActivationClaimer.WasActivationCompleted(parentState, workItem.WorkItemId))
+        if (ActivityAttemptActivationClaimer.WasParentCompletionProcessed(completedChildState))
             return;
 
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
@@ -205,7 +205,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         parentState,
                         Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
                         _timeProvider.GetUtcNow());
-                    endedParentState = ActivityAttemptActivationClaimer.MarkActivationCompleted(endedParentState, workItem.WorkItemId);
                     await CommitDeferredParentActivityAsync(
                         checkpointCommitter,
                         inspectionAccumulator,
@@ -213,6 +212,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         workItem,
                         payload,
                         endedParentState,
+                        ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId),
                         [],
                         [],
                         valueSnapshots,
@@ -226,7 +226,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     parentState,
                     Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
                     _timeProvider.GetUtcNow());
-                endedParentState = ActivityAttemptActivationClaimer.MarkActivationCompleted(endedParentState, workItem.WorkItemId);
                 await CommitDeferredParentActivityAsync(
                     checkpointCommitter,
                     inspectionAccumulator,
@@ -234,6 +233,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     workItem,
                     payload,
                     endedParentState,
+                    ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId),
                     [],
                     [NewContinuationSchedulingWorkItem(workItem, payload)],
                     valueSnapshots,
@@ -278,7 +278,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             if (!continuation.IsDeferred && scheduledChildren.Count > 0)
                 throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same child-completion evaluation.");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
@@ -310,7 +310,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (currentParentState.Status != ActivityExecutionStatus.Running)
             return;
 
-        currentParentState = RuntimeStructuralStateProjector.Apply(currentParentState, continuation);
+        currentParentState = RuntimeStructuralStateProjector.Apply(currentParentState, continuation, _timeProvider.GetUtcNow());
 
         if (continuation.Kind == RuntimeStructuralContinuationKind.Fault)
         {
@@ -375,7 +375,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 currentParentState,
                 Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
                 _timeProvider.GetUtcNow());
-            currentParentState = ActivityAttemptActivationClaimer.MarkActivationCompleted(currentParentState, workItem.WorkItemId);
             await CommitDeferredParentActivityAsync(
                 checkpointCommitter!,
                 inspectionAccumulator,
@@ -383,6 +382,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 workItem,
                 payload,
                 currentParentState,
+                ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId),
                 childScheduleRequests,
                 [],
                 valueSnapshots,
@@ -461,7 +461,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
                 completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
@@ -637,6 +637,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         RuntimeSchedulerWorkItem parentCompletionWorkItem,
         RuntimeCompleteActivityCommandPayload parentCompletionPayload,
         ActivityExecutionState parentState,
+        ActivityExecutionState processedChildState,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
         IReadOnlyCollection<RuntimeSchedulerWorkItem> continuationWorkItems,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
@@ -680,7 +681,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 Name: RuntimeCheckpointNames.ActivityInspectionCaptured,
                 WorkflowExecutionId: parentCompletionWorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [parentCompletionPayload.ActivityExecutionId],
+                ActivityExecutionIds:
+                [
+                    parentCompletionPayload.ActivityExecutionId,
+                    processedChildState.Execution.ActivityExecutionId
+                ],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
@@ -691,6 +696,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         StateId: parentCompletionPayload.ActivityExecutionId,
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: parentState,
+                        Metadata: metadata),
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: processedChildState.Execution.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: processedChildState,
                         Metadata: metadata)
                 ],
                 bookmarks: [],
@@ -860,6 +870,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         {
             Status = ActivityExecutionStatus.Completed,
             CompletedAt = completedAt,
+            PrivateState = null,
             Metadata = metadata
         });
     }

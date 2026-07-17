@@ -46,7 +46,7 @@ public sealed class ReadLineActivityTests : IDisposable
         Console.SetIn(new StringReader(stdin));
         try
         {
-            var transition = await ((IActivity)readLine).ExecuteAsync(context);
+            var transition = await ((IActivity)readLine).ExecuteAsync(context.ToActivityExecutionContext());
             return Assert.IsAssignableFrom<IActivityCompletionTransition<ReadLineResult>>(transition).Result.Line;
         }
         finally

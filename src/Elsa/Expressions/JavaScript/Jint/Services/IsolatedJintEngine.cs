@@ -22,10 +22,15 @@ internal static class IsolatedJintEngine
             options.MaxStatements(maxStatements);
         if (configured.MaxRecursionDepth is { } maxRecursionDepth && maxRecursionDepth > 0)
             options.LimitRecursion(maxRecursionDepth);
+        if (configured.MaxMemoryBytes is { } maxMemoryBytes && maxMemoryBytes > 0)
+            options.LimitMemory(maxMemoryBytes);
+        if (configured.MaxArrayLength is { } maxArrayLength && maxArrayLength > 0)
+            options.Constraints.MaxArraySize = maxArrayLength;
         if (cancellationToken.CanBeCanceled)
             options.CancellationToken(cancellationToken);
 
         var engine = new Engine(options);
+        JintResultMaterializer.Initialize(engine);
         DisableAmbientCapabilities(engine);
         return engine;
     }

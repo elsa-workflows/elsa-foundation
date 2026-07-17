@@ -49,6 +49,17 @@ internal sealed class RuntimeExternalEnvelopeStorage(IExternalPayloadStore? exte
                 payload.Clone(),
                 request.EffectivePolicy),
             cancellationToken);
+        if (reference is null)
+            throw new InvalidOperationException($"VF-ACT-005: External payload storage returned no reference for {request.ValueRole}.");
+        if (string.IsNullOrWhiteSpace(reference.Locator))
+            throw new InvalidOperationException($"VF-ACT-005: External payload storage returned a blank locator for {request.ValueRole}.");
+        if (!StringComparer.Ordinal.Equals(reference.StorageProfile, storageProfile))
+        {
+            throw new InvalidOperationException(
+                $"VF-ACT-005: External payload storage returned storage profile '{reference.StorageProfile}' for {request.ValueRole}, " +
+                $"but effective policy requires '{storageProfile}'.");
+        }
+
         return ValueEnvelope.External(request.Value.Type, reference, request.EffectivePolicy);
     }
 

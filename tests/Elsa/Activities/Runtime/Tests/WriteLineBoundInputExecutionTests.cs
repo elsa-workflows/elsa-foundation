@@ -22,7 +22,7 @@ public sealed class WriteLineBoundInputExecutionTests
             invocationId: "write-line-invocation",
             executableNodeId: "write-line-node");
 
-        var output = await ConsoleCapture.RunAsync(async () => await ((IActivity)writeLine).ExecuteAsync(context));
+        var output = await ConsoleCapture.RunAsync(async () => await ((IActivity)writeLine).ExecuteAsync(context.ToActivityExecutionContext()));
 
         Assert.Equal("Hello World!", output.Trim());
         Assert.Equal("Hello World!", writeLine.Text);

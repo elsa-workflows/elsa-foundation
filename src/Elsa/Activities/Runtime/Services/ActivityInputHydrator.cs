@@ -36,13 +36,9 @@ public sealed class ActivityInputHydrator
                 throw new InvalidOperationException($"Activity '{activity.GetType().FullName}' has no annotated input property for stable key '{input.Key}'.");
 
             if (!snapshot.Values.TryGetValue(input.Key, out var envelope))
-            {
-                if (input.IsRequired)
-                    throw new InvalidOperationException($"Required activity input '{input.Key}' is missing from the pinned snapshot.");
-                continue;
-            }
+                throw new InvalidOperationException($"Activity input '{input.Key}' is missing from the complete pinned snapshot.");
 
-            property.SetValue(activity, Materialize(property, envelope, input.Key));
+            property.SetValue(activity, Materialize(property, input, envelope));
         }
     }
 
@@ -72,31 +68,42 @@ public sealed class ActivityInputHydrator
         return result;
     }
 
-    private object? Materialize(PropertyInfo property, ValueEnvelope envelope, string inputKey)
+    private object? Materialize(
+        PropertyInfo property,
+        ActivityInputContract input,
+        ValueEnvelope envelope)
     {
         if (envelope.Presence == ValuePresence.Absent)
-            throw new InvalidOperationException($"Pinned activity input '{inputKey}' cannot be absent.");
+        {
+            var isNullableTarget = !property.PropertyType.IsValueType || Nullable.GetUnderlyingType(property.PropertyType) is not null;
+            if (input.IsRequired || !isNullableTarget)
+                throw new InvalidOperationException($"Activity input '{input.Key}' does not accept absence.");
+            return null;
+        }
 
         if (envelope.Presence == ValuePresence.ExplicitNull)
         {
-            if (property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) is null ||
-                _nullability.Create(property).WriteState == NullabilityState.NotNull)
-                throw new InvalidOperationException($"Activity input '{inputKey}' does not accept null.");
+            var isNonNullableValueType = property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) is null;
+            var isRequiredNonNullableReference = input.IsRequired &&
+                                                 !property.PropertyType.IsValueType &&
+                                                 _nullability.Create(property).WriteState == NullabilityState.NotNull;
+            if (isNonNullableValueType || isRequiredNonNullableReference)
+                throw new InvalidOperationException($"Activity input '{input.Key}' does not accept null.");
             return null;
         }
 
         if (envelope.ExternalReference is not null)
-            throw new InvalidOperationException($"Activity input '{inputKey}' must be dereferenced before CLR property hydration.");
+            throw new InvalidOperationException($"Activity input '{input.Key}' must be dereferenced before CLR property hydration.");
 
         var inline = envelope.InlineValue
-            ?? throw new InvalidOperationException($"Activity input '{inputKey}' has no inline payload.");
+            ?? throw new InvalidOperationException($"Activity input '{input.Key}' has no inline payload.");
         try
         {
             return inline.Deserialize(property.PropertyType);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new InvalidOperationException($"Activity input '{inputKey}' cannot be materialized as '{property.PropertyType.FullName}'.", exception);
+            throw new InvalidOperationException($"Activity input '{input.Key}' cannot be materialized as '{property.PropertyType.FullName}'.", exception);
         }
     }
 }

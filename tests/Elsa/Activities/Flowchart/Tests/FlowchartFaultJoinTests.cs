@@ -46,7 +46,7 @@ public sealed class FlowchartFaultJoinTests
         Assert.Equal(ActivityExecutionStatus.Faulted, flowchart.Status);
         Assert.NotEmpty(flowchart.IncidentIds);
         var persistedFlowchartState = JsonSerializer.Deserialize<FlowchartExecutionState>(
-            flowchart.Metadata[FlowchartExecutionEngine.StateMetadataKey],
+            flowchart.PrivateState!.Value.InlineValue!.Value.GetRawText(),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.Contains(persistedFlowchartState!.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Faulted);
         Assert.DoesNotContain(run.States(FlowchartNodeId), state => state.Status == ActivityExecutionStatus.Completed);

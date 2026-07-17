@@ -43,7 +43,7 @@ public sealed class WriteLinesActivityTests : IDisposable
         var context = NewContext(writeLines);
 
         ActivityTransition? transition = null;
-        var output = await ConsoleCapture.RunAsync(async () => transition = await ((IActivity)writeLines).ExecuteAsync(context));
+        var output = await ConsoleCapture.RunAsync(async () => transition = await ((IActivity)writeLines).ExecuteAsync(context.ToActivityExecutionContext()));
 
         Assert.Equal(string.Empty, output);
         Assert.Equal(ActivityUnit.Value, Assert.IsAssignableFrom<IActivityCompletionTransition<ActivityUnit>>(transition).Result);
@@ -60,7 +60,7 @@ public sealed class WriteLinesActivityTests : IDisposable
         var context = NewContext(writeLines);
         ActivityTransition? transition = null;
 
-        var output = await ConsoleCapture.RunAsync(async () => transition = await ((IActivity)writeLines).ExecuteAsync(context));
+        var output = await ConsoleCapture.RunAsync(async () => transition = await ((IActivity)writeLines).ExecuteAsync(context.ToActivityExecutionContext()));
         Assert.Equal(ActivityUnit.Value, Assert.IsAssignableFrom<IActivityCompletionTransition<ActivityUnit>>(transition).Result);
         Assert.Equal(lines, writeLines.Lines);
         return output;

@@ -28,7 +28,7 @@ namespace Elsa.Activities.Flowchart.Activities;
 [ActivityChildSlot("Flowchart.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
 [ActivityOutcome(ActivityOutcomes.Break)]
-public sealed class Flowchart(FlowchartExecutionEngine executionEngine) : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
+public sealed class Flowchart(FlowchartExecutionEngine executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
 {
     public const string ActivitiesSlotName = "Flowchart.Activities";
     public const string StructureKind = "elsa.flowchart.structure";

@@ -29,7 +29,7 @@ namespace Elsa.Activities.If.Activities;
 [ActivityOutcome(ActivityOutcomes.Break)]
 [ActivityChildSlot("If.Then", "then", "Then", ActivityChildSlotCardinalities.Single)]
 [ActivityChildSlot("If.Else", "else", "Else", ActivityChildSlotCardinalities.Single)]
-public sealed class If : ActivityBase, IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+public sealed class If : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string ThenSlotName = "If.Then";
     public const string ElseSlotName = "If.Else";

@@ -78,7 +78,7 @@ public sealed class FlowchartExecutionEngineTests
         Assert.DoesNotContain(writer.ListCommits(), write => write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
         var atomicCommit = Assert.Single(writer.ListCommits(), write => SchedulesChild(write.Commit, "node-a")).Commit;
         var activityStateChange = Assert.Single(atomicCommit.StateChanges.ActivityExecutions);
-        var serialized = activityStateChange.State.Metadata[FlowchartExecutionEngine.StateMetadataKey];
+        var serialized = activityStateChange.State.PrivateState!.Value.InlineValue!.Value.GetRawText();
         var initialState = JsonSerializer.Deserialize<FlowchartExecutionState>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web))
                            ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
 
@@ -121,8 +121,10 @@ public sealed class FlowchartExecutionEngineTests
         var writer = Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(fixture.Provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.DoesNotContain(writer.ListCommits(), write => write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
         var nextChildCommit = Assert.Single(writer.ListCommits(), write => SchedulesChild(write.Commit, "node-b")).Commit;
-        var parentChange = Assert.Single(nextChildCommit.StateChanges.ActivityExecutions);
-        var serialized = parentChange.State.Metadata[FlowchartExecutionEngine.StateMetadataKey];
+        var parentChange = Assert.Single(
+            nextChildCommit.StateChanges.ActivityExecutions,
+            change => change.State.Execution.ExecutableNodeId == "node-flowchart");
+        var serialized = parentChange.State.PrivateState!.Value.InlineValue!.Value.GetRawText();
         var state = JsonSerializer.Deserialize<FlowchartExecutionState>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web))
                     ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
 

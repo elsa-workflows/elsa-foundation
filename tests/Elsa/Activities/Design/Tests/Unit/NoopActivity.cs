@@ -9,6 +9,6 @@ namespace Elsa.Activities.Design.Tests.Unit;
 /// </summary>
 public sealed class NoopActivity : IActivity
 {
-    public ValueTask<ActivityTransition> ExecuteAsync(IActivityExecutionContext context) =>
+    public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult<ActivityTransition>(ActivityTransition.Complete(ActivityUnit.Value));
 }
