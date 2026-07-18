@@ -1,3 +1,4 @@
+using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Services;
 using Xunit;
 
@@ -23,5 +24,13 @@ public sealed class SecretNameValidatorTests
     {
         Assert.False(_validator.IsValid(name, out var error));
         Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void IsValid_Rejects_NamesBeyondThePortablePhysicalIndexBound()
+    {
+        Assert.False(
+            _validator.IsValid(new string('a', SecretNameConstraints.MaximumLength + 1), out var error));
+        Assert.Contains(SecretNameConstraints.MaximumLength.ToString(), error, StringComparison.Ordinal);
     }
 }
