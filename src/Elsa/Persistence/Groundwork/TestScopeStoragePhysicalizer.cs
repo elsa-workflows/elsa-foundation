@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
@@ -33,9 +34,18 @@ internal static class TestScopeStoragePhysicalizer
             new IndexField(ElsaRuntimeStorageManifest.StateField),
             new IndexField(ElsaRuntimeStorageManifest.ScopeIdField),
             new IndexField(ElsaRuntimeStorageManifest.ExpiresAtField, IndexValueKind.DateTime));
+        var projectedColumns = definition.ProjectedColumns.Select(column =>
+            column.LogicalName switch
+            {
+                ElsaRuntimeStorageManifest.ByStatusIndex =>
+                    column with { Length = ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength },
+                ElsaRuntimeStorageManifest.ByScopeIdIndex =>
+                    column with { Length = WorkflowTestScope.MaximumScopeIdLength },
+                _ => column
+            }).ToArray();
         var augmentedDefinition = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
-            definition.ProjectedColumns,
+            projectedColumns,
             definition.Indexes.Concat(
             [
                 Physical(stateAndScope.Identity,

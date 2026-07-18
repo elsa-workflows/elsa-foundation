@@ -59,6 +59,10 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
                 options,
                 log,
                 cancellationToken);
+            var diagnostics = coreResult.Inspection.IsAppliedSchemaValid ||
+                              coreResult.Diagnostics.Any(x => x.Code == "ELSA-GW-SCHEMA-DRIFT")
+                ? coreResult.Diagnostics
+                : coreResult.Diagnostics.Append(DriftDiagnostic()).ToArray();
             return new GroundworkRuntimeSchemaAdmissionResult(
                 PhysicalTarget,
                 CompositionFingerprint,
@@ -66,7 +70,7 @@ public sealed class GroundworkPhysicalSchemaManifestSource : IPhysicalSchemaMani
                 coreResult.Inspection.History.AppliedState?.TargetFingerprint,
                 coreResult.Inspection.IsAppliedSchemaValid,
                 coreResult.PendingOperations,
-                coreResult.Diagnostics,
+                diagnostics,
                 coreResult.IsReady,
                 coreResult.AppliedOperationCount);
         }

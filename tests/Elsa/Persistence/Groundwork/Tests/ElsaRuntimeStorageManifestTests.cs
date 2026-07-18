@@ -447,6 +447,17 @@ public sealed class ElsaRuntimeStorageManifestTests
             unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowTestScopesByStatePageQuery &&
                      query.IndexIdentity == ElsaRuntimeStorageManifest.ByStateAndScopeIdIndex);
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage.Policy).Definition;
+        Assert.Contains(
+            physical.ProjectedColumns,
+            column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByStatusIndex &&
+                column.Length == ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength);
+        Assert.Contains(
+            physical.ProjectedColumns,
+            column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByScopeIdIndex &&
+                column.Length == WorkflowTestScope.MaximumScopeIdLength);
     }
 
     [Fact]
