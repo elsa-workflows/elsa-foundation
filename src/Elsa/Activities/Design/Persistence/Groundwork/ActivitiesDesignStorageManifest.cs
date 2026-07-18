@@ -95,6 +95,11 @@ public static class ActivitiesDesignStorageManifest
     public const string ActivityUpgradePlanDocumentKind = "activityUpgradePlan";
     public const string ActivityUpgradePlanCollection = "activityUpgradePlan";
 
+    public const string ActivityForkCandidateDocumentKind = "activityForkCandidate";
+    public const string ActivityForkCandidateCollection = "activityForkCandidate";
+    public const string ActivityForkReceiptDocumentKind = "activityForkReceipt";
+    public const string ActivityForkReceiptCollection = "activityForkReceipt";
+
     public const string ActivityDefinitionManagementProjectionDocumentKind = "activityDefinitionManagementProjection";
     public const string ActivityDefinitionManagementProjectionCollection = "activityDefinitionManagementProjection";
     public const string ActivityDraftManagementProjectionDocumentKind = "activityDraftManagementProjection";
@@ -200,6 +205,16 @@ public static class ActivitiesDesignStorageManifest
             Unit(
                 ActivityUpgradePlanDocumentKind,
                 "Activity upgrade plan",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            Unit(
+                ActivityForkCandidateDocumentKind,
+                "Activity fork candidate",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            Unit(
+                ActivityForkReceiptDocumentKind,
+                "Activity fork receipt",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)]),
             ManagementUnit(

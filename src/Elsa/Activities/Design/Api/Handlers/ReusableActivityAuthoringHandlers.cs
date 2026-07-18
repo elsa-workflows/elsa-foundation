@@ -67,65 +67,6 @@ public sealed class ReusableActivityAuthoringService(
         return new(ToIdentity(definition, authoring), ToSummary(draft));
     }
 
-    public async Task<ReusableActivityDefinitionMutationView> ForkDefinitionAsync(
-        ForkReusableActivityDefinition command,
-        CancellationToken cancellationToken)
-    {
-        EnsureProviderWrite(command.TargetProviderKey);
-        EnsureDisplayName(command.DisplayName);
-        var sourceAuthoring = await GetAuthoringAsync(command.DefinitionId, cancellationToken);
-        EnsureVisible(sourceAuthoring.TenantId);
-        if (sourceAuthoring.ContentAuthority.Kind != ActivityContentAuthorityKind.ProviderSource)
-            throw BadRequest("Only a source-owned definition version can be forked through this operation.");
-        var source = await GetPublicationAsync(command.SourceVersionId, cancellationToken);
-        if (!string.Equals(source.DefinitionId, command.DefinitionId, StringComparison.Ordinal))
-            throw NotFound("activity.version.not-found", "Activity version not found", "The exact source version was not found for this definition.");
-        EnsureVisible(source.TenantId);
-
-        IActivityProvider targetProvider;
-        try
-        {
-            targetProvider = providers.Resolve(command.TargetProviderKey, command.TargetProviderSchemaVersion);
-        }
-        catch (InvalidOperationException exception)
-        {
-            throw MigrationUnsupported(source.Provider, command.TargetProviderKey, command.TargetProviderSchemaVersion, [], exception);
-        }
-
-        var migration = await targetProvider.MigrateAsync(
-            new(source.Provider, command.TargetProviderSchemaVersion),
-            cancellationToken);
-        if (migration.Manifest is null || migration.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
-            throw MigrationUnsupported(source.Provider, command.TargetProviderKey, command.TargetProviderSchemaVersion, migration.Diagnostics);
-
-        var sourceLayout = await layoutStore.FindVersionLayoutAsync(command.SourceVersionId, cancellationToken)
-            ?? throw OperationFailed("The source version layout is unavailable.");
-        var now = timeProvider.GetUtcNow();
-        var definitionId = NewId("activity-def");
-        var draftId = NewId("activity-draft");
-        EnsureAuthorableProvider(migration.Manifest);
-        EnsureAuthorableContract(source.Contract, new("ActivityDraft", draftId, definitionId, Revision: 1));
-        var definition = NewDefinition(definitionId, typeKeyPolicy.Generate(command.DisplayName, definitionId), command.Category, command.DisplayName, command.Description, now);
-        var authoring = NewAuthoring(
-            definitionId,
-            new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
-            new(command.DefinitionId, source.DefinitionVersionId, source.Version),
-            now);
-        var draft = NewDraft(draftId, definitionId, source.DefinitionVersionId, source.Contract, migration.Manifest, now);
-        var layout = NewDraftLayout(draftId, sourceLayout.Records.ToArray(), now);
-
-        try
-        {
-            await createDefinition.ExecuteAsync(new(definition, authoring, draft, layout), cancellationToken);
-        }
-        catch (InvalidOperationException exception)
-        {
-            throw Conflict("activity.definition.key-conflict", "Activity definition key conflict", "The fork target could not be created because its identity or key already exists.", exception);
-        }
-
-        return new(ToIdentity(definition, authoring), ToSummary(draft));
-    }
-
     public async Task<ActivityDefinitionIdentityView> UpdateDefinitionAsync(
         UpdateReusableActivityDefinition command,
         CancellationToken cancellationToken)
@@ -823,13 +764,6 @@ public sealed class CreateReusableActivityDefinitionHandler(ReusableActivityAuth
 {
     public Task<ReusableActivityDefinitionMutationView> Handle(CreateReusableActivityDefinition command, CancellationToken cancellationToken) =>
         service.CreateDefinitionAsync(command, cancellationToken);
-}
-
-public sealed class ForkReusableActivityDefinitionHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<ForkReusableActivityDefinition, ReusableActivityDefinitionMutationView>
-{
-    public Task<ReusableActivityDefinitionMutationView> Handle(ForkReusableActivityDefinition command, CancellationToken cancellationToken) =>
-        service.ForkDefinitionAsync(command, cancellationToken);
 }
 
 public sealed class UpdateReusableActivityDefinitionHandler(ReusableActivityAuthoringService service)

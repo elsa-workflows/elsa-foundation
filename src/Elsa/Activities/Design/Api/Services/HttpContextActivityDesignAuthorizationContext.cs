@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Claims;
 using System.Text;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Contracts;
@@ -26,6 +27,12 @@ public sealed class HttpContextActivityDesignAuthorizationContext(IHttpContextAc
     public string? TenantId =>
         HttpContext?.User.FindFirst(ElsaTenantClaim)?.Value
         ?? HttpContext?.User.FindFirst(ConventionalTenantClaim)?.Value;
+
+    public string ActorId =>
+        HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? HttpContext?.User.FindFirst("sub")?.Value
+        ?? HttpContext?.User.Identity?.Name
+        ?? string.Empty;
 
     public string AuthorizationProfile
     {

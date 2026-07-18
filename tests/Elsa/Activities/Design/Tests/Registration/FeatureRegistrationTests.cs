@@ -115,6 +115,7 @@ public sealed class FeatureRegistrationTests
             User = new ClaimsPrincipal(new ClaimsIdentity(
             [
                 new Claim("elsa.identity.tenant_id", "tenant-a"),
+                new Claim(ClaimTypes.NameIdentifier, "actor-a"),
                 new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission),
                 new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission)
             ], "test"))
@@ -127,6 +128,7 @@ public sealed class FeatureRegistrationTests
         Assert.Same(authoring, dependencies);
         Assert.True(authoring.CanAuthorProvider("elsa.activity-graph"));
         Assert.True(authoring.CanReadProviderPayload("elsa.activity-graph"));
+        Assert.Equal("actor-a", authoring.ActorId);
         Assert.True(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-a")));
         Assert.False(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-b")));
         Assert.NotEmpty(dependencies.AuthorizationProfile);
@@ -142,16 +144,23 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
         var codec = provider.GetRequiredService<IActivityDependencyCursorCodec>();
         var managementCodec = provider.GetRequiredService<IActivityManagementCursorCodec>();
+        var forkCodec = provider.GetRequiredService<IActivityForkCandidateIdCodec>();
         var state = new ActivityDependencyCursorState("tenant", "profile", "version", "Outbound", false, ["Versions"], "watermark", 1);
         var managementState = new ActivityManagementCursorState("scope", 25, 42);
 
         var decoded = codec.Decode(codec.Encode(state));
         var decodedManagement = managementCodec.Decode(managementCodec.Encode(managementState));
+        var forkState = new ActivityForkCandidateIdState(
+            "reservation-1",
+            $"sha256:{new string('a', 64)}",
+            new DateTimeOffset(2026, 7, 18, 12, 15, 0, TimeSpan.Zero));
+        var decodedFork = forkCodec.Decode(forkCodec.Encode(forkState));
         Assert.Equal(state.TenantScope, decoded.TenantScope);
         Assert.Equal(state.RootVersionId, decoded.RootVersionId);
         Assert.Equal(state.Include, decoded.Include);
         Assert.Equal(state.Position, decoded.Position);
         Assert.Equal(managementState, decodedManagement);
+        Assert.Equal(forkState, decodedFork);
         Assert.Throws<ActivityManagementCursorInvalidException>(() =>
             managementCodec.Decode(managementCodec.Encode(new("scope", 25, -1))));
     }

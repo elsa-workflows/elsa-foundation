@@ -156,16 +156,12 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         }
     }
 
-    internal sealed class Fork(ICommandSender sender, ILogger<Fork> logger)
-        : ActivityAuthoringCommandEndpoint<ForkReusableActivityDefinition, ReusableActivityDefinitionMutationView>(sender, logger)
+    internal sealed class PreviewFork(ICommandSender sender, ILogger<PreviewFork> logger)
+        : ActivityAuthoringCommandEndpoint<PreviewReusableActivityFork, ActivityForkPreviewView>(sender, logger)
     {
-        protected override int SuccessStatusCode => 201;
-        protected override string GetLocation(ReusableActivityDefinitionMutationView response) =>
-            $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
-
         public override void Configure()
         {
-            Post(RouteConstants.GetRoute("definitions/{definitionId}/forks"));
+            Post(RouteConstants.GetRoute("definitions/{definitionId}/fork-previews"));
             ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
@@ -250,6 +246,33 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("definitions/{definitionId}/versions"));
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
+        }
+    }
+}
+
+namespace Elsa.Activities.Design.Api.Endpoints.Forks
+{
+    internal sealed class Apply(ICommandSender sender, ILogger<Apply> logger)
+        : ActivityAuthoringCommandEndpoint<ApplyReusableActivityFork, ActivityForkReceiptView>(sender, logger)
+    {
+        protected override int SuccessStatusCode => 201;
+        protected override string GetLocation(ActivityForkReceiptView response) =>
+            $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
+
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("fork-candidates/{candidateId}/apply"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class GetStatus(IRequestSender sender, ILogger<GetStatus> logger)
+        : ActivityAuthoringRequestEndpoint<GetReusableActivityForkStatus, ActivityForkReceiptView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Get(RouteConstants.GetRoute("forks/{idempotencyKey}"));
             ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
     }

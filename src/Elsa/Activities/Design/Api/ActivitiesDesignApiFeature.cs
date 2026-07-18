@@ -38,6 +38,8 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
     public string? DependencyCursorSigningKey { get; set; }
     public int DependencyDefaultPageSize { get; set; } = 100;
     public int DependencyMaximumPageSize { get; set; } = 500;
+    public TimeSpan ForkReservationLifetime { get; set; } = TimeSpan.FromMinutes(15);
+    public TimeSpan ForkReservationRetention { get; set; } = TimeSpan.FromDays(1);
 
     public override void ConfigureServices(IServiceCollection services)
     {
@@ -75,8 +77,15 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         });
         services.TryAddSingleton<IActivityDependencyCursorCodec, HmacActivityDependencyCursorCodec>();
         services.TryAddSingleton<IActivityManagementCursorCodec, HmacActivityManagementCursorCodec>();
+        services.TryAddSingleton<IActivityForkCandidateIdCodec, HmacActivityForkCandidateIdCodec>();
+        services.AddOptions<ActivityForkReservationOptions>().Configure(options =>
+        {
+            options.Lifetime = ForkReservationLifetime;
+            options.Retention = ForkReservationRetention;
+        });
         services.TryAddScoped<ActivityDependencyReader>();
         services.TryAddScoped<ReusableActivityAuthoringService>();
+        services.TryAddScoped<ActivityForkService>();
         services.TryAddScoped<ActivityDefinitionManagementProjectionService>();
         services.TryAddScoped<ActivityContractProposalService>();
         services.TryAddScoped<ActivityVersionLifecycleService>();

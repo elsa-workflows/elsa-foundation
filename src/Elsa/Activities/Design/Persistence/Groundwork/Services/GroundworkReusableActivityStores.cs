@@ -35,9 +35,12 @@ public sealed class GroundworkReusableActivityStores(
     IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
+    IActivityForkStore,
     IActivityDirectDependencyStore,
     IActivityDependencyProjectionStore,
     ICreateActivityDefinitionCommand,
+    ISaveActivityForkCandidateCommand,
+    IApplyActivityForkCandidateCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
     IUpdateActivityDraftPresentationCommand,
@@ -178,6 +181,22 @@ public sealed class GroundworkReusableActivityStores(
         return new(items, sourceOffset < totalCount ? sourceOffset : null);
     }
 
+    public async Task<ActivityForkCandidate?> FindCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default) =>
+        (await LoadAsync<ActivityForkCandidate>(
+            ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+            candidateId,
+            cancellationToken))?.Entity;
+
+    public async Task<ActivityForkReceipt?> FindReceiptAsync(
+        string receiptId,
+        CancellationToken cancellationToken = default) =>
+        (await LoadAsync<ActivityForkReceipt>(
+            ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+            receiptId,
+            cancellationToken))?.Entity;
+
     public async Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(
         string draftId,
         CancellationToken cancellationToken = default) =>
@@ -316,6 +335,167 @@ public sealed class GroundworkReusableActivityStores(
                 [request.InitialDraft],
                 []),
             cancellationToken);
+    }
+
+    public async Task ExecuteAsync(
+        SaveActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateForkCandidate(request.Candidate);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            ForkCandidateLock(request.Candidate.Id),
+            null,
+            cancellationToken);
+        await EnsureAbsentAsync<ActivityForkCandidate>(
+            ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+            request.Candidate.Id,
+            cancellationToken);
+        await store.SaveAsync(
+            Save(
+                ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityForkCandidateCollection,
+                request.Candidate,
+                0),
+            cancellationToken);
+    }
+
+    public async Task<ActivityForkApplyResult> ExecuteAsync(
+        ApplyActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await using var operationLock = await lockProvider.AcquireLockAsync(
+            ForkApplyLock(request.CandidateId, request.ReceiptId),
+            null,
+            cancellationToken);
+
+        var existingReceipt = await LoadAsync<ActivityForkReceipt>(
+            ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+            request.ReceiptId,
+            cancellationToken);
+        if (existingReceipt is not null)
+        {
+            EnsureExactReplay(existingReceipt.Entity, request);
+            return new(existingReceipt.Entity, true);
+        }
+
+        var candidate = await LoadAsync<ActivityForkCandidate>(
+            ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+            request.CandidateId,
+            cancellationToken)
+            ?? throw new ActivityForkCandidateStaleException("The activity fork candidate no longer exists.");
+        EnsureApplicable(candidate.Entity, request);
+        ValidateForkCandidate(candidate.Entity);
+
+        await using var keyLock = await lockProvider.AcquireLockAsync(
+            DefinitionKeyLock(
+                candidate.Entity.ReservedDefinition.TenantId,
+                candidate.Entity.ReservedDefinition.ActivityTypeKey),
+            null,
+            cancellationToken);
+
+        var existingDefinitions = await ListAllAsync<ActivityDefinition>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+            cancellationToken);
+        if (existingDefinitions.Any(x =>
+                StringComparer.Ordinal.Equals(x.Entity.TenantId, candidate.Entity.ReservedDefinition.TenantId) &&
+                StringComparer.Ordinal.Equals(x.Entity.ActivityTypeKey, candidate.Entity.ReservedDefinition.ActivityTypeKey)))
+            throw new ActivityForkCollisionException("The reserved activity type key is no longer available.");
+
+        try
+        {
+            await EnsureAbsentAsync<ActivityDefinition>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                candidate.Entity.ReservedDefinition.Id,
+                cancellationToken);
+            await EnsureAbsentAsync<ActivityDefinitionAuthoringState>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                candidate.Entity.ReservedAuthoringState.Id,
+                cancellationToken);
+            await EnsureAbsentAsync<ActivityDefinitionDraft>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                candidate.Entity.ReservedDraft.Id,
+                cancellationToken);
+            await EnsureAbsentAsync<ActivityDefinitionDraftLayout>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
+                candidate.Entity.ReservedLayout.Id,
+                cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new ActivityForkCollisionException(exception.Message);
+        }
+
+        candidate.Entity.Status = ActivityForkCandidateStatus.Applied;
+        candidate.Entity.AppliedIdempotencyKey = request.IdempotencyKey;
+        candidate.Entity.LastModifiedAt = request.AppliedAt;
+        var receipt = new ActivityForkReceipt
+        {
+            Id = request.ReceiptId,
+            TenantId = candidate.Entity.TenantId,
+            IdempotencyKey = request.IdempotencyKey,
+            CandidateId = candidate.Entity.Id,
+            RequestFingerprint = candidate.Entity.RequestFingerprint,
+            AccessBindingFingerprint = candidate.Entity.AccessBindingFingerprint,
+            ActorId = candidate.Entity.ActorId,
+            AuthorizationProfile = candidate.Entity.AuthorizationProfile,
+            Status = ActivityForkReceiptStatus.Applied,
+            DefinitionId = candidate.Entity.ReservedDefinition.Id,
+            ActivityTypeKey = candidate.Entity.ReservedDefinition.ActivityTypeKey,
+            DraftId = candidate.Entity.ReservedDraft.Id,
+            AppliedAt = request.AppliedAt,
+            CreatedAt = request.AppliedAt,
+            LastModifiedAt = request.AppliedAt
+        };
+
+        await CommitWithManagementProjectionAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
+            [
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityForkCandidateCollection,
+                    candidate.Entity,
+                    candidate.Envelope.Version),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityForkReceiptCollection,
+                    receipt,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                    candidate.Entity.ReservedDefinition,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection,
+                    candidate.Entity.ReservedAuthoringState,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection,
+                    candidate.Entity.ReservedDraft,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection,
+                    candidate.Entity.ReservedLayout,
+                    0)
+            ],
+            new(
+                request.AppliedAt,
+                [new(candidate.Entity.ReservedDefinition, candidate.Entity.ReservedAuthoringState)],
+                [candidate.Entity.ReservedDraft],
+                []),
+            cancellationToken);
+        return new(receipt, false);
     }
 
     public async Task<ActivityDefinition> ExecuteAsync(
@@ -849,6 +1029,49 @@ public sealed class GroundworkReusableActivityStores(
         ValidateDraftAndLayout(request.InitialDraft, request.InitialLayout);
     }
 
+    private static void ValidateForkCandidate(ActivityForkCandidate candidate)
+    {
+        ValidateCreate(new(
+            candidate.ReservedDefinition,
+            candidate.ReservedAuthoringState,
+            candidate.ReservedDraft,
+            candidate.ReservedLayout));
+        if (candidate.Status == ActivityForkCandidateStatus.Applied &&
+            string.IsNullOrWhiteSpace(candidate.AppliedIdempotencyKey))
+            throw new ArgumentException("An applied fork candidate requires its operation identity.", nameof(candidate));
+        if (!StringComparer.Ordinal.Equals(candidate.TenantId, candidate.ReservedDefinition.TenantId) ||
+            !StringComparer.Ordinal.Equals(candidate.SourceVersionId, candidate.ReservedDraft.SourceVersionId))
+            throw new ArgumentException("Fork candidate tenant and exact source bindings must match its reserved authoring material.", nameof(candidate));
+        if (candidate.ExpiresAt <= candidate.CreatedAt || candidate.RetainUntil <= candidate.ExpiresAt)
+            throw new ArgumentException("Fork candidate expiry and retention must be strictly ordered.", nameof(candidate));
+    }
+
+    private static void EnsureApplicable(
+        ActivityForkCandidate candidate,
+        ApplyActivityForkCandidateRequest request)
+    {
+        if (candidate.Status != ActivityForkCandidateStatus.Reserved)
+            throw new ActivityForkCandidateStaleException("The activity fork candidate has already been consumed.");
+        if (!StringComparer.Ordinal.Equals(candidate.RequestFingerprint, request.RequestFingerprint) ||
+            !StringComparer.Ordinal.Equals(candidate.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+            !StringComparer.Ordinal.Equals(candidate.ActorId, request.ActorId) ||
+            !StringComparer.Ordinal.Equals(candidate.AuthorizationProfile, request.AuthorizationProfile))
+            throw new ActivityForkCandidateStaleException("The activity fork candidate binding changed before commit.");
+    }
+
+    private static void EnsureExactReplay(
+        ActivityForkReceipt receipt,
+        ApplyActivityForkCandidateRequest request)
+    {
+        if (!StringComparer.Ordinal.Equals(receipt.CandidateId, request.CandidateId) ||
+            !StringComparer.Ordinal.Equals(receipt.RequestFingerprint, request.RequestFingerprint) ||
+            !StringComparer.Ordinal.Equals(receipt.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+            !StringComparer.Ordinal.Equals(receipt.ActorId, request.ActorId) ||
+            !StringComparer.Ordinal.Equals(receipt.AuthorizationProfile, request.AuthorizationProfile) ||
+            !StringComparer.Ordinal.Equals(receipt.IdempotencyKey, request.IdempotencyKey))
+            throw new ActivityForkIdempotencyConflictException("The activity fork operation identity is already bound to different material.");
+    }
+
     private static void ValidateDraftAndLayout(ActivityDefinitionDraft draft, ActivityDefinitionDraftLayout layout)
     {
         if (!StringComparer.Ordinal.Equals(draft.Id, layout.DraftId))
@@ -992,6 +1215,15 @@ public sealed class GroundworkReusableActivityStores(
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))).ToLowerInvariant();
         return $"elsa:activities:design:definition-key:{hash}";
     }
+
+    private static string ForkCandidateLock(string candidateId) =>
+        $"elsa:activities:design:fork-candidate:{HashLock(candidateId)}";
+
+    private static string ForkApplyLock(string candidateId, string receiptId) =>
+        $"elsa:activities:design:fork-apply:{HashLock($"{candidateId}\u001f{receiptId}")}";
+
+    private static string HashLock(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
     private static bool IsVisible(string? itemTenantId, string? tenantId) =>
         itemTenantId is null || StringComparer.Ordinal.Equals(itemTenantId, tenantId);

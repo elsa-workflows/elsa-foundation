@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Tests.Fixtures;
 using Elsa.Primitives.Contracts;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests;
@@ -638,26 +639,47 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
-    public async Task Source_owned_fork_creates_new_design_identity_with_exact_audit_provenance()
+    public async Task Source_owned_fork_is_previewed_then_applied_with_exact_reserved_identity_and_replay_receipt()
     {
         var harness = new Harness();
         var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
         harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
 
-        var fork = await harness.Service.ForkDefinitionAsync(new(
+        var preview = await harness.Forks.PreviewAsync(new(
             source.DefinitionId,
             "source-version",
-            "Custom",
-            "Forked",
+            " Custom ",
+            " Forked ",
             null,
             "target.provider",
             "1"), default);
+        Assert.Equal(ActivityForkCandidateLifecycleView.Reserved, preview.Status);
+        Assert.Equal("Custom", preview.Presentation.Category);
+        Assert.Equal("Forked", preview.Presentation.DisplayName);
+        Assert.Equal("source", preview.Target.Contract.ContractSchemaVersion);
+        Assert.Equal(preview.ContractComparison.SourceFingerprint, preview.ContractComparison.TargetFingerprint);
+        Assert.NotEqual(source.DefinitionId, preview.Target.DefinitionId);
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
 
-        Assert.NotEqual(source.DefinitionId, fork.Definition.DefinitionId);
-        Assert.Equal(ActivityContentAuthorityKind.Design, fork.Definition.ContentAuthority.Kind);
-        Assert.Equal(WellKnownActivityContentAuthorities.Design, fork.Definition.ContentAuthority.AuthorityKey);
-        Assert.Equal(new(source.DefinitionId, "source-version", "1.0.0"), fork.Definition.ForkedFrom);
-        Assert.Equal("source-version", fork.Draft.SourceVersionId);
+        var applied = await harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "fork-operation-1"),
+            default);
+        var replay = await harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "fork-operation-1"),
+            default);
+        var status = await harness.Forks.GetStatusAsync(new("fork-operation-1"), default);
+
+        Assert.Equal(ActivityForkOutcomeView.Applied, applied.Outcome);
+        Assert.Equal(ActivityForkOutcomeView.AlreadyApplied, replay.Outcome);
+        Assert.Equal(ActivityForkOutcomeView.Applied, status.Outcome);
+        Assert.Equal(preview.Target.DefinitionId, applied.Definition.DefinitionId);
+        Assert.Equal(preview.Target.ActivityTypeKey, applied.Definition.ActivityTypeKey);
+        Assert.Equal(preview.Target.DraftId, applied.Draft.DraftId);
+        Assert.Equal(applied.Definition.DefinitionId, replay.Definition.DefinitionId);
+        Assert.Equal(ActivityContentAuthorityKind.Design, applied.Definition.ContentAuthority.Kind);
+        Assert.Equal(WellKnownActivityContentAuthorities.Design, applied.Definition.ContentAuthority.AuthorityKey);
+        Assert.Equal(new(source.DefinitionId, "source-version", "1.0.0"), applied.Definition.ForkedFrom);
+        Assert.Equal("source-version", applied.Draft.SourceVersionId);
         Assert.Equal(ActivityContentAuthorityKind.ProviderSource, (await harness.Stores.FindAsync(source.DefinitionId))!.ContentAuthority.Kind);
     }
 
@@ -761,11 +783,30 @@ public sealed class ReusableActivityDraftCommandTests
                 _time,
                 _context);
             Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(contractCapabilities), Service, _context);
+            Forks = new(
+                Stores,
+                Stores,
+                Stores,
+                Stores,
+                Stores,
+                Stores,
+                registry,
+                new ActivityContractAuthoringValidator(contractCapabilities),
+                typeKeyPolicy ?? new DefaultActivityTypeKeyPolicy(),
+                _ids,
+                new HmacActivityForkCandidateIdCodec(Options.Create(new ActivityDependencyCursorOptions
+                {
+                    SigningKey = "0123456789abcdef0123456789abcdef"
+                })),
+                Options.Create(new ActivityForkReservationOptions()),
+                _time,
+                _context);
         }
 
         public InMemoryReusableActivityStores Stores { get; }
         public ReusableActivityAuthoringService Service { get; }
         public ActivityContractProposalService Proposals { get; }
+        public ActivityForkService Forks { get; }
 
         public CreateReusableActivityDefinition CreateDefinitionCommand() => new(
             "Orders",
@@ -878,9 +919,11 @@ public sealed class ReusableActivityDraftCommandTests
     private sealed class TestAuthoringContext(string? tenantId, bool canReadProviderPayload, bool canAuthorProvider) : IActivityAuthoringContext
     {
         public string? TenantId => tenantId;
+        public string ActorId => "actor-a";
         public string AuthorizationProfile => $"{tenantId ?? "global"}/{canReadProviderPayload}/{canAuthorProvider}";
         public bool CanAuthorProvider(string providerKey) => canAuthorProvider;
         public bool CanReadProviderPayload(string providerKey) => canReadProviderPayload;
+        public bool CanManageActivityDefinitions => true;
     }
 
     private sealed class EmptyCapabilityCatalog : IActivityContractCapabilityCatalog

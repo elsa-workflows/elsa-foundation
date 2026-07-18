@@ -21,7 +21,9 @@ public sealed class ActivityDefinitionAuthoringApiTests
     {
         { "AuthoringCapabilities.Get", "GET", "design/activities/authoring-capabilities" },
         { "Definitions.Add", "POST", "design/activities/definitions" },
-        { "Definitions.Fork", "POST", "design/activities/definitions/{definitionId}/forks" },
+        { "Definitions.PreviewFork", "POST", "design/activities/definitions/{definitionId}/fork-previews" },
+        { "Forks.Apply", "POST", "design/activities/fork-candidates/{candidateId}/apply" },
+        { "Forks.GetStatus", "GET", "design/activities/forks/{idempotencyKey}" },
         { "Definitions.List", "GET", "design/activities/definitions" },
         { "Definitions.Get", "GET", "design/activities/definitions/{definitionId}" },
         { "Definitions.Update", "PATCH", "design/activities/definitions/{definitionId}" },
@@ -66,6 +68,9 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains(links, x => x.Rel == "activity-draft-validation" && x.Href == "design/activities/drafts/{draftId}/validate" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-versions" && x.Href == "design/activities/definitions/{definitionId}/versions" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-version" && x.Href == "design/activities/versions/{versionId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-fork-preview" && x.Href == "design/activities/definitions/{definitionId}/fork-previews" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-fork-apply" && x.Href == "design/activities/fork-candidates/{candidateId}/apply" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-fork-status" && x.Href == "design/activities/forks/{idempotencyKey}" && x.Templated);
     }
 
     [Theory]
@@ -83,7 +88,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
     {
         object[] requests =
         [
-            new ForkReusableActivityDefinition("definition-route", "source-version", "Category", "Display", null, "provider", "1"),
+            new PreviewReusableActivityFork("definition-route", "source-version", "Category", "Display", null, "provider", "1"),
+            new ApplyReusableActivityFork("candidate-route", "sha256:request", "fork-operation"),
             new CreateReusableActivityDraft("definition-route", null),
             new ReplaceReusableActivityDraft(
                 "draft-route",

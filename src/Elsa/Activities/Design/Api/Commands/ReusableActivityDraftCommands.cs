@@ -13,6 +13,8 @@ public interface IActivityAuthoringContext
 {
     string? TenantId { get; }
 
+    string ActorId => AuthorizationProfile;
+
     string AuthorizationProfile { get; }
 
     bool CanAuthorProvider(string providerKey);
@@ -31,14 +33,22 @@ public sealed record CreateReusableActivityDefinition(
     IReadOnlyList<ActivityLayoutRecord> Layout,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityTypeKey = null) : ICommand<ReusableActivityDefinitionMutationView>;
 
-public sealed record ForkReusableActivityDefinition(
+public sealed record PreviewReusableActivityFork(
     [property: JsonIgnore] string DefinitionId,
     string SourceVersionId,
     string Category,
     string DisplayName,
     string? Description,
     string TargetProviderKey,
-    string TargetProviderSchemaVersion) : ICommand<ReusableActivityDefinitionMutationView>;
+    string TargetProviderSchemaVersion) : ICommand<ActivityForkPreviewView>;
+
+public sealed record ApplyReusableActivityFork(
+    [property: JsonIgnore] string CandidateId,
+    string RequestFingerprint,
+    string IdempotencyKey) : ICommand<ActivityForkReceiptView>;
+
+public sealed record GetReusableActivityForkStatus(
+    [property: JsonIgnore] string IdempotencyKey) : IRequest<ActivityForkReceiptView>;
 
 public sealed record UpdateReusableActivityDefinition(
     [property: JsonIgnore] string DefinitionId,

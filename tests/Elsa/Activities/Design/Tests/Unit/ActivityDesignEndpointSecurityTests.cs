@@ -31,7 +31,9 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Catalog.List")]
     [InlineData("Definitions.Add")]
     [InlineData("Definitions.AddDraft")]
-    [InlineData("Definitions.Fork")]
+    [InlineData("Definitions.PreviewFork")]
+    [InlineData("Forks.Apply")]
+    [InlineData("Forks.GetStatus")]
     [InlineData("Definitions.Get")]
     [InlineData("Definitions.List")]
     [InlineData("Definitions.ListDrafts")]
@@ -85,7 +87,7 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Catalog.List",
             "Definitions.Add",
             "Definitions.AddDraft",
-            "Definitions.Fork",
+            "Definitions.PreviewFork",
             "Definitions.Get",
             "Definitions.List",
             "Definitions.ListDrafts",
@@ -103,6 +105,8 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Drafts.Replace",
             "Drafts.UpdatePresentation",
             "Drafts.Validate",
+            "Forks.Apply",
+            "Forks.GetStatus",
             "UpgradePlans.Apply",
             "UpgradePlans.Create",
             "UpgradePlans.Get",

@@ -73,6 +73,17 @@ public interface IActivityDraftValidationStore
         CancellationToken cancellationToken = default);
 }
 
+public interface IActivityForkStore
+{
+    Task<ActivityForkCandidate?> FindCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default);
+
+    Task<ActivityForkReceipt?> FindReceiptAsync(
+        string receiptId,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Reads authoritative immutable outbound dependency facts. Reverse, transitive, and current-draft
 /// usage projections are deliberately separate because they are rebuildable and carry a watermark.
