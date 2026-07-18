@@ -806,6 +806,86 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
+  it("keeps background contract proposals outside autosave and adopts only an explicitly applied exact revision", async () => {
+    const source = fullDraft({ revision: 3, payload: { edit: 0 } });
+    const currency = {
+      referenceKey: "currency",
+      name: "Currency",
+      displayName: "Currency",
+      description: null,
+      category: null,
+      order: 0,
+      uiHint: null,
+      uiSpecifications: null,
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false,
+      isNullable: true,
+      default: null,
+      storageDriverKey: "elsa.json",
+      durability: "Required"
+    };
+    const applied = {
+      ...source,
+      revision: 4,
+      contract: { ...source.contract, inputs: [currency] }
+    };
+    const putJson = vi.fn();
+    const postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/contract-proposals")) return {
+        draftId: source.draftId,
+        revision: source.revision,
+        providerKey: source.provider.providerKey,
+        providerSchemaVersion: source.provider.schemaVersion,
+        manifestFingerprint: source.provider.manifestFingerprint,
+        proposalFingerprint: "sha256:proposal-3",
+        changes: [{
+          changeId: "input:add:currency",
+          operation: "Add",
+          memberKind: "Input",
+          referenceKey: "currency",
+          input: currency
+        }],
+        diagnostics: []
+      };
+      if (url.endsWith("/contract-proposals/apply")) return applied;
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()],
+      putJson,
+      postJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return proposalCapabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return source;
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        if (url === "/expressions/descriptors") return { items: [] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Add input currency");
+    expect(putJson).not.toHaveBeenCalled();
+    expect(rendered.container.textContent).toContain("1 of 1 changes selected");
+
+    click(buttonByText(rendered.container, "Apply selected changes"));
+    await waitFor(() => expect(postJson).toHaveBeenLastCalledWith(
+      "/design/activities/drafts/activity-draft-1/contract-proposals/apply",
+      {
+        expectedRevision: 3,
+        expectedProviderKey: "elsa.activity-graph",
+        expectedProviderSchemaVersion: "1",
+        expectedManifestFingerprint: "sha256:graph",
+        proposalFingerprint: "sha256:proposal-3",
+        selectedChangeIds: ["input:add:currency"]
+      }
+    ));
+    await waitForText(rendered.container, "Saved revision 4");
+    expect(rendered.container.querySelector("[data-contract-kind='input'][data-contract-reference-key='currency']")).not.toBeNull();
+    expect(putJson).not.toHaveBeenCalled();
+    await rendered.unmount();
+  });
+
   it("renders ordered structured diagnostics with safe severity counts and typed unknown-location handling", async () => {
     const postJson = vi.fn(async () => ({
       draftId: "activity-draft-1",
@@ -1659,6 +1739,16 @@ function capabilities() {
       { rel: "activity-publication-receipt", href: "design/activities/publications/{idempotencyKey}", templated: true }
     ]
   }] };
+}
+
+function proposalCapabilities() {
+  const document = capabilities();
+  const activityDesign = document.capabilities.find(capability => capability.id === "elsa.api.activity-design")!;
+  activityDesign.links.push(
+    { rel: "activity-draft-contract-proposals", href: "design/activities/drafts/{draftId}/contract-proposals", templated: true },
+    { rel: "activity-draft-contract-proposals-apply", href: "design/activities/drafts/{draftId}/contract-proposals/apply", templated: true }
+  );
+  return document;
 }
 
 function publicationChange(overrides: Partial<{

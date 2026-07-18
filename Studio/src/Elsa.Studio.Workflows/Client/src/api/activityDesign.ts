@@ -22,8 +22,11 @@ import type {
   ActivityDefinitionVersionManagementView,
   ActivityDefinitionVersionView,
   ActivityManagementPage,
+  ActivityContractProposalView,
+  ApplyActivityContractProposalRequest,
   CreateActivityDefinitionRequest,
   CreateActivityDefinitionResponse,
+  ProposeActivityContractRequest,
   RecommendedActivityDefinition,
   RecommendedActivityDefinitionPage,
   ReplaceActivityDefinitionDraftRequest
@@ -295,6 +298,25 @@ export async function validateActivityDefinitionDraft(
 ) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-validation", { draftId });
   return context.http.postJson<ActivityDraftValidationView>(path, { expectedRevision });
+}
+
+export async function proposeActivityDefinitionContract(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: ProposeActivityContractRequest,
+  signal?: AbortSignal
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-contract-proposals", { draftId });
+  return context.http.postJson<ActivityContractProposalView>(path, request, { signal });
+}
+
+export async function applyActivityDefinitionContractProposal(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: ApplyActivityContractProposalRequest
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-contract-proposals-apply", { draftId });
+  return context.http.postJson<ActivityDefinitionDraftView>(path, request);
 }
 
 export async function listActivityDefinitionDrafts(

@@ -114,6 +114,29 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   expect(state.draft.contract).toMatchObject({ inputs: [{ referenceKey: "customer-note", isRequired: false, isNullable: true, default: { syntax: "Literal", value: null }, storageDriverKey: "elsa.json", durability: "Required" }] });
 });
 
+test("Activity Definition provider contract proposals require review and apply an exact saved revision", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await createBrowserActivity(page);
+
+  await expect(page.getByText("Add input currency")).toBeVisible();
+  await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
+  expect(state.proposalApplies).toBe(0);
+  expect(state.draft.revision).toBe(1);
+
+  await page.getByRole("button", { name: "Apply selected changes" }).click();
+  await expect(page.getByText("Saved revision 2")).toBeVisible();
+  await expect(page.locator("[data-contract-kind='input'][data-contract-reference-key='currency']")).toBeVisible();
+  expect(state.proposalApplies).toBe(1);
+  expect(state.lastProposalApply).toEqual({
+    expectedRevision: 1,
+    expectedProviderKey: "elsa.activity-graph",
+    expectedProviderSchemaVersion: "1",
+    expectedManifestFingerprint: "sha256:1",
+    proposalFingerprint: "sha256:proposal-1",
+    selectedChangeIds: ["input:add:currency"]
+  });
+});
+
 test("Activity Definition validation distinguishes valid, invalid, unavailable, forbidden, missing, unknown, and stale outcomes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
@@ -218,6 +241,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   expect(state.recommendedVersionId).toBe("published-version-1");
   expect(state.requestedVersions).toEqual(["2.0.0", "3.4.5"]);
   expect(state.publicationWrites).toBe(2);
+  expect(state.proposalApplies).toBe(0);
 });
 
 test("published recommendation is placed exactly, dispatched once, and inspected as one reusable boundary", async ({ page }) => {
@@ -351,6 +375,8 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     recommendedVersionId: null as string | null,
     publicationWrites: 0,
     appliedPublications: 0,
+    proposalApplies: 0,
+    lastProposalApply: null as unknown,
     receiptLookups: 0,
     requestedVersions: [] as string[],
     publishMode: "normal" as "normal" | "ambiguous" | "stale",
@@ -391,6 +417,42 @@ async function mockActivityDefinitionAuthoring(page: Page) {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) });
     }
     return route.fallback();
+  });
+  await page.route("**/design/activities/drafts/activity-draft-browser/contract-proposals", async route => {
+    const body = route.request().postDataJSON() as { expectedRevision: number };
+    const hasCurrency = state.draft.contract.inputs.some(input => input.referenceKey === "currency");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        draftId: state.draft.draftId,
+        revision: body.expectedRevision,
+        providerKey: state.draft.provider.providerKey,
+        providerSchemaVersion: state.draft.provider.schemaVersion,
+        manifestFingerprint: state.draft.provider.manifestFingerprint,
+        proposalFingerprint: `sha256:proposal-${body.expectedRevision}`,
+        changes: hasCurrency ? [] : [{
+          changeId: "input:add:currency",
+          operation: "Add",
+          memberKind: "Input",
+          referenceKey: "currency",
+          input: browserContractInput()
+        }],
+        diagnostics: []
+      })
+    });
+  });
+  await page.route("**/design/activities/drafts/activity-draft-browser/contract-proposals/apply", async route => {
+    const body = route.request().postDataJSON();
+    state.proposalApplies += 1;
+    state.lastProposalApply = body;
+    state.draft = {
+      ...state.draft,
+      revision: state.draft.revision + 1,
+      contract: { ...state.draft.contract, inputs: [...state.draft.contract.inputs, browserContractInput()] },
+      updatedAt: new Date().toISOString()
+    };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) });
   });
   await page.route("**/design/activities/drafts/activity-draft-browser/conflict-copies", async route => {
     const body = route.request().postDataJSON() as { provider: { payload: unknown }; layout: unknown[]; contract: unknown; presentationLabel?: string | null };
@@ -816,6 +878,8 @@ function authoringApiCapabilities() {
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-draft-validation", href: "design/activities/drafts/{draftId}/validate", templated: true },
     { rel: "activity-draft-conflict-copies", href: "design/activities/drafts/{draftId}/conflict-copies", templated: true },
+    { rel: "activity-draft-contract-proposals", href: "design/activities/drafts/{draftId}/contract-proposals", templated: true },
+    { rel: "activity-draft-contract-proposals-apply", href: "design/activities/drafts/{draftId}/contract-proposals/apply", templated: true },
     { rel: "activity-catalog", href: "design/activities/catalog" }
   ] }, { id: "elsa.api.expressions", contractVersion: "1", links: [
     { rel: "expression-descriptors", href: "expressions/descriptors" }
@@ -926,6 +990,25 @@ function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {
 
 function authoringDraft(draftId: string, revision: number, payload: unknown) {
   return { draftId, definitionId: "activity-def-browser", tenantId: "browser-tenant", revision, sourceVersionId: null, status: "active", contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] }, provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: `sha256:${revision}`, payload }, layout: [], validation: null, createdAt: "2026-07-17T10:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null };
+}
+
+function browserContractInput() {
+  return {
+    referenceKey: "currency",
+    name: "Currency",
+    displayName: "Currency",
+    description: null,
+    category: null,
+    order: 0,
+    uiHint: null,
+    uiSpecifications: null,
+    type: { alias: "String", collectionKind: "Single" },
+    isRequired: false,
+    isNullable: true,
+    default: null,
+    storageDriverKey: "elsa.json",
+    durability: "Required"
+  };
 }
 
 function initialGraphPayload() { return { rootActivity: { nodeId: "root", activityVersionId: "", inputs: [], outputs: [], structure: null }, variables: [], outputMappings: [] }; }
