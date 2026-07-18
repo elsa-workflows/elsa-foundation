@@ -82,15 +82,42 @@ public sealed class ReusableActivityCollectionImporter(
                     ["OwnerSourceVersionId"] = x.OwnerSourceVersionId,
                     ["TargetSourceVersionId"] = x.TargetSourceVersionId,
                     ["NodeId"] = x.NodeId
-                })).ToArray();
+                },
+                pathSegments:
+                [
+                    new(Elsa3MigrationPathSegmentKind.SourceVersion, x.OwnerSourceVersionId),
+                    new(Elsa3MigrationPathSegmentKind.Node, x.NodeId),
+                    new(Elsa3MigrationPathSegmentKind.DependencySourceVersion, x.TargetSourceVersionId)
+                ])).ToArray();
             throw new ReusableActivityImportValidationException(
                 "The selected Elsa 3 import set is not dependency-closed.",
                 diagnostics);
         }
 
         var mutation = await materializer.MaterializeAsync(request.Collection, plan, selection, cancellationToken);
+        if (request.AccessScope is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(request.AccessScope.UserId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(request.IdempotencyKey);
+            foreach (var activity in mutation.Activities)
+            {
+                activity.Definition.TenantId = request.AccessScope.TenantId;
+                activity.Version.TenantId = request.AccessScope.TenantId;
+                activity.AuthoringState.TenantId = request.AccessScope.TenantId;
+            }
+            foreach (var workflow in mutation.Workflows)
+            {
+                workflow.Definition.TenantId = request.AccessScope.TenantId;
+                workflow.Version.TenantId = request.AccessScope.TenantId;
+            }
+            mutation = mutation with
+            {
+                AccessScope = request.AccessScope,
+                IdempotencyKey = request.IdempotencyKey
+            };
+        }
         var committed = await command.CommitAsync(mutation, cancellationToken);
-        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp);
+        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, committed.Receipt);
     }
 
     private static ReusableActivityImportValidationException Validation(
