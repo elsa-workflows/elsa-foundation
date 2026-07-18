@@ -122,6 +122,8 @@ public sealed class ActivityDesignEndpointSecurityTests
             "UpgradePlans.Apply",
             "UpgradePlans.Create",
             "UpgradePlans.Get",
+            "UpgradePlans.GetReceipt",
+            "UpgradePlans.Refresh",
             "Versions.Diff",
             "Versions.Dependencies",
             "Versions.Get",

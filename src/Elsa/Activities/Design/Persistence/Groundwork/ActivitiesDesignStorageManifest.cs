@@ -94,6 +94,8 @@ public static class ActivitiesDesignStorageManifest
 
     public const string ActivityUpgradePlanDocumentKind = "activityUpgradePlan";
     public const string ActivityUpgradePlanCollection = "activityUpgradePlan";
+    public const string ActivityUpgradeApplyReceiptDocumentKind = "activityUpgradeApplyReceipt";
+    public const string ActivityUpgradeApplyReceiptCollection = "activityUpgradeApplyReceipt";
 
     public const string ActivityForkCandidateDocumentKind = "activityForkCandidate";
     public const string ActivityForkCandidateCollection = "activityForkCandidate";
@@ -235,6 +237,11 @@ public static class ActivitiesDesignStorageManifest
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)],
                 LifecyclePolicy.AppendOnly),
+            Unit(
+                ActivityUpgradeApplyReceiptDocumentKind,
+                "Activity upgrade apply receipt",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]),
             ManagementUnit(
                 ActivityDefinitionManagementProjectionDocumentKind,
                 "Activity definition management projection",

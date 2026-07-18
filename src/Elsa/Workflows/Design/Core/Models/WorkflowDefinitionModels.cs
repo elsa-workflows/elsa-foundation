@@ -23,7 +23,8 @@ public sealed record WorkflowDefinitionVersionModel(
     IWorkflowDefinition Definition,
     WorkflowDefinitionState State,
     DateTimeOffset? SourceCreatedAt = null,
-    DateTimeOffset CreatedAt = default
+    DateTimeOffset CreatedAt = default,
+    string? SourceDraftId = null
 ) : IWorkflowDefinitionVersion;
 
 /// <summary>Persistence-agnostic <see cref="IWorkflowDefinitionDraft"/> produced by the factory.</summary>

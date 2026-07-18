@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -22,6 +23,21 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
         var structure = ReadAuthoredStructure(activity);
         return [new ActivityChildProjection(FlowchartActivity.ActivitiesSlotName, structure.Activities)];
     }
+
+    public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) =>
+        ReadAuthoredStructure(activity).Connections
+            .GroupBy(connection => connection.Source.NodeId, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => new ActivityChildContractMemberUsage(
+                group.Key,
+                group.Select(connection => new ActivityContractMemberUsage(
+                        "Outcome",
+                        connection.Source.Port,
+                        "Connected"))
+                    .Distinct()
+                    .OrderBy(usage => usage.ReferenceKey, StringComparer.Ordinal)
+                    .ToArray()))
+            .ToArray();
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {

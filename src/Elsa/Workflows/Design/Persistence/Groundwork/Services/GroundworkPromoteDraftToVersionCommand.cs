@@ -35,9 +35,13 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
             store,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
-        var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
+        var observed = await documents.FindByIdAsync(draftId, cancellationToken)
+                       ?? throw new InvalidOperationException($"Workflow definition draft '{draftId}' not found");
+        var definitionLockKey = WorkflowDesignPersistenceLockKeys.DefinitionKey(observed.Entity.WorkflowDefinitionId);
+        var draftLockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
 
-        await using var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken);
+        await using var definitionLock = await lockProvider.AcquireLockAsync(definitionLockKey, null, cancellationToken);
+        await using var draftLock = await lockProvider.AcquireLockAsync(draftLockKey, null, cancellationToken);
 
         var document = await documents.FindByIdAsync(draftId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition draft '{draftId}' not found");
@@ -55,7 +59,8 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         var version = new WorkflowDefinitionVersion(draft.WorkflowDefinitionId, WorkflowVersionNumbering.NextMajor(lastVersion?.Version))
         {
             Id = versionId,
-            State = draft.State
+            State = draft.State,
+            SourceDraftId = draft.Id
         };
 
         var versionLayout = new WorkflowDefinitionVersionLayout

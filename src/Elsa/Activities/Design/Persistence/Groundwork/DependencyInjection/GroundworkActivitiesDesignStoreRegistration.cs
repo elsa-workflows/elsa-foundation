@@ -77,7 +77,10 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.RemoveAll<IActivityDependencyProjectionRebuilder>();
         services.AddScoped<IActivityDependencyProjectionRebuilder>(sp => sp.GetRequiredService<GroundworkActivityDependencyProjection>());
         services.RemoveAll<IActivityUpgradePlanStore>();
-        services.AddScoped<IActivityUpgradePlanStore, GroundworkActivityUpgradePlanStore>();
+        services.AddScoped<GroundworkActivityUpgradePlanStore>();
+        services.AddScoped<IActivityUpgradePlanStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
+        services.RemoveAll<IActivityUpgradeApplyReceiptStore>();
+        services.AddScoped<IActivityUpgradeApplyReceiptStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
 
         services.RemoveAll<ICreateActivityDefinitionCommand>();
         services.AddScoped<ICreateActivityDefinitionCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());

@@ -249,10 +249,13 @@ public sealed class GraphActivityProviderTests
               "variables": [],
               "outputMappings": [{ "outputReferenceKey": "total", "source": { "syntax": "Literal", "value": 42 } }],
               "rootActivity": {
-                "nodeId": "if", "activityVersionId": "version-if", "inputs": [], "outputs": [],
+                "nodeId": "if", "activityVersionId": "version-if",
+                "inputs": [{ "referenceKey": "customer", "value": { "value": "secret", "expressionType": "Literal" }, "isSensitive": true }],
+                "outputs": [{ "referenceKey": "result", "value": { "value": null } }],
                 "structure": { "kind": "If", "schemaVersion": "1", "payload": {
                   "then": { "nodeId": "then", "activityVersionId": "version-then", "inputs": [], "outputs": [], "structure": null },
-                  "else": { "nodeId": "else", "activityVersionId": "version-else", "inputs": [], "outputs": [], "structure": null }
+                  "else": { "nodeId": "else", "activityVersionId": "version-else", "inputs": [], "outputs": [], "structure": null },
+                  "outcomeUsage": [{ "nodeId": "then", "referenceKey": "approved" }]
                 } }
               }
             }
@@ -264,7 +267,13 @@ public sealed class GraphActivityProviderTests
         var root = Assert.Single(discovery.Dependencies, x => x.OccurrenceId == "if");
         Assert.Null(root.ParentOccurrenceId);
         Assert.Equal("activity-graph", root.ChildSlotName);
-        Assert.Equal(("if", "If.Then", 0), discovery.Dependencies.Where(x => x.OccurrenceId == "then").Select(x => (x.ParentOccurrenceId, x.ChildSlotName, x.ChildIndex)).Single());
+        Assert.Equal(
+            [new("Input", "customer", "Bound"), new("Output", "result", "Bound")],
+            root.MemberUsage);
+        Assert.DoesNotContain("secret", JsonSerializer.Serialize(root.MemberUsage), StringComparison.Ordinal);
+        var then = Assert.Single(discovery.Dependencies, x => x.OccurrenceId == "then");
+        Assert.Equal(("if", "If.Then", 0), (then.ParentOccurrenceId, then.ChildSlotName, then.ChildIndex));
+        Assert.Equal([new("Outcome", "approved", "Connected")], then.MemberUsage);
         Assert.Equal(("if", "If.Else", 0), discovery.Dependencies.Where(x => x.OccurrenceId == "else").Select(x => (x.ParentOccurrenceId, x.ChildSlotName, x.ChildIndex)).Single());
     }
 
@@ -504,6 +513,16 @@ public sealed class GraphActivityProviderTests
             return activity with { Structure = new(activity.Structure.Kind, activity.Structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, Options)) };
         }
         public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => activity.Structure;
+        public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity)
+        {
+            if (activity.Structure?.Payload.TryGetProperty("outcomeUsage", out var usage) != true)
+                return [];
+            return usage.EnumerateArray()
+                .Select(item => new ActivityChildContractMemberUsage(
+                    item.GetProperty("nodeId").GetString()!,
+                    [new("Outcome", item.GetProperty("referenceKey").GetString()!, "Connected")]))
+                .ToArray();
+        }
         public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
         public bool SupportsScopedVariables(ActivityNode activity) => false;
     }

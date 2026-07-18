@@ -36,7 +36,8 @@ public sealed record ActivityDependencyItemView(
     ActivityDependencyOccurrenceView Occurrence,
     bool IsDirect,
     int Depth,
-    IReadOnlyList<ActivityDefinitionReferenceView> Path);
+    IReadOnlyList<ActivityDefinitionReferenceView> Path,
+    IReadOnlyList<ActivityContractMemberUsage> MemberUsage);
 
 public sealed record ActivityDependencyPageView(
     ActivityDefinitionReferenceView Root,
@@ -66,7 +67,12 @@ public static class ActivityDependencyViewMappings
         new(item.Occurrence.OccurrenceId, item.Occurrence.NodeOrigin),
         item.IsDirect,
         item.Depth,
-        item.Path.Select(Reference).ToArray());
+        item.Path.Select(Reference).ToArray(),
+        item.MemberUsage
+            .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
+            .ThenBy(x => x.ReferenceKey, StringComparer.Ordinal)
+            .ThenBy(x => x.UsageKind, StringComparer.Ordinal)
+            .ToArray());
 
     private static ActivityDefinitionReferenceView Reference(ActivityDefinitionReference reference) => new(
         reference.Kind,

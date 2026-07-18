@@ -116,6 +116,21 @@ public interface IActivityUpgradePlanner
         CancellationToken cancellationToken = default);
 }
 
+public interface IActivityUpgradePlanRefresher
+{
+    ValueTask<ActivityUpgradePlan> RefreshAsync(
+        ActivityUpgradePlanRefreshRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IActivityUpgradePublishedDraftResolver
+{
+    ValueTask<ActivityUpgradePublishedDraft?> ResolveAsync(
+        string publishedVersionId,
+        string expectedKind,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Cross-owner discovery port used by the Design-owned planner. Publishing supplies the bridge that
 /// can inspect both activity and workflow authoring stores without introducing a Design dependency

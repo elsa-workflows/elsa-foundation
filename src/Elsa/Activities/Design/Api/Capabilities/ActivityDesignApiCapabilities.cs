@@ -29,7 +29,13 @@ public static class ActivityDesignApiCapabilities
             new("activity-definition-recommendation", "design/activities/definitions/{definitionId}/recommendation", true),
             new("recommended-activity-definitions", "design/activities/definitions/picker"),
             new("activity-availability", "design/activities/availability/settings"),
-            new("activity-availability-diagnostics", "design/activities/availability/diagnostics")
+            new("activity-availability-diagnostics", "design/activities/availability/diagnostics"),
+            new("activity-version-dependencies", "design/activities/versions/{versionId}/dependencies", true),
+            new("activity-upgrade-plans", "design/activities/upgrade-plans"),
+            new("activity-upgrade-plan", "design/activities/upgrade-plans/{planId}", true),
+            new("activity-upgrade-plan-apply", "design/activities/upgrade-plans/{planId}/apply", true),
+            new("activity-upgrade-apply-receipt", "design/activities/upgrade-plans/{planId}/receipts/{receiptId}", true),
+            new("activity-upgrade-plan-refresh", "design/activities/upgrade-plans/{planId}/refresh", true)
         ],
         SourceFeatureId);
 }
