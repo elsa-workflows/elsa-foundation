@@ -147,6 +147,19 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         }
     }
 
+    public void SetPublicationLifecycle(
+        string definitionVersionId,
+        ActivityDefinitionVersionLifecycle lifecycle)
+    {
+        lock (_gate)
+        {
+            var publication = _publications.GetValueOrDefault(definitionVersionId)
+                ?? throw new KeyNotFoundException($"Activity version '{definitionVersionId}' was not found.");
+            publication.Lifecycle = lifecycle;
+            _sequence++;
+        }
+    }
+
     public void SeedDependency(ActivityDependencyEdge edge)
     {
         lock (_gate)

@@ -372,7 +372,7 @@ POST /design/activities/definitions/{definitionId}/fork-previews
 ```
 
 Response: `200 OK` with an `ActivityForkPreviewView`. It contains an opaque signed `candidateId`,
-the normalized presentation, exact source and reserved target identities, the complete target
+the normalized presentation, exact source identity and lifecycle, reserved target identities, the complete target
 contract, source/target provider and contract fingerprints, safe ordered migration diagnostics,
 access-binding evidence, and `createdAt`/`expiresAt`. Preview persists only the bounded reservation;
 it does not create a definition, authoring state, draft, layout, or catalog projection.
@@ -396,7 +396,7 @@ POST /design/activities/fork-candidates/{candidateId}/apply
 ```
 
 Response: `200 OK` with an `ActivityForkReceiptView`. Apply rechecks the signed candidate, actor,
-tenant, access profile, expiry, exact source version/authority, provider migration, and activated
+tenant, access profile, expiry, exact source version/lifecycle/authority, provider migration, and activated
 contract capabilities. One atomic commit consumes the reservation and creates the exact reserved
 definition, Design authority state, draft, layout, management projection, and append-only receipt.
 An exact replay returns `AlreadyApplied`; the receipt is never updated.

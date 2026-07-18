@@ -39,6 +39,8 @@ public sealed class ActivityForkCandidate : TenantEntity
 
     public string SourceVersion { get; init; } = null!;
 
+    public ActivityDefinitionVersionLifecycle SourceLifecycle { get; init; }
+
     public string SourceProviderFingerprint { get; init; } = null!;
 
     public string TargetProviderFingerprint { get; init; } = null!;

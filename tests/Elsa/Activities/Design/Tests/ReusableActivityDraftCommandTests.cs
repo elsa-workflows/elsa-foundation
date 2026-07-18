@@ -657,6 +657,7 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.Equal(ActivityForkCandidateLifecycleView.Reserved, preview.Status);
         Assert.Equal("Custom", preview.Presentation.Category);
         Assert.Equal("Forked", preview.Presentation.DisplayName);
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Active, preview.Source.Lifecycle);
         Assert.Equal("source", preview.Target.Contract.ContractSchemaVersion);
         Assert.Equal(preview.ContractComparison.SourceFingerprint, preview.ContractComparison.TargetFingerprint);
         Assert.NotEqual(source.DefinitionId, preview.Target.DefinitionId);
@@ -682,6 +683,24 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.Equal(new(source.DefinitionId, "source-version", "1.0.0"), applied.Definition.ForkedFrom);
         Assert.Equal("source-version", applied.Draft.SourceVersionId);
         Assert.Equal(ActivityContentAuthorityKind.ProviderSource, (await harness.Stores.FindAsync(source.DefinitionId))!.ContentAuthority.Kind);
+    }
+
+    [Fact]
+    public async Task Fork_apply_rejects_a_source_lifecycle_change_after_preview_without_creating_the_target()
+    {
+        var harness = new Harness();
+        var preview = await harness.PreviewForkAsync();
+        harness.Stores.SetPublicationLifecycle(
+            preview.Source.VersionId,
+            ActivityDefinitionVersionLifecycle.Revoked);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            harness.Forks.ApplyAsync(
+                new(preview.CandidateId, preview.RequestFingerprint, "lifecycle-changed-operation"),
+                default));
+
+        Assert.Equal("activity.fork.candidate-stale", exception.ErrorCode);
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
     }
 
     [Fact]

@@ -65,7 +65,7 @@ The origin does not create shared mutable lineage, implicit upgrade behavior, or
 
 Bounded durable review reservation keyed by a server-derived hash of tenant, stable actor identity,
 and the caller's bounded preview idempotency key. It stores the signed public candidate identity,
-normalized request/access fingerprints, exact source facts, reserved server-generated definition,
+normalized request/access fingerprints, exact source facts including lifecycle, reserved server-generated definition,
 authoring, draft, and layout material, safe migration diagnostics, `ExpiresAt`, `RetainUntil`, and
 `Reserved`/`Applied` state.
 

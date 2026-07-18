@@ -199,6 +199,7 @@ public sealed record ActivityForkSourceView(
     string DefinitionId,
     string VersionId,
     string Version,
+    ActivityDefinitionVersionLifecycle Lifecycle,
     string ProviderKey,
     string ProviderSchemaVersion,
     string ProviderFingerprint);

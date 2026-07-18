@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Collections.Concurrent;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -38,6 +39,7 @@ public sealed class GroundworkReusableActivityStoreTests
     {
         var harness = Harness.Create();
         var candidate = ForkCandidate();
+        await SaveForkSourceAsync(harness, candidate);
         await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(candidate));
         var request = ForkApply(candidate, "operation-1");
 
@@ -70,6 +72,7 @@ public sealed class GroundworkReusableActivityStoreTests
     {
         var harness = Harness.Create();
         var candidate = ForkCandidate();
+        await SaveForkSourceAsync(harness, candidate);
         await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(candidate));
         var collision = CreateRequest();
         await harness.Stores.ExecuteAsync(collision);
@@ -94,6 +97,7 @@ public sealed class GroundworkReusableActivityStoreTests
     {
         var harness = Harness.Create();
         var first = ForkCandidate();
+        await SaveForkSourceAsync(harness, first);
         await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
         var firstRequest = ForkApply(first, "operation-1");
         await harness.Stores.ExecuteAsync(firstRequest);
@@ -107,6 +111,38 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores)
             .FindAsync(second.ReservedDraft.Id));
         Assert.Equal(first.Id, (await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId))!.CandidateId);
+    }
+
+    [Fact]
+    public async Task Concurrent_fork_candidates_with_one_operation_identity_have_one_exact_winner()
+    {
+        var harness = Harness.Create(new YieldingDistributedLockProvider());
+        var first = ForkCandidate();
+        await SaveForkSourceAsync(harness, first);
+        var second = ForkCandidate(
+            "candidate-2",
+            "target-definition-2",
+            "target-draft-2",
+            activityTypeKey: "Acme.Other");
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(second));
+        var firstRequest = ForkApply(first, "shared-operation");
+        var secondRequest = ForkApply(second, "shared-operation") with
+        {
+            ReceiptId = firstRequest.ReceiptId
+        };
+
+        var attempts = await Task.WhenAll(
+            CaptureAsync(() => harness.Stores.ExecuteAsync(firstRequest)),
+            CaptureAsync(() => harness.Stores.ExecuteAsync(secondRequest)));
+
+        Assert.Single(attempts.Where(x => x.Result is not null));
+        Assert.Single(attempts.Where(x => x.Exception is ActivityForkIdempotencyConflictException));
+        var receipt = await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId);
+        Assert.NotNull(receipt);
+        Assert.Equal(
+            receipt!.CandidateId == first.Id ? first.ReservedDefinition.Id : second.ReservedDefinition.Id,
+            receipt.DefinitionId);
     }
 
     [Fact]
@@ -135,6 +171,7 @@ public sealed class GroundworkReusableActivityStoreTests
     {
         var harness = Harness.Create();
         var candidate = ForkCandidate();
+        await SaveForkSourceAsync(harness, candidate);
         await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(candidate));
         var request = ForkApply(candidate, "operation-1");
         await harness.Stores.ExecuteAsync(request);
@@ -634,14 +671,15 @@ public sealed class GroundworkReusableActivityStoreTests
         string candidateId = "candidate-1",
         string definitionId = "target-definition-1",
         string draftId = "target-draft-1",
-        string? requestFingerprint = null)
+        string? requestFingerprint = null,
+        string activityTypeKey = "Acme.Sample")
     {
         var createdAt = new DateTimeOffset(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
         var definition = new ActivityDefinition
         {
             Id = definitionId,
             TenantId = null,
-            ActivityTypeKey = "Acme.Sample",
+            ActivityTypeKey = activityTypeKey,
             Category = "Samples",
             DisplayName = "Forked",
             CreatedAt = createdAt,
@@ -678,6 +716,8 @@ public sealed class GroundworkReusableActivityStoreTests
             CreatedAt = createdAt,
             LastModifiedAt = createdAt
         };
+        var sourceContract = Contract();
+        var sourceProvider = Provider();
         return new()
         {
             Id = candidateId,
@@ -691,13 +731,14 @@ public sealed class GroundworkReusableActivityStoreTests
             SourceDefinitionId = "source-definition",
             SourceVersionId = "source-version",
             SourceVersion = "1.0.0",
-            SourceProviderFingerprint = $"sha256:{new string('c', 64)}",
+            SourceLifecycle = ActivityDefinitionVersionLifecycle.Active,
+            SourceProviderFingerprint = ActivityProviderManifestFingerprint.Compute(sourceProvider),
             TargetProviderFingerprint = $"sha256:{new string('d', 64)}",
             ReservedDefinition = definition,
             ReservedAuthoringState = authoring,
             ReservedDraft = draft,
             ReservedLayout = layout,
-            SourceContractFingerprint = $"sha256:{new string('e', 64)}",
+            SourceContractFingerprint = ActivityForkMaterialFingerprint.Compute(sourceContract),
             TargetContractFingerprint = $"sha256:{new string('e', 64)}",
             ExpiresAt = createdAt.AddMinutes(15),
             RetainUntil = createdAt.AddDays(1),
@@ -705,6 +746,48 @@ public sealed class GroundworkReusableActivityStoreTests
             CreatedAt = createdAt,
             LastModifiedAt = createdAt
         };
+    }
+
+    private static async Task SaveForkSourceAsync(
+        Harness harness,
+        ActivityForkCandidate candidate)
+    {
+        var createdAt = candidate.CreatedAt.AddHours(-1);
+        await harness.SaveAsync(new ActivityDefinitionAuthoringState
+        {
+            Id = $"authoring-{candidate.SourceDefinitionId}",
+            TenantId = candidate.TenantId,
+            DefinitionId = candidate.SourceDefinitionId,
+            ContentAuthority = new(
+                ActivityContentAuthorityKind.ProviderSource,
+                "source.provider"),
+            HeadVersionId = candidate.SourceVersionId,
+            RecommendedVersionId = candidate.SourceVersionId,
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        });
+        await harness.SaveAsync(new ActivityDefinitionVersionPublication
+        {
+            Id = $"publication-{candidate.SourceVersionId}",
+            TenantId = candidate.TenantId,
+            DefinitionVersionId = candidate.SourceVersionId,
+            DefinitionId = candidate.SourceDefinitionId,
+            Version = candidate.SourceVersion,
+            ActivityTypeKey = "Acme.Source",
+            Contract = Contract(),
+            Provider = Provider(),
+            TemplateId = $"template-{candidate.SourceVersionId}",
+            TemplateHash = $"hash-{candidate.SourceVersionId}",
+            SourceReferenceId = $"source-{candidate.SourceVersionId}",
+            ProviderFingerprint = candidate.SourceProviderFingerprint,
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 1,
+            RuntimeRequirements = [],
+            Lifecycle = candidate.SourceLifecycle,
+            PublishedAt = createdAt,
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        });
     }
 
     private static ApplyActivityForkCandidateRequest ForkApply(
@@ -718,6 +801,19 @@ public sealed class GroundworkReusableActivityStoreTests
         idempotencyKey,
         ActivityForkReceiptIdentity.Compute(candidate.TenantId, candidate.ActorId, idempotencyKey),
         candidate.CreatedAt.AddMinutes(1));
+
+    private static async Task<(ActivityForkApplyResult? Result, Exception? Exception)> CaptureAsync(
+        Func<Task<ActivityForkApplyResult>> operation)
+    {
+        try
+        {
+            return (await operation(), null);
+        }
+        catch (Exception exception)
+        {
+            return (null, exception);
+        }
+    }
 
     private static void AssertContractEqual(ActivityContract expected, ActivityContract actual)
     {
@@ -751,13 +847,13 @@ public sealed class GroundworkReusableActivityStoreTests
         public InMemoryDocumentStore Documents { get; } = documents;
         public GroundworkReusableActivityStores Stores { get; } = stores;
 
-        public static Harness Create()
+        public static Harness Create(IDistributedLockProvider? lockProvider = null)
         {
             var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
             return new Harness(documents, new GroundworkReusableActivityStores(
                 documents,
                 new FakeClock(),
-                new ImmediateDistributedLockProvider(),
+                lockProvider ?? new ImmediateDistributedLockProvider(),
                 new ActivityDesignTestBoundedDocumentStore(documents),
                 new GroundworkActivityManagementProjectionWriter(
                     documents,
@@ -906,6 +1002,63 @@ public sealed class GroundworkReusableActivityStoreTests
             await FirstOrDefaultAsync(query, cancellationToken) is not null;
     }
 
+}
+
+internal sealed class YieldingDistributedLockProvider : IDistributedLockProvider
+{
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.Ordinal);
+
+    public IDistributedSynchronizationHandle? TryAcquireLock(
+        string name,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        var gate = Gate(name);
+        return gate.Wait(timeout ?? TimeSpan.Zero, cancellationToken)
+            ? new Handle(gate)
+            : null;
+    }
+
+    public async ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
+        string name,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        var gate = Gate(name);
+        return await gate.WaitAsync(timeout ?? TimeSpan.Zero, cancellationToken)
+            ? new Handle(gate)
+            : null;
+    }
+
+    public async ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
+        string name,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        var gate = Gate(name);
+        if (!await gate.WaitAsync(timeout ?? Timeout.InfiniteTimeSpan, cancellationToken))
+            throw new TimeoutException($"Timed out acquiring test lock '{name}'.");
+        return new Handle(gate);
+    }
+
+    private SemaphoreSlim Gate(string name) => _locks.GetOrAdd(name, static _ => new(1, 1));
+
+    private sealed class Handle(SemaphoreSlim gate) : IDistributedSynchronizationHandle
+    {
+        private SemaphoreSlim? _gate = gate;
+
+        public CancellationToken HandleLostToken => CancellationToken.None;
+
+        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
+
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
 }
 
 internal sealed class ImmediateDistributedLockProvider : IDistributedLockProvider

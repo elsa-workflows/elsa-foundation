@@ -404,7 +404,7 @@ public sealed class GroundworkReusableActivityStores(
         CancellationToken cancellationToken = default)
     {
         await using var operationLock = await lockProvider.AcquireLockAsync(
-            ForkApplyLock(request.CandidateId, request.ReceiptId),
+            ForkApplyLock(request.ReceiptId),
             null,
             cancellationToken);
 
@@ -426,6 +426,11 @@ public sealed class GroundworkReusableActivityStores(
         EnsureApplicable(candidate.Entity, request);
         ValidateForkCandidate(candidate.Entity);
 
+        await using var sourceLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(
+                candidate.Entity.SourceDefinitionId),
+            null,
+            cancellationToken);
         await using var keyLock = await lockProvider.AcquireLockAsync(
             DefinitionKeyLock(
                 candidate.Entity.ReservedDefinition.TenantId,
@@ -433,6 +438,7 @@ public sealed class GroundworkReusableActivityStores(
             null,
             cancellationToken);
 
+        await RecheckForkSourceAsync(candidate.Entity, cancellationToken);
         var existingDefinitions = await ListAllAsync<ActivityDefinition>(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
@@ -540,6 +546,28 @@ public sealed class GroundworkReusableActivityStores(
                 []),
             cancellationToken);
         return new(receipt, false);
+    }
+
+    private async Task RecheckForkSourceAsync(
+        ActivityForkCandidate candidate,
+        CancellationToken cancellationToken)
+    {
+        var authoring = await RequiredAuthoringAsync(candidate.SourceDefinitionId, cancellationToken);
+        var publication = await RequiredPublicationAsync(candidate.SourceVersionId, cancellationToken);
+        if (authoring.Entity.ContentAuthority.Kind != ActivityContentAuthorityKind.ProviderSource ||
+            !StringComparer.Ordinal.Equals(authoring.Entity.TenantId, candidate.TenantId) ||
+            !StringComparer.Ordinal.Equals(publication.Entity.TenantId, candidate.TenantId) ||
+            !StringComparer.Ordinal.Equals(publication.Entity.DefinitionId, candidate.SourceDefinitionId) ||
+            !StringComparer.Ordinal.Equals(publication.Entity.Version, candidate.SourceVersion) ||
+            publication.Entity.Lifecycle != candidate.SourceLifecycle ||
+            !StringComparer.Ordinal.Equals(
+                ActivityProviderManifestFingerprint.Compute(publication.Entity.Provider),
+                candidate.SourceProviderFingerprint) ||
+            !StringComparer.Ordinal.Equals(
+                ActivityForkMaterialFingerprint.Compute(publication.Entity.Contract),
+                candidate.SourceContractFingerprint))
+            throw new ActivityForkCandidateStaleException(
+                "The exact source version or authority changed before the atomic fork commit.");
     }
 
     public async Task<ActivityDefinition> ExecuteAsync(
@@ -1311,8 +1339,8 @@ public sealed class GroundworkReusableActivityStores(
     private static string ForkCandidateLock(string candidateId) =>
         $"elsa:activities:design:fork-candidate:{HashLock(candidateId)}";
 
-    private static string ForkApplyLock(string candidateId, string receiptId) =>
-        $"elsa:activities:design:fork-apply:{HashLock($"{candidateId}\u001f{receiptId}")}";
+    private static string ForkApplyLock(string receiptId) =>
+        $"elsa:activities:design:fork-apply:{HashLock(receiptId)}";
 
     private static string HashLock(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();

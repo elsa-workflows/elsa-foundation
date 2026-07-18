@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Services;
@@ -38,7 +37,6 @@ public sealed class ActivityForkService(
     TimeProvider timeProvider,
     IActivityAuthoringContext context)
 {
-    private static readonly JsonSerializerOptions FingerprintJson = new(JsonSerializerDefaults.Web);
     private readonly ActivityForkReservationOptions _options = ValidateOptions(options.Value);
 
     public async Task<ActivityForkPreviewView> PreviewAsync(
@@ -122,8 +120,8 @@ public sealed class ActivityForkService(
 
         var sourceProviderFingerprint = ActivityProviderManifestFingerprint.Compute(source.Provider);
         var targetProviderFingerprint = ActivityProviderManifestFingerprint.Compute(targetManifest);
-        var sourceContractFingerprint = Fingerprint(source.Contract);
-        var targetContractFingerprint = Fingerprint(draft.State.Contract);
+        var sourceContractFingerprint = ActivityForkMaterialFingerprint.Compute(source.Contract);
+        var targetContractFingerprint = ActivityForkMaterialFingerprint.Compute(draft.State.Contract);
         var accessBindingFingerprint = AccessBindingFingerprint();
         var expiresAt = now.Add(_options.Lifetime);
         var requestFingerprint = Fingerprint(
@@ -131,6 +129,7 @@ public sealed class ActivityForkService(
             command.DefinitionId,
             source.DefinitionVersionId,
             source.Version,
+            source.Lifecycle.ToString(),
             sourceProviderFingerprint,
             presentation.Category,
             presentation.DisplayName,
@@ -159,6 +158,7 @@ public sealed class ActivityForkService(
             SourceDefinitionId = source.DefinitionId,
             SourceVersionId = source.DefinitionVersionId,
             SourceVersion = source.Version,
+            SourceLifecycle = source.Lifecycle,
             SourceProviderFingerprint = sourceProviderFingerprint,
             TargetProviderFingerprint = targetProviderFingerprint,
             ReservedDefinition = definition,
@@ -227,13 +227,7 @@ public sealed class ActivityForkService(
         var existingReceipt = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);
         if (existingReceipt is not null)
         {
-            EnsureReceiptBinding(existingReceipt);
-            if (!StringComparer.Ordinal.Equals(existingReceipt.PublicCandidateId, command.CandidateId) ||
-                !StringComparer.Ordinal.Equals(existingReceipt.RequestFingerprint, command.RequestFingerprint))
-                throw Conflict(
-                    "activity.fork.idempotency-conflict",
-                    "Activity fork idempotency conflict",
-                    "The idempotency key is already bound to different reviewed fork material.");
+            EnsureReceiptMatchesCommand(existingReceipt, command);
             return ToReceipt(existingReceipt, ActivityForkOutcomeView.AlreadyApplied);
         }
 
@@ -252,7 +246,7 @@ public sealed class ActivityForkService(
             if (!StringComparer.Ordinal.Equals(candidate.AppliedIdempotencyKey, command.IdempotencyKey))
                 throw Stale("The fork candidate was already consumed by another operation identity.");
             var existing = await RequiredReceiptAsync(command.IdempotencyKey, cancellationToken);
-            EnsureReceiptBinding(existing);
+            EnsureReceiptMatchesCommand(existing, command);
             return ToReceipt(existing, ActivityForkOutcomeView.AlreadyApplied);
         }
 
@@ -293,7 +287,7 @@ public sealed class ActivityForkService(
             var reconciled = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);
             if (reconciled is not null)
             {
-                EnsureReceiptBinding(reconciled);
+                EnsureReceiptMatchesCommand(reconciled, command);
                 return ToReceipt(reconciled, ActivityForkOutcomeView.AlreadyApplied);
             }
             throw OutcomeUnknown("The server cannot prove whether the fork apply committed. Query the fork status before retrying.", exception);
@@ -321,8 +315,11 @@ public sealed class ActivityForkService(
         EnsureVisible(source.TenantId);
         if (!StringComparer.Ordinal.Equals(source.DefinitionId, candidate.SourceDefinitionId) ||
             !StringComparer.Ordinal.Equals(source.Version, candidate.SourceVersion) ||
+            source.Lifecycle != candidate.SourceLifecycle ||
             !StringComparer.Ordinal.Equals(ActivityProviderManifestFingerprint.Compute(source.Provider), candidate.SourceProviderFingerprint) ||
-            !StringComparer.Ordinal.Equals(Fingerprint(source.Contract), candidate.SourceContractFingerprint))
+            !StringComparer.Ordinal.Equals(
+                ActivityForkMaterialFingerprint.Compute(source.Contract),
+                candidate.SourceContractFingerprint))
             throw Stale("The exact source binding no longer matches the reviewed preview.");
 
         var targetProvider = ResolveProvider(
@@ -342,7 +339,9 @@ public sealed class ActivityForkService(
             source.Contract,
             new("ActivityDraft", candidate.ReservedDraft.Id, candidate.ReservedDefinition.Id, Revision: 1));
         if (!StringComparer.Ordinal.Equals(ActivityProviderManifestFingerprint.Compute(manifest), candidate.TargetProviderFingerprint) ||
-            !StringComparer.Ordinal.Equals(Fingerprint(candidate.ReservedDraft.State.Contract), candidate.TargetContractFingerprint))
+            !StringComparer.Ordinal.Equals(
+                ActivityForkMaterialFingerprint.Compute(candidate.ReservedDraft.State.Contract),
+                candidate.TargetContractFingerprint))
             throw Stale("The provider migration or target contract changed after preview.");
     }
 
@@ -358,6 +357,7 @@ public sealed class ActivityForkService(
             candidate.SourceDefinitionId,
             candidate.SourceVersionId,
             candidate.SourceVersion,
+            candidate.SourceLifecycle,
             source.Provider.ProviderKey,
             source.Provider.SchemaVersion,
             candidate.SourceProviderFingerprint),
@@ -513,6 +513,19 @@ public sealed class ActivityForkService(
             throw Forbidden("The durable fork receipt belongs to a different caller or access profile.");
     }
 
+    private void EnsureReceiptMatchesCommand(
+        ActivityForkReceipt receipt,
+        ApplyReusableActivityFork command)
+    {
+        EnsureReceiptBinding(receipt);
+        if (!StringComparer.Ordinal.Equals(receipt.PublicCandidateId, command.CandidateId) ||
+            !StringComparer.Ordinal.Equals(receipt.RequestFingerprint, command.RequestFingerprint))
+            throw Conflict(
+                "activity.fork.idempotency-conflict",
+                "Activity fork idempotency conflict",
+                "The idempotency key is already bound to different reviewed fork material.");
+    }
+
     private void EnsureVisible(string? tenantId)
     {
         if (tenantId is not null && !StringComparer.Ordinal.Equals(tenantId, context.TenantId))
@@ -570,12 +583,6 @@ public sealed class ActivityForkService(
             !value.StartsWith("sha256:", StringComparison.Ordinal) ||
             value[7..].Any(x => !Uri.IsHexDigit(x)))
             throw BadRequest("'requestFingerprint' is invalid.");
-    }
-
-    private static string Fingerprint(object value)
-    {
-        var json = JsonSerializer.SerializeToUtf8Bytes(value, FingerprintJson);
-        return $"sha256:{Convert.ToHexString(SHA256.HashData(json)).ToLowerInvariant()}";
     }
 
     private static string Fingerprint(params string?[] values)
