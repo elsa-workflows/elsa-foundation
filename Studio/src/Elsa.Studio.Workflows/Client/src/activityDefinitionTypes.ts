@@ -306,6 +306,41 @@ export interface ActivityDraftValidationView {
   diagnostics: StudioActivityDiagnostic[];
 }
 
+export interface ActivityContractProposalChange {
+  changeId: string;
+  operation: "Add" | "Replace" | "Remove" | string;
+  memberKind: "Input" | "Output" | "Outcome" | string;
+  referenceKey: string;
+  input?: ActivityInputContract | null;
+  output?: ActivityOutputContract | null;
+  outcome?: ActivityOutcomeContract | null;
+  [key: string]: unknown;
+}
+
+export interface ActivityContractProposalView {
+  draftId: string;
+  revision: number;
+  providerKey: string;
+  providerSchemaVersion: string;
+  manifestFingerprint: string;
+  proposalFingerprint: string;
+  changes: ActivityContractProposalChange[];
+  diagnostics: StudioActivityDiagnostic[];
+  [key: string]: unknown;
+}
+
+export interface ProposeActivityContractRequest {
+  expectedRevision: number;
+  expectedProviderKey: string;
+  expectedProviderSchemaVersion: string;
+  expectedManifestFingerprint: string;
+}
+
+export interface ApplyActivityContractProposalRequest extends ProposeActivityContractRequest {
+  proposalFingerprint: string;
+  selectedChangeIds: string[];
+}
+
 export interface ActivityDefinitionVersionView {
   definition: ActivityDefinitionIdentity;
   versionId: string;

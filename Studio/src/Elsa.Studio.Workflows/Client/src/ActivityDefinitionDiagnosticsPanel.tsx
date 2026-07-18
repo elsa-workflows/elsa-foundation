@@ -55,19 +55,31 @@ export function ActivityDefinitionDiagnosticsPanel({
       <SeverityCount severity="warning" count={counts.warning} />
       <SeverityCount severity="info" count={counts.info} />
     </div>
-    {diagnostics.length ? <ol className="ad-diagnostic-list">
-      {diagnostics.map((diagnostic, index) => <DiagnosticItem
-        key={`${safeDiagnosticCode(diagnostic.code)}:${index}`}
-        diagnostic={diagnostic}
-        onFocus={onFocus}
-      />)}
-    </ol> : validation ? <p className="ad-diagnostics-empty">No diagnostics were returned for this saved revision.</p> : null}
+    {diagnostics.length ? <ActivityDiagnosticList diagnostics={diagnostics} onFocus={onFocus} /> : validation ? <p className="ad-diagnostics-empty">No diagnostics were returned for this saved revision.</p> : null}
     <div className="ad-diagnostic-context" role="status" aria-live="polite">
       <span>{focusAnnouncement ?? "Select a diagnostic to move to a supported contract control or provider-owned implementation location."}</span>
       {canReturn ? <button type="button" onClick={onReturn}><Undo2 size={15} aria-hidden /> Return to diagnostic</button> : null}
     </div>
     <p className="ad-runtime-distinction"><strong>Runtime is separate.</strong> A later Test Run can be rejected during dispatch even when this draft is valid; Runtime rejection is reported by the Test Run experience, not as a draft-validation transport failure.</p>
   </section>;
+}
+
+export function ActivityDiagnosticList({
+  diagnostics,
+  onFocus,
+  label = "Structured diagnostics"
+}: {
+  diagnostics: StudioActivityDiagnostic[];
+  onFocus(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
+  label?: string;
+}) {
+  return <ol className="ad-diagnostic-list" aria-label={label}>
+    {diagnostics.map((diagnostic, index) => <DiagnosticItem
+      key={`${safeDiagnosticCode(diagnostic.code)}:${index}`}
+      diagnostic={diagnostic}
+      onFocus={onFocus}
+    />)}
+  </ol>;
 }
 
 function DiagnosticItem({
