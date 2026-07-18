@@ -281,6 +281,54 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   expect(state.recommendedVersionId).toBeNull();
 });
 
+test("Activity Definition dependency explorer keeps exact snapshot pages, repeated occurrences, paths, cursor recovery, and private failures separate", async ({ page }) => {
+  test.setTimeout(90_000);
+  const state = await mockActivityDependencyExplorer(page);
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=relationships");
+
+  const root = page.getByRole("combobox", { name: "Exact version root" });
+  await root.selectOption("version-1");
+  await expect(page.getByText("AuthoritativeDirect")).toBeVisible();
+  await expect(page.getByText("occurrence-a")).toBeVisible();
+  await expect(page.getByText("occurrence-b")).toBeVisible();
+  await page.getByRole("button", { name: "Review exact path" }).first().click();
+  await expect(page.getByText("Complete cycle path")).toBeVisible();
+  await expect(page.locator(".ad-dependency-path")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Load next page" }).click();
+  await expect(page.getByText("occurrence-c")).toBeVisible();
+  await expect(page.getByText("3 visible rows · 2 server pages")).toBeVisible();
+
+  await page.getByRole("radio", { name: "Used by" }).check();
+  await expect(page.getByText("DerivedProjection")).toBeVisible();
+  await expect(page.getByText("7/18/2026")).toBeVisible();
+  await expect(page.getByText("workflow-use-a")).toBeVisible();
+
+  state.nextFailure = 409;
+  await page.getByRole("radio", { name: "Transitive" }).check();
+  await expect(page.getByText("transitive-confirmed")).toBeVisible();
+  await page.getByRole("button", { name: "Load next page" }).click();
+  await expect(page.getByText("stale completed snapshot")).toBeVisible();
+  await expect(page.getByText("transitive-confirmed")).toBeVisible();
+  await expect(page.getByText("hidden-owner-from-conflict")).toHaveCount(0);
+  await page.getByRole("button", { name: "Restart from latest" }).click();
+  await expect(page.getByText("transitive-restarted")).toBeVisible();
+
+  state.nextFailure = 410;
+  await page.getByRole("button", { name: "Load next page" }).click();
+  await expect(page.getByText("no longer retains this projection watermark")).toBeVisible();
+  await expect(page.getByText("transitive-restarted")).toBeVisible();
+
+  state.privateRootStatus = 403;
+  await root.selectOption("version-2");
+  await expect(page.getByText("No hidden identity or count")).toBeVisible();
+  await expect(page.getByText("hidden-private-owner")).toHaveCount(0);
+  state.privateRootStatus = 404;
+  await root.selectOption("version-3");
+  await expect(page.getByText("No hidden identity or count")).toBeVisible();
+  expect(state.requestedUrls.some(url => url.includes("direction=inbound") && url.includes("transitive=true"))).toBe(true);
+});
+
 test("Activity Definition create, graph autosave, reload, conflict preservation, and recovery", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
@@ -851,6 +899,168 @@ async function mockActivityVersionLifecycle(page: Page) {
       version: current.version,
       lifecycle: current.lifecycle
     }) });
+  });
+  return state;
+}
+
+async function mockActivityDependencyExplorer(page: Page) {
+  const state = {
+    nextFailure: null as 409 | 410 | null,
+    privateRootStatus: null as 403 | 404 | null,
+    restartCount: 0,
+    requestedUrls: [] as string[]
+  };
+  const versions = ["version-1", "version-2", "version-3"].map((versionId, index) => ({
+    version: {
+      versionId,
+      definitionId: "definition-1",
+      version: `${index + 1}.0.0`,
+      lifecycle: "Active",
+      publishedAt: "2026-07-18T12:00:00Z"
+    },
+    providerKey: "elsa.activity-graph",
+    providerSchemaVersion: "1",
+    isRecommended: versionId === "version-1",
+    actions: []
+  }));
+  const reference = (versionId = "version-1") => ({
+    kind: "ActivityVersion",
+    definitionId: "definition-1",
+    versionId,
+    version: versionId === "version-1" ? "1.0.0" : versionId === "version-2" ? "2.0.0" : "3.0.0",
+    draftId: null,
+    revision: null,
+    templateHash: `sha256:${versionId}`,
+    tenantId: "tenant-1",
+    lifecycle: "Active"
+  });
+  const owner = (occurrenceId: string) => ({
+    kind: "WorkflowDraft",
+    definitionId: "workflow-definition-1",
+    versionId: null,
+    version: null,
+    draftId: "workflow-draft-1",
+    revision: 7,
+    templateHash: null,
+    tenantId: "tenant-1",
+    lifecycle: "Active",
+    occurrenceId
+  });
+  const item = (occurrenceId: string, transitive: boolean, cycle = false) => {
+    const ownerReference = owner(occurrenceId);
+    const rootReference = reference();
+    return {
+      relationshipId: `relationship-${occurrenceId}`,
+      owner: ownerReference,
+      dependency: rootReference,
+      occurrence: { occurrenceId, nodeOrigin: [{ kind: "AuthoredNode", id: occurrenceId }] },
+      isDirect: !transitive,
+      depth: transitive ? 2 : 1,
+      path: cycle ? [rootReference, ownerReference, rootReference] : [ownerReference, rootReference]
+    };
+  };
+  const evidence = (
+    query: URLSearchParams,
+    items: unknown[],
+    nextCursor: string | null
+  ) => {
+    const inbound = query.get("direction") === "inbound";
+    return {
+      root: reference(),
+      query: {
+        direction: inbound ? "Inbound" : "Outbound",
+        transitive: query.get("transitive") === "true",
+        include: ["Drafts", "Versions"]
+      },
+      consistency: inbound
+        ? { kind: "DerivedProjection", isAuthoritative: false, asOfSequence: 91, asOf: "2026-07-18T12:00:00Z", rebuildId: "rebuild-91" }
+        : { kind: "AuthoritativeDirect", isAuthoritative: true, asOfSequence: null, asOf: null, rebuildId: null },
+      items,
+      nextCursor
+    };
+  };
+
+  await page.route("**/capabilities", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
+      { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+      { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
+      { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
+    ] }] })
+  }));
+  await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      ...definition(),
+      lifecycle: {
+        ...definition().lifecycle,
+        versionCount: 3,
+        head: { ...definition().lifecycle.head, versionId: "version-3", version: "3.0.0" }
+      }
+    })
+  }));
+  await page.route(/\/design\/activities\/definitions\/definition-1\/versions\?.*/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf(versions))
+  }));
+  await page.route(/\/design\/activities\/versions\/(version-[123])\/dependencies\?.*/, async route => {
+    const url = route.request().url();
+    state.requestedUrls.push(url);
+    const parsed = new URL(url);
+    const versionId = parsed.pathname.match(/versions\/(version-[123])/)?.[1] ?? "version-1";
+    const query = parsed.searchParams;
+    if (versionId !== "version-1" && state.privateRootStatus) {
+      return route.fulfill({
+        status: state.privateRootStatus,
+        contentType: "application/problem+json",
+        body: JSON.stringify({ title: "hidden-private-owner" })
+      });
+    }
+    if (query.has("cursor") && state.nextFailure) {
+      const status = state.nextFailure;
+      state.nextFailure = null;
+      if (status === 409) {
+        return route.fulfill({
+          status,
+          contentType: "application/problem+json",
+          body: JSON.stringify({ title: "hidden-owner-from-conflict" })
+        });
+      }
+      return route.fulfill({
+        status,
+        contentType: "application/problem+json",
+        body: JSON.stringify({ title: "hidden-expired-watermark" })
+      });
+    }
+    const inbound = query.get("direction") === "inbound";
+    const transitive = query.get("transitive") === "true";
+    if (query.has("cursor")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(evidence(query, [item(transitive ? "transitive-page-2" : "occurrence-c", transitive)], null))
+      });
+    }
+    if (transitive) {
+      state.restartCount += 1;
+      const occurrenceId = state.restartCount > 1 ? "transitive-restarted" : "transitive-confirmed";
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(evidence(query, [item(occurrenceId, true)], "transitive-cursor"))
+      });
+    }
+    const firstItems = inbound
+      ? [item("workflow-use-a", false)]
+      : [item("occurrence-a", false, true), item("occurrence-b", false)];
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(evidence(query, firstItems, inbound ? null : "cursor-2"))
+    });
   });
   return state;
 }

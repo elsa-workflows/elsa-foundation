@@ -2,7 +2,6 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityDefinitionRecommendationMutationView,
   ActivityDefinitionRevocationEvidence,
-  ActivityDefinitionUsageEvidence,
   ActivityDefinitionVersionLifecycleAction,
   ActivityDefinitionVersionLifecycleMutationView,
   ActivityDefinitionVersionManagementView,
@@ -11,6 +10,7 @@ import type {
 } from "../activityDefinitionTypes";
 import { capabilityIds, resolveCapabilityLink } from "./capabilities";
 import { listActivityDefinitionVersions } from "./activityDesign";
+import { getActivityDefinitionDependencyPage } from "./activityDefinitionDependencies";
 
 export async function setActivityDefinitionRecommendation(
   context: StudioEndpointContext,
@@ -63,22 +63,18 @@ export async function getActivityDefinitionRevocationEvidence(
   versionId: string,
   signal?: AbortSignal
 ): Promise<ActivityDefinitionRevocationEvidence> {
-  const versionPath = await resolveCapabilityLink(
-    context,
-    capabilityIds.activityDesign,
-    "activity-definition-version",
-    { versionId }
-  );
   const [directDependencies, inboundUsage] = await Promise.all([
-    getActivityDefinitionDependencyEvidence(context, versionPath, {
+    getActivityDefinitionDependencyEvidence(context, {
+      versionId,
       direction: "outbound",
-      transitive: "false",
-      include: "versions"
+      transitive: false,
+      include: ["versions"]
     }, signal),
-    getActivityDefinitionDependencyEvidence(context, versionPath, {
+    getActivityDefinitionDependencyEvidence(context, {
+      versionId,
       direction: "inbound",
-      transitive: "true",
-      include: "versions,drafts"
+      transitive: true,
+      include: ["versions", "drafts"]
     }, signal)
   ]);
   return { directDependencies, inboundUsage };
@@ -86,23 +82,19 @@ export async function getActivityDefinitionRevocationEvidence(
 
 async function getActivityDefinitionDependencyEvidence(
   context: StudioEndpointContext,
-  versionPath: string,
-  query: { direction: string; transitive: string; include: string },
+  query: {
+    versionId: string;
+    direction: "outbound" | "inbound";
+    transitive: boolean;
+    include: Array<"versions" | "drafts">;
+  },
   signal?: AbortSignal
 ) {
-  const items: ActivityDefinitionUsageEvidence["items"] = [];
+  const items: ActivityDefinitionRevocationEvidence["directDependencies"]["items"] = [];
   let cursor: string | null = null;
-  let evidence: ActivityDefinitionUsageEvidence | null = null;
+  let evidence: ActivityDefinitionRevocationEvidence["directDependencies"] | null = null;
   do {
-    const parameters = new URLSearchParams({
-      ...query,
-      limit: "500"
-    });
-    if (cursor) parameters.set("cursor", cursor);
-    const page = await context.http.getJson<ActivityDefinitionUsageEvidence>(
-      `${versionPath}/dependencies?${parameters.toString()}`,
-      { signal }
-    );
+    const page = await getActivityDefinitionDependencyPage(context, { ...query, cursor, limit: 500 }, signal);
     if (evidence && (
       evidence.consistency.asOf !== page.consistency.asOf ||
       evidence.consistency.asOfSequence !== page.consistency.asOfSequence ||
