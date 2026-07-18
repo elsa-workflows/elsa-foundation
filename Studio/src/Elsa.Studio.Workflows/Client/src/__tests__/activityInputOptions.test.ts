@@ -42,7 +42,7 @@ describe("activity input options API", () => {
         nodeId: "activity-1",
         workflowState: expect.objectContaining({
           rootActivity: expect.objectContaining({
-            inputs: [{ referenceKey: "Field", value: { value: "name", expressionType: "Literal" } }]
+            inputs: [{ referenceKey: "field", value: { value: "name", expressionType: "Literal" } }]
           })
         })
       },

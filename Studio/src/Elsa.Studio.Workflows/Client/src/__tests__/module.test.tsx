@@ -939,7 +939,7 @@ describe("workflows module", () => {
     expect(savedRoot.text).toBeUndefined();
     expect(savedRoot.inputs).toEqual([
       {
-        referenceKey: "Text",
+        referenceKey: "text",
         value: { value: "Hello from expanded editor\nwith more room", expressionType: "Literal" }
       }
     ]);
@@ -1038,6 +1038,7 @@ describe("workflows module", () => {
         value: { value: '["First line","Second line"]', expressionType: "Object" }
       }
     ]);
+    expect(savedRoot.lines).toBeUndefined();
 
     await unmount();
   });
@@ -3470,6 +3471,9 @@ function writeLineDescriptor() {
     displayName: "Write Line",
     kind: "Action",
     inputs: [{
+      // Mirrors the real backend catalog: WriteLine declares [ActivityInput(Key = "text")], so the
+      // stable referenceKey is lowercase and deliberately differs from the PascalCase display name.
+      referenceKey: "text",
       name: "Text",
       typeName: "System.String",
       displayName: "Text",
@@ -3496,6 +3500,9 @@ function writeLinesDescriptor() {
     displayName: "Write Lines",
     kind: "Action",
     inputs: [{
+      // WriteLines has no explicit key, so its referenceKey defaults to the PascalCase property name —
+      // the verbatim contract must preserve that casing too.
+      referenceKey: "Lines",
       name: "Lines",
       typeName: "System.Collections.Generic.ICollection`1[[System.String, System.Private.CoreLib]], System.Private.CoreLib",
       displayName: "Lines",
