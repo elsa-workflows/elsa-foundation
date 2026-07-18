@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 
 namespace Elsa.Workflows.Runtime.Distributed.Models;
 
@@ -30,7 +31,7 @@ public sealed class ExecutionCommandTransportItem
         DateTimeOffset? leaseExpiresAt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(transportItemId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentNullException.ThrowIfNull(envelope);
 
         if (sequence < 0)
@@ -42,8 +43,8 @@ public sealed class ExecutionCommandTransportItem
         if (!string.Equals(workflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new ArgumentException("Transport item workflow execution ID must match the envelope workflow execution ID.", nameof(workflowExecutionId));
 
-        if (leasedByOwnerId is not null && string.IsNullOrWhiteSpace(leasedByOwnerId))
-            throw new ArgumentException("Lease owner ID cannot be blank when provided.", nameof(leasedByOwnerId));
+        if (leasedByOwnerId is not null)
+            DistributedRuntimeIdentityConstraints.Validate(leasedByOwnerId, nameof(leasedByOwnerId));
 
         if (leasedByOwnerId is null ^ leaseExpiresAt is null)
             throw new ArgumentException("A leased transport item must carry both an owner ID and a lease expiry, or neither.", nameof(leasedByOwnerId));

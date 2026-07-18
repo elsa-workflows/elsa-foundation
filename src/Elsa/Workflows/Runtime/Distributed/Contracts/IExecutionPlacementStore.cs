@@ -31,23 +31,27 @@ public interface IExecutionPlacementStore
     /// </summary>
     ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists all currently stored placement leases (used by a node's pump to discover the executions it owns).</summary>
-    ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListAsync(CancellationToken cancellationToken = default);
-}
-
-public interface IPagedExecutionPlacementStore
-{
     /// <summary>
-    /// Lists stored placement leases through a provider-bounded deterministic page. The page is scoped by the current
-    /// persistence operation scope and ordered by workflow execution id.
+    /// Returns at most <see cref="ExecutionPlacementLeaseListRequest.Take"/> live leases held by one owner, ordered by
+    /// expiry and workflow execution id so renewal work remains deterministic and finite.
     /// </summary>
-    ValueTask<ExecutionPlacementLeasePage> ListPageAsync(ExecutionPlacementLeasePageRequest request, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(
+        ExecutionPlacementLeaseListRequest request,
+        CancellationToken cancellationToken = default);
 }
 
-public sealed record ExecutionPlacementLeasePageRequest(int Skip = 0, int Take = 100)
+public sealed class ExecutionPlacementLeaseListRequest
 {
-    public int NormalizedSkip => Math.Max(Skip, 0);
-    public int NormalizedTake => Math.Clamp(Take, 1, 500);
-}
+    public ExecutionPlacementLeaseListRequest(string ownerId, DateTimeOffset now, int take = 100)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
 
-public sealed record ExecutionPlacementLeasePage(IReadOnlyCollection<ExecutionPlacementLease> Items, long TotalCount);
+        OwnerId = ownerId;
+        Now = now;
+        Take = DistributedRuntimeQueryLimits.ValidateTake(take, nameof(take));
+    }
+
+    public string OwnerId { get; }
+    public DateTimeOffset Now { get; }
+    public int Take { get; }
+}

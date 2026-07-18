@@ -39,7 +39,10 @@ namespace Elsa.Workflows.Runtime.Distributed;
     DependsOn = new object[] { "Tasks" })]
 public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Node ID", Description = "Stable identity of this node as a placement owner. Defaults to a machine/process-derived value.", Category = "Runtime")]
+    private int _maxExecutionsPerSweep = 100;
+    private int _transportLeaseBatchSize = 100;
+
+    [ManifestSetting(DisplayName = "Node ID", Description = "Stable identity of this node as a placement owner, up to 128 well-formed UTF-16 code units. Defaults to a machine/process-derived value.", Category = "Runtime")]
     public string? NodeId { get; set; }
 
     [ManifestSetting(DisplayName = "Lease duration (seconds)", Description = "Placement and transport visibility lease TTL. A node that stops renewing within this window loses its executions to a survivor.", Category = "Runtime", DefaultValue = "30")]
@@ -52,10 +55,22 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
     public double MaxBackoffIntervalMinutes { get; set; } = 5;
 
     [ManifestSetting(DisplayName = "Max executions per sweep", Description = "Hard cap on executions claimed and re-driven per sweep, bounding dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
-    public int MaxExecutionsPerSweep { get; set; } = 100;
+    public int MaxExecutionsPerSweep
+    {
+        get => _maxExecutionsPerSweep;
+        set => _maxExecutionsPerSweep = DistributedRuntimeQueryLimits.ValidateTake(
+            value,
+            nameof(MaxExecutionsPerSweep));
+    }
 
     [ManifestSetting(DisplayName = "Transport lease batch size", Description = "Maximum transport items leased per owned execution per sweep.", Category = "Runtime", DefaultValue = "100")]
-    public int TransportLeaseBatchSize { get; set; } = 100;
+    public int TransportLeaseBatchSize
+    {
+        get => _transportLeaseBatchSize;
+        set => _transportLeaseBatchSize = DistributedRuntimeQueryLimits.ValidateTake(
+            value,
+            nameof(TransportLeaseBatchSize));
+    }
 
     public void ConfigureServices(IServiceCollection services)
     {

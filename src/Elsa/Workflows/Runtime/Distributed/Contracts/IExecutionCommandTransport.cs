@@ -37,8 +37,14 @@ public interface IExecutionCommandTransport
     /// </summary>
     ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, DateTimeOffset now, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists execution IDs that currently have at least one visible (leasable) item, for the placement pump's backlog sweep.</summary>
-    ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Lists at most <paramref name="maxItems"/> execution IDs that currently have at least one visible item, in
+    /// deterministic ordinal order, for the placement pump's bounded backlog sweep.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+        DateTimeOffset now,
+        int maxItems,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns the number of undelivered (not-yet-acked) items for an execution, regardless of lease state. Primarily for diagnostics and tests.</summary>
     ValueTask<int> CountPendingAsync(string workflowExecutionId, CancellationToken cancellationToken = default);

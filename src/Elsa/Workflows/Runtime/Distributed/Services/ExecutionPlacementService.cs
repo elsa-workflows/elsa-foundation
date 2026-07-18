@@ -12,8 +12,6 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// </summary>
 public sealed class ExecutionPlacementService : IExecutionPlacementService
 {
-    private const int PlacementListPageSize = 500;
-
     private readonly IExecutionPlacementStore _store;
     private readonly TimeProvider _timeProvider;
     private readonly ExecutionPlacementOptions _options;
@@ -23,7 +21,7 @@ public sealed class ExecutionPlacementService : IExecutionPlacementService
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.NodeId);
+        DistributedRuntimeIdentityConstraints.Validate(options.NodeId, nameof(options.NodeId));
 
         if (options.LeaseDuration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(options), "Placement lease duration must be greater than zero.");
@@ -37,7 +35,7 @@ public sealed class ExecutionPlacementService : IExecutionPlacementService
 
     public ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
 
         var now = _timeProvider.GetUtcNow();
         var claim = new ExecutionPlacementClaim(
@@ -57,33 +55,17 @@ public sealed class ExecutionPlacementService : IExecutionPlacementService
 
     public ValueTask<ExecutionPlacementLease?> FindOwnerAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         return _store.FindAsync(workflowExecutionId, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListOwnedAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListOwnedAsync(
+        int maxItems,
+        CancellationToken cancellationToken = default)
     {
         var now = _timeProvider.GetUtcNow();
-        var all = await ListLeasesAsync(cancellationToken);
-
-        return all
-            .Where(lease => StringComparer.Ordinal.Equals(lease.OwnerId, _options.NodeId) && !lease.IsExpired(now))
-            .ToArray();
-    }
-
-    private async ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListLeasesAsync(CancellationToken cancellationToken)
-    {
-        if (_store is not IPagedExecutionPlacementStore pagedStore)
-            return await _store.ListAsync(cancellationToken);
-
-        var leases = new List<ExecutionPlacementLease>();
-        for (var skip = 0;; skip += PlacementListPageSize)
-        {
-            var page = await pagedStore.ListPageAsync(new ExecutionPlacementLeasePageRequest(skip, PlacementListPageSize), cancellationToken);
-            leases.AddRange(page.Items);
-
-            if (leases.Count >= page.TotalCount || page.Items.Count == 0)
-                return leases;
-        }
+        return await _store.ListOwnedAsync(
+            new ExecutionPlacementLeaseListRequest(_options.NodeId, now, maxItems),
+            cancellationToken);
     }
 }

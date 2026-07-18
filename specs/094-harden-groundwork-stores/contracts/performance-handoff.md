@@ -49,7 +49,7 @@ evidence for the five lookup routes against exactly 100,000 physical records and
 candidate. The current Identity shape uses Groundwork physical entity tables. SQLite is mandatory; SQL Server,
 PostgreSQL, and MongoDB use the opt-in external-provider matrix. Spec 095 retains accepted exact-candidate
 Groundwork `preview.60` / Identity manifest v1.0.4 evidence for all four topologies as immutable historical
-provenance. Current execution uses the repository-pinned `preview.63` family and current Identity manifest; no
+provenance. Current execution uses the repository-pinned `preview.64` family and current Identity manifest; no
 historical artifact is linked as an active exact-head pass.
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
 equality, and all timing.
@@ -57,7 +57,8 @@ equality, and all timing.
 Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
 Groundwork PR #95 extends the certified provider-neutral keyset continuation introduced in `preview.62` with
 residual predicates over bounded physical routes. Groundwork PR #96 adds the portable substring search keys
-consumed by `preview.63`. Elsa-specific per-kind version policies, legacy-stamp parsing, JSON
+consumed by `preview.63`; Groundwork PR #97 adds provider-native latest-per-key execution consumed by
+`preview.64`. Elsa-specific per-kind version policies, legacy-stamp parsing, JSON
 options, and concrete upcasters remain behind Elsa's provider marker and provider packages so
 core modules remain Groundwork-free. Any codec or manifest change invalidates prior composition fingerprints and
 requires fresh exact-head provider evidence before the workload can feed #646.

@@ -1,6 +1,8 @@
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Text;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -9,51 +11,199 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
 public sealed class GroundworkDistributedBoundedQueryTests
 {
     [Fact]
-    public async Task StoreReadsUseDeclaredBoundedQueryIdentitiesAndPaths()
+    public void ManifestUsesPortableOrdinalKeysWithinTheDeclaredIdentityBoundary()
+    {
+        var manifest = DistributedGroundworkStorageManifest.Create();
+        var expectedOrdinalKeyLength = DistributedRuntimeIdentityConstraints.MaximumLength * 4;
+        var placement = manifest.StorageUnits.Single(
+            unit => unit.Identity.Value == DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind);
+        var transport = manifest.StorageUnits.Single(
+            unit => unit.Identity.Value == DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind);
+
+        AssertProjectionLength(
+            placement,
+            DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
+            expectedOrdinalKeyLength);
+        AssertProjectionLength(
+            placement,
+            DistributedGroundworkStorageManifest.OwnerIdComparisonKeyField,
+            expectedOrdinalKeyLength);
+        AssertProjectionLength(
+            placement,
+            DistributedGroundworkStorageManifest.OwnerIdLookupKeyField,
+            64);
+        AssertProjectionLength(
+            transport,
+            DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
+            expectedOrdinalKeyLength);
+        AssertProjectionLength(
+            transport,
+            DistributedGroundworkStorageManifest.CollectionField,
+            128);
+
+        var physicalStorage = Assert.IsType<StorageUnitPhysicalStorage>(transport.PhysicalStorage);
+        var countRoute = Assert.Single(
+            physicalStorage.BoundedQueries,
+            query => query.Identity == DistributedGroundworkStorageManifest.CountPendingCommandsQuery);
+        Assert.Equal(
+            new[] { BoundedQueryResultOperation.Count },
+            countRoute.ResultOperations.Order());
+    }
+
+    [Fact]
+    public async Task OwnedPlacementRetrievalBindsOwnerExpiryOrderAndFiniteLimitToItsDeclaredRoute()
     {
         var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
         var queries = new RecordingBoundedDocumentStore();
         var placements = new GroundworkExecutionPlacementStore(documents, queries);
+        var now = new DateTimeOffset(2026, 7, 20, 9, 0, 0, TimeSpan.Zero);
+
+        await placements.ListOwnedAsync(new ExecutionPlacementLeaseListRequest("node-a", now, take: 25));
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind, query.DocumentKind);
+        Assert.Equal(DistributedGroundworkStorageManifest.ListOwnedPlacementsQuery, query.QueryIdentity);
+        Assert.Null(query.Skip);
+        Assert.Equal(25, query.Take);
+        Assert.Collection(
+            query.Clauses,
+            clause => AssertComparison(
+                clause,
+                DistributedGroundworkStorageManifest.OwnerIdLookupKeyField,
+                QueryComparisonOperator.Equal,
+                PortableStringComparison.CreateHash(PortableStringComparison.CreateOrdinal("node-a"))),
+            clause => AssertComparison(
+                clause,
+                DistributedGroundworkStorageManifest.OwnerIdComparisonKeyField,
+                QueryComparisonOperator.Equal,
+                PortableStringComparison.CreateOrdinal("node-a")),
+            clause => AssertComparison(
+                clause,
+                DistributedGroundworkStorageManifest.ExpiresAtField,
+                QueryComparisonOperator.GreaterThan,
+                now.ToString("O")));
+        Assert.Collection(
+            query.Order,
+            order =>
+            {
+                Assert.Equal(DistributedGroundworkStorageManifest.OwnerIdLookupKeyField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal(DistributedGroundworkStorageManifest.ExpiresAtField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            });
+    }
+
+    [Fact]
+    public async Task PendingExecutionDiscoveryBindsVisibilityDistinctnessOrderAndFiniteLimitToItsDeclaredRoute()
+    {
+        var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var transport = new GroundworkExecutionCommandTransport(
+            documents,
+            GroundworkDistributedTestAccess.Scoped(),
+            queries);
+        var now = new DateTimeOffset(2026, 7, 20, 9, 0, 0, TimeSpan.Zero);
+
+        await transport.ListPendingExecutionIdsAsync(now, maxItems: 25);
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind, query.DocumentKind);
+        Assert.Equal(DistributedGroundworkStorageManifest.ListPendingExecutionIdsQuery, query.QueryIdentity);
+        Assert.Null(query.Skip);
+        Assert.Equal(25, query.Take);
+        Assert.Equal(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField, query.LatestPerKeyPath);
+        Assert.Collection(
+            query.Clauses,
+            clause => AssertComparison(
+                clause,
+                DistributedGroundworkStorageManifest.CollectionField,
+                QueryComparisonOperator.Equal,
+                DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind),
+            clause => AssertComparison(
+                clause,
+                DistributedGroundworkStorageManifest.VisibleAtField,
+                QueryComparisonOperator.LessThanOrEqual,
+                now.ToString("O")));
+        Assert.Collection(
+            query.Order,
+            order =>
+            {
+                Assert.Equal(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal(DistributedGroundworkStorageManifest.SequenceField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Descending, order.Direction);
+            });
+    }
+
+    [Fact]
+    public async Task CommandLeaseBindsExecutionVisibilitySequenceOrderAndFiniteLimitToItsDeclaredRoute()
+    {
+        var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var transport = new GroundworkExecutionCommandTransport(
+            documents,
+            GroundworkDistributedTestAccess.Scoped(),
+            queries);
+        var now = new DateTimeOffset(2026, 7, 20, 9, 0, 0, TimeSpan.Zero);
+
+        await transport.LeaseAsync("execution-1", "node-a", now, TimeSpan.FromSeconds(30), maxItems: 25);
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(DistributedGroundworkStorageManifest.LeaseVisibleCommandsQuery, query.QueryIdentity);
+        Assert.Null(query.Skip);
+        Assert.Equal(25, query.Take);
+        Assert.Collection(
+            query.Clauses,
+            clause => AssertComparison(
+                clause,
+                DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
+                QueryComparisonOperator.Equal,
+                PortableStringComparison.CreateOrdinal("execution-1")),
+            clause => AssertComparison(
+                clause,
+                DistributedGroundworkStorageManifest.VisibleAtField,
+                QueryComparisonOperator.LessThanOrEqual,
+                now.ToString("O")));
+        Assert.Collection(
+            query.Order,
+            order =>
+            {
+                Assert.Equal(DistributedGroundworkStorageManifest.SequenceField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+            });
+    }
+
+    [Fact]
+    public async Task PendingCountUsesTheProviderCountOperationOnItsDeclaredRoute()
+    {
+        var documents = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
         var transport = new GroundworkExecutionCommandTransport(
             documents,
             GroundworkDistributedTestAccess.Scoped(),
             queries);
 
-        await placements.ListPageAsync(new ExecutionPlacementLeasePageRequest(10, 25));
-        await transport.ListPendingExecutionIdsAsync(DateTimeOffset.UtcNow);
         await transport.CountPendingAsync("execution-1");
 
-        Assert.Collection(
-            queries.CountObserved,
-            query => AssertQuery(
-                query,
-                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
-                DistributedGroundworkStorageManifest.ListAllQuery,
-                DistributedGroundworkStorageManifest.CollectionField,
-                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind));
-
-        Assert.Collection(
-            queries.Observed,
-            query => AssertQuery(
-                query,
-                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
-                DistributedGroundworkStorageManifest.ListAllQuery,
-                DistributedGroundworkStorageManifest.CollectionField,
-                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
-                10,
-                25),
-            query => AssertQuery(
-                query,
-                DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
-                DistributedGroundworkStorageManifest.ListAllQuery,
-                DistributedGroundworkStorageManifest.CollectionField,
-                DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind),
-            query => AssertQuery(
-                query,
-                DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
-                DistributedGroundworkStorageManifest.ListByWorkflowExecutionQuery,
-                DistributedGroundworkStorageManifest.WorkflowExecutionIdField,
-                "execution-1"));
+        Assert.Empty(queries.Observed);
+        var query = Assert.Single(queries.CountObserved);
+        AssertQuery(
+            query,
+            DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
+            DistributedGroundworkStorageManifest.CountPendingCommandsQuery,
+            DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
+            PortableStringComparison.CreateOrdinal("execution-1"));
     }
 
     [Fact]
@@ -123,6 +273,31 @@ public sealed class GroundworkDistributedBoundedQueryTests
         Assert.Equal(path, comparison.Path);
         Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
         Assert.Equal(value, Assert.Single(comparison.Values));
+    }
+
+    private static void AssertComparison(
+        DocumentQueryClause clause,
+        string path,
+        QueryComparisonOperator operation,
+        string value)
+    {
+        var comparison = Assert.Single(clause.Comparisons);
+        Assert.Equal(path, comparison.Path);
+        Assert.Equal(operation, comparison.Operator);
+        Assert.Equal(value, Assert.Single(comparison.Values));
+    }
+
+    private static void AssertProjectionLength(
+        global::Groundwork.Core.Manifests.StorageUnit unit,
+        string logicalName,
+        int expectedLength)
+    {
+        var policy = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
+            unit.PhysicalStorage!.Policy);
+        var projection = Assert.Single(
+            policy.Definition.ProjectedColumns,
+            column => column.LogicalName == logicalName);
+        Assert.Equal(expectedLength, projection.Length);
     }
 
     private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
