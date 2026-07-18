@@ -224,6 +224,19 @@ public sealed class ActivityForkService(
         if (!StringComparer.Ordinal.Equals(candidateId.RequestFingerprint, command.RequestFingerprint))
             throw Stale("The supplied request fingerprint is not bound to this candidate.");
 
+        var existingReceipt = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);
+        if (existingReceipt is not null)
+        {
+            EnsureReceiptBinding(existingReceipt);
+            if (!StringComparer.Ordinal.Equals(existingReceipt.PublicCandidateId, command.CandidateId) ||
+                !StringComparer.Ordinal.Equals(existingReceipt.RequestFingerprint, command.RequestFingerprint))
+                throw Conflict(
+                    "activity.fork.idempotency-conflict",
+                    "Activity fork idempotency conflict",
+                    "The idempotency key is already bound to different reviewed fork material.");
+            return ToReceipt(existingReceipt, ActivityForkOutcomeView.AlreadyApplied);
+        }
+
         var candidate = await forkStore.FindCandidateAsync(candidateId.ReservationId, cancellationToken)
             ?? throw NotFound("activity.fork.candidate-not-found", "Activity fork candidate not found", "The reviewed fork candidate was not found.");
         EnsureCandidateBinding(candidate);

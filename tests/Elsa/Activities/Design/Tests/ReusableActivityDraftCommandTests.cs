@@ -849,6 +849,27 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Fork_apply_exact_replay_remains_idempotent_after_candidate_retention_cleanup()
+    {
+        var harness = new Harness();
+        var preview = await harness.PreviewForkAsync();
+        var command = new ApplyReusableActivityFork(
+            preview.CandidateId,
+            preview.RequestFingerprint,
+            "retained-receipt-operation");
+        await harness.Forks.ApplyAsync(command, default);
+        harness.Advance(TimeSpan.FromDays(2));
+        await harness.PruneForkCandidatesAsync();
+
+        var replay = await harness.Forks.ApplyAsync(command, default);
+        var status = await harness.Forks.GetStatusAsync(new(command.IdempotencyKey), default);
+
+        Assert.Equal(ActivityForkOutcomeView.AlreadyApplied, replay.Outcome);
+        Assert.Equal(ActivityForkOutcomeView.Applied, status.Outcome);
+        Assert.Equal(preview.Target.DefinitionId, replay.Definition.DefinitionId);
+    }
+
+    [Fact]
     public async Task Fork_apply_reports_unknown_outcome_when_failure_has_no_durable_receipt()
     {
         var harness = new Harness(decorateApplyCommand: _ => new ThrowBeforeCommitForkCommand());
@@ -994,6 +1015,9 @@ public sealed class ReusableActivityDraftCommandTests
         public ActivityForkService Forks { get; }
 
         public void Advance(TimeSpan duration) => _time.Advance(duration);
+
+        public Task<int> PruneForkCandidatesAsync() =>
+            Stores.ExecuteAsync(_time.GetUtcNow());
 
         public async Task<ActivityForkPreviewView> PreviewForkAsync()
         {
