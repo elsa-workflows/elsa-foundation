@@ -101,10 +101,10 @@ internal static class UpdateDraftTestKit
         new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, null);
 
     public static InputDefinition Input(string referenceKey, string name, Type? type = null) =>
-        new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, name, null);
+        new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, name, null, false);
 
     public static OutputDefinition Output(string referenceKey, string name, Type? type = null) =>
-        new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, name, null);
+        new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, name, null, false);
 
     public static ArgumentState Arg(string referenceKey, string? value = null) =>
         new(referenceKey, new ArgumentValue(value), null, null, null, null);

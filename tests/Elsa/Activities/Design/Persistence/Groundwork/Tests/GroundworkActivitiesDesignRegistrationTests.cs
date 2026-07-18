@@ -59,7 +59,8 @@ public class GroundworkActivitiesDesignRegistrationTests
         Assert.Same(reusable, sp.GetRequiredService<IActivityDirectDependencyStore>());
         var projection = Assert.IsType<GroundworkActivityDependencyProjection>(sp.GetRequiredService<IActivityDependencyProjectionStore>());
         Assert.Same(projection, sp.GetRequiredService<IActivityDependencyProjectionRebuilder>());
-        Assert.IsType<GroundworkActivityUpgradePlanStore>(sp.GetRequiredService<IActivityUpgradePlanStore>());
+        var upgradePlans = Assert.IsType<GroundworkActivityUpgradePlanStore>(sp.GetRequiredService<IActivityUpgradePlanStore>());
+        Assert.Same(upgradePlans, sp.GetRequiredService<IActivityUpgradeApplyReceiptStore>());
         Assert.Same(reusable, sp.GetRequiredService<ICreateActivityDefinitionCommand>());
         Assert.Same(reusable, sp.GetRequiredService<IUpdateActivityDefinitionPresentationCommand>());
         Assert.Same(reusable, sp.GetRequiredService<ICreateActivityDraftCommand>());

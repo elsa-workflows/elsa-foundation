@@ -140,6 +140,8 @@ public sealed class ActivityDependencyEdge : TenantEntity
     public int ChildIndex { get; init; }
 
     public ICollection<ActivityNodeOrigin> NodeOrigin { get; init; } = [];
+
+    public ICollection<ActivityContractMemberUsage> MemberUsage { get; init; } = [];
 }
 
 /// <summary>Single rebuildable mixed-owner reverse dependency snapshot.</summary>

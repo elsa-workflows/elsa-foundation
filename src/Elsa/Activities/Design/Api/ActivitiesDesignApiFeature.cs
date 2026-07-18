@@ -55,7 +55,9 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             new DefaultActivityAvailabilityEvaluator(sp.GetRequiredService<IOptions<ActivityAvailabilityOptions>>().Value));
         services.TryAddSingleton<IActivityAvailabilityDiagnosticsProjector, DefaultActivityAvailabilityDiagnosticsProjector>();
         services.TryAddSingleton<IActivityAvailabilitySettingsStore, InMemoryActivityAvailabilitySettingsStore>();
-        services.TryAddScoped<IActivityUpgradePlanner, ActivityUpgradePlanner>();
+        services.TryAddScoped<ActivityUpgradePlanner>();
+        services.TryAddScoped<IActivityUpgradePlanner>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
+        services.TryAddScoped<IActivityUpgradePlanRefresher>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
         services.TryAddScoped<IActivityUpgradeDiffBuilder, ActivityUpgradeDiffBuilder>();
         services.TryAddSingleton<IActivityProviderRegistry, ActivityProviderRegistry>();
         services.TryAddSingleton<IActivityContractCapabilityCatalog, ExpressionActivityContractCapabilityCatalog>();

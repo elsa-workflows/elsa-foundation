@@ -4,6 +4,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Locking.Core;
@@ -357,6 +358,10 @@ public sealed class GroundworkReusableActivityStores(
 
     public async Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.Draft.Id),
+            null,
+            cancellationToken);
         ValidateDraftAndLayout(request.Draft, request.Layout);
         var authoring = await RequiredAuthoringAsync(request.Draft.DefinitionId, cancellationToken);
         EnsureDesignAuthority(authoring.Entity);
@@ -387,6 +392,10 @@ public sealed class GroundworkReusableActivityStores(
         UpdateActivityDraftPresentationRequest request,
         CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
         EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
         var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
@@ -418,6 +427,10 @@ public sealed class GroundworkReusableActivityStores(
         CreateActivityDraftConflictCopyRequest request,
         CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.SourceDraftId),
+            null,
+            cancellationToken);
         ValidateDraftAndLayout(request.ConflictCopy, request.Layout);
         var source = await RequiredDraftAsync(request.SourceDraftId, cancellationToken);
         EnsureActiveRevision(source.Entity, request.ExpectedSourceRevision);
@@ -449,6 +462,10 @@ public sealed class GroundworkReusableActivityStores(
         ReplaceActivityDraftRequest request,
         CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
         EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
         var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
@@ -486,6 +503,10 @@ public sealed class GroundworkReusableActivityStores(
         ApplyActivityContractProposalRequest request,
         CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
         EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
         var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
@@ -522,6 +543,10 @@ public sealed class GroundworkReusableActivityStores(
 
     public async Task ExecuteAsync(DiscardActivityDraftRequest request, CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
         EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
         var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
@@ -540,6 +565,10 @@ public sealed class GroundworkReusableActivityStores(
 
     public async Task ExecuteAsync(ActivityDraftValidationState validation, CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(validation.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(validation.DraftId, cancellationToken);
         if (draft.Entity.Revision != validation.Revision)
             throw Conflict($"Draft '{validation.DraftId}' is at revision {draft.Entity.Revision}, not {validation.Revision}.");
@@ -572,6 +601,11 @@ public sealed class GroundworkReusableActivityStores(
         CancellationToken cancellationToken = default)
     {
         var publication = await RequiredPublicationAsync(request.DefinitionVersionId, cancellationToken);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(publication.Entity.DefinitionId),
+            null,
+            cancellationToken);
+        publication = await RequiredPublicationAsync(request.DefinitionVersionId, cancellationToken);
         var authoring = await RequiredAuthoringAsync(publication.Entity.DefinitionId, cancellationToken);
         if (!IsVisible(authoring.Entity.TenantId, request.TenantId) ||
             !StringComparer.Ordinal.Equals(authoring.Entity.TenantId, publication.Entity.TenantId))

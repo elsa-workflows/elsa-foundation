@@ -132,6 +132,7 @@ public sealed class RequiredInputOutputValidatorTests
         StorageDriverType: null,
         DisplayName: referenceKey,
         Category: null,
+        IsNullable: false,
         IsRequired: true);
 
     private static OutputDefinition RequiredOutput(string referenceKey) => new(
@@ -141,5 +142,6 @@ public sealed class RequiredInputOutputValidatorTests
         StorageDriverType: null,
         DisplayName: referenceKey,
         Category: null,
+        IsNullable: false,
         IsRequired: true);
 }

@@ -30,6 +30,7 @@ public sealed class PublishingGroundworkFeature : IShellFeature
         services.AddScoped<GroundworkActivityUpgradePlanStore>();
         services.AddScoped<IActivityUpgradeDiscoverySource>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
         services.AddScoped<IActivityUpgradePlanMutationStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
+        services.AddScoped<IActivityUpgradePublishedDraftResolver>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
         services.AddScoped<IActivityDependencyProjectionRebuildCoordinator, GroundworkActivityDependencyProjectionRebuildCoordinator>();
     }
 }

@@ -343,6 +343,26 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         return Task.CompletedTask;
     }
 
+    public Task LinkSuccessorAsync(
+        string planId,
+        string successorPlanId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (!_upgradePlans.TryGetValue(planId, out var plan))
+                throw Conflict($"Upgrade plan '{planId}' does not exist.");
+            _upgradePlans[planId] = plan with
+            {
+                Status = ActivityUpgradePlanStatus.Superseded,
+                SuccessorPlanId = successorPlanId
+            };
+            _sequence++;
+        }
+        return Task.CompletedTask;
+    }
+
     public Task ExecuteAsync(CreateActivityDefinitionRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

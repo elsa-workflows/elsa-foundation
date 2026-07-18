@@ -69,7 +69,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
                 new(edge.OccurrenceId, edge.NodeOrigin.ToArray()),
                 true,
                 1,
-                [owner, dependency]));
+                [owner, dependency],
+                edge.MemberUsage.ToArray()));
         }
     }
 
@@ -95,7 +96,7 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
             foreach (var declaration in discovery.Dependencies)
             {
                 var dependency = Reference(await RequiredPublicationAsync(declaration.DefinitionVersionId, cancellationToken));
-                items.Add(DirectItem(owner, dependency, declaration.OccurrenceId, declaration.NodeOrigin));
+                items.Add(DirectItem(owner, dependency, declaration.OccurrenceId, declaration.NodeOrigin, declaration.MemberUsage));
             }
         }
     }
@@ -151,22 +152,44 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         if (state.RootActivity is null)
             return;
-        var stack = new Stack<ActivityNode>();
+        var stack = new Stack<(ActivityNode Node, IReadOnlyCollection<ActivityContractMemberUsage> StructureMemberUsage)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        stack.Push(state.RootActivity);
-        while (stack.TryPop(out var node))
+        stack.Push((state.RootActivity, []));
+        while (stack.TryPop(out var entry))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var node = entry.Node;
             if (!seen.Add(node.NodeId))
                 throw new InvalidOperationException($"Workflow owner '{owner.DraftId ?? owner.VersionId}' has duplicate node id '{node.NodeId}'.");
             // Workflow graphs contain every activity kind. Only exact reusable-activity publications
             // participate in this projection; CLR/provider catalog activities remain ordinary nodes.
             var publication = await publications.FindAsync(node.ActivityVersionId, cancellationToken);
             if (publication is not null)
-                items.Add(DirectItem(owner, Reference(publication), node.NodeId, [new("AuthoredNode", node.NodeId)]));
+                items.Add(DirectItem(
+                    owner,
+                    Reference(publication),
+                    node.NodeId,
+                    [new("AuthoredNode", node.NodeId)],
+                    PublicMemberUsage(node)
+                        .Concat(entry.StructureMemberUsage)
+                        .Distinct()
+                        .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
+                        .ThenBy(x => x.ReferenceKey, StringComparer.Ordinal)
+                        .ToArray()));
+            var structureUsage = structureService.ProjectChildContractMemberUsage(node)
+                .GroupBy(x => x.NodeId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyCollection<ActivityContractMemberUsage>)group
+                        .SelectMany(x => x.MemberUsage)
+                        .Distinct()
+                        .ToArray(),
+                    StringComparer.Ordinal);
             foreach (var slot in structureService.ProjectChildren(node).Reverse())
                 foreach (var child in slot.Activities.Reverse())
-                    stack.Push(child);
+                    stack.Push((
+                        child,
+                        structureUsage.GetValueOrDefault(child.NodeId) ?? []));
         }
     }
 
@@ -207,14 +230,26 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         ActivityDefinitionReference owner,
         ActivityDefinitionReference dependency,
         string occurrenceId,
-        IReadOnlyList<ActivityNodeOrigin> origin) => new(
+        IReadOnlyList<ActivityNodeOrigin> origin,
+        IReadOnlyList<ActivityContractMemberUsage>? memberUsage = null) => new(
         $"{owner.Kind}:{owner.DraftId ?? owner.VersionId}:{occurrenceId}:{dependency.VersionId}",
         owner,
         dependency,
         new(occurrenceId, origin),
         true,
         1,
-        [owner, dependency]);
+        [owner, dependency],
+        memberUsage);
+
+    private static IReadOnlyList<ActivityContractMemberUsage> PublicMemberUsage(ActivityNode node) =>
+        node.Inputs
+            .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
+            .Concat(node.Outputs.Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.ReferenceKey))
+            .Distinct()
+            .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
+            .ThenBy(x => x.ReferenceKey, StringComparer.Ordinal)
+            .ToArray();
 
     private static string SortKey(ActivityDependencyItem item) =>
         $"{item.Owner.Kind}\u001f{item.Owner.DraftId ?? item.Owner.VersionId}\u001f{item.Occurrence.OccurrenceId}\u001f{item.Dependency.VersionId}";

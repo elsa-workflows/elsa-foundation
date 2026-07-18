@@ -143,7 +143,7 @@ public sealed class GroundworkActivityDependencyProjection(
                         dependency = Reference(target);
                         matched.Add(replacement.OccurrenceId);
                     }
-                    rewritten.Add(DirectItem(change.ResultOwner, dependency, item.Occurrence));
+                    rewritten.Add(DirectItem(change.ResultOwner, dependency, item.Occurrence, item.MemberUsage));
                 }
                 if (replacements.Keys.Any(x => !matched.Contains(x)))
                     throw new InvalidOperationException("One or more planned projection occurrences are unavailable.");
@@ -194,13 +194,10 @@ public sealed class GroundworkActivityDependencyProjection(
         var traversed = Traverse(request.RootVersionId, request.Query, state.Items)
             .Where(x => IsIncluded(x.Owner.Kind, includeDrafts, includeVersions))
             .Where(x => IsVisible(x.Owner.TenantId, request.TenantId) && IsVisible(x.Dependency.TenantId, request.TenantId))
-            .OrderBy(x => x.Depth)
-            .ThenBy(x => x.Owner.Kind, StringComparer.Ordinal)
-            .ThenBy(x => x.Owner.DraftId ?? x.Owner.VersionId, StringComparer.Ordinal)
-            .ThenBy(x => x.Occurrence.OccurrenceId, StringComparer.Ordinal)
-            .ThenBy(x => x.Dependency.VersionId, StringComparer.Ordinal)
+            .Skip(request.Offset)
+            .Take(checked(request.Limit + 1))
             .ToArray();
-        var items = traversed.Skip(request.Offset).Take(request.Limit).ToArray();
+        var items = traversed.Take(request.Limit).ToArray();
         var next = request.Offset + items.Length;
         return new ActivityDependencyProjectionSlice(
             new ActivityDefinitionReference(
@@ -219,24 +216,26 @@ public sealed class GroundworkActivityDependencyProjection(
                 state.RebuildId),
             items,
             watermark,
-            next < traversed.Length ? next : null);
+            traversed.Length > request.Limit ? next : null);
     }
 
-    private static IReadOnlyList<ActivityDependencyItem> Traverse(
+    private static IEnumerable<ActivityDependencyItem> Traverse(
         string rootVersionId,
         ActivityDependencyQuery query,
         IEnumerable<ActivityDependencyItem> source)
     {
-        var direct = source.Where(x => x.IsDirect).ToArray();
-        var results = new List<ActivityDependencyItem>();
-        var queue = new Queue<(string VersionId, int Depth, IReadOnlyList<ActivityDefinitionReference> Path)>();
-        queue.Enqueue((rootVersionId, 0, []));
-        var expanded = new HashSet<string>(StringComparer.Ordinal);
+        var direct = source
+            .Where(x => x.IsDirect)
+            .OrderBy(x => x.Owner.Kind, StringComparer.Ordinal)
+            .ThenBy(x => x.Owner.DraftId ?? x.Owner.VersionId, StringComparer.Ordinal)
+            .ThenBy(x => x.Occurrence.OccurrenceId, StringComparer.Ordinal)
+            .ThenBy(x => x.Dependency.VersionId, StringComparer.Ordinal)
+            .ToArray();
+        var queue = new Queue<TraversalState>();
+        queue.Enqueue(new(rootVersionId, 0, [], new HashSet<string>([rootVersionId], StringComparer.Ordinal)));
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            if (!expanded.Add(current.VersionId))
-                continue;
             var matches = query.Direction == ActivityDependencyDirection.Inbound
                 ? direct.Where(x => StringComparer.Ordinal.Equals(x.Dependency.VersionId, current.VersionId))
                 : direct.Where(x => StringComparer.Ordinal.Equals(x.Owner.VersionId, current.VersionId));
@@ -248,16 +247,26 @@ public sealed class GroundworkActivityDependencyProjection(
                         ? new[] { item.Owner }.Concat(current.Path).ToArray()
                         : current.Path.Concat([item.Dependency]).ToArray();
                 var projected = item with { Depth = current.Depth + 1, Path = path };
-                results.Add(projected);
+                yield return projected;
                 if (!query.Transitive)
                     continue;
                 var next = query.Direction == ActivityDependencyDirection.Inbound ? item.Owner.VersionId : item.Dependency.VersionId;
-                if (next is not null)
-                    queue.Enqueue((next, current.Depth + 1, path));
+                if (next is null || current.VisitedVersions.Contains(next))
+                    continue;
+                queue.Enqueue(new(
+                    next,
+                    current.Depth + 1,
+                    path,
+                    new HashSet<string>(current.VisitedVersions, StringComparer.Ordinal) { next }));
             }
         }
-        return results;
     }
+
+    private sealed record TraversalState(
+        string VersionId,
+        int Depth,
+        IReadOnlyList<ActivityDefinitionReference> Path,
+        IReadOnlySet<string> VisitedVersions);
 
     private static ActivityDependencyProjectionState Deserialize(DocumentEnvelope envelope)
     {
@@ -297,12 +306,14 @@ public sealed class GroundworkActivityDependencyProjection(
     private static ActivityDependencyItem DirectItem(
         ActivityDefinitionReference owner,
         ActivityDefinitionReference dependency,
-        ActivityDependencyOccurrence occurrence) => new(
+        ActivityDependencyOccurrence occurrence,
+        IReadOnlyList<ActivityContractMemberUsage>? memberUsage = null) => new(
         $"{owner.Kind}:{owner.DraftId ?? owner.VersionId}:{occurrence.OccurrenceId}:{dependency.VersionId}",
         owner,
         dependency,
         occurrence,
         true,
         1,
-        [owner, dependency]);
+        [owner, dependency],
+        memberUsage);
 }
