@@ -51,6 +51,7 @@ interface InspectorPanelProps {
   onRetryExpressionDescriptors(): void;
   scopedVariableAnalysis: ScopedVariableAnalysis;
   onSelectedActivityChange(activity: ActivityNode): void;
+  onChangeReusableVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
   // Assign or replace the activity of a single-cardinality slot with a fresh instance of `activity`.
   onReplaceSlotActivity(ownerNodeId: string, slot: ChildSlot, label: string, activity: ActivityCatalogItem): void;
@@ -84,6 +85,7 @@ export function InspectorPanel({
   onRetryExpressionDescriptors,
   scopedVariableAnalysis,
   onSelectedActivityChange,
+  onChangeReusableVersion,
   onEnterSlot,
   onReplaceSlotActivity
 }: InspectorPanelProps) {
@@ -121,6 +123,7 @@ export function InspectorPanel({
           version={selectedReusableVersion}
           status={selectedReusableVersionStatus}
           recommendation={selectedRecommendedVersion}
+          onChangeVersion={onChangeReusableVersion}
         />
       ) : null}
       {selectedNodeAvailability ? (
@@ -209,7 +212,8 @@ function ReusableActivityIdentity({
   semanticVersion,
   version,
   status,
-  recommendation
+  recommendation,
+  onChangeVersion
 }: {
   node: ActivityNode;
   definitionId: string;
@@ -217,6 +221,7 @@ function ReusableActivityIdentity({
   version?: ActivityDefinitionVersionView | null;
   status: "idle" | "loading" | "ready" | "failed";
   recommendation?: RecommendedActivityDefinition | null;
+  onChangeVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
 }) {
   const upgradeAvailable = Boolean(recommendation
     && recommendation.isAvailable
@@ -230,7 +235,7 @@ function ReusableActivityIdentity({
   return (
     <section className="wf-reusable-identity" aria-label="Reusable activity identity">
       <h4>Reusable boundary</h4>
-      <p className="wf-muted">This placed occurrence is pinned and read-only. Authoring happens in a separate Activity Definition draft.</p>
+      <p className="wf-muted">This placed occurrence is pinned to an immutable version. Contract authoring happens in a separate Activity Definition draft.</p>
       <dl>
         <dt>Definition ID</dt>
         <dd>{exactDefinitionId}</dd>
@@ -252,6 +257,11 @@ function ReusableActivityIdentity({
       {status === "loading" ? <p className="wf-muted" role="status">Loading exact version details…</p> : null}
       {status === "failed" ? <p className="wf-muted" role="status">Exact authorized version details are unavailable.</p> : null}
       <div className="wf-reusable-actions">
+        <button type="button" disabled={!version || !onChangeVersion} onClick={() => {
+          if (version) onChangeVersion?.(node, version);
+        }}>
+          <Repeat2 size={14} /> Change exact version
+        </button>
         <a href={sourceUrl}>Open exact source definition</a>
         <a href={draftUrl}>Create a separate draft</a>
       </div>

@@ -16,7 +16,15 @@ import { createActivityNode, getActivityDisplay } from "../../src/Elsa.Studio.Wo
 import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
 import { ActivityPalettePanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
 import { InspectorPanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
+import { ActivityVersionChangeDialog } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityVersionChangeDialog";
+import {
+  applyActivityVersionChange,
+  findActivityOccurrence,
+  validateActivityVersionChangePrecondition
+} from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/activityVersionChangeModel";
 import { WorkflowActivityExecutionDetails } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
+import type { ActivityDefinitionVersionView } from "../../src/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
+import type { WorkflowDraft } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
 import "./fixture.css";
@@ -28,6 +36,7 @@ const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
 const activityDefinitionsFixture = searchParams.get("mode") === "activity-definitions" || window.location.pathname.startsWith("/workflows/activity-definitions");
 const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary";
+const versionChangeFixture = searchParams.get("mode") === "version-change";
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const endpointContext = createEndpointContext(window.location.origin);
 
@@ -353,11 +362,159 @@ function ReusableBoundaryFixture() {
   );
 }
 
+function VersionChangeFixture() {
+  const [draft, setDraft] = useState<WorkflowDraft>(() => versionChangeDraft());
+  const [reviewing, setReviewing] = useState(false);
+  const [message, setMessage] = useState("");
+  const occurrence = findActivityOccurrence(draft.state.rootActivity, "invoice-one")!;
+
+  useEffect(() => {
+    if (!reviewing || searchParams.get("stale") !== "true") return;
+    setDraft(current => ({
+      ...current,
+      state: { ...current.state, strategyOptions: { locallyEditedAfterReview: true } }
+    }));
+  }, [reviewing]);
+
+  return (
+    <main className="wf-page browser-reusable-journey">
+      <header className="wf-page-header">
+        <div><span className="wf-kicker">Workflow authoring</span><h1>Exact version change</h1></div>
+      </header>
+      {message ? <p role="status">{message}</p> : null}
+      <button type="button" onClick={() => {
+        setMessage("");
+        setReviewing(true);
+      }}>Change exact version</button>
+      <section aria-label="Workflow draft occurrences">
+        {["invoice-one", "invoice-two", "other"].map(nodeId => {
+          const node = findActivityOccurrence(draft.state.rootActivity, nodeId)!;
+          return <p key={nodeId} data-testid={nodeId}>{nodeId}: {node.activityVersionId}</p>;
+        })}
+      </section>
+      {reviewing ? (
+        <ActivityVersionChangeDialog
+          context={endpointContext}
+          draft={draft}
+          occurrence={occurrence}
+          current={browserVersion("version-1", "1.0.0", ["Amount", "Legacy"], ["Done", "Rejected"])}
+          recommendation={{
+            definitionId: "activity-def-browser",
+            activityTypeKey: "Contoso.Invoice",
+            category: "Browser tests",
+            displayName: "Invoice",
+            versionId: "version-2",
+            version: "2.0.0",
+            isAvailable: true
+          }}
+          onCancel={() => setReviewing(false)}
+          onApply={async request => {
+            const stale = validateActivityVersionChangePrecondition(draft, request.precondition);
+            if (stale) throw new Error(stale);
+            const proposed = applyActivityVersionChange(
+              draft,
+              request.precondition.occurrenceId,
+              request.precondition.fromVersionId,
+              request.targetVersionId,
+              request.scope
+            );
+            const saved = await updateDraft(endpointContext, proposed);
+            setDraft(saved);
+            setReviewing(false);
+            setMessage("Authoritative exact version change applied");
+          }}
+        />
+      ) : null}
+    </main>
+  );
+}
+
+function versionChangeDraft(): WorkflowDraft {
+  const activity = (nodeId: string, activityVersionId: string): ActivityNode => ({
+    nodeId,
+    activityVersionId,
+    inputs: [
+      { referenceKey: "Amount", value: { expressionType: "Literal", value: "42" } },
+      { referenceKey: "Legacy", value: { expressionType: "Literal", value: "kept-unresolved" } }
+    ],
+    outputs: []
+  });
+  return {
+    id: "workflow-draft-version-change",
+    definitionId: "workflow-definition-version-change",
+    sourceVersionId: "published-workflow-version",
+    state: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "flowchart",
+        inputs: [],
+        outputs: [],
+        structure: {
+          kind: "Flowchart",
+          schemaVersion: "1",
+          payload: {
+            activities: [
+              activity("invoice-one", "version-1"),
+              activity("invoice-two", "version-1"),
+              activity("other", "other-version")
+            ],
+            connections: [
+              { id: "done", source: { nodeId: "invoice-one", port: "Done" }, target: { nodeId: "other" } },
+              { id: "rejected", source: { nodeId: "invoice-one", port: "Rejected" }, target: { nodeId: "invoice-two" } }
+            ]
+          }
+        }
+      }
+    },
+    layout: [],
+    validationErrors: []
+  };
+}
+
+function browserVersion(
+  versionId: string,
+  version: string,
+  inputs: string[],
+  outcomes: string[]
+): ActivityDefinitionVersionView {
+  return {
+    definition: {
+      definitionId: "activity-def-browser",
+      activityTypeKey: "Contoso.Invoice",
+      category: "Browser tests",
+      displayName: "Invoice",
+      contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }
+    },
+    versionId,
+    version,
+    contract: {
+      contractSchemaVersion: "1",
+      inputs: inputs.map(referenceKey => ({
+        referenceKey,
+        name: referenceKey,
+        type: { alias: "String", collectionKind: "None" },
+        isRequired: false,
+        isNullable: true,
+        default: null,
+        storageDriverKey: "Workflow",
+        durability: "Durable"
+      })),
+      outputs: [],
+      outcomes: outcomes.map(referenceKey => ({ referenceKey, name: referenceKey, isEmitted: true }))
+    },
+    provider: { providerKey: "ActivityGraph", schemaVersion: "1", manifestFingerprint: "browser" },
+    lifecycle: "Active",
+    publishedAt: "2026-07-19T00:00:00Z"
+  };
+}
+
 const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
-  activityDefinitionsFixture
+  versionChangeFixture
+    ? <QueryClientProvider client={queryClient}><VersionChangeFixture /></QueryClientProvider>
+    : activityDefinitionsFixture
     ? <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} /></QueryClientProvider>
     : reusableBoundaryFixture
       ? <QueryClientProvider client={queryClient}><ReusableBoundaryFixture /></QueryClientProvider>
