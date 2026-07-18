@@ -2,14 +2,14 @@
   "schema_version": "1.0",
   "generator": "tools/maps/generate-maps",
   "freshness_rule": "Maps are fresh when input_fingerprint matches the current inputs. git_head is advisory because generated maps may be committed with their inputs.",
-  "git_head": "2d9f395d8fcb91ebcb41a5add77283db1307fc45",
+  "git_head": "49caea3baab9d07e7747facf1d9fb54a2fa72ea3",
   "relevant_inputs_dirty": true,
-  "input_fingerprint": "7b629aa98435e89c8e0fd14a3f3853f7fe7475aa609bce5921b06f24b8597f91",
+  "input_fingerprint": "ef2567d00ac9121e0f3c28e429fe1656154b8414a56e516ba1b62a64767b330a",
   "input_file_count": 3258,
   "counts": {
     "source_projects": 137,
     "test_projects": 69,
-    "direct_project_references": 940,
+    "direct_project_references": 942,
     "direct_package_references": 800,
     "feature_classes": 92,
     "specs": 123

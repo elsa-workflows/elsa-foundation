@@ -226,7 +226,7 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 ### Tests for User Story 7
 
 - [ ] T077 [P] [US7] Write failing runtime result-equivalence and bounded-materialization tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeBoundedQueryContractTests.cs`
-- [ ] T078 [P] [US7] Write failing IAM/secrets/distributed bounded-route tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/FoundationBoundedQueryContractTests.cs`
+- [x] T078 [P] [US7] Write failing IAM/secrets/distributed bounded-route tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/FoundationBoundedQueryContractTests.cs`
 
 ### Implementation for User Story 7
 
