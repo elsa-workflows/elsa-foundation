@@ -76,7 +76,11 @@ export function createStudioRegistry(
 
 function createBackendContext(host: ElsaStudioHostContext, options: CreateStudioRegistryOptions) {
   const backend = createEndpointContext(options.backendBaseUrl ?? host.baseUrl);
-  return options.backendHttp ? { ...backend, http: options.backendHttp } : backend;
+  return {
+    ...backend,
+    ...(options.backendHttp && { http: options.backendHttp }),
+    ...(host.accessTokenFactory && { accessTokenFactory: host.accessTokenFactory })
+  };
 }
 
 function createFeatureAreaRegistry(
