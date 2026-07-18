@@ -43,7 +43,9 @@ public sealed class Elsa3MigrationDiagnostic
         string message,
         string? path = null,
         string? guidance = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        IReadOnlyList<Elsa3MigrationPathSegment>? pathSegments = null,
+        IReadOnlyList<string>? cycle = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
@@ -60,6 +62,8 @@ public sealed class Elsa3MigrationDiagnostic
         Path = path;
         Guidance = guidance;
         Metadata = Elsa3MigrationMetadata.Snapshot(metadata);
+        PathSegments = Array.AsReadOnly((pathSegments ?? []).ToArray());
+        Cycle = Array.AsReadOnly((cycle ?? []).ToArray());
     }
 
     public Elsa3MigrationDiagnosticSeverity Severity { get; }
@@ -68,8 +72,23 @@ public sealed class Elsa3MigrationDiagnostic
     public string? Path { get; }
     public string? Guidance { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public IReadOnlyList<Elsa3MigrationPathSegment> PathSegments { get; }
+    public IReadOnlyList<string> Cycle { get; }
 
     public bool IsError => Severity == Elsa3MigrationDiagnosticSeverity.Error;
+}
+
+public sealed record Elsa3MigrationPathSegment(
+    Elsa3MigrationPathSegmentKind Kind,
+    string Identity,
+    string? Location = null);
+
+public enum Elsa3MigrationPathSegmentKind
+{
+    SourceVersion,
+    Node,
+    DependencySourceDefinition,
+    DependencySourceVersion
 }
 
 public sealed class Elsa3MigrationResult<T>

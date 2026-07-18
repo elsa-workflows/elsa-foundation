@@ -49,6 +49,9 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityExecutionInspectionAuthorizationContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
         services.TryAddScoped<ActivityExecutionLayoutReader>();
+        services.TryAddScoped<IActivityExecutionValuePayloadReader, ActivityExecutionValuePayloadReader>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<IActivityExecutionValuePayloadAuditSink, LoggingActivityExecutionValuePayloadAuditSink>();
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
     }

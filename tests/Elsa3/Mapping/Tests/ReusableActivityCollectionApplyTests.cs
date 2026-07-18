@@ -141,7 +141,7 @@ public sealed class ReusableActivityCollectionApplyTests
         await conflictingStore.SaveAsync(new SaveDocumentRequest("activityDefinition", conflicting, "1.0.0", "{\"different\":true}", 0));
         var conflictingCommand = Command(conflictingStore);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await conflictingCommand.CommitAsync(mutation));
+        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () => await conflictingCommand.CommitAsync(mutation));
         Assert.Empty(conflictingStore.Snapshot("activityDefinitionVersion"));
         Assert.Empty(conflictingStore.Snapshot("workflowDefinition"));
         Assert.Empty(conflictingStore.Snapshot("workflowDefinitionVersion"));
@@ -195,7 +195,11 @@ public sealed class ReusableActivityCollectionApplyTests
     private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
     private static GroundworkReusableActivityImportCommand Command(InMemoryDocumentStore store) =>
-        new(store, Serializer(), new GroundworkActivityManagementProjectionWriter(store, new ImmediateLockProvider(), store));
+        new(
+            store,
+            Serializer(),
+            new GroundworkActivityManagementProjectionWriter(store, new ImmediateLockProvider(), store),
+            GroundworkTestAccess.DefaultAccessContextAccessor);
 
     private sealed class ImmediateLockProvider : IDistributedLockProvider
     {

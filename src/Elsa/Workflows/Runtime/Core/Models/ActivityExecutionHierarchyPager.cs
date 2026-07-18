@@ -34,7 +34,14 @@ public static class ActivityExecutionHierarchyPager
         var currentWatermark = workflowRecords.Select(x => x.ExecutionSequence).DefaultIfEmpty(0).Max();
         var watermark = cursor?.CommittedThroughSequence ?? currentWatermark;
         if (cursor is not null && currentWatermark < watermark)
-            throw new ActivityExecutionHierarchyCursorException(ActivityExecutionHierarchyCursorFailure.Expired, "The committed hierarchy snapshot is no longer available.");
+            throw new ActivityExecutionHierarchyCursorException(
+                ActivityExecutionHierarchyCursorFailure.Expired,
+                "The committed hierarchy snapshot is no longer available.",
+                metadata: Metadata(
+                    ActivityExecutionCursorBindingState.Matched,
+                    ActivityExecutionCursorBindingState.Matched,
+                    ActivityExecutionCursorBindingState.Matched,
+                    "restart-from-first-page"));
 
         var snapshotRecords = workflowRecords.Where(x => x.ExecutionSequence <= watermark).ToArray();
         var itemsById = ActivityExecutionHierarchyProjector.ProjectItems(snapshotRecords, query.RootActivityExecutionId, query.Include)
@@ -70,16 +77,37 @@ public static class ActivityExecutionHierarchyPager
         ActivityExecutionHierarchyInclude[] include,
         int effectiveLimit)
     {
-        if (!StringComparer.Ordinal.Equals(cursor.TenantScope, query.TenantScope) ||
-            !StringComparer.Ordinal.Equals(cursor.AuthorizationProfile, query.AuthorizationProfile) ||
-            !StringComparer.Ordinal.Equals(cursor.WorkflowExecutionId, query.WorkflowExecutionId) ||
-            !StringComparer.Ordinal.Equals(cursor.RootActivityExecutionId, query.RootActivityExecutionId) ||
-            cursor.EffectiveLimit != effectiveLimit ||
-            query.Limit is not null && Math.Min(query.Limit.Value, MaximumLimit) != effectiveLimit ||
-            !cursor.Include.SequenceEqual(include))
-            throw new ActivityExecutionHierarchyCursorException(ActivityExecutionHierarchyCursorFailure.BindingMismatch, "The hierarchy cursor belongs to another query or authorization scope.");
+        var accessMatches =
+            StringComparer.Ordinal.Equals(cursor.TenantScope, query.TenantScope) &&
+            StringComparer.Ordinal.Equals(cursor.AuthorizationProfile, query.AuthorizationProfile);
+        var boundaryMatches =
+            StringComparer.Ordinal.Equals(cursor.WorkflowExecutionId, query.WorkflowExecutionId) &&
+            StringComparer.Ordinal.Equals(cursor.RootActivityExecutionId, query.RootActivityExecutionId);
+        var queryMatches =
+            cursor.EffectiveLimit == effectiveLimit &&
+            (query.Limit is null || Math.Min(query.Limit.Value, MaximumLimit) == effectiveLimit) &&
+            cursor.Include.SequenceEqual(include);
+        if (!accessMatches || !boundaryMatches || !queryMatches)
+            throw new ActivityExecutionHierarchyCursorException(
+                ActivityExecutionHierarchyCursorFailure.BindingMismatch,
+                "The hierarchy cursor belongs to another query or authorization scope.",
+                metadata: Metadata(
+                    State(boundaryMatches),
+                    State(queryMatches),
+                    State(accessMatches),
+                    "restart-from-first-page"));
     }
 
     private static bool IsAfter(ActivityExecutionHierarchyRecord record, long sequence, string activityExecutionId) =>
         record.ExecutionSequence > sequence || record.ExecutionSequence == sequence && StringComparer.Ordinal.Compare(record.ActivityExecutionId, activityExecutionId) > 0;
+
+    private static ActivityExecutionCursorBindingState State(bool matches) =>
+        matches ? ActivityExecutionCursorBindingState.Matched : ActivityExecutionCursorBindingState.Mismatched;
+
+    private static ActivityExecutionCursorFailureMetadata Metadata(
+        ActivityExecutionCursorBindingState boundary,
+        ActivityExecutionCursorBindingState query,
+        ActivityExecutionCursorBindingState access,
+        string recoveryAction) =>
+        new("activity-execution-hierarchy", boundary, query, access, true, recoveryAction);
 }

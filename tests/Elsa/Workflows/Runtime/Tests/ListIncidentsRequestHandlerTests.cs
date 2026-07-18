@@ -139,7 +139,10 @@ public sealed class ListIncidentsRequestHandlerTests
     {
         public string TenantScope => "test";
         public string AuthorizationProfile => "test";
+        public string AuditSubject => "test";
+        public string RequestCorrelationId => "test-request";
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => canInspectStructure;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => canInspectSensitiveValues;
+        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
     }
 }

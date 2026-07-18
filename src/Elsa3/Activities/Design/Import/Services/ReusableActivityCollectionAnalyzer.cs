@@ -141,7 +141,11 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                         source.Id,
                         path,
                         guidance: "Include the exact reusable target version in the analyzed collection and remove ambiguous or non-reusable references.",
-                        metadata: ReferenceMetadata(activity, reference)));
+                        metadata: ReferenceMetadata(activity, reference),
+                        dependencySourceIdentity: reference.VersionId ?? reference.DefinitionId,
+                        dependencyPathKind: reference.VersionId is null
+                            ? Elsa3MigrationPathSegmentKind.DependencySourceDefinition
+                            : Elsa3MigrationPathSegmentKind.DependencySourceVersion));
                     continue;
                 }
 
@@ -183,7 +187,8 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                 {
                     ["cyclePath"] = string.Join("|", cycle),
                     ["cycleLength"] = (cycle.Count - 1).ToString()
-                });
+                },
+                cycle: cycle);
             diagnostics.Add(cycleDiagnostic);
             var members = cycle.Take(cycle.Count - 1).ToHashSet(StringComparer.Ordinal);
             for (var index = 0; index < items.Count; index++)
@@ -445,12 +450,38 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
         string sourceVersionId,
         string? path = null,
         string? guidance = null,
-        IReadOnlyDictionary<string, string>? metadata = null) =>
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? dependencySourceIdentity = null,
+        Elsa3MigrationPathSegmentKind dependencyPathKind = Elsa3MigrationPathSegmentKind.DependencySourceVersion,
+        IReadOnlyList<string>? cycle = null) =>
         new(Elsa3MigrationDiagnosticSeverity.Error, code, message, path, guidance,
             new Dictionary<string, string>(metadata ?? new Dictionary<string, string>(), StringComparer.Ordinal)
             {
                 ["SourceVersionId"] = sourceVersionId
-            });
+            },
+            BuildPath(sourceVersionId, path, metadata, dependencySourceIdentity, dependencyPathKind),
+            cycle);
+
+    private static IReadOnlyList<Elsa3MigrationPathSegment> BuildPath(
+        string sourceVersionId,
+        string? nodePath,
+        IReadOnlyDictionary<string, string>? metadata,
+        string? dependencySourceIdentity,
+        Elsa3MigrationPathSegmentKind dependencyPathKind)
+    {
+        var result = new List<Elsa3MigrationPathSegment>
+        {
+            new(Elsa3MigrationPathSegmentKind.SourceVersion, sourceVersionId)
+        };
+        if (nodePath is not null)
+            result.Add(new(
+                Elsa3MigrationPathSegmentKind.Node,
+                metadata?.GetValueOrDefault("nodeId") ?? nodePath,
+                nodePath));
+        if (dependencySourceIdentity is not null)
+            result.Add(new(dependencyPathKind, dependencySourceIdentity));
+        return result;
+    }
 
     private static IReadOnlyList<Elsa3MigrationDiagnostic> OrderDiagnostics(IEnumerable<Elsa3MigrationDiagnostic> diagnostics) =>
         diagnostics.OrderBy(x => x.Severity)

@@ -13,7 +13,16 @@ public sealed record ActivityExecutionProblemDetailsView(
     string Instance,
     string ErrorCode,
     string TraceId,
-    IReadOnlyList<ActivityExecutionProblemDiagnosticView> Diagnostics);
+    IReadOnlyList<ActivityExecutionProblemDiagnosticView> Diagnostics,
+    ActivityExecutionCursorProblemView? Cursor);
+
+public sealed record ActivityExecutionCursorProblemView(
+    string CursorClass,
+    string BoundaryBinding,
+    string QueryBinding,
+    string AccessBinding,
+    bool Recoverable,
+    string RecoveryAction);
 
 /// <summary>Safe diagnostic extension point. Inspection request failures currently return an empty list.</summary>
 public sealed record ActivityExecutionProblemDiagnosticView(string Code, string Message, string Severity);
@@ -40,6 +49,24 @@ internal static class ActivityExecutionProblemDetails
             detail,
             cancellationToken);
 
+    public static Task ForbiddenAsync(HttpContext context, CancellationToken cancellationToken) =>
+        WriteAsync(
+            context,
+            StatusCodes.Status403Forbidden,
+            "activity.value-payload.forbidden",
+            "Activity execution value payload resolution denied",
+            "A separate value-payload resolution permission is required.",
+            cancellationToken);
+
+    public static Task ValueUnavailableAsync(HttpContext context, CancellationToken cancellationToken) =>
+        WriteAsync(
+            context,
+            StatusCodes.Status409Conflict,
+            "activity.value-payload.unavailable",
+            "Activity execution value payload unavailable",
+            "Runtime did not capture a payload for this value evidence.",
+            cancellationToken);
+
     public static Task CursorAsync(
         HttpContext context,
         ActivityExecutionHierarchyCursorException exception,
@@ -52,6 +79,7 @@ internal static class ActivityExecutionProblemDetails
                 "activity.cursor.binding-mismatch",
                 "Activity execution cursor does not match",
                 "The activity execution hierarchy cursor does not belong to this query or authorization scope.",
+                exception.Metadata,
                 cancellationToken),
             ActivityExecutionHierarchyCursorFailure.Expired => WriteAsync(
                 context,
@@ -59,6 +87,7 @@ internal static class ActivityExecutionProblemDetails
                 "activity.cursor.expired",
                 "Activity execution cursor expired",
                 "The activity execution hierarchy snapshot used by this cursor is no longer available.",
+                exception.Metadata,
                 cancellationToken),
             _ => WriteAsync(
                 context,
@@ -66,6 +95,7 @@ internal static class ActivityExecutionProblemDetails
                 "activity.request.invalid",
                 "Invalid activity execution cursor",
                 "The activity execution hierarchy cursor is invalid.",
+                null,
                 cancellationToken)
         };
 
@@ -84,6 +114,7 @@ internal static class ActivityExecutionProblemDetails
         string errorCode,
         string title,
         string detail,
+        ActivityExecutionCursorFailureMetadata? cursor,
         CancellationToken cancellationToken)
     {
         var response = new ActivityExecutionProblemDetailsView(
@@ -94,11 +125,29 @@ internal static class ActivityExecutionProblemDetails
             context.Request.Path,
             errorCode,
             context.TraceIdentifier,
-            []);
+            [],
+            cursor is null
+                ? null
+                : new(
+                    cursor.CursorClass,
+                    cursor.BoundaryBinding.ToString(),
+                    cursor.QueryBinding.ToString(),
+                    cursor.AccessBinding.ToString(),
+                    cursor.Recoverable,
+                    cursor.RecoveryAction));
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
         await JsonSerializer.SerializeAsync(context.Response.Body, response, JsonOptions, cancellationToken);
     }
+
+    private static Task WriteAsync(
+        HttpContext context,
+        int status,
+        string errorCode,
+        string title,
+        string detail,
+        CancellationToken cancellationToken) =>
+        WriteAsync(context, status, errorCode, title, detail, null, cancellationToken);
 
     private static string Type(string errorCode) =>
         $"https://elsa.dev/problems/{errorCode.Replace('.', '-')}";
