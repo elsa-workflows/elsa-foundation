@@ -53,6 +53,16 @@ import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
 import { useDialogFocus } from "./useDialogFocus";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
+import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
+import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
+import {
+  applyActivityVersionChange,
+  findActivityOccurrence,
+  validateActivityVersionChangePrecondition
+} from "./activityVersionChangeModel";
+
+const ActivityVersionChangeDialog = React.lazy(() =>
+  import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
 
 export function WorkflowEditor({
   context,
@@ -99,6 +109,11 @@ export function WorkflowEditor({
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
+  const [versionChange, setVersionChange] = useState<{
+    occurrence: ActivityNode;
+    current: ActivityDefinitionVersionView;
+    recommendation?: RecommendedActivityDefinition | null;
+  } | null>(null);
 
   const {
     paletteWidth,
@@ -446,6 +461,40 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft]);
 
+  const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
+    setError("");
+    setAutosavePaused(true);
+    setVersionChange({ occurrence, current, recommendation: inspectedRecommendation });
+  }, [inspectedRecommendation, setAutosavePaused]);
+
+  const cancelVersionChange = useCallback(() => {
+    setVersionChange(null);
+    setAutosavePaused(false);
+  }, [setAutosavePaused]);
+
+  const applyVersionChange = useCallback(async (request: ActivityVersionChangeApplyRequest) => {
+    if (!draft) throw new Error("No workflow draft is loaded.");
+    const staleReason = validateActivityVersionChangePrecondition(draft, request.precondition);
+    if (staleReason) throw new Error(staleReason);
+    const next = applyActivityVersionChange(
+      draft,
+      request.precondition.occurrenceId,
+      request.precondition.fromVersionId,
+      request.targetVersionId,
+      request.scope
+    );
+    if (next === draft) throw new Error("The reviewed occurrence no longer matches this version change.");
+
+    const saved = await saveDraft(next, "Activity version changed");
+    const savedOccurrence = findActivityOccurrence(saved.state.rootActivity, request.precondition.occurrenceId);
+    if (!savedOccurrence || savedOccurrence.activityVersionId !== request.targetVersionId) {
+      throw new Error("The server did not confirm the reviewed exact version change.");
+    }
+    loadDraft(saved);
+    setVersionChange(null);
+    setAutosavePaused(false);
+  }, [draft, loadDraft, saveDraft, setAutosavePaused]);
+
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
   // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027). The
   // path follows planSlotNavigation's breadcrumb conventions, so landing here reads exactly like
@@ -573,6 +622,7 @@ export function WorkflowEditor({
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
           onSelectedActivityChange={updateSelectedActivity}
+          onChangeReusableVersion={openVersionChange}
           onEnterSlot={enterSlotScope}
           onReplaceSlotActivity={replaceSlotActivity}
         />
@@ -681,6 +731,20 @@ export function WorkflowEditor({
       </div>
 
       {error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+
+      {versionChange ? (
+        <React.Suspense fallback={<p role="status">Loading exact version review…</p>}>
+          <ActivityVersionChangeDialog
+            context={context}
+            draft={draft}
+            occurrence={versionChange.occurrence}
+            current={versionChange.current}
+            recommendation={versionChange.recommendation}
+            onApply={applyVersionChange}
+            onCancel={cancelVersionChange}
+          />
+        </React.Suspense>
+      ) : null}
 
       {publicationReview ? (
         <PublicationReviewDialog

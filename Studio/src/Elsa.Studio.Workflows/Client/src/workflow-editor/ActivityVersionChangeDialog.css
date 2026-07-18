@@ -1,0 +1,87 @@
+.wf-version-change-dialog {
+  width: min(780px, 100%);
+  max-height: min(880px, calc(100vh - 40px));
+  overflow-y: auto;
+}
+
+.wf-version-change-dialog form,
+.wf-version-change-facts,
+.wf-version-change-section dl,
+.wf-version-change-section,
+.wf-version-change-list {
+  display: grid;
+}
+
+.wf-version-change-dialog form {
+  gap: 14px;
+}
+
+.wf-version-change-dialog fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+}
+
+.wf-version-change-facts,
+.wf-version-change-section dl {
+  gap: 8px;
+  margin: 0;
+}
+
+.wf-version-change-facts > div,
+.wf-version-change-section dl > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.45fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.wf-version-change-facts dt,
+.wf-version-change-section dt,
+.wf-version-choice small,
+.wf-version-change-list span {
+  color: var(--studio-text-muted);
+}
+
+.wf-version-change-facts dd,
+.wf-version-change-section dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-version-choice,
+.wf-version-page-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wf-version-choice {
+  align-items: flex-start;
+}
+
+.wf-version-choice span,
+.wf-version-change-list li {
+  display: grid;
+  gap: 2px;
+}
+
+.wf-version-change-section {
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-material-panel-bg-soft);
+}
+
+.wf-version-change-section h4,
+.wf-version-change-section p,
+.wf-version-change-list {
+  margin: 0;
+}
+
+.wf-version-change-list {
+  gap: 8px;
+  padding-left: 20px;
+}
