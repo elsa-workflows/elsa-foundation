@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Groundwork.Core.Text;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Secrets.Persistence.Groundwork.Stores;
@@ -14,7 +15,7 @@ public sealed class GroundworkSecretRepository(
 
     public async ValueTask<Secret?> FindAsync(string normalizedName, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(normalizedName);
+        SecretNameConstraints.Validate(normalizedName);
 
         var envelope = await store.LoadAsync(
             SecretsStorageManifest.SecretDocumentKind,
@@ -26,7 +27,7 @@ public sealed class GroundworkSecretRepository(
 
     public async ValueTask<SecretRevisionedRecord?> FindWithRevisionAsync(string normalizedName, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(normalizedName);
+        SecretNameConstraints.Validate(normalizedName);
 
         var envelope = await store.LoadAsync(
             SecretsStorageManifest.SecretDocumentKind,
@@ -36,17 +37,13 @@ public sealed class GroundworkSecretRepository(
         return envelope is null ? null : new SecretRevisionedRecord(Map(envelope), SecretRevisionMapper.Revision(envelope));
     }
 
-    public async ValueTask<IReadOnlyCollection<Secret>> ListAsync(CancellationToken cancellationToken = default)
-    {
-        var result = await BoundedStore.QueryAsync(
-            ListQuery(skip: null, take: null),
-            cancellationToken);
-        return result.Documents.Select(Map).ToArray();
-    }
-
     public async ValueTask<SecretRepositoryPage> ListPageAsync(SecretRepositoryListRequest request, CancellationToken cancellationToken = default)
     {
-        var result = await QueryPageAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        if (IsContradictory(request))
+            return new SecretRepositoryPage([], 0);
+
+        var result = await BoundedStore.QueryAsync(ListQuery(request), cancellationToken);
         return new SecretRepositoryPage(result.Documents.Select(Map).ToArray(), result.TotalCount);
     }
 
@@ -74,27 +71,97 @@ public sealed class GroundworkSecretRepository(
         return SecretRevisionMapper.ToResult(result);
     }
 
-    private Task<DocumentQueryResult> QueryPageAsync(SecretRepositoryListRequest request, CancellationToken cancellationToken) =>
-        BoundedStore.QueryAsync(
-            ListQuery(request.NormalizedSkip, request.NormalizedTake),
-            cancellationToken);
+    private static DocumentQuery ListQuery(SecretRepositoryListRequest request)
+    {
+        var clauses = new List<DocumentQueryClause>();
+        if (request.Search is not null)
+        {
+            var searchKey = SearchKey(request.Search);
+            clauses.Add(DocumentQueryClause.AnyOf(
+                DocumentQueryComparison.Contains(
+                    SecretsStorageManifest.NameSearchKeyField,
+                    searchKey),
+                DocumentQueryComparison.Contains(
+                    SecretsStorageManifest.DisplayNameSearchKeyField,
+                    searchKey)));
+        }
+        if (request.TypeName is not null)
+        {
+            clauses.Add(Equal(
+                SecretsStorageManifest.TypeNameLookupKeyField,
+                LookupKey(request.TypeName)));
+        }
+        if (request.TypeNames.Count > 0)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.In(
+                SecretsStorageManifest.TypeNameLookupKeyField,
+                request.TypeNames.Select(LookupKey))));
+        }
+        if (request.StoreName is not null)
+        {
+            clauses.Add(Equal(
+                SecretsStorageManifest.StoreNameLookupKeyField,
+                LookupKey(request.StoreName)));
+        }
+        if (request.StoreNames.Count > 0)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.In(
+                SecretsStorageManifest.StoreNameLookupKeyField,
+                request.StoreNames.Select(LookupKey))));
+        }
+        if (request.Scope is not null)
+        {
+            clauses.Add(Equal(
+                SecretsStorageManifest.ScopeLookupKeyField,
+                LookupKey(request.Scope)));
+        }
 
-    private static DocumentQuery ListQuery(int? skip, int? take) => new(
-        SecretsStorageManifest.SecretDocumentKind,
-        SecretsStorageManifest.ListAllQuery,
-        [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-            SecretsStorageManifest.CollectionField,
-            SecretsStorageManifest.SecretCollection))],
-        [],
-        skip,
-        take);
+        if (request.ActiveOnly)
+        {
+            clauses.Add(Status(SecretStatus.Active));
+            clauses.Add(DocumentQueryClause.AnyOf(
+                DocumentQueryComparison.Equal(
+                    SecretsStorageManifest.HasNonExpiringActiveVersionField,
+                    bool.TrueString.ToLowerInvariant()),
+                DocumentQueryComparison.GreaterThan(
+                    SecretsStorageManifest.MaxActiveVersionExpiresAtField,
+                    request.Now!.Value.ToString("O"))));
+        }
+        else if (request.Status is not null)
+        {
+            clauses.Add(Status(request.Status.Value));
+        }
+        else
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.NotEqual(
+                SecretsStorageManifest.StatusField,
+                null)));
+        }
+
+        if (request.ExcludedStatus is not null)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.NotEqual(
+                SecretsStorageManifest.StatusField,
+                StatusValue(request.ExcludedStatus.Value))));
+        }
+
+        return new DocumentQuery(
+            SecretsStorageManifest.SecretDocumentKind,
+            request.Search is null
+                ? SecretsStorageManifest.ListFilteredQuery
+                : SecretsStorageManifest.SearchFilteredQuery,
+            clauses,
+            [new DocumentQueryOrder(SecretsStorageManifest.NormalizedNameField)],
+            skip: request.Skip,
+            take: request.Take);
+    }
 
     private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(Secret secret, long? expectedVersion, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(secret);
-        ArgumentException.ThrowIfNullOrWhiteSpace(secret.Name);
+        SecretNameConstraints.Validate(secret.Name);
 
-        var document = new SecretDocument(SecretsStorageManifest.SecretCollection, secret);
+        var document = SecretDocument.FromSecret(secret);
         var content = JsonSerializer.Serialize(document, SecretsGroundworkJson.Options);
 
         return await store.SaveAsync(
@@ -110,5 +177,62 @@ public sealed class GroundworkSecretRepository(
     private static Secret Map(DocumentEnvelope envelope) =>
         JsonSerializer.Deserialize<SecretDocument>(envelope.ContentJson, SecretsGroundworkJson.Options)!.Secret;
 
-    private sealed record SecretDocument(string Collection, Secret Secret);
+    private static bool IsContradictory(SecretRepositoryListRequest request) =>
+        request.Status is not null && request.Status == request.ExcludedStatus ||
+        request.ActiveOnly &&
+        (request.Status is not null && request.Status != SecretStatus.Active ||
+         request.ExcludedStatus == SecretStatus.Active);
+
+    private static DocumentQueryClause Equal(string path, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value));
+
+    private static DocumentQueryClause Status(SecretStatus status) =>
+        Equal(SecretsStorageManifest.StatusField, StatusValue(status));
+
+    private static string StatusValue(SecretStatus status) =>
+        status.ToString().ToLowerInvariant();
+
+    private static string SearchKey(string value) =>
+        PortableStringComparison.CreateSearchKey(
+            value,
+            PortableStringComparisonPolicy.UnicodeOrdinalIgnoreCase);
+
+    private static string LookupKey(string value) =>
+        PortableStringComparison.ProjectIdentity(
+            value,
+            PortableStringComparisonPolicy.UnicodeOrdinalIgnoreCase).LookupKey;
+
+    private sealed record SecretDocument(
+        string NormalizedName,
+        string NameSearchKey,
+        string DisplayNameSearchKey,
+        string TypeNameLookupKey,
+        string StoreNameLookupKey,
+        string? ScopeLookupKey,
+        string Status,
+        bool HasNonExpiringActiveVersion,
+        DateTimeOffset? MaxActiveVersionExpiresAt,
+        Secret Secret)
+    {
+        public static SecretDocument FromSecret(Secret secret)
+        {
+            var activeVersions = secret.Versions
+                .Where(version => version.Status == SecretStatus.Active)
+                .ToArray();
+            return new SecretDocument(
+                secret.Name,
+                SearchKey(secret.Name),
+                SearchKey(secret.DisplayName),
+                LookupKey(secret.TypeName),
+                LookupKey(secret.StoreName),
+                secret.Scope is null ? null : LookupKey(secret.Scope),
+                StatusValue(secret.Status),
+                activeVersions.Any(version => version.ExpiresAt is null),
+                activeVersions
+                    .Where(version => version.ExpiresAt is not null)
+                    .Select(version => version.ExpiresAt)
+                    .Max(),
+                secret);
+        }
+    }
 }

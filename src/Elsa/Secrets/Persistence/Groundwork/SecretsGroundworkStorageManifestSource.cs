@@ -12,7 +12,7 @@ public sealed class SecretsGroundworkStorageManifestSource : IGroundworkStorageM
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(SecretsStorageManifest.Create());
+        var manifest = SecretsStorageManifest.Create();
 
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,

@@ -74,43 +74,27 @@ public sealed class DefaultSecretManager(
 
     public async ValueTask<Page<SecretMetadata>> ListAsync(SecretQuery query, CancellationToken cancellationToken = default)
     {
-        var secrets = await repository.ListAsync(cancellationToken);
-        var filtered = secrets.Where(x => lifecyclePolicy.EvaluatePublicVisibility(x).Allowed);
-
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var search = query.Search.Trim();
-            filtered = filtered.Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || x.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.TypeName))
-            filtered = filtered.Where(x => string.Equals(x.TypeName, query.TypeName, StringComparison.OrdinalIgnoreCase));
-
-        if (query.TypeNames.Count > 0)
-            filtered = filtered.Where(x => query.TypeNames.Contains(x.TypeName, StringComparer.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(query.StoreName))
-            filtered = filtered.Where(x => string.Equals(x.StoreName, query.StoreName, StringComparison.OrdinalIgnoreCase));
-
-        if (query.StoreNames.Count > 0)
-            filtered = filtered.Where(x => query.StoreNames.Contains(x.StoreName, StringComparer.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(query.Scope))
-            filtered = filtered.Where(x => string.Equals(x.Scope, query.Scope, StringComparison.OrdinalIgnoreCase));
-
-        if (query.Status is not null)
-            filtered = filtered.Where(x => x.Status == query.Status);
-
-        if (query.ActiveOnly)
-            filtered = filtered.Where(x => x.Status == SecretStatus.Active && x.LatestActiveVersion is not null);
-
-        var ordered = filtered.OrderBy(x => x.Name).ToArray();
-        var totalCount = ordered.Length;
         var pageSize = Math.Clamp(query.PageSize ?? 50, 1, 250);
         var page = Math.Max(query.Page ?? 0, 0);
-        var items = ordered.Skip(page * pageSize).Take(pageSize).Select(mapper.Map).ToArray();
+        var skip = (int)Math.Min((long)page * pageSize, int.MaxValue);
+        var result = await repository.ListPageAsync(
+            new SecretRepositoryListRequest(
+                query.Search,
+                query.TypeName,
+                query.TypeNames.ToArray(),
+                query.StoreName,
+                query.StoreNames.ToArray(),
+                query.Scope,
+                query.Status,
+                excludedStatus: SecretStatus.Deleted,
+                activeOnly: query.ActiveOnly,
+                now: timeProvider.GetUtcNow(),
+                skip: skip,
+                take: pageSize),
+            cancellationToken);
+        var items = result.Items.Select(mapper.Map).ToArray();
 
-        return Page.Of<SecretMetadata>(items, totalCount);
+        return Page.Of<SecretMetadata>(items, result.TotalCount);
     }
 
     public ValueTask<SecretMetadata> UpdateAsync(string name, UpdateSecretMetadataRequest request, CancellationToken cancellationToken = default)

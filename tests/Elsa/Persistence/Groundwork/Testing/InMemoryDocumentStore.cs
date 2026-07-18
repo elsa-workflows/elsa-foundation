@@ -190,14 +190,25 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         var indexIdentity = declaration?.IndexIdentity ?? legacyDeclaration?.IndexIdentity
             ?? throw new InvalidOperationException(
                 $"Document kind '{query.DocumentKind}' does not declare bounded query '{query.QueryIdentity}'.");
-        var indexFields = declaration is null
-            ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields
-            : unit.PhysicalStorage!.LogicalIndexes.Single(index => index.Identity == indexIdentity).Fields;
-        var fieldKinds = indexFields.ToDictionary(field => field.Path, field => field.ValueKind, StringComparer.Ordinal);
+        var logicalIndex = declaration is null
+            ? null
+            : unit.PhysicalStorage!.LogicalIndexes.Single(index => index.Identity == indexIdentity);
+        var indexFields = logicalIndex?.Fields
+            ?? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields;
+        var fieldKinds = indexFields.ToDictionary(
+            field => field.Path,
+            field => logicalIndex?.GetValueKind(field) ?? field.ValueKind,
+            StringComparer.Ordinal);
+        if (declaration is not null)
+        {
+            foreach (var residual in declaration.ResidualPredicateFields)
+                fieldKinds[residual.Path] = residual.ValueKind;
+        }
         var predicatePaths = declaration is null || declaration.PredicateFields.Count == 0
-            ? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields.Select(field => field.Path)
+            ? indexFields.Select(field => field.Path)
             : declaration.PredicateFields.Select(field => field.Path);
         var paths = predicatePaths
+            .Concat(declaration?.ResidualPredicateFields.Select(field => field.Path) ?? [])
             .Concat(declaration?.SortFields.Select(field => field.Path) ?? [])
             .ToHashSet(StringComparer.Ordinal);
         if (query.Clauses.SelectMany(clause => clause.Comparisons).Any(comparison => !paths.Contains(comparison.Path)))
@@ -207,7 +218,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             .Where(document => document.DocumentKind == query.DocumentKind);
         foreach (var clause in query.Clauses)
         {
-            matches = matches.Where(document => clause.Comparisons.All(comparison =>
+            matches = matches.Where(document => clause.Comparisons.Any(comparison =>
                 Matches(
                     ReadField(document.ContentJson, comparison.Path),
                     comparison,
@@ -239,16 +250,27 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         DocumentQueryComparison comparison,
         IndexValueKind? valueKind)
     {
+        if (comparison.Operator == QueryComparisonOperator.In)
+        {
+            return comparison.Values.Any(expected =>
+                StringComparer.Ordinal.Equals(
+                    Comparable(actual, valueKind),
+                    Comparable(expected, valueKind)));
+        }
+
         var expected = comparison.Values.SingleOrDefault();
+        if (comparison.Operator == QueryComparisonOperator.NotEqual && expected is null)
+            return actual is not null;
         if (comparison.Operator != QueryComparisonOperator.Equal && (actual is null || expected is null))
             return false;
-
         var order = StringComparer.Ordinal.Compare(
             Comparable(actual, valueKind),
             Comparable(expected, valueKind));
         return comparison.Operator switch
         {
             QueryComparisonOperator.Equal => order == 0,
+            QueryComparisonOperator.NotEqual => order != 0,
+            QueryComparisonOperator.Contains => actual!.Contains(expected!, StringComparison.OrdinalIgnoreCase),
             QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.Ordinal),
             QueryComparisonOperator.GreaterThan => order > 0,
             QueryComparisonOperator.GreaterThanOrEqual => order >= 0,
@@ -260,11 +282,16 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
 
     private static string? Comparable(string? value, IndexValueKind? valueKind)
     {
-        if (value is null || valueKind != IndexValueKind.DateTime)
+        if (value is null)
             return value;
 
-        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
-            .UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
+        return valueKind switch
+        {
+            IndexValueKind.DateTime => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                .UtcTicks.ToString("D19", CultureInfo.InvariantCulture),
+            IndexValueKind.Boolean => bool.Parse(value).ToString().ToLowerInvariant(),
+            _ => value
+        };
     }
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>

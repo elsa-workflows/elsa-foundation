@@ -2,6 +2,9 @@ using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Secrets.Persistence.Groundwork.Stores;
+using Groundwork.Core.Indexing;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -9,6 +12,8 @@ namespace Elsa.Secrets.Tests;
 
 public sealed class GroundworkSecretRepositoryTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
+
     [Fact]
     public async Task ListUsesTheDeclaredBoundedQueryIdentityAndPath()
     {
@@ -16,17 +21,20 @@ public sealed class GroundworkSecretRepositoryTests
         var queries = new RecordingBoundedDocumentStore();
         var repository = new GroundworkSecretRepository(documents, queries);
 
-        Assert.Empty((await repository.ListPageAsync(new SecretRepositoryListRequest(10, 25))).Items);
+        Assert.Empty((await repository.ListPageAsync(new SecretRepositoryListRequest(skip: 10, take: 25))).Items);
 
         var query = Assert.Single(queries.Observed);
         Assert.Equal(SecretsStorageManifest.SecretDocumentKind, query.DocumentKind);
-        Assert.Equal(SecretsStorageManifest.ListAllQuery, query.QueryIdentity);
+        Assert.Equal(SecretsStorageManifest.ListFilteredQuery, query.QueryIdentity);
         Assert.Equal(10, query.Skip);
         Assert.Equal(25, query.Take);
+        Assert.Collection(
+            query.Order,
+            order => Assert.Equal(SecretsStorageManifest.NormalizedNameField, order.Path));
         var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-        Assert.Equal(SecretsStorageManifest.CollectionField, comparison.Path);
-        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
-        Assert.Equal(SecretsStorageManifest.SecretCollection, Assert.Single(comparison.Values));
+        Assert.Equal(SecretsStorageManifest.StatusField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.NotEqual, comparison.Operator);
+        Assert.Null(Assert.Single(comparison.Values));
     }
 
     [Fact]
@@ -39,7 +47,7 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.False(await repository.TryAddAsync(secret));
 
         var found = await repository.FindAsync("payments.api");
-        var all = await repository.ListAsync();
+        var all = (await repository.ListPageAsync(new SecretRepositoryListRequest())).Items;
 
         Assert.NotNull(found);
         Assert.Equal("payments.api", found!.Name);
@@ -57,7 +65,9 @@ public sealed class GroundworkSecretRepositoryTests
         secret.Status = SecretStatus.Deleted;
         await repository.SaveAsync(secret);
 
-        Assert.Equal(SecretStatus.Deleted, Assert.Single(await repository.ListAsync()).Status);
+        Assert.Equal(
+            SecretStatus.Deleted,
+            Assert.Single((await repository.ListPageAsync(new SecretRepositoryListRequest())).Items).Status);
         Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync("payments.api"))!.Status);
     }
 
@@ -117,10 +127,91 @@ public sealed class GroundworkSecretRepositoryTests
         await repository.SaveAsync(Secret("b", "v1"));
         await repository.SaveAsync(Secret("c", "v1"));
 
-        var page = await repository.ListPageAsync(new SecretRepositoryListRequest(1, 1));
+        var page = await repository.ListPageAsync(new SecretRepositoryListRequest(skip: 1, take: 1));
 
         Assert.Equal(3, page.TotalCount);
         Assert.Equal("b", Assert.Single(page.Items).Name);
+    }
+
+    [Fact]
+    public async Task ListPage_UsesOrdinaryServerBoundedRouteForSubstringSearch()
+    {
+        var documents = new InMemoryDocumentStore(SecretsStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var repository = new GroundworkSecretRepository(documents, queries);
+
+        await repository.ListPageAsync(new SecretRepositoryListRequest(search: "payments", take: 25));
+
+        Assert.Equal(
+            SecretsStorageManifest.SearchFilteredQuery,
+            Assert.Single(queries.Observed).QueryIdentity);
+    }
+
+    [Fact]
+    public async Task Save_RecomputesActiveVersionProjectionAfterEveryTransition()
+    {
+        var repository = new GroundworkSecretRepository(new InMemoryDocumentStore(SecretsStorageManifest.Create()));
+        var secret = Secret("payments.api", "v1");
+        var request = new SecretRepositoryListRequest(activeOnly: true, now: Now);
+
+        await repository.SaveAsync(secret);
+        Assert.Single((await repository.ListPageAsync(request)).Items);
+
+        Assert.Single(secret.Versions).ExpiresAt = Now;
+        await repository.SaveAsync(secret);
+        Assert.Empty((await repository.ListPageAsync(request)).Items);
+
+        Assert.Single(secret.Versions).ExpiresAt = null;
+        await repository.SaveAsync(secret);
+        Assert.Single((await repository.ListPageAsync(request)).Items);
+
+        Assert.Single(secret.Versions).Status = SecretStatus.Revoked;
+        await repository.SaveAsync(secret);
+        Assert.Empty((await repository.ListPageAsync(request)).Items);
+    }
+
+    [Fact]
+    public void Manifest_declares_a_scale_bearing_filter_route_over_a_physical_entity_table()
+    {
+        var unit = Assert.Single(SecretsStorageManifest.Create().StorageUnits);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+        var policy = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy);
+        Assert.Equal(PhysicalStorageForm.PhysicalEntityTable, policy.Definition.Form);
+        Assert.Equal(SecretsStorageManifest.SecretsTable, policy.Definition.FeatureDefaultLogicalName);
+
+        var query = Assert.Single(
+            storage.BoundedQueries,
+            candidate => candidate.Identity == SecretsStorageManifest.ListFilteredQuery);
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, query.ExecutionClass);
+        Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
+        Assert.True(query.SupportsDisjunction);
+        Assert.True(query.SupportsTotalCount);
+        Assert.Contains(
+            query.ResidualPredicateFields,
+            field =>
+                field.Path == SecretsStorageManifest.StatusField &&
+                field.IsRequired &&
+                field.Operations.Contains(PortableQueryOperation.NotEqual));
+        Assert.Equal(
+            SecretNameConstraints.MaximumLength,
+            policy.Definition.ProjectedColumns.Single(column =>
+                column.Path == SecretsStorageManifest.NormalizedNameField).Length);
+
+        var search = Assert.Single(
+            storage.BoundedQueries,
+            candidate => candidate.Identity == SecretsStorageManifest.SearchFilteredQuery);
+        Assert.Equal(BoundedQueryExecutionClass.Ordinary, search.ExecutionClass);
+        Assert.Empty(search.PredicateFields);
+        Assert.Contains(
+            search.ResidualPredicateFields,
+            field =>
+                field.Path == SecretsStorageManifest.NameSearchKeyField &&
+                field.Operations.Contains(PortableQueryOperation.Contains));
+        Assert.Contains(
+            search.ResidualPredicateFields,
+            field =>
+                field.Path == SecretsStorageManifest.DisplayNameSearchKeyField &&
+                field.Operations.Contains(PortableQueryOperation.Contains));
     }
 
     private static Secret Secret(string name, string value) => new()
