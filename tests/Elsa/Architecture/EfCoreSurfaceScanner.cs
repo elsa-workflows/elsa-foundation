@@ -116,10 +116,9 @@ internal static class EfCoreSurfaceBaseline
     {
         if (surface.ProjectsMissingAssets.Count != 0)
         {
-            var missingProjects = string.Join(", ", surface.ProjectsMissingAssets);
-            throw new InvalidOperationException(
-                $"Cannot update the EF Core surface baseline from an incomplete repository restore. " +
-                $"Run 'dotnet restore Elsa.Server.slnx' first. Missing assets: {missingProjects}");
+            throw IncompleteRestoreError(
+                "Cannot update the EF Core surface baseline from an incomplete repository restore.",
+                surface.ProjectsMissingAssets);
         }
 
         if (!File.Exists(path))
@@ -148,6 +147,18 @@ internal static class EfCoreSurfaceBaseline
 
     public static IReadOnlyList<string> Compare(EfCoreSurfaceSnapshot baseline, EfCoreSurfaceSnapshot actual)
     {
+        var unrestoredProjects = actual.ProjectsMissingAssets
+            .Except(baseline.ProjectsMissingAssets, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (unrestoredProjects.Length != 0)
+        {
+            throw IncompleteRestoreError(
+                "Cannot compare the EF Core surface against an incomplete repository restore; " +
+                "unrestored projects drop out of the resolved package scan and would report phantom surface changes.",
+                unrestoredProjects);
+        }
+
         var differences = new List<string>();
         var actualCategories = actual.Categories();
         foreach (var (category, expectedEntries) in baseline.Categories())
@@ -161,6 +172,9 @@ internal static class EfCoreSurfaceBaseline
         }
         return differences;
     }
+
+    private static InvalidOperationException IncompleteRestoreError(string reason, IEnumerable<string> missingProjects) =>
+        new($"{reason} Run 'dotnet restore Elsa.Server.slnx' first. Missing assets: {string.Join(", ", missingProjects)}");
 }
 
 internal sealed class EfCoreSurfaceScanner
