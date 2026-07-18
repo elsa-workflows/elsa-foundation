@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
@@ -322,6 +323,8 @@ public static class ElsaRuntimeStorageManifest
     // routed to start a new workflow instance. Indexed by stimulus hash (cross-artifact router lookup)
     // and by artifact id (replace-on-republish).
     public const string WorkflowTriggerBindingDocumentKind = "workflowTriggerBinding";
+    public const string TriggerBindingIdField = "triggerBindingId";
+    public const string WorkflowTriggerBindingById = "by-trigger-binding-id";
 
     /// <summary>Durable prepared/active marker for a publication-owned Runtime serving projection.</summary>
     public const string PublicationProjectionStateDocumentKind = "publicationProjectionState";
@@ -338,8 +341,8 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public const string WorkflowTriggerBindingByStimulusAndType = ByStimulusAndTypeIndex;
 
-    /// <summary>Type index used by the route-table refresh scan.</summary>
-    public const string WorkflowTriggerBindingByStimulusType = ByStimulusTypeIndex;
+    /// <summary>Type + active-state index used by the bounded route-table refresh traversal.</summary>
+    public const string WorkflowTriggerBindingByStimulusTypeAndActive = "by-stimulus-type-and-active";
 
     /// <summary>Projected Boolean field used to exclude prepared or retired bindings at the persistence boundary.</summary>
     public const string WorkflowTriggerBindingIsActiveField = "isActive";
@@ -667,6 +670,7 @@ public static class ElsaRuntimeStorageManifest
                     Keyword(ByStimulusIndex, StimulusHashField),
                     Keyword(ByStimulusTypeIndex, StimulusTypeField),
                     Boolean(WorkflowTriggerBindingByActive, WorkflowTriggerBindingIsActiveField),
+                    Keyword(WorkflowTriggerBindingById, TriggerBindingIdField, isUnique: true),
                     Keyword(ByArtifactIndex, ArtifactIdField),
                     Keyword(ByPublicationIndex, PublicationIdField)
                 ],
@@ -713,6 +717,7 @@ public static class ElsaRuntimeStorageManifest
         {
             ByStimulusIndex => column with { Length = StimulusHashProjectionLength },
             ByStimulusTypeIndex => column with { Length = stimulusTypeLength },
+            WorkflowTriggerBindingById => column with { Length = WorkflowTriggerBinding.MaximumIdLength },
             _ => column
         }).ToArray();
 

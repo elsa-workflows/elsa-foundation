@@ -84,13 +84,26 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         // Two HTTP bindings on different artifacts + hashes, plus one of another type.
         await store.SaveAsync(Binding("artifact-1", "node-a", "HttpEndpoint", "hash-1"));
         await store.SaveAsync(Binding("artifact-2", "node-b", "HttpEndpoint", "hash-2"));
+        await store.SaveAsync(Binding("artifact-0", "node-inactive", "HttpEndpoint", "hash-0") with { IsActive = false });
         await store.SaveAsync(Binding("artifact-3", "node-c", "Event", "hash-3"));
 
-        // A type-scoped full scan (no hash) returns both HTTP bindings and narrows out the Event one.
-        var http = await store.ListByStimulusTypeAsync("HttpEndpoint");
-        Assert.Equal(new[] { "artifact-1", "artifact-2" }, http.Select(b => b.ArtifactId).OrderBy(x => x));
+        var first = await store.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery("HttpEndpoint", limit: 2));
 
-        Assert.Empty(await store.ListByStimulusTypeAsync("Signal"));
+        var returned = first.Items.ToArray();
+        Assert.Equal(
+            returned.Select(binding => binding.TriggerBindingId).Order(StringComparer.Ordinal),
+            returned.Select(binding => binding.TriggerBindingId));
+        Assert.Equal(
+            ["artifact-1", "artifact-2"],
+            returned.Select(binding => binding.ArtifactId).Order(StringComparer.Ordinal));
+        Assert.Equal(2, first.TotalCount);
+        Assert.Null(first.NextContinuationToken);
+
+        var missing = await store.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery("Signal"));
+        Assert.Empty(missing.Items);
+        Assert.Equal(0, missing.TotalCount);
     }
 
     [Theory]

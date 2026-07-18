@@ -349,7 +349,7 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
-    public async Task Workflow_trigger_binding_declares_composite_stimulus_type_route()
+    public async Task Workflow_trigger_binding_declares_exact_and_type_page_routes()
     {
         var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
         var unit = declaration.Manifest.StorageUnits.Single(candidate =>
@@ -392,6 +392,43 @@ public sealed class ElsaRuntimeStorageManifestTests
             column =>
                 column.LogicalName == ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive &&
                 column.Type == PortablePhysicalType.Boolean);
+
+        var typeLogical = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulusTypeAndActive);
+        Assert.Collection(
+            typeLogical.Fields,
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path),
+            active =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField, active.Path);
+                Assert.Equal(IndexValueKind.Boolean, active.ValueKind);
+            },
+            id => Assert.Equal(ElsaRuntimeStorageManifest.TriggerBindingIdField, id.Path));
+        var typeRoute = Assert.Single(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery);
+        Assert.Equal(typeLogical.Identity, typeRoute.IndexIdentity);
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, typeRoute.ExecutionClass);
+        Assert.Equal(QueryPagingSupport.Cursor, typeRoute.PagingSupport);
+        Assert.True(typeRoute.SupportsTotalCount);
+        Assert.Collection(
+            typeRoute.PredicateFields,
+            type => Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path),
+            active => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField, active.Path));
+        Assert.Collection(
+            typeRoute.SortFields,
+            id => Assert.Equal(ElsaRuntimeStorageManifest.TriggerBindingIdField, id.Path));
+        Assert.Contains(
+            physical.Indexes,
+            index =>
+                index.LogicalName == typeLogical.Identity &&
+                index.Columns.Count == 5 &&
+                index.Columns[^1].ColumnLogicalName == new DocumentEnvelopeDefinition().IdLookupKeyColumn);
+        Assert.Equal(
+            WorkflowTriggerBinding.MaximumIdLength,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.WorkflowTriggerBindingById).Length);
         AssertStimulusProjectionLengths(
             physical,
             ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusTypeProjectionLength);

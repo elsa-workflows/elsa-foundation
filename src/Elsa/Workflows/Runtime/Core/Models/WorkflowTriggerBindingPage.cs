@@ -1,22 +1,18 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// One finite exact-stimulus lookup over active workflow trigger bindings.
+/// Shared validation for one finite workflow trigger-binding lookup.
 /// </summary>
-public sealed record WorkflowTriggerBindingPageQuery
+public abstract record WorkflowTriggerBindingPageRequest
 {
     public const int DefaultLimit = 100;
     public const int MaximumLimit = 500;
     public const int MaximumContinuationTokenLength = 16 * 1024;
 
-    public WorkflowTriggerBindingPageQuery(
-        string stimulusType,
-        string stimulusHash,
+    protected WorkflowTriggerBindingPageRequest(
         int limit = DefaultLimit,
         string? continuationToken = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
         if (limit is <= 0 or > MaximumLimit)
         {
             throw new ArgumentOutOfRangeException(
@@ -25,14 +21,10 @@ public sealed record WorkflowTriggerBindingPageQuery
                 $"Trigger-binding page limit must be between 1 and {MaximumLimit}.");
         }
 
-        StimulusType = stimulusType;
-        StimulusHash = stimulusHash;
         Limit = limit;
         ContinuationToken = ValidateContinuationToken(continuationToken, nameof(continuationToken));
     }
 
-    public string StimulusType { get; }
-    public string StimulusHash { get; }
     public int Limit { get; }
 
     /// <summary>
@@ -58,13 +50,53 @@ public sealed record WorkflowTriggerBindingPageQuery
 }
 
 /// <summary>
+/// One finite exact-stimulus lookup over active workflow trigger bindings.
+/// </summary>
+public sealed record WorkflowTriggerBindingPageQuery : WorkflowTriggerBindingPageRequest
+{
+    public WorkflowTriggerBindingPageQuery(
+        string stimulusType,
+        string stimulusHash,
+        int limit = DefaultLimit,
+        string? continuationToken = null)
+        : base(limit, continuationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        StimulusType = stimulusType;
+        StimulusHash = stimulusHash;
+    }
+
+    public string StimulusType { get; }
+    public string StimulusHash { get; }
+}
+
+/// <summary>
+/// One finite type-scoped lookup over active workflow trigger bindings.
+/// </summary>
+public sealed record WorkflowTriggerBindingTypePageQuery : WorkflowTriggerBindingPageRequest
+{
+    public WorkflowTriggerBindingTypePageQuery(
+        string stimulusType,
+        int limit = DefaultLimit,
+        string? continuationToken = null)
+        : base(limit, continuationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        StimulusType = stimulusType;
+    }
+
+    public string StimulusType { get; }
+}
+
+/// <summary>
 /// One bounded, deterministically ordered page of active trigger bindings. A continuation resumes
 /// the provider's live view after the last returned item; it does not promise a cross-request snapshot.
 /// </summary>
 public sealed record WorkflowTriggerBindingPage
 {
     public WorkflowTriggerBindingPage(
-        WorkflowTriggerBindingPageQuery query,
+        WorkflowTriggerBindingPageRequest query,
         IReadOnlyList<WorkflowTriggerBinding> items,
         long totalCount,
         string? nextContinuationToken)
@@ -76,7 +108,7 @@ public sealed record WorkflowTriggerBindingPage
         if (totalCount < items.Count)
             throw new ArgumentOutOfRangeException(nameof(totalCount), totalCount, "The total count cannot be smaller than the returned page.");
 
-        nextContinuationToken = WorkflowTriggerBindingPageQuery.ValidateContinuationToken(
+        nextContinuationToken = WorkflowTriggerBindingPageRequest.ValidateContinuationToken(
             nextContinuationToken,
             nameof(nextContinuationToken));
         if (items.Count == 0 && nextContinuationToken is not null)

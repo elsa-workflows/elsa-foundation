@@ -10,6 +10,52 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
     private readonly DateTimeOffset _now = new(2026, 7, 3, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void BuildId_IsBoundedDeterministicAndTupleSensitive()
+    {
+        var first = WorkflowTriggerBinding.BuildId(
+            new string('a', 1_000),
+            new string('b', 1_000),
+            new string('c', 1_000));
+        var replay = WorkflowTriggerBinding.BuildId(
+            new string('a', 1_000),
+            new string('b', 1_000),
+            new string('c', 1_000));
+        var differentTuple = WorkflowTriggerBinding.BuildId("ab", "c", "value");
+        var ambiguousWithoutFraming = WorkflowTriggerBinding.BuildId("a", "bc", "value");
+
+        Assert.Equal(first, replay);
+        Assert.InRange(first.Length, 1, WorkflowTriggerBinding.MaximumIdLength);
+        Assert.NotEqual(differentTuple, ambiguousWithoutFraming);
+    }
+
+    [Fact]
+    public async Task Save_RejectsAnIdThatExceedsThePortableBound()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        var binding = Binding("artifact-1", "node-a") with
+        {
+            TriggerBindingId = new string('x', WorkflowTriggerBinding.MaximumIdLength + 1)
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(async () => await store.SaveAsync(binding));
+    }
+
+    [Fact]
+    public async Task PreparePublication_RejectsAnIdThatExceedsThePortableBound()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        var binding = Binding("artifact-1", "node-a") with
+        {
+            TriggerBindingId = new string('x', WorkflowTriggerBinding.MaximumIdLength + 1),
+            PublicationId = "publication-1",
+            SlotId = "default"
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.PreparePublicationAsync("publication-1", [binding]));
+    }
+
+    [Fact]
     public async Task Save_IsUpsertKeyedByBindingId()
     {
         // The binding id is now (artifact, node, stimulusHash); re-saving the same triple upserts, while a
@@ -135,10 +181,67 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
                 limit: 10,
                 continuationToken: first.NextContinuationToken));
 
-        Assert.Equal("artifact-b", Assert.Single(first.Items).ArtifactId);
-        Assert.Equal(["artifact-c", "artifact-d"], resumed.Items.Select(binding => binding.ArtifactId));
+        var boundary = Assert.Single(first.Items).TriggerBindingId;
+        var expectedResumed = (await store.ListByArtifactAsync("artifact-a"))
+            .Concat(await store.ListByArtifactAsync("artifact-b"))
+            .Concat(await store.ListByArtifactAsync("artifact-c"))
+            .Concat(await store.ListByArtifactAsync("artifact-d"))
+            .Where(binding => StringComparer.Ordinal.Compare(binding.TriggerBindingId, boundary) > 0)
+            .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
+            .Select(binding => binding.ArtifactId);
+        Assert.Equal(expectedResumed, resumed.Items.Select(binding => binding.ArtifactId));
         Assert.Equal(4, resumed.TotalCount);
         Assert.Null(resumed.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task ListByStimulusType_PagesOnlyActiveMatchesInStableBindingOrder()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(Binding("artifact-c", "node", stimulusType: "Event"));
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusType: "Event"));
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusType: "Event") with { IsActive = false });
+        await store.SaveAsync(Binding("artifact-d", "node", stimulusType: "Event"));
+        await store.SaveAsync(Binding("artifact-signal", "node", stimulusType: "Signal"));
+
+        var first = await store.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery("Event", limit: 2));
+        var second = await store.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery(
+                "Event",
+                limit: 2,
+                continuationToken: first.NextContinuationToken));
+
+        var expected = (await store.ListByArtifactAsync("artifact-a"))
+            .Concat(await store.ListByArtifactAsync("artifact-c"))
+            .Concat(await store.ListByArtifactAsync("artifact-d"))
+            .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
+            .Select(binding => binding.ArtifactId)
+            .ToArray();
+        Assert.Equal(
+            expected.Take(2),
+            first.Items.Select(binding => binding.ArtifactId));
+        Assert.Equal(expected.Skip(2), second.Items.Select(binding => binding.ArtifactId));
+        Assert.Equal(3, first.TotalCount);
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task ListByStimulusType_RejectsAContinuationFromAnotherType()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusType: "Event"));
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusType: "Event"));
+        var first = await store.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery("Event", limit: 1));
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.ListByStimulusTypeAsync(
+                new WorkflowTriggerBindingTypePageQuery(
+                    "Signal",
+                    limit: 1,
+                    continuationToken: first.NextContinuationToken)));
     }
 
     [Fact]
@@ -192,6 +295,27 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         var matches = await store.ListAllByStimulusAsync("Event", "sha256:shared");
 
         Assert.Equal(WorkflowTriggerBindingPageQuery.MaximumLimit + 1, matches.Count);
+        Assert.Equal(matches.Count, matches.Select(binding => binding.TriggerBindingId).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task ListAllByStimulusType_TraversesEveryBoundedPage()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        for (var index = 0; index <= WorkflowTriggerBindingTypePageQuery.MaximumLimit; index++)
+        {
+            await store.SaveAsync(Binding(
+                $"artifact-{index:D3}",
+                "node",
+                stimulusType: "Event",
+                stimulusHash: $"sha256:event:{index:D3}"));
+        }
+        await store.SaveAsync(Binding("ignored-artifact", "node", stimulusType: "Signal"));
+
+        var matches = await store.ListAllByStimulusTypeAsync("Event");
+
+        Assert.Equal(WorkflowTriggerBindingTypePageQuery.MaximumLimit + 1, matches.Count);
+        Assert.All(matches, binding => Assert.Equal("Event", binding.StimulusType));
         Assert.Equal(matches.Count, matches.Select(binding => binding.TriggerBindingId).Distinct().Count());
     }
 
