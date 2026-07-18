@@ -4,25 +4,6 @@ using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
-/// <summary>Direction of travel from a stable workflow-execution history anchor.</summary>
-public enum WorkflowExecutionStatePageDirection
-{
-    Previous,
-    Next
-}
-
-/// <summary>
-/// Stable keyset anchor returned by <see cref="WorkflowExecutionStatePage"/>. Cursors are bound to the
-/// complete filter scope that produced them. The embedded page size preserves backward-navigation behavior
-/// while callers remain free to change the requested size on a later page.
-/// </summary>
-public sealed record WorkflowExecutionStatePageCursor(
-    DateTimeOffset SortTimestamp,
-    string WorkflowExecutionId,
-    WorkflowExecutionStatePageDirection Direction,
-    int PageSize,
-    string Scope);
-
 /// <summary>Provider-neutral, bounded workflow-execution history query.</summary>
 public sealed record WorkflowExecutionStatePageQuery(
     int PageSize,
@@ -35,46 +16,24 @@ public sealed record WorkflowExecutionStatePageQuery(
     string? CorrelationId = null,
     string? WorkflowExecutionId = null,
     string? ArtifactId = null,
-    WorkflowExecutionStatePageCursor? Cursor = null)
+    string? Cursor = null)
 {
-    /// <summary>Validates the bounded request and cursor binding.</summary>
+    /// <summary>Validates the bounded request. The active store validates its opaque continuation.</summary>
     public void Validate()
     {
         if (PageSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(PageSize), PageSize, "Page size must be greater than zero.");
         if (From is { } from && To is { } to && from > to)
             throw new ArgumentException("The workflow execution history start must not be after its end.", nameof(From));
-        if (Cursor is not { } cursor)
-            return;
-        if (!StringComparer.Ordinal.Equals(cursor.Scope, Scope()))
-            throw new ArgumentException("The workflow execution history cursor does not belong to this query.", nameof(Cursor));
-    }
-
-    /// <summary>Returns a deterministic fingerprint over every filter that defines this result set.</summary>
-    public string Scope()
-    {
-        var json = JsonSerializer.Serialize(new object?[]
-        {
-            TenantId,
-            DefinitionId,
-            Status is { } status ? (int)status : null,
-            RunKind is { } runKind ? (int)runKind : null,
-            From?.UtcTicks,
-            To?.UtcTicks,
-            CorrelationId,
-            WorkflowExecutionId,
-            ArtifactId
-        });
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+        if (Cursor is not null && string.IsNullOrWhiteSpace(Cursor))
+            throw new ArgumentException("The workflow execution history cursor cannot be blank.", nameof(Cursor));
     }
 }
 
-/// <summary>A bounded workflow-execution history page and its stable navigation anchors.</summary>
+/// <summary>A bounded workflow-execution history page and its opaque forward continuation.</summary>
 public sealed record WorkflowExecutionStatePage(
     IReadOnlyList<WorkflowExecutionState> Items,
-    WorkflowExecutionStatePageCursor? PreviousCursor,
-    WorkflowExecutionStatePageCursor? NextCursor,
-    bool HasPrevious,
+    string? NextCursor,
     bool HasNext,
     long TotalCount);
 
@@ -90,13 +49,6 @@ public static class WorkflowExecutionStateHistory
     {
         var timestamp = SortTimestamp(right).CompareTo(SortTimestamp(left));
         return timestamp != 0 ? timestamp : StringComparer.Ordinal.Compare(left.WorkflowExecutionId, right.WorkflowExecutionId);
-    }
-
-    /// <summary>Compares a state with a keyset cursor in history order.</summary>
-    public static int Compare(WorkflowExecutionState state, WorkflowExecutionStatePageCursor cursor)
-    {
-        var timestamp = cursor.SortTimestamp.CompareTo(SortTimestamp(state));
-        return timestamp != 0 ? timestamp : StringComparer.Ordinal.Compare(state.WorkflowExecutionId, cursor.WorkflowExecutionId);
     }
 
     /// <summary>Applies the provider-neutral filter semantics.</summary>
@@ -121,19 +73,21 @@ public static class WorkflowExecutionStateHistory
         return (query.From is not { } from || timestamp >= from) && (query.To is not { } to || timestamp <= to);
     }
 
-    /// <summary>Builds a cursor anchored to a page item.</summary>
-    public static WorkflowExecutionStatePageCursor Cursor(
-        WorkflowExecutionState state,
-        WorkflowExecutionStatePageDirection direction,
-        WorkflowExecutionStatePageQuery query) =>
-        new(SortTimestamp(state), state.WorkflowExecutionId, direction, query.PageSize, query.Scope());
-
-    /// <summary>
-    /// Preserves the v1 HTTP contract: forward pages use the current request size, while backward pages cannot
-    /// reach farther than the size embedded in their anchor and may still be narrowed by the current request.
-    /// </summary>
-    public static int EffectivePageSize(WorkflowExecutionStatePageQuery query) =>
-        query.Cursor?.Direction == WorkflowExecutionStatePageDirection.Previous
-            ? Math.Min(query.PageSize, query.Cursor.PageSize)
-            : query.PageSize;
+    /// <summary>Returns a deterministic fingerprint over every filter that defines a result set.</summary>
+    public static string Scope(WorkflowExecutionStatePageQuery query)
+    {
+        var json = JsonSerializer.Serialize(new object?[]
+        {
+            query.TenantId,
+            query.DefinitionId,
+            query.Status is { } status ? (int)status : null,
+            query.RunKind is { } runKind ? (int)runKind : null,
+            query.From?.UtcTicks,
+            query.To?.UtcTicks,
+            query.CorrelationId,
+            query.WorkflowExecutionId,
+            query.ArtifactId
+        });
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+    }
 }

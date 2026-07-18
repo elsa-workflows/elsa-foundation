@@ -3,7 +3,6 @@ using CShells.Features;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Testing;
@@ -18,7 +17,6 @@ using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.Scoping;
-using Microsoft.Extensions.Logging;
 using Groundwork.MongoDb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -55,8 +53,8 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
         Assert.Contains("replicaSet=rs0", ConnectionString, StringComparison.Ordinal);
         AssertStartupLeafRegistration<MongoDbGroundworkDocumentStoreInitializer>(services, RegistrationSecret);
         AssertRepresentativeFamilyContracts(services, typeof(IBookmarkStateStore));
-        Assert.DoesNotContain(services, descriptor =>
-            descriptor.ServiceType == typeof(IGroundworkWorkflowExecutionStatePageQuery));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
         AssertRegistrationDiagnosticsAreSanitized(services, RegistrationSecret, ConnectionString);
     }
 

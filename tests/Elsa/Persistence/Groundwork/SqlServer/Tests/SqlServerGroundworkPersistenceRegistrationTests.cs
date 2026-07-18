@@ -1,4 +1,3 @@
-using System.Reflection;
 using CShells;
 using CShells.Features;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -6,7 +5,6 @@ using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
@@ -21,6 +19,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Scoping;
 using Groundwork.SqlServer;
 using Groundwork.SqlServer.Documents;
@@ -226,18 +225,15 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void SQL_Server_history_query_uses_bounded_TOP_syntax_and_no_LIMIT_clause()
+    public void SQL_Server_history_paging_has_no_provider_specific_Elsa_source()
     {
-        var source = File.ReadAllText(Path.Combine(
+        Assert.False(File.Exists(Path.Combine(
             FindRepositoryRoot(),
-            "src/Elsa/Persistence/Groundwork/SqlServer/SqlServerWorkflowExecutionStatePageQuery.cs"));
-
-        Assert.Contains("TOP (@pageLimit)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("\n        LIMIT ", source, StringComparison.OrdinalIgnoreCase);
+            "src/Elsa/Persistence/Groundwork/SqlServer/SqlServerWorkflowExecutionStatePageQuery.cs")));
     }
 
     [Fact]
-    public async Task SQL_Server_history_query_uses_the_exact_transformed_admitted_route_names()
+    public async Task SQL_Server_history_query_uses_the_transformed_common_physical_route()
     {
         var services = new ServiceCollection();
         services.AddSingleton(new GroundworkStorageNamingPolicyOptions(
@@ -266,26 +262,21 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
                 SqlServerGroundworkCapabilities.PhysicalNames);
         var route = Assert.Single(composition.PhysicalTarget.Routes.Where(candidate =>
             candidate.StorageUnit.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
-        var query = provider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
-        query.Bind(route);
+        var historyPath = Assert.Single(route.CandidateQueryPaths.Where(candidate =>
+            candidate.QueryIdentities.Contains(
+                ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery,
+                StringComparer.Ordinal)));
+        var historyIndex = Assert.Single(route.Indexes.Where(candidate =>
+            candidate.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex));
 
-        var pageTable = ReadProtectedString(query, "PageTableExpression");
-        var pageColumns = ReadProtectedString(query, "PageSelectColumns");
-        var canonicalJson = ReadProtectedString(query, "CanonicalJsonExpression");
-        var pageSql = (string)query.GetType()
-            .GetMethod("BuildPageSelectSql", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(query, ["1 = 1", "1 ASC"])!;
-
+        Assert.Equal(PhysicalStorageForm.PhysicalEntityTable, route.Form);
         Assert.NotEqual("groundwork_documents", route.PrimaryStorage.Name.Identifier);
         Assert.NotEqual("content_json", route.Envelope.CanonicalJson.Identifier);
-        Assert.Contains($"[{route.PrimaryStorage.Name.Identifier}] d", pageTable, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.Id.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.SchemaVersion.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.Version.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.CanonicalJson.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.CanonicalJson.Identifier}]", canonicalJson, StringComparison.Ordinal);
-        Assert.Contains(pageTable, pageSql, StringComparison.Ordinal);
-        Assert.Contains(pageColumns, pageSql, StringComparison.Ordinal);
+        Assert.True(historyPath.IsScaleBearing);
+        Assert.Equal(historyIndex.Name, historyPath.IndexName);
+        Assert.Contains(route.ProjectedColumns, projection =>
+            projection.Definition.Path ==
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField);
     }
 
     [Fact]
@@ -309,17 +300,4 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
         return directory?.FullName ?? throw new DirectoryNotFoundException("Could not locate the repository root.");
     }
 
-    private static string ReadProtectedString(object instance, string propertyName)
-    {
-        for (var type = instance.GetType(); type is not null; type = type.BaseType)
-        {
-            var property = type.GetProperty(
-                propertyName,
-                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-            if (property is not null)
-                return (string)property.GetValue(instance)!;
-        }
-
-        throw new MissingMemberException(instance.GetType().FullName, propertyName);
-    }
 }

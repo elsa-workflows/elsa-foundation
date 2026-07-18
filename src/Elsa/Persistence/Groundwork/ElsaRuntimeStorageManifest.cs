@@ -195,6 +195,16 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
     public const string WorkflowExecutionStateCollection = "workflowExecutionState";
     public const string ListWorkflowExecutionsQuery = ListAllQuery;
+    public const string PageWorkflowExecutionsQuery = "page-history";
+    public const string WorkflowExecutionHistoryOrderIndex = "by-history-order";
+    public const string WorkflowExecutionHistorySortTicksField = "historySortTicks";
+    public const string WorkflowExecutionHistoryWorkflowExecutionIdField = "historyWorkflowExecutionId";
+    public const string WorkflowExecutionHistoryTenantIdField = "historyTenantId";
+    public const string WorkflowExecutionHistoryDefinitionIdField = "historyDefinitionId";
+    public const string WorkflowExecutionHistoryStatusField = "historyStatus";
+    public const string WorkflowExecutionHistoryRunKindField = "historyRunKind";
+    public const string WorkflowExecutionHistoryCorrelationIdField = "historyCorrelationId";
+    public const string WorkflowExecutionHistoryArtifactIdField = "historyArtifactId";
     public const string WorkflowTestScopeDocumentKind = "workflowTestScope";
     public const string WorkflowTestScopeCollection = "workflowTestScope";
     public const string ListWorkflowTestScopesQuery = ListAllQuery;
@@ -383,14 +393,15 @@ public static class ElsaRuntimeStorageManifest
     /// over the provider-neutral legacy declarations.
     /// </summary>
     public static StorageManifest CreatePhysicalized() =>
-        ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(
-            PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
-                TestScopeStoragePhysicalizer.AddCompositeRoutes(
-                    WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                        BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                            WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                                DueWorkStoragePhysicalizer.AddRoutes(
-                                    LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))))));
+        WorkflowExecutionHistoryStoragePhysicalizer.AddRoute(
+            ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(
+                PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
+                    TestScopeStoragePhysicalizer.AddCompositeRoutes(
+                        WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                            BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                                WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
+                                    DueWorkStoragePhysicalizer.AddRoutes(
+                                        LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())))))))));
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),

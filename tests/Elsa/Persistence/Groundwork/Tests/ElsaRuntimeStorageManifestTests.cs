@@ -165,6 +165,58 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public async Task Workflow_execution_history_declares_one_scale_bearing_physical_entity_route()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind);
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
+            unit.PhysicalStorage!.Policy).Definition;
+        var logical = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex);
+        var route = Assert.Single(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery);
+
+        Assert.Equal(PhysicalStorageForm.PhysicalEntityTable, physical.Form);
+        Assert.Collection(
+            logical.Fields,
+            timestamp => Assert.Equal(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                timestamp.Path),
+            executionId => Assert.Equal(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                executionId.Path));
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+        Assert.Equal(QueryPagingSupport.Cursor, route.PagingSupport);
+        Assert.True(route.SupportsTotalCount);
+        Assert.Equal(
+            new[]
+            {
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField
+            },
+            route.SortFields.Select(field => field.Path));
+        Assert.Contains(
+            route.ResidualPredicateFields,
+            field => field.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField);
+        Assert.Contains(
+            route.ResidualPredicateFields,
+            field => field.Path == PhysicalDocumentFieldPaths.Id);
+        Assert.Contains(
+            physical.ProjectedColumns,
+            column =>
+                column.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField &&
+                column.Type == PortablePhysicalType.String);
+        Assert.Contains(
+            physical.Indexes,
+            index =>
+                index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex &&
+                index.Columns.Count == 4);
+    }
+
+    [Fact]
     public void Every_Query_Backed_Index_Is_An_Optimized_Physical_Projection()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();

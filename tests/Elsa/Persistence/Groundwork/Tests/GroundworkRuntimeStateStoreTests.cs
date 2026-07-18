@@ -1,5 +1,4 @@
 using Elsa.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
@@ -37,18 +36,16 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task Workflow_execution_query_rejects_explicit_wrong_tenant_before_provider_query()
     {
         var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var pageQuery = new RecordingPageQuery();
         var store = new GroundworkWorkflowExecutionStateStore(
             documentStore,
             GroundworkTestSerialization.Serializer,
             GroundworkTestAccess.AccessContext("tenant-a"),
-            pageQuery,
             documentStore);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10, TenantId: "tenant-b")).AsTask());
 
-        Assert.Equal(0, pageQuery.QueryCount);
+        Assert.Equal(0, documentStore.DocumentQueryCount);
     }
 
     [Theory]
@@ -148,7 +145,6 @@ public sealed class GroundworkRuntimeStateStoreTests
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
             GroundworkTestAccess.DefaultAccessContextAccessor,
-            null,
             fixture.BoundedDocumentStore);
 
         await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Running));
@@ -574,25 +570,6 @@ public sealed class GroundworkRuntimeStateStoreTests
         {
             RunKind = runKind
         };
-
-    private sealed class RecordingPageQuery : IGroundworkWorkflowExecutionStatePageQuery
-    {
-        public int QueryCount { get; private set; }
-
-        public void Bind(global::Groundwork.Core.PhysicalStorage.ExecutableStorageRoute route)
-        {
-        }
-
-        public ValueTask PrepareAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-
-        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
-            WorkflowExecutionStatePageQuery query,
-            CancellationToken cancellationToken = default)
-        {
-            QueryCount++;
-            throw new InvalidOperationException("The provider query should not run for a mismatched tenant.");
-        }
-    }
 
     private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId, int value = 42) => new(
         durableValueId,

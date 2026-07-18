@@ -1,6 +1,5 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Groundwork.Documents.Store;
@@ -35,10 +34,6 @@ public static class MongoDbGroundworkDocumentStoreRegistration
 
         services.AddGroundworkStorageComposition();
         services.AddGroundworkStoreSessions();
-
-        // MongoDB does not yet advertise a bounded workflow-history page adapter. Remove a stale
-        // relational provider registration when the host changes its selected provider leaf.
-        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
 
         services.TryAddSingleton<IMongoDbGroundworkRuntimeAdmission, MongoDbGroundworkRuntimeAdmission>();
         services.AddSingleton(serviceProvider => new MongoDbGroundworkDocumentStoreInitializer(

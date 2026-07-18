@@ -110,7 +110,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
         await connection.OpenAsync();
         await using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
+            command.CommandText = "SELECT schema_version, document FROM workflow_execution_states WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
             await using var reader = await command.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
             Assert.Equal("4", reader.GetString(0));
@@ -119,8 +119,8 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
 
         await using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname LIKE 'ix_elsa_workflow_history_%';";
-            Assert.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+            command.CommandText = "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname LIKE '%history%order%';";
+            Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
         }
 
         await using var restartedScope = restartedProvider.CreateAsyncScope();
@@ -141,6 +141,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
     private static ServiceCollection CreateServices(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         services.AddWorkflowRuntime();
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }
