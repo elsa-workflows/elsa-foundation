@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Distributed.Contracts;
+
 namespace Elsa.Workflows.Runtime.Distributed.Models;
 
 /// <summary>
@@ -13,8 +15,8 @@ public sealed class ExecutionPlacementClaim
         DateTimeOffset requestedAt,
         DateTimeOffset expiresAt)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
 
         if (expiresAt <= requestedAt)
             throw new ArgumentException("Placement claim expiration must be later than the request time.", nameof(expiresAt));

@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
+using Groundwork.Core.Text;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
@@ -16,11 +17,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// A lost race re-reads and re-evaluates, so two nodes can never both hold a live lease — the same exact guarantee
 /// the in-memory store gets from its process-local lock, here enforced by the document store's own storage layer.
 /// The persisted <see cref="ExecutionPlacementLease"/> shape is the frozen v1 <c>executionPlacement</c> golden
-/// fixture; the wrapping document adds only the constant collection partition for the list sweep.
+/// fixture; the wrapping document lifts the route fields needed by the physical owner/expiry index.
 /// </remarks>
 public sealed class GroundworkExecutionPlacementStore(
     IDocumentStore store,
-    IBoundedDocumentStore? boundedStore = null) : IExecutionPlacementStore, IPagedExecutionPlacementStore
+    IBoundedDocumentStore? boundedStore = null) : IExecutionPlacementStore
 {
     private const string Kind = DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind;
     private const int MaxCasAttempts = 8;
@@ -30,7 +31,7 @@ public sealed class GroundworkExecutionPlacementStore(
 
     public async ValueTask<ExecutionPlacementLease?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
 
         var envelope = await store.LoadAsync(Kind, workflowExecutionId, cancellationToken);
@@ -70,7 +71,7 @@ public sealed class GroundworkExecutionPlacementStore(
                     Kind,
                     claim.WorkflowExecutionId,
                     DistributedGroundworkStorageManifest.SchemaVersion,
-                    DistributedGroundworkDocuments.Serialize(new ExecutionPlacementDocument(Kind, lease)),
+                    DistributedGroundworkDocuments.Serialize(ExecutionPlacementDocument.From(Kind, lease)),
                     ExpectedVersion: envelope?.Version ?? 0),
                 cancellationToken);
 
@@ -114,48 +115,67 @@ public sealed class GroundworkExecutionPlacementStore(
         }
     }
 
-    public async ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(
+        ExecutionPlacementLeaseListRequest request,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
         var result = await BoundedStore.QueryAsync(
-            ListQuery(skip: null, take: null),
+            new DocumentQuery(
+                Kind,
+                DistributedGroundworkStorageManifest.ListOwnedPlacementsQuery,
+                [
+                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        DistributedGroundworkStorageManifest.OwnerIdLookupKeyField,
+                        OwnerLookupKey(request.OwnerId))),
+                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        DistributedGroundworkStorageManifest.OwnerIdComparisonKeyField,
+                        OrdinalKey(request.OwnerId))),
+                    DocumentQueryClause.Of(DocumentQueryComparison.GreaterThan(
+                        DistributedGroundworkStorageManifest.ExpiresAtField,
+                        request.Now.ToString("O")))
+                ],
+                [
+                    new DocumentQueryOrder(DistributedGroundworkStorageManifest.OwnerIdLookupKeyField),
+                    new DocumentQueryOrder(DistributedGroundworkStorageManifest.ExpiresAtField),
+                    new DocumentQueryOrder(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField)
+                ],
+                take: request.Take),
             cancellationToken);
 
         return result.Documents
             .Select(envelope => DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease)
-            .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
             .ToArray();
     }
 
-    public async ValueTask<ExecutionPlacementLeasePage> ListPageAsync(ExecutionPlacementLeasePageRequest request, CancellationToken cancellationToken = default)
+    // The lifted owner, expiry, and workflow fields serve the declared physical route; the nested lease remains the
+    // frozen v1 executionPlacement wire shape.
+    private sealed record ExecutionPlacementDocument(
+        string Collection,
+        string WorkflowExecutionId,
+        string WorkflowExecutionIdKey,
+        string OwnerId,
+        string OwnerIdComparisonKey,
+        string OwnerIdLookupKey,
+        DateTimeOffset ExpiresAt,
+        ExecutionPlacementLease Lease)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var count = await BoundedStore.CountAsync(ListQuery(skip: null, take: null), cancellationToken);
-        var result = await BoundedStore.QueryAsync(
-            ListQuery(request.NormalizedSkip, request.NormalizedTake),
-            cancellationToken);
-
-        var items = result.Documents
-            .Select(envelope => DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease)
-            .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
-            .ToArray();
-
-        return new ExecutionPlacementLeasePage(items, count);
+        public static ExecutionPlacementDocument From(string collection, ExecutionPlacementLease lease) => new(
+            collection,
+            lease.WorkflowExecutionId,
+            OrdinalKey(lease.WorkflowExecutionId),
+            lease.OwnerId,
+            OrdinalKey(lease.OwnerId),
+            OwnerLookupKey(lease.OwnerId),
+            lease.ExpiresAt,
+            lease);
     }
 
-    private static DocumentQuery ListQuery(int? skip, int? take) => new(
-        Kind,
-        DistributedGroundworkStorageManifest.ListAllQuery,
-        [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-            DistributedGroundworkStorageManifest.CollectionField,
-            Kind))],
-        [],
-        skip,
-        take);
+    private static string OrdinalKey(string value) =>
+        PortableStringComparison.CreateOrdinal(value);
 
-    // The constant collection partition lets the list sweep use a keyword equality index instead of a provider-wide
-    // scan; the nested lease is the frozen v1 executionPlacement wire shape, unchanged.
-    private sealed record ExecutionPlacementDocument(string Collection, ExecutionPlacementLease Lease);
+    private static string OwnerLookupKey(string value) =>
+        PortableStringComparison.CreateHash(OrdinalKey(value));
 }

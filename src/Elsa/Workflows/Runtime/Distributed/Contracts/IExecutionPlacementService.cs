@@ -10,7 +10,10 @@ namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 /// </summary>
 public interface IExecutionPlacementService
 {
-    /// <summary>Stable identity of this node as a placement owner.</summary>
+    /// <summary>
+    /// Stable identity of this node as a placement owner, within
+    /// <see cref="DistributedRuntimeIdentityConstraints"/>.
+    /// </summary>
     string NodeId { get; }
 
     /// <summary>
@@ -25,6 +28,11 @@ public interface IExecutionPlacementService
     /// <summary>Returns the current placement lease for the execution, or <see langword="null"/> when unplaced.</summary>
     ValueTask<ExecutionPlacementLease?> FindOwnerAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists the executions this node currently holds a (non-expired) placement lease for, evaluated now.</summary>
-    ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListOwnedAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Lists at most <paramref name="maxItems"/> executions this node currently holds a non-expired placement lease
+    /// for, evaluated now in earliest-expiry order.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListOwnedAsync(
+        int maxItems,
+        CancellationToken cancellationToken = default);
 }

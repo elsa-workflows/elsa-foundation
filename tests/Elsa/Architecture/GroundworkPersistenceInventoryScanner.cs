@@ -96,7 +96,6 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IRevisionAwareSecretRepository"] = ["SecretDocumentKind"],
             ["IPagedSecretRepository"] = ["SecretDocumentKind"],
             ["IExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
-            ["IPagedExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
             ["IExecutionCommandTransport"] = ["ExecutionCommandTransportDocumentKind", "ExecutionCommandStreamHeadDocumentKind"]
         };
 

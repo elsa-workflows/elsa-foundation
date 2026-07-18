@@ -43,7 +43,7 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
 
     public ValueTask<ExecutionCommandTransportItem> SendAsync(string workflowExecutionId, WorkflowExecutionCommandEnvelope envelope, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentNullException.ThrowIfNull(envelope);
         cancellationToken.ThrowIfCancellationRequested();
         if (!StringComparer.Ordinal.Equals(envelope.Partition.Value, _partition))
@@ -70,14 +70,13 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
 
     public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(string workflowExecutionId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, int maxItems, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
         cancellationToken.ThrowIfCancellationRequested();
 
         if (leaseDuration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(leaseDuration), "Lease duration must be positive.");
-        if (maxItems <= 0)
-            throw new ArgumentOutOfRangeException(nameof(maxItems), "Max items must be greater than zero.");
+        DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
 
         lock (_state.SyncRoot)
         {
@@ -104,9 +103,9 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
 
     public ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentException.ThrowIfNullOrWhiteSpace(transportItemId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_state.SyncRoot)
@@ -134,8 +133,12 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
         }
     }
 
-    public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+        DateTimeOffset now,
+        int maxItems,
+        CancellationToken cancellationToken = default)
     {
+        DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_state.SyncRoot)
@@ -145,6 +148,7 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
                 .Where(pair => pair.Value.Any(item => item.IsVisible(now)))
                 .Select(pair => pair.Key.WorkflowExecutionId)
                 .OrderBy(id => id, StringComparer.Ordinal)
+                .Take(maxItems)
                 .ToArray();
 
             return new ValueTask<IReadOnlyCollection<string>>(ids);
@@ -153,7 +157,7 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
 
     public ValueTask<int> CountPendingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_state.SyncRoot)

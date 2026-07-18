@@ -132,7 +132,7 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         var acked = 0;
 
         // 1. Renew placements this node holds so ownership does not lapse mid-drain.
-        foreach (var lease in await placementService.ListOwnedAsync(cancellationToken))
+        foreach (var lease in await placementService.ListOwnedAsync(pumpOptions.MaxExecutionsPerSweep, cancellationToken))
         {
             var renewal = await placementService.TryClaimAsync(lease.WorkflowExecutionId, cancellationToken);
             if (renewal.IsOwnedByClaimant)
@@ -140,7 +140,10 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         }
 
         // 2. Discover executions with visible transport backlog, claim any we can own, and drain them locally.
-        var pending = await transport.ListPendingExecutionIdsAsync(now, cancellationToken);
+        var pending = await transport.ListPendingExecutionIdsAsync(
+            now,
+            pumpOptions.MaxExecutionsPerSweep,
+            cancellationToken);
         var executionsThisSweep = 0;
 
         foreach (var executionId in pending)

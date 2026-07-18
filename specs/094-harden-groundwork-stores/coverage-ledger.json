@@ -2,7 +2,7 @@
   "$schema": "./contracts/coverage-ledger.schema.json",
   "schemaVersion": 1,
   "feature": "094-harden-groundwork-stores",
-  "groundworkVersion": "0.0.1-preview.63",
+  "groundworkVersion": "0.0.1-preview.64",
   "baselineRef": "c9aa5fd8f7cfa6c86b2f37885a2446f3f4b82103",
   "mandatoryProviders": [
     "sqlite",
@@ -1471,7 +1471,7 @@
     {
       "id": "distributed-execution-placement",
       "family": "distributed-runtime",
-      "contract": "IExecutionPlacementStore; IPagedExecutionPlacementStore",
+      "contract": "IExecutionPlacementStore",
       "outcome": "specialized-primitive",
       "scope": "tenant-scoped",
       "authority": "#645",

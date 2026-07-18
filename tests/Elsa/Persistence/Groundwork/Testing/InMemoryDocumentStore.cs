@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
@@ -226,24 +227,57 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         }
 
         IOrderedEnumerable<DocumentEnvelope> ordered = query.Order.Count > 0
-            ? matches.OrderBy(
-                document => Comparable(
-                    ReadField(document.ContentJson, query.Order[0].Path),
-                    fieldKinds[query.Order[0].Path]),
-                StringComparer.Ordinal)
+            ? Order(
+                matches,
+                query.Order[0],
+                fieldKinds)
             : matches.OrderBy(document => document.Id, StringComparer.Ordinal);
         foreach (var order in query.Order.Skip(1))
         {
-            ordered = ordered.ThenBy(
-                document => Comparable(ReadField(document.ContentJson, order.Path), fieldKinds[order.Path]),
-                StringComparer.Ordinal);
+            ordered = ThenOrder(ordered, order, fieldKinds);
         }
-        var all = ordered.ThenBy(document => document.Id, StringComparer.Ordinal).ToArray();
+        IEnumerable<DocumentEnvelope> selected = ordered.ThenBy(document => document.Id, StringComparer.Ordinal);
+        if (query.LatestPerKeyPath is { } latestPerKeyPath)
+        {
+            selected = selected
+                .GroupBy(
+                    document => Comparable(
+                        ReadField(document.ContentJson, latestPerKeyPath),
+                        fieldKinds[latestPerKeyPath]),
+                    StringComparer.Ordinal)
+                .Select(group => group.First());
+        }
+
+        var all = selected.ToArray();
         var window = all.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
             window = window.Take(take);
         return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
     }
+
+    private static IOrderedEnumerable<DocumentEnvelope> Order(
+        IEnumerable<DocumentEnvelope> documents,
+        DocumentQueryOrder order,
+        IReadOnlyDictionary<string, IndexValueKind?> fieldKinds) =>
+        order.Direction == PhysicalSortDirection.Descending
+            ? documents.OrderByDescending(
+                document => Comparable(ReadField(document.ContentJson, order.Path), fieldKinds[order.Path]),
+                StringComparer.Ordinal)
+            : documents.OrderBy(
+                document => Comparable(ReadField(document.ContentJson, order.Path), fieldKinds[order.Path]),
+                StringComparer.Ordinal);
+
+    private static IOrderedEnumerable<DocumentEnvelope> ThenOrder(
+        IOrderedEnumerable<DocumentEnvelope> documents,
+        DocumentQueryOrder order,
+        IReadOnlyDictionary<string, IndexValueKind?> fieldKinds) =>
+        order.Direction == PhysicalSortDirection.Descending
+            ? documents.ThenByDescending(
+                document => Comparable(ReadField(document.ContentJson, order.Path), fieldKinds[order.Path]),
+                StringComparer.Ordinal)
+            : documents.ThenBy(
+                document => Comparable(ReadField(document.ContentJson, order.Path), fieldKinds[order.Path]),
+                StringComparer.Ordinal);
 
     private static bool Matches(
         string? actual,

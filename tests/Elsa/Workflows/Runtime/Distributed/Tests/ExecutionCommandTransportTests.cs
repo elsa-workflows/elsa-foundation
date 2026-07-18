@@ -94,12 +94,12 @@ public sealed class ExecutionCommandTransportTests
         // Lease wf-a so it is no longer visible; wf-b remains visible.
         await transport.LeaseAsync("wf-a", NodeA, _now, LeaseDuration, maxItems: 10);
 
-        var pending = await transport.ListPendingExecutionIdsAsync(_now);
+        var pending = await transport.ListPendingExecutionIdsAsync(_now, 10);
         Assert.Equal(new[] { "wf-b" }, pending);
 
         // After wf-a's lease expires it is pending again.
         var afterExpiry = _now + LeaseDuration + TimeSpan.FromSeconds(1);
-        var pendingAfter = await transport.ListPendingExecutionIdsAsync(afterExpiry);
+        var pendingAfter = await transport.ListPendingExecutionIdsAsync(afterExpiry, 10);
         Assert.Equal(new[] { "wf-a", "wf-b" }, pendingAfter);
     }
 
@@ -113,6 +113,19 @@ public sealed class ExecutionCommandTransportTests
         var leased = await transport.LeaseAsync(ExecutionId, NodeA, _now, LeaseDuration, maxItems: 2);
         Assert.Equal(2, leased.Count);
         Assert.Equal(new[] { "env-0", "env-1" }, leased.Select(i => i.Envelope.EnvelopeId));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(501)]
+    public async Task BoundedOperations_RejectLimitsOutsideTheDeclaredMaximum(int maxItems)
+    {
+        var transport = new InMemoryExecutionCommandTransport();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await transport.LeaseAsync(ExecutionId, NodeA, _now, LeaseDuration, maxItems));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await transport.ListPendingExecutionIdsAsync(_now, maxItems));
     }
 
     private WorkflowExecutionCommandEnvelope Envelope(string envelopeId, string executionId = ExecutionId)
