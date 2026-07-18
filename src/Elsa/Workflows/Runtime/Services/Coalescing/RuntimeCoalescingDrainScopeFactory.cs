@@ -43,7 +43,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             // durable queue with the overlay consumption and end the segment; no folded commit is required.
             if (!session.HasBufferedChanges)
             {
-                await session.AdvanceInnerQueueAsync(cancellationToken);
+                await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
                 session.ClearBuffer();
                 session.Deactivate();
                 return;

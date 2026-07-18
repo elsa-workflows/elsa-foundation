@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -307,8 +308,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             nextRetryAt: nextRetryAt,
             metadata: decision is null ? null : new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["runtime.poison.retryMode"] = decision.Mode.ToString(),
-                ["runtime.poison.retryReason"] = decision.Reason
+                [RuntimeMetadataKeys.SchedulerPoisonRetryMode] = decision.Mode.ToString(),
+                [RuntimeMetadataKeys.SchedulerPoisonRetryReason] = decision.Reason
             }),
             cancellationToken);
     }

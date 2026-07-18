@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -267,9 +268,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         output.WriteLine($"Immediate durable checkpoint commits: {immediate.CommitCount}");
         output.WriteLine($"Coalescing durable checkpoint commits: {coalescing.CommitCount}");
 
-        // Behavior parity: identical terminal activity-execution snapshot.
+        // Behavior parity: identical terminal activity-execution snapshot, and the run genuinely completed — a
+        // dispatch fault would previously park silently in the poison store and leave both runs equally "identical"
+        // while stuck in Running.
         Assert.Equal(immediate.Snapshot, coalescing.Snapshot);
         Assert.NotEmpty(coalescing.Snapshot);
+        Assert.Equal(WorkflowExecutionStatus.Completed, immediate.WorkflowStatus);
+        Assert.Equal(WorkflowExecutionStatus.Completed, coalescing.WorkflowStatus);
 
         // Burst folding: coalescing performs strictly fewer durable commits, converging toward Elsa 3's one-per-burst.
         Assert.True(coalescing.CommitCount < immediate.CommitCount,
@@ -337,6 +342,11 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         // Exactly one durable commit landed and it is the BookmarkCreated boundary — coalescing did not defer it.
         var commit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
         Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, commit.Commit.Checkpoint.Name);
+
+        // The bookmark boundary deactivates the session mid-dispatch; the in-flight work item must be consumed by
+        // that final flush, not copied into the durable inner queue where the still-live drain loop would redeliver
+        // it as a duplicate dispatch and park it in the poison store (replay-conflict tripwire).
+        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync("wfexec-1"));
     }
 
     [Theory]
@@ -409,7 +419,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.False(session.IsActive);
     }
 
-    private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount)> DriveAsync(bool coalescing)
+    private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionStatus? WorkflowStatus)> DriveAsync(bool coalescing)
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
@@ -422,7 +432,8 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         var snapshot = await SnapshotAsync(provider);
         var commitCount = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits().Count;
-        return (snapshot, commitCount);
+        var workflowStatus = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"))?.Status;
+        return (snapshot, commitCount, workflowStatus);
     }
 
     private static async Task SeedAsync(ServiceProvider provider)
@@ -697,17 +708,31 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
+    // The driven workflow must genuinely run to completion: a CLR-activity node without a pinned activity contract
+    // faults dispatch with VF-ACT-001 and gets parked in the poison store, which (since poison surfacing landed)
+    // faults the workflow instead of hanging it silently. A Finish intrinsic root needs no CLR contract and
+    // completes the run, so the burst-folding comparison measures a real start-to-completed burst.
     private static WorkflowExecutable NewExecutable()
     {
-        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var outcomeType = new ValueTypeDescriptor("String");
         var node = new ExecutableNode(
             executableNodeId: "node-start",
             authoredActivityId: "authored-node-start",
-            activityType: "test/activity",
+            activityType: "elsa.intrinsic.finish",
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>());
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = nameof(WorkflowIntrinsicKind.Finish), schemaVersion = "1.0.0" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Outcome] = new(
+                    WorkflowIntrinsicInputKeys.Outcome,
+                    outcomeType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(outcomeType, JsonSerializer.SerializeToElement("Done"), ValueProtectionPolicy.InstanceInline))
+            },
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Finish);
 
         return new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
