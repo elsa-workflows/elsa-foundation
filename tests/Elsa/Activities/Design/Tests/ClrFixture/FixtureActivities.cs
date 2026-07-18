@@ -205,6 +205,28 @@ public sealed class TriggerFixtureActivity : FixtureActivity
     public const string ActivityType = "Elsa.Fixture.Trigger";
 }
 
+/// <summary>
+/// An activity declaring multiple <c>[ActivityOutcome]</c> attributes. The scanner must project these
+/// into a design facet so the studio can render outcome ports.
+/// </summary>
+[ActivityOutcome("Done")]
+[ActivityOutcome("Success")]
+[ActivityOutcome("Failed")]
+public sealed class OutcomeFixtureActivity : FixtureActivity;
+
+/// <summary>
+/// A base activity with an <c>[ActivityOutcome]</c> attribute to verify the scanner walks the type chain.
+/// </summary>
+[ActivityOutcome("Done")]
+[ActivityOutcome("BaseOutcome")]
+public abstract class OutcomeBaseActivity : FixtureActivity;
+
+/// <summary>
+/// A derived activity that adds its own outcomes on top of the base. The scanner must collect all of them.
+/// </summary>
+[ActivityOutcome("DerivedOutcome")]
+public sealed class InheritedOutcomeFixtureActivity : OutcomeBaseActivity;
+
 /// <summary>A typed activity used to verify stable plain CLR contract discovery keys.</summary>
 public sealed class PlainFixtureActivity : Activity<PlainFixtureResult>
 {

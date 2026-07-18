@@ -484,6 +484,66 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void ActivityOutcomeAttributes_MapToDesignFacetPorts()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(OutcomeFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(OutcomeFixtureActivity).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+
+        Assert.Equal("1", facet.SchemaVersion);
+        var ports = facet.Payload.GetProperty("ports").EnumerateArray().ToArray();
+        var portNames = ports.Select(p => p.GetProperty("name").GetString()).ToArray();
+        Assert.Equal(new[] { "Done", "Success", "Failed" }, portNames);
+        Assert.All(ports, p => Assert.Equal("outcome", p.GetProperty("type").GetString()));
+    }
+
+    [Fact]
+    public void InheritedOutcomeAttributes_CollectedFromBaseChain()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(InheritedOutcomeFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(InheritedOutcomeFixtureActivity).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+        var portNames = facet.Payload.GetProperty("ports").EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString())
+            .ToArray();
+
+        Assert.Contains("DerivedOutcome", portNames);
+        Assert.Contains("Done", portNames);
+        Assert.Contains("BaseOutcome", portNames);
+    }
+
+    [Fact]
+    public void ActivityWithoutOutcomeAttributes_HasNoOutcomeFacet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(UnannotatedFixtureActivity).FullName);
+
+        Assert.DoesNotContain(model.DesignFacets, f => f.Kind == "elsa.outcomes");
+    }
+
+    [Fact]
+    public void SendHttpRequest_OutcomeFacet_ContainsAllDeclaredOutcomes()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(SendHttpRequest).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+        var portNames = facet.Payload.GetProperty("ports").EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString())
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("Done", portNames);
+        Assert.Contains("Matched", portNames);
+        Assert.Contains("Unmatched", portNames);
+        Assert.Contains("Failed", portNames);
+        Assert.Contains("Timeout", portNames);
+        Assert.Equal(5, portNames.Count);
+    }
+
+    [Fact]
     public void DiscoveredActivities_AreCategorised_ByAssemblyNameLastSegment()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
