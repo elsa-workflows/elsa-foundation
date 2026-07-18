@@ -67,6 +67,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IActivityDefinitionLayoutStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDraftValidationStore>();
         services.AddScoped<IActivityDraftValidationStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IActivityForkStore>();
+        services.AddScoped<IActivityForkStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDirectDependencyStore>();
         services.AddScoped<IActivityDirectDependencyStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.AddScoped<GroundworkActivityDependencyProjection>();
@@ -82,6 +84,12 @@ public static class GroundworkActivitiesDesignStoreRegistration
 
         services.RemoveAll<ICreateActivityDefinitionCommand>();
         services.AddScoped<ICreateActivityDefinitionCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<ISaveActivityForkCandidateCommand>();
+        services.AddScoped<ISaveActivityForkCandidateCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IPruneActivityForkCandidatesCommand>();
+        services.AddScoped<IPruneActivityForkCandidatesCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IApplyActivityForkCandidateCommand>();
+        services.AddScoped<IApplyActivityForkCandidateCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IUpdateActivityDefinitionPresentationCommand>();
         services.AddScoped<IUpdateActivityDefinitionPresentationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<ICreateActivityDraftCommand>();

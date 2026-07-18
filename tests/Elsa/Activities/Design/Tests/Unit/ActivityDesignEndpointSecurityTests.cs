@@ -31,7 +31,9 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Catalog.List")]
     [InlineData("Definitions.Add")]
     [InlineData("Definitions.AddDraft")]
-    [InlineData("Definitions.Fork")]
+    [InlineData("Definitions.PreviewFork")]
+    [InlineData("Forks.Apply")]
+    [InlineData("Forks.GetStatus")]
     [InlineData("Definitions.Get")]
     [InlineData("Definitions.List")]
     [InlineData("Definitions.ListDrafts")]
@@ -64,6 +66,18 @@ public sealed class ActivityDesignEndpointSecurityTests
         Assert.Null(definition.AnonymousVerbs);
     }
 
+    [Theory]
+    [InlineData("Drafts.ProposeContract")]
+    [InlineData("Drafts.ApplyContractProposal")]
+    public void Contract_proposal_endpoints_require_activity_design_manage(string relativeTypeName)
+    {
+        var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
+
+        Assert.Contains(PermissionNames.ActivityDesignManage, definition.AllowedPermissions!);
+        Assert.Equal("POST", Assert.Single(definition.Verbs));
+        Assert.Null(definition.AnonymousVerbs);
+    }
+
     [Fact]
     public void The_inline_list_covers_every_endpoint_in_the_assembly()
     {
@@ -85,7 +99,7 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Catalog.List",
             "Definitions.Add",
             "Definitions.AddDraft",
-            "Definitions.Fork",
+            "Definitions.PreviewFork",
             "Definitions.Get",
             "Definitions.List",
             "Definitions.ListDrafts",
@@ -103,6 +117,8 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Drafts.Replace",
             "Drafts.UpdatePresentation",
             "Drafts.Validate",
+            "Forks.Apply",
+            "Forks.GetStatus",
             "UpgradePlans.Apply",
             "UpgradePlans.Create",
             "UpgradePlans.Get",

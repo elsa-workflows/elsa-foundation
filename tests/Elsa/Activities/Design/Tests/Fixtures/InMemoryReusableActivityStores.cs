@@ -29,10 +29,14 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
+    IActivityForkStore,
     IActivityDirectDependencyStore,
     IActivityDependencyProjectionStore,
     IActivityUpgradePlanStore,
     ICreateActivityDefinitionCommand,
+    ISaveActivityForkCandidateCommand,
+    IPruneActivityForkCandidatesCommand,
+    IApplyActivityForkCandidateCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
     IUpdateActivityDraftPresentationCommand,
@@ -59,6 +63,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     private readonly Dictionary<string, ActivityDefinitionVersionLayout> _versionLayouts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityDependencyEdge> _edges = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityUpgradePlan> _upgradePlans = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActivityForkCandidate> _forkCandidates = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActivityForkReceipt> _forkReceipts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TExecutableTemplate> _templates = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TSourceReference> _sourceReferences = new(StringComparer.Ordinal);
     private readonly HashSet<(string? TenantId, string ActivityTypeKey)> _definitionKeys = [];
@@ -137,6 +143,19 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                 throw new ArgumentException("Publication and layout version identities must match.", nameof(layout));
             _publications.Add(publication.DefinitionVersionId, Clone(publication));
             _versionLayouts.Add(layout.DefinitionVersionId, Clone(layout));
+            _sequence++;
+        }
+    }
+
+    public void SetPublicationLifecycle(
+        string definitionVersionId,
+        ActivityDefinitionVersionLifecycle lifecycle)
+    {
+        lock (_gate)
+        {
+            var publication = _publications.GetValueOrDefault(definitionVersionId)
+                ?? throw new KeyNotFoundException($"Activity version '{definitionVersionId}' was not found.");
+            publication.Lifecycle = lifecycle;
             _sequence++;
         }
     }
@@ -363,6 +382,28 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         return Task.CompletedTask;
     }
 
+    public Task<ActivityForkCandidate?> FindCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return Task.FromResult(_forkCandidates.TryGetValue(candidateId, out var candidate)
+                ? Clone(candidate)
+                : null);
+    }
+
+    public Task<ActivityForkReceipt?> FindReceiptAsync(
+        string receiptId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return Task.FromResult(_forkReceipts.TryGetValue(receiptId, out var receipt)
+                ? Clone(receipt)
+                : null);
+    }
+
     public Task ExecuteAsync(CreateActivityDefinitionRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -386,6 +427,130 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             _sequence++;
         }
         return Task.CompletedTask;
+    }
+
+    public Task<ActivityForkCandidate> ExecuteAsync(
+        SaveActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (_forkCandidates.TryGetValue(request.Candidate.Id, out var existing))
+            {
+                if (existing.ExpiresAt <= request.Candidate.CreatedAt)
+                    throw new ActivityForkPreviewExpiredException("The reviewed fork reservation expired.");
+                if (!StringComparer.Ordinal.Equals(existing.PreviewIdempotencyKey, request.Candidate.PreviewIdempotencyKey) ||
+                    !StringComparer.Ordinal.Equals(existing.RequestFingerprint, request.Candidate.RequestFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.AccessBindingFingerprint, request.Candidate.AccessBindingFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.ActorId, request.Candidate.ActorId) ||
+                    !StringComparer.Ordinal.Equals(existing.AuthorizationProfile, request.Candidate.AuthorizationProfile))
+                    throw new ActivityForkPreviewIdempotencyConflictException("The preview operation identity is already bound.");
+                return Task.FromResult(Clone(existing));
+            }
+            _forkCandidates.Add(request.Candidate.Id, Clone(request.Candidate));
+            _sequence++;
+            return Task.FromResult(Clone(request.Candidate));
+        }
+    }
+
+    public Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (maximumCount is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        lock (_gate)
+        {
+            var expired = _forkCandidates.Values
+                .Where(x => x.RetainUntil <= retainBefore)
+                .OrderBy(x => x.RetentionKey, StringComparer.Ordinal)
+                .Take(maximumCount)
+                .Select(x => x.Id)
+                .ToArray();
+            foreach (var id in expired)
+                _forkCandidates.Remove(id);
+            if (expired.Length > 0)
+                _sequence++;
+            return Task.FromResult(expired.Length);
+        }
+    }
+
+    public Task<ActivityForkApplyResult> ExecuteAsync(
+        ApplyActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (_forkReceipts.TryGetValue(request.ReceiptId, out var existing))
+            {
+                if (!StringComparer.Ordinal.Equals(existing.CandidateId, request.CandidateId) ||
+                    !StringComparer.Ordinal.Equals(existing.RequestFingerprint, request.RequestFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.ActorId, request.ActorId) ||
+                    !StringComparer.Ordinal.Equals(existing.AuthorizationProfile, request.AuthorizationProfile) ||
+                    !StringComparer.Ordinal.Equals(existing.IdempotencyKey, request.IdempotencyKey))
+                    throw new ActivityForkIdempotencyConflictException("The fork operation identity is already bound.");
+                return Task.FromResult(new ActivityForkApplyResult(Clone(existing), true));
+            }
+
+            var candidate = _forkCandidates.GetValueOrDefault(request.CandidateId)
+                ?? throw new ActivityForkCandidateStaleException("The fork candidate does not exist.");
+            if (candidate.Status != ActivityForkCandidateStatus.Reserved ||
+                !StringComparer.Ordinal.Equals(candidate.RequestFingerprint, request.RequestFingerprint) ||
+                !StringComparer.Ordinal.Equals(candidate.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+                !StringComparer.Ordinal.Equals(candidate.ActorId, request.ActorId) ||
+                !StringComparer.Ordinal.Equals(candidate.AuthorizationProfile, request.AuthorizationProfile))
+                throw new ActivityForkCandidateStaleException("The fork candidate binding changed.");
+
+            var definition = candidate.ReservedDefinition;
+            var key = (definition.TenantId, definition.ActivityTypeKey);
+            if (_definitions.ContainsKey(definition.Id) ||
+                _definitionKeys.Contains(key) ||
+                _authoring.ContainsKey(candidate.ReservedAuthoringState.DefinitionId) ||
+                _drafts.ContainsKey(candidate.ReservedDraft.Id) ||
+                _draftLayouts.ContainsKey(candidate.ReservedLayout.DraftId))
+                throw new ActivityForkCollisionException("A reserved fork target identity is no longer available.");
+
+            var applied = Clone(candidate);
+            applied.Status = ActivityForkCandidateStatus.Applied;
+            applied.AppliedIdempotencyKey = request.IdempotencyKey;
+            applied.LastModifiedAt = request.AppliedAt;
+            var receipt = new ActivityForkReceipt
+            {
+                Id = request.ReceiptId,
+                TenantId = applied.TenantId,
+                IdempotencyKey = request.IdempotencyKey,
+                CandidateId = applied.Id,
+                PublicCandidateId = applied.CandidateId,
+                RequestFingerprint = applied.RequestFingerprint,
+                AccessBindingFingerprint = applied.AccessBindingFingerprint,
+                ActorId = applied.ActorId,
+                AuthorizationProfile = applied.AuthorizationProfile,
+                DefinitionId = applied.ReservedDefinition.Id,
+                ActivityTypeKey = applied.ReservedDefinition.ActivityTypeKey,
+                DraftId = applied.ReservedDraft.Id,
+                Definition = Clone(applied.ReservedDefinition),
+                AuthoringState = Clone(applied.ReservedAuthoringState),
+                Draft = Clone(applied.ReservedDraft),
+                AppliedAt = request.AppliedAt,
+                CreatedAt = request.AppliedAt,
+                LastModifiedAt = request.AppliedAt
+            };
+
+            _definitionKeys.Add(key);
+            _definitions.Add(definition.Id, Clone(definition));
+            _authoring.Add(applied.ReservedAuthoringState.DefinitionId, Clone(applied.ReservedAuthoringState));
+            _drafts.Add(applied.ReservedDraft.Id, Clone(applied.ReservedDraft));
+            _draftLayouts.Add(applied.ReservedLayout.DraftId, Clone(applied.ReservedLayout));
+            _forkCandidates[applied.Id] = applied;
+            _forkReceipts.Add(receipt.Id, receipt);
+            _sequence++;
+            return Task.FromResult(new ActivityForkApplyResult(Clone(receipt), false));
+        }
     }
 
     public Task<ActivityDefinition> ExecuteAsync(
@@ -1033,6 +1198,60 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         TenantId = source.TenantId,
         DefinitionVersionId = source.DefinitionVersionId,
         Records = source.Records.Select(Clone).ToList(),
+        CreatedAt = source.CreatedAt,
+        LastModifiedAt = source.LastModifiedAt
+    };
+
+    private static ActivityForkCandidate Clone(ActivityForkCandidate source) => new()
+    {
+        Id = source.Id,
+        CandidateId = source.CandidateId,
+        PreviewIdempotencyKey = source.PreviewIdempotencyKey,
+        TenantId = source.TenantId,
+        RequestFingerprint = source.RequestFingerprint,
+        AccessBindingFingerprint = source.AccessBindingFingerprint,
+        ActorId = source.ActorId,
+        AuthorizationProfile = source.AuthorizationProfile,
+        SourceDefinitionId = source.SourceDefinitionId,
+        SourceVersionId = source.SourceVersionId,
+        SourceVersion = source.SourceVersion,
+        SourceProviderFingerprint = source.SourceProviderFingerprint,
+        TargetProviderFingerprint = source.TargetProviderFingerprint,
+        ReservedDefinition = Clone(source.ReservedDefinition),
+        ReservedAuthoringState = Clone(source.ReservedAuthoringState),
+        ReservedDraft = Clone(source.ReservedDraft),
+        ReservedLayout = Clone(source.ReservedLayout),
+        MigrationDiagnostics = source.MigrationDiagnostics.Select(Clone).ToList(),
+        SourceContractFingerprint = source.SourceContractFingerprint,
+        TargetContractFingerprint = source.TargetContractFingerprint,
+        ExpiresAt = source.ExpiresAt,
+        RetainUntil = source.RetainUntil,
+        RetentionKey = source.RetentionKey,
+        Status = source.Status,
+        AppliedIdempotencyKey = source.AppliedIdempotencyKey,
+        CreatedAt = source.CreatedAt,
+        LastModifiedAt = source.LastModifiedAt
+    };
+
+    private static ActivityForkReceipt Clone(ActivityForkReceipt source) => new()
+    {
+        Id = source.Id,
+        TenantId = source.TenantId,
+        IdempotencyKey = source.IdempotencyKey,
+        CandidateId = source.CandidateId,
+        PublicCandidateId = source.PublicCandidateId,
+        RequestFingerprint = source.RequestFingerprint,
+        AccessBindingFingerprint = source.AccessBindingFingerprint,
+        ActorId = source.ActorId,
+        AuthorizationProfile = source.AuthorizationProfile,
+        Status = source.Status,
+        DefinitionId = source.DefinitionId,
+        ActivityTypeKey = source.ActivityTypeKey,
+        DraftId = source.DraftId,
+        Definition = Clone(source.Definition),
+        AuthoringState = Clone(source.AuthoringState),
+        Draft = Clone(source.Draft),
+        AppliedAt = source.AppliedAt,
         CreatedAt = source.CreatedAt,
         LastModifiedAt = source.LastModifiedAt
     };

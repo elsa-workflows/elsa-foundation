@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Tests.Fixtures;
 using Elsa.Primitives.Contracts;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests;
@@ -638,27 +639,268 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
-    public async Task Source_owned_fork_creates_new_design_identity_with_exact_audit_provenance()
+    public async Task Source_owned_fork_is_previewed_then_applied_with_exact_reserved_identity_and_replay_receipt()
     {
         var harness = new Harness();
         var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
         harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
 
-        var fork = await harness.Service.ForkDefinitionAsync(new(
+        var preview = await harness.Forks.PreviewAsync(new(
             source.DefinitionId,
+            "preview-operation-1",
+            "source-version",
+            " Custom ",
+            " Forked ",
+            null,
+            "target.provider",
+            "1"), default);
+        Assert.Equal(ActivityForkCandidateLifecycleView.Reserved, preview.Status);
+        Assert.Equal("Custom", preview.Presentation.Category);
+        Assert.Equal("Forked", preview.Presentation.DisplayName);
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Active, preview.Source.Lifecycle);
+        Assert.Equal("source", preview.Target.Contract.ContractSchemaVersion);
+        Assert.Equal(preview.ContractComparison.SourceFingerprint, preview.ContractComparison.TargetFingerprint);
+        Assert.NotEqual(source.DefinitionId, preview.Target.DefinitionId);
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
+
+        var applied = await harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "fork-operation-1"),
+            default);
+        var replay = await harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "fork-operation-1"),
+            default);
+        var status = await harness.Forks.GetStatusAsync(new("fork-operation-1"), default);
+
+        Assert.Equal(ActivityForkOutcomeView.Applied, applied.Outcome);
+        Assert.Equal(ActivityForkOutcomeView.AlreadyApplied, replay.Outcome);
+        Assert.Equal(ActivityForkOutcomeView.Applied, status.Outcome);
+        Assert.Equal(preview.Target.DefinitionId, applied.Definition.DefinitionId);
+        Assert.Equal(preview.Target.ActivityTypeKey, applied.Definition.ActivityTypeKey);
+        Assert.Equal(preview.Target.DraftId, applied.Draft.DraftId);
+        Assert.Equal(applied.Definition.DefinitionId, replay.Definition.DefinitionId);
+        Assert.Equal(ActivityContentAuthorityKind.Design, applied.Definition.ContentAuthority.Kind);
+        Assert.Equal(WellKnownActivityContentAuthorities.Design, applied.Definition.ContentAuthority.AuthorityKey);
+        Assert.Equal(new(source.DefinitionId, "source-version", "1.0.0"), applied.Definition.ForkedFrom);
+        Assert.Equal("source-version", applied.Draft.SourceVersionId);
+        Assert.Equal(ActivityContentAuthorityKind.ProviderSource, (await harness.Stores.FindAsync(source.DefinitionId))!.ContentAuthority.Kind);
+    }
+
+    [Fact]
+    public async Task Fork_apply_rejects_a_source_lifecycle_change_after_preview_without_creating_the_target()
+    {
+        var harness = new Harness();
+        var preview = await harness.PreviewForkAsync();
+        harness.Stores.SetPublicationLifecycle(
+            preview.Source.VersionId,
+            ActivityDefinitionVersionLifecycle.Revoked);
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            harness.Forks.ApplyAsync(
+                new(preview.CandidateId, preview.RequestFingerprint, "lifecycle-changed-operation"),
+                default));
+
+        Assert.Equal("activity.fork.candidate-stale", exception.ErrorCode);
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_preview_concurrent_and_normalized_retries_converge_on_the_first_reserved_identities()
+    {
+        var harness = new Harness();
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+        harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
+        var command = new PreviewReusableActivityFork(
+            source.DefinitionId,
+            "preview-operation",
+            "source-version",
+            " Custom ",
+            " Forked ",
+            null,
+            "target.provider",
+            "1");
+
+        var previews = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => harness.Forks.PreviewAsync(command, default)));
+        var normalizedRetry = await harness.Forks.PreviewAsync(
+            command with { Category = "Custom", DisplayName = "Forked" },
+            default);
+
+        Assert.Single(previews.Select(x => x.CandidateId).Append(normalizedRetry.CandidateId).Distinct(StringComparer.Ordinal));
+        Assert.Single(previews.Select(x => x.Target.DefinitionId).Append(normalizedRetry.Target.DefinitionId).Distinct(StringComparer.Ordinal));
+        Assert.Single(previews.Select(x => x.Target.DraftId).Append(normalizedRetry.Target.DraftId).Distinct(StringComparer.Ordinal));
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == normalizedRetry.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_preview_key_rejects_changed_material_and_expiry_without_allocating_replacement()
+    {
+        var harness = new Harness();
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+        harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
+        var command = new PreviewReusableActivityFork(
+            source.DefinitionId,
+            "preview-operation",
             "source-version",
             "Custom",
             "Forked",
             null,
             "target.provider",
-            "1"), default);
+            "1");
+        var preview = await harness.Forks.PreviewAsync(command, default);
 
-        Assert.NotEqual(source.DefinitionId, fork.Definition.DefinitionId);
-        Assert.Equal(ActivityContentAuthorityKind.Design, fork.Definition.ContentAuthority.Kind);
-        Assert.Equal(WellKnownActivityContentAuthorities.Design, fork.Definition.ContentAuthority.AuthorityKey);
-        Assert.Equal(new(source.DefinitionId, "source-version", "1.0.0"), fork.Definition.ForkedFrom);
-        Assert.Equal("source-version", fork.Draft.SourceVersionId);
-        Assert.Equal(ActivityContentAuthorityKind.ProviderSource, (await harness.Stores.FindAsync(source.DefinitionId))!.ContentAuthority.Kind);
+        var changed = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            harness.Forks.PreviewAsync(command with { DisplayName = "Changed" }, default));
+        harness.Advance(TimeSpan.FromMinutes(16));
+        var expired = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            harness.Forks.PreviewAsync(command, default));
+
+        Assert.Equal("activity.fork.preview-idempotency-conflict", changed.ErrorCode);
+        Assert.Equal("activity.fork.preview-expired", expired.ErrorCode);
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_preview_retry_recovers_the_first_reservation_after_a_lost_success_response()
+    {
+        var stores = new InMemoryReusableActivityStores();
+        var failing = new Harness(
+            stores: stores,
+            decorateSaveCommand: inner => new CommitThenThrowForkCandidateCommand(inner));
+        var source = await failing.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+        failing.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
+        var command = new PreviewReusableActivityFork(
+            source.DefinitionId,
+            "preview-operation",
+            "source-version",
+            "Custom",
+            "Forked",
+            null,
+            "target.provider",
+            "1");
+        var unknown = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            failing.Forks.PreviewAsync(command, default));
+        var retry = new Harness(stores: stores);
+
+        var recovered = await retry.Forks.PreviewAsync(command, default);
+
+        Assert.Equal("activity.fork.outcome-unknown", unknown.ErrorCode);
+        Assert.Equal("Forked", recovered.Presentation.DisplayName);
+        Assert.DoesNotContain(stores.Definitions, x => x.Id == recovered.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_apply_rejects_tampered_and_expired_candidates_without_creating_the_reserved_target()
+    {
+        var harness = new Harness();
+        var preview = await harness.PreviewForkAsync();
+
+        var tampered = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Forks.ApplyAsync(
+            new($"{preview.CandidateId}x", preview.RequestFingerprint, "tampered-operation"),
+            default));
+        harness.Advance(TimeSpan.FromMinutes(16));
+        var expired = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "expired-operation"),
+            default));
+
+        Assert.Equal("activity.fork.candidate-stale", tampered.ErrorCode);
+        Assert.Equal(410, expired.StatusCode);
+        Assert.Equal("activity.fork.candidate-expired", expired.ErrorCode);
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_candidate_is_bound_to_the_reviewing_actor_and_access_profile()
+    {
+        var stores = new InMemoryReusableActivityStores();
+        var owner = new Harness(stores: stores);
+        var preview = await owner.PreviewForkAsync();
+        var otherActor = new Harness(stores: stores, actorId: "actor-b");
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => otherActor.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "foreign-operation"),
+            default));
+
+        Assert.Equal(403, exception.StatusCode);
+        Assert.Equal("activity.authorization.denied", exception.ErrorCode);
+        Assert.DoesNotContain(stores.Definitions, x => x.Id == preview.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_apply_collision_and_idempotency_conflict_are_typed_and_leave_no_partial_target()
+    {
+        var collisionHarness = new Harness();
+        var collisionPreview = await collisionHarness.PreviewForkAsync();
+        await collisionHarness.SeedReservedDefinitionCollisionAsync(collisionPreview);
+
+        var collision = await Assert.ThrowsAsync<ActivityAuthoringException>(() => collisionHarness.Forks.ApplyAsync(
+            new(collisionPreview.CandidateId, collisionPreview.RequestFingerprint, "collision-operation"),
+            default));
+
+        Assert.Equal("activity.fork.collision", collision.ErrorCode);
+        Assert.DoesNotContain(collisionHarness.Stores.Definitions, x =>
+            x.Id == collisionPreview.Target.DefinitionId && x.ActivityTypeKey == collisionPreview.Target.ActivityTypeKey);
+
+        var idempotencyHarness = new Harness();
+        var first = await idempotencyHarness.PreviewForkAsync();
+        var second = await idempotencyHarness.PreviewForkAsync();
+        await idempotencyHarness.Forks.ApplyAsync(new(first.CandidateId, first.RequestFingerprint, "shared-operation"), default);
+
+        var idempotency = await Assert.ThrowsAsync<ActivityAuthoringException>(() => idempotencyHarness.Forks.ApplyAsync(
+            new(second.CandidateId, second.RequestFingerprint, "shared-operation"),
+            default));
+
+        Assert.Equal("activity.fork.idempotency-conflict", idempotency.ErrorCode);
+        Assert.DoesNotContain(idempotencyHarness.Stores.Definitions, x => x.Id == second.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_apply_reconciles_a_lost_success_response_from_the_durable_receipt()
+    {
+        var harness = new Harness(decorateApplyCommand: inner => new CommitThenThrowForkCommand(inner));
+        var preview = await harness.PreviewForkAsync();
+
+        var receipt = await harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "lost-response-operation"),
+            default);
+
+        Assert.Equal(ActivityForkOutcomeView.AlreadyApplied, receipt.Outcome);
+        Assert.Contains(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_apply_exact_replay_remains_idempotent_after_candidate_retention_cleanup()
+    {
+        var harness = new Harness();
+        var preview = await harness.PreviewForkAsync();
+        var command = new ApplyReusableActivityFork(
+            preview.CandidateId,
+            preview.RequestFingerprint,
+            "retained-receipt-operation");
+        await harness.Forks.ApplyAsync(command, default);
+        harness.Advance(TimeSpan.FromDays(2));
+        await harness.PruneForkCandidatesAsync();
+
+        var replay = await harness.Forks.ApplyAsync(command, default);
+        var status = await harness.Forks.GetStatusAsync(new(command.IdempotencyKey), default);
+
+        Assert.Equal(ActivityForkOutcomeView.AlreadyApplied, replay.Outcome);
+        Assert.Equal(ActivityForkOutcomeView.Applied, status.Outcome);
+        Assert.Equal(preview.Target.DefinitionId, replay.Definition.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_apply_reports_unknown_outcome_when_failure_has_no_durable_receipt()
+    {
+        var harness = new Harness(decorateApplyCommand: _ => new ThrowBeforeCommitForkCommand());
+        var preview = await harness.PreviewForkAsync();
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "failed-operation"),
+            default));
+
+        Assert.Equal(500, exception.StatusCode);
+        Assert.Equal("activity.fork.outcome-unknown", exception.ErrorCode);
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
     }
 
     [Fact]
@@ -731,10 +973,14 @@ public sealed class ReusableActivityDraftCommandTests
             IActivityProvider? provider = null,
             bool canAuthorProvider = true,
             IActivityTypeKeyPolicy? typeKeyPolicy = null,
-            IActivityContractCapabilityCatalog? capabilityCatalog = null)
+            IActivityContractCapabilityCatalog? capabilityCatalog = null,
+            string actorId = "actor-a",
+            string? authorizationProfile = null,
+            Func<ISaveActivityForkCandidateCommand, ISaveActivityForkCandidateCommand>? decorateSaveCommand = null,
+            Func<IApplyActivityForkCandidateCommand, IApplyActivityForkCandidateCommand>? decorateApplyCommand = null)
         {
             _ids = new(tenantId ?? "global");
-            _context = new(tenantId, canReadProviderPayload, canAuthorProvider);
+            _context = new(tenantId, canReadProviderPayload, canAuthorProvider, actorId, authorizationProfile);
             Stores = stores ?? new();
             var registry = new ActivityProviderRegistry([provider ?? new MigratingProvider("elsa.activity-graph"), new MigratingProvider("target.provider")]);
             var contractCapabilities = capabilityCatalog ?? new EmptyCapabilityCatalog();
@@ -761,11 +1007,100 @@ public sealed class ReusableActivityDraftCommandTests
                 _time,
                 _context);
             Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(contractCapabilities), Service, _context);
+            Forks = new(
+                Stores,
+                Stores,
+                Stores,
+                Stores,
+                decorateSaveCommand?.Invoke(Stores) ?? Stores,
+                Stores,
+                decorateApplyCommand?.Invoke(Stores) ?? Stores,
+                registry,
+                new ActivityContractAuthoringValidator(contractCapabilities),
+                typeKeyPolicy ?? new DefaultActivityTypeKeyPolicy(),
+                _ids,
+                new HmacActivityForkCandidateIdCodec(Options.Create(new ActivityDependencyCursorOptions
+                {
+                    SigningKey = "0123456789abcdef0123456789abcdef"
+                })),
+                Options.Create(new ActivityForkReservationOptions()),
+                _time,
+                _context);
         }
 
         public InMemoryReusableActivityStores Stores { get; }
         public ReusableActivityAuthoringService Service { get; }
         public ActivityContractProposalService Proposals { get; }
+        public ActivityForkService Forks { get; }
+
+        public void Advance(TimeSpan duration) => _time.Advance(duration);
+
+        public Task<int> PruneForkCandidatesAsync() =>
+            Stores.ExecuteAsync(_time.GetUtcNow());
+
+        public async Task<ActivityForkPreviewView> PreviewForkAsync()
+        {
+            var source = await SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+            var versionId = $"source-version-{_ids.Generate()}";
+            SeedVersion(source.DefinitionId, versionId, Manifest("{\"source\":true}"), Contract("source"));
+            return await Forks.PreviewAsync(new(
+                source.DefinitionId,
+                $"preview-operation-{_ids.Generate()}",
+                versionId,
+                "Custom",
+                "Forked",
+                null,
+                "target.provider",
+                "1"), default);
+        }
+
+        public Task SeedReservedDefinitionCollisionAsync(ActivityForkPreviewView preview)
+        {
+            var now = _time.GetUtcNow();
+            var collisionDefinition = new ActivityDefinition
+            {
+                Id = preview.Target.DefinitionId,
+                TenantId = _context.TenantId,
+                ActivityTypeKey = $"collision.{_ids.Generate()}",
+                Category = "Collision",
+                DisplayName = "Collision",
+                CreatedAt = now,
+                LastModifiedAt = now
+            };
+            var collisionAuthoring = new ActivityDefinitionAuthoringState
+            {
+                Id = $"collision-authoring-{_ids.Generate()}",
+                TenantId = _context.TenantId,
+                DefinitionId = collisionDefinition.Id,
+                ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
+                CreatedAt = now,
+                LastModifiedAt = now
+            };
+            var collisionDraft = new ActivityDefinitionDraft
+            {
+                Id = $"collision-draft-{_ids.Generate()}",
+                TenantId = _context.TenantId,
+                DefinitionId = collisionDefinition.Id,
+                Revision = 1,
+                State = new(Contract(), Manifest("{}"), new Dictionary<string, string>()),
+                CreatedAt = now,
+                LastModifiedAt = now
+            };
+            var collisionLayout = new ActivityDefinitionDraftLayout
+            {
+                Id = $"collision-layout-{_ids.Generate()}",
+                TenantId = _context.TenantId,
+                DraftId = collisionDraft.Id,
+                Revision = 1,
+                CreatedAt = now,
+                LastModifiedAt = now
+            };
+            return Stores.ExecuteAsync(new CreateActivityDefinitionRequest(
+                collisionDefinition,
+                collisionAuthoring,
+                collisionDraft,
+                collisionLayout));
+        }
 
         public CreateReusableActivityDefinition CreateDefinitionCommand() => new(
             "Orders",
@@ -875,12 +1210,19 @@ public sealed class ReusableActivityDraftCommandTests
         }
     }
 
-    private sealed class TestAuthoringContext(string? tenantId, bool canReadProviderPayload, bool canAuthorProvider) : IActivityAuthoringContext
+    private sealed class TestAuthoringContext(
+        string? tenantId,
+        bool canReadProviderPayload,
+        bool canAuthorProvider,
+        string actorId,
+        string? authorizationProfile) : IActivityAuthoringContext
     {
         public string? TenantId => tenantId;
-        public string AuthorizationProfile => $"{tenantId ?? "global"}/{canReadProviderPayload}/{canAuthorProvider}";
+        public string ActorId => actorId;
+        public string AuthorizationProfile => authorizationProfile ?? $"{tenantId ?? "global"}/{canReadProviderPayload}/{canAuthorProvider}";
         public bool CanAuthorProvider(string providerKey) => canAuthorProvider;
         public bool CanReadProviderPayload(string providerKey) => canReadProviderPayload;
+        public bool CanManageActivityDefinitions => true;
     }
 
     private sealed class EmptyCapabilityCatalog : IActivityContractCapabilityCatalog
@@ -907,12 +1249,45 @@ public sealed class ReusableActivityDraftCommandTests
     private sealed class FixedIdentityGenerator(string prefix) : IIdentityGenerator
     {
         private int _current;
-        public string Generate() => $"{prefix}-{++_current}";
+        public string Generate() => $"{prefix}-{Interlocked.Increment(ref _current)}";
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        private DateTimeOffset _now = now;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan duration) => _now = _now.Add(duration);
+    }
+
+    private sealed class CommitThenThrowForkCommand(IApplyActivityForkCandidateCommand inner) : IApplyActivityForkCandidateCommand
+    {
+        public async Task<ActivityForkApplyResult> ExecuteAsync(
+            ApplyActivityForkCandidateRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            await inner.ExecuteAsync(request, cancellationToken);
+            throw new IOException("The committed response was lost.");
+        }
+    }
+
+    private sealed class CommitThenThrowForkCandidateCommand(ISaveActivityForkCandidateCommand inner)
+        : ISaveActivityForkCandidateCommand
+    {
+        public async Task<ActivityForkCandidate> ExecuteAsync(
+            SaveActivityForkCandidateRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            await inner.ExecuteAsync(request, cancellationToken);
+            throw new InvalidOperationException("The committed preview response was lost.");
+        }
+    }
+
+    private sealed class ThrowBeforeCommitForkCommand : IApplyActivityForkCandidateCommand
+    {
+        public Task<ActivityForkApplyResult> ExecuteAsync(
+            ApplyActivityForkCandidateRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new IOException("The persistence response is unavailable.");
     }
 
     private sealed class NonOverridableActivityTypeKeyPolicy : IActivityTypeKeyPolicy

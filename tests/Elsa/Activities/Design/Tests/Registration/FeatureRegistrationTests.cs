@@ -17,6 +17,8 @@ using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Api.Capabilities.Contracts;
+using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Events;
@@ -104,6 +106,27 @@ public sealed class FeatureRegistrationTests
     }
 
     [Fact]
+    public async Task ActivitiesDesignApiFeature_Registers_Canonical_Contract_Proposal_Capability_Relations()
+    {
+        var services = MinimalServices();
+        services.AddApiCapabilities();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var document = await provider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
+        var capability = Assert.Single(document.Capabilities, x => x.Id == "elsa.api.activity-design");
+
+        Assert.Contains(capability.Links, x =>
+            x.Rel == "activity-draft-contract-proposals" &&
+            x.Href == "design/activities/drafts/{draftId}/contract-proposals" &&
+            x.Templated);
+        Assert.Contains(capability.Links, x =>
+            x.Rel == "activity-draft-contract-proposals-apply" &&
+            x.Href == "design/activities/drafts/{draftId}/contract-proposals/apply" &&
+            x.Templated);
+    }
+
+    [Fact]
     public void ActivitiesDesignApiFeature_Registers_Request_Scoped_Tenant_And_Permission_Authorization()
     {
         var services = MinimalServices();
@@ -115,6 +138,7 @@ public sealed class FeatureRegistrationTests
             User = new ClaimsPrincipal(new ClaimsIdentity(
             [
                 new Claim("elsa.identity.tenant_id", "tenant-a"),
+                new Claim(ClaimTypes.NameIdentifier, "actor-a"),
                 new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission),
                 new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission)
             ], "test"))
@@ -127,6 +151,7 @@ public sealed class FeatureRegistrationTests
         Assert.Same(authoring, dependencies);
         Assert.True(authoring.CanAuthorProvider("elsa.activity-graph"));
         Assert.True(authoring.CanReadProviderPayload("elsa.activity-graph"));
+        Assert.Equal("actor-a", authoring.ActorId);
         Assert.True(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-a")));
         Assert.False(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-b")));
         Assert.NotEmpty(dependencies.AuthorizationProfile);
@@ -142,16 +167,23 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
         var codec = provider.GetRequiredService<IActivityDependencyCursorCodec>();
         var managementCodec = provider.GetRequiredService<IActivityManagementCursorCodec>();
+        var forkCodec = provider.GetRequiredService<IActivityForkCandidateIdCodec>();
         var state = new ActivityDependencyCursorState("tenant", "profile", "version", "Outbound", false, ["Versions"], "watermark", 1);
         var managementState = new ActivityManagementCursorState("scope", 25, 42);
 
         var decoded = codec.Decode(codec.Encode(state));
         var decodedManagement = managementCodec.Decode(managementCodec.Encode(managementState));
+        var forkState = new ActivityForkCandidateIdState(
+            "reservation-1",
+            $"sha256:{new string('a', 64)}",
+            new DateTimeOffset(2026, 7, 18, 12, 15, 0, TimeSpan.Zero));
+        var decodedFork = forkCodec.Decode(forkCodec.Encode(forkState));
         Assert.Equal(state.TenantScope, decoded.TenantScope);
         Assert.Equal(state.RootVersionId, decoded.RootVersionId);
         Assert.Equal(state.Include, decoded.Include);
         Assert.Equal(state.Position, decoded.Position);
         Assert.Equal(managementState, decodedManagement);
+        Assert.Equal(forkState, decodedFork);
         Assert.Throws<ActivityManagementCursorInvalidException>(() =>
             managementCodec.Decode(managementCodec.Encode(new("scope", 25, -1))));
     }

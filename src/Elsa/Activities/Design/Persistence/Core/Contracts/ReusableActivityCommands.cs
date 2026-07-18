@@ -16,6 +16,54 @@ public interface ICreateActivityDefinitionCommand
         CancellationToken cancellationToken = default);
 }
 
+public sealed record SaveActivityForkCandidateRequest(ActivityForkCandidate Candidate);
+
+public interface ISaveActivityForkCandidateCommand
+{
+    Task<ActivityForkCandidate> ExecuteAsync(
+        SaveActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IPruneActivityForkCandidatesCommand
+{
+    Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record ApplyActivityForkCandidateRequest(
+    string CandidateId,
+    string RequestFingerprint,
+    string AccessBindingFingerprint,
+    string ActorId,
+    string AuthorizationProfile,
+    string IdempotencyKey,
+    string ReceiptId,
+    DateTimeOffset AppliedAt);
+
+public sealed record ActivityForkApplyResult(
+    ActivityForkReceipt Receipt,
+    bool AlreadyApplied);
+
+public interface IApplyActivityForkCandidateCommand
+{
+    Task<ActivityForkApplyResult> ExecuteAsync(
+        ApplyActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class ActivityForkCandidateStaleException(string message) : Exception(message);
+
+public sealed class ActivityForkIdempotencyConflictException(string message) : Exception(message);
+
+public sealed class ActivityForkCollisionException(string message) : Exception(message);
+
+public sealed class ActivityForkPreviewIdempotencyConflictException(string message) : Exception(message);
+
+public sealed class ActivityForkPreviewExpiredException(string message) : Exception(message);
+
 public sealed record UpdateActivityDefinitionPresentationRequest(
     string DefinitionId,
     string? TenantId,

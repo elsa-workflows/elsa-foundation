@@ -178,6 +178,8 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `404` | `activity.definition.not-found` | Definition absent in authorized scope. |
 | `404` | `activity.draft.not-found` | Draft absent in authorized scope. |
 | `404` | `activity.version.not-found` | Version absent in authorized scope. |
+| `404` | `activity.fork.candidate-not-found` | Reviewed fork candidate absent in authorized scope. |
+| `404` | `activity.fork.receipt-not-found` | No durable fork receipt exists for the scoped operation identity. |
 | `404` | `activity.execution.not-found` | Runtime execution or requested boundary absent in authorized scope. |
 | `409` | `activity.definition.key-conflict` | Duplicate tenant/key identity. |
 | `409` | `activity.definition.content-authority` | General authoring command attempted against a source-owned lineage. |
@@ -189,7 +191,13 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `409` | `activity.version.stale-lifecycle` | Lifecycle command observed a different current state. |
 | `409` | `activity.upgrade.stale-plan` | At least one pinned draft revision/head changed before apply. |
 | `409` | `activity.cursor.binding-mismatch` | A non-management opaque cursor belongs to another tenant, root, query, or authorization profile. |
+| `409` | `activity.fork.preview-idempotency-conflict` | Preview operation key is already bound to different normalized fork material. |
+| `409` | `activity.fork.candidate-stale` | Candidate identity, fingerprint, exact source/provider binding, or consumption state changed after review. |
+| `409` | `activity.fork.idempotency-conflict` | Apply operation key is already bound to different reviewed fork material. |
+| `409` | `activity.fork.collision` | A server-reserved target identity or immutable activity type key is no longer available. |
 | `410` | `activity.cursor.expired` | A retained management snapshot, non-management cursor snapshot, or watermark is no longer valid. Recovery may instruct the client to restart without a cursor. |
+| `410` | `activity.fork.preview-expired` | Preview operation key belongs to an expired reservation and cannot allocate replacement identities. |
+| `410` | `activity.fork.candidate-expired` | Reviewed candidate expired before apply. |
 | `422` | `activity.publication.invalid` | One or more deterministic publication diagnostics block publication. |
 | `422` | `activity.contract.capability-rejected` | A mutable contract uses a type, collection kind, storage driver, durability, or nullability fact unavailable in the activated authoring capability catalog. |
 | `422` | `activity.version.choice-invalid` | Requested version was not one of the exact choices in the reviewed preflight. |
@@ -203,6 +211,7 @@ This makes CI output and publication retries stable. Providers return findings; 
 | `422` | `activity.admission.rejected` | Host/tenant policy rejects measured resource requirements. |
 | `500` | `activity.operation.failed` | Unexpected domain operation failure after infrastructure exceptions are wrapped/logged. Details remain non-disclosing. |
 | `500` | `activity.publication.outcome-unknown` | The server cannot prove whether an operation was applied; query the receipt before retrying with a new key. |
+| `500` | `activity.fork.outcome-unknown` | The server cannot prove whether fork apply committed; query the fork receipt before retrying. |
 | `503` | `activity.runtime.requirement-unavailable` | Requested activation cannot proceed because a required Runtime consumer/schema is unavailable. Runtime also records an activation incident. |
 
 An endpoint may choose the operation-level code (`activity.publication.invalid`) while individual diagnostics carry more specific codes (`activity.dependency.cycle`, `activity.version.bump-insufficient`).

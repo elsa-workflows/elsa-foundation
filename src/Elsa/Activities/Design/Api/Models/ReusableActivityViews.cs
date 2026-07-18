@@ -174,6 +174,92 @@ public sealed record ReusableActivityDefinitionMutationView(
     ActivityDefinitionIdentityView Definition,
     ReusableActivityDraftSummaryView Draft);
 
+public enum ActivityForkCandidateLifecycleView
+{
+    Reserved,
+    Applied,
+    Expired
+}
+
+public enum ActivityForkOutcomeView
+{
+    Applied,
+    AlreadyApplied,
+    Stale,
+    Expired,
+    Rejected,
+    Collision,
+    Failed,
+    OutcomeUnknown
+}
+
+public sealed record ActivityForkAccessBindingView(string Fingerprint);
+
+public sealed record ActivityForkSourceView(
+    string DefinitionId,
+    string VersionId,
+    string Version,
+    ActivityDefinitionVersionLifecycle Lifecycle,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ProviderFingerprint);
+
+public sealed record ActivityForkPresentationView(
+    string Category,
+    string DisplayName,
+    string? Description);
+
+public sealed record ActivityForkTargetView(
+    string DefinitionId,
+    string ActivityTypeKey,
+    string DraftId,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ManifestFingerprint,
+    ActivityContractView Contract);
+
+public sealed record ActivityForkProviderMigrationView(
+    string SourceProviderKey,
+    string SourceProviderSchemaVersion,
+    string TargetProviderKey,
+    string TargetProviderSchemaVersion,
+    string TargetManifestFingerprint,
+    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+
+public sealed record ActivityForkContractChangeView(
+    string Kind,
+    string? ReferenceKey,
+    string Detail);
+
+public sealed record ActivityForkContractComparisonView(
+    string SourceFingerprint,
+    string TargetFingerprint,
+    bool IsCompatible,
+    IReadOnlyList<ActivityForkContractChangeView> Changes);
+
+public sealed record ActivityForkPreviewView(
+    string CandidateId,
+    string RequestFingerprint,
+    ActivityForkCandidateLifecycleView Status,
+    ActivityForkAccessBindingView AccessBinding,
+    ActivityForkSourceView Source,
+    ActivityForkPresentationView Presentation,
+    ActivityForkTargetView Target,
+    ActivityForkProviderMigrationView ProviderMigration,
+    ActivityForkContractComparisonView ContractComparison,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset ExpiresAt);
+
+public sealed record ActivityForkReceiptView(
+    string IdempotencyKey,
+    string CandidateId,
+    string RequestFingerprint,
+    ActivityForkOutcomeView Outcome,
+    ActivityForkAccessBindingView AccessBinding,
+    ActivityDefinitionIdentityView Definition,
+    ReusableActivityDraftSummaryView Draft,
+    DateTimeOffset AppliedAt);
+
 public sealed record ReusableActivityDraftSummaryView(
     string DraftId,
     string DefinitionId,
