@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Models;
@@ -162,6 +163,47 @@ public sealed class ActivityTemplatePlacementTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => placer.PlaceAsync(request, cancellation.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task Placement_preserves_intrinsic_identity_of_template_nodes()
+    {
+        var value = new RuntimeInputBinding(
+            WorkflowIntrinsicInputKeys.Value,
+            new ValueTypeDescriptor("System.String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                new ValueTypeDescriptor("System.String"),
+                Json("\"updated\""),
+                ValueProtectionPolicy.InstanceInline));
+        var intrinsic = new ExecutableNode(
+            "local-set", "set", "elsa.intrinsic.set", "1.0.0",
+            new("intrinsic", "1", Json("{}")),
+            new Dictionary<string, RuntimeInputBinding> { [value.InputName] = value },
+            new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("target", "scope-root"));
+        var root = new ExecutableNode(
+            "local-root", "local-root", "local", "1", new("local", "1", Json("{}")),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Body", [intrinsic])]);
+        var template = Template("template-intrinsic", "hash-intrinsic", root);
+        var publication = Publication("definition-intrinsic", "version-intrinsic", "type.intrinsic", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = new ActivityTemplatePlacer(
+            new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+            new Sha256ActivityPlacementHasher());
+
+        var placement = await placer.PlaceAsync(new(
+            publication, template, reference,
+            new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow")]), "type.intrinsic",
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+
+        var placed = Assert.Single(Assert.Single(placement.Root.ChildSlots).Activities);
+        Assert.Equal(WorkflowIntrinsicKind.Set, placed.IntrinsicKind);
+        Assert.Equal("target", placed.IntrinsicVariable?.VariableKey);
     }
 
     private sealed record Fixture(ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request)

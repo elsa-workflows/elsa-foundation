@@ -191,7 +191,9 @@ public sealed class ActivityTemplatePlacer(
                 metadata,
                 childSlots,
                 current.Node.Structure,
-                activityContract);
+                activityContract,
+                current.Node.IntrinsicKind,
+                current.Node.IntrinsicVariable);
         }
 
         var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
@@ -345,7 +347,9 @@ public sealed class ActivityTemplatePlacer(
         node.Metadata,
         childSlots,
         node.Structure,
-        node.ActivityContract);
+        node.ActivityContract,
+        node.IntrinsicKind,
+        node.IntrinsicVariable);
 
     private RuntimeActivityDescriptor StampBoundaryDescriptor(
         RuntimeActivityDescriptor descriptor,
