@@ -9,9 +9,10 @@
 #
 #   docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 #
-# The frontend (React/Vite) assets are prebuilt and committed under each project's
-# wwwroot, and no MSBuild target invokes pnpm/vite, so `dotnet publish` alone
-# produces a complete, runnable app - no Node/pnpm stage is required.
+# The frontend (React/Vite) assets are generated before this Docker build (by CI or
+# by running `pnpm build` locally) under each project's wwwroot. No MSBuild target
+# invokes pnpm/vite, so this Dockerfile packages the generated assets without a
+# Node/pnpm stage.
 # =============================================================================
 
 # ---- Build stage ------------------------------------------------------------
@@ -25,6 +26,11 @@ COPY Elsa.Studio.slnx ./
 
 # Copy the source tree (tests, docs, etc. are excluded via .dockerignore).
 COPY src/ ./src/
+
+# Fail the image build clearly if the frontend build was skipped. The generated
+# wwwroot files are intentionally ignored by Git, so this protects both CI and
+# local Docker builds from publishing an assetless image that returns 404 at `/`.
+RUN test -f src/Elsa.Studio.Web/wwwroot/studio/index.html
 
 # Restore and publish only the web host; project references are pulled in transitively.
 #

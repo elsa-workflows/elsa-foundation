@@ -9,9 +9,10 @@ the repository root** because the build depends on repo-root configuration
 (`Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`,
 `NuGet.config`).
 
-> The React/Vite frontend assets are prebuilt and committed under each project's
-> `wwwroot`, and no MSBuild target invokes pnpm/vite. `dotnet publish` alone produces a
-> complete, runnable app, so the image has **no Node/pnpm build stage**. All three NuGet
+> The React/Vite frontend assets are generated into each project's `wwwroot` by
+> `pnpm build` before the Docker build. No MSBuild target invokes pnpm/vite, so the
+> image has **no Node/pnpm build stage**. The Docker workflow performs this frontend
+> build and the Dockerfile fails if the host shell asset is missing. All three NuGet
 > feeds used by the build are public, so no NuGet credentials are required.
 
 ## Quick start — prebuilt image (no clone or build)
@@ -79,6 +80,8 @@ Four environment variables wire the two containers together:
 From the repository root:
 
 ```bash
+pnpm install --frozen-lockfile
+pnpm build
 docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 ```
 
