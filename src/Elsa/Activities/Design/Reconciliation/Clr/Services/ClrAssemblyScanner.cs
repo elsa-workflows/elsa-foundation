@@ -44,6 +44,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityInputOptionAttributeFullName = typeof(ActivityInputOptionAttribute).FullName!;
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
+    private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     public IReadOnlyList<ActivityVersionReconciliationModel> Scan(string folderPath)
@@ -190,34 +191,74 @@ public sealed class ClrAssemblyScanner(
             Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type)),
             Inputs: inputs,
             Outputs: outputs,
-            DesignFacets: BuildDesignFacets(attributes),
+            DesignFacets: BuildDesignFacets(type, attributes),
             // Keep CLR catalog content stable for already-reconciled activity versions. Runtime trigger
             // classification is derived from the CLR descriptor by ExecutableNodeCompiler instead; changing
             // this value in place would invalidate persisted same-version hashes during an upgrade.
             ExecutionType: ActivityExecutionType.Action);
     }
 
-    private static IReadOnlyCollection<ActivityDesignFacet> BuildDesignFacets(IReadOnlyCollection<CustomAttributeData> attributes)
+    private static IReadOnlyCollection<ActivityDesignFacet> BuildDesignFacets(Type type, IReadOnlyCollection<CustomAttributeData> attributes)
     {
+        var facets = new List<ActivityDesignFacet>();
+
         var structureAttribute = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == ActivityStructureAttributeFullName);
-        if (structureAttribute is null)
-            return [];
+        if (structureAttribute is not null)
+        {
+            var kind = ReadRequiredStringConstructorArgument(structureAttribute, 0);
+            var schemaVersion = ReadRequiredStringConstructorArgument(structureAttribute, 1);
+            var mode = ReadNamedStringArgument(structureAttribute, nameof(ActivityStructureAttribute.Mode)) ?? "generic";
+            var supportsScopedVariables = ReadNamedBoolArgument(structureAttribute, nameof(ActivityStructureAttribute.SupportsScopedVariables));
+            var slots = attributes
+                .Where(attribute => attribute.AttributeType.FullName == ActivityChildSlotAttributeFullName)
+                .Select(ToSlotDescriptor)
+                .ToArray();
+            var payload = new ActivityStructureDesignFacetPayload(
+                mode,
+                supportsScopedVariables,
+                slots,
+                BuildInitialPayload(mode, slots));
 
-        var kind = ReadRequiredStringConstructorArgument(structureAttribute, 0);
-        var schemaVersion = ReadRequiredStringConstructorArgument(structureAttribute, 1);
-        var mode = ReadNamedStringArgument(structureAttribute, nameof(ActivityStructureAttribute.Mode)) ?? "generic";
-        var supportsScopedVariables = ReadNamedBoolArgument(structureAttribute, nameof(ActivityStructureAttribute.SupportsScopedVariables));
-        var slots = attributes
-            .Where(attribute => attribute.AttributeType.FullName == ActivityChildSlotAttributeFullName)
-            .Select(ToSlotDescriptor)
-            .ToArray();
-        var payload = new ActivityStructureDesignFacetPayload(
-            mode,
-            supportsScopedVariables,
-            slots,
-            BuildInitialPayload(mode, slots));
+            facets.Add(new ActivityDesignFacet(kind, schemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions)));
+        }
 
-        return [new ActivityDesignFacet(kind, schemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions))];
+        var outcomesFacet = BuildOutcomesFacet(type);
+        if (outcomesFacet is not null)
+            facets.Add(outcomesFacet);
+
+        return facets;
+    }
+
+    /// <summary>
+    /// Collects <see cref="ActivityOutcomeAttribute"/> declarations from <paramref name="type"/> and its
+    /// base chain (the attribute has <c>Inherited = true</c>, but <see cref="MetadataLoadContext"/> does
+    /// not honour that automatically). Returns an <c>"elsa.outcomes"</c> facet whose payload contains a
+    /// <c>"ports"</c> array consumable by the catalog API, or <see langword="null"/> when no outcomes are
+    /// explicitly declared — in which case the studio applies its own "Done" default.
+    /// </summary>
+    private static ActivityDesignFacet? BuildOutcomesFacet(Type type)
+    {
+        var outcomes = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var current = (Type?)type; current is not null; current = current.BaseType)
+        {
+            foreach (var attribute in current.GetCustomAttributesData())
+            {
+                if (attribute.AttributeType.FullName != ActivityOutcomeAttributeFullName)
+                    continue;
+
+                if (attribute.ConstructorArguments is [{ Value: string key }] && !string.IsNullOrWhiteSpace(key) && seen.Add(key))
+                    outcomes.Add(key);
+            }
+        }
+
+        if (outcomes.Count == 0)
+            return null;
+
+        var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
+        var payload = JsonSerializer.SerializeToElement(new { ports }, SerializerOptions);
+        return new ActivityDesignFacet("elsa.outcomes", "1", payload);
     }
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>
