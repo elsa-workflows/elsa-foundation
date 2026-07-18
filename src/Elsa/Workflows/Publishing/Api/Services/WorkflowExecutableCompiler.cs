@@ -1,13 +1,16 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -192,6 +195,8 @@ public sealed class WorkflowExecutableCompiler(
                 dependencyClaims = enrichment.Dependencies;
             }
 
+            ValidatePinnedActivityContracts(compiledRoot);
+
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
             var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies);
@@ -293,6 +298,39 @@ public sealed class WorkflowExecutableCompiler(
             result[input.ReferenceKey] = compiler.Compile(activity.NodeId, definition, inputState);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Fail-fast mirror of the runtime VF-ACT-001 dispatch check: a CLR activity node that reaches the
+    /// runtime without a pinned contract poisons its scheduler work item, so publication refuses the
+    /// artifact instead. The gate runs on the final tree — after node compilation, template placement,
+    /// and metadata enrichment — so a contract dropped by any of those rebuilds is caught here.
+    /// </summary>
+    private static void ValidatePinnedActivityContracts(ExecutableNode root)
+    {
+        foreach (var node in Flatten(root))
+        {
+            if (node.IntrinsicKind is not null ||
+                node.ActivityContract is not null ||
+                !StringComparer.Ordinal.Equals(node.Descriptor.ConsumerKey, WellKnownRuntimeActivityConsumers.ClrActivity))
+                continue;
+
+            string? typeAlias = null;
+            try
+            {
+                typeAlias = node.Descriptor.Payload
+                    .Deserialize<ClrActivityDescriptor>(new JsonSerializerOptions(JsonSerializerDefaults.Web))?
+                    .TypeAlias;
+            }
+            catch (JsonException)
+            {
+                // A malformed descriptor payload still fails the gate; the alias is just unavailable for the message.
+            }
+
+            throw new ArgumentException(
+                $"VF-ACT-001: Executable CLR activity node '{node.ExecutableNodeId}' (activity type '{node.ActivityType}', type alias '{typeAlias ?? "<unknown>"}') compiled without a pinned activity contract. " +
+                "The type alias must resolve to a registered CLR activity type that declares a typed result; publication is refused instead of deferring the failure to runtime dispatch.");
+        }
     }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)

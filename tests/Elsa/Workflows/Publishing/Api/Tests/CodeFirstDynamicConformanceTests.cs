@@ -81,11 +81,14 @@ public sealed class CodeFirstDynamicConformanceTests
     private static async Task<WorkflowExecutable> CompileAsync(WorkflowDefinitionState state)
     {
         var structureService = CreateStructureService();
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(GeneratedProducerActivity), TypeAliasConvention.CanonicalAlias(typeof(GeneratedProducerActivity)));
+        registry.RegisterType(typeof(GeneratedConsumerActivity), TypeAliasConvention.CanonicalAlias(typeof(GeneratedConsumerActivity)));
         var compiler = TestCompiler.Create(
             new UnusedWorkflowVersionStore(),
             new FakeActivityVersionStore(ActivityVersions().ToList()),
             structureService,
-            TestWellKnownTypeRegistry.Create());
+            registry);
 
         return await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
@@ -205,7 +208,13 @@ public sealed class CodeFirstDynamicConformanceTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+                id switch
+                {
+                    // Producer/consumer catalog keys already carry the generated CLR type's full name.
+                    "elsa.sequence@1" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)),
+                    _ => activityTypeKey
+                })),
             Inputs = inputs
         };
 
