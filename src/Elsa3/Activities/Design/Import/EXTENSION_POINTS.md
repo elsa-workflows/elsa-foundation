@@ -20,6 +20,9 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Purpose:** commits one selected dependency closure across Activity Design and Workflow Design.
 - **Default implementation:** `GroundworkReusableActivityImportCommand`, registered by `Elsa3ImportActivitiesGroundworkFeature`.
 - **Invariant:** all candidate documents and the durable receipt are preflighted before one cross-kind commit; identical reapply is an `AlreadyImported` no-op.
+- **Ownership boundary:** imported Activity/Workflow Definitions, immutable versions, and their
+  provenance bindings are tenant-owned Design resources. User identity never participates in a
+  provenance binding, so another user in the same tenant reuses exact imported resources.
 - **Composition:** the generic `Elsa3ImportActivitiesFeature` depends only on mapping and contracts.
   A host selects `Elsa3ImportActivitiesGroundworkFeature` (or another provider feature) explicitly.
 
@@ -30,6 +33,8 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Default implementation:** `GroundworkReusableActivityImportOperationStore`.
 - **Invariant:** collection and receipt writes are append-only, and reads are bound to the exact
   ambient tenant plus user scope; authorization mismatches are indistinguishable from absence.
+- **Idempotency boundary:** the key namespace is the exact tenant-plus-user operation scope. The same
+  textual key is independent for two users in one tenant, while each user can reconcile only their own receipt.
 
 ### `IReusableActivityCollectionAnalyzer`
 
@@ -44,7 +49,8 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - `POST migration/elsa3/reusable-activities/collections` — bounded authored-definition array upload.
 - `GET .../collections/{collectionHandle}/analysis` — deterministic, side-effect-free, offset-paged analysis.
 - `POST .../collections/{collectionHandle}/selection` — authoritative dependency-closure expansion and readiness.
-- `POST .../collections/{collectionHandle}/apply` — exact Plan ID, selection, scope, and idempotency binding.
+- `POST .../collections/{collectionHandle}/apply` — exact Plan ID, selection, tenant-plus-user
+  operation scope, and user-scoped idempotency binding; resulting Design resources remain tenant-owned.
 - `GET .../imports/{idempotencyKey}` — durable lost-response reconciliation.
 
 Uploads default to 16 MiB, 20,000 source versions, a 24-hour lifetime, and analysis pages of at

@@ -47,7 +47,8 @@ public interface IReusableActivityImportCommand
 
 /// <summary>
 /// Durable, immutable storage for bounded Elsa 3 collection uploads and completed import receipts.
-/// Implementations must apply access-scope checks before returning either resource.
+/// Collections, receipts, and their idempotency-key namespace belong to the exact tenant-plus-user
+/// operation scope. Implementations must apply that scope before returning either resource.
 /// </summary>
 public interface IReusableActivityImportOperationStore
 {
@@ -100,7 +101,11 @@ public interface IReusableActivityImportOperationService
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically applies one reviewed exact selection and stores its immutable durable receipt.</summary>
+    /// <summary>
+    /// Atomically applies one reviewed exact selection and stores its immutable durable receipt.
+    /// The idempotency key is unique within the exact tenant-plus-user operation scope; another user
+    /// in the same tenant may use the same key for an independent operation over tenant-owned Design resources.
+    /// </summary>
     /// <exception cref="ReusableActivityImportNotFoundException">The collection does not exist in the current access scope.</exception>
     /// <exception cref="ReusableActivityImportExpiredException">The immutable collection has expired.</exception>
     /// <exception cref="ReusableActivityImportValidationException">The plan or selection is not valid and dependency-closed.</exception>
@@ -115,7 +120,7 @@ public interface IReusableActivityImportOperationService
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Loads the immutable receipt for a previously completed scoped import.</summary>
+    /// <summary>Loads the immutable receipt for the exact tenant-plus-user operation scope.</summary>
     /// <exception cref="ReusableActivityImportNotFoundException">The receipt does not exist in the current access scope.</exception>
     /// <exception cref="ReusableActivityImportPersistenceException">The receipt cannot be loaded.</exception>
     ValueTask<ReusableActivityImportReceipt> GetStatusAsync(

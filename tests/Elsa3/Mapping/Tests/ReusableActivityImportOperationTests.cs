@@ -393,6 +393,90 @@ public sealed class ReusableActivityImportOperationTests
     }
 
     [Fact]
+    public async Task Same_tenant_users_reuse_tenant_design_but_own_independent_operations_and_idempotency_keys()
+    {
+        var source = ReusableActivityImportFixtures.Workflow(
+            "tenant-shared",
+            "tenant-shared-v1",
+            1,
+            true,
+            ReusableActivityImportFixtures.Leaf("root"));
+        var userA = new ReusableActivityImportAccessScope("tenant-shared", "user-a");
+        var userB = new ReusableActivityImportAccessScope("tenant-shared", "user-b");
+        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        var harness = Harness(
+            store,
+            store,
+            store,
+            GroundworkTestAccess.AccessContext("tenant-shared"));
+        var uploadA = await harness.Service.UploadAsync(Json(source), null, userA);
+        var uploadB = await harness.Service.UploadAsync(Json(source), null, userB);
+        var analysisA = await harness.Service.AnalyzeAsync(uploadA.CollectionHandle, 0, 10, userA);
+        var analysisB = await harness.Service.AnalyzeAsync(uploadB.CollectionHandle, 0, 10, userB);
+
+        var receiptA = await harness.Service.ApplyAsync(
+            uploadA.CollectionHandle,
+            analysisA.PlanId,
+            [source.Id],
+            "same-key",
+            userA);
+
+        await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
+            await harness.Service.GetStatusAsync("same-key", userB));
+        await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
+            await harness.Service.AnalyzeAsync(uploadA.CollectionHandle, 0, 10, userB));
+        await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
+            await harness.Service.AnalyzeAsync(uploadB.CollectionHandle, 0, 10, userA));
+        await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
+            await harness.Service.ApplyAsync(
+                uploadA.CollectionHandle,
+                analysisA.PlanId,
+                [source.Id],
+                "same-key",
+                userB));
+        await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
+            await harness.Service.ApplyAsync(
+                uploadB.CollectionHandle,
+                analysisB.PlanId,
+                [source.Id],
+                "user-a-cross-replay",
+                userA));
+
+        var receiptB = await harness.Service.ApplyAsync(
+            uploadB.CollectionHandle,
+            analysisB.PlanId,
+            [source.Id],
+            "same-key",
+            userB);
+        var recoveredA = await harness.Service.GetStatusAsync("same-key", userA);
+        var recoveredB = await harness.Service.GetStatusAsync("same-key", userB);
+
+        Assert.Equal(ReusableActivityImportReceiptStatus.Applied, receiptA.Status);
+        Assert.Equal(ReusableActivityImportReceiptStatus.Applied, receiptB.Status);
+        Assert.Equal(Elsa3ImportStorageManifest.ReceiptId("same-key", userA), receiptA.ReceiptId);
+        Assert.Equal(Elsa3ImportStorageManifest.ReceiptId("same-key", userB), receiptB.ReceiptId);
+        Assert.NotEqual(receiptA.ReceiptId, receiptB.ReceiptId);
+        Assert.Equal(receiptA.ReceiptId, recoveredA.ReceiptId);
+        Assert.Equal(receiptB.ReceiptId, recoveredB.ReceiptId);
+        Assert.NotEqual(recoveredA.ReceiptId, recoveredB.ReceiptId);
+        var sourceA = Assert.Single(receiptA.Sources);
+        var sourceB = Assert.Single(receiptB.Sources);
+        Assert.Equal(ReusableActivityImportResourceDisposition.Created, sourceA.WorkflowDisposition);
+        Assert.Equal(ReusableActivityImportResourceDisposition.Created, sourceA.ActivityDefinitionDisposition);
+        Assert.Equal(ReusableActivityImportResourceDisposition.Created, sourceA.ActivityVersionDisposition);
+        Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.WorkflowDisposition);
+        Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityDefinitionDisposition);
+        Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityVersionDisposition);
+        Assert.Equal(2, store.Snapshot(Elsa3ImportStorageManifest.CollectionDocumentKind).Count);
+        Assert.Equal(2, store.Snapshot(Elsa3ImportStorageManifest.ReceiptDocumentKind).Count);
+        Assert.Equal(2, store.Snapshot(Elsa3ImportStorageManifest.DefinitionBindingDocumentKind).Count);
+        Assert.Single(store.Snapshot("activityDefinition"));
+        Assert.Single(store.Snapshot("activityDefinitionVersion"));
+        Assert.Single(store.Snapshot("workflowDefinition"));
+        Assert.Single(store.Snapshot("workflowDefinitionVersion"));
+    }
+
+    [Fact]
     public async Task Upload_wraps_stream_failure_and_handle_exhaustion_in_typed_outcomes()
     {
         var failingStreamHarness = Harness();
