@@ -1,10 +1,10 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -106,7 +106,7 @@ public sealed class ActivityDefinitionPublisher(
                     ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
         EnsureAuthorized(draft.TenantId);
         await using var lockHandle = await lockProvider.AcquireLockAsync(
-            DefinitionLockKey(draft.DefinitionId),
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(draft.DefinitionId),
             null,
             cancellationToken);
 
@@ -402,7 +402,10 @@ public sealed class ActivityDefinitionPublisher(
         var draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
                     ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
         EnsureAuthorized(draft.TenantId);
-        await using var lockHandle = await lockProvider.AcquireLockAsync(DefinitionLockKey(draft.DefinitionId), null, cancellationToken);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(draft.DefinitionId),
+            null,
+            cancellationToken);
 
         draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
                 ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
@@ -995,9 +998,6 @@ public sealed class ActivityDefinitionPublisher(
 
     private static long ComputeLayoutBytes(IEnumerable<ActivityLayoutRecord> records) => records.Sum(x =>
         (long)Encoding.UTF8.GetByteCount(x.NodeId) + Encoding.UTF8.GetByteCount(x.Data.GetRawText()));
-
-    private static string DefinitionLockKey(string definitionId) =>
-        $"elsa:activities:design:publication:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(definitionId)))}";
 
     private static ActivityPublicationRejectedException Reject(
         string code,

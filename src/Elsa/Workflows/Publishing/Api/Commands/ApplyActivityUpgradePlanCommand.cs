@@ -106,13 +106,19 @@ public sealed class ApplyActivityUpgradePlanCommand(
         }
         catch (ActivityUpgradeApplyException exception)
         {
-            await receiptStore.RejectAsync(
-                receipt,
-                exception.StatusCode,
-                exception.ErrorCode,
-                exception.Diagnostics,
-                clock.UtcNow,
-                cancellationToken);
+            // A stale-plan result is produced by the atomic mutation boundary after its final
+            // validation failed. Keep the pre-existing Preparing receipt untouched: rejecting it
+            // in a second commit would violate the stale operation's zero-write guarantee.
+            if (!StringComparer.Ordinal.Equals(exception.ErrorCode, "activity.upgrade.stale-plan"))
+            {
+                await receiptStore.RejectAsync(
+                    receipt,
+                    exception.StatusCode,
+                    exception.ErrorCode,
+                    exception.Diagnostics,
+                    clock.UtcNow,
+                    cancellationToken);
+            }
             throw;
         }
     }

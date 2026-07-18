@@ -4,9 +4,11 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
@@ -14,6 +16,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -43,7 +46,8 @@ public sealed class GroundworkActivityUpgradePlanStore(
     ActivityContractAuthoringValidator contractValidator,
     IEnumerable<IActivityProviderReferenceRewriter> activityRewriters,
     IIdentityGenerator identityGenerator,
-    GroundworkActivityManagementProjectionWriter managementProjectionWriter) :
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter,
+    IDistributedLockProvider lockProvider) :
     IActivityUpgradeDiscoverySource,
     IActivityUpgradePlanMutationStore,
     IActivityUpgradePublishedDraftResolver
@@ -198,6 +202,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
 
         await RecheckPlanBindingAsync(plan, cancellationToken);
         await RecheckTargetsAsync(plan.Replacements, cancellationToken);
+        await using var applyLocks = await AcquireApplyLocksAsync(plan, cancellationToken);
         var requests = new List<SaveDocumentRequest>();
         var scopes = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -274,13 +279,14 @@ public sealed class GroundworkActivityUpgradePlanStore(
                     ? ActivityUpgradePlanStatus.AwaitingPublication
                     : ActivityUpgradePlanStatus.Blocked;
         var allAppliedDrafts = (plan.AppliedDrafts ?? []).Concat(applied).ToArray();
-        var appliedPlan = plan with
-        {
-            Status = status,
-            AppliedAt = status == ActivityUpgradePlanStatus.Applied ? appliedAt : null,
-            AppliedDrafts = allAppliedDrafts,
-            Stages = stages
-        };
+        var appliedPlan = RebaseAfterCommittedStage(
+            plan,
+            selectedSteps,
+            applied,
+            status,
+            status == ActivityUpgradePlanStatus.Applied ? appliedAt : null,
+            allAppliedDrafts,
+            stages);
         var result = new ActivityUpgradeApplyResult(
             plan.PlanId,
             status,
@@ -307,23 +313,156 @@ public sealed class GroundworkActivityUpgradePlanStore(
             receipt.ReceiptId,
             new ApplyReceiptDocument(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptCollection, completedReceipt),
             receiptEnvelope.Version));
+        GroundworkActivityManagementProjectionUpdate? managementProjection = null;
         try
         {
-            if (changedActivityDrafts.Count == 0)
-                await store.SaveAllAsync(DocumentCommitScope.Of(scopes.ToArray()), requests, cancellationToken);
-            else
-            {
-                await using var managementProjection = await managementProjectionWriter.PrepareAsync(
+            if (changedActivityDrafts.Count != 0)
+                managementProjection = await managementProjectionWriter.PrepareAsync(
                     new(appliedAt, [], changedActivityDrafts, []),
                     cancellationToken);
-                await managementProjection.CommitAsync(scopes, requests, cancellationToken);
+            await CommitWithFinalValidationAsync(
+                plan,
+                scopes,
+                requests,
+                managementProjection,
+                cancellationToken);
+        }
+        finally
+        {
+            if (managementProjection is not null)
+                await managementProjection.DisposeAsync();
+        }
+        return result;
+    }
+
+    private async Task CommitWithFinalValidationAsync(
+        ActivityUpgradePlan plan,
+        IReadOnlyCollection<string> authoritativeScopes,
+        IReadOnlyList<SaveDocumentRequest> authoritativeRequests,
+        GroundworkActivityManagementProjectionUpdate? managementProjection,
+        CancellationToken cancellationToken)
+    {
+        var scopes = authoritativeScopes
+            .Concat(managementProjection?.DocumentKinds ?? Enumerable.Empty<string>())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var requests = authoritativeRequests
+            .Concat(managementProjection?.Requests ?? [])
+            .ToList();
+
+        try
+        {
+            await using var unitOfWork = await store.BeginAsync(DocumentCommitScope.Of(scopes), cancellationToken);
+            await RecheckPlanBindingAsync(plan, cancellationToken);
+            await RecheckTargetsAsync(plan.Replacements, cancellationToken);
+
+            foreach (var request in requests)
+            {
+                var result = await unitOfWork.SaveAsync(request, cancellationToken);
+                if (result.Status != DocumentStoreWriteStatus.Saved)
+                    throw Stale($"Snapshot '{request.DocumentKind}/{request.Id}' changed before the atomic commit.");
             }
+            await unitOfWork.CommitAsync(cancellationToken);
         }
         catch (DocumentAtomicWriteException)
         {
             throw Stale("One or more upgrade snapshots changed before the atomic commit.");
         }
-        return result;
+    }
+
+    private async Task<DistributedLockScope> AcquireApplyLocksAsync(
+        ActivityUpgradePlan plan,
+        CancellationToken cancellationToken)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var snapshot in plan.ExpectedSnapshots)
+        {
+            if (snapshot.Kind == "ActivityDefinition")
+                keys.Add(ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(snapshot.DefinitionId));
+            else if (snapshot.Kind == "WorkflowDefinition")
+                keys.Add(WorkflowDesignPersistenceLockKeys.DefinitionKey(snapshot.DefinitionId));
+        }
+        foreach (var reference in plan.Binding!.SelectedClosure)
+        {
+            if (reference.Kind.StartsWith("Activity", StringComparison.Ordinal))
+                keys.Add(ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(reference.DefinitionId));
+            else if (reference.Kind.StartsWith("Workflow", StringComparison.Ordinal))
+                keys.Add(WorkflowDesignPersistenceLockKeys.DefinitionKey(reference.DefinitionId));
+            if (reference.Kind == "WorkflowDraft" && reference.DraftId is not null)
+                keys.Add(WorkflowDesignPersistenceLockKeys.DraftKey(reference.DraftId));
+            else if (reference.Kind == "ActivityDraft" && reference.DraftId is not null)
+                keys.Add(ActivityDesignPersistenceLockKeys.DraftKey(reference.DraftId));
+        }
+        foreach (var replacement in plan.Replacements)
+        {
+            var from = await activityVersions.FindAsync(replacement.FromVersionId, cancellationToken);
+            var to = await activityVersions.FindAsync(replacement.ToVersionId, cancellationToken);
+            if (from is not null)
+                keys.Add(ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(from.DefinitionId));
+            if (to is not null)
+                keys.Add(ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(to.DefinitionId));
+        }
+
+        var handles = new List<IDistributedSynchronizationHandle>();
+        try
+        {
+            foreach (var key in keys.Order(StringComparer.Ordinal))
+                handles.Add(await lockProvider.AcquireLockAsync(key, null, cancellationToken));
+            return new(handles);
+        }
+        catch
+        {
+            for (var index = handles.Count - 1; index >= 0; index--)
+                await handles[index].DisposeAsync();
+            throw;
+        }
+    }
+
+    private static ActivityUpgradePlan RebaseAfterCommittedStage(
+        ActivityUpgradePlan plan,
+        IReadOnlyList<ActivityUpgradeStep> selectedSteps,
+        IReadOnlyList<ActivityUpgradeAppliedDraft> appliedDrafts,
+        ActivityUpgradePlanStatus status,
+        DateTimeOffset? appliedAt,
+        IReadOnlyList<ActivityUpgradeAppliedDraft> allAppliedDrafts,
+        IReadOnlyList<ActivityUpgradeStage> stages)
+    {
+        var changes = BuildProjectionChanges(selectedSteps, appliedDrafts, plan.TenantId)
+            .ToDictionary(
+                x => ReferenceKey(x.SourceOwner),
+                x => x.ResultOwner ?? throw new InvalidOperationException("An applied upgrade must produce one result owner."),
+                StringComparer.Ordinal);
+        var selectedClosure = plan.Binding!.SelectedClosure
+            .Select(reference => changes.GetValueOrDefault(ReferenceKey(reference)) ?? reference)
+            .GroupBy(ReferenceKey, StringComparer.Ordinal)
+            .Select(x => x.First())
+            .ToArray();
+        var snapshots = plan.ExpectedSnapshots
+            .Select(snapshot =>
+            {
+                var key = $"{snapshot.Kind}\u001f{snapshot.Id}";
+                if (!changes.TryGetValue(key, out var result))
+                    return snapshot;
+                return new ActivityUpgradeExpectedSnapshot(
+                    result.Kind,
+                    result.DraftId ?? result.VersionId
+                    ?? throw new InvalidOperationException("An applied upgrade result must carry an exact identity."),
+                    result.Revision,
+                    result.DefinitionId,
+                    snapshot.HeadVersionId);
+            })
+            .GroupBy(x => (x.Kind, x.Id))
+            .Select(x => x.First())
+            .ToArray();
+        return plan with
+        {
+            Status = status,
+            AppliedAt = appliedAt,
+            AppliedDrafts = allAppliedDrafts,
+            ExpectedSnapshots = snapshots,
+            Binding = plan.Binding with { SelectedClosure = selectedClosure },
+            Stages = stages
+        };
     }
 
     private static IReadOnlyList<ActivityDependencyProjectionOwnerChange> BuildProjectionChanges(
@@ -354,6 +493,15 @@ public sealed class GroundworkActivityUpgradePlanStore(
                 TenantId: tenantId);
             return new ActivityDependencyProjectionOwnerChange(source, result, step.Replacements);
         }).ToArray();
+    }
+
+    private sealed class DistributedLockScope(IReadOnlyList<IDistributedSynchronizationHandle> handles) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            for (var index = handles.Count - 1; index >= 0; index--)
+                await handles[index].DisposeAsync();
+        }
     }
 
     private async Task<ActivityUpgradeOwnerSnapshot?> ResolveOwnerAsync(
@@ -584,7 +732,9 @@ public sealed class GroundworkActivityUpgradePlanStore(
         applied.Add(new("WorkflowDraft", id, source.DefinitionId, 1, true, source.Id));
     }
 
-    private async Task RecheckTargetsAsync(IEnumerable<ActivityVersionReplacement> replacements, CancellationToken cancellationToken)
+    private async Task RecheckTargetsAsync(
+        IEnumerable<ActivityVersionReplacement> replacements,
+        CancellationToken cancellationToken)
     {
         foreach (var replacement in replacements)
         {
@@ -595,7 +745,9 @@ public sealed class GroundworkActivityUpgradePlanStore(
         }
     }
 
-    private async Task RecheckPlanBindingAsync(ActivityUpgradePlan plan, CancellationToken cancellationToken)
+    private async Task RecheckPlanBindingAsync(
+        ActivityUpgradePlan plan,
+        CancellationToken cancellationToken)
     {
         if (plan.Binding is null)
             throw Stale("The upgrade plan has no exact selected closure.");
@@ -621,10 +773,19 @@ public sealed class GroundworkActivityUpgradePlanStore(
             plan.TenantId,
             plan.Binding.AccessProfileFingerprint,
             plan.PredecessorPlanId), cancellationToken);
-        if (discovery.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+        var appliedDraftKeys = (plan.AppliedDrafts ?? [])
+            .Select(x => $"{x.Kind}\u001f{x.DraftId}")
+            .ToHashSet(StringComparer.Ordinal);
+        if (discovery.Diagnostics.Any(x =>
+                x.Severity == ActivityDiagnosticSeverity.Error &&
+                !(x.Code == "activity.upgrade.root-not-affected" &&
+                  appliedDraftKeys.Contains($"{x.Subject.Kind}\u001f{x.Subject.Id}"))))
             throw Stale("The bound root closure can no longer be discovered without errors.");
         var currentClosure = discovery.Owners
             .SelectMany(owner => owner.DependencyPaths.SelectMany(path => path.Append(owner.Owner)))
+            .Concat(plan.Binding.SelectedClosure.Where(reference =>
+                reference.DraftId is not null &&
+                appliedDraftKeys.Contains($"{reference.Kind}\u001f{reference.DraftId}")))
             .GroupBy(ReferenceKey, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(ReferenceKey, StringComparer.Ordinal)
@@ -648,8 +809,14 @@ public sealed class GroundworkActivityUpgradePlanStore(
             {
                 case "ActivityDefinition":
                     {
-                        var definition = await activityAuthoring.FindAsync(snapshot.DefinitionId, cancellationToken);
-                        if (definition is null ||
+                        var envelope = await RequiredActivityByIndexAsync<ActivityDefinitionAuthoringState>(
+                            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                            "list-by-definition",
+                            ActivitiesDesignStorageManifest.DefinitionIdField,
+                            snapshot.DefinitionId,
+                            cancellationToken);
+                        var definition = DeserializeActivity<ActivityDefinitionAuthoringState>(envelope);
+                        if (
                             !StringComparer.Ordinal.Equals(definition.HeadVersionId, snapshot.HeadVersionId))
                             throw Stale($"Activity definition head '{snapshot.DefinitionId}' changed before apply.");
                         break;
