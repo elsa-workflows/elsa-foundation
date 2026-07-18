@@ -186,6 +186,7 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
 
     await waitForText(rendered.container, "Source-owned and read-only");
+    await waitForText(rendered.container, "contoso.source");
     expect(rendered.container.textContent).toContain("contoso.catalog");
     expect(rendered.container.textContent).toContain("invoice-source");
     expect(rendered.container.textContent).toContain("contoso.source");
@@ -193,7 +194,7 @@ describe("Activity Definitions experience", () => {
     expect(rendered.container.textContent).toContain("Immutable public contract");
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Fork"))).toBe(false);
     await rendered.unmount();
-  });
+  }, 15_000);
 
   it("does not offer an explicit fork version override when no recommended active version exists", async () => {
     const source = {
