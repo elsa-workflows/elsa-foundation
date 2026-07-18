@@ -18,6 +18,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private readonly IRuntimeInputBindingResolver _inputBindingResolver;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry;
     private readonly IExternalPayloadStore? _externalPayloadStore;
+    private readonly IRuntimeValueConversionExecutor _valueConversionExecutor;
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator;
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage;
 
@@ -31,6 +32,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
 
         _inputBindingResolver = inputBindingResolver;
+        _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: null);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore: null);
     }
@@ -43,6 +45,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(externalPayloadStore);
 
         _inputBindingResolver = inputBindingResolver;
+        _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _externalPayloadStore = externalPayloadStore;
         _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
@@ -57,6 +60,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
 
         _inputBindingResolver = inputBindingResolver;
+        _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
@@ -74,8 +78,29 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(portableExpressionEvaluator);
 
         _inputBindingResolver = inputBindingResolver;
+        _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore);
+        _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IPortableExpressionEvaluator portableExpressionEvaluator,
+        IRuntimeValueConversionExecutor valueConversionExecutor,
+        IExternalPayloadStore? externalPayloadStore = null)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+        ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
+        ArgumentNullException.ThrowIfNull(portableExpressionEvaluator);
+        ArgumentNullException.ThrowIfNull(valueConversionExecutor);
+
+        _inputBindingResolver = inputBindingResolver;
+        _wellKnownTypeRegistry = wellKnownTypeRegistry;
+        _externalPayloadStore = externalPayloadStore;
+        _valueConversionExecutor = valueConversionExecutor;
         _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
@@ -158,7 +183,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             return await ApplyDestinationStorageAsync(
                 invocationId,
                 input,
-                envelope,
+                ApplyConversionPlan(binding, envelope),
                 expressionPolicy,
                 expressionPolicy,
                 resolutionContext,
@@ -173,7 +198,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 "was resolved without its source protection envelope.");
         }
 
-        if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType))
+        if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType) &&
+            (binding.ConversionPlan is null || !SameType(source.Type, binding.ConversionPlan.SourceType)))
             throw new InvalidOperationException($"VF-ACT-004: Literal input '{input.Key}' on executable node '{node.ExecutableNodeId}' does not match its declared portable type.");
         if (source.Policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has a transient source at a durable invocation boundary.");
@@ -188,12 +214,20 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (source.ExternalReference is not null && HasExternalProjection(binding))
             return await MaterializeExternalProjectionAsync(node, invocationId, input, binding, source, effectivePolicy, resolutionContext, cancellationToken);
 
-        var retyped = new ValueEnvelope(
-            binding.TargetType,
-            source.Presence,
-            source.InlineValue,
-            source.ExternalReference,
-            effectivePolicy);
+        var projected = source;
+        var retyped = binding.ConversionPlan is null
+            ? new ValueEnvelope(
+                binding.TargetType,
+                projected.Presence,
+                projected.InlineValue,
+                projected.ExternalReference,
+                effectivePolicy)
+            : ApplyConversionPlan(binding, new ValueEnvelope(
+                projected.Type,
+                projected.Presence,
+                projected.InlineValue,
+                projected.ExternalReference,
+                effectivePolicy));
         return await ApplyDestinationStorageAsync(
             invocationId,
             input,
@@ -246,21 +280,27 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         }
 
         if (payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-            return ValueEnvelope.Null(binding.TargetType, effectivePolicy);
+            return ValueEnvelope.Null(binding.ConversionPlan?.TargetType ?? binding.TargetType, effectivePolicy);
 
-        var projected = ValueEnvelope.Inline(binding.TargetType, payload.Clone(), effectivePolicy);
+        var projected = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, payload.Clone(), effectivePolicy);
+        var converted = ApplyConversionPlan(binding, projected);
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
                 resolutionContext.WorkflowExecutionId,
                 $"activity:{invocationId}:input:{input.Key}",
                 $"Input '{input.Key}' on executable node '{node.ExecutableNodeId}'",
-                projected,
+                converted,
                 source.Policy,
                 effectivePolicy,
                 source.ExternalReference!.StorageProfile,
                 ForceExternal: true),
             cancellationToken);
     }
+
+    private ValueEnvelope ApplyConversionPlan(RuntimeInputBinding binding, ValueEnvelope source) =>
+        binding.ConversionPlan is null
+            ? source
+            : _valueConversionExecutor.Convert(source, binding.ConversionPlan);
 
     private static bool HasExternalProjection(RuntimeInputBinding binding) =>
         binding.Source == RuntimeInputBindingSource.ActivityResult &&

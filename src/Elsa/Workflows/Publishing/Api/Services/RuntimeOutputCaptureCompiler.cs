@@ -15,9 +15,13 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// resolved to one concrete execution during publication, and treating arbitrary authored values as durable ids
 /// would guess at target semantics.
 /// </summary>
-public sealed class RuntimeOutputCaptureCompiler(IRuntimeDurableValueStorageDriverRegistry storageDrivers)
+public sealed class RuntimeOutputCaptureCompiler(
+    IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+    ValueConversionPlanResolver? conversionPlanResolver = null)
 {
     private const string VariableExpressionType = "Variable";
+
+    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new();
 
     public IReadOnlyDictionary<string, RuntimeOutputCapture> CompileBoundaryOutputs(
         string nodeId,
@@ -71,17 +75,17 @@ public sealed class RuntimeOutputCaptureCompiler(IRuntimeDurableValueStorageDriv
                     $"Activity node '{nodeId}' output '{definition.ReferenceKey}' targets unknown workflow variable '{target.ReferenceKey}'.");
             }
 
-            if (variable.Type != definition.Type)
-            {
-                throw new ArgumentException(
-                    $"Activity node '{nodeId}' output '{definition.ReferenceKey}' type '{definition.Type}' does not match target workflow variable '{target.ReferenceKey}' type '{variable.Type}'.");
-            }
-
             storageDrivers.GetRequired(definition.StorageDriverKey);
+            var sourceType = new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind);
+            var targetType = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
+            var conversionPlan = resolvedConversionPlanResolver.Resolve(
+                sourceType,
+                ValueRepresentationDefaults.Infer(sourceType),
+                targetType);
             var type = new RuntimeValueTypeDescriptor(
-                definition.Type.Alias,
+                variable.Type.Alias,
                 definition.StorageDriverKey,
-                System.Text.Json.JsonSerializer.SerializeToElement(definition.Type));
+                System.Text.Json.JsonSerializer.SerializeToElement(variable.Type));
             captures.Add(definition.Name, new RuntimeOutputCapture(
                 definition.Name,
                 $"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}{variable.Name}",
@@ -96,7 +100,8 @@ public sealed class RuntimeOutputCaptureCompiler(IRuntimeDurableValueStorageDriv
                     [RuntimeMetadataKeys.VariableName] = variable.Name,
                     [RuntimeMetadataKeys.StorageDriverKey] = definition.StorageDriverKey
                 },
-                definition.StorageDriverKey));
+                definition.StorageDriverKey,
+                conversionPlan));
         }
 
         return captures;

@@ -59,7 +59,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var resolution = new CausalActivityResultResolver().Resolve(reference, consumer, context.RuntimeView);
         if (resolution is null)
         {
-            var unavailable = ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy);
+            var unavailable = ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, binding.EffectivePolicy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = unavailable
@@ -71,7 +71,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = Retype(result, binding.TargetType)
+                Envelope = Retype(result, binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
 
@@ -86,7 +86,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
 
         if (result.Presence == ValuePresence.ExplicitNull)
         {
-            var projectedNull = ValueEnvelope.Null(binding.TargetType, projectedPolicy);
+            var projectedNull = ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, projectedPolicy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = projectedNull
@@ -94,7 +94,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         }
         if (!result.InlineValue.HasValue && result.ExternalReference is not null)
         {
-            var externalProjectionSource = ValueEnvelope.External(binding.TargetType, result.ExternalReference, projectedPolicy);
+            var externalProjectionSource = ValueEnvelope.External(
+                binding.ConversionPlan?.SourceType ?? binding.TargetType,
+                result.ExternalReference,
+                projectedPolicy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = externalProjectionSource
@@ -110,9 +113,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
                 throw new InvalidOperationException($"Committed result from producer node '{reference.ProducerExecutableNodeId}' has no projection path '{projection.Path}'.");
         }
 
+        var projectedType = binding.ConversionPlan?.SourceType ?? binding.TargetType;
         var projectedEnvelope = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-            ? ValueEnvelope.Null(binding.TargetType, projectedPolicy)
-            : ValueEnvelope.Inline(binding.TargetType, value, projectedPolicy);
+            ? ValueEnvelope.Null(projectedType, projectedPolicy)
+            : ValueEnvelope.Inline(projectedType, value, projectedPolicy);
         return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
         {
             Envelope = projectedEnvelope

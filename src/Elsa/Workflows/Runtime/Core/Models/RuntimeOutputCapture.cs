@@ -13,7 +13,8 @@ public sealed class RuntimeOutputCapture
         DurableValueStorage storage,
         bool captureOnSuccessfulCompletion,
         IReadOnlyDictionary<string, string>? metadata = null,
-        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json)
+        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json,
+        ValueConversionPlan? conversionPlan = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputName);
         ArgumentException.ThrowIfNullOrWhiteSpace(valueId);
@@ -34,6 +35,7 @@ public sealed class RuntimeOutputCapture
         CaptureOnSuccessfulCompletion = captureOnSuccessfulCompletion;
         StorageDriverKey = storageDriverKey;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        ConversionPlan = conversionPlan;
     }
 
     public string OutputName { get; }
@@ -44,4 +46,6 @@ public sealed class RuntimeOutputCapture
     public bool CaptureOnSuccessfulCompletion { get; }
     public string StorageDriverKey { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    /// <summary>Null preserves the legacy identity/retyping behavior of artifacts published before conversion plans.</summary>
+    public ValueConversionPlan? ConversionPlan { get; }
 }

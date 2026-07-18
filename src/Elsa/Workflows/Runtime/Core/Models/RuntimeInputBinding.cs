@@ -22,7 +22,8 @@ public sealed class RuntimeInputBinding
         RuntimeVariableReference? variable = null,
         RuntimeActivityResultReference? activityResult = null,
         RuntimeExpressionBinding? expression = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        ValueConversionPlan? conversionPlan = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputKey);
         ArgumentNullException.ThrowIfNull(targetType);
@@ -45,6 +46,7 @@ public sealed class RuntimeInputBinding
         ActivityResult = activityResult;
         Expression = expression;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        ConversionPlan = conversionPlan;
     }
 
     public string InputName { get; }
@@ -59,6 +61,8 @@ public sealed class RuntimeInputBinding
     public JsonElement? LiteralValue { get; }
     public RuntimeExpressionBinding? Expression { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    /// <summary>Null preserves the legacy identity/retyping behavior of artifacts published before conversion plans.</summary>
+    public ValueConversionPlan? ConversionPlan { get; }
 
     private static void ValidateCanonical(
         RuntimeInputBindingSource source,
