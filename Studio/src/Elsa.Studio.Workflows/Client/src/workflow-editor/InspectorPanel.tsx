@@ -223,14 +223,19 @@ function ReusableActivityIdentity({
     && recommendation.definitionId === (version?.definition.definitionId ?? definitionId)
     && recommendation.versionId !== node.activityVersionId);
   const recommendedVersion = upgradeAvailable ? recommendation : null;
+  const exactDefinitionId = version?.definition.definitionId ?? definitionId;
+  const exactVersionId = version?.versionId ?? node.activityVersionId;
+  const sourceUrl = `/workflows/activity-definitions?definition=${encodeURIComponent(exactDefinitionId)}&section=versions&version=${encodeURIComponent(exactVersionId)}`;
+  const draftUrl = `${sourceUrl}&createDraftFrom=${encodeURIComponent(exactVersionId)}`;
   return (
     <section className="wf-reusable-identity" aria-label="Reusable activity identity">
       <h4>Reusable boundary</h4>
+      <p className="wf-muted">This placed occurrence is pinned and read-only. Authoring happens in a separate Activity Definition draft.</p>
       <dl>
         <dt>Definition ID</dt>
-        <dd>{version?.definition.definitionId ?? definitionId}</dd>
+        <dd>{exactDefinitionId}</dd>
         <dt>Version ID</dt>
-        <dd>{version?.versionId ?? node.activityVersionId}</dd>
+        <dd>{exactVersionId}</dd>
         <dt>Exact version</dt>
         <dd>{version?.version ?? semanticVersion ?? "Unknown"}</dd>
         {version ? (
@@ -246,6 +251,10 @@ function ReusableActivityIdentity({
       </dl>
       {status === "loading" ? <p className="wf-muted" role="status">Loading exact version details…</p> : null}
       {status === "failed" ? <p className="wf-muted" role="status">Exact authorized version details are unavailable.</p> : null}
+      <div className="wf-reusable-actions">
+        <a href={sourceUrl}>Open exact source definition</a>
+        <a href={draftUrl}>Create a separate draft</a>
+      </div>
       {recommendedVersion ? <p className="wf-upgrade-available">Recommended v{recommendedVersion.version} available</p> : null}
     </section>
   );

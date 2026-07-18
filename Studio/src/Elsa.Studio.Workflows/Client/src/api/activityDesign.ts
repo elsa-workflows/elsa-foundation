@@ -19,11 +19,16 @@ import type {
   ActivityDefinitionDraftView,
   ActivityDefinitionDraftManagementView,
   ActivityDefinitionManagementView,
+  ActivityDefinitionForkPreview,
+  ActivityDefinitionForkReceipt,
   ActivityDefinitionVersionManagementView,
   ActivityDefinitionVersionView,
   ActivityManagementPage,
+  CreateActivityDefinitionDraftRequest,
   CreateActivityDefinitionRequest,
   CreateActivityDefinitionResponse,
+  MigrateActivityDefinitionDraftRequest,
+  PreviewActivityDefinitionForkRequest,
   RecommendedActivityDefinition,
   RecommendedActivityDefinitionPage,
   ReplaceActivityDefinitionDraftRequest
@@ -250,6 +255,69 @@ export async function getActivityAuthoringCapabilities(context: StudioEndpointCo
 export async function createActivityDefinition(context: StudioEndpointContext, request: CreateActivityDefinitionRequest) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definitions");
   return context.http.postJson<CreateActivityDefinitionResponse>(path, request);
+}
+
+export async function createActivityDefinitionDraft(
+  context: StudioEndpointContext,
+  definitionId: string,
+  request: CreateActivityDefinitionDraftRequest
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-drafts", { definitionId });
+  return context.http.postJson<ActivityDefinitionDraftView>(path, request);
+}
+
+export async function migrateActivityDefinitionDraft(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: MigrateActivityDefinitionDraftRequest
+) {
+  const draftPath = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-draft", { draftId });
+  return context.http.postJson<ActivityDefinitionDraftView>(`${draftPath}/migrate-provider`, request);
+}
+
+export async function previewActivityDefinitionFork(
+  context: StudioEndpointContext,
+  definitionId: string,
+  request: PreviewActivityDefinitionForkRequest
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.activityDesign,
+    "activity-definition-fork-preview",
+    { definitionId }
+  );
+  return context.http.postJson<ActivityDefinitionForkPreview>(path, request);
+}
+
+export async function applyActivityDefinitionFork(
+  context: StudioEndpointContext,
+  candidateId: string,
+  requestFingerprint: string,
+  idempotencyKey: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.activityDesign,
+    "activity-definition-fork-apply",
+    { candidateId }
+  );
+  return context.http.postJson<ActivityDefinitionForkReceipt>(path, {
+    requestFingerprint,
+    idempotencyKey
+  });
+}
+
+export async function getActivityDefinitionForkStatus(
+  context: StudioEndpointContext,
+  idempotencyKey: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.activityDesign,
+    "activity-definition-fork-status",
+    { idempotencyKey }
+  );
+  return context.http.getJson<ActivityDefinitionForkReceipt>(path);
 }
 
 export async function getActivityDefinitionDraft(
