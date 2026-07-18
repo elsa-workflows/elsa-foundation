@@ -67,10 +67,13 @@ describe("studio auth mounting", () => {
 
     const { container, flush, unmount } = renderBoundary(manager);
 
-    await flush();
-    await flush();
-
-    expect(container.textContent).toContain("Unable to sign in");
+    // The error UI needs two settled rejections (initialize, then the login the anonymous
+    // session triggers), each followed by a passive-effect/render cycle whose scheduling
+    // races a fixed flush count — poll instead of counting flushes.
+    await vi.waitFor(async () => {
+      await flush();
+      expect(container.textContent).toContain("Unable to sign in");
+    });
     expect(container.textContent).toContain("authentication service may be unavailable");
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
 
@@ -79,9 +82,10 @@ describe("studio auth mounting", () => {
     expect(retryButton).toBeDefined();
 
     flushSync(() => retryButton?.click());
-    await flush();
-
-    expect(manager.login).toHaveBeenCalledTimes(2);
+    await vi.waitFor(async () => {
+      await flush();
+      expect(manager.login).toHaveBeenCalledTimes(2);
+    });
     expect(container.textContent).toContain("Signing in");
 
     await unmount();
