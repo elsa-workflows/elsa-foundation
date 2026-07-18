@@ -93,6 +93,56 @@ test("source-owned Activity Definition history stays exact and offers no denied 
   await expect(page.getByRole("button", { name: /Create draft from/ })).toHaveCount(0);
 });
 
+test("source-owned Activity Definition fork reviews and applies only the recommended active version", async ({ page }) => {
+  const state = await mockActivityFork(page);
+  await page.goto("/workflows/activity-definitions?definition=definition-1");
+
+  await page.getByRole("button", { name: "Fork recommended version" }).click();
+  const request = page.getByRole("dialog", { name: "Fork recommended activity version" });
+  await expect(request.getByText("Studio does not offer an explicit version override")).toBeVisible();
+  await expect(request.getByText("version-1")).toBeVisible();
+  await expect(request.getByRole("combobox")).toHaveCount(1);
+  await request.getByRole("button", { name: "Create fork preview" }).click();
+
+  const review = page.getByRole("dialog", { name: "Review activity fork" });
+  await expect(review.getByText("elsa.user.invoice-evaluator.forked")).toBeVisible();
+  await expect(review.getByText("definition-fork")).toBeVisible();
+  await expect(review.getByText("draft-fork")).toBeVisible();
+  await review.getByRole("button", { name: "Apply reviewed fork" }).click();
+
+  await expect(page).toHaveURL(/definition=definition-fork.*section=editor.*draft=draft-fork/);
+  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  expect(state.previewRequests).toHaveLength(1);
+  expect(state.previewRequests[0]).toMatchObject({
+    sourceVersionId: "version-1",
+    targetProviderKey: "elsa.activity-graph",
+    targetProviderSchemaVersion: "1"
+  });
+  expect(state.applyRequests).toHaveLength(1);
+});
+
+test("unsupported fork conversion and atomic collision preserve the source without opening a draft", async ({ page }) => {
+  const unsupported = await mockActivityFork(page, "unsupported");
+  await page.goto("/workflows/activity-definitions?definition=definition-1");
+  await page.getByRole("button", { name: "Fork recommended version" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create fork preview" }).click();
+
+  await expect(page.getByRole("alert")).toContainText("exact provider conversion is unsupported");
+  await expect(page).toHaveURL(/definition=definition-1/);
+  expect(unsupported.applyRequests).toHaveLength(0);
+
+  await page.unrouteAll({ behavior: "wait" });
+  const collision = await mockActivityFork(page, "collision");
+  await page.goto("/workflows/activity-definitions?definition=definition-1");
+  await page.getByRole("button", { name: "Fork recommended version" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create fork preview" }).click();
+  await page.getByRole("dialog", { name: "Review activity fork" }).getByRole("button", { name: "Apply reviewed fork" }).click();
+
+  await expect(page.getByRole("alert")).toContainText("reserved target identity is no longer available");
+  await expect(page).toHaveURL(/definition=definition-1/);
+  expect(collision.applyRequests).toHaveLength(1);
+});
+
 test("draft management dialog traps and restores focus, supports keyboard clone submission, and fits target layouts", async ({ page }) => {
   const state = await mockActivityDraftManagement(page);
   for (const width of [320, 768, 1024, 1440]) {
@@ -544,6 +594,101 @@ function browserAuthoringCapabilities() {
     types: [],
     storageDriverKeys: [],
     snapshotFingerprint: "sha256:browser"
+  };
+}
+
+async function mockActivityFork(page: Page, outcome: "success" | "unsupported" | "collision" = "success") {
+  const previewRequests: unknown[] = [];
+  const applyRequests: unknown[] = [];
+  const source = {
+    ...definition(),
+    definition: {
+      ...definition().definition,
+      contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+    },
+    lifecycle: {
+      ...definition().lifecycle,
+      draftCount: 0,
+      head: { ...definition().lifecycle.head, providerKey: "elsa.activity-graph" },
+      recommendation: { ...definition().lifecycle.recommendation, providerKey: "elsa.activity-graph" }
+    },
+    actions: [{ action: "fork-definition", allowed: true }]
+  };
+  await page.route("**/capabilities", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
+      { rel: "activity-definitions", href: "design/activities/definitions" },
+      { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
+      { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+      { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
+      { rel: "activity-definition-fork-preview", href: "design/activities/definitions/{definitionId}/fork-previews", templated: true },
+      { rel: "activity-definition-fork-apply", href: "design/activities/fork-candidates/{candidateId}/apply", templated: true },
+      { rel: "activity-definition-fork-status", href: "design/activities/forks/{idempotencyKey}", templated: true }
+    ] }] })
+  }));
+  await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(source) }));
+  await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(browserAuthoringCapabilities()) }));
+  await page.route("**/design/activities/definitions/definition-1/fork-previews", async route => {
+    previewRequests.push(route.request().postDataJSON());
+    if (outcome === "unsupported") {
+      return route.fulfill({
+        status: 422,
+        contentType: "application/problem+json",
+        body: JSON.stringify({ title: "Unsupported migration", errorCode: "activity.provider.migration-unsupported" })
+      });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(browserForkPreview()) });
+  });
+  await page.route("**/design/activities/fork-candidates/candidate-signed/apply", async route => {
+    const request = route.request().postDataJSON() as { idempotencyKey: string };
+    applyRequests.push(request);
+    if (outcome === "collision") {
+      return route.fulfill({
+        status: 409,
+        contentType: "application/problem+json",
+        body: JSON.stringify({ title: "Identity collision", errorCode: "activity.fork.collision" })
+      });
+    }
+    return route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ ...browserForkReceipt(), idempotencyKey: request.idempotencyKey })
+    });
+  });
+  await page.route("**/design/activities/drafts/draft-fork", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    ...managementDraftDetail("draft-fork", null, "version-1"),
+    definitionId: "definition-fork"
+  }) }));
+  return { previewRequests, applyRequests };
+}
+
+function browserForkPreview() {
+  return {
+    candidateId: "candidate-signed",
+    requestFingerprint: `sha256:${"a".repeat(64)}`,
+    status: "Reserved",
+    accessBinding: { fingerprint: `sha256:${"b".repeat(64)}` },
+    source: { definitionId: "definition-1", versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1", providerFingerprint: `sha256:${"c".repeat(64)}` },
+    presentation: { category: "Finance", displayName: "Invoice evaluator", description: "Evaluates invoice policy." },
+    target: { definitionId: "definition-fork", activityTypeKey: "elsa.user.invoice-evaluator.forked", draftId: "draft-fork", providerKey: "elsa.activity-graph", providerSchemaVersion: "1", manifestFingerprint: `sha256:${"d".repeat(64)}`, contract: browserContract() },
+    providerMigration: { sourceProviderKey: "elsa.activity-graph", sourceProviderSchemaVersion: "1", targetProviderKey: "elsa.activity-graph", targetProviderSchemaVersion: "1", targetManifestFingerprint: `sha256:${"d".repeat(64)}`, diagnostics: [] },
+    contractComparison: { sourceFingerprint: `sha256:${"e".repeat(64)}`, targetFingerprint: `sha256:${"e".repeat(64)}`, isCompatible: true, changes: [] },
+    createdAt: "2026-07-17T10:00:00Z",
+    expiresAt: "2026-07-17T10:15:00Z"
+  };
+}
+
+function browserForkReceipt() {
+  return {
+    idempotencyKey: "activity-fork-apply-browser",
+    candidateId: "candidate-signed",
+    requestFingerprint: `sha256:${"a".repeat(64)}`,
+    outcome: "Applied",
+    accessBinding: { fingerprint: `sha256:${"b".repeat(64)}` },
+    definition: { ...definition().definition, definitionId: "definition-fork", activityTypeKey: "elsa.user.invoice-evaluator.forked", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, forkedFrom: { definitionId: "definition-1", versionId: "version-1", version: "1.0.0" } },
+    draft: { ...draft().draft, draftId: "draft-fork", definitionId: "definition-fork", revision: 1 },
+    appliedAt: "2026-07-17T10:01:00Z"
   };
 }
 

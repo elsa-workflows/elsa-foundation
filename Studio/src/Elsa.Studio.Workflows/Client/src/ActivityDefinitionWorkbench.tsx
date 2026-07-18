@@ -6,6 +6,7 @@ import type { ActivityDefinitionDraftManagementView, ActivityDefinitionManagemen
 import { activityDesignKeys, classifyActivityDefinitionReadFailure, redactActivityDefinitionChildCache, redactActivityDefinitionManagementCache, useActivityDefinition, useActivityDefinitionDraft, useActivityDefinitionDrafts, useActivityDefinitionVersion, useActivityDefinitionVersions } from "./api/activityDesign";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { ActivityDefinitionDraftDialog, isActionAllowed } from "./ActivityDefinitionDraftManagementDialogs";
+import { ActivityDefinitionForkDialog } from "./ActivityDefinitionForkDialog";
 
 type Section = "overview" | "drafts" | "versions" | "relationships";
 type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; draftActionVersionId?: string | null };
@@ -32,6 +33,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const [draftSelectionFailure, setDraftSelectionFailure] = useState<{ id: string; kind: "unavailable" | "forbidden" | "not-found" } | null>(null);
   const [versionSelectionFailure, setVersionSelectionFailure] = useState<{ id: string; kind: "unavailable" | "forbidden" | "not-found" } | null>(null);
   const [draftDialogSource, setDraftDialogSource] = useState<string | null | false>(false);
+  const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const requestedActionHandled = useRef(false);
   const detailQuery = useActivityDefinition(context, definitionId);
   const directFailure = detailQuery.error ? classifyActivityDefinitionReadFailure(detailQuery.error) : null;
@@ -119,15 +121,19 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
 
   const designOwned = detail.definition.contentAuthority.kind === "Design";
   const canCreateDraft = designOwned && isActionAllowed(detail.actions, "create-draft");
-  const forkAdvertisedByManagement = !designOwned && isActionAllowed(detail.actions, "fork-definition");
+  const forkAllowed = !designOwned && isActionAllowed(detail.actions, "fork-definition");
+  const recommendedActiveVersion = detail.lifecycle.recommendation?.lifecycle === "Active"
+    ? detail.lifecycle.recommendation
+    : null;
+  const canFork = forkAllowed && Boolean(recommendedActiveVersion);
 
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
     <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}><ArrowLeft size={16} aria-hidden /> Activity Definitions</button>
-    <header className="ad-workbench-header"><div><span className="ad-kicker">Stable Activity Definition</span><h1 id="activity-definition-title">{detail.definition.displayName}</h1><p>{detail.definition.description || "No description provided."}</p></div><div className="ad-header-actions">{canCreateDraft ? <button type="button" onClick={() => setDraftDialogSource(null)}>Create draft</button> : null}<button type="button" className="ad-primary-action" onClick={() => { setPrivacyFailure(null); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}><RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}</button></div></header>
+    <header className="ad-workbench-header"><div><span className="ad-kicker">Stable Activity Definition</span><h1 id="activity-definition-title">{detail.definition.displayName}</h1><p>{detail.definition.description || "No description provided."}</p></div><div className="ad-header-actions">{canCreateDraft ? <button type="button" onClick={() => setDraftDialogSource(null)}>Create draft</button> : null}{canFork ? <button type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</button> : null}<button type="button" className="ad-primary-action" onClick={() => { setPrivacyFailure(null); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}><RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}</button></div></header>
     {detailQuery.isError ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained definition evidence</strong><span>Retry before relying on lifecycle changes.</span></div></div> : null}
     {!designOwned ? <div className="ad-readonly-banner" role="status"><strong>Source-owned and read-only</strong><span>Studio preserves this authority's exact immutable versions. Editing requires an authorized fork into a new Design-owned identity.</span></div> : null}
-    {forkAdvertisedByManagement ? <div className="ad-unavailable-note" role="status"><strong>Fork preview unavailable</strong><span>This backend does not advertise the authoritative fork preview and reservation contract required by Studio. No direct endpoint fallback is used.</span></div> : null}
+    {forkAllowed && !recommendedActiveVersion ? <div className="ad-unavailable-note" role="status"><strong>No recommended active version</strong><span>Forking is unavailable until the source definition recommends one active immutable version. Studio does not offer an explicit version override.</span></div> : null}
     <dl className="ad-identity-strip">
       <div><dt>Activity Type Key</dt><dd><code>{detail.definition.activityTypeKey}</code></dd></div>
       <div><dt>Definition identity</dt><dd><code>{detail.definition.definitionId}</code></dd></div>
@@ -148,6 +154,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
     </section>
   </main>
   {draftDialogSource !== false ? <ActivityDefinitionDraftDialog context={context} definitionId={definitionId} activityEditors={activityEditors} initialSourceVersionId={draftDialogSource} onClose={() => setDraftDialogSource(false)} onCreated={draft => { setDraftDialogSource(false); void queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources }); onNavigate({ definitionId, section: "editor", draftId: draft.draftId, versionId: null }); }} /> : null}
+  {forkDialogOpen && recommendedActiveVersion ? <ActivityDefinitionForkDialog context={context} definition={detail} activityEditors={activityEditors} onClose={() => setForkDialogOpen(false)} onApplied={receipt => { setForkDialogOpen(false); void queryClient.invalidateQueries({ queryKey: activityDesignKeys.all }); onNavigate({ definitionId: receipt.definition.definitionId, section: "editor", draftId: receipt.draft.draftId, versionId: null }); }} /> : null}
   </>;
 }
 
@@ -175,7 +182,7 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
       ? { ...exactQuery.data, actions: listedSelection?.actions ?? exactQuery.data.actions }
       : listedSelection;
   const actionAllowed = Boolean(designOwned && listedSelection && isActionAllowed(listedSelection.actions, "clone-draft"));
-  return <div><SectionHeading icon={<Layers3 size={18} />} title="Versions" description="Every row is an immutable semantic version. Recommendation remains an explicit definition-level decision." />{selected ? <SelectedVersion item={selected} actionLabel={designOwned ? "Create draft from this exact version" : "Fork this exact version"} actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selected.version.versionId)} /> : <ExactSelectionState kind="version" selected={Boolean(selectedVersionId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized versions are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition versions">{data.items.map(item => <button key={item.version.versionId} type="button" className={item.version.versionId === selectedVersionId ? "is-selected" : ""} onClick={() => onSelect(item.version.versionId)}><span><strong>{item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong><small>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</small></span><span><strong>{item.providerKey}</strong><small>Schema {item.providerSchemaVersion}</small></span></button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
+  return <div><SectionHeading icon={<Layers3 size={18} />} title="Versions" description="Every row is an immutable semantic version. Recommendation remains an explicit definition-level decision." />{selected ? <SelectedVersion item={selected} actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selected.version.versionId)} /> : <ExactSelectionState kind="version" selected={Boolean(selectedVersionId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized versions are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition versions">{data.items.map(item => <button key={item.version.versionId} type="button" className={item.version.versionId === selectedVersionId ? "is-selected" : ""} onClick={() => onSelect(item.version.versionId)}><span><strong>{item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong><small>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</small></span><span><strong>{item.providerKey}</strong><small>Schema {item.providerSchemaVersion}</small></span></button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
 }
 
 function RelationshipsSection({ onOpen }: { onOpen(section: Section): void }) {

@@ -324,3 +324,70 @@ export interface ActivityDefinitionVersionView {
   publishedAt: string;
   [key: string]: unknown;
 }
+
+export interface PreviewActivityDefinitionForkRequest {
+  idempotencyKey: string;
+  sourceVersionId: string;
+  category: string;
+  displayName: string;
+  description: string | null;
+  targetProviderKey: string;
+  targetProviderSchemaVersion: string;
+}
+
+export interface ActivityDefinitionForkPreview {
+  candidateId: string;
+  requestFingerprint: string;
+  status: string;
+  accessBinding: { fingerprint: string };
+  source: {
+    definitionId: string;
+    versionId: string;
+    version: string;
+    lifecycle: string;
+    providerKey: string;
+    providerSchemaVersion: string;
+    providerFingerprint: string;
+  };
+  presentation: {
+    category: string;
+    displayName: string;
+    description?: string | null;
+  };
+  target: {
+    definitionId: string;
+    activityTypeKey: string;
+    draftId: string;
+    providerKey: string;
+    providerSchemaVersion: string;
+    manifestFingerprint: string;
+    contract: ActivityContract;
+  };
+  providerMigration: {
+    sourceProviderKey: string;
+    sourceProviderSchemaVersion: string;
+    targetProviderKey: string;
+    targetProviderSchemaVersion: string;
+    targetManifestFingerprint: string;
+    diagnostics: StudioActivityDiagnostic[];
+  };
+  contractComparison: {
+    sourceFingerprint: string;
+    targetFingerprint: string;
+    isCompatible: boolean;
+    changes: Array<{ kind: string; referenceKey?: string | null; detail: string }>;
+  };
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface ActivityDefinitionForkReceipt {
+  idempotencyKey: string;
+  candidateId: string;
+  requestFingerprint: string;
+  outcome: string;
+  accessBinding: { fingerprint: string };
+  definition: ActivityDefinitionIdentity;
+  draft: ActivityDefinitionDraftManagementView["draft"];
+  appliedAt: string;
+}

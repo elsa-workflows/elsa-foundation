@@ -195,22 +195,134 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
-  it("does not probe a direct fork endpoint when management allows forking but preview reservation is unavailable", async () => {
+  it("does not offer an explicit fork version override when no recommended active version exists", async () => {
+    const source = {
+      ...definition({
+        contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+      }, [{ action: "fork-definition", allowed: true }]),
+      lifecycle: {
+        ...definition().lifecycle,
+        recommendation: { ...definition().lifecycle.recommendation!, lifecycle: "Revoked" }
+      }
+    };
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true, true);
+      if (url === "/design/activities/definitions/definition-1") return source;
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1");
+
+    await waitForText(rendered.container, "No recommended active version");
+    expect(rendered.container.textContent).toContain("does not offer an explicit version override");
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Fork"))).toBe(false);
+    await rendered.unmount();
+  });
+
+  it("fails closed without probing a direct fork path when the preview relation is unavailable", async () => {
     const source = definition({
       contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
     }, [{ action: "fork-definition", allowed: true }]);
     const postJson = vi.fn();
     const getJson = vi.fn(async (url: string) => {
-      if (url === "/capabilities") return capabilities();
+      if (url === "/capabilities") return capabilities(true);
       if (url === "/design/activities/definitions/definition-1") return source;
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
       throw new Error(`Unexpected GET ${url}`);
     });
-    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1", postJson);
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1", postJson, [graphContribution()]);
 
-    await waitForText(rendered.container, "Fork preview unavailable");
-    expect(rendered.container.textContent).toContain("No direct endpoint fallback is used");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Fork"))).toBe(false);
+    await waitForText(rendered.container, "Fork recommended version");
+    click(buttonByText(rendered.container, "Fork recommended version"));
+    await waitForText(rendered.container, "Studio does not offer an explicit version override");
+    click(await enabledButton(rendered.container, "Create fork preview"));
+    await waitForText(rendered.container, "fork preview could not be established");
     expect(postJson).not.toHaveBeenCalled();
+    await rendered.unmount();
+  });
+
+  it("reviews and atomically applies the recommended active version without offering an explicit version picker", async () => {
+    const source = definition({
+      contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+    }, [{ action: "fork-definition", allowed: true }]);
+    const postJson = vi.fn(async (url: string, _body: unknown) => {
+      if (url === "/design/activities/definitions/definition-1/fork-previews") return forkPreview();
+      if (url === "/design/activities/fork-candidates/candidate-signed/apply") return {
+        ...forkReceipt(),
+        idempotencyKey: (_body as { idempotencyKey: string }).idempotencyKey
+      };
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true, true);
+      if (url === "/design/activities/definitions/definition-1") return source;
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      if (url === "/design/activities/drafts/draft-fork") return draftDetail({ draftId: "draft-fork" });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1", postJson, [graphContribution()]);
+
+    await waitForText(rendered.container, "Fork recommended version");
+    click(buttonByText(rendered.container, "Fork recommended version"));
+    await waitForText(rendered.container, "Recommended version");
+    expect(rendered.container.querySelector("select")?.textContent).not.toContain("Version");
+    click(await enabledButton(rendered.container, "Create fork preview"));
+
+    await waitForText(rendered.container, "elsa.user.invoice-evaluator.forked");
+    expect(rendered.container.textContent).toContain("definition-fork");
+    expect(rendered.container.textContent).toContain("draft-fork");
+    click(buttonByText(rendered.container, "Apply reviewed fork"));
+
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-fork"));
+    expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-fork");
+    expect(postJson.mock.calls[0][0]).toBe("/design/activities/definitions/definition-1/fork-previews");
+    expect(postJson.mock.calls[0][1]).toMatchObject({
+      sourceVersionId: "version-1",
+      category: "Finance",
+      displayName: "Invoice evaluator",
+      targetProviderKey: "visual-graph",
+      targetProviderSchemaVersion: "1"
+    });
+    expect(postJson.mock.calls[1][1]).toMatchObject({
+      requestFingerprint: `sha256:${"a".repeat(64)}`
+    });
+    await rendered.unmount();
+  });
+
+  it("reconciles a lost successful Apply response through the advertised fork status relation", async () => {
+    const source = definition({
+      contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+    }, [{ action: "fork-definition", allowed: true }]);
+    const postJson = vi.fn(async (url: string, _body: unknown) => {
+      if (url.endsWith("/fork-previews")) return forkPreview();
+      if (url.includes("/fork-candidates/")) throw new StudioHttpError(
+        500,
+        "Outcome unknown",
+        null,
+        { errorCode: "activity.fork.outcome-unknown" }
+      );
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true, true);
+      if (url === "/design/activities/definitions/definition-1") return source;
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      if (url.startsWith("/design/activities/forks/")) return {
+        ...forkReceipt(),
+        idempotencyKey: decodeURIComponent(url.slice("/design/activities/forks/".length))
+      };
+      if (url === "/design/activities/drafts/draft-fork") return draftDetail({ draftId: "draft-fork" });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1", postJson, [graphContribution()]);
+
+    await waitForText(rendered.container, "Fork recommended version");
+    click(buttonByText(rendered.container, "Fork recommended version"));
+    click(await enabledButton(rendered.container, "Create fork preview"));
+    await waitForText(rendered.container, "Apply reviewed fork");
+    click(buttonByText(rendered.container, "Apply reviewed fork"));
+
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-fork"));
+    expect(getJson.mock.calls.some(([url]) => String(url).startsWith("/design/activities/forks/activity-fork-apply-"))).toBe(true);
     await rendered.unmount();
   });
 
@@ -389,7 +501,7 @@ function renderPage(
   };
 }
 
-function capabilities(includeAuthoring = false) {
+function capabilities(includeAuthoring = false, includeFork = false) {
   return { capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
     { rel: "activity-definitions", href: "design/activities/definitions" },
     ...(includeAuthoring ? [{ rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" }] : []),
@@ -397,7 +509,12 @@ function capabilities(includeAuthoring = false) {
     { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
-    { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
+    { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
+    ...(includeFork ? [
+      { rel: "activity-definition-fork-preview", href: "design/activities/definitions/{definitionId}/fork-previews", templated: true },
+      { rel: "activity-definition-fork-apply", href: "design/activities/fork-candidates/{candidateId}/apply", templated: true },
+      { rel: "activity-definition-fork-status", href: "design/activities/forks/{idempotencyKey}", templated: true }
+    ] : [])
   ] }] };
 }
 
@@ -429,9 +546,47 @@ function emptyContract() { return { contractSchemaVersion: "1", inputs: [], outp
 function authoringCapabilities() { return { contractSchemaVersions: ["1"], activityTypeKeyRules: { serverGenerated: true, allowsPreCreationOverride: false, immutable: true, prefix: "elsa.user", pattern: "^elsa\\\\.user\\\\..+$", maximumLength: 160, collisionScope: "tenant" }, providers: [{ providerKey: "visual-graph", displayName: "Visual graph", manifestSchemas: [{ schemaVersion: "1", isAuthorable: true, migratableFromSchemaVersions: ["1"] }], requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] }], types: [], storageDriverKeys: [], snapshotFingerprint: "sha256:test" }; }
 function graphContribution(): StudioActivityDefinitionImplementationEditorContribution { return { id: "visual-graph", providerKey: "visual-graph", providerSchemaVersion: "1", createInitialImplementation: () => ({ payload: { root: null }, layout: [] }), component: () => <div>Visual graph editor</div> }; }
 
+function forkPreview() {
+  return {
+    candidateId: "candidate-signed",
+    requestFingerprint: `sha256:${"a".repeat(64)}`,
+    status: "Reserved",
+    accessBinding: { fingerprint: `sha256:${"b".repeat(64)}` },
+    source: { definitionId: "definition-1", versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "visual-graph", providerSchemaVersion: "1", providerFingerprint: `sha256:${"c".repeat(64)}` },
+    presentation: { category: "Finance", displayName: "Invoice evaluator", description: "Evaluates invoice policy." },
+    target: { definitionId: "definition-fork", activityTypeKey: "elsa.user.invoice-evaluator.forked", draftId: "draft-fork", providerKey: "visual-graph", providerSchemaVersion: "1", manifestFingerprint: `sha256:${"d".repeat(64)}`, contract: emptyContract() },
+    providerMigration: { sourceProviderKey: "visual-graph", sourceProviderSchemaVersion: "1", targetProviderKey: "visual-graph", targetProviderSchemaVersion: "1", targetManifestFingerprint: `sha256:${"d".repeat(64)}`, diagnostics: [] },
+    contractComparison: { sourceFingerprint: `sha256:${"e".repeat(64)}`, targetFingerprint: `sha256:${"e".repeat(64)}`, isCompatible: true, changes: [] },
+    createdAt: "2026-07-17T10:00:00Z",
+    expiresAt: "2026-07-17T10:15:00Z"
+  };
+}
+
+function forkReceipt() {
+  return {
+    idempotencyKey: "activity-fork-apply-test",
+    candidateId: "candidate-signed",
+    requestFingerprint: `sha256:${"a".repeat(64)}`,
+    outcome: "Applied",
+    accessBinding: { fingerprint: `sha256:${"b".repeat(64)}` },
+    definition: { ...definition().definition, definitionId: "definition-fork", activityTypeKey: "elsa.user.invoice-evaluator.forked", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, forkedFrom: { definitionId: "definition-1", versionId: "version-1", version: "1.0.0" } },
+    draft: { ...draft().draft, draftId: "draft-fork", definitionId: "definition-fork", revision: 1 },
+    appliedAt: "2026-07-17T10:01:00Z"
+  };
+}
+
 function buttonByText(container: HTMLElement, text: string) {
   const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent?.includes(text));
   if (!button) throw new Error(`Button '${text}' not found.`);
+  return button;
+}
+
+async function enabledButton(container: HTMLElement, text: string) {
+  let button!: HTMLButtonElement;
+  await waitFor(() => {
+    button = buttonByText(container, text) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+  });
   return button;
 }
 
