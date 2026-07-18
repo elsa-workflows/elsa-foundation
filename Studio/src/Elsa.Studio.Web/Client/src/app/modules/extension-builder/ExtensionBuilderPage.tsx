@@ -133,7 +133,7 @@ function ExtensionBuilderView() {
 function backendManagementUnavailableMessage(unavailable: BackendManagementUnavailable | null): string {
   if (unavailable?.detail) return unavailable.detail;
   switch (unavailable?.kind) {
-    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
+    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendServerBaseUrl (or Studio:BackendBaseUrl for a shared URL) and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "unreachable": return "The privileged host-management surface could not be reached.";
     case "degraded": return "The privileged host-management surface is degraded.";

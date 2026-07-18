@@ -17,6 +17,7 @@ public sealed class StudioRuntimeScriptTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Studio:BackendBaseUrl"] = "https://backend.example/",
+                ["Studio:BackendServerBaseUrl"] = "http://elsa-server:8080",
                 // Configured server-side — the bridge needs it — but it must never leak into the browser script.
                 ["Studio:BackendModuleManagementApiKey"] = ManagementKey,
                 ["Studio:Auth:Enabled"] = "true"
@@ -50,6 +51,7 @@ public sealed class StudioRuntimeScriptTests
         Assert.Contains(StudioRuntimeScript.GlobalName, script);
         Assert.Contains("backendBaseUrl", script);
         Assert.Contains("https://backend.example/", script);
+        Assert.DoesNotContain("http://elsa-server:8080", script);
         Assert.Contains("\"enabled\":true", script);
     }
 }

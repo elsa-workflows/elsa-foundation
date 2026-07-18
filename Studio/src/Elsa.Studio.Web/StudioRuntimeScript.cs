@@ -19,7 +19,9 @@ internal static class StudioRuntimeScript
     public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration) =>
         new()
         {
-            ["backendBaseUrl"] = configuration["Studio:BackendBaseUrl"] ?? string.Empty,
+            // This is the browser-facing URL. Server-side calls use Studio:BackendServerBaseUrl when supplied, with
+            // Studio:BackendBaseUrl as the backwards-compatible single-host fallback.
+            ["backendBaseUrl"] = configuration[StudioBackendManagementOptions.BackendBaseUrlConfigurationKey] ?? string.Empty,
             // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry) against the
             // backend identity endpoints. Omitted endpoints fall back to the SDK defaults (`/_elsa/identity/token`);
             // when Enabled is false the shell keeps booting anonymously.

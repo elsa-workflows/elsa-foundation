@@ -174,19 +174,19 @@ internal sealed class StudioBackendManagementClient(
     private static readonly BackendReadSurface ManagementRegistrySurface = new(
         Path: BackendRegistryPath,
         Description: "privileged host-management surface",
-        UnconfiguredDetail: "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Server module management.",
+        UnconfiguredDetail: "Privileged host management is not configured on the Studio host. Set Studio:BackendServerBaseUrl (or Studio:BackendBaseUrl for a shared URL) and Studio:BackendModuleManagementApiKey to enable Server module management.",
         AvailableDetail: "The privileged host-management surface is reachable.",
         UnauthorizedDetail: "The backend rejected the Studio management key (or its privileged host-management surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
-        UnreachableDetail: "The privileged host-management surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
+        UnreachableDetail: "The privileged host-management surface could not be reached. Check that the backend host is running and Studio:BackendServerBaseUrl (or Studio:BackendBaseUrl) is correct.",
         UnrecognizedPayloadDetail: "The backend responded but did not return a recognizable management registry.");
 
     private static readonly BackendReadSurface ExtensionBuilderCapabilitiesSurface = new(
         Path: BackendExtensionBuilderCapabilitiesPath,
         Description: "backend Extension Builder capabilities surface",
-        UnconfiguredDetail: "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.",
+        UnconfiguredDetail: "Privileged host management is not configured on the Studio host. Set Studio:BackendServerBaseUrl (or Studio:BackendBaseUrl for a shared URL) and Studio:BackendModuleManagementApiKey to enable Extension Builder.",
         AvailableDetail: "The backend Extension Builder capabilities are reachable.",
         UnauthorizedDetail: "The backend rejected the Studio management key (or the Extension Builder surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
-        UnreachableDetail: "The backend Extension Builder capabilities surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
+        UnreachableDetail: "The backend Extension Builder capabilities surface could not be reached. Check that the backend host is running and Studio:BackendServerBaseUrl (or Studio:BackendBaseUrl) is correct.",
         UnrecognizedPayloadDetail: "The backend responded but did not return recognizable Extension Builder capabilities.");
 
     public async Task<StudioBackendManagementStatus> GetManagementStatusAsync(CancellationToken cancellationToken)
@@ -377,12 +377,15 @@ internal sealed class StudioBackendManagementClient(
 }
 
 /// <summary>
-/// Server-side configuration for the Studio→backend management client, bound from <c>Studio:BackendBaseUrl</c> and
-/// <c>Studio:BackendModuleManagementApiKey</c>. Held server-side only; never emitted to the browser by the bridge.
+/// Server-side configuration for Studio→backend calls, bound from <c>Studio:BackendServerBaseUrl</c> and
+/// <c>Studio:BackendModuleManagementApiKey</c>. <c>Studio:BackendBaseUrl</c> remains the browser-facing URL and is
+/// used as the server-side fallback for single-host deployments. The management key is held server-side only and is
+/// never emitted to the browser by the bridge.
 /// </summary>
 internal sealed record StudioBackendManagementOptions(string? BackendBaseUrl, string? ManagementApiKey)
 {
     public const string BackendBaseUrlConfigurationKey = "Studio:BackendBaseUrl";
+    public const string BackendServerBaseUrlConfigurationKey = "Studio:BackendServerBaseUrl";
     public const string ManagementApiKeyConfigurationKey = "Studio:BackendModuleManagementApiKey";
 
     /// <summary>
@@ -395,12 +398,20 @@ internal sealed record StudioBackendManagementOptions(string? BackendBaseUrl, st
     /// closed to <c>unconfigured</c> with zero outbound calls (ADR 0037).</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(BackendBaseUrl) && !string.IsNullOrWhiteSpace(ManagementApiKey);
 
-    /// <summary>The backend base URL without its trailing slash, or null when unset — the browser-facing form every
-    /// bridge status DTO reports.</summary>
+    /// <summary>The resolved server-side backend URL without its trailing slash, or null when unset.</summary>
     public string? NormalizedBackendBaseUrl => string.IsNullOrWhiteSpace(BackendBaseUrl) ? null : BackendBaseUrl.TrimEnd('/');
 
+    /// <summary>
+    /// Resolves the URL used by Studio's server-side backend clients. The dedicated server URL is preferred; the
+    /// legacy/shared URL remains a fallback so existing deployments keep their current behaviour.
+    /// </summary>
+    public static string? ResolveServerBaseUrl(IConfiguration configuration) =>
+        string.IsNullOrWhiteSpace(configuration[BackendServerBaseUrlConfigurationKey])
+            ? configuration[BackendBaseUrlConfigurationKey]
+            : configuration[BackendServerBaseUrlConfigurationKey];
+
     public static StudioBackendManagementOptions FromConfiguration(IConfiguration configuration) =>
-        new(configuration[BackendBaseUrlConfigurationKey], configuration[ManagementApiKeyConfigurationKey]);
+        new(ResolveServerBaseUrl(configuration), configuration[ManagementApiKeyConfigurationKey]);
 }
 
 internal static class StudioBackendManagementBridgeServiceCollectionExtensions
