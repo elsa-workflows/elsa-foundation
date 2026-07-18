@@ -326,6 +326,139 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("moves the recommendation with exact head, current recommendation, target lifecycle, and reason", async () => {
+    const definitionView = lifecycleDefinition("version-2", "version-1");
+    const versions = [
+      lifecycleVersion("version-1", "1.0.0", true),
+      lifecycleVersion("version-2", "2.0.0", false, "Active", [{ action: "set-recommendation", allowed: true }])
+    ];
+    const putJson = vi.fn(async () => ({
+      definitionId: "definition-1",
+      headVersionId: "version-2",
+      recommendedVersionId: "version-2",
+      changedAt: "2026-07-18T12:00:00Z",
+      reason: "Validated rollout"
+    }));
+    const getJson = lifecycleGetJson(definitionView, versions);
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-2", undefined, [], putJson);
+
+    await waitForText(rendered.container, "Make recommended");
+    click(buttonByText(rendered.container, "Make recommended"));
+    await waitForText(rendered.container, "Existing placed occurrences");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Validated rollout");
+    click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));
+    click(await enabledButton(rendered.container, "Move recommendation"));
+
+    await waitFor(() => expect(putJson).toHaveBeenCalledWith("/design/activities/definitions/definition-1/recommendation", {
+      expectedDefinitionHeadVersionId: "version-2",
+      expectedRecommendedVersionId: "version-1",
+      recommendedVersionId: "version-2",
+      expectedRecommendedVersionLifecycle: "Active",
+      reason: "Validated rollout"
+    }));
+    await rendered.unmount();
+  });
+
+  it("retires the recommended version only with an exact replacement decision", async () => {
+    const definitionView = lifecycleDefinition("version-2", "version-1");
+    const versions = [
+      lifecycleVersion("version-1", "1.0.0", true, "Active", [{ action: "retire-version", allowed: true }]),
+      lifecycleVersion("version-2", "2.0.0", false)
+    ];
+    const postJson = vi.fn(async () => ({ versionId: "version-1", lifecycle: "Retired", reason: "Superseded", changedAt: "2026-07-18T12:00:00Z" }));
+    const rendered = renderPage(lifecycleGetJson(definitionView, versions), undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1", postJson);
+
+    await waitForText(rendered.container, "Retire");
+    click(buttonByText(rendered.container, "Retire"));
+    await waitForText(rendered.container, "Required recommendation decision");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Superseded");
+    click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));
+    click(await enabledButton(rendered.container, "Retire exact version"));
+
+    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/versions/version-1/retire", {
+      expectedLifecycle: "Active",
+      reason: "Superseded",
+      recommendationDecision: {
+        expectedDefinitionHeadVersionId: "version-2",
+        expectedRecommendedVersionId: "version-1",
+        disposition: "Replace",
+        replacementVersionId: "version-2",
+        expectedReplacementLifecycle: "Active"
+      }
+    }));
+    await rendered.unmount();
+  });
+
+  it("restores a retired version without changing recommendation", async () => {
+    const definitionView = lifecycleDefinition("version-2", "version-2");
+    const versions = [
+      lifecycleVersion("version-1", "1.0.0", false, "Retired", [{ action: "restore-version", allowed: true }]),
+      lifecycleVersion("version-2", "2.0.0", true)
+    ];
+    const postJson = vi.fn(async () => ({ versionId: "version-1", lifecycle: "Active", reason: "Incident cleared", changedAt: "2026-07-18T12:00:00Z" }));
+    const rendered = renderPage(lifecycleGetJson(definitionView, versions), undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1", postJson);
+
+    await waitForText(rendered.container, "Restore");
+    click(buttonByText(rendered.container, "Restore"));
+    await waitForText(rendered.container, "Restoration does not recommend");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Incident cleared");
+    click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));
+    click(await enabledButton(rendered.container, "Restore exact version"));
+
+    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/versions/version-1/restore", {
+      expectedLifecycle: "Retired",
+      reason: "Incident cleared",
+      recommendationDecision: null
+    }));
+    await rendered.unmount();
+  });
+
+  it("requires authoritative direct dependencies, bounded as-of usage, and typed semantic-version confirmation for terminal revocation", async () => {
+    const definitionView = lifecycleDefinition("version-2", "version-2");
+    const versions = [
+      lifecycleVersion("version-1", "1.0.0", false, "Retired", [{ action: "revoke-version", allowed: true }]),
+      lifecycleVersion("version-2", "2.0.0", true)
+    ];
+    const postJson = vi.fn(async () => ({ versionId: "version-1", lifecycle: "Revoked", reason: "Security response", changedAt: "2026-07-18T12:00:00Z" }));
+    const getJson = lifecycleGetJson(definitionView, versions, authoritativeUsageEvidence());
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1", postJson);
+
+    await waitForText(rendered.container, "Revoke");
+    click(buttonByText(rendered.container, "Revoke"));
+    await waitForText(rendered.container, "Visible inbound uses");
+    expect(rendered.container.textContent).toContain("7/18/2026");
+    expect(rendered.container.textContent).toContain("Immutable artifacts, identities, dependency evidence, and Runtime Evidence are preserved");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Type semantic version"), "1.0.0");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Security response");
+    click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));
+    click(await enabledButton(rendered.container, "Revoke exact version permanently"));
+
+    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/versions/version-1/revoke", {
+      expectedLifecycle: "Retired",
+      reason: "Security response",
+      recommendationDecision: null
+    }));
+    await rendered.unmount();
+  });
+
+  it("keeps stale lifecycle conflicts privacy-safe and requires a fresh review", async () => {
+    const definitionView = lifecycleDefinition("version-1", "version-1");
+    const versions = [lifecycleVersion("version-1", "1.0.0", true, "Active", [{ action: "retire-version", allowed: true }])];
+    const postJson = vi.fn(async () => { throw new StudioHttpError(409, "hidden current version identity", null); });
+    const rendered = renderPage(lifecycleGetJson(definitionView, versions), undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1", postJson);
+
+    await waitForText(rendered.container, "Retire");
+    click(buttonByText(rendered.container, "Retire"));
+    click(controlByLabel<HTMLInputElement>(rendered.container, "Continue with no recommended version"));
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Lifecycle cleanup");
+    click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));
+    click(await enabledButton(rendered.container, "Retire exact version"));
+
+    await waitForText(rendered.container, "changed after review");
+    expect(rendered.container.textContent).not.toContain("hidden current version identity");
+    await rendered.unmount();
+  });
+
   it.each([403, 404])("purges retained child identities when a draft collection fails closed with %s", async status => {
     let draftReads = 0;
     const getJson = vi.fn(async (url: string) => {
@@ -484,13 +617,14 @@ function renderPage(
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   path = "/workflows/activity-definitions",
   postJson: (url: string, body: unknown) => Promise<unknown> = vi.fn(),
-  activityEditors: StudioActivityDefinitionImplementationEditorContribution[] = []
+  activityEditors: StudioActivityDefinitionImplementationEditorContribution[] = [],
+  putJson: (url: string, body: unknown) => Promise<unknown> = vi.fn()
 ) {
   window.history.replaceState({}, "", path);
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  const context = { baseUrl: `test://activity-definitions-${Math.random()}`, http: { getJson, postJson } } as unknown as StudioEndpointContext;
+  const context = { baseUrl: `test://activity-definitions-${Math.random()}`, http: { getJson, postJson, putJson } } as unknown as StudioEndpointContext;
   flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} /></QueryClientProvider>));
   return {
     container,
@@ -510,6 +644,7 @@ function capabilities(includeAuthoring = false, includeFork = false) {
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
     { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
+    { rel: "activity-definition-recommendation", href: "design/activities/definitions/{definitionId}/recommendation", templated: true },
     ...(includeFork ? [
       { rel: "activity-definition-fork-preview", href: "design/activities/definitions/{definitionId}/fork-previews", templated: true },
       { rel: "activity-definition-fork-apply", href: "design/activities/fork-candidates/{candidateId}/apply", templated: true },
@@ -535,8 +670,94 @@ function draft(overrides: Partial<ActivityDefinitionDraftManagementView["draft"]
   return { draft: { draftId: "draft-1", definitionId: "definition-1", revision: 3, sourceVersionId: "version-1", status: "Active", providerKey: "visual-graph", providerSchemaVersion: "1", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null, ...overrides }, actions: [] };
 }
 
-function version(overrides: { actions?: ActivityDefinitionVersionManagementView["actions"] } = {}): ActivityDefinitionVersionManagementView {
-  return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: overrides.actions ?? [] };
+function version(overrides: Partial<ActivityDefinitionVersionManagementView> = {}): ActivityDefinitionVersionManagementView {
+  return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: [], ...overrides };
+}
+
+function lifecycleDefinition(headVersionId: string, recommendedVersionId: string | null): ActivityDefinitionManagementView {
+  const view = definition({ headVersionId, recommendedVersionId });
+  const reference = (versionId: string) => ({
+    versionId,
+    version: versionId === "version-1" ? "1.0.0" : "2.0.0",
+    lifecycle: "Active",
+    providerKey: "visual-graph",
+    providerSchemaVersion: "1"
+  });
+  return {
+    ...view,
+    lifecycle: {
+      ...view.lifecycle,
+      versionCount: 2,
+      head: reference(headVersionId),
+      recommendation: recommendedVersionId ? reference(recommendedVersionId) : null
+    }
+  };
+}
+
+function lifecycleVersion(
+  versionId: string,
+  semanticVersion: string,
+  isRecommended: boolean,
+  lifecycle = "Active",
+  actions: ActivityDefinitionVersionManagementView["actions"] = []
+): ActivityDefinitionVersionManagementView {
+  return {
+    version: { versionId, definitionId: "definition-1", version: semanticVersion, lifecycle, publishedAt: "2026-07-17T09:00:00Z" },
+    providerKey: "visual-graph",
+    providerSchemaVersion: "1",
+    isRecommended,
+    actions
+  };
+}
+
+function lifecycleGetJson(
+  definitionView: ActivityDefinitionManagementView,
+  versions: ActivityDefinitionVersionManagementView[],
+  evidence = authoritativeUsageEvidence()
+) {
+  return vi.fn(async (url: string) => {
+    if (url === "/capabilities") return capabilities();
+    if (url === "/design/activities/definitions/definition-1") return definitionView;
+    if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return page(versions);
+    if (url.includes("/dependencies?")) return url.includes("direction=outbound") ? evidence.directDependencies : evidence.inboundUsage;
+    const exact = versions.find(item => url === `/design/activities/versions/${item.version.versionId}`);
+    if (exact) return versionDetail({
+      definition: definitionView.definition,
+      versionId: exact.version.versionId,
+      version: exact.version.version,
+      lifecycle: exact.version.lifecycle,
+      publishedAt: exact.version.publishedAt
+    });
+    throw new Error(`Unexpected GET ${url}`);
+  });
+}
+
+function authoritativeUsageEvidence() {
+  const base = {
+    root: { kind: "ActivityVersion", definitionId: "definition-1", versionId: "version-1", version: "1.0.0", lifecycle: "Retired" },
+    items: [{
+      relationshipId: "relationship-1",
+      owner: { kind: "ActivityVersion", definitionId: "owner-1", versionId: "owner-version-1" },
+      dependency: { kind: "ActivityVersion", definitionId: "definition-1", versionId: "version-1" },
+      occurrence: { occurrenceId: "occurrence-1", nodeOrigin: [] },
+      isDirect: true,
+      depth: 1,
+      path: []
+    }],
+    nextCursor: null
+  };
+  return {
+    directDependencies: {
+      ...base,
+      query: { direction: "Outbound", transitive: false, include: ["Versions"] },
+      consistency: { kind: "AuthoritativeDirect", isAuthoritative: true, asOfSequence: null, asOf: null, rebuildId: null }
+    },
+    inboundUsage: {
+      ...base,
+      query: { direction: "Inbound", transitive: true, include: ["Drafts", "Versions"] },
+      consistency: { kind: "DerivedProjection", isAuthoritative: false, asOfSequence: 42, asOf: "2026-07-18T12:00:00Z", rebuildId: "rebuild-42" }
+    }
+  };
 }
 
 function draftDetail(overrides: Partial<{ draftId: string; presentationLabel: string | null }> = {}) { return { ...draftDetailBase(), ...overrides }; }
@@ -591,10 +812,10 @@ async function enabledButton(container: HTMLElement, text: string) {
 }
 
 function click(element: Element) { flushSync(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true }))); }
-function change(element: HTMLInputElement | HTMLSelectElement, value: string) { flushSync(() => { const setter = Object.getOwnPropertyDescriptor(element instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLSelectElement.prototype, "value")?.set; setter?.call(element, value); element.dispatchEvent(new Event("change", { bubbles: true })); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
-function controlByLabel<T extends HTMLInputElement | HTMLSelectElement>(container: HTMLElement, text: string) {
-  const label = [...container.querySelectorAll("label")].find(candidate => candidate.querySelector(":scope > span")?.textContent?.includes(text));
-  const control = label?.querySelector("input, select");
+function change(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) { flushSync(() => { const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLTextAreaElement.prototype; const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set; setter?.call(element, value); element.dispatchEvent(new Event("change", { bubbles: true })); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
+function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(container: HTMLElement, text: string) {
+  const label = [...container.querySelectorAll("label")].find(candidate => candidate.textContent?.includes(text));
+  const control = label?.querySelector("input, select, textarea");
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
 }

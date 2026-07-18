@@ -99,6 +99,94 @@ export interface ActivityDefinitionVersionManagementView {
   contract?: ActivityContract;
 }
 
+export type ActivityDefinitionVersionLifecycle = "Active" | "Retired" | "Revoked";
+export type ActivityDefinitionVersionLifecycleAction = "recommend" | "retire" | "restore" | "revoke";
+
+export interface SetActivityDefinitionRecommendationRequest {
+  expectedDefinitionHeadVersionId: string | null;
+  expectedRecommendedVersionId: string | null;
+  recommendedVersionId: string | null;
+  expectedRecommendedVersionLifecycle: ActivityDefinitionVersionLifecycle | null;
+  reason: string;
+}
+
+export interface ActivityRecommendationDecision {
+  expectedDefinitionHeadVersionId: string | null;
+  expectedRecommendedVersionId: string | null;
+  disposition: "Clear" | "Replace";
+  replacementVersionId?: string | null;
+  expectedReplacementLifecycle?: ActivityDefinitionVersionLifecycle | null;
+}
+
+export interface ChangeActivityDefinitionVersionLifecycleRequest {
+  expectedLifecycle: ActivityDefinitionVersionLifecycle;
+  reason: string;
+  recommendationDecision?: ActivityRecommendationDecision | null;
+}
+
+export interface ActivityDefinitionRecommendationMutationView {
+  definitionId: string;
+  headVersionId?: string | null;
+  recommendedVersionId?: string | null;
+  changedAt: string;
+  reason: string;
+}
+
+export interface ActivityDefinitionVersionLifecycleMutationView {
+  versionId: string;
+  lifecycle: ActivityDefinitionVersionLifecycle;
+  reason: string;
+  changedAt: string;
+}
+
+export interface ActivityDefinitionDependencyReference {
+  kind: string;
+  definitionId: string;
+  versionId?: string | null;
+  version?: string | null;
+  draftId?: string | null;
+  revision?: number | null;
+  templateHash?: string | null;
+  tenantId?: string | null;
+  lifecycle?: string | null;
+}
+
+export interface ActivityDefinitionDependencyItem {
+  relationshipId: string;
+  owner: ActivityDefinitionDependencyReference;
+  dependency: ActivityDefinitionDependencyReference;
+  occurrence: {
+    occurrenceId: string;
+    nodeOrigin: unknown[];
+  };
+  isDirect: boolean;
+  depth: number;
+  path: ActivityDefinitionDependencyReference[];
+}
+
+export interface ActivityDefinitionUsageEvidence {
+  root: ActivityDefinitionDependencyReference;
+  query: {
+    direction: string;
+    transitive: boolean;
+    include: string[];
+  };
+  consistency: {
+    kind: string;
+    isAuthoritative: boolean;
+    asOfSequence?: number | null;
+    asOf?: string | null;
+    rebuildId?: string | null;
+  };
+  items: ActivityDefinitionDependencyItem[];
+  nextCursor?: string | null;
+}
+
+export interface ActivityDefinitionRevocationEvidence {
+  directDependencies: ActivityDefinitionUsageEvidence;
+  inboundUsage: ActivityDefinitionUsageEvidence;
+}
+
 export interface ActivityManagementSnapshot {
   snapshotId: string;
   asOf: string;

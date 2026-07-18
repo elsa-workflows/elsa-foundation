@@ -181,6 +181,106 @@ test("draft management dialog traps and restores focus, supports keyboard clone 
   expect(state.draftRequests.at(-1)).toEqual({ sourceVersionId: "version-1", presentationLabel: "Keyboard clone" });
 });
 
+test("Activity Definition lifecycle review moves recommendation, retires, clears, restores, revokes, reconciles, and rejects stale state", async ({ page }) => {
+  test.setTimeout(60_000);
+  const state = await mockActivityVersionLifecycle(page);
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-2");
+
+  await page.getByRole("button", { name: "Make recommended" }).click();
+  let dialog = page.getByRole("dialog", { name: "Move recommended version" });
+  await expect(dialog).toContainText("Existing placed occurrences");
+  await dialog.getByRole("textbox", { name: /Reason/ }).fill("Validated rollout");
+  await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
+  await dialog.getByRole("button", { name: "Move recommendation" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.recommendationRequests.at(-1)).toEqual({
+    expectedDefinitionHeadVersionId: "version-2",
+    expectedRecommendedVersionId: "version-1",
+    recommendedVersionId: "version-2",
+    expectedRecommendedVersionLifecycle: "Active",
+    reason: "Validated rollout"
+  });
+
+  await page.getByRole("button", { name: "Retire", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Retire activity version" });
+  await expect(dialog.getByRole("combobox", { name: "Exact replacement" })).toHaveValue("version-1");
+  await dialog.getByRole("textbox", { name: /Reason/ }).fill("Superseded");
+  await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
+  await dialog.getByRole("button", { name: "Retire exact version" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.lifecycleRequests.at(-1)).toMatchObject({
+    action: "retire",
+    versionId: "version-2",
+    body: {
+      expectedLifecycle: "Active",
+      recommendationDecision: {
+        disposition: "Replace",
+        replacementVersionId: "version-1",
+        expectedReplacementLifecycle: "Active"
+      }
+    }
+  });
+
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
+  await page.getByRole("button", { name: "Retire", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Retire activity version" });
+  await dialog.getByRole("radio", { name: "Continue with no recommended version" }).check();
+  await dialog.getByRole("textbox", { name: /Reason/ }).fill("No supported default");
+  await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
+  await dialog.getByRole("button", { name: "Retire exact version" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.recommendedVersionId).toBeNull();
+  expect(state.lifecycleRequests.at(-1)).toMatchObject({
+    action: "retire",
+    versionId: "version-1",
+    body: {
+      expectedLifecycle: "Active",
+      recommendationDecision: {
+        expectedDefinitionHeadVersionId: "version-2",
+        expectedRecommendedVersionId: "version-1",
+        disposition: "Clear"
+      }
+    }
+  });
+
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-2");
+  state.ambiguousNext = true;
+  await page.getByRole("button", { name: "Restore", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Restore activity version" });
+  await expect(dialog).toContainText("Restoration does not recommend it automatically");
+  await dialog.getByRole("textbox", { name: /Reason/ }).fill("Incident cleared");
+  await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
+  await dialog.getByRole("button", { name: "Restore exact version" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel("Selected exact version")).toContainText("Active");
+  expect(state.recommendedVersionId).toBeNull();
+
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
+  await page.getByRole("button", { name: "Revoke", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Revoke activity version" });
+  await expect(dialog.getByText("AuthoritativeDirect")).toBeVisible();
+  await expect(dialog.getByText("DerivedProjection")).toBeVisible();
+  await expect(dialog).toContainText("7/18/2026");
+  await expect(dialog).toContainText("Runtime Evidence are preserved");
+  await dialog.getByRole("textbox", { name: /Type semantic version/ }).fill("1.0.0");
+  await dialog.getByRole("textbox", { name: /Reason/ }).fill("Security response");
+  await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
+  await dialog.getByRole("button", { name: "Revoke exact version permanently" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.versions["version-1"].lifecycle).toBe("Revoked");
+
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-2");
+  state.staleNext = true;
+  await page.getByRole("button", { name: "Make recommended" }).click();
+  dialog = page.getByRole("dialog", { name: "Move recommended version" });
+  await dialog.getByRole("textbox", { name: /Reason/ }).fill("Stale attempt");
+  await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
+  await dialog.getByRole("button", { name: "Move recommendation" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("changed after review");
+  await expect(dialog).not.toContainText("hidden lifecycle identity");
+  expect(state.recommendedVersionId).toBeNull();
+});
+
 test("Activity Definition create, graph autosave, reload, conflict preservation, and recovery", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
@@ -619,6 +719,140 @@ function browserAuthoringCapabilities() {
     storageDriverKeys: [],
     snapshotFingerprint: "sha256:browser"
   };
+}
+
+async function mockActivityVersionLifecycle(page: Page) {
+  const state = {
+    headVersionId: "version-2",
+    recommendedVersionId: "version-1" as string | null,
+    versions: {
+      "version-1": { version: "1.0.0", lifecycle: "Active" },
+      "version-2": { version: "2.0.0", lifecycle: "Active" }
+    } as Record<string, { version: string; lifecycle: "Active" | "Retired" | "Revoked" }>,
+    recommendationRequests: [] as unknown[],
+    lifecycleRequests: [] as Array<{ action: string; versionId: string; body: unknown }>,
+    staleNext: false,
+    ambiguousNext: false
+  };
+  const managementDefinition = () => {
+    const reference = (versionId: string) => ({
+      versionId,
+      version: state.versions[versionId].version,
+      lifecycle: state.versions[versionId].lifecycle,
+      providerKey: "elsa.activity-graph",
+      providerSchemaVersion: "1"
+    });
+    return {
+      ...definition(),
+      definition: { ...definition().definition, headVersionId: state.headVersionId, recommendedVersionId: state.recommendedVersionId },
+      lifecycle: {
+        ...definition().lifecycle,
+        versionCount: 2,
+        head: reference(state.headVersionId),
+        recommendation: state.recommendedVersionId ? reference(state.recommendedVersionId) : null
+      }
+    };
+  };
+  const managementVersions = () => Object.entries(state.versions).map(([versionId, current]) => ({
+    version: { versionId, definitionId: "definition-1", version: current.version, lifecycle: current.lifecycle, publishedAt: "2026-07-17T09:00:00Z" },
+    providerKey: "elsa.activity-graph",
+    providerSchemaVersion: "1",
+    isRecommended: state.recommendedVersionId === versionId,
+    actions: current.lifecycle === "Active"
+      ? [
+          { action: "set-recommendation", allowed: true },
+          { action: "retire-version", allowed: true },
+          { action: "revoke-version", allowed: true }
+        ]
+      : current.lifecycle === "Retired"
+        ? [
+            { action: "restore-version", allowed: true },
+            { action: "revoke-version", allowed: true }
+          ]
+        : []
+  }));
+
+  await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
+      { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+      { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
+      { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
+      { rel: "activity-definition-recommendation", href: "design/activities/definitions/{definitionId}/recommendation", templated: true }
+    ] }]
+  }) }));
+  await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(managementDefinition()) }));
+  await page.route("**/design/activities/definitions/definition-1/recommendation", async route => {
+    const body = route.request().postDataJSON() as {
+      recommendedVersionId: string | null;
+      expectedDefinitionHeadVersionId: string | null;
+      reason: string;
+    };
+    state.recommendationRequests.push(body);
+    if (state.staleNext) {
+      state.staleNext = false;
+      return route.fulfill({ status: 409, contentType: "application/problem+json", body: JSON.stringify({ title: "hidden lifecycle identity" }) });
+    }
+    state.recommendedVersionId = body.recommendedVersionId;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      definitionId: "definition-1",
+      headVersionId: body.expectedDefinitionHeadVersionId,
+      recommendedVersionId: body.recommendedVersionId,
+      changedAt: "2026-07-18T12:00:00Z",
+      reason: body.reason
+    }) });
+  });
+  await page.route(/\/design\/activities\/definitions\/definition-1\/versions\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf(managementVersions())) }));
+  await page.route(/\/design\/activities\/versions\/(version-[12])\/dependencies\?.*/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      root: { kind: "ActivityVersion", definitionId: "definition-1", versionId: route.request().url().includes("version-1") ? "version-1" : "version-2" },
+      query: route.request().url().includes("direction=outbound")
+        ? { direction: "Outbound", transitive: false, include: ["Versions"] }
+        : { direction: "Inbound", transitive: true, include: ["Drafts", "Versions"] },
+      consistency: route.request().url().includes("direction=outbound")
+        ? { kind: "AuthoritativeDirect", isAuthoritative: true, asOfSequence: null, asOf: null, rebuildId: null }
+        : { kind: "DerivedProjection", isAuthoritative: false, asOfSequence: 42, asOf: "2026-07-18T12:00:00Z", rebuildId: "rebuild-42" },
+      items: [],
+      nextCursor: null
+    })
+  }));
+  await page.route(/\/design\/activities\/versions\/(version-[12])\/(retire|restore|revoke)$/, async route => {
+    const match = new URL(route.request().url()).pathname.match(/\/versions\/(version-[12])\/(retire|restore|revoke)$/)!;
+    const versionId = match[1];
+    const action = match[2];
+    const body = route.request().postDataJSON() as { reason: string; recommendationDecision?: { disposition: "Clear" | "Replace"; replacementVersionId?: string } | null };
+    state.lifecycleRequests.push({ action, versionId, body });
+    if (state.staleNext) {
+      state.staleNext = false;
+      return route.fulfill({ status: 409, contentType: "application/problem+json", body: JSON.stringify({ title: "hidden lifecycle identity" }) });
+    }
+    state.versions[versionId].lifecycle = action === "retire" ? "Retired" : action === "restore" ? "Active" : "Revoked";
+    if (body.recommendationDecision?.disposition === "Clear") state.recommendedVersionId = null;
+    if (body.recommendationDecision?.disposition === "Replace") state.recommendedVersionId = body.recommendationDecision.replacementVersionId ?? null;
+    if (state.ambiguousNext) {
+      state.ambiguousNext = false;
+      return route.abort("connectionreset");
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      versionId,
+      lifecycle: state.versions[versionId].lifecycle,
+      reason: body.reason,
+      changedAt: "2026-07-18T12:00:00Z"
+    }) });
+  });
+  await page.route(/\/design\/activities\/versions\/(version-[12])$/, route => {
+    const versionId = new URL(route.request().url()).pathname.split("/").at(-1)!;
+    const current = state.versions[versionId];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      ...sourceVersionDetail(),
+      definition: managementDefinition().definition,
+      versionId,
+      version: current.version,
+      lifecycle: current.lifecycle
+    }) });
+  });
+  return state;
 }
 
 async function mockActivityFork(page: Page, outcome: "success" | "unsupported" | "collision" = "success") {
