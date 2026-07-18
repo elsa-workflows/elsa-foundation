@@ -432,6 +432,45 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Metadata_enrichment_preserves_intrinsic_identity()
+    {
+        var value = new RuntimeInputBinding(
+            WorkflowIntrinsicInputKeys.Value,
+            new ValueTypeDescriptor("System.String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                new ValueTypeDescriptor("System.String"),
+                JsonSerializer.SerializeToElement("updated"),
+                ValueProtectionPolicy.InstanceInline));
+        var intrinsic = new ExecutableNode(
+            "node-set", "set", "elsa.intrinsic.set", "1.0.0",
+            new RuntimeActivityDescriptor("intrinsic", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding> { [value.InputName] = value },
+            new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("target", "scope-root"));
+        var root = new ExecutableNode(
+            "root", "root", "test.container", "1.0.0",
+            new RuntimeActivityDescriptor("test.container", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot("Body", [intrinsic])]);
+        var source = new WorkflowExecutableCompileSource(
+            "definition-1", "version-1", "1.0.0",
+            new WorkflowDefinitionState([], null, [], [], null),
+            "WorkflowDefinitionVersion", "version-1", null);
+
+        var enrichment = await MetadataEnricher(new FixedMetadataSource("node-set", "runtime.pin", "pinned-value"))
+            .EnrichCompilationAsync(NewRequest(DateTimeOffset.UtcNow), source, root);
+
+        var enriched = Assert.Single(Assert.Single(enrichment.RootActivity.ChildSlots).Activities);
+        Assert.Equal("pinned-value", enriched.Metadata["runtime.pin"]);
+        Assert.Equal(WorkflowIntrinsicKind.Set, enriched.IntrinsicKind);
+        Assert.Equal("target", enriched.IntrinsicVariable?.VariableKey);
+    }
+
+    [Fact]
     public async Task Compiler_projects_canonical_versioned_workflow_input_contract_into_behavioral_hash()
     {
         var first = WorkflowVersion(
