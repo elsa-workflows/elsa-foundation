@@ -9,6 +9,7 @@ import { ActivityDefinitionContractEditor } from "./ActivityDefinitionContractEd
 import { ActivityDefinitionDiagnosticsPanel, type ActivityDraftValidationFailure } from "./ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionPublicationReview } from "./ActivityDefinitionPublicationReview";
 import { ActivityDefinitionContractProposalReview } from "./ActivityDefinitionContractProposalReview";
+import { ActivityDefinitionProviderMigrationDialog } from "./ActivityDefinitionDraftManagementDialogs";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "./api/capabilities";
 
 type SaveStatus = "saved" | "pending" | "saving" | "offline" | "conflict" | "failed";
@@ -56,6 +57,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
   const [providerEditorFailed, setProviderEditorFailed] = useState(false);
   const [contractLocallyValid, setContractLocallyValid] = useState(true);
   const [proposalApplying, setProposalApplying] = useState(false);
+  const [migrationOpen, setMigrationOpen] = useState(false);
   const capabilitiesQuery = useActivityAuthoringCapabilities(context);
   const expressionsQuery = useActivityContractExpressionDescriptors(context);
   const baselineQuery = useFullActivityDefinitionVersion(context, initialDraft.sourceVersionId ?? null);
@@ -386,7 +388,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
 
   return <main className="ad-page ad-draft-editor" aria-labelledby="activity-draft-title">
     <button type="button" className="ad-back" onClick={() => onBack()} disabled={revisionSensitiveActionsBlocked}><ArrowLeft size={16} /> Activity Definition</button>
-    <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><h1 id="activity-draft-title">Contract & implementation</h1><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => void validateSavedRevision()} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying}><RefreshCw size={16} /> Save now</button></div></header>
+    <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><h1 id="activity-draft-title">{draft.presentationLabel?.trim() || generatedDraftLabel(draft)}</h1><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => setMigrationOpen(true)} disabled={revisionSensitiveActionsBlocked}>Migrate provider</button><button type="button" onClick={() => void validateSavedRevision()} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying}><RefreshCw size={16} /> Save now</button></div></header>
+    <label className="ad-draft-label"><span>Draft label <small>Optional · need not be unique</small></span><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small></label>
     <div className={`ad-save-state is-${contractLocallyValid ? status : "failed"}`} role={status === "failed" || status === "conflict" || !contractLocallyValid ? "alert" : "status"} aria-live="polite"><strong>{contractLocallyValid ? saveStatusLabel(status, draft.revision) : "Contract correction required"}</strong><span>{contractLocallyValid ? saveStatusDescription(status, revisionSensitiveActionsBlocked) : `Server revision ${draft.revision} is saved, but a visible literal is not valid contract data and has not been added to the autosave queue. Correct it or explicitly discard local changes.`}</span></div>
     <ActivityDefinitionDiagnosticsPanel
       validation={draft.validation}
@@ -432,6 +435,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
     />
     {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} value={{ payload: draft.provider.payload, layout: draft.layout }} readOnly={status === "conflict" || proposalApplying} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
     {revisionSensitiveActionsBlocked ? <div className="ad-revision-gate" role="status"><span>Revision-sensitive lifecycle actions and navigation are paused until this exact draft revision is saved.</span><button type="button" onClick={discardLocalChanges} disabled={status === "pending" || status === "saving"}>{status === "pending" || status === "saving" ? "Waiting for save before navigation" : "Discard local changes and return"}</button></div> : null}
+    {migrationOpen ? <ActivityDefinitionProviderMigrationDialog context={context} draft={draft} activityEditors={activityEditors} onClose={() => setMigrationOpen(false)} onCreated={created => { setMigrationOpen(false); onOpenDraft(created.definitionId, created.draftId); }} /> : null}
   </main>;
 }
 
@@ -454,6 +458,10 @@ class ProviderEditorBoundary extends Component<{ children: ReactNode; onFailure(
 
 function editableSignature(draft: ActivityDefinitionDraftView) {
   return JSON.stringify({ contract: draft.contract, provider: { providerKey: draft.provider.providerKey, schemaVersion: draft.provider.schemaVersion, payload: draft.provider.payload }, layout: draft.layout, presentationLabel: draft.presentationLabel ?? null });
+}
+
+function generatedDraftLabel(draft: Pick<ActivityDefinitionDraftView, "draftId">) {
+  return `Draft ${draft.draftId}`;
 }
 
 function isStaleRevision(error: unknown) {

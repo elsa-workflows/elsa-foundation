@@ -13,7 +13,7 @@ const ActivityDefinitionCreateDialog = lazy(() => import("./ActivityDefinitionCr
 const ActivityDefinitionDraftEditor = lazy(() => import("./ActivityDefinitionDraftEditor").then(module => ({ default: module.ActivityDefinitionDraftEditor })));
 
 type PageSize = 10 | 25 | 50;
-type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null };
+type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; draftActionVersionId?: string | null };
 
 export function ActivityDefinitionsPage({ context, activityEditors = () => [], runtime = {} }: { context: StudioEndpointContext; activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[]; runtime?: StudioRuntimeSettings }) {
   const [route, setRoute] = useState(readRouteState);
@@ -53,7 +53,7 @@ export function ActivityDefinitionsPage({ context, activityEditors = () => [], r
     }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
-        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} onNavigate={navigate} />
+        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={navigate} />
       </WorkflowLazyBoundary>
     );
   }
@@ -67,6 +67,7 @@ function writeRouteState(route: RouteState, mode: "push" | "replace") {
   if (route.section) parameters.set("section", route.section);
   if (route.draftId) parameters.set("draft", route.draftId);
   if (route.versionId) parameters.set("version", route.versionId);
+  if (route.draftActionVersionId) parameters.set("createDraftFrom", route.draftActionVersionId);
   const query = parameters.toString();
   window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", `/workflows/activity-definitions${query ? `?${query}` : ""}`);
 }
@@ -217,7 +218,7 @@ function useDebouncedValue(value: string, delay: number) {
 
 function readRouteState(): RouteState {
   const parameters = new URLSearchParams(window.location.search);
-  return { definitionId: parameters.get("definition"), section: parameters.get("section"), draftId: parameters.get("draft"), versionId: parameters.get("version") };
+  return { definitionId: parameters.get("definition"), section: parameters.get("section"), draftId: parameters.get("draft"), versionId: parameters.get("version"), draftActionVersionId: parameters.get("createDraftFrom") };
 }
 
 function formatDate(value: string | null | undefined) {
