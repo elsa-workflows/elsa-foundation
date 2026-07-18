@@ -199,7 +199,7 @@ public sealed class PublicationProjectionReconcilerTests
             WorkflowTriggerIndexSnapshot snapshot,
             CancellationToken cancellationToken = default)
         {
-            var visible = await bindingStore.ListByStimulusTypeAsync("Event", cancellationToken);
+            var visible = await bindingStore.ListAllByStimulusTypeAsync("Event", cancellationToken);
             VisiblePublicationsByNotification.Add(visible
                 .Select(x => x.PublicationId!)
                 .OrderBy(x => x, StringComparer.Ordinal)

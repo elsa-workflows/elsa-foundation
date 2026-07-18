@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -141,6 +142,88 @@ public sealed class RuntimeBoundedQueryContractTests
             observation =>
             {
                 Assert.Equal(ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery, observation.Query.QueryIdentity);
+                Assert.InRange(observation.Query.Take!.Value, 1, 2);
+                Assert.InRange(observation.MaterializedDocuments, 0, observation.Query.Take.Value);
+                Assert.Contains(
+                    observation.Query.Clauses.SelectMany(clause => clause.Comparisons),
+                    comparison =>
+                        comparison.Path == ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField &&
+                        comparison.Values.SequenceEqual([bool.TrueString.ToLowerInvariant()]));
+            });
+        Assert.All(bounded.Observations, observation => Assert.Null(observation.Query.Skip));
+        Assert.Null(bounded.Observations[0].Query.Continuation);
+        Assert.Equal(first.NextContinuationToken, bounded.Observations[1].Query.Continuation);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Active_trigger_binding_type_pages_are_equivalent_and_materialized_inside_the_requested_window(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync(
+            [new RuntimeUnitManifestSource(
+                "runtime-bounded-trigger-binding-type-contract",
+                ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind)]);
+
+        await using var client = await driver.OpenPhysicalClientAsync();
+        var bounded = new RecordingBoundedDocumentStore(
+            client.BoundedDocumentStore
+            ?? throw new InvalidOperationException(
+                "The physical provider did not expose its admitted bounded-query runtime."));
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            client.DocumentStore,
+            GroundworkProviderTestSerialization.Serializer,
+            bounded);
+
+        await store.SaveAsync(Binding("binding-a"));
+        await store.SaveAsync(Binding("binding-b", isActive: false));
+        await store.SaveAsync(Binding("binding-c"));
+        await store.SaveAsync(Binding("binding-d", isActive: false));
+        await store.SaveAsync(Binding("binding-e"));
+        await store.SaveAsync(Binding("binding-ignored", stimulusType: "Signal"));
+
+        var first = await store.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery("Event", limit: 2));
+        await Assert.ThrowsAsync<InvalidDocumentQueryContinuationException>(async () =>
+            await store.ListByStimulusTypeAsync(
+                new WorkflowTriggerBindingTypePageQuery(
+                    "Signal",
+                    limit: 1,
+                    continuationToken: first.NextContinuationToken)));
+        var second = await store.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery(
+                "Event",
+                limit: 1,
+                continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(
+            ["binding-a", "binding-c", "binding-e"],
+            first.Items
+                .Concat(second.Items)
+                .Select(binding => binding.TriggerBindingId));
+        Assert.Equal(3, first.TotalCount);
+        Assert.Equal(3, second.TotalCount);
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Null(second.NextContinuationToken);
+        Assert.All(
+            bounded.Observations,
+            observation =>
+            {
+                Assert.Equal(
+                    ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
+                    observation.Query.QueryIdentity);
+                Assert.Collection(
+                    observation.Query.Order,
+                    order =>
+                    {
+                        Assert.Equal(ElsaRuntimeStorageManifest.TriggerBindingIdField, order.Path);
+                        Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+                    });
                 Assert.InRange(observation.Query.Take!.Value, 1, 2);
                 Assert.InRange(observation.MaterializedDocuments, 0, observation.Query.Take.Value);
                 Assert.Contains(

@@ -300,7 +300,9 @@ public sealed class StimulusRouterTests
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("The router must reuse the supplied match set, not query the store.");
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+            WorkflowTriggerBindingTypePageQuery query,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private StimulusRouter Router(

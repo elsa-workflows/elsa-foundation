@@ -19,7 +19,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
     public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(binding);
-        ArgumentException.ThrowIfNullOrWhiteSpace(binding.TriggerBindingId);
+        WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -176,18 +176,38 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         }
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+        WorkflowTriggerBindingTypePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
             var matches = _bindings.Values
-                .Where(binding => binding.IsActive && StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
+                .Where(binding =>
+                    binding.IsActive &&
+                    StringComparer.Ordinal.Equals(binding.StimulusType, query.StimulusType))
+                .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
+            var continuationId = DecodeContinuation(query);
+            var remaining = continuationId is null
+                ? matches
+                : matches
+                    .Where(binding => StringComparer.Ordinal.Compare(binding.TriggerBindingId, continuationId) > 0)
+                    .ToArray();
+            var page = remaining.Take(query.Limit).ToArray();
+            var nextContinuation = remaining.Length > page.Length
+                ? EncodeContinuation(query, page[^1].TriggerBindingId)
+                : null;
 
-            return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
+            return ValueTask.FromResult(
+                new WorkflowTriggerBindingPage(
+                    query,
+                    page,
+                    matches.Length,
+                    nextContinuation));
         }
     }
 
@@ -198,6 +218,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         foreach (var binding in bindings)
         {
             ArgumentNullException.ThrowIfNull(binding);
+            WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
             if (!StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
                 throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to publication '{publicationId}'.", nameof(bindings));
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
@@ -221,14 +242,14 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
             _bindings.Remove(bindingId);
     }
 
-    private static string EncodeContinuation(WorkflowTriggerBindingPageQuery query, string lastBindingId)
+    private static string EncodeContinuation(WorkflowTriggerBindingPageRequest query, string lastBindingId)
     {
         var payload = Encoding.UTF8.GetBytes($"{QueryBinding(query)}\0{lastBindingId}");
         var checksum = SHA256.HashData(payload);
         return $"imq1.{Base64UrlEncode(payload)}.{Base64UrlEncode(checksum)}";
     }
 
-    private static string? DecodeContinuation(WorkflowTriggerBindingPageQuery query)
+    private static string? DecodeContinuation(WorkflowTriggerBindingPageRequest query)
     {
         if (query.ContinuationToken is null)
             return null;
@@ -262,14 +283,24 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         {
             throw new ArgumentException(
-                "The trigger-binding continuation token is invalid or belongs to another stimulus query.",
+                "The trigger-binding continuation token is invalid or belongs to another trigger-binding query.",
                 nameof(query),
                 exception);
         }
     }
 
-    private static string QueryBinding(WorkflowTriggerBindingPageQuery query) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{query.StimulusType}\0{query.StimulusHash}")));
+    private static string QueryBinding(WorkflowTriggerBindingPageRequest query)
+    {
+        var value = query switch
+        {
+            WorkflowTriggerBindingPageQuery exact =>
+                $"exact\0{exact.StimulusType}\0{exact.StimulusHash}",
+            WorkflowTriggerBindingTypePageQuery byType =>
+                $"type\0{byType.StimulusType}",
+            _ => throw new ArgumentOutOfRangeException(nameof(query), query, "Unsupported trigger-binding page request.")
+        };
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    }
 
     private static string Base64UrlEncode(ReadOnlySpan<byte> bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

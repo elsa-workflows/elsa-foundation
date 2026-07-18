@@ -28,7 +28,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     public async ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(binding);
-        ArgumentException.ThrowIfNullOrWhiteSpace(binding.TriggerBindingId);
+        WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
 
         var existing = await Store.LoadAsync(DocumentKind, binding.TriggerBindingId, cancellationToken);
         var result = await SaveDocumentAsync(
@@ -223,15 +223,30 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    public async ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+        WorkflowTriggerBindingTypePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
-
-        var bindings = await QueryBindingsAsync(
-            ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
-            [Equal(ElsaRuntimeStorageManifest.StimulusTypeField, stimulusType)],
+        ArgumentNullException.ThrowIfNull(query);
+        var result = await Queries.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
+                [
+                    Equal(ElsaRuntimeStorageManifest.StimulusTypeField, query.StimulusType),
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
+                        bool.TrueString.ToLowerInvariant())
+                ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.TriggerBindingIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
-        return bindings.Where(binding => binding.IsActive).ToArray();
+        return new WorkflowTriggerBindingPage(
+            query,
+            result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray(),
+            result.TotalCount,
+            result.NextContinuation);
     }
 
     private async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> QueryBindingsAsync(
@@ -258,6 +273,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         foreach (var binding in bindings)
         {
             ArgumentNullException.ThrowIfNull(binding);
+            WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
             if (!StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
                 throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to publication '{publicationId}'.", nameof(bindings));
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
