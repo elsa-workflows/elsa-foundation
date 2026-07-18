@@ -49,8 +49,31 @@ internal static class TestWellKnownTypeRegistry
         registry.RegisterType(typeof(Guid), "Guid");
         registry.RegisterType(typeof(TestWriteLineActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)));
         registry.RegisterType(typeof(TestWriteLinesActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)));
+        registry.RegisterType(
+            typeof(Elsa.Activities.Sequence.Activities.Sequence),
+            TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)));
+        registry.RegisterType(
+            typeof(Elsa.Activities.Flowchart.Activities.Flowchart),
+            TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Flowchart.Activities.Flowchart)));
         return registry;
     }
+}
+
+/// <summary>
+/// Maps the shared activity-version-id fixtures to the CLR type alias of a registered activity with a
+/// typed result, so compiled test workflows satisfy the publish-time VF-ACT-001 contract gate the same
+/// way production catalog rows do.
+/// </summary>
+internal static class TestActivityAliases
+{
+    public static string ForActivityVersionId(string id) => id switch
+    {
+        "activity-write-line" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)),
+        "activity-write-lines" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)),
+        "activity-sequence" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)),
+        "activity-flowchart" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Flowchart.Activities.Flowchart)),
+        _ => "Object"
+    };
 }
 
 internal sealed class TestWriteLineActivity : Activity<ActivityUnit>

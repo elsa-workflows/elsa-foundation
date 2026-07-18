@@ -5,6 +5,8 @@ using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -319,7 +321,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             scenario.ActivityType,
             scenario.InputDefinitions,
             legacyActionCatalog ? ActivityExecutionType.Action : ActivityExecutionType.Trigger,
-            legacyActionCatalog ? scenario.ClrType : null);
+            scenario.ClrType);
 
     private PublishWorkflowRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
@@ -359,6 +361,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         Type? clrType)
     {
         var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(TestTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(TestTriggerActivity)));
         if (clrType is not null)
             registry.RegisterType(clrType, TypeAliasConvention.CanonicalAlias(clrType));
 
@@ -409,7 +412,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(
-                new ClrActivityDescriptor(clrType is null ? "Object" : TypeAliasConvention.CanonicalAlias(clrType)),
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(clrType ?? typeof(TestTriggerActivity))),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             Inputs = inputs ?? [Definition("EventName", "String")]
         };
@@ -452,6 +455,14 @@ public sealed class PublishWorkflowTriggerIndexingTests
         Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<IActivityStructureService, DefaultActivityStructureService>(services);
         return Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IActivityStructureService>(
             Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services));
+    }
+
+    // Minimal registered trigger CLR type: an EventName input plus the typed-result marker, so compiled
+    // generic trigger nodes pin an activity contract at publish time (VF-ACT-001 gate).
+    private sealed class TestTriggerActivity : IActivityResult<ActivityUnit>
+    {
+        [ActivityInput(Key = "EventName")]
+        public string? EventName { get; set; }
     }
 
     private sealed class FakeVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore

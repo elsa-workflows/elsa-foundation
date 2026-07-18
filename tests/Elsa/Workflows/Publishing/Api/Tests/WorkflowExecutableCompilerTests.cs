@@ -356,6 +356,82 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Metadata_enrichment_preserves_pinned_activity_contracts()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("hello")));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: MetadataEnricher(new FixedMetadataSource("write-one", "runtime.pin", "pinned-value")));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        // The enricher rebuilds every node to merge metadata claims; the rebuild must carry the pinned
+        // activity contract through, or the runtime start handler faults with VF-ACT-001 on dispatch.
+        Assert.Equal("pinned-value", executable.RootActivity.Metadata["runtime.pin"]);
+        Assert.NotNull(executable.RootActivity.ActivityContract);
+    }
+
+    [Fact]
+    public async Task Clr_node_with_unresolvable_type_alias_fails_publication()
+    {
+        var ghost = GhostAliasActivityVersion();
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("write-ghost", ghost.Id, [], []))),
+            new FakeActivityVersionStore([ghost]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("write-ghost", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Test.UnregisteredActivity", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Clr_node_without_a_typed_result_fails_publication()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(ContractlessActivity), TypeAliasConvention.CanonicalAlias(typeof(ContractlessActivity)));
+        var contractless = ContractlessActivityVersion();
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("run-contractless", contractless.Id, [], []))),
+            new FakeActivityVersionStore([contractless]),
+            _activityStructureService,
+            registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("run-contractless", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Enrichment_that_drops_pinned_contracts_fails_publication()
+    {
+        // The VF-ACT-001 gate runs on the final tree, so a metadata enricher that rebuilds nodes without
+        // their pinned contracts is caught at publish time instead of poisoning runtime dispatch.
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("hello")));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: new ContractStrippingEnricher());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("write-one", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Compiler_projects_canonical_versioned_workflow_input_contract_into_behavioral_hash()
     {
         var first = WorkflowVersion(
@@ -1402,9 +1478,9 @@ public sealed class WorkflowExecutableCompilerTests
 
     private readonly ActivityDefinitionVersion _resumeProbeActivity = ActivityVersion("activity-probe", typeof(ResumeProbeActivity).FullName!);
 
-    // A minimal type carrying a [ResumeTarget] handler. The compiler reflects the attribute off the node's
-    // resolved CLR type, so the type need not be a full activity for this indexing test.
-    private sealed class ResumeProbeActivity
+    // A minimal type carrying a [ResumeTarget] handler plus the typed-result marker the publish-time
+    // contract gate requires of every resolvable CLR activity.
+    private sealed class ResumeProbeActivity : IActivityResult<ActivityUnit>
     {
         [ResumeTarget("resume-target:probe")]
         public ValueTask OnResumeAsync() => ValueTask.CompletedTask;
@@ -1582,12 +1658,70 @@ public sealed class WorkflowExecutableCompilerTests
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
                 id switch
                 {
-                    "activity-write-line" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)),
-                    "activity-write-lines" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)),
-                    _ => "Object"
+                    "activity-probe" => TypeAliasConvention.CanonicalAlias(typeof(ResumeProbeActivity)),
+                    _ => TestActivityAliases.ForActivityVersionId(id)
                 })),
             Inputs = inputs ?? []
         };
+
+    private static ActivityDefinitionVersion GhostAliasActivityVersion() =>
+        ClrActivityVersion("activity-ghost", "Test.Ghost", "Test.UnregisteredActivity");
+
+    private static ActivityDefinitionVersion ContractlessActivityVersion() =>
+        ClrActivityVersion("activity-contractless", "Test.Contractless", TypeAliasConvention.CanonicalAlias(typeof(ContractlessActivity)));
+
+    private static ActivityDefinitionVersion ClrActivityVersion(string id, string activityTypeKey, string typeAlias) =>
+        new("1.0.0", $"{id}-definition")
+        {
+            Id = id,
+            Definition = new ActivityDefinition
+            {
+                Id = $"{id}-definition",
+                ActivityTypeKey = activityTypeKey,
+                Category = "Test"
+            },
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(typeAlias)),
+            Inputs = []
+        };
+
+    // Resolvable CLR type that declares no IActivityResult<T>: contract projection yields null, which the
+    // publish-time VF-ACT-001 gate must refuse.
+    private sealed class ContractlessActivity;
+
+    private sealed class ContractStrippingEnricher : IExecutableNodeMetadataEnricher
+    {
+        public async ValueTask<ExecutableNode> EnrichAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default) =>
+            (await EnrichCompilationAsync(request, source, rootActivity, cancellationToken)).RootActivity;
+
+        public ValueTask<ExecutableCompilationEnrichment> EnrichCompilationAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ExecutableCompilationEnrichment(Strip(rootActivity), []));
+
+        private static ExecutableNode Strip(ExecutableNode node) => new(
+            node.ExecutableNodeId,
+            node.AuthoredActivityId,
+            node.ActivityType,
+            node.ActivityTypeVersion,
+            node.Descriptor,
+            node.InputBindings,
+            node.OutputCaptures,
+            node.Metadata,
+            node.ChildSlots.Select(slot => new ExecutableChildSlot(
+                slot.Name,
+                slot.Activities.Select(Strip).ToArray())).ToArray(),
+            node.Structure);
+    }
 
     private sealed class RuntimeVariableStructureProjection
     {
@@ -1619,7 +1753,7 @@ public sealed class WorkflowExecutableCompilerTests
         };
 
     [TriggerActivity]
-    private sealed class LegacyTriggerActivity
+    private sealed class LegacyTriggerActivity : IActivityResult<ActivityUnit>
     {
         public const string ActivityType = "Elsa.Test.LegacyTrigger";
     }

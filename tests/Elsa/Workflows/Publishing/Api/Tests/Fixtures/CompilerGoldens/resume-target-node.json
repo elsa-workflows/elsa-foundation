@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:b58e8e81b8aec23bae693e56c2817009f2641513e849e6a8c94444e416896ca1",
-    "artifactId": "artifact-b58e8e81b8ae",
+    "artifactHash": "sha256:e1fcd7904e7a325d9ec8a7fdfc53bf6ef77c13c96b3cfc2c5d8ad9be2404f08e",
+    "artifactId": "artifact-e1fcd7904e7a",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -30,7 +30,7 @@
     "descriptor": {
       "consumerKey": "elsa.clr-activity",
       "payload": {
-        "TypeAlias": "Object"
+        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests\u002BResumeProbeActivity"
       },
       "schemaVersion": "1"
     },
