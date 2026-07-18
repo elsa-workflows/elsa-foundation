@@ -1,6 +1,5 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
@@ -80,15 +79,6 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                 cancellationToken);
             if (!admission.IsReady)
                 throw new ElsaAdmissionException(admission);
-
-            var workflowRoute = source.PhysicalTarget.Routes.SingleOrDefault(route =>
-                route.StorageUnit.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind);
-            if (workflowRoute is not null)
-            {
-                var historyQuery = scope.ServiceProvider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
-                historyQuery.Bind(workflowRoute);
-                await historyQuery.PrepareAsync(cancellationToken);
-            }
 
             if (!sessionSource.IsInitialized)
             {

@@ -20,15 +20,12 @@ public sealed class WorkflowExecutionStateStorePagingContractTests
         await _store.SaveAsync(State("wf-0", _timestamp));
         await _store.SaveAsync(State("wf-new", _timestamp.AddMinutes(1)));
         var second = await _store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 2, Cursor: first.NextCursor));
-        var previous = await _store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 2, Cursor: second.PreviousCursor));
 
         Assert.Equal(["wf-a", "wf-b"], first.Items.Select(x => x.WorkflowExecutionId));
         Assert.Equal(["wf-c", "wf-d"], second.Items.Select(x => x.WorkflowExecutionId));
-        Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previous.Items.Select(x => x.WorkflowExecutionId));
-        Assert.False(first.HasPrevious);
         Assert.True(first.HasNext);
-        Assert.True(second.HasPrevious);
         Assert.False(second.HasNext);
+        Assert.Null(second.NextCursor);
         Assert.Equal(6, second.TotalCount);
     }
 
@@ -73,7 +70,7 @@ public sealed class WorkflowExecutionStateStorePagingContractTests
                 TenantId: "tenant-2",
                 Cursor: cursor)));
 
-        Assert.Equal("Cursor", exception.ParamName);
+        Assert.Equal("cursor", exception.ParamName);
     }
 
     private static WorkflowExecutionState State(string id, DateTimeOffset timestamp) => new(

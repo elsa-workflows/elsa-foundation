@@ -1,6 +1,5 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
@@ -35,14 +34,6 @@ public static class SqlServerGroundworkDocumentStoreRegistration
 
         services.AddGroundworkStorageComposition();
         services.AddGroundworkStoreSessions();
-
-        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
-        services.AddScoped<IGroundworkWorkflowExecutionStatePageQuery>(serviceProvider =>
-            new SqlServerWorkflowExecutionStatePageQuery(
-                connectionString,
-                serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
-                serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-                serviceProvider.GetRequiredService<GroundworkWorkflowExecutionStatePageRouteSource>()));
 
         services.AddSingleton(serviceProvider => new SqlServerGroundworkDocumentStoreInitializer(
             connectionString,

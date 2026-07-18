@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Serialization;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -58,7 +57,6 @@ public static class GroundworkRuntimeStoreRegistration
             serviceProvider.GetRequiredService<IDocumentStore>(),
             serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
             serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            serviceProvider.GetService<IGroundworkWorkflowExecutionStatePageQuery>(),
             serviceProvider.GetService<IBoundedDocumentStore>()
             ?? serviceProvider.GetRequiredService<IDocumentStore>() as IBoundedDocumentStore
             ?? throw new InvalidOperationException("Workflow-execution queries require an admitted bounded document-store runtime.")));

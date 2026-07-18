@@ -34,6 +34,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     private int _loadCount;
     private int _deleteCount;
     private int _beginCount;
+    private int _documentQueryCount;
 
     public InMemoryDocumentStore(StorageManifest manifest, DocumentStoreAccess? access = null)
     {
@@ -46,6 +47,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     public int LoadCount => Volatile.Read(ref _loadCount);
     public int DeleteCount => Volatile.Read(ref _deleteCount);
     public int BeginCount => Volatile.Read(ref _beginCount);
+    public int DocumentQueryCount => Volatile.Read(ref _documentQueryCount);
 
     public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
     {
@@ -181,6 +183,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
 
     public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _documentQueryCount);
         var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
         var declaration = unit.PhysicalStorage?.BoundedQueries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
         var legacyDeclaration = unit.Queries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);

@@ -108,6 +108,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         const string secret = "postgresql-admission-secret";
         var connectionString = $"Host=localhost;Port={secret};Database=elsa;Username=postgres;Password={secret}";
         var services = new ServiceCollection();
+        services.AddLogging();
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }
             .ConfigureServices(services);
 

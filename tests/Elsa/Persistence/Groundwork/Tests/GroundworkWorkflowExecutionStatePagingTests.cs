@@ -30,18 +30,19 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         await store.SaveAsync(State("wf-0", _timestamp));
         await store.SaveAsync(State("wf-new", _timestamp.AddMinutes(1)));
         var second = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 2, Cursor: first.NextCursor));
-        var previous = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 2, Cursor: second.PreviousCursor));
 
         Assert.Equal(["wf-a", "wf-b"], first.Items.Select(x => x.WorkflowExecutionId));
         Assert.Equal(["wf-c", "wf-d"], second.Items.Select(x => x.WorkflowExecutionId));
-        Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previous.Items.Select(x => x.WorkflowExecutionId));
+        Assert.True(first.HasNext);
+        Assert.False(second.HasNext);
+        Assert.Null(second.NextCursor);
         Assert.Equal(6, second.TotalCount);
 
         await using var connection = new SqliteConnection(database.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'ix_elsa_workflow_history_%';";
-        Assert.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE '%history%order%';";
+        Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
     }
 
     [Fact]
@@ -66,7 +67,7 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         await using var connection = new SqliteConnection(database.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
+        command.CommandText = "SELECT schema_version, document FROM workflow_execution_states WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
         await using var reader = await command.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync());
         Assert.Equal("4", reader.GetString(0));
@@ -97,6 +98,44 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
     }
 
     [Fact]
+    public async Task Sqlite_query_classifies_a_malformed_continuation_as_an_invalid_cursor()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await using var provider = await BuildProviderAsync(database.ConnectionString);
+        var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(
+                PageSize: 10,
+                Cursor: "not-a-groundwork-continuation")));
+
+        Assert.Equal("cursor", exception.ParamName);
+        Assert.IsType<InvalidDocumentQueryContinuationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Sqlite_query_classifies_a_continuation_reused_with_different_filters_as_an_invalid_cursor()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await using var provider = await BuildProviderAsync(database.ConnectionString);
+        var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+        await store.SaveAsync(State("wf-1", _timestamp));
+        await store.SaveAsync(State("wf-2", _timestamp.AddMinutes(-1)));
+        var first = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(
+            PageSize: 1,
+            DefinitionId: "definition-1"));
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(
+                PageSize: 1,
+                DefinitionId: "definition-2",
+                Cursor: first.NextCursor)));
+
+        Assert.Equal("cursor", exception.ParamName);
+        Assert.IsType<InvalidDocumentQueryContinuationException>(exception.InnerException);
+    }
+
+    [Fact]
     public async Task Sqlite_history_query_uses_host_transformed_table_and_envelope_names()
     {
         await using var database = new TemporarySqliteDatabase();
@@ -119,7 +158,7 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
         await using var connection = new SqliteConnection(database.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM host_groundwork_documents WHERE host_document_kind = 'workflowExecutionState' AND host_id = 'wf-transformed' AND host_content_json IS NOT NULL;";
+        command.CommandText = "SELECT COUNT(*) FROM host_workflow_execution_states WHERE host_document_kind = 'workflowExecutionState' AND host_id = 'wf-transformed' AND host_document IS NOT NULL;";
         Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
     }
 

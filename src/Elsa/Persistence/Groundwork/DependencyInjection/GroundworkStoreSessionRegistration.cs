@@ -1,5 +1,4 @@
 using Elsa.Persistence.Core.DependencyInjection;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
@@ -16,7 +15,6 @@ public static class GroundworkStoreSessionRegistration
         ArgumentNullException.ThrowIfNull(services);
         services.AddPersistenceCore();
         services.TryAddSingleton<GroundworkStoreSessionSource>();
-        services.TryAddSingleton<GroundworkWorkflowExecutionStatePageRouteSource>();
         services.TryAddSingleton<IGroundworkStoreSessionSource>(serviceProvider =>
             serviceProvider.GetRequiredService<GroundworkStoreSessionSource>());
         services.TryAddSingleton<GroundworkPrivilegedAccessSink>();

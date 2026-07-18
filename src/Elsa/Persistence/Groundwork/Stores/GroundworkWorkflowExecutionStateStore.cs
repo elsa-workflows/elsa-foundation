@@ -1,30 +1,29 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
-/// Groundwork-backed <see cref="IWorkflowExecutionStateStore"/>. Ordinary collection projections use the
-/// portable document query contract. Run-history paging delegates to the active provider's bounded native
-/// keyset plan so filtered requests never materialize the full collection.
+/// Groundwork-backed <see cref="IWorkflowExecutionStateStore"/>. Ordinary collection projections and
+/// execution-history paging both use admitted provider-neutral bounded routes.
 /// </summary>
 public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentStore, IWorkflowExecutionStateStore
 {
     private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
-    private readonly IGroundworkWorkflowExecutionStatePageQuery? _pageQuery;
     private readonly IBoundedDocumentStore? _queries;
 
     public GroundworkWorkflowExecutionStateStore(
         IDocumentStore store,
         IGroundworkRuntimeDocumentSerializer serializer,
         IPersistenceAccessContextAccessor accessContextAccessor)
-        : this(store, serializer, accessContextAccessor, null, null)
+        : this(store, serializer, accessContextAccessor, null)
     {
     }
 
@@ -32,12 +31,10 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
         IDocumentStore store,
         IGroundworkRuntimeDocumentSerializer serializer,
         IPersistenceAccessContextAccessor accessContextAccessor,
-        IGroundworkWorkflowExecutionStatePageQuery? pageQuery,
         IBoundedDocumentStore? boundedStore = null)
         : base(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)
     {
         _accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
-        _pageQuery = pageQuery;
         _queries = boundedStore ?? store as IBoundedDocumentStore;
     }
 
@@ -73,14 +70,51 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
             .ToArray();
     }
 
-    public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+    public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
         _accessContextAccessor.Current.EnsureTenantScope(query.TenantId);
-        return _pageQuery?.QueryPageAsync(query, cancellationToken)
-            ?? throw new NotSupportedException("The active Groundwork provider has no bounded workflow execution history query plan.");
+
+        DocumentQueryResult result;
+        try
+        {
+            result = await Queries.QueryAsync(
+                new DocumentQuery(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                    ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery,
+                    BuildHistoryClauses(query),
+                    [
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                            PhysicalSortDirection.Descending),
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                            PhysicalSortDirection.Ascending)
+                    ],
+                    take: query.PageSize,
+                    continuation: query.Cursor),
+                cancellationToken);
+        }
+        catch (InvalidDocumentQueryContinuationException exception)
+        {
+            throw new ArgumentException(
+                "The workflow execution history cursor is invalid or does not belong to this query.",
+                "cursor",
+                exception);
+        }
+
+        var states = result.Documents
+            .Select(Serializer.Deserialize<WorkflowExecutionStateDocument>)
+            .Select(document => document.State)
+            .ToArray();
+        return new(
+            states,
+            result.NextContinuation,
+            result.NextContinuation is not null,
+            result.TotalCount);
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
@@ -106,6 +140,57 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
                             ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection))
                 ]),
             cancellationToken);
+
+    private static IReadOnlyList<DocumentQueryClause> BuildHistoryClauses(
+        WorkflowExecutionStatePageQuery query)
+    {
+        var clauses = new List<DocumentQueryClause>();
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
+            query.TenantId);
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryDefinitionIdField,
+            query.DefinitionId);
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField,
+            query.Status is { } status
+                ? ((int)status).ToString(CultureInfo.InvariantCulture)
+                : null);
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindField,
+            query.RunKind is { } runKind
+                ? ((int)runKind).ToString(CultureInfo.InvariantCulture)
+                : null);
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryCorrelationIdField,
+            query.CorrelationId);
+        AddEqual(
+            PhysicalDocumentFieldPaths.Id,
+            query.WorkflowExecutionId);
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
+            query.ArtifactId);
+        if (query.From is { } from)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.GreaterThanOrEqual(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                from.UtcTicks.ToString(CultureInfo.InvariantCulture))));
+        }
+        if (query.To is { } to)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                to.UtcTicks.ToString(CultureInfo.InvariantCulture))));
+        }
+
+        return clauses;
+
+        void AddEqual(string path, string? value)
+        {
+            if (value is not null)
+                clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value)));
+        }
+    }
 
     public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
@@ -138,10 +223,24 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
 internal sealed record WorkflowExecutionStateDocument(
     string Collection,
     WorkflowExecutionState State,
-    long HistorySortTicks)
+    long HistorySortTicks,
+    string HistoryWorkflowExecutionId,
+    string? HistoryTenantId,
+    string HistoryDefinitionId,
+    int HistoryStatus,
+    int HistoryRunKind,
+    string? HistoryCorrelationId,
+    string HistoryArtifactId)
 {
     public static WorkflowExecutionStateDocument From(WorkflowExecutionState state) => new(
         ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection,
         state,
-        WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks);
+        WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks,
+        state.WorkflowExecutionId,
+        state.TenantId,
+        state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId,
+        (int)state.Status,
+        (int)state.RunKind,
+        state.CorrelationId,
+        state.PinnedExecutable.ArtifactId);
 }

@@ -206,7 +206,6 @@ public sealed class DispatchWorkflowDeliveryRecoveryCrashTests
                 fixture.DocumentStore,
                 GroundworkTestSerialization.Serializer,
                 access,
-                pageQuery: null,
                 boundedStore: fixture.BoundedDocumentStore),
             new GroundworkActivityExecutionStateStore(
                 fixture.DocumentStore,

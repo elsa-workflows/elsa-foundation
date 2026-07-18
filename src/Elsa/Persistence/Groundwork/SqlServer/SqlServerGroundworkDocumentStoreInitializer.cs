@@ -1,6 +1,5 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
@@ -79,18 +78,6 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
             if (!admission.IsReady)
                 throw new ElsaAdmissionException(admission);
 
-            var historyRoute = admission.PhysicalTarget.Routes.SingleOrDefault(route =>
-                string.Equals(
-                    route.StorageUnit.Value,
-                    ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-                    StringComparison.Ordinal));
-            if (historyRoute is not null)
-            {
-                await using var queryScope = _scopeFactory.CreateAsyncScope();
-                var historyQuery = queryScope.ServiceProvider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
-                historyQuery.Bind(historyRoute);
-                await historyQuery.PrepareAsync(cancellationToken);
-            }
             if (!_sessionSource.IsInitialized)
             {
                 var manifest = schemaSource.CreateManifest();

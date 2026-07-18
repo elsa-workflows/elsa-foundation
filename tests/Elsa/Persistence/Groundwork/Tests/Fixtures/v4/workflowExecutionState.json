@@ -1,6 +1,13 @@
 {
   "collection": "workflowExecutionState",
+  "historyArtifactId": "artifact-wf-1",
+  "historyCorrelationId": "correlation-1",
+  "historyDefinitionId": "definition-1",
+  "historyRunKind": 0,
   "historySortTicks": 621355968000000000,
+  "historyStatus": 3,
+  "historyTenantId": "tenant-1",
+  "historyWorkflowExecutionId": "wf-1",
   "state": {
     "completedAt": "1970-01-01T00:00:00\u002B00:00",
     "correlationId": "correlation-1",

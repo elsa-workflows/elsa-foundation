@@ -105,15 +105,12 @@ public sealed class WorkflowInstancesRequestHandlerTests
 
         var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
         var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
-        var previous = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, second.PreviousCursor), CancellationToken.None);
 
         Assert.Equal(["wf-a", "wf-b"], first.Items.Select(x => x.WorkflowExecutionId));
-        Assert.False(first.HasPrevious);
         Assert.True(first.HasNext);
         Assert.Equal(["wf-c", "wf-d"], second.Items.Select(x => x.WorkflowExecutionId));
-        Assert.True(second.HasPrevious);
         Assert.False(second.HasNext);
-        Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previous.Items.Select(x => x.WorkflowExecutionId));
+        Assert.Null(second.NextCursor);
         Assert.Equal(4, second.TotalCount);
     }
 
@@ -124,26 +121,10 @@ public sealed class WorkflowInstancesRequestHandlerTests
         var handler = NewListInstanceHandler();
 
         var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
-        var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
         var nextWithOmittedTake = await handler.Handle(new ListWorkflowInstances(null, null, null, null, first.NextCursor), CancellationToken.None);
-        var previousWithOmittedTake = await handler.Handle(new ListWorkflowInstances(null, null, null, null, second.PreviousCursor), CancellationToken.None);
 
         Assert.Equal(25, nextWithOmittedTake.Count);
-        Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previousWithOmittedTake.Items.Select(x => x.WorkflowExecutionId));
-    }
-
-    [Fact]
-    public async Task ListWorkflowInstances_accepts_legacy_five_part_cursors()
-    {
-        await SeedWorkflowInstancesAsync(30);
-        var handler = NewListInstanceHandler();
-        var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
-        var legacyCursor = RemoveCursorScope(first.NextCursor!);
-
-        var next = await handler.Handle(new ListWorkflowInstances(null, null, null, null, legacyCursor), CancellationToken.None);
-
-        Assert.Equal(25, next.Count);
-        Assert.Equal("wf-002", next.Items.First().WorkflowExecutionId);
+        Assert.Equal("wf-002", nextWithOmittedTake.Items.First().WorkflowExecutionId);
     }
 
     [Fact]
@@ -157,7 +138,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             new ListWorkflowInstances(null, "definition-2", null, 1, first.NextCursor),
             CancellationToken.None));
 
-        Assert.Equal("Cursor", exception.ParamName);
+        Assert.Equal("cursor", exception.ParamName);
     }
 
     [Fact]
@@ -391,18 +372,6 @@ public sealed class WorkflowInstancesRequestHandlerTests
                     "publication-1",
                     "slot-default")
         };
-
-    private static string RemoveCursorScope(string cursor)
-    {
-        var base64 = cursor.Replace('-', '+').Replace('_', '/');
-        base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
-        var parts = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(base64)).Split('|');
-        var legacy = string.Join('|', parts.Take(5));
-        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(legacy))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-    }
 
     private sealed class BoundedQueryOnlyWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
     {
