@@ -20,8 +20,16 @@ public sealed record SaveActivityForkCandidateRequest(ActivityForkCandidate Cand
 
 public interface ISaveActivityForkCandidateCommand
 {
-    Task ExecuteAsync(
+    Task<ActivityForkCandidate> ExecuteAsync(
         SaveActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IPruneActivityForkCandidatesCommand
+{
+    Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
         CancellationToken cancellationToken = default);
 }
 
@@ -51,6 +59,10 @@ public sealed class ActivityForkCandidateStaleException(string message) : Except
 public sealed class ActivityForkIdempotencyConflictException(string message) : Exception(message);
 
 public sealed class ActivityForkCollisionException(string message) : Exception(message);
+
+public sealed class ActivityForkPreviewIdempotencyConflictException(string message) : Exception(message);
+
+public sealed class ActivityForkPreviewExpiredException(string message) : Exception(message);
 
 public sealed record UpdateActivityDefinitionPresentationRequest(
     string DefinitionId,

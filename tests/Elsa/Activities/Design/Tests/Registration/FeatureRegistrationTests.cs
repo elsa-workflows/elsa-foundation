@@ -17,6 +17,8 @@ using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Api.Capabilities.Contracts;
+using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Events;
@@ -101,6 +103,27 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.NotNull(provider.GetService<IActivityAvailabilityEvaluator>());
+    }
+
+    [Fact]
+    public async Task ActivitiesDesignApiFeature_Registers_Canonical_Contract_Proposal_Capability_Relations()
+    {
+        var services = MinimalServices();
+        services.AddApiCapabilities();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var document = await provider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
+        var capability = Assert.Single(document.Capabilities, x => x.Id == "elsa.api.activity-design");
+
+        Assert.Contains(capability.Links, x =>
+            x.Rel == "activity-draft-contract-proposals" &&
+            x.Href == "design/activities/drafts/{draftId}/contract-proposals" &&
+            x.Templated);
+        Assert.Contains(capability.Links, x =>
+            x.Rel == "activity-draft-contract-proposals-apply" &&
+            x.Href == "design/activities/drafts/{draftId}/contract-proposals/apply" &&
+            x.Templated);
     }
 
     [Fact]

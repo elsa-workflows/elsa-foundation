@@ -110,6 +110,47 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
+    public async Task Fork_preview_retries_return_the_first_reservation_and_reject_changed_material()
+    {
+        var harness = Harness.Create();
+        var first = ForkCandidate();
+        var retry = ForkCandidate(definitionId: "losing-definition", draftId: "losing-draft");
+        var changed = ForkCandidate(
+            definitionId: "changed-definition",
+            draftId: "changed-draft",
+            requestFingerprint: $"sha256:{new string('f', 64)}");
+
+        var reserved = await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
+        var replay = await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(retry));
+        await Assert.ThrowsAsync<ActivityForkPreviewIdempotencyConflictException>(() =>
+            harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(changed)));
+
+        Assert.Equal(first.ReservedDefinition.Id, reserved.ReservedDefinition.Id);
+        Assert.Equal(first.ReservedDefinition.Id, replay.ReservedDefinition.Id);
+        Assert.Single(harness.Documents.Snapshot(ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind));
+    }
+
+    [Fact]
+    public async Task Fork_candidate_retention_prunes_bounded_candidates_but_preserves_append_only_receipt()
+    {
+        var harness = Harness.Create();
+        var candidate = ForkCandidate();
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(candidate));
+        var request = ForkApply(candidate, "operation-1");
+        await harness.Stores.ExecuteAsync(request);
+
+        var pruned = await harness.Stores.ExecuteAsync(candidate.RetainUntil, 1);
+
+        Assert.Equal(1, pruned);
+        Assert.Null(await harness.Stores.FindCandidateAsync(candidate.Id));
+        var receipt = await harness.Stores.FindReceiptAsync(request.ReceiptId);
+        Assert.NotNull(receipt);
+        Assert.Equal(candidate.CandidateId, receipt!.PublicCandidateId);
+        Assert.Equal(candidate.ReservedDefinition.Id, receipt.Definition.Id);
+        Assert.Single(harness.Documents.Snapshot(ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind));
+    }
+
+    [Fact]
     public async Task UpdateDefinitionPresentation_Uses_Document_Cas_And_Preserves_Immutable_Identity_State()
     {
         var harness = Harness.Create();
@@ -592,7 +633,8 @@ public sealed class GroundworkReusableActivityStoreTests
     private static ActivityForkCandidate ForkCandidate(
         string candidateId = "candidate-1",
         string definitionId = "target-definition-1",
-        string draftId = "target-draft-1")
+        string draftId = "target-draft-1",
+        string? requestFingerprint = null)
     {
         var createdAt = new DateTimeOffset(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
         var definition = new ActivityDefinition
@@ -639,8 +681,10 @@ public sealed class GroundworkReusableActivityStoreTests
         return new()
         {
             Id = candidateId,
+            CandidateId = $"public-{candidateId}",
+            PreviewIdempotencyKey = $"preview-{candidateId}",
             TenantId = null,
-            RequestFingerprint = $"sha256:{new string('a', 64)}",
+            RequestFingerprint = requestFingerprint ?? $"sha256:{new string('a', 64)}",
             AccessBindingFingerprint = $"sha256:{new string('b', 64)}",
             ActorId = "actor-a",
             AuthorizationProfile = "profile-a",
@@ -657,6 +701,7 @@ public sealed class GroundworkReusableActivityStoreTests
             TargetContractFingerprint = $"sha256:{new string('e', 64)}",
             ExpiresAt = createdAt.AddMinutes(15),
             RetainUntil = createdAt.AddDays(1),
+            RetentionKey = ActivityForkCandidateIdentity.RetentionKey(createdAt.AddDays(1)),
             CreatedAt = createdAt,
             LastModifiedAt = createdAt
         };
@@ -804,6 +849,29 @@ public sealed class GroundworkReusableActivityStoreTests
     {
         public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         {
+            if (query.QueryIdentity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery)
+            {
+                var expiredComparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+                Assert.Equal(QueryComparisonOperator.LessThanOrEqual, expiredComparison.Operator);
+                var retainBefore = Assert.Single(expiredComparison.Values)!;
+                var memory = Assert.IsType<InMemoryDocumentStore>(documents);
+                var expiredMatches = memory
+                    .Snapshot(query.DocumentKind)
+                    .Where(x =>
+                    {
+                        using var json = JsonDocument.Parse(x.ContentJson);
+                        var retentionKey = json.RootElement
+                            .GetProperty("entity")
+                            .GetProperty("retentionKey")
+                            .GetString();
+                        return StringComparer.Ordinal.Compare(retentionKey, retainBefore) <= 0;
+                    })
+                    .ToArray();
+                IEnumerable<DocumentEnvelope> expiredPage = expiredMatches.Skip(query.Skip ?? 0);
+                if (query.Take is { } expiredTake)
+                    expiredPage = expiredPage.Take(expiredTake);
+                return new DocumentQueryResult(expiredPage.ToArray(), expiredMatches.Length);
+            }
             var index = query.QueryIdentity switch
             {
                 ActivitiesDesignStorageManifest.ListAllQuery => ActivitiesDesignStorageManifest.ByCollectionIndex,

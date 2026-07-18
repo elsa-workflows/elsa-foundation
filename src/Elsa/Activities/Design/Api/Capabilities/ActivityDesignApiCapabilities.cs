@@ -18,6 +18,8 @@ public static class ActivityDesignApiCapabilities
             new("activity-definition-drafts", "design/activities/definitions/{definitionId}/drafts", true),
             new("activity-definition-draft", "design/activities/drafts/{draftId}", true),
             new("activity-draft-validation", "design/activities/drafts/{draftId}/validate", true),
+            new("activity-draft-contract-proposals", "design/activities/drafts/{draftId}/contract-proposals", true),
+            new("activity-draft-contract-proposals-apply", "design/activities/drafts/{draftId}/contract-proposals/apply", true),
             new("activity-definition-versions", "design/activities/definitions/{definitionId}/versions", true),
             new("activity-definition-version", "design/activities/versions/{versionId}", true),
             new("activity-definition-fork-preview", "design/activities/definitions/{definitionId}/fork-previews", true),

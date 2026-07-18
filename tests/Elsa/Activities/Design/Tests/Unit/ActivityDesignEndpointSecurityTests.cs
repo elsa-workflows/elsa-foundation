@@ -66,6 +66,18 @@ public sealed class ActivityDesignEndpointSecurityTests
         Assert.Null(definition.AnonymousVerbs);
     }
 
+    [Theory]
+    [InlineData("Drafts.ProposeContract")]
+    [InlineData("Drafts.ApplyContractProposal")]
+    public void Contract_proposal_endpoints_require_activity_design_manage(string relativeTypeName)
+    {
+        var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
+
+        Assert.Contains(PermissionNames.ActivityDesignManage, definition.AllowedPermissions!);
+        Assert.Equal("POST", Assert.Single(definition.Verbs));
+        Assert.Null(definition.AnonymousVerbs);
+    }
+
     [Fact]
     public void The_inline_list_covers_every_endpoint_in_the_assembly()
     {

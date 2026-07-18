@@ -97,6 +97,9 @@ public static class ActivitiesDesignStorageManifest
 
     public const string ActivityForkCandidateDocumentKind = "activityForkCandidate";
     public const string ActivityForkCandidateCollection = "activityForkCandidate";
+    public const string ActivityForkCandidateRetentionField = "entity.retentionKey";
+    public const string ActivityForkCandidateRetentionIndex = "fork-candidate-by-retention";
+    public const string ActivityForkCandidateExpiredQuery = "fork-candidate-expired";
     public const string ActivityForkReceiptDocumentKind = "activityForkReceipt";
     public const string ActivityForkReceiptCollection = "activityForkReceipt";
 
@@ -210,13 +213,28 @@ public static class ActivitiesDesignStorageManifest
             Unit(
                 ActivityForkCandidateDocumentKind,
                 "Activity fork candidate",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(
+                        ActivityForkCandidateRetentionIndex,
+                        ActivityForkCandidateRetentionField,
+                        PortableQueryOperation.LessThanOrEqual)
+                ],
+                [
+                    Query(ListAllQuery, ByCollectionIndex),
+                    new PortableQueryDeclaration(
+                        ActivityForkCandidateExpiredQuery,
+                        ActivityForkCandidateRetentionIndex,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.None,
+                        QueryPagingSupport.Offset)
+                ]),
             Unit(
                 ActivityForkReceiptDocumentKind,
                 "Activity fork receipt",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+                [Query(ListAllQuery, ByCollectionIndex)],
+                LifecyclePolicy.AppendOnly),
             ManagementUnit(
                 ActivityDefinitionManagementProjectionDocumentKind,
                 "Activity definition management projection",
@@ -253,11 +271,19 @@ public static class ActivitiesDesignStorageManifest
         string documentKind,
         string label,
         IndexDeclaration[] indexes,
-        PortableQueryDeclaration[] queries) => new(
+        PortableQueryDeclaration[] queries) =>
+        Unit(documentKind, label, indexes, queries, LifecyclePolicy.Mutable);
+
+    private static StorageUnit Unit(
+        string documentKind,
+        string label,
+        IndexDeclaration[] indexes,
+        PortableQueryDeclaration[] queries,
+        LifecyclePolicy lifecycle) => new(
         new StorageUnitIdentity(documentKind),
         label,
         StorageIntent.PortableDocument(),
-        LifecyclePolicy.Mutable,
+        lifecycle,
         IdentityPolicy.StringId(),
         TenancyPolicy.Scoped,
         ConcurrencyPolicy.Optimistic(),
@@ -462,13 +488,18 @@ public static class ActivitiesDesignStorageManifest
         _ => throw new ArgumentOutOfRangeException(nameof(path), path, null)
     };
 
-    private static IndexDeclaration Keyword(string identity, string field) => new(
+    private static IndexDeclaration Keyword(
+        string identity,
+        string field,
+        params PortableQueryOperation[] operations) => new(
         identity,
         [new IndexField(field)],
         IndexValueKind.Keyword,
         false,
         true,
         MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        operations.Length == 0
+            ? new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }
+            : operations.ToHashSet(),
         IndexPhysicalizationPolicy.Optimized);
 }

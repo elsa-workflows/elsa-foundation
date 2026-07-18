@@ -40,6 +40,7 @@ public sealed class GroundworkReusableActivityStores(
     IActivityDependencyProjectionStore,
     ICreateActivityDefinitionCommand,
     ISaveActivityForkCandidateCommand,
+    IPruneActivityForkCandidatesCommand,
     IApplyActivityForkCandidateCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
@@ -337,7 +338,7 @@ public sealed class GroundworkReusableActivityStores(
             cancellationToken);
     }
 
-    public async Task ExecuteAsync(
+    public async Task<ActivityForkCandidate> ExecuteAsync(
         SaveActivityForkCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -346,17 +347,55 @@ public sealed class GroundworkReusableActivityStores(
             ForkCandidateLock(request.Candidate.Id),
             null,
             cancellationToken);
-        await EnsureAbsentAsync<ActivityForkCandidate>(
+        var existing = await LoadAsync<ActivityForkCandidate>(
             ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
             request.Candidate.Id,
             cancellationToken);
+        if (existing is not null)
+        {
+            if (existing.Entity.ExpiresAt <= request.Candidate.CreatedAt)
+                throw new ActivityForkPreviewExpiredException("The reviewed fork reservation expired.");
+            EnsureExactPreviewReplay(existing.Entity, request.Candidate);
+            return existing.Entity;
+        }
         await store.SaveAsync(
             Save(
                 ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityForkCandidateCollection,
-                request.Candidate,
-                0),
+            request.Candidate,
+            0),
             cancellationToken);
+        return request.Candidate;
+    }
+
+    public async Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (maximumCount is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        var result = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                    ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField,
+                    ActivityForkCandidateIdentity.RetentionKey(retainBefore)))],
+                null,
+                0,
+                maximumCount),
+            cancellationToken);
+        if (result.Documents.Count == 0)
+            return 0;
+        await store.WriteAllAsync(
+            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind),
+            result.Documents.Select(x => DocumentWriteOperation.Delete(new DeleteDocumentRequest(
+                x.DocumentKind,
+                x.Id,
+                x.Version))).ToArray(),
+            cancellationToken);
+        return result.Documents.Count;
     }
 
     public async Task<ActivityForkApplyResult> ExecuteAsync(
@@ -435,6 +474,7 @@ public sealed class GroundworkReusableActivityStores(
             TenantId = candidate.Entity.TenantId,
             IdempotencyKey = request.IdempotencyKey,
             CandidateId = candidate.Entity.Id,
+            PublicCandidateId = candidate.Entity.CandidateId,
             RequestFingerprint = candidate.Entity.RequestFingerprint,
             AccessBindingFingerprint = candidate.Entity.AccessBindingFingerprint,
             ActorId = candidate.Entity.ActorId,
@@ -443,6 +483,9 @@ public sealed class GroundworkReusableActivityStores(
             DefinitionId = candidate.Entity.ReservedDefinition.Id,
             ActivityTypeKey = candidate.Entity.ReservedDefinition.ActivityTypeKey,
             DraftId = candidate.Entity.ReservedDraft.Id,
+            Definition = candidate.Entity.ReservedDefinition,
+            AuthoringState = candidate.Entity.ReservedAuthoringState,
+            Draft = candidate.Entity.ReservedDraft,
             AppliedAt = request.AppliedAt,
             CreatedAt = request.AppliedAt,
             LastModifiedAt = request.AppliedAt
@@ -1044,6 +1087,21 @@ public sealed class GroundworkReusableActivityStores(
             throw new ArgumentException("Fork candidate tenant and exact source bindings must match its reserved authoring material.", nameof(candidate));
         if (candidate.ExpiresAt <= candidate.CreatedAt || candidate.RetainUntil <= candidate.ExpiresAt)
             throw new ArgumentException("Fork candidate expiry and retention must be strictly ordered.", nameof(candidate));
+        if (!StringComparer.Ordinal.Equals(
+                candidate.RetentionKey,
+                ActivityForkCandidateIdentity.RetentionKey(candidate.RetainUntil)))
+            throw new ArgumentException("Fork candidate retention key must exactly represent its retention deadline.", nameof(candidate));
+    }
+
+    private static void EnsureExactPreviewReplay(ActivityForkCandidate existing, ActivityForkCandidate requested)
+    {
+        if (!StringComparer.Ordinal.Equals(existing.PreviewIdempotencyKey, requested.PreviewIdempotencyKey) ||
+            !StringComparer.Ordinal.Equals(existing.RequestFingerprint, requested.RequestFingerprint) ||
+            !StringComparer.Ordinal.Equals(existing.AccessBindingFingerprint, requested.AccessBindingFingerprint) ||
+            !StringComparer.Ordinal.Equals(existing.ActorId, requested.ActorId) ||
+            !StringComparer.Ordinal.Equals(existing.AuthorizationProfile, requested.AuthorizationProfile))
+            throw new ActivityForkPreviewIdempotencyConflictException(
+                "The preview operation identity is already bound to different material.");
     }
 
     private static void EnsureApplicable(

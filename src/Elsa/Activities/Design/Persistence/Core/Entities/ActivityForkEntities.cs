@@ -21,6 +21,10 @@ public enum ActivityForkCandidateStatus
 /// </summary>
 public sealed class ActivityForkCandidate : TenantEntity
 {
+    public string CandidateId { get; init; } = null!;
+
+    public string PreviewIdempotencyKey { get; init; } = null!;
+
     public string RequestFingerprint { get; init; } = null!;
 
     public string AccessBindingFingerprint { get; init; } = null!;
@@ -57,6 +61,8 @@ public sealed class ActivityForkCandidate : TenantEntity
 
     public DateTimeOffset RetainUntil { get; init; }
 
+    public string RetentionKey { get; init; } = null!;
+
     public ActivityForkCandidateStatus Status { get; set; } = ActivityForkCandidateStatus.Reserved;
 
     public string? AppliedIdempotencyKey { get; set; }
@@ -74,6 +80,8 @@ public sealed class ActivityForkReceipt : TenantEntity
 
     public string CandidateId { get; init; } = null!;
 
+    public string PublicCandidateId { get; init; } = null!;
+
     public string RequestFingerprint { get; init; } = null!;
 
     public string AccessBindingFingerprint { get; init; } = null!;
@@ -90,6 +98,12 @@ public sealed class ActivityForkReceipt : TenantEntity
 
     public string DraftId { get; init; } = null!;
 
+    public ActivityDefinition Definition { get; init; } = null!;
+
+    public ActivityDefinitionAuthoringState AuthoringState { get; init; } = null!;
+
+    public ActivityDefinitionDraft Draft { get; init; } = null!;
+
     public DateTimeOffset AppliedAt { get; init; }
 }
 
@@ -100,4 +114,16 @@ public static class ActivityForkReceiptIdentity
         var material = $"{tenantId ?? "<global>"}\u001f{actorId}\u001f{idempotencyKey}";
         return $"activity-fork-receipt-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant()}";
     }
+}
+
+public static class ActivityForkCandidateIdentity
+{
+    public static string Compute(string? tenantId, string actorId, string idempotencyKey)
+    {
+        var material = $"{tenantId ?? "<global>"}\u001f{actorId}\u001f{idempotencyKey}";
+        return $"activity-fork-candidate-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant()}";
+    }
+
+    public static string RetentionKey(DateTimeOffset retainUntil) =>
+        retainUntil.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
 }

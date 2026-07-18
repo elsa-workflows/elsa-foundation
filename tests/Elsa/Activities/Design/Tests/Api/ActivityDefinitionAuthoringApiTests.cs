@@ -66,6 +66,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains(links, x => x.Rel == "activity-definition-drafts" && x.Href == "design/activities/definitions/{definitionId}/drafts" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-draft" && x.Href == "design/activities/drafts/{draftId}" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-draft-validation" && x.Href == "design/activities/drafts/{draftId}/validate" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-draft-contract-proposals" && x.Href == "design/activities/drafts/{draftId}/contract-proposals" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-draft-contract-proposals-apply" && x.Href == "design/activities/drafts/{draftId}/contract-proposals/apply" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-versions" && x.Href == "design/activities/definitions/{definitionId}/versions" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-version" && x.Href == "design/activities/versions/{versionId}" && x.Templated);
         Assert.Contains(links, x => x.Rel == "activity-definition-fork-preview" && x.Href == "design/activities/definitions/{definitionId}/fork-previews" && x.Templated);
@@ -88,7 +90,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
     {
         object[] requests =
         [
-            new PreviewReusableActivityFork("definition-route", "source-version", "Category", "Display", null, "provider", "1"),
+            new PreviewReusableActivityFork("definition-route", "preview-operation", "source-version", "Category", "Display", null, "provider", "1"),
             new ApplyReusableActivityFork("candidate-route", "sha256:request", "fork-operation"),
             new CreateReusableActivityDraft("definition-route", null),
             new ReplaceReusableActivityDraft(

@@ -35,6 +35,7 @@ public sealed record CreateReusableActivityDefinition(
 
 public sealed record PreviewReusableActivityFork(
     [property: JsonIgnore] string DefinitionId,
+    string IdempotencyKey,
     string SourceVersionId,
     string Category,
     string DisplayName,

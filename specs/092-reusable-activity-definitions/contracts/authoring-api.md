@@ -13,7 +13,9 @@ All paths are relative to the Elsa shell route. The contract extends the existin
 | `PATCH` | `/design/activities/definitions/{definitionId}` | Change presentation metadata only. |
 | `PUT` | `/design/activities/definitions/{definitionId}/recommendation` | Replace or explicitly clear the exact recommended active version under reviewed preconditions. |
 | `GET` | `/design/activities/definitions/picker` | Page one authorization-safe exact recommended active version per definition. |
-| `POST` | `/design/activities/definitions/{definitionId}/forks` | Fork an exact source-owned version into a new Design-owned identity and draft. |
+| `POST` | `/design/activities/definitions/{definitionId}/fork-previews` | Durably reserve and review an exact source-owned fork candidate without creating authoring state. |
+| `POST` | `/design/activities/fork-candidates/{candidateId}/apply` | Atomically apply an unchanged, unexpired reviewed fork candidate. |
+| `GET` | `/design/activities/forks/{idempotencyKey}` | Read a durable terminal fork receipt after an uncertain response. |
 | `POST` | `/design/activities/definitions/{definitionId}/drafts` | Create a fresh draft or clone an exact version. |
 | `GET` | `/design/activities/definitions/{definitionId}/drafts` | Page authorization-safe draft management summaries for one definition. |
 | `GET` | `/design/activities/drafts/{draftId}` | Read one draft, state, layout, revision, and current validation. |
@@ -52,8 +54,14 @@ subordinate operations follow this capability-major contract.
 | `activity-definition` | `design/activities/definitions/{definitionId}` | One stable definition detail. |
 | `activity-definition-drafts` | `design/activities/definitions/{definitionId}/drafts` | Draft collection and creation for one definition. |
 | `activity-definition-draft` | `design/activities/drafts/{draftId}` | One mutable draft detail/update/discard target. |
+| `activity-draft-validation` | `design/activities/drafts/{draftId}/validate` | Explicit validation for one exact draft revision. |
+| `activity-draft-contract-proposals` | `design/activities/drafts/{draftId}/contract-proposals` | Read-only typed contract proposal for one exact draft binding. |
+| `activity-draft-contract-proposals-apply` | `design/activities/drafts/{draftId}/contract-proposals/apply` | Apply selected changes from an unchanged reviewed proposal. |
 | `activity-definition-versions` | `design/activities/definitions/{definitionId}/versions` | Immutable version collection for one definition. |
 | `activity-definition-version` | `design/activities/versions/{versionId}` | One immutable version detail. |
+| `activity-definition-fork-preview` | `design/activities/definitions/{definitionId}/fork-previews` | Reserve and review one source-owned fork candidate. |
+| `activity-definition-fork-apply` | `design/activities/fork-candidates/{candidateId}/apply` | Apply one reviewed candidate. |
+| `activity-definition-fork-status` | `design/activities/forks/{idempotencyKey}` | Durable terminal fork outcome. |
 | `activity-draft-conflict-copies` | `design/activities/drafts/{draftId}/conflict-copies` | Conflict-copy recovery for one draft. |
 | `activity-definition-recommendation` | `design/activities/definitions/{definitionId}/recommendation` | Exact recommendation replacement or clearing. |
 | `recommended-activity-definitions` | `design/activities/definitions/picker` | One recommended active version per visible definition. |
@@ -345,14 +353,15 @@ Rules:
 - The initial draft has no required author-supplied name. Its optional presentation label may be
   set later and is neither identity nor a uniqueness boundary.
 
-## 4. Fork a source-owned version
+## 4. Review and apply a source-owned fork
 
 ```http
-POST /design/activities/definitions/{definitionId}/forks
+POST /design/activities/definitions/{definitionId}/fork-previews
 ```
 
 ```json
 {
+  "idempotencyKey": "fork-preview-01J...",
   "sourceVersionId": "activity-ver-clr-3",
   "category": "Orders",
   "displayName": "Calculate order total (custom)",
@@ -362,8 +371,42 @@ POST /design/activities/definitions/{definitionId}/forks
 }
 ```
 
-Response: `201 Created` with `ReusableActivityDefinitionMutationView` containing `definition` and
-its one exact initial `draft`.
+Response: `200 OK` with an `ActivityForkPreviewView`. It contains an opaque signed `candidateId`,
+the normalized presentation, exact source and reserved target identities, the complete target
+contract, source/target provider and contract fingerprints, safe ordered migration diagnostics,
+access-binding evidence, and `createdAt`/`expiresAt`. Preview persists only the bounded reservation;
+it does not create a definition, authoring state, draft, layout, or catalog projection.
+
+The preview `idempotencyKey` is actor- and tenant-scoped. Concurrent or lost-response retries with
+the same key and exact normalized material return the first reservation and the same server-created
+target identities. Reusing the key for different material returns
+`409 activity.fork.preview-idempotency-conflict`. An expired reservation returns
+`410 activity.fork.preview-expired`; it never silently allocates replacement identities under the
+same reviewed key.
+
+```http
+POST /design/activities/fork-candidates/{candidateId}/apply
+```
+
+```json
+{
+  "requestFingerprint": "sha256:...",
+  "idempotencyKey": "fork-apply-01J..."
+}
+```
+
+Response: `200 OK` with an `ActivityForkReceiptView`. Apply rechecks the signed candidate, actor,
+tenant, access profile, expiry, exact source version/authority, provider migration, and activated
+contract capabilities. One atomic commit consumes the reservation and creates the exact reserved
+definition, Design authority state, draft, layout, management projection, and append-only receipt.
+An exact replay returns `AlreadyApplied`; the receipt is never updated.
+
+```http
+GET /design/activities/forks/{idempotencyKey}
+```
+
+The status operation reads the actor- and tenant-scoped append-only terminal receipt. Clients use
+it after an uncertain apply response before deciding whether any recovery action is needed.
 
 Rules:
 
@@ -373,6 +416,9 @@ Rules:
 - The new definition records fork provenance for audit/inspection, but it is not part of the source definition's lineage or content authority.
 - The fork receives a new server-generated immutable activity type key. Its initial draft does not
   require a user-supplied unique name.
+- Candidates have explicit expiry and retention deadlines. A bounded admitted retention query
+  deletes candidates after retention; the self-contained append-only receipt remains sufficient
+  for status reconciliation.
 
 ## 5. Create or clone a draft
 

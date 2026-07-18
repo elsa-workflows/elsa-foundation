@@ -35,6 +35,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     IActivityUpgradePlanStore,
     ICreateActivityDefinitionCommand,
     ISaveActivityForkCandidateCommand,
+    IPruneActivityForkCandidatesCommand,
     IApplyActivityForkCandidateCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
@@ -395,18 +396,53 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         return Task.CompletedTask;
     }
 
-    public Task ExecuteAsync(
+    public Task<ActivityForkCandidate> ExecuteAsync(
         SaveActivityForkCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (_gate)
         {
-            if (!_forkCandidates.TryAdd(request.Candidate.Id, Clone(request.Candidate)))
-                throw Conflict($"Activity fork candidate '{request.Candidate.Id}' already exists.");
+            if (_forkCandidates.TryGetValue(request.Candidate.Id, out var existing))
+            {
+                if (existing.ExpiresAt <= request.Candidate.CreatedAt)
+                    throw new ActivityForkPreviewExpiredException("The reviewed fork reservation expired.");
+                if (!StringComparer.Ordinal.Equals(existing.PreviewIdempotencyKey, request.Candidate.PreviewIdempotencyKey) ||
+                    !StringComparer.Ordinal.Equals(existing.RequestFingerprint, request.Candidate.RequestFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.AccessBindingFingerprint, request.Candidate.AccessBindingFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.ActorId, request.Candidate.ActorId) ||
+                    !StringComparer.Ordinal.Equals(existing.AuthorizationProfile, request.Candidate.AuthorizationProfile))
+                    throw new ActivityForkPreviewIdempotencyConflictException("The preview operation identity is already bound.");
+                return Task.FromResult(Clone(existing));
+            }
+            _forkCandidates.Add(request.Candidate.Id, Clone(request.Candidate));
             _sequence++;
+            return Task.FromResult(Clone(request.Candidate));
         }
-        return Task.CompletedTask;
+    }
+
+    public Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (maximumCount is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        lock (_gate)
+        {
+            var expired = _forkCandidates.Values
+                .Where(x => x.RetainUntil <= retainBefore)
+                .OrderBy(x => x.RetentionKey, StringComparer.Ordinal)
+                .Take(maximumCount)
+                .Select(x => x.Id)
+                .ToArray();
+            foreach (var id in expired)
+                _forkCandidates.Remove(id);
+            if (expired.Length > 0)
+                _sequence++;
+            return Task.FromResult(expired.Length);
+        }
     }
 
     public Task<ActivityForkApplyResult> ExecuteAsync(
@@ -456,6 +492,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                 TenantId = applied.TenantId,
                 IdempotencyKey = request.IdempotencyKey,
                 CandidateId = applied.Id,
+                PublicCandidateId = applied.CandidateId,
                 RequestFingerprint = applied.RequestFingerprint,
                 AccessBindingFingerprint = applied.AccessBindingFingerprint,
                 ActorId = applied.ActorId,
@@ -463,6 +500,9 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                 DefinitionId = applied.ReservedDefinition.Id,
                 ActivityTypeKey = applied.ReservedDefinition.ActivityTypeKey,
                 DraftId = applied.ReservedDraft.Id,
+                Definition = Clone(applied.ReservedDefinition),
+                AuthoringState = Clone(applied.ReservedAuthoringState),
+                Draft = Clone(applied.ReservedDraft),
                 AppliedAt = request.AppliedAt,
                 CreatedAt = request.AppliedAt,
                 LastModifiedAt = request.AppliedAt
@@ -1132,6 +1172,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     private static ActivityForkCandidate Clone(ActivityForkCandidate source) => new()
     {
         Id = source.Id,
+        CandidateId = source.CandidateId,
+        PreviewIdempotencyKey = source.PreviewIdempotencyKey,
         TenantId = source.TenantId,
         RequestFingerprint = source.RequestFingerprint,
         AccessBindingFingerprint = source.AccessBindingFingerprint,
@@ -1151,6 +1193,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         TargetContractFingerprint = source.TargetContractFingerprint,
         ExpiresAt = source.ExpiresAt,
         RetainUntil = source.RetainUntil,
+        RetentionKey = source.RetentionKey,
         Status = source.Status,
         AppliedIdempotencyKey = source.AppliedIdempotencyKey,
         CreatedAt = source.CreatedAt,
@@ -1163,6 +1206,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         TenantId = source.TenantId,
         IdempotencyKey = source.IdempotencyKey,
         CandidateId = source.CandidateId,
+        PublicCandidateId = source.PublicCandidateId,
         RequestFingerprint = source.RequestFingerprint,
         AccessBindingFingerprint = source.AccessBindingFingerprint,
         ActorId = source.ActorId,
@@ -1171,6 +1215,9 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         DefinitionId = source.DefinitionId,
         ActivityTypeKey = source.ActivityTypeKey,
         DraftId = source.DraftId,
+        Definition = Clone(source.Definition),
+        AuthoringState = Clone(source.AuthoringState),
+        Draft = Clone(source.Draft),
         AppliedAt = source.AppliedAt,
         CreatedAt = source.CreatedAt,
         LastModifiedAt = source.LastModifiedAt

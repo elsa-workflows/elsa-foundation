@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 136
 - Test projects: 68
-- Direct project references: 933
+- Direct project references: 936
 
 ## Projects
 
@@ -146,8 +146,8 @@ Records direct project references only.
 | [Elsa.Workflows.Runtime.Resumption](../../src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Tracing](../../src/Elsa/Workflows/Runtime/Tracing/Elsa.Workflows.Runtime.Tracing.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
-| [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa3 | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Models |
-| [Elsa3.Activities.Design.Import.Persistence.Groundwork](../../src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj) | source | Elsa3 | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Querying<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Activities.Design.Import |
+| [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa3 | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Models |
+| [Elsa3.Activities.Design.Import.Persistence.Groundwork](../../src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj) | source | Elsa3 | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork.Composition<br>Elsa.Persistence.Groundwork.Querying<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Activities.Design.Import |
 | [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | Elsa3 | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Activities.Design.Import<br>Elsa3.Models |
 | [Elsa3.Models](../../src/Elsa3/Models/Elsa3.Models.csproj) | source | Elsa3 | net10.0 | default | - |
 | [Elsa.Activities.ControlFlow.Tests](../../tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript |

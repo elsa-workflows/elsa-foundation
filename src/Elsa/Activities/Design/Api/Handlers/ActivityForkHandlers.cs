@@ -27,6 +27,7 @@ public sealed class ActivityForkService(
     IActivityDefinitionLayoutStore layoutStore,
     IActivityForkStore forkStore,
     ISaveActivityForkCandidateCommand saveCandidate,
+    IPruneActivityForkCandidatesCommand pruneCandidates,
     IApplyActivityForkCandidateCommand applyCandidate,
     IActivityProviderRegistry providers,
     ActivityContractAuthoringValidator contractAuthoringValidator,
@@ -45,6 +46,7 @@ public sealed class ActivityForkService(
         CancellationToken cancellationToken)
     {
         EnsureCanFork(command.TargetProviderKey);
+        EnsureBoundedIdentity(command.IdempotencyKey, "idempotencyKey");
         var presentation = NormalizePresentation(command.Category, command.DisplayName, command.Description);
         var sourceAuthoring = await RequiredAuthoringAsync(command.DefinitionId, cancellationToken);
         EnsureVisible(sourceAuthoring.TenantId);
@@ -125,6 +127,7 @@ public sealed class ActivityForkService(
         var accessBindingFingerprint = AccessBindingFingerprint();
         var expiresAt = now.Add(_options.Lifetime);
         var requestFingerprint = Fingerprint(
+            command.IdempotencyKey,
             command.DefinitionId,
             source.DefinitionVersionId,
             source.Version,
@@ -137,14 +140,17 @@ public sealed class ActivityForkService(
             targetProviderFingerprint,
             sourceContractFingerprint,
             targetContractFingerprint,
-            definition.Id,
-            definition.ActivityTypeKey,
-            draft.Id,
             accessBindingFingerprint);
-        var candidateId = candidateIdCodec.Encode(new(NewId("activity-fork"), requestFingerprint, expiresAt));
+        var reservationId = ActivityForkCandidateIdentity.Compute(
+            context.TenantId,
+            context.ActorId,
+            command.IdempotencyKey);
+        var candidateId = candidateIdCodec.Encode(new(reservationId, requestFingerprint, expiresAt));
         var candidate = new ActivityForkCandidate
         {
-            Id = candidateId,
+            Id = reservationId,
+            CandidateId = candidateId,
+            PreviewIdempotencyKey = command.IdempotencyKey,
             TenantId = context.TenantId,
             RequestFingerprint = requestFingerprint,
             AccessBindingFingerprint = accessBindingFingerprint,
@@ -164,6 +170,7 @@ public sealed class ActivityForkService(
             TargetContractFingerprint = targetContractFingerprint,
             ExpiresAt = expiresAt,
             RetainUntil = expiresAt.Add(_options.Retention),
+            RetentionKey = ActivityForkCandidateIdentity.RetentionKey(expiresAt.Add(_options.Retention)),
             Status = ActivityForkCandidateStatus.Reserved,
             CreatedAt = now,
             LastModifiedAt = now
@@ -171,7 +178,25 @@ public sealed class ActivityForkService(
 
         try
         {
-            await saveCandidate.ExecuteAsync(new(candidate), cancellationToken);
+            await pruneCandidates.ExecuteAsync(now, cancellationToken: cancellationToken);
+            candidate = await saveCandidate.ExecuteAsync(new(candidate), cancellationToken);
+        }
+        catch (ActivityForkPreviewIdempotencyConflictException exception)
+        {
+            throw Conflict(
+                "activity.fork.preview-idempotency-conflict",
+                "Activity fork preview idempotency conflict",
+                "The preview idempotency key is already bound to different normalized fork material.",
+                exception);
+        }
+        catch (ActivityForkPreviewExpiredException exception)
+        {
+            throw new ActivityAuthoringException(
+                410,
+                "activity.fork.preview-expired",
+                "Activity fork preview expired",
+                "The preview idempotency key belongs to an expired reviewed reservation and cannot allocate replacement identities.",
+                innerException: exception);
         }
         catch (InvalidOperationException exception)
         {
@@ -199,10 +224,12 @@ public sealed class ActivityForkService(
         if (!StringComparer.Ordinal.Equals(candidateId.RequestFingerprint, command.RequestFingerprint))
             throw Stale("The supplied request fingerprint is not bound to this candidate.");
 
-        var candidate = await forkStore.FindCandidateAsync(command.CandidateId, cancellationToken)
+        var candidate = await forkStore.FindCandidateAsync(candidateId.ReservationId, cancellationToken)
             ?? throw NotFound("activity.fork.candidate-not-found", "Activity fork candidate not found", "The reviewed fork candidate was not found.");
         EnsureCandidateBinding(candidate);
-        if (!StringComparer.Ordinal.Equals(candidate.RequestFingerprint, command.RequestFingerprint))
+        if (!StringComparer.Ordinal.Equals(candidate.CandidateId, command.CandidateId) ||
+            !StringComparer.Ordinal.Equals(candidate.RequestFingerprint, command.RequestFingerprint) ||
+            candidate.ExpiresAt != candidateId.ExpiresAt)
             throw Stale("The reviewed fork material changed after preview.");
         if (candidate.ExpiresAt <= timeProvider.GetUtcNow())
             throw Expired();
@@ -213,7 +240,7 @@ public sealed class ActivityForkService(
                 throw Stale("The fork candidate was already consumed by another operation identity.");
             var existing = await RequiredReceiptAsync(command.IdempotencyKey, cancellationToken);
             EnsureReceiptBinding(existing);
-            return ToReceipt(candidate, existing, ActivityForkOutcomeView.AlreadyApplied);
+            return ToReceipt(existing, ActivityForkOutcomeView.AlreadyApplied);
         }
 
         await RevalidateAsync(candidate, cancellationToken);
@@ -229,7 +256,6 @@ public sealed class ActivityForkService(
                 ReceiptId(command.IdempotencyKey),
                 timeProvider.GetUtcNow()), cancellationToken);
             return ToReceipt(
-                candidate,
                 result.Receipt,
                 result.AlreadyApplied ? ActivityForkOutcomeView.AlreadyApplied : ActivityForkOutcomeView.Applied);
         }
@@ -245,13 +271,17 @@ public sealed class ActivityForkService(
         {
             throw Conflict("activity.fork.collision", "Activity fork identity collision", "A reserved target identity or activity type key is no longer available. Create a new preview.", exception);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             var reconciled = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);
             if (reconciled is not null)
             {
                 EnsureReceiptBinding(reconciled);
-                return ToReceipt(candidate, reconciled, ActivityForkOutcomeView.AlreadyApplied);
+                return ToReceipt(reconciled, ActivityForkOutcomeView.AlreadyApplied);
             }
             throw OutcomeUnknown("The server cannot prove whether the fork apply committed. Query the fork status before retrying.", exception);
         }
@@ -264,10 +294,7 @@ public sealed class ActivityForkService(
         EnsureBoundedIdentity(request.IdempotencyKey, "idempotencyKey");
         var receipt = await RequiredReceiptAsync(request.IdempotencyKey, cancellationToken);
         EnsureReceiptBinding(receipt);
-        var candidate = await forkStore.FindCandidateAsync(receipt.CandidateId, cancellationToken)
-            ?? throw OutcomeUnknown("The durable fork receipt refers to an unavailable candidate.");
-        EnsureCandidateBinding(candidate);
-        return ToReceipt(candidate, receipt, ActivityForkOutcomeView.Applied);
+        return ToReceipt(receipt, ActivityForkOutcomeView.Applied);
     }
 
     private async Task RevalidateAsync(ActivityForkCandidate candidate, CancellationToken cancellationToken)
@@ -310,7 +337,7 @@ public sealed class ActivityForkService(
         ActivityForkCandidate candidate,
         ActivityDefinitionVersionPublication source,
         ActivityForkPresentationView presentation) => new(
-        candidate.Id,
+        candidate.CandidateId,
         candidate.RequestFingerprint,
         ActivityForkCandidateLifecycleView.Reserved,
         new(candidate.AccessBindingFingerprint),
@@ -346,35 +373,34 @@ public sealed class ActivityForkService(
         candidate.ExpiresAt);
 
     private static ActivityForkReceiptView ToReceipt(
-        ActivityForkCandidate candidate,
         ActivityForkReceipt receipt,
         ActivityForkOutcomeView outcome) => new(
         receipt.IdempotencyKey,
-        receipt.CandidateId,
+        receipt.PublicCandidateId,
         receipt.RequestFingerprint,
         outcome,
         new(receipt.AccessBindingFingerprint),
         new(
-            candidate.ReservedDefinition.Id,
-            candidate.ReservedDefinition.ActivityTypeKey,
-            candidate.ReservedDefinition.TenantId,
-            candidate.ReservedDefinition.Category,
-            candidate.ReservedDefinition.DisplayName ?? candidate.ReservedDefinition.ActivityTypeKey,
-            candidate.ReservedDefinition.Description,
-            candidate.ReservedAuthoringState.ContentAuthority,
-            candidate.ReservedAuthoringState.ForkedFrom,
+            receipt.Definition.Id,
+            receipt.Definition.ActivityTypeKey,
+            receipt.Definition.TenantId,
+            receipt.Definition.Category,
+            receipt.Definition.DisplayName ?? receipt.Definition.ActivityTypeKey,
+            receipt.Definition.Description,
+            receipt.AuthoringState.ContentAuthority,
+            receipt.AuthoringState.ForkedFrom,
             null,
             null),
         new(
-            candidate.ReservedDraft.Id,
-            candidate.ReservedDraft.DefinitionId,
-            candidate.ReservedDraft.Revision,
-            candidate.ReservedDraft.SourceVersionId,
-            candidate.ReservedDraft.Status,
-            candidate.ReservedDraft.State.Provider.ProviderKey,
-            candidate.ReservedDraft.State.Provider.SchemaVersion,
-            candidate.ReservedDraft.LastModifiedAt,
-            candidate.ReservedDraft.PresentationLabel),
+            receipt.Draft.Id,
+            receipt.Draft.DefinitionId,
+            receipt.Draft.Revision,
+            receipt.Draft.SourceVersionId,
+            receipt.Draft.Status,
+            receipt.Draft.State.Provider.ProviderKey,
+            receipt.Draft.State.Provider.SchemaVersion,
+            receipt.Draft.LastModifiedAt,
+            receipt.Draft.PresentationLabel),
         receipt.AppliedAt);
 
     private IActivityProvider ResolveProvider(

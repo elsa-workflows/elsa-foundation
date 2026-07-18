@@ -61,6 +61,28 @@ Immutable provenance recorded only when a definition is created by the explicit 
 
 The origin does not create shared mutable lineage, implicit upgrade behavior, or cross-tenant access. Later source-version visibility changes do not erase the retained audit fact.
 
+### 1.3.1 `ActivityForkCandidate`
+
+Bounded durable review reservation keyed by a server-derived hash of tenant, stable actor identity,
+and the caller's bounded preview idempotency key. It stores the signed public candidate identity,
+normalized request/access fingerprints, exact source facts, reserved server-generated definition,
+authoring, draft, and layout material, safe migration diagnostics, `ExpiresAt`, `RetainUntil`, and
+`Reserved`/`Applied` state.
+
+Saving is an exact compare-or-return operation under the reservation lock: same scoped key and same
+normalized material returns the first reservation; changed material conflicts; an expired retained
+reservation rejects replacement. Concurrent retries therefore converge without making definition
+or draft identities client-generated. Only the atomic apply commit may transition `Reserved` to
+`Applied`. A bounded retention query deletes candidates after `RetainUntil`.
+
+### 1.3.2 `ActivityForkReceipt`
+
+Append-only, self-contained terminal proof keyed by tenant, stable actor identity, and apply
+idempotency key. It binds the internal and signed public candidate identities, request/access
+fingerprints, actor/access profile, exact applied definition and draft projections, and `AppliedAt`.
+No update path exists. Because the receipt contains the complete safe result required by status
+reconciliation, candidate retention never erases terminal outcome evidence.
+
 ### 1.4 `ActivityDefinitionDraft`
 
 Mutable authoring aggregate header.

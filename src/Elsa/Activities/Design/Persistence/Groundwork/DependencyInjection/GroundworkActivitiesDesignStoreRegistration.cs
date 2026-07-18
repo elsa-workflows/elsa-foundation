@@ -83,6 +83,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<ICreateActivityDefinitionCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<ISaveActivityForkCandidateCommand>();
         services.AddScoped<ISaveActivityForkCandidateCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        services.RemoveAll<IPruneActivityForkCandidatesCommand>();
+        services.AddScoped<IPruneActivityForkCandidatesCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IApplyActivityForkCandidateCommand>();
         services.AddScoped<IApplyActivityForkCandidateCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IUpdateActivityDefinitionPresentationCommand>();
