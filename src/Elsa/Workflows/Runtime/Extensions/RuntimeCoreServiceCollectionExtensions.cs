@@ -209,6 +209,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddScoped<WorkflowIntrinsicExecutor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
+        // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked
+        // poison record must be visible to the fault observer within the same drain notification pass.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, PoisonedSchedulerWorkIncidentObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());

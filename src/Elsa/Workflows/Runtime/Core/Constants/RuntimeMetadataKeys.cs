@@ -205,6 +205,14 @@ public static class RuntimeMetadataKeys
     public const string ResumeTargetId = "runtime.resumeTargetId";
     public const string ScheduleReason = "runtime.scheduleReason";
     public const string SchedulerWorkItemId = "runtime.schedulerWorkItemId";
+    /// <summary>Retry mode the domain retry policy decided for a poisoned scheduler work item.</summary>
+    public const string SchedulerPoisonRetryMode = "runtime.poison.retryMode";
+    /// <summary>Reason the domain retry policy gave for its poison retry decision.</summary>
+    public const string SchedulerPoisonRetryReason = "runtime.poison.retryReason";
+    /// <summary>Handler whose dispatch fault poisoned the scheduler work item.</summary>
+    public const string SchedulerPoisonHandlerName = "runtime.poison.handlerName";
+    /// <summary>Number of dispatch failures recorded for the poisoned scheduler work item.</summary>
+    public const string SchedulerPoisonFailureCount = "runtime.poison.failureCount";
     public const string StartReason = "runtime.startReason";
     public const string StartSchedulerWorkItemId = "runtime.startSchedulerWorkItemId";
     public const string StimulusHash = "runtime.stimulusHash";

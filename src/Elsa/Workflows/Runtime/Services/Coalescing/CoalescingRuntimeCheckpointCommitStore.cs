@@ -40,7 +40,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         if (commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush))
         {
             var flushResult = await _inner.CommitAsync(commit, decision, cancellationToken);
-            await session.AdvanceInnerQueueAsync(cancellationToken);
+            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             session.ClearBuffer();
             session.Deactivate();
             return flushResult;
@@ -75,7 +75,9 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             await _inner.CommitAsync(foldedCommit, ImmediateDecision, cancellationToken);
             if (continueAfterBoundary)
                 session.RecordDurableBoundaryState(commit.StateChanges);
-            await session.AdvanceInnerQueueAsync(cancellationToken);
+            // A deactivating boundary is the session's final advance: the in-flight item's effect just landed in this
+            // flush, so it must be consumed here instead of surviving as a durable duplicate (see AdvanceInnerQueueAsync).
+            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: !continueAfterBoundary, cancellationToken);
             session.ClearBuffer();
             if (!continueAfterBoundary)
                 session.Deactivate();
@@ -87,7 +89,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         var passthrough = await _inner.CommitAsync(commit, decision, cancellationToken);
         if (continueAfterBoundary)
             session.RecordDurableBoundaryState(commit.StateChanges);
-        await session.AdvanceInnerQueueAsync(cancellationToken);
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: !continueAfterBoundary, cancellationToken);
         session.ClearBuffer();
         if (!continueAfterBoundary)
             session.Deactivate();

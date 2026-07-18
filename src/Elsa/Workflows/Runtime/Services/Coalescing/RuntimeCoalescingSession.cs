@@ -580,13 +580,32 @@ public sealed class RuntimeCoalescingSession
     /// (a FIFO prefix of the seeded items) and durably enqueues any remaining unconsumed continuation. Called only as
     /// part of a flush, after the folded checkpoint commit has landed durably (condition B).
     /// </summary>
-    public async ValueTask AdvanceInnerQueueAsync(CancellationToken cancellationToken)
+    /// <param name="consumeInFlightClaims">
+    /// The overlay lists a claimed work item until its claim completes, so the item whose dispatch triggered this very
+    /// flush is still visible here. When the flush closes the session's <b>final</b> segment (the boundary deactivates
+    /// coalescing — suspension, terminal, cap, or quiescence), pass <see langword="true"/>: the flush already carries
+    /// that item's durable effect, no later advance will run, and copying it into the durable inner queue would
+    /// redeliver it to the still-live drain loop as a duplicate dispatch (which then poisons on the replay-conflict
+    /// tripwire). When the session continues (a durable attempt boundary starting the next segment), pass
+    /// <see langword="false"/>: the durable copy is the crash-redrive guarantee for the in-flight user code and the
+    /// next flush counts it consumed once its claim completes.
+    /// </param>
+    public async ValueTask AdvanceInnerQueueAsync(bool consumeInFlightClaims, CancellationToken cancellationToken)
     {
         if (!_queueSeeded)
             return;
 
         var seeded = new HashSet<string>(_seededWorkItemIds, StringComparer.Ordinal);
-        var remaining = await _overlayQueue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId), cancellationToken);
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> remaining =
+            await _overlayQueue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId), cancellationToken);
+
+        if (consumeInFlightClaims && _overlayClaims.Count > 0)
+        {
+            var inFlight = new HashSet<string>(
+                _overlayClaims.Keys.Select(claim => claim.Item.WorkItemId),
+                StringComparer.Ordinal);
+            remaining = remaining.Where(item => !inFlight.Contains(item.WorkItemId)).ToArray();
+        }
 
         var remainingSeeded = remaining.Count(item => seeded.Contains(item.WorkItemId));
         var consumedSeeded = _seededWorkItemIds.Count - remainingSeeded;
