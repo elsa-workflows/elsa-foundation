@@ -13,7 +13,7 @@ export interface WorkflowFolderTreeLoadOptions {
 interface UseWorkflowFolderTreeOptions {
   context: StudioEndpointContext;
   unavailableMessage?: string;
-  onPageLoaded?(items: WorkflowFolder[]): Promise<void> | void;
+  onPageLoaded?(items: WorkflowFolder[], parentId?: string): Promise<void> | void;
 }
 
 /**
@@ -52,6 +52,45 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
       inFlightGenerations.current = {};
     };
   }, [context]);
+
+  const invalidatePages = useCallback((parentIds: Iterable<string | undefined>) => {
+    const keys = new Set(Array.from(parentIds, parentId => parentId ?? workflowFolderRootKey));
+    if (keys.size === 0) return;
+
+    for (const key of keys) {
+      delete inFlightGenerations.current[key];
+      delete loadedPageCounts.current[key];
+    }
+
+    if (keys.has(workflowFolderRootKey)) setRoots([]);
+    setChildren(current => {
+      const next = { ...current };
+      for (const key of keys) {
+        if (key !== workflowFolderRootKey) delete next[key];
+      }
+      return next;
+    });
+    setContinuations(current => {
+      const next = { ...current };
+      for (const key of keys) delete next[key];
+      return next;
+    });
+    setLoadedKeys(current => {
+      const next = new Set(current);
+      for (const key of keys) next.delete(key);
+      return next;
+    });
+    setLoadingKeys(current => {
+      const next = new Set(current);
+      for (const key of keys) next.delete(key);
+      return next;
+    });
+    setLoadFailures(current => {
+      const next = { ...current };
+      for (const key of keys) delete next[key];
+      return next;
+    });
+  }, []);
 
   const loadPage = useCallback(async (
     parentId?: string,
@@ -97,7 +136,7 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
         nextToken = nextContinuationToken;
       }
 
-      await onPageLoaded?.(items);
+      await onPageLoaded?.(items, parentId);
       if (!isCurrent()) return false;
 
       if (parentId) {
@@ -131,5 +170,5 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
     }
   }, [context, onPageLoaded, unavailableMessage]);
 
-  return { roots, children, continuations, loadedKeys, loadingKeys, loadFailures, loadPage };
+  return { roots, children, continuations, loadedKeys, loadingKeys, loadFailures, loadPage, invalidatePages };
 }

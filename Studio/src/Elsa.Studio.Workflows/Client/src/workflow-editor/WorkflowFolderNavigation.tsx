@@ -41,7 +41,16 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
-  const { roots, children, continuations, loadingKeys, loadFailures, loadPage: loadFolderPage } = useWorkflowFolderTree({ context });
+  const {
+    roots,
+    children,
+    continuations,
+    loadedKeys,
+    loadingKeys,
+    loadFailures,
+    loadPage: loadFolderPage,
+    invalidatePages
+  } = useWorkflowFolderTree({ context });
 
   useEffect(() => {
     let cancelled = false;
@@ -140,9 +149,10 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const selectedFolder = selectedId ? findFolder(roots, children, selectedId) ?? crumbs.at(-1) : undefined;
 
   const refreshAfterStructureChange = async (nextSelection?: WorkflowFolderSelection) => {
+    invalidatePages([...loadedKeys].filter(key => key !== workflowFolderRootKey && !expanded.has(key)));
     await Promise.all([
       loadFolderPage(undefined, undefined, { force: true }),
-      ...Array.from(expanded, folderId => loadFolderPage(folderId, undefined, { force: true }))
+      ...[...expanded].map(folderId => loadFolderPage(folderId, undefined, { force: true }))
     ]);
     setLocalRefreshKey(current => current + 1);
     await onFoldersMutated?.(nextSelection);
@@ -154,7 +164,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         folderPickerButtonRef.current?.focus();
         return;
       }
-      document.querySelector<HTMLElement>(`.wf-folder-nav [data-tree-key="${key}"]`)?.focus();
+      const navigation = document.querySelector<HTMLElement>(".wf-folder-nav");
+      findTreeItemByKey(navigation, key)?.focus();
     });
   };
 
@@ -285,6 +296,11 @@ function firstDirectFolderChild(parent: HTMLElement) {
   ) as HTMLElement | undefined;
 }
 
+function findTreeItemByKey(root: ParentNode | null | undefined, key: string) {
+  return [...(root?.querySelectorAll<HTMLElement>("[data-tree-key]") ?? [])]
+    .find(item => item.dataset.treeKey === key);
+}
+
 function FolderTree(props: FolderTreeProps) {
   const {
     roots, children, continuations, expanded, loadingKeys, loadFailures, selection, focusedKey,
@@ -294,6 +310,16 @@ function FolderTree(props: FolderTreeProps) {
   const active = selectedFolderId(selection);
   const treeId = useId().replaceAll(":", "");
   const treeRef = useRef<HTMLDivElement>(null);
+  const groupIds = useRef(new Map<string, string>());
+  const nextGroupId = useRef(0);
+
+  const groupIdFor = (folderId: string) => {
+    const existing = groupIds.current.get(folderId);
+    if (existing) return existing;
+    const id = `${treeId}-children-${nextGroupId.current++}`;
+    groupIds.current.set(folderId, id);
+    return id;
+  };
 
   const focusItem = (item: HTMLElement | null | undefined) => {
     if (!item) return;
@@ -409,7 +435,7 @@ function FolderTree(props: FolderTreeProps) {
           const tree = event.currentTarget.closest<HTMLElement>('[role="tree"]');
           const survivorKey = parentId ? `folder:${parentId}` : "all";
           onFocusedKeyChange(survivorKey);
-          requestAnimationFrame(() => tree?.querySelector<HTMLElement>(`[data-tree-key="${survivorKey}"]`)?.focus());
+          requestAnimationFrame(() => findTreeItemByKey(tree, survivorKey)?.focus());
           void (kind === "retry" ? onRetry(parentId) : onLoadMore(parentId));
         }}
       >
@@ -425,7 +451,7 @@ function FolderTree(props: FolderTreeProps) {
     return <>
       {items.map(folder => {
         const key = `folder:${folder.id}`;
-        const groupId = `${treeId}-children-${folder.id}`;
+        const groupId = groupIdFor(folder.id);
         return (
           <div
             key={folder.id}

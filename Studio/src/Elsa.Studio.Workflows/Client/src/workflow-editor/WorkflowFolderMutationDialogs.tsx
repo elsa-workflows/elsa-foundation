@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getWorkflowFolder, moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
+import { moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { useDialogFocus } from "./useDialogFocus";
 import { useWorkflowFolderTree, workflowFolderRootKey } from "./useWorkflowFolderTree";
@@ -50,7 +50,7 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
   </div>;
 }
 
-type Eligibility = "checking" | "eligible" | "descendant" | "unavailable";
+type Eligibility = "eligible" | "descendant";
 
 export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: {
   context: StudioEndpointContext;
@@ -60,7 +60,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
 }) {
   const titleId = useId();
   const ref = useRef<HTMLElement>(null);
-  const classificationGenerations = useRef<Record<string, number>>({});
+  const descendantIds = useRef(new Set([folder.id]));
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [eligibility, setEligibility] = useState<Record<string, Eligibility>>({});
   const [destinationId, setDestinationId] = useState<string | null>(folder.parentId ?? null);
@@ -68,28 +68,29 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
   const [error, setError] = useState<string | null>(null);
   useDialogFocus(ref, busy ? null : onClose);
 
-  const classify = useCallback(async (items: WorkflowFolder[]) => {
-    setEligibility(current => ({
-      ...current,
-      ...Object.fromEntries(items.map(item => [item.id, item.id === folder.id ? "descendant" : "checking"]))
-    }));
-    await Promise.all(items.filter(item => item.id !== folder.id).map(async item => {
-      const generation = (classificationGenerations.current[item.id] ?? 0) + 1;
-      classificationGenerations.current[item.id] = generation;
-      try {
-        const detail = await getWorkflowFolder(context, item.id);
-        if (!detail) throw new Error("Folder detail is unavailable.");
-        const state: Eligibility = detail.ancestors.some(ancestor => ancestor.id === folder.id) ? "descendant" : "eligible";
-        if (classificationGenerations.current[item.id] === generation) {
-          setEligibility(current => ({ ...current, [item.id]: state }));
-        }
-      } catch {
-        if (classificationGenerations.current[item.id] === generation) {
-          setEligibility(current => ({ ...current, [item.id]: "unavailable" }));
+  const classify = useCallback((items: WorkflowFolder[], parentId?: string) => {
+    const discoveredDescendants = new Set(descendantIds.current);
+    if (parentId && discoveredDescendants.has(parentId)) {
+      for (const item of items) discoveredDescendants.add(item.id);
+    } else {
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const item of items) {
+          if (!discoveredDescendants.has(item.id) && item.parentId && discoveredDescendants.has(item.parentId)) {
+            discoveredDescendants.add(item.id);
+            changed = true;
+          }
         }
       }
+    }
+    const classified = Object.fromEntries(items.map(item => {
+      const state: Eligibility = discoveredDescendants.has(item.id) ? "descendant" : "eligible";
+      if (state === "descendant") descendantIds.current.add(item.id);
+      return [item.id, state];
     }));
-  }, [context, folder.id]);
+    setEligibility(current => ({ ...current, ...classified }));
+  }, []);
 
   const { roots, children, continuations, loadedKeys, loadingKeys, loadFailures: loadErrors, loadPage } = useWorkflowFolderTree({
     context,
@@ -154,8 +155,6 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
         <div className="wf-dialog-heading"><div><h3 id={titleId}>Move folder</h3><p>Choose a new parent for {folder.name}. The folder keeps its identity.</p></div></div>
         <div className="wf-folder-mutation-content">
           {error ? <p className="wf-dialog-error" role="alert">{error}</p> : null}
-          {Object.values(eligibility).some(state => state === "checking") ? <p className="wf-folder-loading" role="status"><LoaderCircle size={14} /> Verifying destinations…</p> : null}
-          {Object.values(eligibility).some(state => state === "unavailable") ? <p className="wf-dialog-error" role="alert">Some destinations could not be verified and were excluded. Retry by reopening this dialog.</p> : null}
           <fieldset className="wf-move-destination" disabled={busy}><legend>New parent</legend><div className="wf-move-folder-list">
             <label className="wf-move-folder-row"><input type="radio" name="folder-parent" checked={destinationId === null} onChange={() => setDestinationId(null)} /> Top level</label>
             {rows(roots)}{controls()}
