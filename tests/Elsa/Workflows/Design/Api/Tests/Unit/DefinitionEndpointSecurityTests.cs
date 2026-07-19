@@ -1,9 +1,11 @@
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
+using Elsa.Workflows.Design.Api.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
@@ -35,6 +37,19 @@ public sealed class DefinitionEndpointSecurityTests
     public void Delete_endpoint_requires_a_permission_and_is_not_anonymous() =>
         AssertPermissionGuarded($"{EndpointsNamespace}.Delete", new StubCommandSender());
 
+    [Fact]
+    public void Tag_read_and_replace_endpoints_require_their_distinct_permissions()
+    {
+        var service = RuntimeHelpers.GetUninitializedObject(typeof(WorkflowDefinitionTagApplicationService));
+        var get = ConfiguredDefinition($"{EndpointsNamespace}.GetTags", service, includeLogger: false);
+        var replace = ConfiguredDefinition($"{EndpointsNamespace}.ReplaceTags", service, includeLogger: false);
+
+        Assert.Contains(PermissionNames.WorkflowDesignRead, get.AllowedPermissions!);
+        Assert.Contains(PermissionNames.WorkflowDesignTagsAssign, replace.AllowedPermissions!);
+        Assert.Null(get.AnonymousVerbs);
+        Assert.Null(replace.AnonymousVerbs);
+    }
+
     // D5 sweep (QA finding): endpoints that carried an interim AllowAnonymous() are now permission-guarded.
     // These are the direct regression guards proving the sweep replaced AllowAnonymous() with
     // ConfigurePermissions() and that no swept endpoint can silently regress to anonymous.
@@ -61,7 +76,10 @@ public sealed class DefinitionEndpointSecurityTests
         Assert.Null(definition.AnonymousVerbs);
     }
 
-    private static EndpointDefinition ConfiguredDefinition(string endpointTypeName, object sender)
+    private static EndpointDefinition ConfiguredDefinition(
+        string endpointTypeName,
+        object sender,
+        bool includeLogger = true)
     {
         var endpointType = typeof(UpdateDefinition).Assembly.GetType(endpointTypeName, throwOnError: true)!;
         var nullLoggerType = typeof(NullLogger<>).MakeGenericType(endpointType);
@@ -79,7 +97,8 @@ public sealed class DefinitionEndpointSecurityTests
             .MakeGenericMethod(endpointType);
 
         Action<DefaultHttpContext> noopContext = _ => { };
-        var endpoint = (BaseEndpoint)create.Invoke(null, [noopContext, new[] { sender, logger }])!;
+        var dependencies = includeLogger ? new[] { sender, logger } : [sender];
+        var endpoint = (BaseEndpoint)create.Invoke(null, [noopContext, dependencies])!;
 
         endpoint.Configure();
         return endpoint.Definition;

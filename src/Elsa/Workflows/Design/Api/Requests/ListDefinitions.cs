@@ -12,7 +12,8 @@ public sealed record ListDefinitions(
     int Page = 1,
     int PageSize = 50,
     string? SortBy = null,
-    string? SortDirection = null
+    string? SortDirection = null,
+    IReadOnlyCollection<string>? MarkerTagClauses = null
 )
 
 : IRequest<WorkflowDefinitionListView>;

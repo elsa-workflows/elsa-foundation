@@ -10,7 +10,8 @@ public sealed record WorkflowDefinitionView(
     string? DraftId = null,
     string? LatestVersionId = null,
     string? LatestVersion = null,
-    int VersionCount = 0
+    int VersionCount = 0,
+    IReadOnlyCollection<WorkflowDefinitionMarkerTagView>? MarkerTags = null
 );
 
 public sealed record WorkflowDefinitionListView(

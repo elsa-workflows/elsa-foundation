@@ -121,6 +121,20 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
                 DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, filter.SearchTerm),
                 DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, filter.SearchTerm),
                 DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, filter.SearchTerm)));
+        foreach (var markerClause in filter.MarkerTagClauses ?? [])
+        {
+            var marker = $"|{markerClause.TagDefinitionId}|";
+            clauses.Add(DocumentQueryClause.Of(markerClause.Operator switch
+            {
+                WorkflowDefinitionMarkerTagOperator.Exists => DocumentQueryComparison.Contains(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionField,
+                    marker),
+                WorkflowDefinitionMarkerTagOperator.Missing => DocumentQueryComparison.NotContains(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionField,
+                    marker),
+                _ => throw new ArgumentOutOfRangeException(nameof(markerClause.Operator), markerClause.Operator, null)
+            }));
+        }
 
         switch (query.Scope)
         {

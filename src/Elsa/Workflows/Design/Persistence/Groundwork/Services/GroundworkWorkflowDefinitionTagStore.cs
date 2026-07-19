@@ -64,6 +64,19 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
         if (!WorkflowDefinitionTagRevision.TryGetVersion(request.ExpectedRevision, out var expectedVersion))
             return await ConflictAsync(request.WorkflowDefinitionId, cancellationToken);
 
+        var workflowDefinitionEnvelope = await store.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            request.WorkflowDefinitionId,
+            cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Workflow definition '{request.WorkflowDefinitionId}' does not exist.");
+        var workflowDefinitionDocument = GroundworkWorkflowDefinitionDocuments.Deserialize(workflowDefinitionEnvelope);
+        accessContextAccessor.Current.EnsureTenantScope(workflowDefinitionDocument.Entity.TenantId);
+        if (!StringComparer.Ordinal.Equals(workflowDefinitionDocument.Entity.TenantId, request.TenantId))
+            throw new InvalidOperationException("The requested resource does not belong to the current persistence scope.");
+        if (workflowDefinitionDocument.Entity.DeletedAt is not null)
+            throw new InvalidOperationException("Restore the workflow definition before changing its tags.");
+
         var existingEnvelope = await store.LoadAsync(
             WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
             request.WorkflowDefinitionId,
@@ -89,6 +102,13 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
+        if (tagDefinitionIds.Length > 64)
+            throw new ArgumentOutOfRangeException(nameof(request.TagDefinitionIds), "At most 64 marker tags can be assigned to one workflow definition.");
+        var markerProjection = MarkerProjection(tagDefinitionIds);
+        if (markerProjection.Length > WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionLength)
+            throw new ArgumentOutOfRangeException(
+                nameof(request.TagDefinitionIds),
+                $"The encoded marker assignment cannot exceed {WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionLength} characters.");
         var assertions = tagDefinitionIds.Select(WorkflowDefinitionTagAssertion.Manual).ToArray();
         var nextVersion = expectedVersion + 1;
         var nextRevision = WorkflowDefinitionTagRevision.FromVersion(nextVersion);
@@ -97,7 +117,7 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
             WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetCollection,
             request.WorkflowDefinitionId,
             request.TenantId,
-            MarkerProjection(tagDefinitionIds),
+            markerProjection,
             assertions,
             now);
         var beforeIds = existing.Assertions
@@ -125,9 +145,14 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
         {
             await store.SaveAllAsync(
                 DocumentCommitScope.Of(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionTagAuditDocumentKind),
                 [
+                    GroundworkWorkflowDefinitionDocuments.Save(
+                        workflowDefinitionDocument.Entity,
+                        markerProjection,
+                        workflowDefinitionEnvelope.Version),
                     Save(
                         WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
                         request.WorkflowDefinitionId,
@@ -191,8 +216,11 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
         return tagDefinitionId;
     }
 
-    public static string MarkerProjection(IEnumerable<string> tagDefinitionIds) =>
-        $"|{string.Join('|', tagDefinitionIds)}|";
+    public static string MarkerProjection(IEnumerable<string> tagDefinitionIds)
+    {
+        var ids = tagDefinitionIds.ToArray();
+        return ids.Length == 0 ? "|" : $"|{string.Join('|', ids)}|";
+    }
 
     private sealed record WorkflowDefinitionTagSetDocument(
         string Collection,

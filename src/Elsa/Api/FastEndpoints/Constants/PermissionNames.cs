@@ -9,6 +9,7 @@ public static class PermissionNames
     // without referencing an individual domain API implementation.
     public const string WorkflowDesignRead = "workflow-design.read";
     public const string WorkflowDesignManage = "workflow-design.manage";
+    public const string WorkflowDesignTagsAssign = "workflow-design.tags.assign";
     public const string ActivityDesignRead = "activity-design.read";
     public const string ActivityDesignManage = "activity-design.manage";
     public const string ExpressionsRead = "expressions.read";

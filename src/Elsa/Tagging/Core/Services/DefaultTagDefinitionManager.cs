@@ -47,6 +47,14 @@ public sealed class DefaultTagDefinitionManager(
         return store.ListAsync(request, cancellationToken);
     }
 
+    public ValueTask<IReadOnlyList<TagDefinitionRevisionedRecord>> ListWithRevisionsAsync(
+        TagDefinitionListRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return store.ListWithRevisionsAsync(request, cancellationToken);
+    }
+
     public ValueTask<TagDefinitionRevisionedRecord?> FindWithRevisionAsync(string tagDefinitionId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(tagDefinitionId))
@@ -67,15 +75,19 @@ public sealed class DefaultTagDefinitionManager(
         var loaded = await FindWithRevisionAsync(tagDefinitionId, cancellationToken)
             ?? throw new InvalidOperationException($"Tag definition '{tagDefinitionId}' was not found.");
         var definition = loaded.Definition;
-        var displayName = request.DisplayName is null ? definition.DisplayName : request.DisplayName.Trim();
-        var description = request.Description ?? definition.Description;
-        var color = request.Color ?? definition.Color;
+        var displayName = request.HasDisplayName
+            ? request.DisplayName?.Trim() ?? string.Empty
+            : definition.DisplayName;
+        var description = request.HasDescription ? request.Description : definition.Description;
+        var color = request.HasColor ? request.Color : definition.Color;
         TagDefinitionConstraints.ValidateMutableFields(displayName, description, color);
 
         definition.DisplayName = displayName;
         definition.Description = description;
         definition.Color = color;
-        definition.Status = request.Status ?? definition.Status;
+        definition.Status = request.HasStatus
+            ? request.Status ?? throw new ArgumentException("Status cannot be null.", nameof(request))
+            : definition.Status;
         definition.UpdatedAt = timeProvider.GetUtcNow();
 
         var save = await store.SaveWithRevisionAsync(definition, expectedRevision, cancellationToken);

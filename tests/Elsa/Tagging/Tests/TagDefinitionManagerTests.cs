@@ -86,6 +86,32 @@ public class TagDefinitionManagerTests
         Assert.Equal(TagDefinitionStatus.Retired, updated.Definition.Status);
     }
 
+    [Fact]
+    public async Task Partial_updates_distinguish_omitted_fields_from_explicit_null()
+    {
+        var manager = new DefaultTagDefinitionManager(new InMemoryStore(), new InMemoryAuditStore(), new TestAuditContext(), TimeProvider.System);
+        var created = await manager.CreateAsync(new CreateTagDefinitionRequest
+        {
+            CanonicalKey = "risk.pii",
+            Description = "Sensitive data",
+            Color = "#C2410C"
+        });
+
+        var retired = await manager.UpdateAsync(
+            created.Id,
+            new UpdateTagDefinitionRequest { Status = TagDefinitionStatus.Retired },
+            "1");
+        Assert.Equal("Sensitive data", retired.Definition.Description);
+        Assert.Equal("#C2410C", retired.Definition.Color);
+
+        var cleared = await manager.UpdateAsync(
+            created.Id,
+            new UpdateTagDefinitionRequest { Description = null, Color = null },
+            "2");
+        Assert.Null(cleared.Definition.Description);
+        Assert.Null(cleared.Definition.Color);
+    }
+
     [Theory]
     [InlineData("Risk.Pii")]
     [InlineData("risk pii")]

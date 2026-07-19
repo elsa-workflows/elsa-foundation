@@ -77,10 +77,55 @@ public sealed class CreateTagDefinitionRequest
 
 public sealed class UpdateTagDefinitionRequest
 {
-    public string? DisplayName { get; set; }
-    public string? Description { get; set; }
-    public string? Color { get; set; }
-    public TagDefinitionStatus? Status { get; set; }
+    private string? _displayName;
+    private string? _description;
+    private string? _color;
+    private TagDefinitionStatus? _status;
+
+    public string? DisplayName
+    {
+        get => _displayName;
+        set
+        {
+            _displayName = value;
+            HasDisplayName = true;
+        }
+    }
+
+    public string? Description
+    {
+        get => _description;
+        set
+        {
+            _description = value;
+            HasDescription = true;
+        }
+    }
+
+    public string? Color
+    {
+        get => _color;
+        set
+        {
+            _color = value;
+            HasColor = true;
+        }
+    }
+
+    public TagDefinitionStatus? Status
+    {
+        get => _status;
+        set
+        {
+            _status = value;
+            HasStatus = true;
+        }
+    }
+
+    public bool HasDisplayName { get; private set; }
+    public bool HasDescription { get; private set; }
+    public bool HasColor { get; private set; }
+    public bool HasStatus { get; private set; }
 }
 
 public sealed class TagDefinitionListRequest

@@ -36,6 +36,13 @@ public sealed class GroundworkTagDefinitionStore(
     }
 
     public async ValueTask<IReadOnlyList<TagDefinition>> ListAsync(TagDefinitionListRequest request, CancellationToken cancellationToken = default)
+        => (await ListWithRevisionsAsync(request, cancellationToken))
+            .Select(record => record.Definition)
+            .ToArray();
+
+    public async ValueTask<IReadOnlyList<TagDefinitionRevisionedRecord>> ListWithRevisionsAsync(
+        TagDefinitionListRequest request,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         var clauses = request.ActiveOnly
@@ -49,7 +56,11 @@ public sealed class GroundworkTagDefinitionStore(
             skip: 0,
             take: 250);
         var result = await BoundedStore.QueryAsync(query, cancellationToken);
-        return result.Documents.Select(MapDefinition).ToArray();
+        return result.Documents
+            .Select(envelope => new TagDefinitionRevisionedRecord(
+                MapDefinition(envelope),
+                TagDefinitionRevisionMapper.Revision(envelope)))
+            .ToArray();
     }
 
     public async ValueTask<bool> TryAddAsync(TagDefinition definition, CancellationToken cancellationToken = default)

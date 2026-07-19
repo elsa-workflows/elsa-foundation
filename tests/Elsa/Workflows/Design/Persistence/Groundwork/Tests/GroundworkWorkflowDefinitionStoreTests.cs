@@ -180,6 +180,52 @@ public class GroundworkWorkflowDefinitionStoreTests
         Assert.Equal(["c", "a"], page.Items.Select(definition => definition.Id));
     }
 
+    [Theory]
+    [InlineData(WorkflowDefinitionMarkerTagOperator.Exists, "tagged")]
+    [InlineData(WorkflowDefinitionMarkerTagOperator.Missing, "untagged")]
+    public async Task List_page_filters_marker_projection_with_authoritative_total(
+        WorkflowDefinitionMarkerTagOperator operation,
+        string expectedId)
+    {
+        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        await documents.SaveAsync(MarkerDefinitionSave(
+            new WorkflowDefinition { Id = "tagged", Name = "Tagged" },
+            ["tag-priority"]));
+        await documents.SaveAsync(MarkerDefinitionSave(
+            new WorkflowDefinition { Id = "untagged", Name = "Untagged" },
+            []));
+        var store = new GroundworkWorkflowDefinitionStore(documents, documents);
+
+        var page = await store.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter
+            {
+                MarkerTagClauses =
+                [
+                    new WorkflowDefinitionMarkerTagClause("tag-priority", operation)
+                ]
+            },
+            WorkflowDefinitionLifecycleScope.All));
+
+        Assert.Equal(1, page.TotalCount);
+        Assert.Equal(expectedId, Assert.Single(page.Items).Id);
+    }
+
+    private static SaveDocumentRequest MarkerDefinitionSave(
+        WorkflowDefinition definition,
+        IReadOnlyCollection<string> tagDefinitionIds) =>
+        new(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            definition.Id,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            JsonSerializer.Serialize(
+                new
+                {
+                    collection = WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                    entity = definition,
+                    markerProjection = GroundworkWorkflowDefinitionTagStore.MarkerProjection(tagDefinitionIds)
+                },
+                GroundworkDesignJson.Options));
+
     [Fact]
     public void Paging_manifest_declares_bounded_server_routes_and_typed_sort_indexes()
     {
@@ -214,6 +260,11 @@ public class GroundworkWorkflowDefinitionStoreTests
             searchRoute.PredicateFields,
             field => field.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionNameField
                 && field.Operations.Contains(PortableQueryOperation.Contains));
+        var markerProjection = Assert.Single(
+            searchRoute.ResidualPredicateFields,
+            field => field.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionField);
+        Assert.Contains(PortableQueryOperation.Contains, markerProjection.Operations);
+        Assert.Contains(PortableQueryOperation.NotContains, markerProjection.Operations);
 
         Assert.Equal(
             IndexValueKind.DateTime,

@@ -323,7 +323,8 @@ public sealed class FoundationBoundedQueryContractTests
 
         await SaveWorkflowDefinitionAsync(
             client.DocumentStore,
-            new WorkflowDefinition { Id = "invoice-active", Name = "Invoice Case" });
+            new WorkflowDefinition { Id = "invoice-active", Name = "Invoice Case" },
+            ["tag-priority"]);
         await SaveWorkflowDefinitionAsync(
             client.DocumentStore,
             new WorkflowDefinition { Id = "invoice-deleted", Name = "Invoice Deleted", DeletedAt = Now });
@@ -343,10 +344,58 @@ public sealed class FoundationBoundedQueryContractTests
             Page: 1,
             PageSize: 10));
         var legacy = await definitions.ListAsync(new WorkflowDefinitionFilter { Id = "invoice-active" });
+        var markerExists = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter
+            {
+                Id = "invoice-active",
+                MarkerTagClauses =
+                [
+                    new WorkflowDefinitionMarkerTagClause(
+                        "tag-priority",
+                        WorkflowDefinitionMarkerTagOperator.Exists)
+                ]
+            },
+            WorkflowDefinitionLifecycleScope.Active,
+            PageSize: 10));
+        var markerMissing = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter
+            {
+                Id = "invoice-deleted",
+                MarkerTagClauses =
+                [
+                    new WorkflowDefinitionMarkerTagClause(
+                        "tag-priority",
+                        WorkflowDefinitionMarkerTagOperator.Missing)
+                ]
+            },
+            WorkflowDefinitionLifecycleScope.Deleted,
+            PageSize: 10));
 
         Assert.Equal(["invoice-active"], mixedCaseSearch.Items.Select(definition => definition.Id));
         Assert.Equal(["invoice-deleted"], deleted.Items.Select(definition => definition.Id));
         Assert.Equal(["invoice-active"], legacy.Select(definition => definition.Id));
+        Assert.Equal(["invoice-active"], markerExists.Items.Select(definition => definition.Id));
+        Assert.Equal(1, markerExists.TotalCount);
+        Assert.Equal(["invoice-deleted"], markerMissing.Items.Select(definition => definition.Id));
+        Assert.Equal(1, markerMissing.TotalCount);
+        Assert.All(
+            bounded.Observations.TakeLast(2),
+            observation =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.SearchPageByNameQuery, observation.Query.QueryIdentity);
+                Assert.InRange(observation.MaterializedDocuments, 0, 1);
+                Assert.Equal(1, observation.TotalCount);
+            });
+        Assert.Contains(
+            bounded.Observations[^2].Query.Clauses,
+            clause => clause.Comparisons.Any(comparison =>
+                comparison.Operator == QueryComparisonOperator.Contains
+                && comparison.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionField));
+        Assert.Contains(
+            bounded.Observations[^1].Query.Clauses,
+            clause => clause.Comparisons.Any(comparison =>
+                comparison.Operator == QueryComparisonOperator.NotContains
+                && comparison.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionField));
 
         await using (var otherTenant = await driver.OpenPhysicalClientAsync(Access("tenant-b")))
         {
@@ -752,16 +801,28 @@ public sealed class FoundationBoundedQueryContractTests
     private static DocumentStoreAccess Access(string scope) =>
         DocumentStoreAccess.Scoped(new StorageScope(scope));
 
-    private static async Task SaveWorkflowDefinitionAsync(IDocumentStore store, WorkflowDefinition definition) =>
+    private static async Task SaveWorkflowDefinitionAsync(
+        IDocumentStore store,
+        WorkflowDefinition definition,
+        IReadOnlyCollection<string>? markerTagDefinitionIds = null) =>
         _ = await store.SaveAsync(new SaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             definition.Id,
             WorkflowsDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(
-                new GroundworkDocument<WorkflowDefinition>(
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
-                    definition),
-                GroundworkDesignJson.Options)));
+            markerTagDefinitionIds is null
+                ? JsonSerializer.Serialize(
+                    new GroundworkDocument<WorkflowDefinition>(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        definition),
+                    GroundworkDesignJson.Options)
+                : JsonSerializer.Serialize(
+                    new
+                    {
+                        collection = WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        entity = definition,
+                        markerProjection = GroundworkWorkflowDefinitionTagStore.MarkerProjection(markerTagDefinitionIds)
+                    },
+                    GroundworkDesignJson.Options)));
 
     private static FixedAccessContextAccessor Accessor(string scope) =>
         new(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));

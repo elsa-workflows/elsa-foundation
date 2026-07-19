@@ -1,12 +1,13 @@
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Tagging.Api.Constants;
+using Elsa.Tagging.Api.Models;
 using Elsa.Tagging.Api.Requests;
 using Elsa.Tagging.Core.Contracts;
 using Elsa.Tagging.Core.Models;
 
 namespace Elsa.Tagging.Api.Endpoints.Definitions;
 
-internal sealed class Update(ITagDefinitionManager manager) : ElsaEndpoint<UpdateTagDefinitionApiRequest, TagDefinition>
+internal sealed class Update(ITagDefinitionManager manager) : ElsaEndpoint<UpdateTagDefinitionApiRequest, TagDefinitionListItem>
 {
     public override void Configure()
     {
@@ -16,18 +17,19 @@ internal sealed class Update(ITagDefinitionManager manager) : ElsaEndpoint<Updat
 
     public override async Task HandleAsync(UpdateTagDefinitionApiRequest request, CancellationToken cancellationToken)
     {
-        var expectedRevision = HttpContext.Request.Headers.IfMatch.ToString().Trim('"');
-        if (string.IsNullOrWhiteSpace(expectedRevision))
+        var ifMatch = HttpContext.Request.Headers.IfMatch.ToString();
+        if (ifMatch.Length < 3 || ifMatch[0] != '"' || ifMatch[^1] != '"')
         {
             ThrowError("A quoted If-Match revision is required.", 400);
             return;
         }
+        var expectedRevision = ifMatch[1..^1];
 
         try
         {
             var updated = await manager.UpdateAsync(request.TagDefinitionId, request.ToCoreRequest(), expectedRevision, cancellationToken);
             HttpContext.Response.Headers.ETag = QuoteRevision(updated.Revision);
-            await Send.OkAsync(updated.Definition, cancellationToken);
+            await Send.OkAsync(TagDefinitionListItem.From(updated), cancellationToken);
         }
         catch (TagDefinitionConflictException exception)
         {

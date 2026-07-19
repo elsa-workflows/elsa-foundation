@@ -38,6 +38,8 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         services.AddScopedVariableAuthoring();
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
         services.TryAddScoped<ActivityInputOptionsAuthoringService>();
+        services.TryAddScoped<IWorkflowDefinitionTagAuthorizationContext, HttpWorkflowDefinitionTagAuthorizationContext>();
+        services.TryAddScoped<WorkflowDefinitionTagApplicationService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();

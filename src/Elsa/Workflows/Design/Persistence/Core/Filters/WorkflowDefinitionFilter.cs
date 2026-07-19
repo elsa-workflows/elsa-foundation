@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core.Queries;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Filters;
 
@@ -42,6 +43,11 @@ public class WorkflowDefinitionFilter
     /// Gets or sets a value indicating whether to include tenant matching in the filter.
     /// </summary>
     public bool? TenantAgnostic { get; set; }
+
+    /// <summary>
+    /// Filter logical workflow definitions by Workflow Design-owned marker assignments.
+    /// </summary>
+    public IReadOnlyCollection<WorkflowDefinitionMarkerTagClause>? MarkerTagClauses { get; set; }
 
     /// <summary>
     /// Projects this filter onto the closed, provider-neutral <see cref="Query{TEntity}"/> spec. This is

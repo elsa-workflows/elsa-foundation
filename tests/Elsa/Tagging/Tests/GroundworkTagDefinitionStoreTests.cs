@@ -22,6 +22,9 @@ public sealed class GroundworkTagDefinitionStoreTests
 
         Assert.Equal("risk.pii", (await store.FindByCanonicalKeyAsync("risk.pii"))!.CanonicalKey);
         Assert.Equal("risk.pii", Assert.Single(await store.ListAsync(new TagDefinitionListRequest())).CanonicalKey);
+        var revisioned = await store.ListWithRevisionsAsync(new TagDefinitionListRequest { ActiveOnly = false });
+        Assert.Equal(["ops.legacy", "risk.pii"], revisioned.Select(record => record.Definition.CanonicalKey));
+        Assert.All(revisioned, record => Assert.False(string.IsNullOrWhiteSpace(record.Revision)));
     }
 
     [Fact]

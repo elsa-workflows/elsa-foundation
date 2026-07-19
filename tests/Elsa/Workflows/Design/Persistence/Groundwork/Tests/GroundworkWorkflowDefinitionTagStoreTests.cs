@@ -1,4 +1,6 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Documents.Store;
@@ -24,8 +26,7 @@ public sealed class GroundworkWorkflowDefinitionTagStoreTests
     [Fact]
     public async Task Replace_manual_slice_commits_assertions_revision_and_audit_together()
     {
-        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var store = CreateStore(documents);
+        var (documents, store) = await CreateSeededStoreAsync();
 
         var result = await store.ReplaceManualAsync(new(
             "workflow-1",
@@ -64,8 +65,7 @@ public sealed class GroundworkWorkflowDefinitionTagStoreTests
     [Fact]
     public async Task Stale_revision_returns_conflict_without_mutation_or_audit()
     {
-        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var store = CreateStore(documents);
+        var (documents, store) = await CreateSeededStoreAsync();
         var first = await store.ReplaceManualAsync(new(
             "workflow-1",
             "tenant-a",
@@ -114,8 +114,7 @@ public sealed class GroundworkWorkflowDefinitionTagStoreTests
     [Fact]
     public async Task Marker_projection_is_stable_and_delimiter_safe()
     {
-        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var store = CreateStore(documents);
+        var (documents, store) = await CreateSeededStoreAsync();
 
         await store.ReplaceManualAsync(new(
             "workflow-1",
@@ -130,6 +129,25 @@ public sealed class GroundworkWorkflowDefinitionTagStoreTests
             "workflow-1");
         Assert.NotNull(envelope);
         Assert.Contains("\"markerProjection\":\"|tag-a|tag-b|\"", envelope.ContentJson);
+        var definition = await documents.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            "workflow-1");
+        Assert.NotNull(definition);
+        Assert.Contains("\"markerProjection\":\"|tag-a|tag-b|\"", definition.ContentJson);
+    }
+
+    private static async Task<(InMemoryDocumentStore Documents, GroundworkWorkflowDefinitionTagStore Store)>
+        CreateSeededStoreAsync()
+    {
+        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        await documents.SaveAsync(GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            new WorkflowDefinition { Id = "workflow-1", Name = "Workflow 1", TenantId = "tenant-a" },
+            GroundworkDesignJson.Options,
+            PersistenceAccessContext.Scoped(new("tenant-a"))));
+        return (documents, CreateStore(documents));
     }
 
     private static GroundworkWorkflowDefinitionTagStore CreateStore(IDocumentStore documents) =>
