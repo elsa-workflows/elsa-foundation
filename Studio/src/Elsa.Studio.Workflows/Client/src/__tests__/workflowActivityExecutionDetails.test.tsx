@@ -30,6 +30,17 @@ vi.mock("../api/runtime", async importOriginal => ({
   getActivityExecutionLayout: vi.fn()
 }));
 
+vi.mock("../workflow-editor/ReusableBoundaryInspector", () => ({
+  ReusableBoundaryInspector: ({ inspection }: { inspection: ActivityExecutionInspection }) => (
+    <section>
+      <h4>Boundary lifecycle</h4>
+      <span>{inspection.boundary?.definitionVersionId}</span>
+      <h4>Descendant aggregate</h4>
+      <span>Pinned historical layout</span>
+    </section>
+  )
+}));
+
 let active: { root: Root; container: HTMLElement } | null = null;
 let restoreClipboard: (() => void) | null = null;
 
@@ -174,7 +185,7 @@ function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"
 }
 
 describe("WorkflowActivityExecutionDetails", () => {
-  it("separates outer Boundary lifecycle from Descendant aggregate and reads its pinned historical layout", async () => {
+  it("defers reusable Boundary inspection to its independently lazy Runtime Evidence chunk", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue({
       ...inspection([]),
       boundary: {
@@ -204,64 +215,10 @@ describe("WorkflowActivityExecutionDetails", () => {
         layoutAvailable: true
       }
     });
-    vi.mocked(getActivityExecutionDescendants).mockResolvedValue({
-      root: {
-        workflowExecutionId: "wf-1",
-        activityExecutionId: "ae-1",
-        executionScopeId: "scope-invoice",
-        definitionVersionId: "invoice-version-2",
-        templateHash: "sha256:invoice-v2"
-      },
-      committedThroughSequence: 3,
-      effectiveLimit: 100,
-      items: [{
-        activityExecutionId: "ae-child",
-        workflowExecutionId: "wf-1",
-        executableNodeId: "invoice-write",
-        authoredActivityId: "write",
-        activityType: "Elsa.WriteLine",
-        activityTypeVersion: "1",
-        status: "Completed",
-        executionSequence: 2,
-        scheduledAt: "2026-07-09T10:00:01Z",
-        relativeDepth: 1,
-        outcomeNames: [],
-        bookmarkCount: 0,
-        incidentCount: 0,
-        blockingIncidentCount: 0,
-        metadata: {}
-      }],
-      nextCursor: null
-    });
-    vi.mocked(getActivityExecutionLayout).mockResolvedValue({
-      workflowExecutionId: "wf-1",
-      activityExecutionId: "ae-1",
-      artifactId: "artifact-workflow",
-      sourceReferenceId: "source-reference-published",
-      selection: "ExecutedReference",
-      boundaryOrigin: [{ kind: "TemplateBoundary", id: "invoice-version-2" }],
-      templateHash: "sha256:invoice-v2",
-      nodes: [{
-        templateNodeId: "template-write",
-        authoredActivityId: "write",
-        executableNodeId: "invoice-write",
-        x: 120,
-        y: 80,
-        hasPinnedGeometry: true
-      }],
-      connections: [],
-      nestedBoundaries: []
-    });
-
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
-    await waitFor(() => expect(container.textContent).toContain("Pinned historical layout"));
-    expect(container.textContent).toContain("Boundary lifecycle");
-    expect(container.textContent).toContain("Descendant aggregate");
-    expect(container.textContent).toContain("source-reference-published");
-    expect(container.textContent).toContain("invoice-write");
-    expect(getActivityExecutionDescendants).toHaveBeenCalledWith(context, "wf-1", "ae-1");
-    expect(getActivityExecutionLayout).toHaveBeenCalledWith(context, "wf-1", "ae-1");
+    await waitFor(() => expect(container.textContent).toContain("Loading reusable boundary inspector"));
+    expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1", expect.any(AbortSignal));
   });
 
   it("loads and renders diagnostic snapshots for selected execution inputs and outputs", async () => {
@@ -295,7 +252,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
     await waitFor(() => expect(container.textContent).toContain("Hello at runtime"));
-    expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1");
+    expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1", expect.any(AbortSignal));
     expect(container.textContent).toContain("Inputs");
     expect(container.textContent).toContain("Outputs");
     expect(container.textContent).toContain("Message");

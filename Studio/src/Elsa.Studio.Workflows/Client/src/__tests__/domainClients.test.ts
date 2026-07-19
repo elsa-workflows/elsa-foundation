@@ -231,6 +231,23 @@ describe("canonical domain clients", () => {
       "/runtime/workflows/instances/run%2F1/activity-executions/activity%2F1/layout"
     );
   });
+
+  it("binds descendant continuation requests to the same explicit query and supports cancellation", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+    const controller = new AbortController();
+
+    await getActivityExecutionDescendants(context, "run/1", "activity/1", {
+      cursor: "cursor/+=",
+      limit: 200,
+      include: ["outcomes", "bookmarks", "incidents"]
+    }, controller.signal);
+
+    expect(getJson).toHaveBeenLastCalledWith(
+      "/runtime/workflows/instances/run%2F1/activity-executions/activity%2F1/descendants?limit=200&cursor=cursor%2F%2B%3D&include=outcomes%2Cbookmarks%2Cincidents",
+      { signal: controller.signal }
+    );
+  });
 });
 
 function createContext(http: Record<string, unknown>) {

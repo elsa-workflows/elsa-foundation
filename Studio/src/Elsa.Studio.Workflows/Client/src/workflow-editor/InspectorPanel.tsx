@@ -235,7 +235,7 @@ function ReusableActivityIdentity({
   return (
     <section className="wf-reusable-identity" aria-label="Reusable activity identity">
       <h4>Reusable boundary</h4>
-      <p className="wf-muted">This placed occurrence is pinned to an immutable version. Contract authoring happens in a separate Activity Definition draft.</p>
+      <p className="wf-muted">This placed occurrence is pinned and read-only at its immutable version. Contract authoring happens in a separate Activity Definition draft.</p>
       <dl>
         <dt>Definition ID</dt>
         <dd>{exactDefinitionId}</dd>
